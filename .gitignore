@@ -3,3 +3,6 @@ venv
 .git
 .env.test
 __pycache__
+.pytest_cache
+.DS_Store
+*.log

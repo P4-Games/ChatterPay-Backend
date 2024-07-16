@@ -7,8 +7,9 @@ __pycache__/
 .git
 .gitignore
 
-# Archivos de ambiente
+# Variables de entorno 
 .env
+.env.test 
 
 # Otros
 .DS_Store
