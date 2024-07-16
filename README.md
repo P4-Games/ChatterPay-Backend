@@ -1,13 +1,17 @@
-# Demo: Obtener Balance de una Cuenta en Polygon
+# Multi-Chain Balance API
 
-Este proyecto es una demostración de cómo obtener el balance de una cuenta en la red Polygon utilizando Python. Proporciona una API simple para consultar los balances de tokens ERC20 específicos y el balance nativo de MATIC para una dirección dada.
+## Descripción
+
+Este proyecto es una API que proporciona información sobre balances de cuentas en múltiples redes blockchain, incluyendo Polygon, Arbitrum y Scroll. La API ofrece funcionalidades para obtener balances de tokens, precios actuales y valores totales en USD y ARS.
 
 ## Características
 
-- Consulta de balances de tokens ERC20 (WETH, USDC) y MATIC nativo.
-- Obtención de precios actuales de tokens desde la API de DeFi Llama.
-- Cálculo del valor total estimado de la cuenta.
-- API REST simple construida con FastAPI.
+- Consulta de balances de tokens ERC20 y tokens nativos.
+- Soporte para múltiples redes: Polygon, Arbitrum y Scroll.
+- Obtención de precios actuales de tokens desde DeFi Llama.
+- Cálculo del valor total estimado de la cuenta en USD y ARS.
+- Caché implementado para mejorar el rendimiento.
+- Documentación de API con Swagger UI.
 
 ## Requisitos
 
@@ -16,14 +20,14 @@ Este proyecto es una demostración de cómo obtener el balance de una cuenta en 
 
 ## Instalación
 
-1. Clona este repositorio:
+1. Clona el repositorio:
 
    ```bash
-   git clone https://github.com/TomasDmArg/py-balance-polygon.git
-   cd py-balance-polygon
+   git clone https://github.com/TomasDmArg/py-wallet-balance.git
+   cd py-wallet-balance
    ```
 
-2. (Opcional) Crea y activa un entorno virtual:
+2. Crea y activa un entorno virtual:
 
    ```bash
    python -m venv venv
@@ -33,7 +37,7 @@ Este proyecto es una demostración de cómo obtener el balance de una cuenta en 
 3. Instala las dependencias:
 
    ```bash
-    pip install -r requirements.txt
+   pip install -r requirements.txt
    ```
 
 4. Crea un archivo `.env` en la raíz del proyecto y añade tu clave API de Alchemy:
@@ -45,22 +49,60 @@ Este proyecto es una demostración de cómo obtener el balance de una cuenta en 
 
 1. Inicia el servidor:
 
-   ```
-   uvicorn main:app --reload
-   ```
-
-2. Abre tu navegador o utiliza una herramienta como curl para hacer una solicitud GET a:
-
-   ```
-   http://localhost:8000/api/address/{dirección_ethereum}
+   ```bash
+   uvicorn app.main:app --reload
    ```
 
-   Reemplaza `{dirección_ethereum}` con la dirección que deseas consultar.
+2. Accede a la API:
 
-3. La API devolverá un JSON con los balances de MATIC, WETH, USDC y el valor total estimado de la cuenta en USD.
+   - Balances: `http://localhost:8000/api/balance/{dirección_ethereum}?network={red}`
+   - Precios: `http://localhost:8000/api/prices`
+   - Redes soportadas: `http://localhost:8000/api/networks`
+   - Precios Fiat: `http://localhost:8000/api/fiat-prices`
+
+   Donde `{dirección_ethereum}` es la dirección que deseas consultar y `{red}` puede ser "polygon", "arbitrum", "scroll" o "all".
+
+3. Accede a la documentación Swagger UI:
+   ```bash
+   http://localhost:8000/docs
+   ```
 
 ## Estructura del Proyecto
 
-- `main.py`: Punto de entrada de la aplicación y configuración de FastAPI.
-- `balance_module.py`: Lógica principal para obtener balances y precios.
-- `erc20.json`: ABI del contrato ERC20 necesario para interactuar con los tokens.
+```bash
+multi-chain-balance-api/
+│
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   └── constants.py
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── balance_service.py
+│   │   └── price_service.py
+│   └── utils/
+│       ├── __init__.py
+│       └── web3_utils.py
+│
+├── tests/
+│   └── test_main.py
+│
+├── .env
+├── .gitignore
+├── requirements.txt
+└── README.md
+```
+
+## Pruebas
+
+Para ejecutar las pruebas:
+
+```bash
+pytest
+```
