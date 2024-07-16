@@ -18,19 +18,26 @@ Este proyecto es una demostración de cómo obtener el balance de una cuenta en 
 
 1. Clona este repositorio:
 
-   ```
+   ```bash
    git clone https://github.com/TomasDmArg/py-balance-polygon.git
    cd py-balance-polygon
    ```
 
-2. Instala las dependencias:
+2. (Opcional) Crea y activa un entorno virtual:
 
-   ```
-   pip install -r requirements.txt
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # En Windows usa `venv\Scripts\activate`
    ```
 
-3. Crea un archivo `.env` en la raíz del proyecto y añade tu clave API de Alchemy:
+3. Instala las dependencias:
+
+   ```bash
+    pip install -r requirements.txt
    ```
+
+4. Crea un archivo `.env` en la raíz del proyecto y añade tu clave API de Alchemy:
+   ```bash
    ALCHEMY_API_KEY=tu_clave_api_de_alchemy
    ```
 
@@ -50,7 +57,7 @@ Este proyecto es una demostración de cómo obtener el balance de una cuenta en 
 
    Reemplaza `{dirección_ethereum}` con la dirección que deseas consultar.
 
-3. La API devolverá un JSON con los balances de MATIC, WETH, USDC y el valor total estimado de la cuenta.
+3. La API devolverá un JSON con los balances de MATIC, WETH, USDC y el valor total estimado de la cuenta en USD.
 
 ## Estructura del Proyecto
 
