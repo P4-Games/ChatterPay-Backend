@@ -1,0 +1,15 @@
+# Entornos virtuales
+venv/
+*.pyc
+__pycache__/
+
+# Archivos de git
+.git
+.gitignore
+
+# Archivos de ambiente
+.env
+
+# Otros
+.DS_Store
+*.log
