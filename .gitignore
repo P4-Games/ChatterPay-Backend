@@ -1,8 +1,53 @@
-venv
+# Dependencias
+node_modules/
+.pnp
+.pnp.js
+
+# Archivos de compilación
+dist/
+build/
+
+# Archivos de ambiente
 .env
-.git
-.env.test
-__pycache__
-.pytest_cache
-.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 *.log
+
+# Directorios y archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Directorios y archivos del IDE/Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Archivos de configuración de TypeScript
+tsconfig.tsbuildinfo
+
+# Directorios y archivos específicos de Bun
+bun.lockb
+
+# Archivos de prueba y cobertura
+coverage/
+
+# Archivos temporales
+*.tmp
+*.temp
+
+# Archivos de respaldo
+*.bak
+
+# Archivos de caché
+.cache/
+
+# Otros archivos y directorios que podrían ser específicos de tu proyecto
+# Agrega aquí cualquier otro archivo o directorio que quieras ignorar
