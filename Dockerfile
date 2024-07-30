@@ -12,7 +12,6 @@ RUN bun install --frozen-lockfile
 
 # Copia el código fuente
 COPY src ./src
-COPY public ./public
 
 # Compila el código TypeScript
 RUN bun build ./src/index.ts --outdir ./dist
@@ -25,7 +24,6 @@ WORKDIR /app
 # Copia los archivos necesarios desde la etapa base
 COPY --from=base /app/dist ./dist
 COPY --from=base /app/node_modules ./node_modules
-COPY --from=base /app/public ./public
 COPY --from=base /app/package.json ./package.json
 
 # Expone el puerto en el que se ejecuta la aplicación

@@ -37,7 +37,6 @@ bun install
   - `index.ts`: Punto de entrada de la aplicación.
 - `tests/`: Directorio para pruebas.
 - `config/`: Archivos de configuración.
-- `public/`: Archivos estáticos servidos por el servidor.
 - `.gitignore`: Especifica archivos y directorios ignorados por Git.
 - `package.json`: Configuración del proyecto y dependencias.
 - `tsconfig.json`: Configuración de TypeScript.
