@@ -1,108 +1,60 @@
-# Multi-Chain Balance API
+# Hackathon Ethereum 2024 - ChatterPay
 
-## Descripción
+ChatterPay es una billetera crypto en WhatsApp que integra IA y Abstracción de Cuentas, permitiendo a cualquier usuario utilizar blockchain de forma fácil y segura sin necesidad de conocimientos técnicos.
 
-Este proyecto es una API que proporciona información sobre balances de cuentas en múltiples redes blockchain, incluyendo Polygon, Arbitrum y Scroll. La API ofrece funcionalidades para obtener balances de tokens, precios actuales y valores totales en USD y ARS.
+Este proyecto es un backend utilizando TypeScript y Bun.js con el framework Fastify.
 
-## Características
+## Requisitos previos
 
-- Consulta de balances de tokens ERC20 y tokens nativos.
-- Soporte para múltiples redes: Polygon, Arbitrum y Scroll.
-- Obtención de precios actuales de tokens desde DeFi Llama.
-- Cálculo del valor total estimado de la cuenta en USD y ARS.
-- Caché implementado para mejorar el rendimiento.
-- Documentación de API con Swagger UI.
+- [Bun](https://bun.sh/)
+- [Git](https://git-scm.com/)
 
-## Requisitos
+## Inicialización del repositorio
 
-- Python 3.7+
-- pip
-
-## Instalación
-
-1. Clona el repositorio:
-
-   ```bash
-   git clone https://github.com/TomasDmArg/py-wallet-balance.git
-   cd py-wallet-balance
-   ```
-
-2. Crea y activa un entorno virtual:
-
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # En Windows usa `venv\Scripts\activate`
-   ```
-
-3. Instala las dependencias:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Crea un archivo `.env` en la raíz del proyecto y añade tu clave API de Alchemy:
-   ```bash
-   ALCHEMY_API_KEY=tu_clave_api_de_alchemy
-   ```
-
-## Uso
-
-1. Inicia el servidor:
-
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-
-2. Accede a la API:
-
-   - Balances: `http://localhost:8000/api/balance/{dirección_ethereum}?network={red}`
-   - Precios: `http://localhost:8000/api/prices`
-   - Redes soportadas: `http://localhost:8000/api/networks`
-   - Precios Fiat: `http://localhost:8000/api/fiat-prices`
-
-   Donde `{dirección_ethereum}` es la dirección que deseas consultar y `{red}` puede ser "polygon", "arbitrum", "scroll" o "all".
-
-3. Accede a la documentación Swagger UI:
-   ```bash
-   http://localhost:8000/docs
-   ```
-
-## Estructura del Proyecto
+Clona este repositorio:
 
 ```bash
-multi-chain-balance-api/
-│
-├── app/
-│   ├── __init__.py
-│   ├── main.py
-│   ├── api/
-│   │   ├── __init__.py
-│   │   └── routes.py
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── config.py
-│   │   └── constants.py
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── balance_service.py
-│   │   └── price_service.py
-│   └── utils/
-│       ├── __init__.py
-│       └── web3_utils.py
-│
-├── tests/
-│   └── test_main.py
-│
-├── .env
-├── .gitignore
-├── requirements.txt
-└── README.md
+   git clone https://github.com/P4-Games/ChatterPay-Backend
+   cd ChatterPay-Backend
 ```
 
-## Pruebas
+## Instalación de dependencias
 
-Para ejecutar las pruebas:
+Instala las dependencias necesarias con los siguientes comandos:
 
 ```bash
-pytest
+bun install
 ```
+
+## Estructura de carpetas
+
+- `src/`:
+  - `controllers/`: Lógica de controladores.
+  - `models/`: Definiciones de modelos de datos.
+  - `routes/`: Definiciones de rutas.
+  - `services/`: Lógica de negocio.
+  - `utils/`: Funciones de utilidad.
+  - `index.ts`: Punto de entrada de la aplicación.
+- `tests/`: Directorio para pruebas.
+- `config/`: Archivos de configuración.
+- `public/`: Archivos estáticos servidos por el servidor.
+- `.gitignore`: Especifica archivos y directorios ignorados por Git.
+- `package.json`: Configuración del proyecto y dependencias.
+- `tsconfig.json`: Configuración de TypeScript.
+- `README.md`: Este archivo.
+- `.env`: Variables de entorno.
+
+## Ejecución del servidor
+
+Para iniciar el servidor, ejecuta:
+
+```bash
+bun run src/index.ts
+```
+
+El servidor estará disponible en `http://localhost:3000`.
+
+## Comentarios y documentación
+
+- Utilizamos JSDoc para documentar nuestras funciones y clases.
+- Asegúrate de mantener los comentarios actualizados a medida que el código cambia.

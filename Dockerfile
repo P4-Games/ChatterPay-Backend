@@ -1,20 +1,35 @@
-# Usa una imagen base oficial de Python
-FROM python:3.9-slim-buster
+# Usa la imagen oficial de Bun
+FROM oven/bun:1 as base
 
 # Establece el directorio de trabajo en el contenedor
 WORKDIR /app
 
-# Copia los archivos de requisitos primero para aprovechar la caché de Docker
-COPY requirements.txt .
+# Copia los archivos de configuración del proyecto
+COPY package.json bun.lockb tsconfig.json ./
 
 # Instala las dependencias
-RUN pip install --no-cache-dir -r requirements.txt
+RUN bun install --frozen-lockfile
 
-# Copia el resto del código de la aplicación
-COPY . .
+# Copia el código fuente
+COPY src ./src
+COPY public ./public
 
-# Hace que el puerto 8000 esté disponible para el mundo fuera de este contenedor
-EXPOSE 8080
+# Compila el código TypeScript
+RUN bun build ./src/index.ts --outdir ./dist
 
-# Ejecuta la aplicación cuando se inicie el contenedor
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8080"]
+# Etapa de producción
+FROM oven/bun:1-slim as production
+
+WORKDIR /app
+
+# Copia los archivos necesarios desde la etapa base
+COPY --from=base /app/dist ./dist
+COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/public ./public
+COPY --from=base /app/package.json ./package.json
+
+# Expone el puerto en el que se ejecuta la aplicación
+EXPOSE 3000
+
+# Comando para ejecutar la aplicación
+CMD ["bun", "run", "dist/index.js"]
