@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@fastify/static": "^7.0.4",
-    "fastify": "^4.28.1"
+    "fastify": "^4.28.1",
+    "mongoose": "^8.5.2"
   }
 }
