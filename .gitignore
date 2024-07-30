@@ -33,9 +33,6 @@ Thumbs.db
 # Archivos de configuración de TypeScript
 tsconfig.tsbuildinfo
 
-# Directorios y archivos específicos de Bun
-bun.lockb
-
 # Archivos de prueba y cobertura
 coverage/
 
