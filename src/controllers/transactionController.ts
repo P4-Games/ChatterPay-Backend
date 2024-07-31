@@ -151,18 +151,3 @@ export const makeTransaction = async (request: FastifyRequest<{
     return reply.status(400).send({ message: 'Bad Request' });
   }
 };
-
-// Realizar una transacción
-export const makeTransaction2 = async (request: FastifyRequest<{ Body: { userId: string, to: string, tokenAddress: string, amount: string, chain_id: number } }>, reply: FastifyReply) => {
-  const { userId, to, tokenAddress, amount, chain_id } = request.body;
-
-  try {
-    authenticate(request);
-
-    const result = await sendUserOperation(userId, to, tokenAddress, amount, chain_id);
-    reply.send(result);
-  } catch (error: any) {
-    console.error('Error making transaction:', error);
-    reply.status(500).send({ error: 'Failed to send transaction', details: error.message });
-  }
-};
