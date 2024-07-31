@@ -8,7 +8,6 @@ import {
   deleteTransaction,
   makeTransaction
 } from '../controllers/transactionController';
-import { sendUserOperation } from '../services/walletService';
 
 const transactionRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/transaction/:trx_hash/status', checkTransactionStatus);

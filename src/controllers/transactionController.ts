@@ -116,14 +116,15 @@ const authenticate = (request: FastifyRequest) => {
 };
 
 // Realizar una transaccion
-export const makeTransaction = async (request: FastifyRequest<{ 
-  Body: { 
-    from: string, 
-    to: string, 
-    tokenAddress: string, 
+export const makeTransaction = async (request: FastifyRequest<{
+  Body: {
+    from: string,
+    to: string,
+    tokenAddress: string,
     amount: string,
     chain_id: number
-  } }>, reply: FastifyReply) => {
+  }
+}>, reply: FastifyReply) => {
   try {
     authenticate(request);
 
@@ -138,7 +139,7 @@ export const makeTransaction = async (request: FastifyRequest<{
       wallet_to: to,
       type: 'transfer',
       date: new Date(),
-      status: result.status ? 'completed' : 'failed',
+      status: result.transactionHash ? 'completed' : 'failed',
       amount,
       token: tokenAddress
     });
