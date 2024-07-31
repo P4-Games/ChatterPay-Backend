@@ -15,6 +15,7 @@
   "dependencies": {
     "@fastify/static": "^7.0.4",
     "fastify": "^4.28.1",
-    "mongoose": "^8.5.2"
+    "mongoose": "^8.5.2",
+    "web3": "^4.11.1"
   }
 }

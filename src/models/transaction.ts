@@ -1,6 +1,6 @@
 import { Schema, model, Document } from 'mongoose';
 
-interface ITransaction extends Document {
+export interface ITransaction extends Document {
   trx_hash: string;
   wallet_from: string;
   wallet_to: string;

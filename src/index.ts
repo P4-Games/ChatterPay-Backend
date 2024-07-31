@@ -1,33 +1,25 @@
-import Fastify, { FastifyInstance } from 'fastify';
-import { pingRoute } from './routes/ping';
-import { AddressInfo } from 'net';
+import Fastify from 'fastify';
+import mongoose from 'mongoose';
+import transactionRoutes from './routes/transactionRoutes';
 
-/**
- * Creates and configures the Fastify server instance.
- * @type {FastifyInstance}
- */
-const server: FastifyInstance = Fastify({
-    logger: true
+// Crear una instancia de Fastify
+const server = Fastify();
+const PORT = process.env.PORT || 3000;
+const MongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/chatterpay'
+
+// Conectar a MongoDB
+mongoose.connect(MongoURI)
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
+
+// Registrar las rutas
+server.register(transactionRoutes);
+
+// Iniciar el servidor
+server.listen({ port: Number(PORT), host: '0.0.0.0' }, (err, address) => {
+  if (err) {
+    console.error(err);
+    process.exit(1);
+  }
+  console.log(`Server listening at ${address}`);
 });
-
-// Registrar rutas
-server.register(pingRoute, { prefix: '/api' });
-
-/**
- * Starts the Fastify server.
- * @async
- * @function start
- * @throws {Error} If the server fails to start
- * @returns {Promise<void>}
- */
-const start = async (): Promise<void> => {
-    try {
-        await server.listen({ port: 3000 });
-        console.log(`Server listening on ${(server.server.address() as AddressInfo)?.port}`);
-    } catch (err) {
-        server.log.error(err);
-        process.exit(1);
-    }
-};
-
-start();
