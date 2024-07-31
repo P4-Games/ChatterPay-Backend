@@ -17,18 +17,11 @@ async function startServer() {
         // Conectar a MongoDB
         await mongoose.connect(MongoURI);
         console.log('MongoDB connected');
-
-<<<<<<< HEAD
-// Registrar las rutas
-server.register(transactionRoutes);
-server.register(userRoutes);
-server.register(tokenRoutes)
-server.register(blockchainRoutes)
-=======
         // Registrar las rutas
-        await server.register(transactionRoutes);
-        await server.register(userRoutes);
->>>>>>> aa0f1fc349b4e7863334eac38953c049e560b79f
+        server.register(transactionRoutes);
+        server.register(userRoutes);
+        server.register(tokenRoutes)
+        server.register(blockchainRoutes)
 
         // Iniciar el servidor
         await server.listen({ port: Number(PORT), host: '0.0.0.0' });
