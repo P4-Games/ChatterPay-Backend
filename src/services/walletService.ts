@@ -73,11 +73,12 @@ export async function sendUserOperation(
 
         const ev = await res.wait();
         console.log(`Transaction hash: ${ev?.transactionHash ?? null}`);
+        const receipt = await ev?.getTransactionReceipt()
 
         return {
             userOpHash: res.userOpHash,
             transactionHash: ev?.transactionHash,
-            status: ev?.status
+            status: receipt?.status
         };
     } catch (error) {
         console.error('Error sending user operation:', error);
