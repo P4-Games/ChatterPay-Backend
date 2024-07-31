@@ -105,3 +105,46 @@ export const deleteTransaction = async (request: FastifyRequest<{ Params: { id: 
     return reply.status(400).send({ message: 'Bad Request' });
   }
 };
+
+// Middleware para autenticar usando el token en el encabezado
+const authenticate = (request: FastifyRequest) => {
+  const token = request.headers['authorization'];
+  if (!token || token !== 'chatterPayToken') {
+    throw new Error('Unauthorized');
+  }
+};
+
+// Realizar una transaccion
+export const makeTransaction = async (request: FastifyRequest<{ 
+  Body: { 
+    from: string, 
+    to: string, 
+    tokenAddress: string, 
+    amount: number 
+  } }>, reply: FastifyReply) => {
+  try {
+    authenticate(request);
+
+    const { from, to, tokenAddress, amount } = request.body;
+
+    //Handle function of userop
+
+    const newTransaction = new Transaction({
+      trx_hash: receipt.transactionHash,
+      wallet_from: from,
+      wallet_to: to,
+      type: 'transfer',
+      date: new Date(),
+      status: receipt.status ? 'completed' : 'failed',
+      amount,
+      token: tokenAddress
+    });
+
+    await newTransaction.save();
+
+    return reply.status(201).send(newTransaction);
+  } catch (error) {
+    console.error('Error making transaction:', error);
+    return reply.status(400).send({ message: 'Bad Request' });
+  }
+};
