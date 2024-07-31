@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import mongoose from 'mongoose';
 import transactionRoutes from './routes/transactionRoutes';
+import userRoutes from './routes/userRoutes';
 
 // Crear una instancia de Fastify
 const server = Fastify();
@@ -14,6 +15,7 @@ mongoose.connect(MongoURI)
 
 // Registrar las rutas
 server.register(transactionRoutes);
+server.register(userRoutes);
 
 // Iniciar el servidor
 server.listen({ port: Number(PORT), host: '0.0.0.0' }, (err, address) => {
