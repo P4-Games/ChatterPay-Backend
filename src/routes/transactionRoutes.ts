@@ -17,9 +17,7 @@ const transactionRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/transactions/:id', getTransactionById);
   fastify.put('/transactions/:id', updateTransaction);
   fastify.delete('/transactions/:id', deleteTransaction);
-<<<<<<< HEAD
   fastify.post('/make_transaction/', makeTransaction)
-=======
 
   //Test route for sending a transaction
   fastify.post<{
@@ -39,7 +37,6 @@ const transactionRoutes = async (fastify: FastifyInstance) => {
       reply.status(500).send({ error: 'Failed to send transaction', details: error.message });
     }
   });
->>>>>>> aa0f1fc349b4e7863334eac38953c049e560b79f
 };
 
 export default transactionRoutes;
