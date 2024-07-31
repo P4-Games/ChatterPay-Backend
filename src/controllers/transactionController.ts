@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import web3 from '../config';
 import Transaction, { ITransaction } from '../models/transaction';
+import { sendUserOperation } from '../services/walletService';
 
 // Verificar estado de una transacción
 export const checkTransactionStatus = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -120,22 +121,24 @@ export const makeTransaction = async (request: FastifyRequest<{
     from: string, 
     to: string, 
     tokenAddress: string, 
-    amount: number 
+    amount: string,
+    chain_id: number
   } }>, reply: FastifyReply) => {
   try {
     authenticate(request);
 
-    const { from, to, tokenAddress, amount } = request.body;
+    const { from, to, tokenAddress, amount, chain_id } = request.body;
 
     //Handle function of userop
+    const result = await sendUserOperation(from, to, tokenAddress, amount, chain_id);
 
     const newTransaction = new Transaction({
-      trx_hash: receipt.transactionHash,
+      trx_hash: result.transactionHash,
       wallet_from: from,
       wallet_to: to,
       type: 'transfer',
       date: new Date(),
-      status: receipt.status ? 'completed' : 'failed',
+      status: result.status ? 'completed' : 'failed',
       amount,
       token: tokenAddress
     });
@@ -146,5 +149,20 @@ export const makeTransaction = async (request: FastifyRequest<{
   } catch (error) {
     console.error('Error making transaction:', error);
     return reply.status(400).send({ message: 'Bad Request' });
+  }
+};
+
+// Realizar una transacción
+export const makeTransaction2 = async (request: FastifyRequest<{ Body: { userId: string, to: string, tokenAddress: string, amount: string, chain_id: number } }>, reply: FastifyReply) => {
+  const { userId, to, tokenAddress, amount, chain_id } = request.body;
+
+  try {
+    authenticate(request);
+
+    const result = await sendUserOperation(userId, to, tokenAddress, amount, chain_id);
+    reply.send(result);
+  } catch (error: any) {
+    console.error('Error making transaction:', error);
+    reply.status(500).send({ error: 'Failed to send transaction', details: error.message });
   }
 };

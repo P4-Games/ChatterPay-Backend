@@ -77,3 +77,21 @@ export const deleteBlockchain = async (request: FastifyRequest<{ Params: { id: s
     return reply.status(400).send({ message: 'Bad Request' });
   }
 };
+
+// Obtener RPC, entryPoint y signingKey por chain_id
+export const getBlockchainDetailsByChainId = async (chain_id: number) => {
+  try {
+    const blockchain = await Blockchain.findOne({ chain_id });
+
+    if (!blockchain) {
+      throw new Error('Blockchain not found');
+    }
+
+    const { rpc, entryPoint, signingKey } = blockchain;
+
+    return { rpc, entryPoint, signingKey };
+  } catch (error) {
+    console.error('Error fetching blockchain details:', error);
+    throw new Error('Failed to fetch blockchain details');
+  }
+};

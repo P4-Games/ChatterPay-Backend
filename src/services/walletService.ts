@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { Presets, Client } from 'userop';
+import { getBlockchainDetailsByChainId } from '../controllers/blockchainController';
 
 const ERC20_ABI = [
     'function transfer(address to, uint256 amount) returns (bool)',
@@ -10,22 +11,22 @@ export async function sendUserOperation(
     userId: string,
     to: string,
     tokenAddress: string,
-    amount: string
+    amount: string,
+    chain_id: number
 ) {
-    const rpcUrl = process.env.RPC_URL;
-    const signingKey = process.env.SIGNING_KEY;
-    const entryPoint = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
 
-    if (!rpcUrl || !signingKey) {
+    const { rpc, signingKey, entryPoint } = await getBlockchainDetailsByChainId(chain_id)
+
+    if (!rpc || !signingKey) {
         throw new Error("Missing RPC_URL or SIGNING_KEY in environment variables");
     }
 
-    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const provider = new ethers.providers.JsonRpcProvider(rpc);
     const signer = new ethers.Wallet(signingKey, provider);
 
     console.log("EOA address:", await signer.getAddress());
 
-    const builder = await Presets.Builder.Kernel.init(signer, rpcUrl, { entryPoint });
+    const builder = await Presets.Builder.Kernel.init(signer, rpc, { entryPoint });
     const smartAccountAddress = builder.getSender();
     console.log("Smart Account address for user", userId, ":", smartAccountAddress);
 
@@ -50,7 +51,7 @@ export async function sendUserOperation(
     const smartAccountBalance = await erc20.balanceOf(smartAccountAddress);
     console.log("Smart Account balance:", ethers.utils.formatUnits(smartAccountBalance, 6));
 
-    const client = await Client.init(rpcUrl, { entryPoint });
+    const client = await Client.init(rpc, { entryPoint });
 
     try {
         const userOp = builder.execute({
@@ -76,6 +77,7 @@ export async function sendUserOperation(
         return {
             userOpHash: res.userOpHash,
             transactionHash: ev?.transactionHash,
+            status: ev?.status
         };
     } catch (error) {
         console.error('Error sending user operation:', error);

@@ -28,10 +28,10 @@ const transactionRoutes = async (fastify: FastifyInstance) => {
       amount: string;
     }
   }>('/send', async (request, reply) => {
-    const { userId, to, tokenAddress, amount } = request.body;
+    const { userId, to, tokenAddress, amount, chain_id } = request.body;
 
     try {
-      const result = await sendUserOperation(userId, to, tokenAddress, amount);
+      const result = await sendUserOperation(userId, to, tokenAddress, amount, chain_id);
       reply.send(result);
     } catch (error: any) {
       reply.status(500).send({ error: 'Failed to send transaction', details: error.message });
