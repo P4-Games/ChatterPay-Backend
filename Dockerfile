@@ -30,4 +30,4 @@ COPY --from=base /app/package.json ./package.json
 EXPOSE 3000
 
 # Comando para ejecutar la aplicación
-CMD ["bun", "start"]
+CMD ["bun", "start", "./dist/index.js"]
