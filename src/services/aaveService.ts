@@ -54,7 +54,8 @@ export const borrow = async (amount: number, tokenAddress: string, tokenName: st
  * @param amount Monto a depositar en numeros, sin agregar decimales
  * @param address Direccion del token
  */
-export const supply = async (amount: number, tokenAddress: string) => {
+export const supply =  async (request: FastifyRequest<{ Body: { tokenAddress: string, amount: number } }>, reply: FastifyReply) => {
+    const {tokenAddress, amount} = request.body;
     const provider = new ethers.providers.JsonRpcProvider(providerRPC.mumbai.rpc,
         {
             name: "Sepolia",
@@ -134,3 +135,4 @@ export const getAAVEYield = async (request: FastifyRequest<{ Params: { address: 
     
     return APY;
 }
+
