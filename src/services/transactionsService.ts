@@ -89,9 +89,9 @@ const checkBalancesAndDeposits = async () => {
             }
 
             lastKnownBalances.set(wallet, { 
-                eth: ethBalance.toString(), 
-                usdt: ethers.BigNumber.from(ethers.utils.parseUnits(usdtBalance, 6)).toString(), 
-                usdc: ethers.BigNumber.from(ethers.utils.parseUnits(usdcBalance, 6)).toString() 
+                eth: ethBalance, 
+                usdt: usdtBalance, 
+                usdc: usdcBalance 
             });
 
         } catch (error) {
