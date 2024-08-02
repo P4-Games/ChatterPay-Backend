@@ -6,7 +6,8 @@ import {
   getTransactionById,
   updateTransaction,
   deleteTransaction,
-  makeTransaction
+  makeTransaction,
+  listenTransactions
 } from '../controllers/transactionController';
 
 const transactionRoutes = async (fastify: FastifyInstance) => {
@@ -17,6 +18,7 @@ const transactionRoutes = async (fastify: FastifyInstance) => {
   fastify.put('/transactions/:id', updateTransaction);
   fastify.delete('/transactions/:id', deleteTransaction);
   fastify.post('/make_transaction/', makeTransaction);
+  fastify.post('/listen_transactions/', listenTransactions);
 }
 
 export default transactionRoutes;

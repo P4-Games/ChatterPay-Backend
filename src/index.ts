@@ -4,6 +4,7 @@ import transactionRoutes from './routes/transactionRoutes';
 import userRoutes from './routes/userRoutes';
 import tokenRoutes from './routes/tokenRoutes';
 import blockchainRoutes from './routes/blockchainRoutes';
+import aaveRoutes from './routes/aaveRoutes';
 
 const server = Fastify({
     logger: true // Esto habilitará el logging detallado
@@ -15,13 +16,14 @@ const MongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/chatterpay'
 async function startServer() {
     try {
         // Conectar a MongoDB
-        await mongoose.connect(MongoURI);
+        //await mongoose.connect(MongoURI);
         console.log('MongoDB connected');
         // Registrar las rutas
         server.register(transactionRoutes);
         server.register(userRoutes);
-        server.register(tokenRoutes)
-        server.register(blockchainRoutes)
+        server.register(tokenRoutes);
+        server.register(aaveRoutes);
+        server.register(blockchainRoutes);
 
         // Iniciar el servidor
         await server.listen({ port: Number(PORT), host: '0.0.0.0' });

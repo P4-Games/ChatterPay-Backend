@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import web3 from '../config';
 import Transaction, { ITransaction } from '../models/transaction';
 import { sendUserOperation } from '../services/walletService';
+import { Alchemy, Network, AlchemySubscription } from "alchemy-sdk";
 
 // Verificar estado de una transacción
 export const checkTransactionStatus = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -149,6 +150,56 @@ export const makeTransaction = async (request: FastifyRequest<{
     return reply.status(201).send(newTransaction);
   } catch (error) {
     console.error('Error making transaction:', error);
+    return reply.status(400).send({ message: 'Bad Request' });
+  }
+};
+
+export const listenTransactions = async (request: FastifyRequest<{
+  Body: {
+    address: string,
+  }
+}>, reply: FastifyReply) => {
+  try {
+    authenticate(request);
+
+    const { address } = request.body;
+
+    const alchemy = new Alchemy({
+      apiKey: process.env.ALCHEMY_API_KEY,
+      network: Network.ETH_SEPOLIA
+    });
+
+    alchemy.ws.on(
+      {
+        method: AlchemySubscription.MINED_TRANSACTIONS,
+      },
+      (tx) => {
+        console.log('New block:', tx);
+      }
+    );
+
+    alchemy.ws.on(
+      {
+        method: AlchemySubscription.MINED_TRANSACTIONS,
+        addresses: [
+          {
+            to: address,
+          },
+        ],
+        includeRemoved: true,
+        hashesOnly: false,
+      },
+      (tx) => {
+        console.log('New transaction:', JSON.stringify(tx));
+      }
+    );
+
+    reply.status(200).send({ message: 'Listening transactions for: ' + address });
+  
+  } catch (
+    error
+  ) {
+    console.error('Error listening transactions:', error);
     return reply.status(400).send({ message: 'Bad Request' });
   }
 };
