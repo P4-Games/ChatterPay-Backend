@@ -54,7 +54,8 @@ export const borrow = async (amount: number, tokenAddress: string, tokenName: st
  * @param amount Monto a depositar en numeros, sin agregar decimales
  * @param address Direccion del token
  */
-export const supply = async (amount: number, tokenAddress: string) => {
+export const supply =  async (request: FastifyRequest<{ Body: { tokenAddress: string, amount: number } }>, reply: FastifyReply) => {
+    const {tokenAddress, amount} = request.body;
     const provider = new ethers.providers.JsonRpcProvider(providerRPC.mumbai.rpc,
         {
             name: "Sepolia",
@@ -84,6 +85,48 @@ export const supply = async (amount: number, tokenAddress: string) => {
         const createReceipt = await contract.supply(...args);
         await createReceipt.wait();
         console.log("Supplied ", amount, createReceipt.hash);
+        //logSupplies(amountToRegister, createReceipt.hash, address);
+    } catch (e) {
+        console.log(e);
+    }
+}
+
+/**
+ * Retirar todo el balance disponible en aave
+ * @param tokenAddress Dirreccion del token a retirar
+ */
+
+export const withdraw = async (request: FastifyRequest<{ Body: { tokenAddress: string} }>, reply: FastifyReply) => {
+    const {tokenAddress} = request.body;
+    const provider = new ethers.providers.JsonRpcProvider(providerRPC.mumbai.rpc,
+        {
+            name: "Sepolia",
+            chainId: 11155111,
+        }
+    );
+
+    const signer = new ethers.Wallet(process.env.SIGNING_KEY ?? "", provider);
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+    const etherPrice = await getPriceByEVMContract([
+        ["eth", ASSETS["eth"]]
+    ]);
+    const amount = 2**256 - 1;
+    const withdrawAmount = Math.floor((amount / parseInt(etherPrice[0][1].toString())) * 1e18).toString();
+    const args = [
+        tokenAddress,
+        withdrawAmount,
+        '0',
+        '0',
+        CONTRACT_ADDRESS,
+    ];
+
+    console.log(JSON.stringify(args))
+
+    try{
+        const createReceipt = await contract.withdraw(...args);
+        await createReceipt.wait();
+        console.log("Withdrawed ", amount, createReceipt.hash);
         //logSupplies(amountToRegister, createReceipt.hash, address);
     } catch (e) {
         console.log(e);
@@ -134,3 +177,4 @@ export const getAAVEYield = async (request: FastifyRequest<{ Params: { address: 
     
     return APY;
 }
+

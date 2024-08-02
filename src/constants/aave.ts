@@ -19,7 +19,7 @@ export const ASSETS_TEST = {
     matic: "0xEEeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 }
 
-export const CONTRACT_ADDRESS = "0x794a61358D6845594F94dc1DB02A252b5b4814aD";
+export const CONTRACT_ADDRESS = "0x794a61358D6845594F94dc1DB02A252b5b4814aD"; // pool aave polygon
 export const CONTRACT_ADDRESS_TEST = "0xcC6114B983E4Ed2737E9BD3961c9924e6216c704";
 
 
