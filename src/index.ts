@@ -17,7 +17,7 @@ const MongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/chatterpay'
 async function startServer() {
     try {
         // Conectar a MongoDB
-        //await mongoose.connect(MongoURI);
+        await mongoose.connect(MongoURI);
         console.log('MongoDB connected');
         //Swagger
         await server.register(require('@fastify/swagger'), {

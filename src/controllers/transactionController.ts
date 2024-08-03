@@ -2,9 +2,6 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import web3 from "../config";
 import Transaction, { ITransaction } from "../models/transaction";
 import { sendUserOperation } from "../services/walletService";
-import { Alchemy, Network, AlchemySubscription } from "alchemy-sdk";
-import Web3 from "web3";
-import { ethers } from "ethers";
 
 // Verificar estado de una transacción
 export const checkTransactionStatus = async (
@@ -53,15 +50,30 @@ export const createTransaction = async (
 
 // Obtener todas las transacciones
 export const getAllTransactions = async (
-	request: FastifyRequest,
+	request: FastifyRequest<{ Querystring: { page?: string, limit?: string } }>,
 	reply: FastifyReply
 ) => {
 	try {
-		const transactions = await Transaction.find();
-		return reply.status(200).send(transactions);
+		const page = parseInt(request.query.page || '1', 10);
+		const limit = parseInt(request.query.limit || '50', 10);
+		const skip = (page - 1) * limit;
+
+		const transactions = await Transaction.find()
+			.skip(skip)
+			.limit(limit)
+			.lean();
+
+		const total = await Transaction.countDocuments();
+
+		return reply.status(200).send({
+			transactions,
+			currentPage: page,
+			totalPages: Math.ceil(total / limit),
+			totalItems: total,
+		});
 	} catch (error) {
 		console.error("Error fetching transactions:", error);
-		return reply.status(400).send({ message: "Bad Request" });
+		return reply.status(500).send({ message: "Internal Server Error" });
 	}
 };
 
