@@ -2,7 +2,7 @@ import { ASSETS, CONTRACT_ADDRESS, providerRPC } from "../constants/aave";
 import dotenv from "dotenv";
 import { getPriceByEVMContract } from "./priceService";
 import { ethers } from "ethers";
-import ABI from "../../aaveABI.json";
+import ABI from "../aaveABI.json";
 import { FastifyReply, FastifyRequest } from "fastify";
 
 dotenv.config({path: './.env'});
