@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { FastifyError, FastifyRequest } from 'fastify';
 import mongoose from 'mongoose';
 import transactionRoutes from './routes/transactionRoutes';
 import userRoutes from './routes/userRoutes';
@@ -19,6 +19,17 @@ async function startServer() {
         // Conectar a MongoDB
         await mongoose.connect(MongoURI);
         console.log('MongoDB connected');
+
+        // parse petitions
+        server.addContentTypeParser('application/json', { parseAs: 'string' }, (req: FastifyRequest, body: string, done: (err: FastifyError | null, body?: any) => void) => {
+            try {
+              const json = JSON.parse(body);
+              done(null, json);
+            } catch (err) {
+              done(err as FastifyError, undefined);
+            }
+          });
+
         //Swagger
         await server.register(require('@fastify/swagger'), {
             openapi: {
