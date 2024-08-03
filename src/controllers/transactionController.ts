@@ -4,6 +4,7 @@ import Transaction, { ITransaction } from "../models/transaction";
 import { sendUserOperation } from "../services/walletService";
 import User, { IUser } from "../models/user";
 import Token, { IToken } from "../models/token";
+import { sendTransferNotification } from "./replyController";
 
 // Verificar estado de una transacción
 export const checkTransactionStatus = async (
@@ -181,8 +182,12 @@ export const makeTransaction = async (
 			return reply.status(400).send({message: "Bad Request, el usuario no esta registrado en ChatterPay"})
 		}
 
-		const toUser: IUser[] = await User.find({"phone_number": channel_user_id});
-		const toWallet = toUser[0].wallet;
+		const toUser: IUser[] = await User.find({"phone_number": to});
+		const toWallet = toUser?.[0]?.wallet;
+
+		if (toWallet) {
+			sendTransferNotification(to, channel_user_id, amount, token);
+		}
 
 		const tokenDB: IToken[] = await Token.find({"name": token})
 		const tokenAddress = tokenDB[0].address;
