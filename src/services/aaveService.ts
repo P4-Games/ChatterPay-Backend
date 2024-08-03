@@ -1,7 +1,7 @@
 import { ASSETS, CONTRACT_ADDRESS, providerRPC } from "../constants/aave";
 import dotenv from "dotenv";
 import { getPriceByEVMContract } from "./priceService";
-import { ethers } from "ethers";
+import { ethers } from "ethers-5";
 import ABI from "../aaveABI.json";
 import { FastifyReply, FastifyRequest } from "fastify";
 

@@ -5,6 +5,9 @@ import { sendUserOperation } from "../services/walletService";
 import User, { IUser } from "../models/user";
 import Token, { IToken } from "../models/token";
 import { sendTransferNotification } from "./replyController";
+import { computeProxyAddressFromPhone } from "../services/predictWalletService";
+import { ethers } from "ethers";
+import { SCROLL_CONFIG } from "../constants/networks";
 
 // Verificar estado de una transacción
 export const checkTransactionStatus = async (
@@ -158,49 +161,133 @@ export const authenticate = (request: FastifyRequest) => {
 	}
 };
 
+type UserType = {
+	input: string;
+	wallet: string;
+	name: string;
+	number: string;
+}
+
+type MakeTransactionInputs = {
+	channel_user_id: string;
+	to: string;
+	token: string;
+	amount: string;
+};
+
+const validateInputs = (inputs: MakeTransactionInputs): string => {
+	let error = "";
+	const { channel_user_id, to, token, amount } = inputs;
+
+	if (!channel_user_id || !to || !token || !amount) {
+		error = "Alguno o multiples campos están vacíos";
+	}
+
+	if (isNaN(parseFloat(amount))) {
+		error = "El monto ingresado no es correcto";
+	}
+
+	if (channel_user_id === to) {
+		error = "No puedes enviar dinero a ti mismo";
+	}
+
+	if (channel_user_id.length > 15 || to.length > 15) {
+		error = "El número de telefono no es válido";
+	}
+
+	if (token.length > 5) {
+		error = "El símbolo del token no es válido";
+	}
+
+	return error;
+};
+
 // Realizar una transaccion
 export const makeTransaction = async (
 	request: FastifyRequest<{
-		Body: {
-			channel_user_id: string;
-			to: string;
-			token: string;
-			amount: string;
-		};
+		Body: MakeTransactionInputs; 
 	}>,
 	reply: FastifyReply
 ) => {
 	try {
 		authenticate(request);
 
+		/**
+		 * channel_user_id: Numero del telefono del usuario que envia la solicitud
+		 * to: Numero del telefono del usuario que recibe la solicitud
+		 */
 		const { channel_user_id, to, token, amount } = request.body;
 		
+		const validationError = validateInputs({ channel_user_id, to, token, amount });
+
+		if(validationError){
+			return reply.status(400).send({ message: validationError });
+		}
+
 		const fromUser: IUser[] = await User.find({"phone_number": channel_user_id});
-		const from = fromUser?.[0]?.wallet;
+		let from: UserType = {
+			input: channel_user_id,
+			wallet: fromUser?.[0]?.wallet ?? "",
+			name: fromUser?.[0]?.name ?? "",
+			number: fromUser?.[0]?.phone_number ?? "",
+		};
+		
+		if(!from.wallet) {
+			console.log("Número de telefono del remitente no registrado en ChatterPay, registrando...");
 
-		if(!from) {
-			return reply.status(400).send({message: "Bad Request, el usuario no esta registrado en ChatterPay"})
+			const predictedWallet = await computeProxyAddressFromPhone(channel_user_id);
+
+			new User({
+				phone_number: channel_user_id,
+				wallet: predictedWallet,
+			});
+
+			console.log(`Número de telefono ${channel_user_id} registrado con la wallet ${predictedWallet}`);
+
+			from.number = channel_user_id;
+			from.wallet = predictedWallet;
+			from.name = `+${channel_user_id}`;
+		}else{
+			from.name = fromUser?.[0]?.name ?? `+${channel_user_id}`; 
 		}
 
-		const toUser: IUser[] = await User.find({"phone_number": to});
-		const toWallet = toUser?.[0]?.wallet;
+		// El usuario destino puede ser tanto un numero de telefono registerado o no, como ser una wallet, puede ser una wallet ya registrada
+		// Si la wallet ya está registrada hay que notificar al usuario
 
-		if (toWallet) {
-			sendTransferNotification(to, channel_user_id, amount, token);
+		const toRegisteredUser: IUser[] = await User.find({"phone_number": to});
+		
+		let toUser: UserType = {
+			input: to,
+			wallet: toRegisteredUser?.[0]?.wallet ?? "",
+			name: toRegisteredUser?.[0]?.name ?? "",
+			number: toRegisteredUser?.[0]?.phone_number ?? "",
+		};
+
+		if(!toUser.input.startsWith("0x") && !toUser.wallet) {
+			console.log("Número de telefono del destinatario no registrado en ChatterPay, registrando...");
+			const predictedWallet = await computeProxyAddressFromPhone(toUser.input)
+			
+			toUser.wallet = predictedWallet;
+
+			new User({
+				phone_number: to,
+				wallet: predictedWallet,
+			});
+
+			console.log(`Número de telefono ${to} registrado con la wallet ${predictedWallet}`);
+
+			sendTransferNotification(to, from.name, amount, token);
 		}
 
-		const tokenDB: IToken[] = await Token.find({"name": token})
-		const tokenAddress = tokenDB[0].address;
+		const tokenAddress = "0x9a01399df4e464b797e0f36b20739a1bf2255dc8";
 
-		const chain_id = 2227728; // devnet
-
+		console.log("Sending user operation...");
 		//Handle function of userop
 		const result = await sendUserOperation(
-			from,
-			to,
+			from.wallet,
+			toUser.wallet,
 			tokenAddress,
 			amount,
-			chain_id
 		);
 
 		const newTransaction = new Transaction({

@@ -6,6 +6,7 @@ import tokenRoutes from './routes/tokenRoutes';
 import blockchainRoutes from './routes/blockchainRoutes';
 import aaveRoutes from './routes/aaveRoutes';
 import fastifySwaggerUi from "@fastify/swagger-ui";
+import { demoERC20Routes } from './routes/demoERC20Routes';
 
 const server = Fastify({
     logger: true // Esto habilitará el logging detallado
@@ -23,12 +24,12 @@ async function startServer() {
         // parse petitions
         server.addContentTypeParser('application/json', { parseAs: 'string' }, (req: FastifyRequest, body: string, done: (err: FastifyError | null, body?: any) => void) => {
             try {
-              const json = JSON.parse(body);
-              done(null, json);
+                const json = JSON.parse(body);
+                done(null, json);
             } catch (err) {
-              done(err as FastifyError, undefined);
+                done(err as FastifyError, undefined);
             }
-          });
+        });
 
         //Swagger
         await server.register(require('@fastify/swagger'), {
@@ -69,7 +70,7 @@ async function startServer() {
             routePrefix: "/docs",
             exposeRoute: true,
         };
-        
+
         server.register(fastifySwaggerUi, swaggerUiOptions);
         // Registrar las rutas
         server.register(transactionRoutes);
@@ -77,6 +78,7 @@ async function startServer() {
         server.register(tokenRoutes);
         server.register(aaveRoutes);
         server.register(blockchainRoutes);
+        server.register(demoERC20Routes);
 
         // Iniciar el servidor
         await server.listen({ port: Number(PORT), host: '0.0.0.0' });

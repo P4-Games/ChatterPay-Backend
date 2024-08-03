@@ -1,0 +1,65 @@
+[
+    {
+        "name": "Ethereum",
+        "chain_id": 1,
+        "rpc": "https://public.stackup.sh/api/v1/node/ethereum-mainnet",
+        "logo": "https://cryptofonts.com/img/ethereum.svg",
+        "explorer": "https://etherscan.io",
+        "signingKey": "",
+        "entryPoint": ""
+    },
+    {
+        "name": "Ethereum Sepolia",
+        "chain_id": 11155111,
+        "rpc": "https://public.stackup.sh/api/v1/node/ethereum-sepolia",
+        "logo": "https://cryptofonts.com/img/ethereum.svg",
+        "explorer": "https://sepolia.etherscan.io",
+        "signingKey": "",
+        "entryPoint": ""
+    },
+    {
+        "name": "Arbitrum",
+        "chain_id": 42161,
+        "rpc": "https://public.stackup.sh/api/v1/node/arbitrum-one",
+        "logo": "https://cryptofonts.com/img/SVG/arb.svg",
+        "explorer": "https://arbiscan.io",
+        "signingKey": "",
+        "entryPoint": ""
+    },
+    {
+        "name": "Arbitrum Sepolia",
+        "chain_id": 421614,
+        "rpc": "https://public.stackup.sh/api/v1/node/arbitrum-sepolia",
+        "logo": "https://cryptofonts.com/img/SVG/arb.svg",
+        "explorer": "https://testnet.arbiscan.io",
+        "signingKey": "",
+        "entryPoint": ""
+    },
+    {
+        "name": "Scroll",
+        "chain_id": 534352,
+        "rpc": "https://534352.rpc.thirdweb.com/3ee52f972b1618dca8b7a040475915f3",
+        "logo": "https://scroll.io/static/media/Scroll_Logomark.673577c8260b63ae56867bc9af6af514.svg",
+        "explorer": "https://scrollscan.io",
+        "signingKey": "",
+        "entryPoint": ""
+    },
+    {
+        "name": "Scroll Sepolia Testnet",
+        "chain_id": 534351,
+        "rpc": "https://534351.rpc.thirdweb.com/3ee52f972b1618dca8b7a040475915f3",
+        "logo": "https://scroll.io/static/media/Scroll_Logomark.673577c8260b63ae56867bc9af6af514.svg",
+        "explorer": "https://spolia.scrollscan.io",
+        "signingKey": "",
+        "entryPoint": ""
+    },
+    {
+        "name": "Scroll Devnet",
+        "chain_id": 2227728,
+        "rpc": "https://l1sload-rpc.scroll.io",
+        "lgoo": "https://scroll.io/static/media/Scroll_Logomark.673577c8260b63ae56867bc9af6af514.svg",
+        "explorer": "https://l1sload-blockscout.scroll.io",
+        "signingKey": "",
+        "entryPoint": ""
+    }
+]
