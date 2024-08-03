@@ -174,14 +174,14 @@ export const makeTransaction = async (
 
 		const { channel_user_id, to, token, amount } = request.body;
 		
-		const fromUser: IUser[] = await User.find({"channel_user_id": channel_user_id});
+		const fromUser: IUser[] = await User.find({"phone_number": channel_user_id});
 		const from = fromUser?.[0]?.wallet;
 
 		if(!from) {
 			return reply.status(400).send({message: "Bad Request, el usuario no esta registrado en ChatterPay"})
 		}
 
-		const toUser: IUser[] = await User.find({"channel_user_id": channel_user_id});
+		const toUser: IUser[] = await User.find({"phone_number": channel_user_id});
 		const toWallet = toUser[0].wallet;
 
 		const tokenDB: IToken[] = await Token.find({"name": token})
