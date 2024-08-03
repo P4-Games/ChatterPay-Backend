@@ -2,6 +2,8 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import web3 from "../config";
 import Transaction, { ITransaction } from "../models/transaction";
 import { sendUserOperation } from "../services/walletService";
+import User, { IUser } from "../models/user";
+import Token, { IToken } from "../models/token";
 
 // Verificar estado de una transacción
 export const checkTransactionStatus = async (
@@ -159,11 +161,10 @@ export const authenticate = (request: FastifyRequest) => {
 export const makeTransaction = async (
 	request: FastifyRequest<{
 		Body: {
-			from: string;
+			channel_user_id: string;
 			to: string;
-			tokenAddress: string;
+			token: string;
 			amount: string;
-			chain_id: number;
 		};
 	}>,
 	reply: FastifyReply
@@ -171,7 +172,18 @@ export const makeTransaction = async (
 	try {
 		authenticate(request);
 
-		const { from, to, tokenAddress, amount, chain_id } = request.body;
+		const { channel_user_id, to, token, amount } = request.body;
+
+		const fromUser: IUser[] = await User.find({"channel_user_id": channel_user_id});
+		const from = fromUser[0].wallet;
+
+		const toUser: IUser[] = await User.find({"channel_user_id": channel_user_id});
+		const toWallet = toUser[0].wallet;
+
+		const tokenDB: IToken[] = await Token.find({"name": token})
+		const tokenAddress = tokenDB[0].address;
+
+		const chain_id = 2227728; // devnet
 
 		//Handle function of userop
 		const result = await sendUserOperation(

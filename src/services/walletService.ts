@@ -145,6 +145,9 @@ function calculateFutureWalletAddress(userId: string, factoryAddress: string): s
 }
 
 export async function supplyAaveByUOp(wallet:string, amount:string, token: string, chain_id: number) {
+
+    
+
     // Check if wallet exists in keystore
     const walletExists = await checkWalletExistsInKeystore(wallet);
 
@@ -167,6 +170,9 @@ export async function supplyAaveByUOp(wallet:string, amount:string, token: strin
     const smartAccountBalance = await erc20.balanceOf(smartAccountAddress);
     console.log("Smart Account balance:", ethers.utils.formatUnits(smartAccountBalance, 6));
 
+    // Setear aave pool
+    const aavePool = new ethers.Contract(aaveAddress, aaveABI, signer);
+
     try {
         const simpleAccount = await Presets.Builder.SimpleAccount.init(
             signer,
@@ -178,8 +184,26 @@ export async function supplyAaveByUOp(wallet:string, amount:string, token: strin
             }
         );
 
-        const callData = erc20.interface.encodeFunctionData("supply", [smartAccountAddress, amount_bn]);
-        
+        const callData = aavePool.interface.encodeFunctionData("supply", [token, amount_bn, smartAccountAddress, 0]);
+        let userOp = simpleAccount.execute(aavePool, 0, callData);
+
+        if (!walletExists) {
+            // Si la wallet no existe, establecer el initCode
+            userOp.setInitCode(createInitCode(factoryAddress, await signer.getAddress()));
+        }
+
+        console.log("UserOperation:", userOp);
+
+        const res = await client.sendUserOperation(userOp);
+        console.log(`UserOpHash: ${res.userOpHash}`);
+
+        const ev = await res.wait();
+        console.log(`Transaction hash: ${ev?.transactionHash ?? null}`);
+
+        return {
+            userOpHash: res.userOpHash,
+            transactionHash: ev?.transactionHash,
+        };
 
     } catch (error) {
         console.error('Error sending user operation:', error);
