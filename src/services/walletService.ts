@@ -1,15 +1,17 @@
 import { ethers } from 'ethers';
 import { Presets, Client } from 'userop';
+import aaveABI from "../aaveABI.json"
+import { CONTRACT_ADDRESS as aaveAddress} from "../constants/aave";
 
 const ERC20_ABI = [
     'function transfer(address to, uint256 amount) returns (bool)',
     'function balanceOf(address account) view returns (uint256)'
 ];
 
-const rpcUrl = process.env.RPC_URL;
-const signingKey = process.env.SIGNING_KEY;
+const rpcUrl = process.env?.RPC_URL ?? "";
+const signingKey = process.env?.SIGNING_KEY ?? "";
 const entryPoint = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
-const factoryAddress = process.env.FACTORY_ADDRESS;
+const factoryAddress = process.env?.FACTORY_ADDRESS ?? "";
 const client = await Client.init(rpcUrl, { entryPoint });
 
 if (!rpcUrl || !signingKey || !factoryAddress) {
@@ -145,9 +147,7 @@ function calculateFutureWalletAddress(userId: string, factoryAddress: string): s
 }
 
 export async function supplyAaveByUOp(wallet:string, amount:string, token: string, chain_id: number) {
-
     
-
     // Check if wallet exists in keystore
     const walletExists = await checkWalletExistsInKeystore(wallet);
 
@@ -185,7 +185,7 @@ export async function supplyAaveByUOp(wallet:string, amount:string, token: strin
         );
 
         const callData = aavePool.interface.encodeFunctionData("supply", [token, amount_bn, smartAccountAddress, 0]);
-        let userOp = simpleAccount.execute(aavePool, 0, callData);
+        let userOp = simpleAccount.execute(aaveAddress, 0, callData);
 
         if (!walletExists) {
             // Si la wallet no existe, establecer el initCode
