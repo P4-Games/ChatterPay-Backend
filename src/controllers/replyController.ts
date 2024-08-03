@@ -16,7 +16,7 @@ const userConversationSchema = new mongoose.Schema({
   unread_count: Number,
 });
 
-const UserConversation = mongoose.model('UserConversation', userConversationSchema);
+const UserConversation = mongoose.model('user_conversations', userConversationSchema);
 
 // Función para conectar a MongoDB
 const connectToMongoDB = async () => {
