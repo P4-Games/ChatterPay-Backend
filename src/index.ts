@@ -5,6 +5,7 @@ import userRoutes from './routes/userRoutes';
 import tokenRoutes from './routes/tokenRoutes';
 import blockchainRoutes from './routes/blockchainRoutes';
 import aaveRoutes from './routes/aaveRoutes';
+import fastifySwaggerUi from "@fastify/swagger-ui";
 
 const server = Fastify({
     logger: true // Esto habilitará el logging detallado
@@ -18,6 +19,47 @@ async function startServer() {
         // Conectar a MongoDB
         //await mongoose.connect(MongoURI);
         console.log('MongoDB connected');
+        //Swagger
+        await server.register(require('@fastify/swagger'), {
+            openapi: {
+                openapi: '3.0.0',
+                info: {
+                    title: 'ChatterPay Backend',
+                    description: 'API Rest documentation for ChatterPay.',
+                    version: '0.1.0'
+                },
+                servers: [
+                    {
+                        url: 'http://localhost:3000',
+                        description: 'Development server'
+                    },
+                    {
+                        url: "https://chatterpay-back-ylswtey2za-uc.a.run.app/",
+                        description: "Production server"
+                    }
+                ],
+                tags: [
+                    { name: 'user', description: 'User related end-points' },
+                    { name: 'code', description: 'Code related end-points' }
+                ],
+                components: {
+                    securitySchemes: {
+                        apiKey: {
+                            type: 'apiKey',
+                            name: 'apiKey',
+                            in: 'header'
+                        }
+                    }
+                },
+            }
+        })
+
+        const swaggerUiOptions = {
+            routePrefix: "/docs",
+            exposeRoute: true,
+        };
+        
+        server.register(fastifySwaggerUi, swaggerUiOptions);
         // Registrar las rutas
         server.register(transactionRoutes);
         server.register(userRoutes);
