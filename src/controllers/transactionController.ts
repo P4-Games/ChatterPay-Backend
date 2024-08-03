@@ -148,7 +148,7 @@ export const deleteTransaction = async (
 };
 
 // Middleware para autenticar usando el token en el encabezado
-const authenticate = (request: FastifyRequest) => {
+export const authenticate = (request: FastifyRequest) => {
 	const token = request.headers["authorization"];
 	if (!token || token !== "chatterPayToken") {
 		throw new Error("Unauthorized");

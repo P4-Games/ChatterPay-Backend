@@ -6,6 +6,19 @@ const ERC20_ABI = [
     'function balanceOf(address account) view returns (uint256)'
 ];
 
+const rpcUrl = process.env.RPC_URL;
+const signingKey = process.env.SIGNING_KEY;
+const entryPoint = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
+const factoryAddress = process.env.FACTORY_ADDRESS;
+const client = await Client.init(rpcUrl, { entryPoint });
+
+if (!rpcUrl || !signingKey || !factoryAddress) {
+    throw new Error("Missing RPC_URL, SIGNING_KEY, or FACTORY_ADDRESS in environment variables");
+}
+
+const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+const signer = new ethers.Wallet(signingKey, provider);
+
 export async function sendUserOperation(
     from: string,
     to: string,
@@ -13,17 +26,6 @@ export async function sendUserOperation(
     amount: string,
     chain_id: number
 ) {
-    const rpcUrl = process.env.RPC_URL;
-    const signingKey = process.env.SIGNING_KEY;
-    const entryPoint = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
-    const factoryAddress = process.env.FACTORY_ADDRESS;
-
-    if (!rpcUrl || !signingKey || !factoryAddress) {
-        throw new Error("Missing RPC_URL, SIGNING_KEY, or FACTORY_ADDRESS in environment variables");
-    }
-
-    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-    const signer = new ethers.Wallet(signingKey, provider);
 
     console.log("EOA address:", await signer.getAddress());
 
@@ -140,4 +142,48 @@ function calculateFutureWalletAddress(userId: string, factoryAddress: string): s
 
     // Tomamos los últimos 20 bytes (40 caracteres) para obtener la dirección
     return ethers.utils.getAddress('0x' + addressBytes.slice(-40));
+}
+
+export async function supplyAaveByUOp(wallet:string, amount:string, token: string, chain_id: number) {
+    // Check if wallet exists in keystore
+    const walletExists = await checkWalletExistsInKeystore(wallet);
+
+    let smartAccountAddress: string;
+    if (walletExists) {
+        // If wallet exists, use the existing address
+        smartAccountAddress = await getWalletAddressFromKeystore(wallet);
+    } else {
+        // If wallet doesn't exist, calculate the future address
+        smartAccountAddress = calculateFutureWalletAddress(wallet, factoryAddress);
+    }
+
+    console.log("Smart Account address for user", wallet, ":", smartAccountAddress);
+
+    // Verificar el balance de la cuenta inteligente
+    const erc20 = new ethers.Contract(token, ERC20_ABI, signer);
+    const amount_bn = ethers.utils.parseUnits(amount, 6);
+
+    // Verificar el balance de la cuenta inteligente
+    const smartAccountBalance = await erc20.balanceOf(smartAccountAddress);
+    console.log("Smart Account balance:", ethers.utils.formatUnits(smartAccountBalance, 6));
+
+    try {
+        const simpleAccount = await Presets.Builder.SimpleAccount.init(
+            signer,
+            rpcUrl,
+            {
+                entryPoint,
+                factory: factoryAddress,
+                salt: ethers.utils.hexZeroPad(ethers.utils.hexlify(wallet), 32) // Usar from como salt
+            }
+        );
+
+        const callData = erc20.interface.encodeFunctionData("supply", [smartAccountAddress, amount_bn]);
+        
+
+    } catch (error) {
+        console.error('Error sending user operation:', error);
+        throw error;
+    }
+
 }
