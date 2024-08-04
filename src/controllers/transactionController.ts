@@ -299,8 +299,6 @@ export const makeTransaction = async (
 			
 		} 
 
-		sendTransferNotification(to, from.name, amount, token);
-
 		const tokenAddress = "0x9a01399df4e464b797e0f36b20739a1bf2255dc8"; // Demo USDT en Devnet Scroll
 
 		console.log("Sending user operation...");
@@ -330,7 +328,14 @@ export const makeTransaction = async (
 
 		await newTransaction.save();
 
+		try{
+			sendTransferNotification(to, from.name, amount, token);
+		} catch (error:any) {
+			console.error(error)
+		}
+
 		return reply.status(201).send(newTransaction);
+		
 	} catch (error) {
 		console.error("Error making transaction:", error);
 		return reply.status(400).send({ message: "Bad Request" });
