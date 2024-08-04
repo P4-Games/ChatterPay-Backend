@@ -27,6 +27,7 @@
     "@types/mocha": "^10.0.7",
     "alchemy-sdk": "^3.3.1",
     "axios": "^1.7.3",
+    "bcrypt": "^5.1.1",
     "dotenv": "^16.4.5",
     "ethers": "^5.7.2",
     "ethers-5": "npm:ethers@^5.7.2",

@@ -5,9 +5,10 @@ import { sendUserOperation } from "../services/walletService";
 import User, { IUser } from "../models/user";
 import Token, { IToken } from "../models/token";
 import { sendTransferNotification } from "./replyController";
-import { computeProxyAddressFromPhone } from "../services/predictWalletService";
+import { ComputedAddress, computeProxyAddressFromPhone, PhoneNumberToAddress } from "../services/predictWalletService";
 import { ethers } from "ethers";
 import { SCROLL_CONFIG } from "../constants/networks";
+import { createUser } from "./userController";
 
 // Verificar estado de una transacción
 export const checkTransactionStatus = async (
@@ -165,6 +166,7 @@ type UserType = {
 	input: string;
 	wallet: string;
 	name: string;
+	privateKey?: string;
 	number: string;
 }
 
@@ -224,10 +226,14 @@ export const makeTransaction = async (
 			return reply.status(400).send({ message: validationError });
 		}
 
+		let createdAddress = "";
+
 		const fromUser: IUser[] = await User.find({"phone_number": channel_user_id});
+		
 		let from: UserType = {
 			input: channel_user_id,
 			wallet: fromUser?.[0]?.wallet ?? "",
+			privateKey: fromUser?.[0]?.privateKey ?? "",
 			name: fromUser?.[0]?.name ?? "",
 			number: fromUser?.[0]?.phone_number ?? "",
 		};
@@ -235,18 +241,26 @@ export const makeTransaction = async (
 		if(!from.wallet) {
 			console.log("Número de telefono del remitente no registrado en ChatterPay, registrando...");
 
-			const predictedWallet = await computeProxyAddressFromPhone(channel_user_id);
+			const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(channel_user_id);
 
-			new User({
+			User.create(new User({
 				phone_number: channel_user_id,
-				wallet: predictedWallet,
-			});
+				wallet: predictedWallet.proxyAddress,
+				privateKey: predictedWallet.privateKey,
+				code: null,
+				photo: null,
+				email: null,
+				name: null,
+			}));
 
-			console.log(`Número de telefono ${channel_user_id} registrado con la wallet ${predictedWallet}`);
+			console.log(`Número de telefono ${channel_user_id} registrado con la wallet ${predictedWallet.EOAAddress}`);
 
 			from.number = channel_user_id;
-			from.wallet = predictedWallet;
+			from.wallet = predictedWallet.proxyAddress;
+			from.privateKey = predictedWallet.privateKey;
 			from.name = `+${channel_user_id}`;
+
+			createdAddress = predictedWallet.EOAAddress;
 		}else{
 			from.name = fromUser?.[0]?.name ?? `+${channel_user_id}`; 
 		}
@@ -265,21 +279,29 @@ export const makeTransaction = async (
 
 		if(!toUser.input.startsWith("0x") && !toUser.wallet) {
 			console.log("Número de telefono del destinatario no registrado en ChatterPay, registrando...");
-			const predictedWallet = await computeProxyAddressFromPhone(toUser.input)
+			const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(toUser.input)
 			
-			toUser.wallet = predictedWallet;
+			toUser.wallet = predictedWallet.proxyAddress;
+			createdAddress = predictedWallet.EOAAddress;
 
-			new User({
+			User.create(new User({
 				phone_number: to,
-				wallet: predictedWallet,
-			});
+				wallet: predictedWallet.proxyAddress,
+				privateKey: predictedWallet.privateKey,
+				code: null,
+				email: null,
+				photo: null,
+				name: null,
+			}));
 
-			console.log(`Número de telefono ${to} registrado con la wallet ${predictedWallet}`);
+			console.log(`Número de telefono ${to} registrado con la wallet ${predictedWallet.EOAAddress}`);
 
-			sendTransferNotification(to, from.name, amount, token);
-		}
+			
+		} 
 
-		const tokenAddress = "0x9a01399df4e464b797e0f36b20739a1bf2255dc8";
+		sendTransferNotification(to, from.name, amount, token);
+
+		const tokenAddress = "0x9a01399df4e464b797e0f36b20739a1bf2255dc8"; // Demo USDT en Devnet Scroll
 
 		console.log("Sending user operation...");
 		//Handle function of userop
@@ -288,18 +310,23 @@ export const makeTransaction = async (
 			toUser.wallet,
 			tokenAddress,
 			amount,
+			createdAddress
 		);
+
+		if(!result) return;
 
 		const newTransaction = new Transaction({
 			trx_hash: result.transactionHash,
-			wallet_from: from,
+			wallet_from: from.wallet,
 			wallet_to: to,
 			type: "transfer",
 			date: new Date(),
 			status: result.transactionHash ? "completed" : "failed",
-			amount,
-			token: tokenAddress,
-		});
+			amount: parseFloat(amount),
+			token: "USDT",
+		})
+
+		await Transaction.create(newTransaction);
 
 		await newTransaction.save();
 

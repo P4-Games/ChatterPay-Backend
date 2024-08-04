@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+import { BigNumber, ethers } from 'ethers';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts/factories/ChatterPayWalletFactory__factory';
 import { ChatterPay__factory } from '../types/ethers-contracts/factories/ChatterPay__factory';
 import { SCROLL_CONFIG } from '../constants/networks';
@@ -23,32 +23,56 @@ export async function sendUserOperation(
     from: string,
     to: string,
     tokenAddress: string,
-    amount: string
+    amount: string,
+    createdAddress?: string
 ) {
     const factory = ChatterPayWalletFactory__factory.connect(SCROLL_CONFIG.CHATTER_PAY_WALLET_FACTORY_ADDRESS, signer);
 
     // Check if wallet exists
     console.log(`Checking if wallet exists for ${from}...`);
-    let smartAccountAddress = await factory.computeProxyAddress(from, { gasLimit: 100000 });
+    let smartAccountAddress = from;
     const code = await provider.getCode(smartAccountAddress);
     
     console.log(`Wallet code: ${code}`);
     if (code === '0x') {
+        if(!createdAddress) return null;
         // Create new wallet if it doesn't exist
-        console.log(`Creating new wallet for ${from}...`);
-        const tx = await factory.createProxy(from, { gasLimit: 100000 });
-        await tx.wait();
-        smartAccountAddress = await factory.computeProxyAddress(from, { gasLimit: 100000 });
+        console.log(`Creating new wallet for ${createdAddress}...`);
+        const tx = await factory.createProxy(createdAddress, { gasLimit: 1000000 });
+        let result = await tx.wait();
+        console.log(JSON.stringify(result));
     }
 
     console.log(`Wallet address: ${smartAccountAddress}, setting up ChatterPay contract...`);
-    const chatterPay = new ethers.Contract(SCROLL_CONFIG.CHATTER_PAY_ADDRESS, chatterPayABI, signer);
-
+    const chatterPay = new ethers.Contract(smartAccountAddress, chatterPayABI, signer);
+    
     // Prepare the transaction data
     console.log(`Preparing transaction data...`);
-    const erc20 = new ethers.Contract(tokenAddress, ['function transfer(address to, uint256 amount)'], signer);
+    const erc20 = new ethers.Contract(tokenAddress, [
+        'function transfer(address to, uint256 amount)',
+        'function mint(address, uint256 amount)',
+        'function balanceOf(address owner) view returns (uint256)',
+    ], signer);
     const amount_bn = ethers.utils.parseUnits(amount, 18);
     const transferEncode = erc20.interface.encodeFunctionData("transfer", [to, amount_bn])
+
+    // Check balance of the wallet
+    const balanceCheck = await erc20.balanceOf(smartAccountAddress);
+    let balance = ethers.utils.formatUnits(balanceCheck, 18);
+    
+    console.log(`Balance of the wallet is ${ethers.utils.formatUnits(balanceCheck, 18)}`);
+
+    if (parseFloat(balance) < 1) {
+        //Mintear "amount" tokens al usuario que envia la solicitud
+        const amountToMint = ethers.utils.parseUnits(amount, 18);
+        
+        console.log(`Funding wallet with 100,000 tokens...`);
+        const tx = await erc20.mint(smartAccountAddress, amountToMint, { gasLimit: 300000 });
+        await tx.wait();
+        console.log(`Funded wallet with 100,000 tokens`);
+    }
+    const newbalance = await erc20.balanceOf(smartAccountAddress);
+    console.log(`El nuevo balance del SCA es ${ethers.utils.formatUnits(newbalance, 18)}`);
 
     const callData = chatterPay.interface.encodeFunctionData("execute", [
         tokenAddress,
@@ -56,16 +80,10 @@ export async function sendUserOperation(
         transferEncode
     ]);
 
-
-    console.log('xxxxxxxxxxxxxxxxxxxxxxx')
-
     try {
         // Check balance of the signer
-        console.log('1')
         const balance = await signer.getBalance();
-        console.log('2')
         const minBalance = ethers.utils.parseEther("0.001");
-        console.log('3', balance, minBalance)
 
         if (balance.lt(minBalance)) {
             // Fund the wallet with 0.001 ETH if balance is less than 0.001 ETH
@@ -85,7 +103,7 @@ export async function sendUserOperation(
         const tx = await signer.sendTransaction({
             to: smartAccountAddress,
             data: callData,
-            gasLimit: 50000,
+            gasLimit: 1000000,
         });
 
         console.log(`Transaction hash: ${tx.hash}`);

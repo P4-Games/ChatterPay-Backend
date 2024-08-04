@@ -34,3 +34,28 @@ export const issueTokens = async (request: FastifyRequest<{ Body: {
         return reply.status(400).send({ message: 'Bad Request' });
     }
 };
+
+// Funcion para ver balace de Demo USDT
+export const walletBalance = async ( request: FastifyRequest<{ Params: { wallet: string } }>, reply: FastifyReply) => {
+    const wallet = request.params.wallet;
+  
+    const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL);
+    const signer = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+    const erc20 = new ethers.Contract("0x9a01399df4E464B797E0f36B20739a1BF2255Dc8", 
+        [
+            'function transfer(address to, uint256 amount)',
+            'function mint(address, uint256 amount)'
+        ], signer
+    );
+  
+    try {
+      const balance = await erc20.balanceOf(wallet);
+      
+      // Normalmente, el balance está en la unidad mínima del token, por lo que puedes necesitar formatearlo
+      const formattedBalance = ethers.utils.formatUnits(balance, 18); // Ajusta los decimales según el token
+      
+      reply.send({ balance: formattedBalance });
+    } catch (error:any) {
+      reply.status(400).send({ error: 'Error fetching balance', details: error.message });
+    }
+  };

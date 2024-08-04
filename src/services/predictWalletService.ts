@@ -1,5 +1,7 @@
 import { ethers } from 'ethers';
 import { SCROLL_CONFIG } from '../constants/networks';
+import * as crypto from 'crypto';
+import User from '../models/user';
 
 const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL);
 
@@ -8,23 +10,55 @@ const factoryABI = [
     "function computeProxyAddress(address _owner) public view returns (address)"
 ];
 
-function phoneNumberToAddress(phoneNumber: string): string {
-    // Remove any non-digit characters from the phone number
-    const cleanNumber = phoneNumber.replace(/\D/g, '');
-
-    // Hash the cleaned phone number
-    const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(cleanNumber));
-
-    // Take the last 20 bytes of the hash to create an Ethereum address
-    return ethers.utils.getAddress('0x' + hash.slice(-40));
+export interface PhoneNumberToAddress {
+    hashedPrivateKey: string;
+    publicKey: string;
 }
 
-export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<string> {
+function phoneNumberToAddress(phoneNumber: string): PhoneNumberToAddress {
+    const seedPrivateKey = process.env.PRIVATE_KEY;
+    if (!seedPrivateKey) {
+        throw new Error('Seed private key not found in environment variables');
+    }
+
+    // Create a seed for generating a new wallet
+    const seed = seedPrivateKey + phoneNumber;
+
+    // Generate a new wallet using the seed
+    const wallet = ethers.Wallet.createRandom();
+
+    // Get the public key and private key of the new wallet
+    const publicKey = wallet.address;
+    const userPrivateKey = wallet.privateKey;
+
+    // Hash the user's private key using the seed
+    const hashedPrivateKey = crypto.createHash('sha256').update(seed + userPrivateKey).digest('hex');
+
+    return {
+        hashedPrivateKey,
+        publicKey
+    };
+}
+
+export interface ComputedAddress {
+    proxyAddress: string;
+    EOAAddress: string;
+    privateKey: string;
+}
+
+export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
     const factory = new ethers.Contract(SCROLL_CONFIG.CHATTER_PAY_WALLET_FACTORY_ADDRESS, factoryABI, provider);
 
     // Convert phone number to Ethereum address
-    const ownerAddress = phoneNumberToAddress(phoneNumber);
+    const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(phoneNumber);
 
     // Use the contract's computeProxyAddress function directly
-    return await factory.computeProxyAddress(ownerAddress, { gasLimit: 100000 });
+    console.log('Computing proxy address...', JSON.stringify(ownerAddress));
+    const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, { gasLimit: 100000 });
+    
+    return {
+        proxyAddress,
+        EOAAddress: ownerAddress.publicKey,
+        privateKey: ownerAddress.hashedPrivateKey
+    } 
 }
