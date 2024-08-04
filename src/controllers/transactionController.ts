@@ -4,7 +4,7 @@ import Transaction, { ITransaction } from "../models/transaction";
 import { sendUserOperation } from "../services/walletService";
 import User, { IUser } from "../models/user";
 import Token, { IToken } from "../models/token";
-import { sendTransferNotification } from "./replyController";
+import { sendTransferNotification, sendTransferNotification2 } from "./replyController";
 import { ComputedAddress, computeProxyAddressFromPhone, PhoneNumberToAddress } from "../services/predictWalletService";
 import { ethers } from "ethers";
 import { SCROLL_CONFIG } from "../constants/networks";
@@ -328,15 +328,14 @@ export const makeTransaction = async (
 
 		try{
 			console.log("Trying to notificate transfer");
-			sendTransferNotification(to, from.name, amount, token);
+			await sendTransferNotification(to, from.name, amount, token);
 			console.log("Notification sent!");
+			await sendTransferNotification2(channel_user_id, to, amount, token, result.transactionHash);
 		} catch (error:any) {
 			console.error(error)
 		}
 
-		const replyMessage = `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: https://l1sload-blockscout.scroll.io/tx/${result.transactionHash}`;
-
-		return reply.status(200).send({status: "OK", message: replyMessage, code:"OK_TX"});
+		return reply.status(200)
 		
 	} catch (error) {
 		console.error("Error making transaction:", error);

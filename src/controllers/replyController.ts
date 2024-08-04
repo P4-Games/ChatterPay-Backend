@@ -32,6 +32,35 @@ export const sendTransferNotification = async (channel_user_id: string, from: st
     }
 }
 
+export const sendTransferNotification2 = async (channel_user_id: string, to:string | null, amount: string, token: string, txHash:string) => {
+    const mongoUrl = 'mongodb+srv://chatbot:p4tech@p4techsolutions.hvxfjoc.mongodb.net/chatterpay';
+    
+    try {
+        console.log("Sending notifications");
+        const connection = await connectToMongoDB(mongoUrl);
+        
+        // Creamos los modelos usando esta conexión específica
+        const UserConversation = connection.model('user_conversations', userConversationSchema);
+        
+        await updateUserConversationStatus(UserConversation, channel_user_id, "operator");
+        console.log("Updated conversation to operator");
+        
+        const payload: OperatorReplyPayload = {
+            data_token: 'ddbe7f0e3d93447486efa9ef77954ae7',
+            channel_user_id: channel_user_id,
+            message: `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: https://l1sload-blockscout.scroll.io/tx/${txHash}`
+        };
+        await sendOperatorReply(payload);
+        console.log("Sent operator reply");
+
+		await updateUserConversationStatus(UserConversation, channel_user_id, "assistant");
+        console.log("Updated conversation to assistant");
+    } catch (error) {
+        console.error("Error in sendTransferNotification:", error);
+        throw error;
+    }
+}
+
 const updateUserConversationStatus = async (UserConversation: mongoose.Model<any>, channelUserId: string, newStatus: string) => {
     try {
         await UserConversation.findOneAndUpdate(
