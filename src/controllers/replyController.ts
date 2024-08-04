@@ -19,12 +19,12 @@ export const sendTransferNotification = async (channel_user_id: string, from: st
         const payload: OperatorReplyPayload = {
             data_token: 'ddbe7f0e3d93447486efa9ef77954ae7',
             channel_user_id: channel_user_id,
-            message: `${from} te envio ${amount} ${token}. \n Ya estan disponibles en tu billetera ChatterPay! `
+            message: `${from} te envio ${amount} ${token} 💸. \n Ya estan disponibles en tu billetera ChatterPay! 🥳`
         };
         await sendOperatorReply(payload);
         console.log("Sent operator reply");
-        
-        await updateUserConversationStatus(UserConversation, channel_user_id, "assistant");
+
+		await updateUserConversationStatus(UserConversation, channel_user_id, "assistant");
         console.log("Updated conversation to assistant");
     } catch (error) {
         console.error("Error in sendTransferNotification:", error);
