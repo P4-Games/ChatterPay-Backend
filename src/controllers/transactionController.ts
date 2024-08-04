@@ -290,13 +290,11 @@ export const makeTransaction = async (
 				privateKey: predictedWallet.privateKey,
 				code: null,
 				email: null,
-				photo:  "/assets/images/avatars/generic_user.jpg",
+				photo: "/assets/images/avatars/generic_user.jpg",
 				name: null,
 			}));
 
 			console.log(`Número de telefono ${to} registrado con la wallet ${predictedWallet.EOAAddress}`);
-
-			
 		} 
 
 		const tokenAddress = "0x9a01399df4e464b797e0f36b20739a1bf2255dc8"; // Demo USDT en Devnet Scroll

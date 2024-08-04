@@ -1,44 +1,48 @@
 import axios from 'axios';
-import { channel } from 'diagnostics_channel';
+import { connectToMongoDB } from '../db/dbConnections';
 import mongoose from 'mongoose';
+import { userConversationSchema } from '../models/userConversation';
 
-// Definir el esquema y modelo para user_conversations
-const userConversationSchema = new mongoose.Schema({
-	name: String,
-	channel_user_id: String,
-	created_ts: Date,
-	last_message_ts: Date,
-	cost: Number,
-	messages: Array,
-	status: String,
-	control: String,
-	messaging_channel: String,
-	unread_count: Number,
-});
+export const sendTransferNotification = async (channel_user_id: string, from: string | null, amount: string, token: string) => {
+    const mongoUrl = 'mongodb+srv://chatbot:p4tech@p4techsolutions.hvxfjoc.mongodb.net/chatterpay';
+    
+    try {
+        console.log("Sending notifications");
+        const connection = await connectToMongoDB(mongoUrl);
+        
+        // Creamos los modelos usando esta conexión específica
+        const UserConversation = connection.model('user_conversations', userConversationSchema);
+        
+        await updateUserConversationStatus(UserConversation, channel_user_id, "operator");
+        console.log("Updated conversation to operator");
+        
+        const payload: OperatorReplyPayload = {
+            data_token: 'ddbe7f0e3d93447486efa9ef77954ae7',
+            channel_user_id: channel_user_id,
+            message: `Haz recibido una transferencia ${from ? `de ${from}` : ""}! Te ${from ? "envió" : "enviaron"} ${amount} ${token}`
+        };
+        await sendOperatorReply(payload);
+        console.log("Sent operator reply");
+        
+        await updateUserConversationStatus(UserConversation, channel_user_id, "assistant");
+        console.log("Updated conversation to assistant");
+    } catch (error) {
+        console.error("Error in sendTransferNotification:", error);
+        throw error;
+    }
+}
 
-const UserConversation = mongoose.model('user_conversations', userConversationSchema);
-
-// Función para conectar a MongoDB
-const connectToMongoDB = async () => {
-	try {
-		await mongoose.connect('mongodb+srv://chatbot:p4tech@p4techsolutions.hvxfjoc.mongodb.net/chatterpay');
-		console.log('Conexión a MongoDB exitosa');
-	} catch (error) {
-		console.error('Error al conectar a MongoDB', error);
-	}
-};
-
-// Función para actualizar user_conversations
-const updateUserConversationStatus = async (channelUserId: string, newStatus: string) => {
-	try {
-		await UserConversation.findOneAndUpdate(
-			{ channel_user_id: channelUserId },
-			{ $set: { control: newStatus } }
-		);
-		console.log('Actualización de estado exitosa');
-	} catch (error) {
-		console.error('Error al actualizar user_conversations', error);
-	}
+const updateUserConversationStatus = async (UserConversation: mongoose.Model<any>, channelUserId: string, newStatus: string) => {
+    try {
+        await UserConversation.findOneAndUpdate(
+            { channel_user_id: channelUserId },
+            { $set: { control: newStatus } }
+        );
+        console.log('Actualización de estado exitosa');
+    } catch (error) {
+        console.error('Error al actualizar user_conversations', error);
+        throw error;
+    }
 };
 
 interface OperatorReplyPayload {
@@ -62,21 +66,3 @@ const sendOperatorReply = async (payload: OperatorReplyPayload) => {
 		throw error;
 	}
 };
-
-export const sendTransferNotification = async (channel_user_id: string, from: string | null, amount: string, token: string) => {
-	console.log("im here sending notifications");
-	await connectToMongoDB();
-	console.log("im connected to mongo")
-	await updateUserConversationStatus(channel_user_id, "operator");
-	console.log("i updated the conversation to operator")
-	const payload: OperatorReplyPayload = {
-		data_token: 'ddbe7f0e3d93447486efa9ef77954ae7',
-		channel_user_id: channel_user_id, // El id del MongoDB de la conversación
-		message: `Haz recibido una transferencia ${from ? `de ${from}` : ""}! Te ${from ? "envió" : "enviaron"} ${amount} ${token}`
-	};
-	await sendOperatorReply(payload);
-	console.log("i sended operator reply")
-	await updateUserConversationStatus(channel_user_id, "assistant");
-	console.log("i updated the conversation to assistant")
-	mongoose.connection.close(); // Cierra la conexión después de la operación
-}
