@@ -38,16 +38,17 @@ export const issueTokens = async (request: FastifyRequest<{ Body: {
 // Funcion para ver balace de Demo USDT
 export const walletBalance = async ( request: FastifyRequest<{ Params: { wallet: string } }>, reply: FastifyReply) => {
     const wallet = request.params.wallet;
-  
+
     const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL);
     const signer = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
     const erc20 = new ethers.Contract("0x9a01399df4E464B797E0f36B20739a1BF2255Dc8", 
         [
             'function transfer(address to, uint256 amount)',
+            'function balanceOf(address owner) view returns (uint256)',
             'function mint(address, uint256 amount)'
         ], signer
     );
-  
+
     try {
       const balance = await erc20.balanceOf(wallet);
       

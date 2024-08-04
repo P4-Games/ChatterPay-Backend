@@ -6,19 +6,6 @@ import chatterPayABI from "../chatterPayABI.json"
 const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL);
 const signer = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
 
-/**
- * Flujo: 
-    Si el usuario no tiene wallet:
-        1. Crear una wallet con una private key que guardamos en la bd (EOA)
-        2. La fondeo con eth
-        3. Con esa wallet llamamos a la funcion del contrato computeProxyAddress para obtener el address futuro de la smart account, usando el address de la wallet EOA generada
-        4. Cuando tengamos la UserOperation, ahi firmamos esa transaccion con la EOA del usuario y se la manda al entry point (0x0000000071727De22E5E9d8BAf0edAc6f37da032)
-    
-    Si el usuario tiene wallet:
-        0. Obtenemos la private key del usuario de la bd (user -> signing_key)
-        1. Llamamos a la funcion del contrato computeProxyAddress para obtener el address de la smart account
-        2. Cuando tengamos la UserOperation, ahi firmamos esa transaccion con la EOA del usuario y se la manda al entry point desde el signer del backend (0x0000000071727De22E5E9d8BAf0edAc6f37da032)
- */
 export async function sendUserOperation(
     from: string,
     to: string,
