@@ -57,8 +57,15 @@ export const walletBalance = async (request: FastifyRequest<{ Params: { wallet: 
         // Normalmente, el balance está en la unidad mínima del token, por lo que puedes necesitar formatearlo
         const formattedBalance = ethers.utils.formatUnits(balance, 18); // Ajusta los decimales según el token
 
-        reply.send({ 
-            balance: Math.round(parseFloat(formattedBalance) * 1e2) / 1e2 
+        reply.send({
+            explorer_url: "https://l1sload-blockscout.scroll.io/address/" + wallet, 
+            balances: [
+                {
+                    token: "USDT",
+                    logo: "https://cryptofonts.com/img/SVG/usdt.svg",
+                    balance: Math.round(parseFloat(formattedBalance) * 1e2) / 1e2,
+                }
+            ]
         });
     } catch (error: any) {
         reply.status(400).send({ error: 'Error fetching balance', details: error.message });
