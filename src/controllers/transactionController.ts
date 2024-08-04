@@ -204,6 +204,121 @@ const validateInputs = (inputs: MakeTransactionInputs): string => {
 	return error;
 };
 
+const execute = async (channel_user_id: string, to: string, token: string, amount: string) => {
+
+	let createdAddress = "";
+
+	const fromUser: IUser[] = await User.find({"phone_number": channel_user_id});
+	
+	let from: UserType = {
+		input: channel_user_id,
+		wallet: fromUser?.[0]?.wallet ?? "",
+		privateKey: fromUser?.[0]?.privateKey ?? "",
+		name: fromUser?.[0]?.name ?? "",
+		number: fromUser?.[0]?.phone_number ?? "",
+	};
+	
+	if(!from.wallet) {
+		console.log("Número de telefono del remitente no registrado en ChatterPay, registrando...");
+
+		const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(channel_user_id);
+
+		User.create(new User({
+			phone_number: channel_user_id,
+			wallet: predictedWallet.proxyAddress,
+			privateKey: predictedWallet.privateKey,
+			code: null,
+			photo: null,
+			email: null,
+			name: null,
+		}));
+
+		console.log(`Número de telefono ${channel_user_id} registrado con la wallet ${predictedWallet.EOAAddress}`);
+
+		from.number = channel_user_id;
+		from.wallet = predictedWallet.proxyAddress;
+		from.privateKey = predictedWallet.privateKey;
+		from.name = `+${channel_user_id}`;
+
+		createdAddress = predictedWallet.EOAAddress;
+	}else{
+		from.name = fromUser?.[0]?.name ?? `+${channel_user_id}`; 
+	}
+
+	// El usuario destino puede ser tanto un numero de telefono registerado o no, como ser una wallet, puede ser una wallet ya registrada
+	// Si la wallet ya está registrada hay que notificar al usuario
+
+	const toRegisteredUser: IUser[] = await User.find({"phone_number": to});
+	
+	let toUser: UserType = {
+		input: to,
+		wallet: toRegisteredUser?.[0]?.wallet ?? "",
+		name: toRegisteredUser?.[0]?.name ?? "",
+		number: toRegisteredUser?.[0]?.phone_number ?? "",
+	};
+
+	if(!toUser.input.startsWith("0x") && !toUser.wallet) {
+		console.log("Número de telefono del destinatario no registrado en ChatterPay, registrando...");
+		const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(toUser.input)
+		
+		toUser.wallet = predictedWallet.proxyAddress;
+		createdAddress = predictedWallet.EOAAddress;
+
+		User.create(new User({
+			phone_number: to,
+			wallet: predictedWallet.proxyAddress,
+			privateKey: predictedWallet.privateKey,
+			code: null,
+			email: null,
+			photo: "/assets/images/avatars/generic_user.jpg",
+			name: null,
+		}));
+
+		console.log(`Número de telefono ${to} registrado con la wallet ${predictedWallet.EOAAddress}`);
+	} 
+
+	const tokenAddress = "0x9a01399df4e464b797e0f36b20739a1bf2255dc8"; // Demo USDT en Devnet Scroll
+
+	console.log("Sending user operation...");
+	//Handle function of userop
+	const result = await sendUserOperation(
+		from.wallet,
+		toUser.wallet,
+		tokenAddress,
+		amount,
+		createdAddress
+	);
+
+	if(!result) return;
+
+	const newTransaction = new Transaction({
+		trx_hash: result.transactionHash,
+		wallet_from: from.wallet,
+		wallet_to: toUser.wallet,
+		type: "transfer",
+		date: new Date(),
+		status: result.transactionHash ? "completed" : "failed",
+		amount: parseFloat(amount),
+		token: "USDT",
+	})
+
+	await Transaction.create(newTransaction);
+
+	await newTransaction.save();
+
+	try{
+		console.log("Trying to notificate transfer");
+		
+		let fromName = from?.name ?? from?.number ?? "Alguien";
+
+		sendTransferNotification(to, fromName, amount, token);
+		console.log("Notification sent!");
+		sendTransferNotification2(channel_user_id, to, amount, token, result.transactionHash);
+	} catch (error:any) {
+		console.error(error)
+	}
+}
+
 // Realizar una transaccion
 export const makeTransaction = async (
 	request: FastifyRequest<{
@@ -219,123 +334,16 @@ export const makeTransaction = async (
 		 * to: Numero del telefono del usuario que recibe la solicitud
 		 */
 		const { channel_user_id, to, token, amount } = request.body;
-		
+			
 		const validationError = validateInputs({ channel_user_id, to, token, amount });
 
 		if(validationError){
 			return reply.status(400).send({ message: validationError });
 		}
 
-		let createdAddress = "";
-
-		const fromUser: IUser[] = await User.find({"phone_number": channel_user_id});
+		execute(channel_user_id, to, token, amount);
 		
-		let from: UserType = {
-			input: channel_user_id,
-			wallet: fromUser?.[0]?.wallet ?? "",
-			privateKey: fromUser?.[0]?.privateKey ?? "",
-			name: fromUser?.[0]?.name ?? "",
-			number: fromUser?.[0]?.phone_number ?? "",
-		};
-		
-		if(!from.wallet) {
-			console.log("Número de telefono del remitente no registrado en ChatterPay, registrando...");
-
-			const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(channel_user_id);
-
-			User.create(new User({
-				phone_number: channel_user_id,
-				wallet: predictedWallet.proxyAddress,
-				privateKey: predictedWallet.privateKey,
-				code: null,
-				photo: null,
-				email: null,
-				name: null,
-			}));
-
-			console.log(`Número de telefono ${channel_user_id} registrado con la wallet ${predictedWallet.EOAAddress}`);
-
-			from.number = channel_user_id;
-			from.wallet = predictedWallet.proxyAddress;
-			from.privateKey = predictedWallet.privateKey;
-			from.name = `+${channel_user_id}`;
-
-			createdAddress = predictedWallet.EOAAddress;
-		}else{
-			from.name = fromUser?.[0]?.name ?? `+${channel_user_id}`; 
-		}
-
-		// El usuario destino puede ser tanto un numero de telefono registerado o no, como ser una wallet, puede ser una wallet ya registrada
-		// Si la wallet ya está registrada hay que notificar al usuario
-
-		const toRegisteredUser: IUser[] = await User.find({"phone_number": to});
-		
-		let toUser: UserType = {
-			input: to,
-			wallet: toRegisteredUser?.[0]?.wallet ?? "",
-			name: toRegisteredUser?.[0]?.name ?? "",
-			number: toRegisteredUser?.[0]?.phone_number ?? "",
-		};
-
-		if(!toUser.input.startsWith("0x") && !toUser.wallet) {
-			console.log("Número de telefono del destinatario no registrado en ChatterPay, registrando...");
-			const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(toUser.input)
-			
-			toUser.wallet = predictedWallet.proxyAddress;
-			createdAddress = predictedWallet.EOAAddress;
-
-			User.create(new User({
-				phone_number: to,
-				wallet: predictedWallet.proxyAddress,
-				privateKey: predictedWallet.privateKey,
-				code: null,
-				email: null,
-				photo: "/assets/images/avatars/generic_user.jpg",
-				name: null,
-			}));
-
-			console.log(`Número de telefono ${to} registrado con la wallet ${predictedWallet.EOAAddress}`);
-		} 
-
-		const tokenAddress = "0x9a01399df4e464b797e0f36b20739a1bf2255dc8"; // Demo USDT en Devnet Scroll
-
-		console.log("Sending user operation...");
-		//Handle function of userop
-		const result = await sendUserOperation(
-			from.wallet,
-			toUser.wallet,
-			tokenAddress,
-			amount,
-			createdAddress
-		);
-
-		if(!result) return;
-
-		const newTransaction = new Transaction({
-			trx_hash: result.transactionHash,
-			wallet_from: from.wallet,
-			wallet_to: toUser.wallet,
-			type: "transfer",
-			date: new Date(),
-			status: result.transactionHash ? "completed" : "failed",
-			amount: parseFloat(amount),
-			token: "USDT",
-		})
-
-		await Transaction.create(newTransaction);
-
-		await newTransaction.save();
-
-		try{
-			console.log("Trying to notificate transfer");
-			await sendTransferNotification(to, from.name, amount, token);
-			console.log("Notification sent!");
-			await sendTransferNotification2(channel_user_id, to, amount, token, result.transactionHash);
-		} catch (error:any) {
-			console.error(error)
-		}
-
-		return reply.status(200)
+		return reply.status(200).send({ message: "Transaction in progress..." }); 
 		
 	} catch (error) {
 		console.error("Error making transaction:", error);
