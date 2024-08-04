@@ -31,9 +31,15 @@ function parseBody(body: string): any {
             return JSON.parse(fixedBody);
         }
     } 
-    // If it contains '=' and '&', it's likely URL-encoded
-    else if (body.includes('=') && body.includes('&')) {
-        console.log('Parsing URL-encoded data');
+    // If it contains '=', it's likely URL-encoded or a single key-value pair
+    else if (body.includes('=')) {
+        console.log('Parsing URL-encoded or key-value data');
+        // If it doesn't contain '&', it's a single key-value pair
+        if (!body.includes('&')) {
+            const [key, value] = body.split('=');
+            return { [key]: value };
+        }
+        // Otherwise, it's regular URL-encoded data
         return querystring.parse(body);
     }
     
@@ -47,9 +53,10 @@ async function startServer() {
         console.log('MongoDB connected');
 
         // Custom parser for handling both JSON and URL-encoded data
-        server.addContentTypeParser(['application/json', 'application/x-www-form-urlencoded'], { parseAs: 'string' }, (req: FastifyRequest, body: string, done: (err: FastifyError | null, body?: any) => void) => {
+        server.addContentTypeParser(['application/json', 'application/x-www-form-urlencoded', 'text/plain'], { parseAs: 'string' }, (req: FastifyRequest, body: string, done: (err: FastifyError | null, body?: any) => void) => {
             try {
                 const parsedBody = parseBody(body);
+                console.log('Successfully parsed body:', parsedBody);
                 done(null, parsedBody);
             } catch (err) {
                 console.error('Failed to parse body:', body);
