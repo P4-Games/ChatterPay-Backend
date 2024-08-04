@@ -343,7 +343,7 @@ export const makeTransaction = async (
 
 		execute(channel_user_id, to, token, amount);
 		
-		return reply.status(200).send({ message: "Transaction in progress..." }); 
+		return reply.status(200).send({ message: "Transaccion en progreso... Esto puede tardar unos minutos." }); 
 		
 	} catch (error) {
 		console.error("Error making transaction:", error);
