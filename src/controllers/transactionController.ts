@@ -329,6 +329,7 @@ export const makeTransaction = async (
 		try{
 			console.log("Trying to notificate transfer");
 			sendTransferNotification(to, from.name, amount, token);
+			console.log("Notification sent!");
 		} catch (error:any) {
 			console.error(error)
 		}
