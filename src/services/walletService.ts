@@ -22,12 +22,13 @@ export async function sendUserOperation(
     
     console.log(`Wallet code: ${code}`);
     if (code === '0x') {
-        if(!createdAddress) return null;
-        // Create new wallet if it doesn't exist
-        console.log(`Creating new wallet for ${createdAddress}...`);
-        const tx = await factory.createProxy(createdAddress, { gasLimit: 1000000 });
-        let result = await tx.wait();
-        console.log(JSON.stringify(result));
+        if(createdAddress) {
+            // Create new wallet if it doesn't exist
+            console.log(`Creating new wallet for ${createdAddress}...`);
+            const tx = await factory.createProxy(createdAddress, { gasLimit: 1000000 });
+            let result = await tx.wait();
+            console.log(JSON.stringify(result));
+        }
     }
 
     console.log(`Wallet address: ${smartAccountAddress}, setting up ChatterPay contract...`);

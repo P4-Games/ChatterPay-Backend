@@ -334,9 +334,9 @@ export const makeTransaction = async (
 			console.error(error)
 		}
 
-		const replyMessage = `Enviaste ${amount} ${token} a ${to}! \n Puedes ver la transacción aquí: https://l1sload-blockscout.scroll.io/tx/${result.transactionHash}`;
+		const replyMessage = `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: https://l1sload-blockscout.scroll.io/tx/${result.transactionHash}`;
 
-		return reply.status(200).send({ message: replyMessage});
+		return reply.status(200).send({status: "OK", message: replyMessage, code:"OK_TX"});
 		
 	} catch (error) {
 		console.error("Error making transaction:", error);
