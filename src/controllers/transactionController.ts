@@ -314,7 +314,7 @@ export const makeTransaction = async (
 		const newTransaction = new Transaction({
 			trx_hash: result.transactionHash,
 			wallet_from: from.wallet,
-			wallet_to: to,
+			wallet_to: toUser.wallet,
 			type: "transfer",
 			date: new Date(),
 			status: result.transactionHash ? "completed" : "failed",
