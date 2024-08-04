@@ -290,7 +290,7 @@ export const makeTransaction = async (
 				privateKey: predictedWallet.privateKey,
 				code: null,
 				email: null,
-				photo: null,
+				photo:  "/assets/images/avatars/generic_user.jpg",
 				name: null,
 			}));
 
