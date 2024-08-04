@@ -24,7 +24,8 @@ async function startServer() {
         // parse petitions
         server.addContentTypeParser('application/json', { parseAs: 'string' }, (req: FastifyRequest, body: string, done: (err: FastifyError | null, body?: any) => void) => {
             try {
-                const json = JSON.parse(body);
+                const cleanedBody = body.replace(/'/g, '"');
+                const json = JSON.parse(cleanedBody);
                 done(null, json);
             } catch (err) {
                 done(err as FastifyError, undefined);
