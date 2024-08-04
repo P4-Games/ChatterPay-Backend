@@ -19,8 +19,7 @@ export const sendTransferNotification = async (channel_user_id: string, from: st
         const payload: OperatorReplyPayload = {
             data_token: 'ddbe7f0e3d93447486efa9ef77954ae7',
             channel_user_id: channel_user_id,
-            //message: `💸 Recibiste una transferencia${from ? ` de ${from}` : ""}! \n Te ${from ? "envió" : "enviaron"} ${amount} ${token}`
-            message: `${from} te envio ${amount} ${token} 💸. \n Ya estan disponibles en tu billetera ChatterPay! 🥳`
+            message: `${from} te envio ${amount} ${token}. \n Ya estan disponibles en tu billetera ChatterPay! `
         };
         await sendOperatorReply(payload);
         console.log("Sent operator reply");

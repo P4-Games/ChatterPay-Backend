@@ -327,12 +327,13 @@ export const makeTransaction = async (
 		await newTransaction.save();
 
 		try{
+			console.log("Trying to notificate transfer");
 			sendTransferNotification(to, from.name, amount, token);
 		} catch (error:any) {
 			console.error(error)
 		}
 
-		const replyMessage = `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: https://l1sload-blockscout.scroll.io/tx/${result.transactionHash}`;
+		const replyMessage = `Enviaste ${amount} ${token} a ${to}! \n Puedes ver la transacción aquí: https://l1sload-blockscout.scroll.io/tx/${result.transactionHash}`;
 
 		return reply.status(200).send(replyMessage);
 		
