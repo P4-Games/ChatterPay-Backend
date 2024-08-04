@@ -7,6 +7,7 @@ import blockchainRoutes from './routes/blockchainRoutes';
 import aaveRoutes from './routes/aaveRoutes';
 import fastifySwaggerUi from "@fastify/swagger-ui";
 import { demoERC20Routes } from './routes/demoERC20Routes';
+import querystring from 'querystring';
 
 const server = Fastify({
     logger: true // Esto habilitará el logging detallado
@@ -15,35 +16,27 @@ const server = Fastify({
 const PORT = process.env.PORT || 3000;
 const MongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/chatterpay'
 
-function parseCustomJSON(str: string): any {
-    // Remove leading/trailing whitespace
-    str = str.trim();
+function parseBody(body: string): any {
+    body = body.trim();
     
-    // Check if the string starts and ends with curly braces
-    if (str[0] !== '{' || str[str.length - 1] !== '}') {
-        throw new Error('Invalid JSON: must be an object');
+    // Check if it's JSON-like (starts with { or [)
+    if (body.startsWith('{') || body.startsWith('[')) {
+        try {
+            return JSON.parse(body);
+        } catch (error) {
+            console.warn('JSON parse failed, attempting to fix malformed JSON');
+            // Attempt to fix common JSON issues (like single quotes)
+            const fixedBody = body.replace(/'/g, '"').replace(/(\w+):/g, '"$1":');
+            return JSON.parse(fixedBody);
+        }
+    } 
+    // If it contains '=' and '&', it's likely URL-encoded
+    else if (body.includes('=') && body.includes('&')) {
+        console.log('Parsing URL-encoded data');
+        return querystring.parse(body);
     }
     
-    // Remove curly braces
-    str = str.slice(1, -1);
-    
-    // Split by commas, but not within quotes
-    const pairs = str.match(/('[^']*'|[^,]+)/g) || [];
-    
-    const result: {[key: string]: string} = {};
-    
-    for (let pair of pairs) {
-        // Split each pair by colon
-        const [key, value] = pair.split(':').map(s => s.trim());
-        
-        // Remove quotes from key and value
-        const cleanKey = key.replace(/^'|'$/g, '').trim();
-        const cleanValue = value.replace(/^'|'$/g, '').trim();
-        
-        result[cleanKey] = cleanValue;
-    }
-    
-    return result;
+    throw new Error('Unrecognized data format');
 }
 
 async function startServer() {
@@ -52,22 +45,14 @@ async function startServer() {
         await mongoose.connect(MongoURI);
         console.log('MongoDB connected');
 
-        // Custom parser for handling problematic JSON
-        server.addContentTypeParser('application/json', { parseAs: 'string' }, (req: FastifyRequest, body: string, done: (err: FastifyError | null, body?: any) => void) => {
+        // Custom parser for handling both JSON and URL-encoded data
+        server.addContentTypeParser(['application/json', 'application/x-www-form-urlencoded'], { parseAs: 'string' }, (req: FastifyRequest, body: string, done: (err: FastifyError | null, body?: any) => void) => {
             try {
-                let parsedBody;
-                try {
-                    // First, try standard JSON parse
-                    parsedBody = JSON.parse(body);
-                } catch (jsonError) {
-                    // If standard parse fails, use our custom parser
-                    console.warn('Standard JSON parse failed. Attempting custom parse.');
-                    parsedBody = parseCustomJSON(body);
-                }
+                const parsedBody = parseBody(body);
                 done(null, parsedBody);
             } catch (err) {
-                console.error('Failed to parse JSON:', body);
-                done(new Error('Invalid JSON') as FastifyError, undefined);
+                console.error('Failed to parse body:', body);
+                done(new Error('Invalid body format') as FastifyError, undefined);
             }
         });
 
