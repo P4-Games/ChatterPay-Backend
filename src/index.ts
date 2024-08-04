@@ -8,6 +8,7 @@ import aaveRoutes from './routes/aaveRoutes';
 import fastifySwaggerUi from "@fastify/swagger-ui";
 import { demoERC20Routes } from './routes/demoERC20Routes';
 import querystring from 'querystring';
+import { walletRouter } from './routes/walletRouter';
 
 const server = Fastify({
     logger: true // Esto habilitará el logging detallado
@@ -102,6 +103,7 @@ async function startServer() {
         server.register(userRoutes);
         server.register(tokenRoutes);
         server.register(aaveRoutes);
+        server.register(walletRouter);
         server.register(blockchainRoutes);
         server.register(demoERC20Routes);
 

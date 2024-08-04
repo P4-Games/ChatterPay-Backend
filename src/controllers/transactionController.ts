@@ -334,7 +334,7 @@ export const makeTransaction = async (
 		 * to: Numero del telefono del usuario que recibe la solicitud
 		 */
 		const { channel_user_id, to, token, amount } = request.body;
-			
+		
 		const validationError = validateInputs({ channel_user_id, to, token, amount });
 
 		if(validationError){
