@@ -25,7 +25,7 @@ export const createWallet = async (
         // Check if user already exists
         const existingUser = await User.findOne({ phone_number });
         if (existingUser) {
-            return reply.status(200).send({ message: "El usuario ya existe" });
+            return reply.status(200).send({ message: `El usuario ya existe, tu wallet es ${existingUser.wallet}`});
         }
 
         // Create new wallet
