@@ -9,6 +9,7 @@ import fastifySwaggerUi from "@fastify/swagger-ui";
 import { demoERC20Routes } from './routes/demoERC20Routes';
 import querystring from 'querystring';
 import { walletRouter } from './routes/walletRouter';
+require('dotenv').config();
 
 const server = Fastify({
     logger: true // Esto habilitará el logging detallado
