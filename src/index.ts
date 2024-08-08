@@ -116,7 +116,10 @@ async function startServer() {
 
         // Iniciar el servidor
         await server.listen({ port: Number(PORT), host: '0.0.0.0' });
-        console.log(`Server listening at ${server.server.address()}`);
+        const address = server.server.address();
+        const port = typeof address === 'string' ? address : address?.port;
+        const host = typeof address === 'string' ? address : address?.address
+        server.log.info(`Server is listening on http://${host}:${port}`);
     } catch (err) {
         console.error('Error starting server:', err);
         process.exit(1);

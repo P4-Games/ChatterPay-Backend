@@ -33,6 +33,7 @@
     "ethers-5": "npm:ethers@^5.7.2",
     "fastify": "^4.28.1",
     "fastify-swagger": "^5.2.0",
+    "logger": "^0.0.1",
     "mongoose": "^8.5.2",
     "typechain": "^8.3.2",
     "userop": "0.3.8",
