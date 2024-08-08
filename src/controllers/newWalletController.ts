@@ -25,7 +25,7 @@ export const createWallet = async (
         // Check if user already exists
         const existingUser = await User.findOne({ phone_number });
         if (existingUser) {
-            return reply.status(400).send({ message: "El usuario ya existe" });
+            return reply.status(200).send({ message: "El usuario ya existe" });
         }
 
         // Create new wallet
@@ -44,7 +44,7 @@ export const createWallet = async (
 
         await newUser.save();
 
-        return reply.status(201).send({
+        return reply.status(200).send({
             message: "La wallet fue creada exitosamente!",
             walletHash: predictedWallet.EOAAddress,
             proxyAddress: predictedWallet.proxyAddress
