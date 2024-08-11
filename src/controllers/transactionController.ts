@@ -9,6 +9,8 @@ import { ComputedAddress, computeProxyAddressFromPhone, PhoneNumberToAddress } f
 import { ethers } from "ethers";
 import { SCROLL_CONFIG } from "../constants/networks";
 import { createUser } from "./userController";
+import Blockchain from "../models/blockchain";
+import { exec } from "child_process";
 
 // Verificar estado de una transacción
 export const checkTransactionStatus = async (
@@ -175,11 +177,12 @@ type MakeTransactionInputs = {
 	to: string;
 	token: string;
 	amount: string;
+	chain_id:string;
 };
 
 const validateInputs = (inputs: MakeTransactionInputs): string => {
 	let error = "";
-	const { channel_user_id, to, token, amount } = inputs;
+	const { channel_user_id, to, token, amount, chain_id } = inputs;
 
 	if (!channel_user_id || !to || !token || !amount) {
 		error = "Alguno o multiples campos están vacíos";
@@ -200,13 +203,26 @@ const validateInputs = (inputs: MakeTransactionInputs): string => {
 	if (token.length > 5) {
 		error = "El símbolo del token no es válido";
 	}
+	try {
+		let newChainID
+		if (chain_id != null) {
+			newChainID = 42161;
+		} else {
+			newChainID = chain_id;
+		}
+		Blockchain.find({newChainID})
+	} catch {
+		error = "La blcokchain no esta registrada"
+	}
 
 	return error;
 };
 
-const execute = async (channel_user_id: string, to: string, token: string, amount: string) => {
+const execute = async (channel_user_id: string, to: string, token: string, amount: string, chain_id:number = 42161) => {
 
-	let createdAddress = "";
+	// Check if 
+
+	let createdAddress:string;
 
 	const fromUser: IUser[] = await User.find({"phone_number": channel_user_id});
 	
@@ -240,9 +256,10 @@ const execute = async (channel_user_id: string, to: string, token: string, amoun
 		from.privateKey = predictedWallet.privateKey;
 		from.name = `+${channel_user_id}`;
 
-		createdAddress = predictedWallet.EOAAddress;
+		createdAddress = predictedWallet.proxyAddress;
 	}else{
 		from.name = fromUser?.[0]?.name ?? `+${channel_user_id}`; 
+		createdAddress = from.wallet;
 	}
 
 	// El usuario destino puede ser tanto un numero de telefono registerado o no, como ser una wallet, puede ser una wallet ya registrada
@@ -286,7 +303,8 @@ const execute = async (channel_user_id: string, to: string, token: string, amoun
 		toUser.wallet,
 		tokenAddress,
 		amount,
-		createdAddress
+		createdAddress!,
+		chain_id
 	);
 
 	if(!result) return;
@@ -333,9 +351,9 @@ export const makeTransaction = async (
 		 * channel_user_id: Numero del telefono del usuario que envia la solicitud
 		 * to: Numero del telefono del usuario que recibe la solicitud
 		 */
-		const { channel_user_id, to, token, amount } = request.body;
+		const { channel_user_id, to, token, amount, chain_id } = request.body;
 		
-		const validationError = validateInputs({ channel_user_id, to, token, amount });
+		const validationError = validateInputs({ channel_user_id, to, token, amount, chain_id });
 
 		if(validationError){
 			return reply.status(400).send({ message: validationError });

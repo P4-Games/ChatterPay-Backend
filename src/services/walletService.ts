@@ -3,17 +3,23 @@ import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts/fact
 import { ChatterPay__factory } from '../types/ethers-contracts/factories/ChatterPay__factory';
 import { SCROLL_CONFIG } from '../constants/networks';
 import chatterPayABI from "../chatterPayABI.json"
-const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL);
-const signer = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+import Blockchain, { IBlockchain } from '../models/blockchain';
+import { sign } from 'crypto';
 
 export async function sendUserOperation(
     from: string,
     to: string,
     tokenAddress: string,
     amount: string,
-    createdAddress?: string
+    createdAddress?: string,
+    chain_id: number = 42161
 ) {
-    const factory = ChatterPayWalletFactory__factory.connect(SCROLL_CONFIG.CHATTER_PAY_WALLET_FACTORY_ADDRESS, signer);
+
+    //GET BLOCKCHAIN
+    const blockchain:any = Blockchain.find({chain_id});
+    const provider = new ethers.providers.JsonRpcProvider(blockchain.rpc);
+    const signer = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+    const factory = ChatterPayWalletFactory__factory.connect(blockchain.factoryAddress, signer);
 
     // Check if wallet exists
     console.log(`Checking if wallet exists for ${from}...`);
@@ -50,6 +56,7 @@ export async function sendUserOperation(
     
     console.log(`Balance of the wallet is ${ethers.utils.formatUnits(balanceCheck, 18)}`);
 
+    /**
     if (parseFloat(balance) < 1) {
         //Mintear "amount" tokens al usuario que envia la solicitud
         const amountToMint = ethers.utils.parseUnits(amount, 18);
@@ -59,8 +66,10 @@ export async function sendUserOperation(
         await tx.wait();
         console.log(`Funded wallet with 100,000 tokens`);
     }
+    
     const newbalance = await erc20.balanceOf(smartAccountAddress);
     console.log(`El nuevo balance del SCA es ${ethers.utils.formatUnits(newbalance, 18)}`);
+        */
 
     const callData = chatterPay.interface.encodeFunctionData("execute", [
         tokenAddress,
@@ -69,25 +78,8 @@ export async function sendUserOperation(
     ]);
 
     try {
-        // Check balance of the signer
-        const balance = await signer.getBalance();
-        const minBalance = ethers.utils.parseEther("0.001");
-
-        if (balance.lt(minBalance)) {
-            // Fund the wallet with 0.001 ETH if balance is less than 0.001 ETH
-            console.log(`Funding wallet with ${ethers.utils.formatEther(minBalance)} ETH...`);
-            const ethToSend = minBalance;
-            const fundingTx = await signer.sendTransaction({
-                to: signer.address,
-                value: ethToSend,
-                gasLimit: 21000
-            });
-            await fundingTx.wait();
-            console.log(`Funded wallet with ${ethers.utils.formatEther(ethToSend)} ETH`);
-        }
 
         console.log(`Sending the transaction...`);
-        // Send the transaction
         const tx = await signer.sendTransaction({
             to: smartAccountAddress,
             data: callData,

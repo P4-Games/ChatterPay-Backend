@@ -8,6 +8,7 @@ export interface IBlockchain extends Document {
   explorer: string;
   signingKey: string;
   entryPoint: string;
+  factoryAddress:string;
 }
 
 const blockchainSchema = new Schema<IBlockchain>({
@@ -17,7 +18,8 @@ const blockchainSchema = new Schema<IBlockchain>({
   logo: { type: String, required: true },
   explorer: { type: String, required: true },
   signingKey: { type: String, required: true },
-  entryPoint: { type: String, required: true }
+  entryPoint: { type: String, required: true },
+  factoryAddress: { type: String, required: true }
 });
 
 const Blockchain = model<IBlockchain>('Blockchain', blockchainSchema, 'blockchains');
