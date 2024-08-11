@@ -46,8 +46,8 @@ export const createWallet = async (
 
         return reply.status(200).send({
             message: "La wallet fue creada exitosamente!",
-            walletHash: predictedWallet.EOAAddress,
-            proxyAddress: predictedWallet.proxyAddress
+            //walletHash: predictedWallet.EOAAddress,
+            walletAddress: predictedWallet.proxyAddress
         });
 
     } catch (error) {
