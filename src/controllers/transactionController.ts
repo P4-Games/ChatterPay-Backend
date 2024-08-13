@@ -177,7 +177,7 @@ type MakeTransactionInputs = {
 	to: string;
 	token: string;
 	amount: string;
-	chain_id:string;
+	chain_id: string;
 };
 
 const validateInputs = (inputs: MakeTransactionInputs): string => {
@@ -196,7 +196,7 @@ const validateInputs = (inputs: MakeTransactionInputs): string => {
 		error = "No puedes enviar dinero a ti mismo";
 	}
 
-	if (channel_user_id.length > 15 || to.length > 15) {
+	if (channel_user_id.length > 15 || (to.startsWith("0x") && !isNaN(parseInt(to)) && to.length <= 15)) {
 		error = "El número de telefono no es válido";
 	}
 
@@ -210,7 +210,7 @@ const validateInputs = (inputs: MakeTransactionInputs): string => {
 		} else {
 			newChainID = chain_id;
 		}
-		Blockchain.find({newChainID})
+		Blockchain.find({ newChainID })
 	} catch {
 		error = "La blcokchain no esta registrada"
 	}
@@ -218,14 +218,12 @@ const validateInputs = (inputs: MakeTransactionInputs): string => {
 	return error;
 };
 
-const execute = async (channel_user_id: string, to: string, token: string, amount: string, chain_id:number = 42161) => {
+const execute = async (channel_user_id: string, to: string, token: string, amount: string, chain_id: number = 42161) => {
 
-	// Check if 
+	let createdAddress: string;
 
-	let createdAddress:string;
+	const fromUser: IUser[] = await User.find({ "phone_number": channel_user_id });
 
-	const fromUser: IUser[] = await User.find({"phone_number": channel_user_id});
-	
 	let from: UserType = {
 		input: channel_user_id,
 		wallet: fromUser?.[0]?.wallet ?? "",
@@ -233,8 +231,8 @@ const execute = async (channel_user_id: string, to: string, token: string, amoun
 		name: fromUser?.[0]?.name ?? "",
 		number: fromUser?.[0]?.phone_number ?? "",
 	};
-	
-	if(!from.wallet) {
+
+	if (!from.wallet) {
 		console.log("Número de telefono del remitente no registrado en ChatterPay, registrando...");
 
 		const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(channel_user_id);
@@ -257,29 +255,27 @@ const execute = async (channel_user_id: string, to: string, token: string, amoun
 		from.name = `+${channel_user_id}`;
 
 		createdAddress = predictedWallet.proxyAddress;
-	}else{
-		from.name = fromUser?.[0]?.name ?? `+${channel_user_id}`; 
-		createdAddress = from.wallet;
+	} else {
+		from.name = fromUser?.[0]?.name ?? `+${channel_user_id}`;
 	}
 
 	// El usuario destino puede ser tanto un numero de telefono registerado o no, como ser una wallet, puede ser una wallet ya registrada
 	// Si la wallet ya está registrada hay que notificar al usuario
 
-	const toRegisteredUser: IUser[] = await User.find({"phone_number": to});
-	
+	const toRegisteredUser: IUser[] = await User.find({ "phone_number": to });
+
 	let toUser: UserType = {
 		input: to,
-		wallet: toRegisteredUser?.[0]?.wallet ?? "",
+		wallet: to.startsWith("0x") ? to : toRegisteredUser?.[0]?.wallet ?? "",
 		name: toRegisteredUser?.[0]?.name ?? "",
 		number: toRegisteredUser?.[0]?.phone_number ?? "",
 	};
 
-	if(!toUser.input.startsWith("0x") && !toUser.wallet) {
+	if (!toUser.input.startsWith("0x") && !toUser.wallet) {
 		console.log("Número de telefono del destinatario no registrado en ChatterPay, registrando...");
 		const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(toUser.input)
-		
+
 		toUser.wallet = predictedWallet.proxyAddress;
-		createdAddress = predictedWallet.EOAAddress;
 
 		User.create(new User({
 			phone_number: to,
@@ -292,9 +288,9 @@ const execute = async (channel_user_id: string, to: string, token: string, amoun
 		}));
 
 		console.log(`Número de telefono ${to} registrado con la wallet ${predictedWallet.EOAAddress}`);
-	} 
+	}
 
-	const tokenAddress = "0x9a01399df4e464b797e0f36b20739a1bf2255dc8"; // Demo USDT en Devnet Scroll
+	const tokenAddress = "0x961bf3bf61d3446907E0Db83C9c5D958c17A94f6"; // Demo USDT en Devnet Scroll
 
 	console.log("Sending user operation...");
 	//Handle function of userop
@@ -307,7 +303,8 @@ const execute = async (channel_user_id: string, to: string, token: string, amoun
 		chain_id
 	);
 
-	if(!result) return;
+	return;
+	if (!result) return;
 
 	const newTransaction = new Transaction({
 		trx_hash: result.transactionHash,
@@ -324,15 +321,15 @@ const execute = async (channel_user_id: string, to: string, token: string, amoun
 
 	await newTransaction.save();
 
-	try{
+	try {
 		console.log("Trying to notificate transfer");
-		
+
 		let fromName = from?.name ?? from?.number ?? "Alguien";
 
 		sendTransferNotification(to, fromName, amount, token);
 		console.log("Notification sent!");
 		sendTransferNotification2(channel_user_id, to, amount, token, result.transactionHash);
-	} catch (error:any) {
+	} catch (error: any) {
 		console.error(error)
 	}
 }
@@ -340,7 +337,7 @@ const execute = async (channel_user_id: string, to: string, token: string, amoun
 // Realizar una transaccion
 export const makeTransaction = async (
 	request: FastifyRequest<{
-		Body: MakeTransactionInputs; 
+		Body: MakeTransactionInputs;
 	}>,
 	reply: FastifyReply
 ) => {
@@ -352,17 +349,17 @@ export const makeTransaction = async (
 		 * to: Numero del telefono del usuario que recibe la solicitud
 		 */
 		const { channel_user_id, to, token, amount, chain_id } = request.body;
-		
+
 		const validationError = validateInputs({ channel_user_id, to, token, amount, chain_id });
 
-		if(validationError){
+		if (validationError) {
 			return reply.status(400).send({ message: validationError });
 		}
 
-		execute(channel_user_id, to, token, amount);
-		
-		return reply.status(200).send({ message: "Transaccion en progreso... Esto puede tardar unos minutos." }); 
-		
+		execute(channel_user_id, to, token, amount, parseInt(chain_id));
+
+		return reply.status(200).send({ message: "Transaccion en progreso... Esto puede tardar unos minutos." });
+
 	} catch (error) {
 		console.error("Error making transaction:", error);
 		return reply.status(400).send({ message: "Bad Request" });

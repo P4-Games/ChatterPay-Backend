@@ -3,7 +3,7 @@ import { SCROLL_CONFIG } from '../constants/networks';
 import * as crypto from 'crypto';
 import User from '../models/user';
 
-const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL);
+const provider = new ethers.providers.JsonRpcProvider("https://public.stackup.sh/api/v1/node/arbitrum-sepolia");
 
 const factoryABI = [
     "function getProxyBytecode(address _owner) public view returns (bytes memory)",
@@ -54,11 +54,11 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
 
     // Use the contract's computeProxyAddress function directly
     console.log('Computing proxy address...', JSON.stringify(ownerAddress));
-    const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, { gasLimit: 100000 });
-    
+    const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, { gasLimit: 1000000 });
+
     return {
         proxyAddress,
         EOAAddress: ownerAddress.publicKey,
         privateKey: ownerAddress.hashedPrivateKey
-    } 
+    }
 }
