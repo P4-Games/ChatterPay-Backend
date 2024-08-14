@@ -247,8 +247,8 @@ const executeTransaction = async (from: UserType, to: UserType, token: string, a
 
     if (!result) return;
 
-    const newTransaction = new Transaction({
-        trx_hash: result.transactionHash,
+    Transaction.create({
+        trx_hash: result?.transactionHash ?? "",
         wallet_from: from.wallet,
         wallet_to: to.wallet,
         type: "transfer",
@@ -257,8 +257,6 @@ const executeTransaction = async (from: UserType, to: UserType, token: string, a
         amount: parseFloat(amount),
         token: "USDT",
     });
-
-    await newTransaction.save();
 
     try {
         console.log("Trying to notificate transfer");
@@ -287,7 +285,7 @@ export const makeTransaction = async (
             ? { input: to, wallet: to, name: "", number: "" } 
             : await getOrCreateUser(to);
 
-        await executeTransaction(fromUser, toUser, token, amount, parseInt(chain_id) || 42161);
+        executeTransaction(fromUser, toUser, token, amount, parseInt(chain_id) || 42161);
 
         return reply.status(200).send({ message: "Transaccion en progreso... Esto puede tardar unos minutos." });
     } catch (error) {

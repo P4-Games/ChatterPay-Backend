@@ -56,10 +56,7 @@ export async function sendUserOperation(
         'function allowance(address owner, address spender) view returns (uint256)',
     ], signer);
 
-    await checkBalanceAndApprove(erc20, proxy.proxyAddress, tokenAddress, amount, chatterPay, signer);
-
-    
-
+    await checkBalance(erc20, proxy.proxyAddress, amount);
 
     return await executeTransfer(erc20, chatterPay, to, amount, proxy.proxyAddress, signer);
 }
@@ -77,31 +74,19 @@ async function ensureSignerHasEth(signer: ethers.Wallet, backendSigner: ethers.W
     }
 }
 
-async function checkBalanceAndApprove(erc20: ethers.Contract, proxyAddress: string, tokenAddress: string, amount: string, chatterPay: ethers.Contract, signer: ethers.Wallet) {
+async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount: string) {
     const amount_bn = ethers.utils.parseUnits(amount, 18);
     const balanceCheck = await erc20.balanceOf(proxyAddress);
     if (balanceCheck.lt(amount_bn)) {
         throw new Error(`Insufficient balance. Required: ${amount}, Available: ${ethers.utils.formatUnits(balanceCheck, 18)}`);
     }
-
-    /*const currentAllowance = await erc20.allowance(proxyAddress, tokenAddress);
-    if (currentAllowance.lt(amount_bn)) {
-        const approveEncode = erc20.interface.encodeFunctionData("approve", ["0xe54b48F8caF88a08849dCdDE3D3d41Cd6D7ab369", amount_bn]);
-        const approveCallData = chatterPay.interface.encodeFunctionData("execute", [tokenAddress, 0, approveEncode]);
-        const approveTx = await signer.sendTransaction({
-            to: proxyAddress,
-            data: approveCallData,
-            gasLimit: 500000,
-        });
-        await approveTx.wait();
-    }*/
 }
 
 async function executeTransfer(erc20: ethers.Contract, chatterPay: ethers.Contract, to: string, amount: string, proxyAddress: string, signer: ethers.Wallet) {
     const amount_bn = ethers.utils.parseUnits(amount, 18);
     const transferEncode = erc20.interface.encodeFunctionData("transfer", [to, amount_bn]);
     const transferCallData = chatterPay.interface.encodeFunctionData("execute", [tokenAddress, 0, transferEncode]);
-    console.log(`Sending ${amount} to ${to}, TransferEncode ${transferCallData}...`);
+
     try {
         const tx = await signer.sendTransaction({
             to: proxyAddress,
@@ -110,7 +95,8 @@ async function executeTransfer(erc20: ethers.Contract, chatterPay: ethers.Contra
         });
         const receipt = await tx.wait();
         console.log(`Transfer transaction confirmed in block ${receipt.blockNumber}`);
-        return { transactionHash: tx.hash };
+        return { transactionHash: receipt.transactionHash };
+
     } catch (error) {
         console.error('Error sending transfer transaction:', error);
         throw error;
