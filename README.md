@@ -28,6 +28,8 @@ __Components__:
 - User Dashboard Website ([product](https://chatterpay-front-ylswtey2za-uc.a.run.app/dashboard), [source code](https://github.com/P4-Games/ChatterPay))
 - Backend API ([source code](https://github.com/P4-Games/ChatterPay-Backend))  (this Repo)
 - Smart Contracts ([source code](https://github.com/P4-Games/ChatterPay-SmartContracts))
+- Data Indexing (Subgraph) ([source code](https://github.com/P4-Games/ChatterPay-Subgraph))
+- Bot AI Admin Dashboard Website ([product](https://app.chatizalo.com/))
 - Bot AI (Chatizalo) ([product](https://chatizalo.com/))
 - Bot AI Admin Dashboard Website ([product](https://app.chatizalo.com/))
 
