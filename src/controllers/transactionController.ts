@@ -165,205 +165,135 @@ export const authenticate = (request: FastifyRequest) => {
 };
 
 type UserType = {
-	input: string;
-	wallet: string;
-	name: string;
-	privateKey?: string;
-	number: string;
-}
+    input: string;
+    wallet: string;
+    name: string;
+    privateKey?: string;
+    number: string;
+};
 
 type MakeTransactionInputs = {
-	channel_user_id: string;
-	to: string;
-	token: string;
-	amount: string;
-	chain_id: string;
+    channel_user_id: string;
+    to: string;
+    token: string;
+    amount: string;
+    chain_id: string;
 };
 
 const validateInputs = (inputs: MakeTransactionInputs): string => {
-	let error = "";
-	const { channel_user_id, to, token, amount, chain_id } = inputs;
-
-	if (!channel_user_id || !to || !token || !amount) {
-		error = "Alguno o multiples campos están vacíos";
-	}
-
-	if (isNaN(parseFloat(amount))) {
-		error = "El monto ingresado no es correcto";
-	}
-
-	if (channel_user_id === to) {
-		error = "No puedes enviar dinero a ti mismo";
-	}
-
-	if (channel_user_id.length > 15 || (to.startsWith("0x") && !isNaN(parseInt(to)) && to.length <= 15)) {
-		error = "El número de telefono no es válido";
-	}
-
-	if (token.length > 5) {
-		error = "El símbolo del token no es válido";
-	}
-	try {
-		let newChainID
-		if (chain_id != null) {
-			newChainID = 42161;
-		} else {
-			newChainID = chain_id;
-		}
-		Blockchain.find({ newChainID })
-	} catch {
-		error = "La blcokchain no esta registrada"
-	}
-
-	return error;
+    const { channel_user_id, to, token, amount, chain_id } = inputs;
+    
+    if (!channel_user_id || !to || !token || !amount) {
+        return "Alguno o multiples campos están vacíos";
+    }
+    if (isNaN(parseFloat(amount))) {
+        return "El monto ingresado no es correcto";
+    }
+    if (channel_user_id === to) {
+        return "No puedes enviar dinero a ti mismo";
+    }
+    if (channel_user_id.length > 15 || (to.startsWith("0x") && !isNaN(parseInt(to)) && to.length <= 15)) {
+        return "El número de telefono no es válido";
+    }
+    if (token.length > 5) {
+        return "El símbolo del token no es válido";
+    }
+    try {
+        const newChainID = chain_id ? parseInt(chain_id) : 42161;
+        Blockchain.findOne({ chain_id: newChainID });
+    } catch {
+        return "La blockchain no esta registrada";
+    }
+    return "";
 };
 
-const execute = async (channel_user_id: string, to: string, token: string, amount: string, chain_id: number = 42161) => {
+const getOrCreateUser = async (phoneNumber: string): Promise<UserType> => {
+    let user = await User.findOne({ phone_number: phoneNumber });
+	
+    if (!user) {
+        console.log(`Número de telefono ${phoneNumber} no registrado en ChatterPay, registrando...`);
+        const predictedWallet = await computeProxyAddressFromPhone(phoneNumber);
+        user = await User.create({
+            phone_number: phoneNumber,
+            wallet: predictedWallet.EOAAddress,
+            privateKey: predictedWallet.privateKey,
+            name: `+${phoneNumber}`,
+        });
+		
+        console.log(`Número de telefono ${phoneNumber} registrado con la wallet ${predictedWallet.EOAAddress}`);
+    }
 
-	let createdAddress: string;
+    return {
+        input: phoneNumber,
+        wallet: user.wallet,
+        privateKey: user.privateKey,
+        name: user.name || `+${phoneNumber}`,
+        number: user.phone_number,
+    };
+};
 
-	const fromUser: IUser[] = await User.find({ "phone_number": channel_user_id });
+export const tokenAddress = "0x961bf3bf61d3446907E0Db83C9c5D958c17A94f6"; // Demo USDT en Devnet Scroll
 
-	let from: UserType = {
-		input: channel_user_id,
-		wallet: fromUser?.[0]?.wallet ?? "",
-		privateKey: fromUser?.[0]?.privateKey ?? "",
-		name: fromUser?.[0]?.name ?? "",
-		number: fromUser?.[0]?.phone_number ?? "",
-	};
+const executeTransaction = async (from: UserType, to: UserType, token: string, amount: string, chain_id: number) => {
+    console.log("Sending user operation...");
+    const result = await sendUserOperation(
+        from.wallet,
+        from.number,
+        to.wallet,
+        tokenAddress,
+        amount,
+        chain_id
+    );
 
-	if (!from.wallet) {
-		console.log("Número de telefono del remitente no registrado en ChatterPay, registrando...");
+    if (!result) return;
 
-		const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(channel_user_id);
+    const newTransaction = new Transaction({
+        trx_hash: result.transactionHash,
+        wallet_from: from.wallet,
+        wallet_to: to.wallet,
+        type: "transfer",
+        date: new Date(),
+        status: "completed",
+        amount: parseFloat(amount),
+        token: "USDT",
+    });
 
-		User.create(new User({
-			phone_number: channel_user_id,
-			wallet: predictedWallet.proxyAddress,
-			privateKey: predictedWallet.privateKey,
-			code: null,
-			photo: null,
-			email: null,
-			name: null,
-		}));
+    await newTransaction.save();
 
-		console.log(`Número de telefono ${channel_user_id} registrado con la wallet ${predictedWallet.EOAAddress}`);
+    try {
+        console.log("Trying to notificate transfer");
+        let fromName = from.name || from.number || "Alguien";
+        sendTransferNotification(to.number, fromName, amount, token);
+        sendTransferNotification2(from.number, to.number, amount, token, result.transactionHash);
+    } catch (error) {
+        console.error("Error sending notifications:", error);
+    }
+};
 
-		from.number = channel_user_id;
-		from.wallet = predictedWallet.proxyAddress;
-		from.privateKey = predictedWallet.privateKey;
-		from.name = `+${channel_user_id}`;
-
-		createdAddress = predictedWallet.proxyAddress;
-	} else {
-		from.name = fromUser?.[0]?.name ?? `+${channel_user_id}`;
-	}
-
-	// El usuario destino puede ser tanto un numero de telefono registerado o no, como ser una wallet, puede ser una wallet ya registrada
-	// Si la wallet ya está registrada hay que notificar al usuario
-
-	const toRegisteredUser: IUser[] = await User.find({ "phone_number": to });
-
-	let toUser: UserType = {
-		input: to,
-		wallet: to.startsWith("0x") ? to : toRegisteredUser?.[0]?.wallet ?? "",
-		name: toRegisteredUser?.[0]?.name ?? "",
-		number: toRegisteredUser?.[0]?.phone_number ?? "",
-	};
-
-	if (!toUser.input.startsWith("0x") && !toUser.wallet) {
-		console.log("Número de telefono del destinatario no registrado en ChatterPay, registrando...");
-		const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(toUser.input)
-
-		toUser.wallet = predictedWallet.proxyAddress;
-
-		User.create(new User({
-			phone_number: to,
-			wallet: predictedWallet.proxyAddress,
-			privateKey: predictedWallet.privateKey,
-			code: null,
-			email: null,
-			photo: "/assets/images/avatars/generic_user.jpg",
-			name: null,
-		}));
-
-		console.log(`Número de telefono ${to} registrado con la wallet ${predictedWallet.EOAAddress}`);
-	}
-
-	const tokenAddress = "0x961bf3bf61d3446907E0Db83C9c5D958c17A94f6"; // Demo USDT en Devnet Scroll
-
-	console.log("Sending user operation...");
-	//Handle function of userop
-	const result = await sendUserOperation(
-		from.wallet,
-		toUser.wallet,
-		tokenAddress,
-		amount,
-		createdAddress!,
-		chain_id
-	);
-
-	return;
-	if (!result) return;
-
-	const newTransaction = new Transaction({
-		trx_hash: result.transactionHash,
-		wallet_from: from.wallet,
-		wallet_to: toUser.wallet,
-		type: "transfer",
-		date: new Date(),
-		status: result.transactionHash ? "completed" : "failed",
-		amount: parseFloat(amount),
-		token: "USDT",
-	})
-
-	await Transaction.create(newTransaction);
-
-	await newTransaction.save();
-
-	try {
-		console.log("Trying to notificate transfer");
-
-		let fromName = from?.name ?? from?.number ?? "Alguien";
-
-		sendTransferNotification(to, fromName, amount, token);
-		console.log("Notification sent!");
-		sendTransferNotification2(channel_user_id, to, amount, token, result.transactionHash);
-	} catch (error: any) {
-		console.error(error)
-	}
-}
-
-// Realizar una transaccion
 export const makeTransaction = async (
-	request: FastifyRequest<{
-		Body: MakeTransactionInputs;
-	}>,
-	reply: FastifyReply
+    request: FastifyRequest<{ Body: MakeTransactionInputs }>,
+    reply: FastifyReply
 ) => {
-	try {
-		authenticate(request);
+    try {
+        const { channel_user_id, to, token, amount, chain_id } = request.body;
 
-		/**
-		 * channel_user_id: Numero del telefono del usuario que envia la solicitud
-		 * to: Numero del telefono del usuario que recibe la solicitud
-		 */
-		const { channel_user_id, to, token, amount, chain_id } = request.body;
+        const validationError = validateInputs({ channel_user_id, to, token, amount, chain_id });
+        if (validationError) {
+            return reply.status(400).send({ message: validationError });
+        }
 
-		const validationError = validateInputs({ channel_user_id, to, token, amount, chain_id });
+        const fromUser = await getOrCreateUser(channel_user_id);
+        const toUser = to.startsWith("0x") 
+            ? { input: to, wallet: to, name: "", number: "" } 
+            : await getOrCreateUser(to);
 
-		if (validationError) {
-			return reply.status(400).send({ message: validationError });
-		}
+        await executeTransaction(fromUser, toUser, token, amount, parseInt(chain_id) || 42161);
 
-		execute(channel_user_id, to, token, amount, parseInt(chain_id));
-
-		return reply.status(200).send({ message: "Transaccion en progreso... Esto puede tardar unos minutos." });
-
-	} catch (error) {
-		console.error("Error making transaction:", error);
-		return reply.status(400).send({ message: "Bad Request" });
-	}
+        return reply.status(200).send({ message: "Transaccion en progreso... Esto puede tardar unos minutos." });
+    } catch (error) {
+        console.error("Error making transaction:", error);
+        return reply.status(400).send({ message: "Bad Request" });
+    }
 };
 
 export const listenTransactions = async (
