@@ -1,6 +1,6 @@
 // constants/networks.ts
 export const SCROLL_CONFIG = {
-    RPC_URL: "https://public.stackup.sh/api/v1/node/arbitrum-sepolia" || process.env.SCROLL_RPC_URL,
+    RPC_URL: "https://534351.rpc.thirdweb.com/3ee52f972b1618dca8b7a040475915f3" || process.env.SCROLL_RPC_URL,
     CHATTER_PAY_ADDRESS: "0xd9993eF8AfA47E9D470b12973B2072f33EAd28e8",
     CHATTER_PAY_BEACON_ADDRESS: "0x1C5d8B0810D6c400101F82a93323bb5b55B78930",
     CHATTER_PAY_WALLET_FACTORY_ADDRESS: "0xE74DB72ad1652940d2edC1FaE5C2c41801608e1D",
