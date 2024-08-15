@@ -1,109 +1,106 @@
-import { BigNumber, ethers } from 'ethers';
+import { ethers } from 'ethers';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts/factories/ChatterPayWalletFactory__factory';
-import { ChatterPay__factory } from '../types/ethers-contracts/factories/ChatterPay__factory';
-import { SCROLL_CONFIG } from '../constants/networks';
-import chatterPayABI from "../chatterPayABI.json"
-const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL);
-const signer = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+import chatterPayABI from "../chatterPayABI.json";
+import Blockchain, { IBlockchain } from '../models/blockchain';
+import { computeProxyAddressFromPhone } from './predictWalletService';
+import { tokenAddress } from '../controllers/transactionController';
+import * as crypto from 'crypto';
 
 export async function sendUserOperation(
     from: string,
+    fromNumber: string,
     to: string,
     tokenAddress: string,
     amount: string,
-    createdAddress?: string
+    chain_id: number = 534351
 ) {
-    const factory = ChatterPayWalletFactory__factory.connect(SCROLL_CONFIG.CHATTER_PAY_WALLET_FACTORY_ADDRESS, signer);
-
-    // Check if wallet exists
-    console.log(`Checking if wallet exists for ${from}...`);
-    let smartAccountAddress = from;
-    const code = await provider.getCode(smartAccountAddress);
+    const blockchain: IBlockchain | null = await Blockchain.findOne({ chain_id });
     
-    console.log(`Wallet code: ${code}`);
+    if (!blockchain) {
+        throw new Error(`Blockchain with chain_id ${chain_id} not found`);
+    }else{
+        console.log(`Blockchain with chain_id ${JSON.stringify(blockchain)} found`);
+    }
+
+    const seedPrivateKey = process.env.PRIVATE_KEY;
+    if (!seedPrivateKey) {
+        throw new Error('Seed private key not found in environment variables');
+    }
+
+    // Create a deterministic seed for generating the wallet
+    const seed = seedPrivateKey + fromNumber;
+
+    // Generate a deterministic private key
+    const privateKey = '0x' + crypto.createHash('sha256').update(seed).digest('hex');
+
+    console.log(`Data: Phone number ${fromNumber}...`);
+    const proxy = await computeProxyAddressFromPhone(fromNumber);
+    const provider = new ethers.providers.JsonRpcProvider(blockchain.rpc);
+    const signer = new ethers.Wallet(privateKey!, provider);
+    const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+
+    const factory = ChatterPayWalletFactory__factory.connect(blockchain.factoryAddress, backendSigner);
+
+    const code = await provider.getCode(proxy.proxyAddress);
     if (code === '0x') {
-        if(createdAddress) {
-            // Create new wallet if it doesn't exist
-            console.log(`Creating new wallet for ${createdAddress}...`);
-            const tx = await factory.createProxy(createdAddress, { gasLimit: 1000000 });
-            let result = await tx.wait();
-            console.log(JSON.stringify(result));
-        }
-    }
-
-    console.log(`Wallet address: ${smartAccountAddress}, setting up ChatterPay contract...`);
-    const chatterPay = new ethers.Contract(smartAccountAddress, chatterPayABI, signer);
-    
-    // Prepare the transaction data
-    console.log(`Preparing transaction data...`);
-    const erc20 = new ethers.Contract(tokenAddress, [
-        'function transfer(address to, uint256 amount)',
-        'function mint(address, uint256 amount)',
-        'function balanceOf(address owner) view returns (uint256)',
-    ], signer);
-    const amount_bn = ethers.utils.parseUnits(amount, 18);
-    const transferEncode = erc20.interface.encodeFunctionData("transfer", [to, amount_bn])
-
-    // Check balance of the wallet
-    const balanceCheck = await erc20.balanceOf(smartAccountAddress);
-    let balance = ethers.utils.formatUnits(balanceCheck, 18);
-    
-    console.log(`Balance of the wallet is ${ethers.utils.formatUnits(balanceCheck, 18)}`);
-
-    if (parseFloat(balance) < 1) {
-        //Mintear "amount" tokens al usuario que envia la solicitud
-        const amountToMint = ethers.utils.parseUnits(amount, 18);
-        
-        console.log(`Funding wallet with 100,000 tokens...`);
-        const tx = await erc20.mint(smartAccountAddress, amountToMint, { gasLimit: 300000 });
+        console.log(`Creating new wallet for EOA: ${proxy.EOAAddress}, will result in: ${proxy.proxyAddress}...`);
+        const tx = await factory.createProxy(proxy.EOAAddress, { gasLimit: 1000000 });
         await tx.wait();
-        console.log(`Funded wallet with 100,000 tokens`);
     }
-    const newbalance = await erc20.balanceOf(smartAccountAddress);
-    console.log(`El nuevo balance del SCA es ${ethers.utils.formatUnits(newbalance, 18)}`);
 
-    const callData = chatterPay.interface.encodeFunctionData("execute", [
-        tokenAddress,
-        0,
-        transferEncode
-    ]);
+    await ensureSignerHasEth(signer, backendSigner, provider);
+
+    const chatterPay = new ethers.Contract(proxy.proxyAddress, chatterPayABI, signer);
+    const erc20 = new ethers.Contract(tokenAddress, [
+        'function transfer(address to, uint256 amount) returns (bool)',
+        'function balanceOf(address owner) view returns (uint256)',
+        'function approve(address spender, uint256 amount) returns (bool)',
+        'function allowance(address owner, address spender) view returns (uint256)',
+    ], signer);
+
+    await checkBalance(erc20, proxy.proxyAddress, amount);
+
+    return await executeTransfer(erc20, chatterPay, to, amount, proxy.proxyAddress, signer);
+}
+
+async function ensureSignerHasEth(signer: ethers.Wallet, backendSigner: ethers.Wallet, provider: ethers.providers.JsonRpcProvider) {
+    const EOABalance = await provider.getBalance(await signer.getAddress());
+    if (EOABalance.lt(ethers.utils.parseEther('0.0008'))) {
+        console.log('Sending ETH to signer...');
+        const tx = await backendSigner.sendTransaction({
+            to: await signer.getAddress(),
+            value: ethers.utils.parseEther('0.001'),
+            gasLimit: 210000,
+        });
+        await tx.wait();
+    }
+}
+
+async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount: string) {
+    const amount_bn = ethers.utils.parseUnits(amount, 18);
+    const balanceCheck = await erc20.balanceOf(proxyAddress);
+    if (balanceCheck.lt(amount_bn)) {
+        throw new Error(`Insufficient balance. Required: ${amount}, Available: ${ethers.utils.formatUnits(balanceCheck, 18)}`);
+    }
+}
+
+async function executeTransfer(erc20: ethers.Contract, chatterPay: ethers.Contract, to: string, amount: string, proxyAddress: string, signer: ethers.Wallet) {
+    const amount_bn = ethers.utils.parseUnits(amount, 18);
+    const transferEncode = erc20.interface.encodeFunctionData("transfer", [to, amount_bn]);
+    const transferCallData = chatterPay.interface.encodeFunctionData("execute", [tokenAddress, 0, transferEncode]);
 
     try {
-        // Check balance of the signer
-        const balance = await signer.getBalance();
-        const minBalance = ethers.utils.parseEther("0.001");
-
-        if (balance.lt(minBalance)) {
-            // Fund the wallet with 0.001 ETH if balance is less than 0.001 ETH
-            console.log(`Funding wallet with ${ethers.utils.formatEther(minBalance)} ETH...`);
-            const ethToSend = minBalance;
-            const fundingTx = await signer.sendTransaction({
-                to: signer.address,
-                value: ethToSend,
-                gasLimit: 21000
-            });
-            await fundingTx.wait();
-            console.log(`Funded wallet with ${ethers.utils.formatEther(ethToSend)} ETH`);
-        }
-
-        console.log(`Sending the transaction...`);
-        // Send the transaction
         const tx = await signer.sendTransaction({
-            to: smartAccountAddress,
-            data: callData,
-            gasLimit: 1000000,
+            to: proxyAddress,
+            data: transferCallData,
+            gasLimit: 500000,
         });
-
-        console.log(`Transaction hash: ${tx.hash}`);
-
         const receipt = await tx.wait();
-        console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
+        console.log(`Transfer transaction confirmed in block ${receipt.blockNumber}`);
+        return { transactionHash: receipt.transactionHash };
 
-        return {
-            transactionHash: tx.hash,
-        };
     } catch (error) {
-        console.error('Error sending transaction:', error);
+        console.error('Error sending transfer transaction:', error);
         throw error;
     }
 }

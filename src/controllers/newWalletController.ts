@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { computeProxyAddressFromPhone } from "../services/predictWalletService";
 import User from "../models/user";
 import { authenticate } from "./transactionController";
+import { issueToAddress } from "./demoERC20Controller";
 
 export const createWallet = async (
     request: FastifyRequest<{
@@ -41,6 +42,9 @@ export const createWallet = async (
             email: null,
             name: null,
         });
+
+        //Mintea tokens al usuario
+        issueToAddress(predictedWallet.proxyAddress);
 
         await newUser.save();
 
