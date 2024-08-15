@@ -278,7 +278,7 @@ export const makeTransaction = async (
 
 		let user = await User.findOne({ phone_number: channel_user_id });
 	
-		if (!user) {
+    	if (!user) {
 			return reply.status(400).send({ message: "Debes tener una wallet creada para poder transferir" });
 		}
 

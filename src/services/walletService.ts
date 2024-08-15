@@ -60,12 +60,12 @@ export async function sendUserOperation(
 
     await checkBalance(erc20, proxy.proxyAddress, amount);
 
-    return await executeTransfer(erc20, chatterPay, to, amount, proxy.proxyAddress, backendSigner);
+    return await executeTransfer(erc20, chatterPay, to, amount, proxy.proxyAddress, signer);
 }
 
 async function ensureSignerHasEth(signer: ethers.Wallet, backendSigner: ethers.Wallet, provider: ethers.providers.JsonRpcProvider) {
     const EOABalance = await provider.getBalance(await signer.getAddress());
-    if (EOABalance.lt(ethers.utils.parseEther('0.001'))) {
+    if (EOABalance.lt(ethers.utils.parseEther('0.0008'))) {
         console.log('Sending ETH to signer...');
         const tx = await backendSigner.sendTransaction({
             to: await signer.getAddress(),

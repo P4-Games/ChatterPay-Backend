@@ -3,43 +3,47 @@ import { ethers } from 'ethers';
 import { SCROLL_CONFIG } from '../constants/networks';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
 
-export const issueToAddress = (address: string, reply?: FastifyReply) => {
-    const tokens = [USDT_ADDRESS, WETH_ADDRESS];
-    
-    tokens.forEach(async (token_address) => {
-        try {
-            //Mintear 100,000 tokens al usuario que envia la solicitud
-            const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL);
-            const signer = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
-            const erc20 = new ethers.Contract(token_address,
-                [
-                    'function transfer(address to, uint256 amount)',
-                    'function mint(address, uint256 amount)'
-                ], signer
-            );
+export const mint = async (token_address: string, address: string, reply?: FastifyReply) => {
+    try {
+        //Mintear 100,000 tokens al usuario que envia la solicitud
+        const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL);
+        const signer = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+        const erc20 = new ethers.Contract(token_address,
+            [
+                'function transfer(address to, uint256 amount)',
+                'function mint(address, uint256 amount)'
+            ], signer
+        );
 
-            const amount_bn = ethers.utils.parseUnits("1000", 18);
+        const amount_bn = ethers.utils.parseUnits("1000", 18);
 
-            const gasLimit = 300000; // Set the desired gas limit here
+        const gasLimit = 500000; // Set the desired gas limit here
 
-            const tx = await erc20.mint(address, amount_bn, { gasLimit });
+        const tx = await erc20.mint(address, amount_bn, { gasLimit: gasLimit });
 
-            const result = await tx.wait();
+        const result = await tx.wait();
 
-            if (reply) {
-                reply?.status(201).send({
-                    message: 'Tokens issued',
-                    txHash: result.transactionHash,
-                });
-            }
-        } catch (error) {
-            console.error('Error creating user:', error);
-            
-            if(reply) {
-                reply.status(400).send({ message: 'Bad Request' });
-            }
+        if (reply) {
+            reply?.status(201).send({
+                message: 'Tokens issued',
+                txHash: result.transactionHash,
+            });
         }
-    });
+    } catch (error) {
+        console.error('Error creating user:', error);
+
+        if (reply) {
+            reply.status(400).send({ message: 'Bad Request' });
+        }
+    }
+}
+
+export const issueToAddress = async (address: string, reply?: FastifyReply) => {
+    const tokens = [USDT_ADDRESS, WETH_ADDRESS];
+
+    for (let i = 0; i < tokens.length; i++) {
+        await mint(tokens[i], address, reply);
+    }
 }
 
 // Emite nuevos tokens a la dirección especificada
@@ -48,7 +52,7 @@ export const issueTokens = async (request: FastifyRequest<{
         address: string,
     }
 }>, reply: FastifyReply) => {
-    const {address} = request.body;
+    const { address } = request.body;
     issueToAddress(address, reply);
 };
 
@@ -107,7 +111,7 @@ export const walletBalance = async (request: FastifyRequest<{ Params: { wallet: 
 
         const balances = tokenBalances.map(({ symbol, balance, rateUSD }) => {
             const balanceUSD = parseFloat(balance) * rateUSD;
-            return { 
+            return {
                 network: "Scroll Sepolia",
                 token: symbol,
                 logo: `https://cryptofonts.com/img/SVG/${symbol.toLowerCase()}.svg`,
