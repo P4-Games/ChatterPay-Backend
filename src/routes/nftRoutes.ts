@@ -1,8 +1,10 @@
 import { FastifyInstance } from 'fastify';
-import { swap } from '../controllers/swapController';
+import { getNFT, mintNFT } from '../controllers/nftController';
 
-const tokenRoutes = async (fastify: FastifyInstance) => {
-    fastify.post('/nft', swap);
+const nftRoutes = async (fastify: FastifyInstance) => {
+    fastify.post('/nft', mintNFT);
+    fastify.get('/nft/:id', getNFT);
+    //fastify.post('/nft/transfer', transferNFT);
 };
 
-export default tokenRoutes;
+export default nftRoutes;
