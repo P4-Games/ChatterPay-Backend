@@ -2,15 +2,10 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import web3 from "../config";
 import Transaction, { ITransaction } from "../models/transaction";
 import { sendUserOperation } from "../services/walletService";
-import User, { IUser } from "../models/user";
-import Token, { IToken } from "../models/token";
+import User from "../models/user";
 import { sendTransferNotification, sendTransferNotification2 } from "./replyController";
-import { ComputedAddress, computeProxyAddressFromPhone, PhoneNumberToAddress } from "../services/predictWalletService";
-import { ethers } from "ethers";
-import { SCROLL_CONFIG } from "../constants/networks";
-import { createUser } from "./userController";
+import { computeProxyAddressFromPhone } from "../services/predictWalletService";
 import Blockchain from "../models/blockchain";
-import { exec } from "child_process";
 import { USDT_ADDRESS } from "../constants/contracts";
 
 // Verificar estado de una transacción
@@ -200,7 +195,7 @@ const validateInputs = (inputs: MakeTransactionInputs): string => {
         return "El símbolo del token no es válido";
     }
     try {
-        const newChainID = chain_id ? parseInt(chain_id) : 42161;
+        const newChainID = chain_id ? parseInt(chain_id) : 534351;
         Blockchain.findOne({ chain_id: newChainID });
     } catch {
         return "La blockchain no esta registrada";
@@ -281,12 +276,18 @@ export const makeTransaction = async (
             return reply.status(400).send({ message: validationError });
         }
 
+		let user = await User.findOne({ phone_number: channel_user_id });
+	
+		if (!user) {
+			return reply.status(400).send({ message: "Debes tener una wallet creada para poder transferir" });
+		}
+
         const fromUser = await getOrCreateUser(channel_user_id);
         const toUser = to.startsWith("0x") 
             ? { input: to, wallet: to, name: "", number: "" } 
             : await getOrCreateUser(to);
 
-        executeTransaction(fromUser, toUser, token, amount, parseInt(chain_id) || 42161);
+        executeTransaction(fromUser, toUser, token, amount, parseInt(chain_id) || 534351);
 
         return reply.status(200).send({ message: "Transaccion en progreso... Esto puede tardar unos minutos." });
     } catch (error) {

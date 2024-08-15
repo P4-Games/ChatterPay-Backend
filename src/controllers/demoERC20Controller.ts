@@ -3,13 +3,7 @@ import { ethers } from 'ethers';
 import { SCROLL_CONFIG } from '../constants/networks';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
 
-// Emite nuevos tokens a la dirección especificada
-export const issueTokens = async (request: FastifyRequest<{
-    Body: {
-        address: string,
-    }
-}>, reply: FastifyReply) => {
-    const {address} = request.body;
+export const issueToAddress = (address: string, reply?: FastifyReply) => {
     const tokens = [USDT_ADDRESS, WETH_ADDRESS];
     
     tokens.forEach(async (token_address) => {
@@ -32,15 +26,30 @@ export const issueTokens = async (request: FastifyRequest<{
 
             const result = await tx.wait();
 
-            return reply.status(201).send({
-                message: 'Tokens issued',
-                txHash: result.transactionHash,
-            });
+            if (reply) {
+                reply?.status(201).send({
+                    message: 'Tokens issued',
+                    txHash: result.transactionHash,
+                });
+            }
         } catch (error) {
             console.error('Error creating user:', error);
-            return reply.status(400).send({ message: 'Bad Request' });
+            
+            if(reply) {
+                reply.status(400).send({ message: 'Bad Request' });
+            }
         }
     });
+}
+
+// Emite nuevos tokens a la dirección especificada
+export const issueTokens = async (request: FastifyRequest<{
+    Body: {
+        address: string,
+    }
+}>, reply: FastifyReply) => {
+    const {address} = request.body;
+    issueToAddress(address, reply);
 };
 
 const getContractBalance = async (contractAddress: string, signer: ethers.Wallet, address: string) => {

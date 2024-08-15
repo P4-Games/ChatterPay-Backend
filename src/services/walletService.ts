@@ -12,7 +12,7 @@ export async function sendUserOperation(
     to: string,
     tokenAddress: string,
     amount: string,
-    chain_id: number = 42161
+    chain_id: number = 534351
 ) {
     const blockchain: IBlockchain | null = await Blockchain.findOne({ chain_id });
     

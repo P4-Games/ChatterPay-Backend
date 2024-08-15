@@ -19,7 +19,7 @@
     },
     {
         "name": "Arbitrum",
-        "chain_id": 42161,
+        "chain_id": 534351,
         "rpc": "https://public.stackup.sh/api/v1/node/arbitrum-one",
         "logo": "https://cryptofonts.com/img/SVG/arb.svg",
         "explorer": "https://arbiscan.io",
@@ -28,7 +28,7 @@
     },
     {
         "name": "Arbitrum Sepolia",
-        "chain_id": 421614,
+        "chain_id": 5343514,
         "rpc": "https://public.stackup.sh/api/v1/node/arbitrum-sepolia",
         "logo": "https://cryptofonts.com/img/SVG/arb.svg",
         "explorer": "https://testnet.arbiscan.io",

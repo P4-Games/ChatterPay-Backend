@@ -46,10 +46,11 @@ export interface ComputedAddress {
     privateKey: string;
 }
 
+
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
-const provider = new ethers.providers.JsonRpcProvider("https://421614.rpc.thirdweb.com/3ee52f972b1618dca8b7a040475915f3", {
-        name: "arbitrum-sepolia",
-        chainId: 421614,
+    const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL, {
+        name: "scroll-sepolia",
+        chainId: 534351,
     });
 
     const factory = new ethers.Contract(SCROLL_CONFIG.CHATTER_PAY_WALLET_FACTORY_ADDRESS, factoryABI, provider);
