@@ -60,7 +60,7 @@ export async function sendUserOperation(
 
     await checkBalance(erc20, proxy.proxyAddress, amount);
 
-    return await executeTransfer(erc20, chatterPay, to, amount, proxy.proxyAddress, signer);
+    return await executeTransfer(erc20, chatterPay, to, amount, proxy.proxyAddress, backendSigner);
 }
 
 async function ensureSignerHasEth(signer: ethers.Wallet, backendSigner: ethers.Wallet, provider: ethers.providers.JsonRpcProvider) {
