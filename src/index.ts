@@ -10,6 +10,7 @@ import { demoERC20Routes } from './routes/demoERC20Routes';
 import querystring from 'querystring';
 import { walletRouter } from './routes/walletRouter';
 import swapRoutes from './routes/swapRoutes';
+import nftRoutes from './routes/nftRoutes';
 require('dotenv').config();
 
 const server = Fastify({
@@ -116,6 +117,7 @@ async function startServer() {
         server.register(blockchainRoutes);
         server.register(demoERC20Routes);
         server.register(swapRoutes);
+        server.register(nftRoutes);
 
         // Iniciar el servidor
         await server.listen({ port: Number(PORT), host: '0.0.0.0' });
