@@ -2,7 +2,6 @@ import { ethers } from 'ethers';
 import { SCROLL_CONFIG } from '../constants/networks';
 import * as crypto from 'crypto';
 
-const provider = new ethers.providers.JsonRpcProvider("https://public.stackup.sh/api/v1/node/arbitrum-sepolia");
 
 const factoryABI = [
     "function getProxyBytecode(address _owner) public view returns (bytes memory)",
@@ -48,6 +47,11 @@ export interface ComputedAddress {
 }
 
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
+const provider = new ethers.providers.JsonRpcProvider("https://421614.rpc.thirdweb.com/3ee52f972b1618dca8b7a040475915f3", {
+        name: "arbitrum-sepolia",
+        chainId: 421614,
+    });
+
     const factory = new ethers.Contract(SCROLL_CONFIG.CHATTER_PAY_WALLET_FACTORY_ADDRESS, factoryABI, provider);
 
     // Convert phone number to Ethereum address

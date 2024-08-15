@@ -18,6 +18,8 @@ export async function sendUserOperation(
     
     if (!blockchain) {
         throw new Error(`Blockchain with chain_id ${chain_id} not found`);
+    }else{
+        console.log(`Blockchain with chain_id ${JSON.stringify(blockchain)} found`);
     }
 
     const seedPrivateKey = process.env.PRIVATE_KEY;
