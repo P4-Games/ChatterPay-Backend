@@ -11,6 +11,7 @@ import { SCROLL_CONFIG } from "../constants/networks";
 import { createUser } from "./userController";
 import Blockchain from "../models/blockchain";
 import { exec } from "child_process";
+import { USDT_ADDRESS } from "../constants/contracts";
 
 // Verificar estado de una transacción
 export const checkTransactionStatus = async (
@@ -232,7 +233,7 @@ const getOrCreateUser = async (phoneNumber: string): Promise<UserType> => {
     };
 };
 
-export const tokenAddress = "0x961bf3bf61d3446907E0Db83C9c5D958c17A94f6"; // Demo USDT en Devnet Scroll # add wETH 
+export const tokenAddress = USDT_ADDRESS; // Demo USDT en Devnet Scroll # add wETH 
 
 const executeTransaction = async (from: UserType, to: UserType, token: string, amount: string, chain_id: number) => {
     console.log("Sending user operation...");
