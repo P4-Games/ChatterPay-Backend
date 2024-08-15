@@ -5,5 +5,6 @@ export const SCROLL_CONFIG = {
     CHATTER_PAY_WALLET_FACTORY_ADDRESS: "0x5904ea48b047d32cc6febacdce227f383cb954bc",
     ENTRY_POINT_ADDRESS: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789",
     CHATTER_NFT: "0x8d1d3bcf856fd96969c178f7e6f9899cc18f8cf3",
+    EXPLORER_URL: "https://sepolia.scrollscan.com",
     CHAIN_ID: 534351 // Scroll sepolia chain ID
 };

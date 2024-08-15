@@ -63,7 +63,7 @@ export async function sendUserOperation(
     return await executeTransfer(erc20, chatterPay, to, amount, proxy.proxyAddress, signer);
 }
 
-async function ensureSignerHasEth(signer: ethers.Wallet, backendSigner: ethers.Wallet, provider: ethers.providers.JsonRpcProvider) {
+export async function ensureSignerHasEth(signer: ethers.Wallet, backendSigner: ethers.Wallet, provider: ethers.providers.JsonRpcProvider) {
     const EOABalance = await provider.getBalance(await signer.getAddress());
     if (EOABalance.lt(ethers.utils.parseEther('0.0008'))) {
         console.log('Sending ETH to signer...');
@@ -73,7 +73,9 @@ async function ensureSignerHasEth(signer: ethers.Wallet, backendSigner: ethers.W
             gasLimit: 210000,
         });
         await tx.wait();
+        console.log('ETH sent to signer');
     }
+    console.log('Signer has enough ETH');
 }
 
 async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount: string) {
