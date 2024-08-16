@@ -172,6 +172,33 @@ export const getNFT = async (
     }
 };
 
+export const getLastNFT = async (
+    request: FastifyRequest<{
+        Querystring: {
+            channel_user_id: string;
+        };
+    }>,
+    reply: FastifyReply
+) => {
+    try {
+        const { channel_user_id } = request.query;
+
+        // Buscar el NFT por el campo 'id'
+        const nft = (await NFTModel.find({ channel_user_id: channel_user_id })).sort((a, b) => { return b.id - a.id })?.[0];
+
+        if (nft) {
+            reply.redirect(`https://api.whatsapp.com/send/?phone=5491164629653&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`);
+        } else {
+            // Si no se encuentra el NFT, responder con un error 404
+            reply.status(404).send({ message: 'NFT not found' });
+        }
+    } catch (error) {
+        // Manejo de errores
+        console.error('Error al obtener el NFT:', error);
+        reply.status(500).send({ message: 'Internal Server Error' });
+    }
+}
+
 export const getPhoneNFTs = async (phone_number: string) => {
     try {
         // Buscar todos los NFTs del usuario
