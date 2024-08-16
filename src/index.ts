@@ -11,6 +11,7 @@ import querystring from 'querystring';
 import { walletRouter } from './routes/walletRouter';
 import swapRoutes from './routes/swapRoutes';
 import nftRoutes from './routes/nftRoutes';
+import fastifyCors from '@fastify/cors';
 require('dotenv').config();
 
 const server = Fastify({
@@ -108,6 +109,8 @@ async function startServer() {
             routePrefix: "/docs",
             exposeRoute: true,
         };
+
+        server.register(fastifyCors);
 
         server.register(fastifySwaggerUi, swaggerUiOptions);
         // Registrar las rutas
