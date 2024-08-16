@@ -1,9 +1,11 @@
-import { FastifyRequest, FastifyReply } from "fastify";
-import NFTModel, { getLastId } from "../models/nft";
 import { ethers } from "ethers";
-import { getWalletByPhoneNumber } from "../models/user";
+import { FastifyReply, FastifyRequest } from "fastify";
+
 import { SCROLL_CONFIG } from "../constants/networks";
+import NFTModel, { getLastId } from "../models/nft";
+import { getWalletByPhoneNumber } from "../models/user";
 import { sendMintNotification } from "./replyController";
+
 //import {}
 
 const NFT_ADDRESS = SCROLL_CONFIG.CHATTER_NFT;
@@ -72,10 +74,11 @@ export const mintNFT = async (
         return reply.status(400).send({message: "Hubo un error al mintear el NFT."})
     }
 
-    // Crear un nuevo documento en la colección 'nft'
+    // Crear un nuevo documento en la colección 'nfts'
     NFTModel.create({
         id: new_id,
         channel_user_id: channel_user_id,
+        wallet: address_of_user,
         trxId: data.transactionHash,
         metadata: {
             image_url: url,

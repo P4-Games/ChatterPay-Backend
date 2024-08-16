@@ -1,6 +1,6 @@
-import { Schema, model, Document } from 'mongoose';
+import { Document, model, Schema } from 'mongoose';
 
-// Interfaz que representa el documento en la colección 'nft'
+// Interfaz que representa el documento en la colección 'nfts'
 interface INFT extends Document {
   channel_user_id: string;
   id: number;
@@ -26,7 +26,7 @@ const NFTSchema = new Schema<INFT>({
 const NFTModel = model<INFT>('NFTs', NFTSchema, 'nfts');
 
 /**
- * Función para obtener el último ID (el ID más grande) en la colección 'nft'
+ * Función para obtener el último ID (el ID más grande) en la colección 'nfts'
  * @returns {Promise<number>} El último ID
  */
 export async function getLastId(): Promise<number> {
