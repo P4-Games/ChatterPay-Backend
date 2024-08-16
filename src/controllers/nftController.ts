@@ -33,7 +33,7 @@ const mint_eth_nft = async (
             gasLimit: 500000
         });
 
-        
+
         console.log("Transaction sent: ", tx.hash);
 
         // Esperar la confirmación de la transacción
@@ -57,13 +57,13 @@ export const mintNFT = async (
     }>,
     reply: FastifyReply
 ) => {
-    const { channel_user_id, url, mensaje} = request.body;
+    const { channel_user_id, url, mensaje } = request.body;
     const address_of_user = await getWalletByPhoneNumber(channel_user_id);
     if (!address_of_user) {
-        return reply.status(400).send({message: "La wallet del usuario no existe."})
+        return reply.status(400).send({ message: "La wallet del usuario no existe." })
     }
 
-    reply.status(200).send({message: "El certificado en NFT está siendo generado..."});
+    reply.status(200).send({ message: "El certificado en NFT está siendo generado..." });
 
     const new_id = await getLastId() + 1;
 
@@ -71,7 +71,7 @@ export const mintNFT = async (
     try {
         data = await mint_eth_nft(address_of_user, new_id);
     } catch {
-        return reply.status(400).send({message: "Hubo un error al mintear el NFT."})
+        return reply.status(400).send({ message: "Hubo un error al mintear el NFT." })
     }
 
     // Crear un nuevo documento en la colección 'nfts'
@@ -87,7 +87,53 @@ export const mintNFT = async (
     });
 
     sendMintNotification(channel_user_id, new_id);
-    
+
+    return;
+}
+
+export const mintExistingNFT = async (
+    request: FastifyRequest<{
+        Body: {
+            channel_user_id: string;
+            id: string,
+        };
+    }>,
+    reply: FastifyReply
+) => {
+    const { channel_user_id, id } = request.body;
+
+    const address_of_user = await getWalletByPhoneNumber(channel_user_id);
+    if (!address_of_user) {
+        return reply.status(400).send({ message: "La wallet del usuario no existe." })
+    }
+
+    reply.status(200).send({ message: "El certificado en NFT está siendo generado..." });
+
+    const nft = await NFTModel.find({ id: parseInt(id) });
+
+    if (!nft) {
+        return reply.status(400).send({ message: "El NFT no existe." })
+    }
+    const new_id = await getLastId() + 1;
+
+    let data;
+    try {
+        data = await mint_eth_nft(address_of_user, new_id);
+    } catch {
+        return reply.status(400).send({ message: "Hubo un error al mintear el NFT." })
+    }
+
+    // Crear un nuevo documento en la colección 'nfts'
+    NFTModel.create({
+        id: new_id,
+        channel_user_id: channel_user_id,
+        wallet: address_of_user,
+        trxId: data.transactionHash,
+        metadata: nft?.[0]?.metadata ? nft?.[0]?.metadata : { image_url: "", description: "" }
+    });
+
+    sendMintNotification(channel_user_id, new_id);
+
     return;
 }
 
@@ -103,7 +149,7 @@ export const getNFT = async (
         const { id } = request.params;
 
         // Buscar el NFT por el campo 'id'
-        const nft = (await NFTModel.find({id}))?.[0];
+        const nft = (await NFTModel.find({ id }))?.[0];
 
         if (nft) {
             // Si el NFT se encuentra, responder con los datos del NFT
@@ -115,7 +161,7 @@ export const getNFT = async (
             // Si no se encuentra el NFT, responder con un error 404
             reply.status(404).send({ message: 'NFT not found' });
         }
-        
+
     } catch (error) {
         // Manejo de errores
         console.error('Error al obtener el NFT:', error);
@@ -126,7 +172,7 @@ export const getNFT = async (
 export const getPhoneNFTs = async (phone_number: string) => {
     try {
         // Buscar todos los NFTs del usuario
-        const nfts = await NFTModel.find({channel_user_id: phone_number});
+        const nfts = await NFTModel.find({ channel_user_id: phone_number });
 
         // Responder con la cantidad de NFTs y la lista de NFTs
         return {
@@ -152,7 +198,7 @@ export const getAllNFTs = async (request: FastifyRequest<{ Querystring: { channe
 }> => {
     const { channel_user_id: phone_number } = request.query;
 
-    const result = await getPhoneNFTs(phone_number);    
+    const result = await getPhoneNFTs(phone_number);
 
     return reply ? reply.status(200).send(result) : result;
 };
