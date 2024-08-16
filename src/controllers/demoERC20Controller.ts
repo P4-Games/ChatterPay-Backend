@@ -76,9 +76,7 @@ const getContractBalance = async (contractAddress: string, signer: ethers.Wallet
     }
 }
 
-export const walletBalance = async (request: { params: { wallet: string } } | FastifyRequest<{ Params: { wallet: string } }>, reply: FastifyReply) => {
-    const wallet = request.params.wallet;
-
+const getAddressBalance = async (address: string, reply: FastifyReply) => {
     const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL);
     const signer = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
 
@@ -105,7 +103,7 @@ export const walletBalance = async (request: { params: { wallet: string } } | Fa
             })),
             // Fetch all token balances in parallel
             Promise.all(tokenInfo.map(async (token) => {
-                const balance = await getContractBalance(token.address, signer, wallet);
+                const balance = await getContractBalance(token.address, signer, address);
                 return { ...token, balance };
             }))
         ]);
@@ -136,7 +134,7 @@ export const walletBalance = async (request: { params: { wallet: string } } | Fa
         const res = {
             balances,
             totals,
-            wallet
+            wallet: address
         };
 
         return reply.status(200).send(res);
@@ -144,10 +142,20 @@ export const walletBalance = async (request: { params: { wallet: string } } | Fa
         console.error('Error fetching wallet balance:', error);
         return reply.status(500).send({ message: 'Internal Server Error' });
     }
+}
+
+export const walletBalance = async (request: FastifyRequest<{Params: { wallet: string }}>, reply: FastifyReply) => {
+    const { wallet } = request.params;
+    
+    if (!wallet) {
+        return reply.status(400).send({ message: 'Wallet address is required' });
+    }
+
+    return getAddressBalance(wallet, reply);
 };
 
-export const balanceByPhoneNumber = async (request: FastifyRequest<{ Params: { phone: string } }>, reply: FastifyReply) => {
-    const phone = request.params.phone;
+export const balanceByPhoneNumber = async (request: FastifyRequest, reply: FastifyReply) => {
+    const phone = new URL("http://localhost:3000/"+ request.originalUrl).searchParams.get('channel_user_id');
 
     try {
         const user = await User.findOne({
@@ -158,7 +166,7 @@ export const balanceByPhoneNumber = async (request: FastifyRequest<{ Params: { p
             return reply.status(404).send({ message: 'User not found' });
         }
 
-        return walletBalance({ params: { wallet: user.wallet } }, reply);
+        return getAddressBalance(user.wallet, reply);
     } catch (error) {
         console.error('Error fetching user balance:', error);
         return reply.status(500).send({ message: 'Internal Server Error' });

@@ -27,7 +27,7 @@ const mint_eth_nft = async (
     try {
         // Llamada a la función mint del contrato
         const tx = await nftContract.safeMint(recipientAddress, tokenURI, {
-            gasLimit: 100000
+            gasLimit: 500000
         });
         console.log("Transaction sent: ", tx.hash);
 
@@ -57,6 +57,9 @@ export const mintNFT = async (
     if (!address_of_user) {
         return reply.status(400).send({message: "La wallet del usuario no existe."})
     }
+
+    reply.status(200).send({message: "El certificado en NFT está siendo generado..."});
+
     const new_id = await getLastId() + 1;
     console.log(new_id, address_of_user);
     let data;
@@ -65,7 +68,6 @@ export const mintNFT = async (
     } catch {
         return reply.status(400).send({message: "Hubo un error al mintear el NFT."})
     }
-    
 
     // Crear un nuevo documento en la colección 'nft'
     NFTModel.create({

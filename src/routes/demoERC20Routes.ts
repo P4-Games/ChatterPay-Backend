@@ -3,6 +3,6 @@ import { balanceByPhoneNumber, issueTokens, walletBalance } from '../controllers
 
 export const demoERC20Routes = async (fastify: FastifyInstance) => {
     fastify.post('/issue/', issueTokens);
-    fastify.get('/balance/:wallet/', walletBalance);
-    fastify.get('/balance_by_phone/:phone/', balanceByPhoneNumber);
+    fastify.get('/balance/:wallet', walletBalance);
+    fastify.get('/balance_by_phone/', balanceByPhoneNumber);
 };
