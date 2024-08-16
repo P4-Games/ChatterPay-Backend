@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { ethers } from 'ethers';
 import { SCROLL_CONFIG } from '../constants/networks';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
+import User from '../models/user';
 
 export const mint = async (token_address: string, address: string, reply?: FastifyReply) => {
     try {
@@ -75,7 +76,7 @@ const getContractBalance = async (contractAddress: string, signer: ethers.Wallet
     }
 }
 
-export const walletBalance = async (request: FastifyRequest<{ Params: { wallet: string } }>, reply: FastifyReply) => {
+export const walletBalance = async (request: { params: { wallet: string } } | FastifyRequest<{ Params: { wallet: string } }>, reply: FastifyReply) => {
     const wallet = request.params.wallet;
 
     const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL);
@@ -144,3 +145,22 @@ export const walletBalance = async (request: FastifyRequest<{ Params: { wallet: 
         return reply.status(500).send({ message: 'Internal Server Error' });
     }
 };
+
+export const balanceByPhoneNumber = async (request: FastifyRequest<{ Params: { phone: string } }>, reply: FastifyReply) => {
+    const phone = request.params.phone;
+
+    try {
+        const user = await User.findOne({
+            phone_number: phone
+        });
+
+        if (!user) {
+            return reply.status(404).send({ message: 'User not found' });
+        }
+
+        return walletBalance({ params: { wallet: user.wallet } }, reply);
+    } catch (error) {
+        console.error('Error fetching user balance:', error);
+        return reply.status(500).send({ message: 'Internal Server Error' });
+    }
+}
