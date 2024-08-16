@@ -4,9 +4,9 @@ import mongoose from 'mongoose';
 import { userConversationSchema } from '../models/userConversation';
 import { SCROLL_CONFIG } from '../constants/networks';
 
+const mongoUrl = 'mongodb+srv://chatbot:p4tech@p4techsolutions.hvxfjoc.mongodb.net/chatterpay';
+
 export const sendTransferNotification = async (channel_user_id: string, from: string | null, amount: string, token: string) => {
-    const mongoUrl = 'mongodb+srv://chatbot:p4tech@p4techsolutions.hvxfjoc.mongodb.net/chatterpay';
-    
     try {
         console.log("Sending notifications");
         const connection = await connectToMongoDB(mongoUrl);
@@ -34,7 +34,6 @@ export const sendTransferNotification = async (channel_user_id: string, from: st
 }
 
 export const sendSwapNotification = async (channel_user_id: string, token: string, amount: string, result: string, outputToken: string, transactionHash: string) => {
-    const mongoUrl = 'mongodb+srv://chatbot:p4tech@p4techsolutions.hvxfjoc.mongodb.net/chatterpay';
     
     try {
         console.log("Sending notifications");
@@ -42,8 +41,6 @@ export const sendSwapNotification = async (channel_user_id: string, token: strin
         
         // Creamos los modelos usando esta conexión específica
         const UserConversation = connection.model('user_conversations', userConversationSchema);
-        
-        console.log("Updated conversation to operator");
         
         const payload: OperatorReplyPayload = {
             data_token: 'ddbe7f0e3d93447486efa9ef77954ae7',
@@ -60,8 +57,30 @@ export const sendSwapNotification = async (channel_user_id: string, token: strin
     }
 }
 
+// Función para enviar notificaciones de minteo de certificados y recuerdos onchain
+export const sendMintNotification = async (channel_user_id: string, id: number) => {
+    try {
+        console.log("Sending notifications");
+        const connection = await connectToMongoDB(mongoUrl);
+        
+        // Creamos los modelos usando esta conexión específica
+        const UserConversation = connection.model('user_conversations', userConversationSchema);
+        
+        const payload: OperatorReplyPayload = {
+            data_token: 'ddbe7f0e3d93447486efa9ef77954ae7',
+            channel_user_id: channel_user_id,
+            message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${SCROLL_CONFIG.CHATTER_NFT}/${id}`,
+        };
+
+        await sendOperatorReply(payload);
+        console.log("Sent operator reply");
+    } catch (error) {
+        console.error("Error in sendMintNotification:", error);
+        throw error;
+    }
+}
+
 export const sendTransferNotification2 = async (channel_user_id: string, to:string | null, amount: string, token: string, txHash:string) => {
-    const mongoUrl = 'mongodb+srv://chatbot:p4tech@p4techsolutions.hvxfjoc.mongodb.net/chatterpay';
     
     try {
         console.log("Sending notifications");
@@ -76,7 +95,7 @@ export const sendTransferNotification2 = async (channel_user_id: string, to:stri
         const payload: OperatorReplyPayload = {
             data_token: 'ddbe7f0e3d93447486efa9ef77954ae7',
             channel_user_id: channel_user_id,
-            message: `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: https://l1sload-blockscout.scroll.io/tx/${txHash}`
+            message: `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: https://sepolia.scrollscan.com/tx/${txHash}`
         };
         await sendOperatorReply(payload);
         console.log("Sent operator reply");
