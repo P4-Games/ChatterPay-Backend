@@ -117,3 +117,38 @@ export const getNFT = async (
         reply.status(500).send({ message: 'Internal Server Error' });
     }
 };
+
+export const getPhoneNFTs = async (phone_number: string) => {
+    try {
+        // Buscar todos los NFTs del usuario
+        const nfts = await NFTModel.find({channel_user_id: phone_number});
+
+        // Responder con la cantidad de NFTs y la lista de NFTs
+        return {
+            count: nfts.length,
+            nfts: nfts.map(nft => ({
+                description: nft.metadata.description,
+                url: `https://testnets.opensea.io/assets/arbitrum-sepolia/${SCROLL_CONFIG.CHATTER_NFT}/${nft.id}`,
+            }))
+        };
+    } catch (error) {
+        // Manejo de errores
+        console.error('Error al obtener los NFTs:', error);
+        throw new Error('Internal Server Error');
+    }
+}
+
+export const getAllNFTs = async (request: FastifyRequest<{ Querystring: { channel_user_id: string } }>, reply: FastifyReply): Promise<{
+    count: number;
+    nfts: {
+        description: string;
+        url: string;
+    }[];
+}> => {
+    const { channel_user_id: phone_number } = request.query;
+
+    const result = await getPhoneNFTs(phone_number);
+    reply.status(200).send(result);
+
+    return result;
+};

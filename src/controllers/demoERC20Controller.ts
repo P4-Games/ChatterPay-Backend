@@ -2,7 +2,8 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { ethers } from 'ethers';
 import { SCROLL_CONFIG } from '../constants/networks';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
-import User from '../models/user';
+import User, { getWalletByPhoneNumber } from '../models/user';
+import { getAllNFTs, getPhoneNFTs } from './nftController';
 
 export const mint = async (token_address: string, address: string, reply?: FastifyReply) => {
     try {
@@ -93,6 +94,15 @@ const getAddressBalance = async (address: string, reply: FastifyReply) => {
 
     type Currency = "USD" | "UYU" | "ARS" | "BRL";
 
+    console.log(`Fetching balance for address: ${address}`);
+    const phoneNumber = (await User.find({ wallet: address }))?.[0]?.phone_number;
+
+    if (!phoneNumber) {
+        return reply.status(404).send({ message: 'User not found' });
+    }
+
+    const NFTs = await getPhoneNFTs(phoneNumber);
+
     try {
         const [fiatQuotes, tokenBalances] = await Promise.all([
             // Fetch all fiat quotes in parallel
@@ -133,6 +143,7 @@ const getAddressBalance = async (address: string, reply: FastifyReply) => {
         const res = {
             balances,
             totals,
+            certificates: NFTs,
             wallet: address
         };
 
