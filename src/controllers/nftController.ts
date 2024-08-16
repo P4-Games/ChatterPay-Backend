@@ -79,6 +79,8 @@ export const mintNFT = async (
             description: mensaje
         }
     });
+
+
 }
 
 export const getNFT = async (
@@ -93,11 +95,14 @@ export const getNFT = async (
         const { id } = request.params;
 
         // Buscar el NFT por el campo 'id'
-        const nft = await NFTModel.find({id}).exec();
+        const nft = (await NFTModel.find({id}))?.[0];
         console.log(nft);
-        if (nft[0]) {
+        if (nft) {
             // Si el NFT se encuentra, responder con los datos del NFT
-            reply.send(nft[0]);
+            reply.send({
+                image: nft.metadata.image_url,
+                description: nft.metadata.description,
+            });
         } else {
             // Si no se encuentra el NFT, responder con un error 404
             reply.status(404).send({ message: 'NFT not found' });

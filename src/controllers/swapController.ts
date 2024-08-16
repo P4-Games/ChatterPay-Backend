@@ -8,6 +8,7 @@ import chatterPayABI from "../chatterPayABI.json";
 import { ensureSignerHasEth } from "../services/walletService";
 import { computeProxyAddressFromPhone } from "../services/predictWalletService";
 import { sendSwapNotification, sendTransferNotification } from "./replyController";
+import Transaction from "../models/transaction";
 
 interface SwapBody {
     channel_user_id: string;
@@ -168,6 +169,31 @@ export const swap = async (
         const result = ethers.utils.formatUnits(outputBalance.sub(balance), 18);
 
         sendSwapNotification(channel_user_id, inputCurrency, amount.toString(), result, outputCurrency, tx.swapTransactionHash)
+
+        //Save transaction objects for the swap in the database
+        await Transaction.create({
+            trx_hash: tx.approveTransactionHash,
+            wallet_from: proxy.proxyAddress,
+            wallet_to: SIMPLE_SWAP_ADDRESS,
+            type: "transfer",
+            date: new Date(),
+            status: "completed",
+            amount: parseFloat(inputAmount),
+            token: inputCurrency,
+        });
+        
+        await Transaction.create({
+            trx_hash: tx.swapTransactionHash,
+            wallet_from: SIMPLE_SWAP_ADDRESS,
+            wallet_to: proxy.proxyAddress,
+            type: "transfer",
+            date: new Date(),
+            status: "completed",
+            amount: parseFloat(result),
+            token: outputCurrency,
+        })
+
+        return;
     } catch (error) {
         console.error("Error swapping tokens:", error);
         return reply.status(500).send({ message: "Internal Server Error" });
