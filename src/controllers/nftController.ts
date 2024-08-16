@@ -68,7 +68,8 @@ export const mintNFT = async (
     
 
     // Crear un nuevo documento en la colección 'nft'
-    const newNFT = new NFTModel({
+    NFTModel.create({
+        id: new_id,
         channel_user_id: channel_user_id,
         trxId: data.transactionHash,
         metadata: {
@@ -76,16 +77,6 @@ export const mintNFT = async (
             description: mensaje
         }
     });
-    
-    // Guardar el documento en la base de datos
-    newNFT.save()
-        .then(doc => {
-        console.log('NFT creado:', newNFT);
-        })
-        .catch(err => {
-        console.error('Error al crear el NFT:', err);
-        });
-
 }
 
 export const getNFT = async (
