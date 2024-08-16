@@ -66,7 +66,7 @@ export const mintNFT = async (
     reply.status(200).send({message: "El certificado en NFT está siendo generado..."});
 
     const new_id = await getLastId() + 1;
-    console.log(new_id, address_of_user);
+
     let data;
     try {
         data = await mint_eth_nft(address_of_user, new_id);
@@ -104,7 +104,7 @@ export const getNFT = async (
 
         // Buscar el NFT por el campo 'id'
         const nft = (await NFTModel.find({id}))?.[0];
-        console.log(nft);
+
         if (nft) {
             // Si el NFT se encuentra, responder con los datos del NFT
             reply.send({
@@ -153,7 +153,6 @@ export const getAllNFTs = async (request: FastifyRequest<{ Querystring: { channe
     const { channel_user_id: phone_number } = request.query;
 
     const result = await getPhoneNFTs(phone_number);    
-    console.log(result, { channel_user_id: phone_number });
 
     return reply ? reply.status(200).send(result) : result;
 };
