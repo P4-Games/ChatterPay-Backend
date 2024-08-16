@@ -23,7 +23,7 @@ const NFTSchema = new Schema<INFT>({
 });
 
 // Crear el modelo basado en el esquema
-const NFTModel = model<INFT>('NFTs', NFTSchema, 'nft');
+const NFTModel = model<INFT>('NFTs', NFTSchema, 'nfts');
 
 /**
  * Función para obtener el último ID (el ID más grande) en la colección 'nft'

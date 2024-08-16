@@ -30,6 +30,8 @@ const mint_eth_nft = async (
         const tx = await nftContract.safeMint(recipientAddress, tokenURI, {
             gasLimit: 500000
         });
+
+        
         console.log("Transaction sent: ", tx.hash);
 
         // Esperar la confirmación de la transacción
@@ -147,8 +149,8 @@ export const getAllNFTs = async (request: FastifyRequest<{ Querystring: { channe
 }> => {
     const { channel_user_id: phone_number } = request.query;
 
-    const result = await getPhoneNFTs(phone_number);
-    reply.status(200).send(result);
+    const result = await getPhoneNFTs(phone_number);    
+    console.log(result, { channel_user_id: phone_number });
 
-    return result;
+    return reply ? reply.status(200).send(result) : result;
 };
