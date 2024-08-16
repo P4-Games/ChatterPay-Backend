@@ -4,6 +4,7 @@ import { Document, model, Schema } from 'mongoose';
 interface INFT extends Document {
   channel_user_id: string;
   id: number;
+  wallet: string;
   trxId: string;
   metadata: {
     image_url: string;
@@ -15,6 +16,7 @@ interface INFT extends Document {
 const NFTSchema = new Schema<INFT>({
   channel_user_id: { type: String, required: true },
   id: { type: Number, required: true },
+  wallet: { type: String, required: true },
   trxId: { type: String, required: true },
   metadata: {
     image_url: { type: String, required: true },
