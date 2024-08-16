@@ -3,6 +3,7 @@ import NFTModel, { getLastId } from "../models/nft";
 import { ethers } from "ethers";
 import { getWalletByPhoneNumber } from "../models/user";
 import { SCROLL_CONFIG } from "../constants/networks";
+import { sendMintNotification } from "./replyController";
 //import {}
 
 const NFT_ADDRESS = SCROLL_CONFIG.CHATTER_NFT;
@@ -80,7 +81,9 @@ export const mintNFT = async (
         }
     });
 
-
+    sendMintNotification(channel_user_id, new_id);
+    
+    return;
 }
 
 export const getNFT = async (

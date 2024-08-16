@@ -113,7 +113,6 @@ const getAddressBalance = async (address: string, reply: FastifyReply) => {
             return {
                 network: "Scroll Sepolia",
                 token: symbol,
-                logo: `https://cryptofonts.com/img/SVG/${symbol.toLowerCase()}.svg`,
                 balance: parseFloat(balance),
                 balance_conv: {
                     USD: balanceUSD,
