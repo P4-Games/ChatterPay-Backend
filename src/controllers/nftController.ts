@@ -27,7 +27,7 @@ const mint_eth_nft = async (
     try {
         // Llamada a la función mint del contrato
         const tx = await nftContract.safeMint(recipientAddress, tokenURI, {
-            gasLimit: 100000
+            gasLimit: 500000
         });
         console.log("Transaction sent: ", tx.hash);
 
@@ -57,6 +57,9 @@ export const mintNFT = async (
     if (!address_of_user) {
         return reply.status(400).send({message: "La wallet del usuario no existe."})
     }
+
+    reply.status(200).send({message: "El certificado en NFT está siendo generado..."});
+
     const new_id = await getLastId() + 1;
     console.log(new_id, address_of_user);
     let data;
@@ -65,10 +68,10 @@ export const mintNFT = async (
     } catch {
         return reply.status(400).send({message: "Hubo un error al mintear el NFT."})
     }
-    
 
     // Crear un nuevo documento en la colección 'nft'
-    const newNFT = new NFTModel({
+    NFTModel.create({
+        id: new_id,
         channel_user_id: channel_user_id,
         trxId: data.transactionHash,
         metadata: {
@@ -76,15 +79,7 @@ export const mintNFT = async (
             description: mensaje
         }
     });
-    
-    // Guardar el documento en la base de datos
-    newNFT.save()
-        .then(doc => {
-        console.log('NFT creado:', newNFT);
-        })
-        .catch(err => {
-        console.error('Error al crear el NFT:', err);
-        });
+
 
 }
 
@@ -100,11 +95,14 @@ export const getNFT = async (
         const { id } = request.params;
 
         // Buscar el NFT por el campo 'id'
-        const nft = await NFTModel.find({id}).exec();
+        const nft = (await NFTModel.find({id}))?.[0];
         console.log(nft);
-        if (nft[0]) {
+        if (nft) {
             // Si el NFT se encuentra, responder con los datos del NFT
-            reply.send(nft[0]);
+            reply.send({
+                image: nft.metadata.image_url,
+                description: nft.metadata.description,
+            });
         } else {
             // Si no se encuentra el NFT, responder con un error 404
             reply.status(404).send({ message: 'NFT not found' });

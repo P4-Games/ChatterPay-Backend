@@ -14,6 +14,8 @@ import nftRoutes from './routes/nftRoutes';
 require('dotenv').config();
 
 const server = Fastify({
+    ignoreDuplicateSlashes: true, 
+    ignoreTrailingSlash: true,
     logger: true // Esto habilitará el logging detallado
 });
 
