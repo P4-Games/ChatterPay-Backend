@@ -5,6 +5,8 @@ import Blockchain, { IBlockchain } from '../models/blockchain';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 import { tokenAddress } from '../controllers/transactionController';
 import * as crypto from 'crypto';
+import { SCROLL_CONFIG } from '../constants/networks';
+import entryPoint from "../entryPoint.json";
 
 export async function sendUserOperation(
     from: string,
@@ -48,7 +50,7 @@ export async function sendUserOperation(
         await tx.wait();
     }
 
-    await ensureSignerHasEth(signer, backendSigner, provider);
+    // await ensureSignerHasEth(signer, backendSigner, provider);
 
     const chatterPay = new ethers.Contract(proxy.proxyAddress, chatterPayABI, signer);
     const erc20 = new ethers.Contract(tokenAddress, [
@@ -60,7 +62,7 @@ export async function sendUserOperation(
 
     await checkBalance(erc20, proxy.proxyAddress, amount);
 
-    return await executeTransfer(erc20, chatterPay, to, amount, proxy.proxyAddress, signer);
+    return await executeTransfer(erc20, chatterPay, to, amount, proxy.proxyAddress, signer, backendSigner);
 }
 
 export async function ensureSignerHasEth(signer: ethers.Wallet, backendSigner: ethers.Wallet, provider: ethers.providers.JsonRpcProvider) {
@@ -86,23 +88,76 @@ async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount
     }
 }
 
-async function executeTransfer(erc20: ethers.Contract, chatterPay: ethers.Contract, to: string, amount: string, proxyAddress: string, signer: ethers.Wallet) {
+async function executeTransfer(
+    erc20: ethers.Contract,
+    chatterPay: ethers.Contract,
+    to: string,
+    amount: string,
+    proxyAddress: string,
+    signer: ethers.Wallet,
+    backendSigner: ethers.Wallet
+) {
     const amount_bn = ethers.utils.parseUnits(amount, 18);
     const transferEncode = erc20.interface.encodeFunctionData("transfer", [to, amount_bn]);
-    const transferCallData = chatterPay.interface.encodeFunctionData("execute", [tokenAddress, 0, transferEncode]);
+    const transferCallData = chatterPay.interface.encodeFunctionData("execute", [erc20.address, 0, transferEncode]);
+
+    const entrypoint = new ethers.Contract(SCROLL_CONFIG.ENTRY_POINT_ADDRESS, entryPoint, signer);
+
+    // Obtener el nonce del contrato proxyAddress (deberás tener una forma de obtenerlo)
+    const nonce = await signer.provider.getTransactionCount(proxyAddress) + 1;
+    console.log("MY Nonce")
+    console.log(nonce);
+
+    // Example UserOperation
+    const userOperation = {
+        sender: proxyAddress,
+        nonce: ethers.BigNumber.from(nonce).toHexString(), // Ensure nonce is a BigNumber
+        initCode: "",
+        callData: transferCallData,
+        accountGasLimits: ethers.BigNumber.from("10000000"), // Ensure this is a BigNumber
+        preVerificationGas: ethers.BigNumber.from(16777216), // Ensure this is a BigNumber
+        gasFees: ethers.BigNumber.from("1000000"), // Ensure this is a BigNumber
+        paymasterAndData: "",
+        signature: ""
+    };
+    console.log("My user op")
+    console.log(userOperation);
+
+    // Codifica la operación (esto depende del contrato EntryPoint y cómo espera recibir la operación)
+    const userOpHash = await entrypoint.getUserOpHash([
+        userOperation.sender,
+        userOperation.nonce,
+        userOperation.initCode,
+        userOperation.callData,
+        userOperation.accountGasLimits,
+        userOperation.preVerificationGas,
+        userOperation.gasFees,
+        userOperation.paymasterAndData,
+        userOperation.signature
+    ]);
+    console.log("My hash")
+    console.log(userOpHash);
+    const userOpSignature = await signer.signMessage(userOpHash);
+
+    // Asigna la firma al userOperation
+    userOperation.signature = userOpSignature;
 
     try {
-        const tx = await signer.sendTransaction({
-            to: proxyAddress,
-            data: transferCallData,
-            gasLimit: 500000,
-        });
+        // Enviar la User Operation a la EntryPoint
+        const entrypoint_backend = new ethers.Contract(SCROLL_CONFIG.ENTRY_POINT_ADDRESS, entryPoint, backendSigner);
+
+        const tx = await entrypoint_backend.handleOps(
+            [userOperation], 
+            signer.address,
+            { gasLimit: 1000000 }
+        );
+
         const receipt = await tx.wait();
-        console.log(`Transfer transaction confirmed in block ${receipt.blockNumber}`);
+        console.log(`User Operation execute confirmed in block ${receipt.blockNumber}`);
         return { transactionHash: receipt.transactionHash };
 
     } catch (error) {
-        console.error('Error sending transfer transaction:', error);
+        console.error('Error sending User Operation transaction:', error);
         throw error;
     }
 }

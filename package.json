@@ -37,7 +37,8 @@
     "mongoose": "^8.5.2",
     "typechain": "^8.3.2",
     "userop": "0.3.8",
-    "web3": "^4.11.1"
+    "web3": "^4.11.1",
+    "x": "^0.1.2"
   },
   "trustedDependencies": [
     "es5-ext"
