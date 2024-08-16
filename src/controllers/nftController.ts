@@ -5,6 +5,7 @@ import { SCROLL_CONFIG } from "../constants/networks";
 import NFTModel, { getLastId } from "../models/nft";
 import { getWalletByPhoneNumber } from "../models/user";
 import { sendMintNotification } from "./replyController";
+import { executeWalletCreation } from "./newWalletController";
 
 //import {}
 
@@ -102,9 +103,11 @@ export const mintExistingNFT = async (
 ) => {
     const { channel_user_id, id } = request.body;
 
-    const address_of_user = await getWalletByPhoneNumber(channel_user_id);
+    let address_of_user = await getWalletByPhoneNumber(channel_user_id);
+
     if (!address_of_user) {
-        return reply.status(400).send({ message: "La wallet del usuario no existe." })
+        console.log("La wallet del usuario no existe. Creando...");
+        address_of_user = await executeWalletCreation(channel_user_id);
     }
 
     reply.status(200).send({ message: "El certificado en NFT está siendo generado..." });
