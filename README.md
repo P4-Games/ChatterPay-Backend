@@ -15,7 +15,6 @@
 
 # ChatterPay
 
-
 Chatterpay is a Wallet for WhatsApp that integrates AI and Account Abstraction, enabling any user to use blockchain easily and securely without technical knowledge.
 
 > Built for: [Level Up Hackathon - Ethereum Argentina 2024](https://ethereumargentina.org/) 
@@ -24,8 +23,8 @@ Chatterpay is a Wallet for WhatsApp that integrates AI and Account Abstraction, 
 
 __Components__:
 
-- Landing Page ([product](https://chatterpay-front-ylswtey2za-uc.a.run.app/), [source code](https://github.com/P4-Games/ChatterPay))
-- User Dashboard Website ([product](https://chatterpay-front-ylswtey2za-uc.a.run.app/dashboard), [source code](https://github.com/P4-Games/ChatterPay))
+- Landing Page ([product](https://chatterpay.net), [source code](https://github.com/P4-Games/ChatterPay))
+- User Dashboard Website ([product](https://chatterpay.net/dashboard), [source code](https://github.com/P4-Games/ChatterPay))
 - Backend API ([source code](https://github.com/P4-Games/ChatterPay-Backend))  (this Repo)
 - Smart Contracts ([source code](https://github.com/P4-Games/ChatterPay-SmartContracts))
 - Data Indexing (Subgraph) ([source code](https://github.com/P4-Games/ChatterPay-Subgraph))
