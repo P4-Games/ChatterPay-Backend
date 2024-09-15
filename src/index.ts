@@ -1,20 +1,20 @@
 import Fastify, { FastifyError, FastifyRequest } from 'fastify';
 import mongoose from 'mongoose';
-import transactionRoutes from './routes/transactionRoutes';
-import userRoutes from './routes/userRoutes';
-import tokenRoutes from './routes/tokenRoutes';
-import blockchainRoutes from './routes/blockchainRoutes';
-import aaveRoutes from './routes/aaveRoutes';
+import transactionRoutes from './api/transactionRoutes';
+import userRoutes from './api/userRoutes';
+import tokenRoutes from './api/tokenRoutes';
+import blockchainRoutes from './api/blockchainRoutes';
+import aaveRoutes from './api/aaveRoutes';
 import fastifySwaggerUi from "@fastify/swagger-ui";
-import { demoERC20Routes } from './routes/demoERC20Routes';
+import { demoERC20Routes } from './api/demoERC20Routes';
 import querystring from 'querystring';
-import { walletRouter } from './routes/walletRouter';
-import swapRoutes from './routes/swapRoutes';
-import nftRoutes from './routes/nftRoutes';
+import { walletRouter } from './api/walletRouter';
+import swapRoutes from './api/swapRoutes';
+import nftRoutes from './api/nftRoutes';
 require('dotenv').config();
 
 const server = Fastify({
-    ignoreDuplicateSlashes: true, 
+    ignoreDuplicateSlashes: true,
     ignoreTrailingSlash: true,
     logger: true // Esto habilitará el logging detallado
 });
@@ -24,7 +24,7 @@ const MongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/chatterpay'
 
 function parseBody(body: string): any {
     body = body.trim();
-    
+
     // Check if it's JSON-like (starts with { or [)
     if (body.startsWith('{') || body.startsWith('[')) {
         try {
@@ -35,7 +35,7 @@ function parseBody(body: string): any {
             const fixedBody = body.replace(/'/g, '"').replace(/(\w+):/g, '"$1":');
             return JSON.parse(fixedBody);
         }
-    } 
+    }
     // If it contains '=', it's likely URL-encoded or a single key-value pair
     else if (body.includes('=')) {
         console.log('Parsing URL-encoded or key-value data');
@@ -47,7 +47,7 @@ function parseBody(body: string): any {
         // Otherwise, it's regular URL-encoded data
         return querystring.parse(body);
     }
-    
+
     throw new Error('Unrecognized data format');
 }
 

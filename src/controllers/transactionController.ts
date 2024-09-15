@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from "fastify";
-import web3 from "../config";
+import web3 from "../utils/web3_config";
 import Transaction, { ITransaction } from "../models/transaction";
 import { sendUserOperation } from "../services/walletService";
 import User from "../models/user";
@@ -161,139 +161,139 @@ export const authenticate = (request: FastifyRequest) => {
 };
 
 type UserType = {
-    input: string;
-    wallet: string;
-    name: string;
-    privateKey?: string;
-    number: string;
+	input: string;
+	wallet: string;
+	name: string;
+	privateKey?: string;
+	number: string;
 };
 
 type MakeTransactionInputs = {
-    channel_user_id: string;
-    to: string;
-    token: string;
-    amount: string;
-    chain_id: string;
+	channel_user_id: string;
+	to: string;
+	token: string;
+	amount: string;
+	chain_id: string;
 };
 
 const validateInputs = (inputs: MakeTransactionInputs): string => {
-    const { channel_user_id, to, token, amount, chain_id } = inputs;
-    
-    if (!channel_user_id || !to || !token || !amount) {
-        return "Alguno o multiples campos están vacíos";
-    }
-    if (isNaN(parseFloat(amount))) {
-        return "El monto ingresado no es correcto";
-    }
-    if (channel_user_id === to) {
-        return "No puedes enviar dinero a ti mismo";
-    }
-    if (channel_user_id.length > 15 || (to.startsWith("0x") && !isNaN(parseInt(to)) && to.length <= 15)) {
-        return "El número de telefono no es válido";
-    }
-    if (token.length > 5) {
-        return "El símbolo del token no es válido";
-    }
-    try {
-        const newChainID = chain_id ? parseInt(chain_id) : 534351;
-        Blockchain.findOne({ chain_id: newChainID });
-    } catch {
-        return "La blockchain no esta registrada";
-    }
-    return "";
+	const { channel_user_id, to, token, amount, chain_id } = inputs;
+
+	if (!channel_user_id || !to || !token || !amount) {
+		return "Alguno o multiples campos están vacíos";
+	}
+	if (isNaN(parseFloat(amount))) {
+		return "El monto ingresado no es correcto";
+	}
+	if (channel_user_id === to) {
+		return "No puedes enviar dinero a ti mismo";
+	}
+	if (channel_user_id.length > 15 || (to.startsWith("0x") && !isNaN(parseInt(to)) && to.length <= 15)) {
+		return "El número de telefono no es válido";
+	}
+	if (token.length > 5) {
+		return "El símbolo del token no es válido";
+	}
+	try {
+		const newChainID = chain_id ? parseInt(chain_id) : 534351;
+		Blockchain.findOne({ chain_id: newChainID });
+	} catch {
+		return "La blockchain no esta registrada";
+	}
+	return "";
 };
 
 const getOrCreateUser = async (phoneNumber: string): Promise<UserType> => {
-    let user = await User.findOne({ phone_number: phoneNumber });
-	
-    if (!user) {
-        console.log(`Número de telefono ${phoneNumber} no registrado en ChatterPay, registrando...`);
-        const predictedWallet = await computeProxyAddressFromPhone(phoneNumber);
-        user = await User.create({
-            phone_number: phoneNumber,
-            wallet: predictedWallet.EOAAddress,
-            privateKey: predictedWallet.privateKey,
-            name: `+${phoneNumber}`,
-        });
-		
-        console.log(`Número de telefono ${phoneNumber} registrado con la wallet ${predictedWallet.EOAAddress}`);
-    }
+	let user = await User.findOne({ phone_number: phoneNumber });
 
-    return {
-        input: phoneNumber,
-        wallet: user.wallet,
-        privateKey: user.privateKey,
-        name: user.name || `+${phoneNumber}`,
-        number: user.phone_number,
-    };
+	if (!user) {
+		console.log(`Número de telefono ${phoneNumber} no registrado en ChatterPay, registrando...`);
+		const predictedWallet = await computeProxyAddressFromPhone(phoneNumber);
+		user = await User.create({
+			phone_number: phoneNumber,
+			wallet: predictedWallet.EOAAddress,
+			privateKey: predictedWallet.privateKey,
+			name: `+${phoneNumber}`,
+		});
+
+		console.log(`Número de telefono ${phoneNumber} registrado con la wallet ${predictedWallet.EOAAddress}`);
+	}
+
+	return {
+		input: phoneNumber,
+		wallet: user.wallet,
+		privateKey: user.privateKey,
+		name: user.name || `+${phoneNumber}`,
+		number: user.phone_number,
+	};
 };
 
 export const tokenAddress = USDT_ADDRESS; // Demo USDT en Devnet Scroll # add wETH 
 
 const executeTransaction = async (from: UserType, to: UserType, token: string, amount: string, chain_id: number) => {
-    console.log("Sending user operation...");
-    const result = await sendUserOperation(
-        from.wallet,
-        from.number,
-        to.wallet,
-        tokenAddress,
-        amount,
-        chain_id
-    );
+	console.log("Sending user operation...");
+	const result = await sendUserOperation(
+		from.wallet,
+		from.number,
+		to.wallet,
+		tokenAddress,
+		amount,
+		chain_id
+	);
 
-    if (!result) return;
+	if (!result) return;
 
-    Transaction.create({
-        trx_hash: result?.transactionHash ?? "",
-        wallet_from: from.wallet,
-        wallet_to: to.wallet,
-        type: "transfer",
-        date: new Date(),
-        status: "completed",
-        amount: parseFloat(amount),
-        token: "USDT",
-    });
+	Transaction.create({
+		trx_hash: result?.transactionHash ?? "",
+		wallet_from: from.wallet,
+		wallet_to: to.wallet,
+		type: "transfer",
+		date: new Date(),
+		status: "completed",
+		amount: parseFloat(amount),
+		token: "USDT",
+	});
 
-    try {
-        console.log("Trying to notificate transfer");
-        let fromName = from.name || from.number || "Alguien";
-        sendTransferNotification(to.number, fromName, amount, token);
-        sendTransferNotification2(from.number, to.number, amount, token, result.transactionHash);
-    } catch (error) {
-        console.error("Error sending notifications:", error);
-    }
+	try {
+		console.log("Trying to notificate transfer");
+		let fromName = from.name || from.number || "Alguien";
+		sendTransferNotification(to.number, fromName, amount, token);
+		sendTransferNotification2(from.number, to.number, amount, token, result.transactionHash);
+	} catch (error) {
+		console.error("Error sending notifications:", error);
+	}
 };
 
 export const makeTransaction = async (
-    request: FastifyRequest<{ Body: MakeTransactionInputs }>,
-    reply: FastifyReply
+	request: FastifyRequest<{ Body: MakeTransactionInputs }>,
+	reply: FastifyReply
 ) => {
-    try {
-        const { channel_user_id, to, token, amount, chain_id } = request.body;
+	try {
+		const { channel_user_id, to, token, amount, chain_id } = request.body;
 
-        const validationError = validateInputs({ channel_user_id, to, token, amount, chain_id });
-        if (validationError) {
-            return reply.status(400).send({ message: validationError });
-        }
+		const validationError = validateInputs({ channel_user_id, to, token, amount, chain_id });
+		if (validationError) {
+			return reply.status(400).send({ message: validationError });
+		}
 
 		let user = await User.findOne({ phone_number: channel_user_id });
-	
-    	if (!user) {
+
+		if (!user) {
 			return reply.status(400).send({ message: "Debes tener una wallet creada para poder transferir" });
 		}
 
-        const fromUser = await getOrCreateUser(channel_user_id);
-        const toUser = to.startsWith("0x") 
-            ? { input: to, wallet: to, name: "", number: "" } 
-            : await getOrCreateUser(to);
+		const fromUser = await getOrCreateUser(channel_user_id);
+		const toUser = to.startsWith("0x")
+			? { input: to, wallet: to, name: "", number: "" }
+			: await getOrCreateUser(to);
 
-        executeTransaction(fromUser, toUser, token, amount, parseInt(chain_id) || 534351);
+		executeTransaction(fromUser, toUser, token, amount, parseInt(chain_id) || 534351);
 
-        return reply.status(200).send({ message: "Transaccion en progreso... Esto puede tardar unos minutos." });
-    } catch (error) {
-        console.error("Error making transaction:", error);
-        return reply.status(400).send({ message: "Bad Request" });
-    }
+		return reply.status(200).send({ message: "Transaccion en progreso... Esto puede tardar unos minutos." });
+	} catch (error) {
+		console.error("Error making transaction:", error);
+		return reply.status(400).send({ message: "Bad Request" });
+	}
 };
 
 export const listenTransactions = async (
