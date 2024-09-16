@@ -3,6 +3,7 @@ import { FastifyReply, FastifyRequest } from "fastify";
 import { User } from "../models/user";
 import { authenticate } from "./transactionController";
 import { computeProxyAddressFromPhone } from "../services/predictWalletService";
+import { issueTokensCore } from "./tokenController";
 
 /**
  * Creates a new wallet and user for the given phone number.
@@ -61,6 +62,9 @@ export const createWallet = async (
         }
 
         const wallet = await executeWalletCreation(phone_number);
+
+        // Issue demo tokens to the user. This will be later removed in mainnet
+        issueTokensCore(wallet)
 
         return await reply.status(200).send({
             message: "La wallet fue creada exitosamente!",

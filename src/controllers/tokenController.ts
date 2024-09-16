@@ -107,6 +107,8 @@ export const deleteToken = async (request: FastifyRequest<{ Params: { id: string
   }
 };
 
+// Tokens issuing related functions. This will be later removed in mainnet as we don't need to issue tokens anymore.
+
 /**
  * Represents the result of a token minting operation.
  */
@@ -163,33 +165,48 @@ async function mintToken(
 }
 
 /**
- * Issues a specified amount of USDT and WETH tokens to a given address.
+ * Issues a specified amount of tokens to a given address. 
+ * 
+ * @param recipientAddress - The address to receive the minted tokens
+ * @returns A promise that resolves to an array of MintResult objects
+ */
+export async function issueTokensCore(
+  recipientAddress: string,
+): Promise<MintResult[]> {
+  const signingKey = process.env.SIGNING_KEY!;
+  const amount: string = "1000";
+  const network = await getNetworkConfig();
+  const provider: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(network.rpc);
+  const signer: ethers.Wallet = new ethers.Wallet(signingKey, provider);
+  const tokenAddresses: string[] = [USDT_ADDRESS, WETH_ADDRESS];
+
+  // Get the current nonce for the signer
+  const currentNonce: number = await provider.getTransactionCount(signer.address);
+
+  const mintPromises: Promise<MintResult>[] = tokenAddresses.map((tokenAddress, index) => 
+    mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index)
+  );
+
+  const mintResults = await Promise.all(mintPromises);
+
+  return mintResults;
+}
+
+/**
+ * Fastify route handler for issuing tokens.
  * 
  * @param request - The Fastify request object containing the recipient's address
  * @param reply - The Fastify reply object
  * @returns A promise that resolves to the Fastify reply object
  */
-export const issueTokens = async (
+export const issueTokensHandler = async (
   request: FastifyRequest<{ Body: { address: string } }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   const { address }: { address: string } = request.body;
-  const tokenAddresses: string[] = [USDT_ADDRESS, WETH_ADDRESS];
-  const amount: string = "1000";
 
   try {
-    const network = await getNetworkConfig();
-    const provider: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(network.rpc);
-    const signer: ethers.Wallet = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
-    
-    // Get the current nonce for the signer
-    const currentNonce: number = await provider.getTransactionCount(signer.address);
-
-    const mintPromises: Promise<MintResult>[] = tokenAddresses.map((tokenAddress, index) => 
-      mintToken(signer, tokenAddress, address, amount, currentNonce + index)
-    );
-
-    const results: MintResult[] = await Promise.all(mintPromises);
+    const results = await issueTokensCore(address);
 
     return await reply.status(201).send({
       message: 'Tokens minted successfully',

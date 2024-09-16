@@ -6,6 +6,7 @@ import { getWalletByPhoneNumber } from "../models/user";
 import { sendMintNotification } from "./replyController";
 import { executeWalletCreation } from "./newWalletController";
 import { getNetworkConfig } from "../services/networkService";
+import { issueTokensCore } from "./tokenController";
 
 export interface NFTInfo {
     description: string;
@@ -125,6 +126,9 @@ export const mintExistingNFT = async (
     if (!address_of_user) {
         console.log("La wallet del usuario no existe. Creando...");
         address_of_user = await executeWalletCreation(channel_user_id);
+        
+        // Issue demo tokens to the user. This will be later removed in mainnet
+        issueTokensCore(address_of_user)
     }
 
     reply.status(200).send({ message: "El certificado en NFT está siendo generado..." });
