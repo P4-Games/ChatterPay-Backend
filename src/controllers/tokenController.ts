@@ -1,9 +1,13 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-
 import Token, { IToken } from '../models/token';
 
-// Crear un nuevo token
-export const createToken = async (request: FastifyRequest<{ Body: IToken }>, reply: FastifyReply) => {
+/**
+ * Creates a new token
+ * @param {FastifyRequest<{ Body: IToken }>} request - The Fastify request object containing the token data in the body
+ * @param {FastifyReply} reply - The Fastify reply object
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object
+ */
+export const createToken = async (request: FastifyRequest<{ Body: IToken }>, reply: FastifyReply): Promise<FastifyReply> => {
   try {
     const newToken = new Token(request.body);
     await newToken.save();
@@ -14,8 +18,13 @@ export const createToken = async (request: FastifyRequest<{ Body: IToken }>, rep
   }
 };
 
-// Obtener todos los tokens
-export const getAllTokens = async (request: FastifyRequest, reply: FastifyReply) => {
+/**
+ * Retrieves all tokens
+ * @param {FastifyRequest} request - The Fastify request object
+ * @param {FastifyReply} reply - The Fastify reply object
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing all tokens
+ */
+export const getAllTokens = async (request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply> => {
   try {
     const tokens = await Token.find();
     return await reply.status(200).send(tokens);
@@ -25,8 +34,13 @@ export const getAllTokens = async (request: FastifyRequest, reply: FastifyReply)
   }
 };
 
-// Obtener un token por ID
-export const getTokenById = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+/**
+ * Retrieves a token by its ID
+ * @param {FastifyRequest<{ Params: { id: string } }>} request - The Fastify request object containing the token ID in the params
+ * @param {FastifyReply} reply - The Fastify reply object
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the found token or an error message
+ */
+export const getTokenById = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply): Promise<FastifyReply> => {
   const { id } = request.params as { id: string };
 
   try {
@@ -43,8 +57,13 @@ export const getTokenById = async (request: FastifyRequest<{ Params: { id: strin
   }
 };
 
-// Actualizar un token por ID
-export const updateToken = async (request: FastifyRequest<{ Params: { id: string }, Body: Partial<IToken> }>, reply: FastifyReply) => {
+/**
+ * Updates a token by its ID
+ * @param {FastifyRequest<{ Params: { id: string }, Body: Partial<IToken> }>} request - The Fastify request object containing the token ID in the params and update data in the body
+ * @param {FastifyReply} reply - The Fastify reply object
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the updated token or an error message
+ */
+export const updateToken = async (request: FastifyRequest<{ Params: { id: string }, Body: Partial<IToken> }>, reply: FastifyReply): Promise<FastifyReply> => {
   const { id } = request.params as { id: string };
 
   try {
@@ -61,8 +80,13 @@ export const updateToken = async (request: FastifyRequest<{ Params: { id: string
   }
 };
 
-// Eliminar un token por ID
-export const deleteToken = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+/**
+ * Deletes a token by its ID
+ * @param {FastifyRequest<{ Params: { id: string } }>} request - The Fastify request object containing the token ID in the params
+ * @param {FastifyReply} reply - The Fastify reply object
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing a success message or an error message
+ */
+export const deleteToken = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply): Promise<FastifyReply> => {
   const { id } = request.params as { id: string };
 
   try {

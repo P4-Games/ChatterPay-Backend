@@ -4,11 +4,15 @@ import { swap } from '../controllers/swapController';
 
 /**
  * Configures routes related to swaps.
- * @param fastify - Fastify instance
+ * @param {FastifyInstance} fastify - Fastify instance
+ * @returns {Promise<void>}
  */
-const swapRoutes: (fastify: FastifyInstance) => Promise<void> = async (fastify) => {
-    // Route to perform a swap
-    fastify.post('/swap', swap);
+const swapRoutes = async (fastify: FastifyInstance): Promise<void> => {
+  /**
+   * Route to perform a swap
+   * @route POST /swap
+   */
+  fastify.post('/swap', swap);
 };
 
 export default swapRoutes;

@@ -3,7 +3,7 @@ import { ethers, BigNumber } from 'ethers';
 
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
 
-/** URLs y API Keys de los escaners */
+/** URLs and API Keys */
 const SCROLL_TESTNET_API = 'https://api-sepolia.scrollscan.com/api';
 const SEPOLIA_API = 'https://api-sepolia.etherscan.io/api';
 const SCROLL_API_KEY = process.env?.SCROLLSCAN_API_KEY ?? "";
@@ -190,7 +190,6 @@ async function findApproximateDepositTransactionsOnNetwork(
     }
 }
 
-// Exportamos las funciones y tipos principales para su uso en otros módulos
 export {
     WalletBalance,
     DepositTransaction,

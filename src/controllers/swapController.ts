@@ -156,54 +156,70 @@ export const swap = async (
     reply: FastifyReply
 ) => {
     try {
+        // Authenticate the request
         authenticate(request);
 
+        // Extract swap details from request body
         const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
 
+        // Validate inputs
         const validationError = validateInputs(request.body);
         if (validationError) {
             return await reply.status(400).send({ message: validationError });
         }
 
+        // Send initial response to client
         reply.status(200).send({ message: "Intercambio de monedas en progreso, puede tardar unos minutos..." });
 
+        // Generate user wallet
         const { signer, proxyAddress } = await generateUserWallet(channel_user_id);
 
         console.log("Wallet of the signer: ", await signer.getAddress());
 
+        // Create SimpleSwap contract instance (Custom demo contract for swapping between these two tokens)
         const simpleSwap = new ethers.Contract(SIMPLE_SWAP_ADDRESS, [
             "function swapWETHforUSDT(uint256 wethAmount) external",
             "function swapUSDTforWETH(uint256 usdtAmount) external"
         ], signer);
 
+        // Determine swap direction and prepare input amount
         const isWETHtoUSDT = inputCurrency.toUpperCase() === "WETH" && outputCurrency.toUpperCase() === "USDT";
         const inputAmount = amount.toString();
 
+        // Create ERC20 contract instance for balance checks
         const erc20 = new ethers.Contract(isWETHtoUSDT ? WETH_ADDRESS : USDT_ADDRESS, [
             'function balanceOf(address owner) view returns (uint256)',
         ], signer);
 
+        // Check initial balance
         const initialBalance = await erc20.balanceOf(proxyAddress);
         console.log(`User initial balance of ${inputCurrency}: ${ethers.utils.formatUnits(initialBalance, 18)}`);
 
+        // Execute swap
         const tx = await executeSwap(simpleSwap, isWETHtoUSDT, inputAmount, proxyAddress, signer);
 
+        // Check final balance
         const finalBalance = await erc20.balanceOf(proxyAddress);
         console.log(`User final balance of ${outputCurrency}: ${ethers.utils.formatUnits(finalBalance, 18)}`);
 
+        // Calculate swap result
         const result = ethers.utils.formatUnits(finalBalance.sub(initialBalance), 18);
 
+        // Send swap notification
         await sendSwapNotification(channel_user_id, inputCurrency, amount.toString(), result, outputCurrency, tx.swapTransactionHash);
 
+        // Save transactions
         await saveTransaction(tx.approveTransactionHash, proxyAddress, SIMPLE_SWAP_ADDRESS, parseFloat(inputAmount), inputCurrency);
         await saveTransaction(tx.swapTransactionHash, SIMPLE_SWAP_ADDRESS, proxyAddress, parseFloat(result), outputCurrency);
 
+        // Return success response
         return await reply.status(200).send({
             message: "Swap completed successfully",
             approveTransactionHash: tx.approveTransactionHash,
             swapTransactionHash: tx.swapTransactionHash
         });
     } catch (error) {
+        // Handle errors
         console.error("Error swapping tokens:", error);
         return reply.status(500).send({ message: "Internal Server Error" });
     }

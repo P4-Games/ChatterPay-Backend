@@ -12,16 +12,21 @@ export interface NFTInfo {
     url: string;
 }
 
+/**
+ * Mints an NFT on the Ethereum network.
+ * @param {string} recipientAddress - The address to receive the minted NFT.
+ * @param {number} tokenURI - The token URI for the NFT.
+ * @returns {Promise<ethers.ContractReceipt>} The transaction receipt.
+ * @throws {Error} If minting fails.
+ */
 const mint_eth_nft = async (
     recipientAddress: string,
     tokenURI: number
-) => {
+): Promise<ethers.ContractReceipt> => {
     const networkConfig = await getNetworkConfig(421614);
-    // Configuración del proveedor y del firmante
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
 
-    // Instancia del contrato NFT
     const nftContract = new ethers.Contract(
         networkConfig.chatterNFTAddress,
         [
@@ -31,15 +36,12 @@ const mint_eth_nft = async (
     );
 
     try {
-        // Llamada a la función mint del contrato
         const tx = await nftContract.safeMint(recipientAddress, tokenURI, {
             gasLimit: 500000
         });
 
-
         console.log("Transaction sent: ", tx.hash);
 
-        // Esperar la confirmación de la transacción
         const receipt = await tx.wait();
         console.log("Transaction confirmed: ", receipt.transactionHash);
 
@@ -50,6 +52,12 @@ const mint_eth_nft = async (
     }
 };
 
+/**
+ * Handles the minting of a new NFT.
+ * @param {FastifyRequest} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<boolean>} True if minting was successful.
+ */
 export const mintNFT = async (
     request: FastifyRequest<{
         Body: {
@@ -59,11 +67,12 @@ export const mintNFT = async (
         };
     }>,
     reply: FastifyReply
-) => {
+): Promise<boolean> => {
     const { channel_user_id, url, mensaje } = request.body;
     const address_of_user = await getWalletByPhoneNumber(channel_user_id);
     if (!address_of_user) {
-        return reply.status(400).send({ message: "La wallet del usuario no existe." })
+        reply.status(400).send({ message: "La wallet del usuario no existe." });
+        return false;
     }
 
     reply.status(200).send({ message: "El certificado en NFT está siendo generado..." });
@@ -74,11 +83,11 @@ export const mintNFT = async (
     try {
         data = await mint_eth_nft(address_of_user, new_id);
     } catch {
-        return reply.status(400).send({ message: "Hubo un error al mintear el NFT." })
+        reply.status(400).send({ message: "Hubo un error al mintear el NFT." });
+        return false;
     }
 
-    // Crear un nuevo documento en la colección 'nfts'
-    NFTModel.create({
+    await NFTModel.create({
         id: new_id,
         channel_user_id,
         wallet: address_of_user,
@@ -94,6 +103,12 @@ export const mintNFT = async (
     return true;
 }
 
+/**
+ * Mints an existing NFT for a user.
+ * @param {FastifyRequest} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<boolean>} True if minting was successful.
+ */
 export const mintExistingNFT = async (
     request: FastifyRequest<{
         Body: {
@@ -102,7 +117,7 @@ export const mintExistingNFT = async (
         };
     }>,
     reply: FastifyReply
-) => {
+): Promise<boolean> => {
     const { channel_user_id, id } = request.body;
 
     let address_of_user = await getWalletByPhoneNumber(channel_user_id);
@@ -117,7 +132,8 @@ export const mintExistingNFT = async (
     const nft = await NFTModel.find({ id: parseInt(id, 10) });
 
     if (!nft) {
-        return reply.status(400).send({ message: "El NFT no existe." })
+        reply.status(400).send({ message: "El NFT no existe." });
+        return false;
     }
     const new_id = await getLastId() + 1;
 
@@ -125,11 +141,11 @@ export const mintExistingNFT = async (
     try {
         data = await mint_eth_nft(address_of_user, new_id);
     } catch {
-        return reply.status(400).send({ message: "Hubo un error al mintear el NFT." })
+        reply.status(400).send({ message: "Hubo un error al mintear el NFT." });
+        return false;
     }
 
-    // Crear un nuevo documento en la colección 'nfts'
-    NFTModel.create({
+    await NFTModel.create({
         id: new_id,
         channel_user_id,
         wallet: address_of_user,
@@ -142,6 +158,11 @@ export const mintExistingNFT = async (
     return true;
 }
 
+/**
+ * Retrieves an NFT by its ID.
+ * @param {FastifyRequest} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ */
 export const getNFT = async (
     request: FastifyRequest<{
         Params: {
@@ -149,31 +170,32 @@ export const getNFT = async (
         };
     }>,
     reply: FastifyReply
-) => {
+): Promise<void> => {
     try {
         const { id } = request.params;
 
-        // Buscar el NFT por el campo 'id'
         const nft = (await NFTModel.find({ id }))?.[0];
 
         if (nft) {
-            // Si el NFT se encuentra, responder con los datos del NFT
             reply.send({
                 image: nft.metadata.image_url,
                 description: nft.metadata.description,
             });
         } else {
-            // Si no se encuentra el NFT, responder con un error 404
             reply.status(404).send({ message: 'NFT not found' });
         }
 
     } catch (error) {
-        // Manejo de errores
         console.error('Error al obtener el NFT:', error);
         reply.status(500).send({ message: 'Internal Server Error' });
     }
 };
 
+/**
+ * Retrieves the last NFT for a user and redirects to a WhatsApp link.
+ * @param {FastifyRequest} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ */
 export const getLastNFT = async (
     request: FastifyRequest<{
         Querystring: {
@@ -181,33 +203,34 @@ export const getLastNFT = async (
         };
     }>,
     reply: FastifyReply
-) => {
+): Promise<void> => {
     try {
         const { channel_user_id } = request.query;
 
-        // Buscar el NFT por el campo 'id'
         const nft = (await NFTModel.find({ channel_user_id })).sort((a, b) => b.id - a.id)?.[0];
 
         if (nft) {
             reply.redirect(`https://api.whatsapp.com/send/?phone=5491164629653&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`);
         } else {
-            // Si no se encuentra el NFT, responder con un error 404
             reply.status(404).send({ message: 'NFT not found' });
         }
     } catch (error) {
-        // Manejo de errores
         console.error('Error al obtener el NFT:', error);
         reply.status(500).send({ message: 'Internal Server Error' });
     }
 }
 
-export const getPhoneNFTs = async (phone_number: string) => {
+/**
+ * Retrieves all NFTs for a given phone number.
+ * @param {string} phone_number - The phone number to retrieve NFTs for.
+ * @returns {Promise<{count: number, nfts: NFTInfo[]}>} The count and list of NFTs.
+ * @throws {Error} If there's an error retrieving the NFTs.
+ */
+export const getPhoneNFTs = async (phone_number: string): Promise<{count: number, nfts: NFTInfo[]}> => {
     try {
         const networkConfig = await getNetworkConfig(421614);
-        // Buscar todos los NFTs del usuario
         const nfts = await NFTModel.find({ channel_user_id: phone_number });
 
-        // Responder con la cantidad de NFTs y la lista de NFTs
         return {
             count: nfts.length,
             nfts: nfts.map(nft => ({
@@ -216,19 +239,21 @@ export const getPhoneNFTs = async (phone_number: string) => {
             }))
         };
     } catch (error) {
-        // Manejo de errores
         console.error('Error al obtener los NFTs:', error);
         throw new Error('Internal Server Error');
     }
 }
 
-export const getAllNFTs = async (request: FastifyRequest<{ Querystring: { channel_user_id: string } }>, reply: FastifyReply): Promise<{
-    count: number;
-    nfts: {
-        description: string;
-        url: string;
-    }[];
-}> => {
+/**
+ * Retrieves all NFTs for a given user.
+ * @param {FastifyRequest} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<{count: number, nfts: NFTInfo[]}>} The count and list of NFTs.
+ */
+export const getAllNFTs = async (
+    request: FastifyRequest<{ Querystring: { channel_user_id: string } }>,
+    reply: FastifyReply
+): Promise<{count: number, nfts: NFTInfo[]}> => {
     const { channel_user_id: phone_number } = request.query;
 
     const result = await getPhoneNFTs(phone_number);

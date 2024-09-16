@@ -4,9 +4,13 @@ import { createWallet } from '../controllers/newWalletController';
 
 /**
  * Configures routes related to wallets.
- * @param fastify - Fastify instance
+ * @param {FastifyInstance} fastify - Fastify instance
+ * @returns {Promise<void>}
  */
-export const walletRouter: (fastify: FastifyInstance) => Promise<void> = async (fastify) => {
-    // Route to create a new wallet
-    fastify.post('/create_wallet/', createWallet);
+export const walletRouter = async (fastify: FastifyInstance): Promise<void> => {
+  /**
+   * Route to create a new wallet
+   * @route POST /create_wallet/
+   */
+  fastify.post('/create_wallet/', createWallet);
 };

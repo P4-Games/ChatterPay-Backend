@@ -6,10 +6,10 @@ interface CoinData {
 }
 
 /**
- * Obtiene el precio de un token en una red
- * @param contracts Matriz de contratos de tokens con nombre y dirección
- * @param network Red de la que se obtendrán los precios (en formato de string en minúsculas)
- * @returns Matriz, donde cada elemento es un array con el nombre del token y su precio
+ * Gets the price of a token on a network
+ * @param contracts Array of token contracts with name and address
+ * @param network Network from which prices will be obtained (in lowercase string format)
+ * @returns Array, where each element is an array with the token name and its price
  */
 export const getPriceByEVMContract = async (contracts: [string, string][], network: string = "polygon"): Promise<[string, number][]> => {
     const contractsAsString = contracts.map((c) => `${network}:${c[1].toLowerCase()}`).join(",");
@@ -34,9 +34,9 @@ export const getPriceByEVMContract = async (contracts: [string, string][], netwo
 }
 
 /**
- * Obtiene el precio de un token en Binance (Exchange Centralizado)
- * @param symbol Símbolo del token
- * @returns {Promise<number>} Precio del token
+ * Gets the price of a token on Binance (Centralized Exchange)
+ * @param symbol Token symbol
+ * @returns {Promise<number>} Token price
  */
 export const getTokenPrice = async (symbol: string = "ETH"): Promise<number> => {
     const URL = `https://api.binance.us/api/v3/ticker/price?symbol=${symbol}USDT`;

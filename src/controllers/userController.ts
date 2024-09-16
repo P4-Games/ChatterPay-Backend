@@ -2,8 +2,13 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { User, IUser } from '../models/user';
 
-// Crear un nuevo usuario
-export const createUser = async (request: FastifyRequest<{ Body: IUser }>, reply: FastifyReply) => {
+/**
+ * Creates a new user in the database.
+ * @param {FastifyRequest<{ Body: IUser }>} request - The Fastify request object containing the user data in the body.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object.
+ */
+export const createUser = async (request: FastifyRequest<{ Body: IUser }>, reply: FastifyReply): Promise<FastifyReply> => {
   try {
     const newUser = new User(request.body);
     await newUser.save();
@@ -14,8 +19,13 @@ export const createUser = async (request: FastifyRequest<{ Body: IUser }>, reply
   }
 };
 
-// Obtener todos los usuarios
-export const getAllUsers = async (request: FastifyRequest, reply: FastifyReply) => {
+/**
+ * Retrieves all users from the database.
+ * @param {FastifyRequest} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing all users.
+ */
+export const getAllUsers = async (request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply> => {
   try {
     const users = await User.find();
     return await reply.status(200).send(users);
@@ -25,8 +35,13 @@ export const getAllUsers = async (request: FastifyRequest, reply: FastifyReply) 
   }
 };
 
-// Obtener un usuario por ID
-export const getUserById = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+/**
+ * Retrieves a user by their ID from the database.
+ * @param {FastifyRequest<{ Params: { id: string } }>} request - The Fastify request object containing the user ID in the params.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the found user or an error message.
+ */
+export const getUserById = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply): Promise<FastifyReply> => {
   const { id } = request.params as { id: string };
 
   try {
@@ -43,8 +58,13 @@ export const getUserById = async (request: FastifyRequest<{ Params: { id: string
   }
 };
 
-// Actualizar un usuario por ID
-export const updateUser = async (request: FastifyRequest<{ Params: { id: string }, Body: Partial<IUser> }>, reply: FastifyReply) => {
+/**
+ * Updates a user by their ID in the database.
+ * @param {FastifyRequest<{ Params: { id: string }, Body: Partial<IUser> }>} request - The Fastify request object containing the user ID in the params and update data in the body.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the updated user or an error message.
+ */
+export const updateUser = async (request: FastifyRequest<{ Params: { id: string }, Body: Partial<IUser> }>, reply: FastifyReply): Promise<FastifyReply> => {
   const { id } = request.params as { id: string };
 
   try {
@@ -61,8 +81,13 @@ export const updateUser = async (request: FastifyRequest<{ Params: { id: string 
   }
 };
 
-// Eliminar un usuario por ID
-export const deleteUser = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+/**
+ * Deletes a user by their ID from the database.
+ * @param {FastifyRequest<{ Params: { id: string } }>} request - The Fastify request object containing the user ID in the params.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing a success message or an error message.
+ */
+export const deleteUser = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply): Promise<FastifyReply> => {
   const { id } = request.params as { id: string };
 
   try {
