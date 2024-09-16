@@ -4,6 +4,26 @@ import { User } from "../models/user";
 import { authenticate } from "./transactionController";
 import { computeProxyAddressFromPhone } from "../services/predictWalletService";
 
+export const executeWalletCreation = async (phone_number: string) => {
+    // Create new wallet
+    const predictedWallet = await computeProxyAddressFromPhone(phone_number);
+
+    // Create new user
+    const newUser = new User({
+        phone_number,
+        wallet: predictedWallet.proxyAddress,
+        privateKey: predictedWallet.privateKey,
+        code: null,
+        photo: "/assets/images/avatars/generic_user.jpg",
+        email: null,
+        name: null,
+    });
+
+    await newUser.save();
+
+    return predictedWallet.proxyAddress;
+}
+
 export const createWallet = async (
     request: FastifyRequest<{
         Body: {
@@ -29,26 +49,12 @@ export const createWallet = async (
             return await reply.status(200).send({ message: `El usuario ya existe, tu wallet es ${existingUser.wallet}` });
         }
 
-        // Create new wallet
-        const predictedWallet = await computeProxyAddressFromPhone(phone_number);
-
-        // Create new user
-        const newUser = new User({
-            phone_number,
-            wallet: predictedWallet.proxyAddress,
-            privateKey: predictedWallet.privateKey,
-            code: null,
-            photo: "/assets/images/avatars/generic_user.jpg",
-            email: null,
-            name: null,
-        });
-
-        await newUser.save();
+        const wallet = await executeWalletCreation(phone_number);
 
         return await reply.status(200).send({
             message: "La wallet fue creada exitosamente!",
             // walletHash: predictedWallet.EOAAddress,
-            walletAddress: predictedWallet.proxyAddress
+            walletAddress: wallet
         });
 
     } catch (error) {
