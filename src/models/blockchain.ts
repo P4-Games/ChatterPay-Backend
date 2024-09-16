@@ -1,4 +1,4 @@
-import { Schema, model, Document } from 'mongoose';
+import { model, Schema, Document } from 'mongoose';
 
 export interface IBlockchain extends Document {
   name: string;
@@ -8,7 +8,10 @@ export interface IBlockchain extends Document {
   explorer: string;
   signingKey: string;
   entryPoint: string;
-  factoryAddress:string;
+  factoryAddress: string;
+  chatterPayAddress: string;
+  chatterPayBeaconAddress: string;
+  chatterNFTAddress: string;
 }
 
 const blockchainSchema = new Schema<IBlockchain>({
@@ -19,7 +22,10 @@ const blockchainSchema = new Schema<IBlockchain>({
   explorer: { type: String, required: true },
   signingKey: { type: String, required: true },
   entryPoint: { type: String, required: true },
-  factoryAddress: { type: String, required: true }
+  factoryAddress: { type: String, required: true },
+  chatterPayAddress: { type: String, required: true },
+  chatterPayBeaconAddress: { type: String, required: true },
+  chatterNFTAddress: { type: String, required: true }
 });
 
 const Blockchain = model<IBlockchain>('Blockchain', blockchainSchema, 'blockchains');

@@ -1,24 +1,34 @@
+interface CoinData {
+    price: number;
+    symbol: string;
+    timestamp: number;
+    confidence: number;
+}
+
 /**
  * Obtiene el precio de un token en una red
- * @param contract Matriz de contratos de tokens con nombre y dirección
+ * @param contracts Matriz de contratos de tokens con nombre y dirección
  * @param network Red de la que se obtendrán los precios (en formato de string en minúsculas)
  * @returns Matriz, donde cada elemento es un array con el nombre del token y su precio
  */
-export const getPriceByEVMContract = async (contract: [string, string][], network: string = "polygon")=>{
-    const contractsAsString = contract.map((contract) => `${network}:${contract[1].toLowerCase()}`).join(",");
-    const URL = "https://coins.llama.fi/prices/current/" + contractsAsString.toLowerCase();
+export const getPriceByEVMContract = async (contracts: [string, string][], network: string = "polygon"): Promise<[string, number][]> => {
+    const contractsAsString = contracts.map((c) => `${network}:${c[1].toLowerCase()}`).join(",");
+    const URL = `https://coins.llama.fi/prices/current/${contractsAsString.toLowerCase()}`;
 
     const priceRequest = await fetch(URL);
-    const data = await priceRequest.json();
-    
-    //["<token key>", "<price>"]
-    let res = contract.map((contract) => [contract[0], 0]);
+    const data: { coins: Record<string, CoinData> } = await priceRequest.json();
 
-    for(const key in data.coins){
+    // Initialize result array with token names and zero prices
+    const res: [string, number][] = contracts.map((c) => [c[0], 0]);
+
+    // Use Object.entries() to iterate over data.coins
+    Object.entries(data.coins).forEach(([key, value]) => {
         const contract_value = key.split(":")[1];
-        const index = contract.findIndex((contract) => contract[1].toLowerCase() === contract_value);
-        res[index][1] = data.coins[key].price;
-    }
+        const index = contracts.findIndex((c) => c[1].toLowerCase() === contract_value);
+        if (index !== -1) {
+            res[index][1] = value.price;
+        }
+    });
 
     return res;
 }
@@ -31,13 +41,8 @@ export const getPriceByEVMContract = async (contract: [string, string][], networ
 export const getTokenPrice = async (symbol: string = "ETH"): Promise<number> => {
     const URL = `https://api.binance.us/api/v3/ticker/price?symbol=${symbol}USDT`;
 
-    let price = 0;
-
     const priceRequest = await fetch(URL);
+    const data: { price: string } = await priceRequest.json();
 
-    const data = await priceRequest.json();
-
-    price = parseFloat(data.price);
-
-    return price;
+    return parseFloat(data.price);
 }

@@ -1,4 +1,4 @@
-import { Schema, model, Document } from 'mongoose';
+import { model, Schema, Document } from 'mongoose';
 
 export interface IToken extends Document {
   name: string;

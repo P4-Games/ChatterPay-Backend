@@ -1,125 +1,13 @@
 import axios from 'axios';
-import { connectToMongoDB } from './dbConnections';
 import mongoose from 'mongoose';
-import { userConversationSchema } from '../models/userConversation';
-import { SCROLL_CONFIG } from '../constants/networks';
+
+import { connectToMongoDB } from './dbConnections';
+import { getNetworkConfig } from '../services/networkService';
+import { UserConversation, userConversationSchema } from '../models/userConversation';
 
 const mongoUrl = process.env?.MONGO_URI_CHATTERPAY ?? "";
-
-export const sendTransferNotification = async (channel_user_id: string, from: string | null, amount: string, token: string) => {
-    try {
-        console.log("Sending notifications");
-        const connection = await connectToMongoDB(mongoUrl);
-
-        // Creamos los modelos usando esta conexión específica
-        const UserConversation = connection.model('user_conversations', userConversationSchema);
-
-        await updateUserConversationStatus(UserConversation, channel_user_id, "operator");
-        console.log("Updated conversation to operator");
-
-        const payload: OperatorReplyPayload = {
-            data_token: 'ddbe7f0e3d93447486efa9ef77954ae7',
-            channel_user_id: channel_user_id,
-            message: `${from} te envio ${amount} ${token} 💸. \n Ya estan disponibles en tu billetera ChatterPay! 🥳`
-        };
-        await sendOperatorReply(payload);
-        console.log("Sent operator reply");
-
-        await updateUserConversationStatus(UserConversation, channel_user_id, "assistant");
-        console.log("Updated conversation to assistant");
-    } catch (error) {
-        console.error("Error in sendTransferNotification:", error);
-        throw error;
-    }
-}
-
-export const sendSwapNotification = async (channel_user_id: string, token: string, amount: string, result: string, outputToken: string, transactionHash: string) => {
-
-    try {
-        console.log("Sending notifications");
-        const connection = await connectToMongoDB(mongoUrl);
-
-        // Creamos los modelos usando esta conexión específica
-        const UserConversation = connection.model('user_conversations', userConversationSchema);
-
-        const payload: OperatorReplyPayload = {
-            data_token: 'ddbe7f0e3d93447486efa9ef77954ae7',
-            channel_user_id: channel_user_id,
-            message: `🔄 Intercambiaste ${amount} ${token} por ${Math.round(parseFloat(result) * 1e2) / 1e2} ${outputToken}! 🔄 \n Puedes ver la transacción aquí: ${SCROLL_CONFIG.EXPLORER_URL}/tx/${transactionHash}`
-        };
-        await sendOperatorReply(payload);
-        console.log("Sent operator reply");
-
-        console.log("Updated conversation to assistant");
-    } catch (error) {
-        console.error("Error in sendTransferNotification:", error);
-        throw error;
-    }
-}
-
-// Función para enviar notificaciones de minteo de certificados y recuerdos onchain
-export const sendMintNotification = async (channel_user_id: string, id: number) => {
-    try {
-        console.log("Sending notifications");
-        const connection = await connectToMongoDB(mongoUrl);
-
-        // Creamos los modelos usando esta conexión específica
-        const UserConversation = connection.model('user_conversations', userConversationSchema);
-
-        const payload: OperatorReplyPayload = {
-            data_token: 'ddbe7f0e3d93447486efa9ef77954ae7',
-            channel_user_id: channel_user_id,
-            message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${SCROLL_CONFIG.CHATTER_NFT}/${id}`,
-        };
-
-        await sendOperatorReply(payload);
-        console.log("Sent operator reply");
-    } catch (error) {
-        console.error("Error in sendMintNotification:", error);
-        throw error;
-    }
-}
-
-export const sendTransferNotification2 = async (channel_user_id: string, to: string | null, amount: string, token: string, txHash: string) => {
-
-    try {
-        console.log("Sending notifications");
-        const connection = await connectToMongoDB(mongoUrl);
-
-        // Creamos los modelos usando esta conexión específica
-        const UserConversation = connection.model('user_conversations', userConversationSchema);
-
-        await updateUserConversationStatus(UserConversation, channel_user_id, "operator");
-        console.log("Updated conversation to operator");
-
-        const payload: OperatorReplyPayload = {
-            data_token: 'ddbe7f0e3d93447486efa9ef77954ae7',
-            channel_user_id: channel_user_id,
-            message: `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: https://sepolia.scrollscan.com/tx/${txHash}`
-        };
-        await sendOperatorReply(payload);
-        console.log("Sent operator reply");
-
-        await updateUserConversationStatus(UserConversation, channel_user_id, "assistant");
-        console.log("Updated conversation to assistant");
-    } catch (error) {
-        console.error("Error in sendTransferNotification:", error);
-        throw error;
-    }
-}
-
-const updateUserConversationStatus = async (UserConversation: mongoose.Model<any>, channelUserId: string, newStatus: string) => {
-    try {
-        await UserConversation.findOneAndUpdate(
-            { channel_user_id: channelUserId },
-            { $set: { control: newStatus } }
-        );
-        console.log('Actualización de estado exitosa');
-    } catch (error) {
-        console.error('Error al actualizar user_conversations', error);
-        throw error;
-    }
-};
+const DATA_TOKEN = 'ddbe7f0e3d93447486efa9ef77954ae7';
+const API_URL = 'https://chatterpay-i7bji6tiqa-uc.a.run.app/chatbot/conversations/send-message';
 
 interface OperatorReplyPayload {
     data_token: string;
@@ -127,18 +15,137 @@ interface OperatorReplyPayload {
     message: string;
 }
 
-const sendOperatorReply = async (payload: OperatorReplyPayload) => {
+interface NetworkConfig {
+    explorer: string;
+    chatterNFTAddress: string;
+}
+
+/**
+ * Connects to MongoDB and returns the UserConversation model.
+ */
+async function getUserConversationModel(): Promise<mongoose.Model<UserConversation>> {
+    const connection = await connectToMongoDB(mongoUrl);
+    return connection.model('user_conversations', userConversationSchema);
+}
+
+/**
+ * Updates the user conversation status in the database.
+ */
+async function updateUserConversationStatus(channelUserId: string, newStatus: string): Promise<void> {
     try {
-        const response = await axios.post('https://chatterpay-i7bji6tiqa-uc.a.run.app/chatbot/conversations/send-message', payload, {
+        const userConversation = await getUserConversationModel();
+        await userConversation.findOneAndUpdate(
+            { channel_user_id: channelUserId },
+            { $set: { control: newStatus } }
+        );
+        console.log('Status update successful');
+    } catch (error) {
+        console.error('Error updating user_conversations', error);
+        throw error;
+    }
+}
+
+/**
+ * Sends an operator reply to the API.
+ */
+async function sendOperatorReply(payload: OperatorReplyPayload): Promise<unknown> {
+    try {
+        const response = await axios.post(API_URL, payload, {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${payload.data_token}`
             }
         });
-        console.log('Respuesta de la API:', response.data);
+        console.log('API Response:', response.data);
         return response.data;
     } catch (error) {
-        console.error('Error al enviar la respuesta del operador:', error);
+        console.error('Error sending operator reply:', error);
         throw error;
     }
-};
+}
+
+/**
+ * Sends a notification for a transfer.
+ */
+export async function sendTransferNotification(channel_user_id: string, from: string | null, amount: string, token: string): Promise<void> {
+    try {
+        console.log("Sending transfer notification");
+        await updateUserConversationStatus(channel_user_id, "operator");
+
+        const payload: OperatorReplyPayload = {
+            data_token: DATA_TOKEN,
+            channel_user_id,
+            message: `${from} te envio ${amount} ${token} 💸. \n Ya estan disponibles en tu billetera ChatterPay! 🥳`
+        };
+        await sendOperatorReply(payload);
+
+        await updateUserConversationStatus(channel_user_id, "assistant");
+    } catch (error) {
+        console.error("Error in sendTransferNotification:", error);
+        throw error;
+    }
+}
+
+/**
+ * Sends a notification for a swap.
+ */
+export async function sendSwapNotification(channel_user_id: string, token: string, amount: string, result: string, outputToken: string, transactionHash: string): Promise<void> {
+    try {
+        console.log("Sending swap notification");
+        const networkConfig: NetworkConfig = await getNetworkConfig();
+
+        const payload: OperatorReplyPayload = {
+            data_token: DATA_TOKEN,
+            channel_user_id,
+            message: `🔄 Intercambiaste ${amount} ${token} por ${Math.round(parseFloat(result) * 1e2) / 1e2} ${outputToken}! 🔄 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${transactionHash}`
+        };
+        await sendOperatorReply(payload);
+    } catch (error) {
+        console.error("Error in sendSwapNotification:", error);
+        throw error;
+    }
+}
+
+/**
+ * Sends a notification for minting certificates and on-chain memories.
+ */
+export async function sendMintNotification(channel_user_id: string, id: number): Promise<void> {
+    try {
+        console.log("Sending mint notification");
+        const networkConfig: NetworkConfig = await getNetworkConfig(421614);
+
+        const payload: OperatorReplyPayload = {
+            data_token: DATA_TOKEN,
+            channel_user_id,
+            message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.chatterNFTAddress}/${id}`,
+        };
+        await sendOperatorReply(payload);
+    } catch (error) {
+        console.error("Error in sendMintNotification:", error);
+        throw error;
+    }
+}
+
+/**
+ * Sends a notification for an outgoing transfer.
+ */
+export async function sendOutgoingTransferNotification(channel_user_id: string, to: string | null, amount: string, token: string, txHash: string): Promise<void> {
+    try {
+        console.log("Sending outgoing transfer notification");
+        await updateUserConversationStatus(channel_user_id, "operator");
+
+        const networkConfig: NetworkConfig = await getNetworkConfig();
+
+        const payload: OperatorReplyPayload = {
+            data_token: DATA_TOKEN,
+            channel_user_id,
+            message: `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${txHash}`
+        };
+        await sendOperatorReply(payload);
+
+        await updateUserConversationStatus(channel_user_id, "assistant");
+    } catch (error) {
+        console.error("Error in sendOutgoingTransferNotification:", error);
+        throw error;
+    }
+}

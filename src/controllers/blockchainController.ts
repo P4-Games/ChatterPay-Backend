@@ -1,94 +1,137 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyReply, FastifyRequest } from 'fastify';
+
 import Blockchain, { IBlockchain } from '../models/blockchain';
 
-// Crear una nueva blockchain
-export const createBlockchain = async (request: FastifyRequest<{ Body: IBlockchain }>, reply: FastifyReply) => {
+type BlockchainParams = { id: string };
+type BlockchainBody = IBlockchain | Partial<IBlockchain>;
+
+/**
+ * Handles errors in blockchain operations.
+ * @param error - The error object.
+ * @param reply - The FastifyReply object.
+ * @param operation - The operation being performed.
+ */
+const handleBlockchainError = (error: unknown, reply: FastifyReply, operation: string): FastifyReply => {
+  console.error(`Error ${operation} blockchain:`, error);
+  return reply.status(500).send({ message: 'Internal Server Error' });
+};
+
+/**
+ * Creates a new blockchain entry in the database.
+ * @param request - The FastifyRequest object containing the blockchain data.
+ * @param reply - The FastifyReply object.
+ * @returns A promise resolving to the FastifyReply object.
+ */
+export const createBlockchain = async (
+  request: FastifyRequest<{ Body: IBlockchain }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
   try {
     const newBlockchain = new Blockchain(request.body);
     await newBlockchain.save();
-    return reply.status(201).send(newBlockchain);
+    return await reply.status(201).send(newBlockchain);
   } catch (error) {
-    console.error('Error creating blockchain:', error);
-    return reply.status(400).send({ message: 'Bad Request' });
+    return handleBlockchainError(error, reply, 'creating');
   }
 };
 
-// Obtener todas las blockchains
-export const getAllBlockchains = async (request: FastifyRequest, reply: FastifyReply) => {
+/**
+ * Retrieves all blockchain entries from the database.
+ * @param request - The FastifyRequest object.
+ * @param reply - The FastifyReply object.
+ * @returns A promise resolving to the FastifyReply object.
+ */
+export const getAllBlockchains = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
   try {
     const blockchains = await Blockchain.find();
-    return reply.status(200).send(blockchains);
+    return await reply.status(200).send(blockchains);
   } catch (error) {
-    console.error('Error fetching blockchains:', error);
-    return reply.status(400).send({ message: 'Bad Request' });
+    return handleBlockchainError(error, reply, 'fetching');
   }
 };
 
-// Obtener una blockchain por ID
-export const getBlockchainById = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-  const { id } = request.params as { id: string };
-
+/**
+ * Retrieves a specific blockchain entry by its ID.
+ * @param request - The FastifyRequest object containing the blockchain ID.
+ * @param reply - The FastifyReply object.
+ * @returns A promise resolving to the FastifyReply object.
+ */
+export const getBlockchainById = async (
+  request: FastifyRequest<{ Params: BlockchainParams }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  const { id } = request.params;
   try {
     const blockchain = await Blockchain.findById(id);
-
     if (!blockchain) {
-      return reply.status(404).send({ message: 'Blockchain not found' });
+      return await reply.status(404).send({ message: 'Blockchain not found' });
     }
-
-    return reply.status(200).send(blockchain);
+    return await reply.status(200).send(blockchain);
   } catch (error) {
-    console.error('Error fetching blockchain:', error);
-    return reply.status(400).send({ message: 'Bad Request' });
+    return handleBlockchainError(error, reply, 'fetching');
   }
 };
 
-// Actualizar una blockchain por ID
-export const updateBlockchain = async (request: FastifyRequest<{ Params: { id: string }, Body: Partial<IBlockchain> }>, reply: FastifyReply) => {
-  const { id } = request.params as { id: string };
-
+/**
+ * Updates a specific blockchain entry by its ID.
+ * @param request - The FastifyRequest object containing the blockchain ID and update data.
+ * @param reply - The FastifyReply object.
+ * @returns A promise resolving to the FastifyReply object.
+ */
+export const updateBlockchain = async (
+  request: FastifyRequest<{ Params: BlockchainParams; Body: BlockchainBody }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  const { id } = request.params;
   try {
     const updatedBlockchain = await Blockchain.findByIdAndUpdate(id, request.body, { new: true });
-
     if (!updatedBlockchain) {
-      return reply.status(404).send({ message: 'Blockchain not found' });
+      return await reply.status(404).send({ message: 'Blockchain not found' });
     }
-
-    return reply.status(200).send(updatedBlockchain);
+    return await reply.status(200).send(updatedBlockchain);
   } catch (error) {
-    console.error('Error updating blockchain:', error);
-    return reply.status(400).send({ message: 'Bad Request' });
+    return handleBlockchainError(error, reply, 'updating');
   }
 };
 
-// Eliminar una blockchain por ID
-export const deleteBlockchain = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-  const { id } = request.params as { id: string };
-
+/**
+ * Deletes a specific blockchain entry by its ID.
+ * @param request - The FastifyRequest object containing the blockchain ID.
+ * @param reply - The FastifyReply object.
+ * @returns A promise resolving to the FastifyReply object.
+ */
+export const deleteBlockchain = async (
+  request: FastifyRequest<{ Params: BlockchainParams }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  const { id } = request.params;
   try {
     const deletedBlockchain = await Blockchain.findByIdAndDelete(id);
-
     if (!deletedBlockchain) {
-      return reply.status(404).send({ message: 'Blockchain not found' });
+      return await reply.status(404).send({ message: 'Blockchain not found' });
     }
-
-    return reply.status(200).send({ message: 'Blockchain deleted' });
+    return await reply.status(200).send({ message: 'Blockchain deleted' });
   } catch (error) {
-    console.error('Error deleting blockchain:', error);
-    return reply.status(400).send({ message: 'Bad Request' });
+    return handleBlockchainError(error, reply, 'deleting');
   }
 };
 
-// Obtener RPC, entryPoint y signingKey por chain_id
-export const getBlockchainDetailsByChainId = async (chain_id: number) => {
+/**
+ * Retrieves specific blockchain details by chain ID.
+ * @param chain_id - The chain ID of the blockchain.
+ * @returns A promise resolving to an object containing rpc, entryPoint, and signingKey.
+ * @throws An error if the blockchain is not found or if there's an error fetching the details.
+ */
+export const getBlockchainDetailsByChainId = async (chain_id: number): Promise<{ rpc: string; entryPoint: string; signingKey: string }> => {
   try {
     const blockchain = await Blockchain.findOne({ chain_id });
-
     if (!blockchain) {
       throw new Error('Blockchain not found');
     }
-
     const { rpc, entryPoint, signingKey } = blockchain;
-
     return { rpc, entryPoint, signingKey };
   } catch (error) {
     console.error('Error fetching blockchain details:', error);
