@@ -4,8 +4,9 @@ import {
   createToken,
   updateToken,
   deleteToken,
+  issueTokens,
   getAllTokens,
-  getTokenById,
+  getTokenById
 } from '../controllers/tokenController';
 
 /**
@@ -43,6 +44,12 @@ const tokenRoutes = async (fastify: FastifyInstance): Promise<void> => {
    * @route DELETE /tokens/:id
    */
   fastify.delete('/tokens/:id', deleteToken);
+
+  /**
+   * Route to issue demo tokens
+   * @route POST /issue { "address": string }
+   */
+  fastify.post('/issue/', issueTokens);
 };
 
 export default tokenRoutes;
