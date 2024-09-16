@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 
+import { pingRoute } from './ping';
 import nftRoutes from './nftRoutes';
 import swapRoutes from './swapRoutes';
 import userRoutes from './userRoutes';
@@ -14,6 +15,7 @@ import transactionRoutes from './transactionRoutes';
  * @param server - Fastify server instance
  */
 export async function setupRoutes(server: FastifyInstance): Promise<void> {
+    server.register(pingRoute);
     server.register(transactionRoutes);
     server.register(userRoutes);
     server.register(tokenRoutes);

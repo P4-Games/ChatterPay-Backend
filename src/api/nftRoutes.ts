@@ -1,20 +1,13 @@
 import { FastifyInstance } from 'fastify';
 
-import { getNFT, mintNFT, getAllNFTs } from '../controllers/nftController';
+import { getNFT, mintNFT, getAllNFTs, getLastNFT, mintExistingNFT } from '../controllers/nftController';
 
-/**
- * Configures routes related to NFTs (Non-Fungible Tokens).
- * @param fastify - Fastify instance
- */
-const nftRoutes: (fastify: FastifyInstance) => Promise<void> = async (fastify) => {
-    // Route to mint a new NFT
+const nftRoutes = async (fastify: FastifyInstance) => {
     fastify.post('/nft/', mintNFT);
-
-    // Route to get all NFTs
+    fastify.post('/mint_existing/', mintExistingNFT);
     fastify.get('/nfts/', getAllNFTs);
-
-    // Route to get a specific NFT by its ID
     fastify.get('/nft/:id', getNFT);
+    fastify.get('/last_nft/', getLastNFT);
 };
 
 export default nftRoutes;
