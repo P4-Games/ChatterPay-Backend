@@ -12,14 +12,13 @@
 ![](https://img.shields.io/badge/jsdoc-informational?style=flat&logo=jsdoc&logoColor=white&color=6aa6f8)
 ![](https://img.shields.io/badge/userOps.js-informational?style=flat&logo=useropsjs&logoColor=white&color=6aa6f8)
 
-
 # ChatterPay
 
-Chatterpay is a Wallet for WhatsApp that integrates AI and Account Abstraction, enabling any user to use blockchain easily and securely without technical knowledge.
+ChatterPay is a Wallet for WhatsApp that integrates AI and Account Abstraction, enabling any user to use blockchain easily and securely without technical knowledge.
 
-> Built for: [Level Up Hackathon - Ethereum Argentina 2024](https://ethereumargentina.org/) 
+> Built for: [Level Up Hackathon - Ethereum Argentina 2024](https://ethereumargentina.org/) & [Ethereum Uruguay 2024](https://www.ethereumuruguay.org/)
 
-> Build By: [mpefaur](https://github.com/mpefaur), [tomasfrancizco](https://github.com/tomasfrancizco), [TomasDmArg](https://github.com/TomasDmArg), [gonzageraci](https://github.com/gonzageraci),  [dappsar](https://github.com/dappsar)
+> Built By: [mpefaur](https://github.com/mpefaur), [tomasfrancizco](https://github.com/tomasfrancizco), [TomasDmArg](https://github.com/TomasDmArg), [gonzageraci](https://github.com/gonzageraci),  [dappsar](https://github.com/dappsar)
 
 __Components__:
 
@@ -32,12 +31,11 @@ __Components__:
 - Bot AI (Chatizalo) ([product](https://chatizalo.com/))
 - Bot AI Admin Dashboard Website ([product](https://app.chatizalo.com/))
 
-
 # About this Repo
 
 This repository contains the backend API source code.
 
-__Build With__:
+__Built With__:
 
 - Framework: [Bun.js](https://bun.sh/)
 - Language: [TypeScript](https://www.typescriptlang.org)
@@ -58,12 +56,11 @@ __1. Install these Requirements__:
 - [bun](https://bun.sh/)
 - [mongoDb](https://www.mongodb.com/docs/manual/installation/)
 
-
 __2. Clone repository__:
 
 ```bash
-   git clone https://github.com/P4-Games/ChatterPay-Backend
-   cd ChatterPay-Backend
+git clone https://github.com/P4-Games/ChatterPay-Backend
+cd ChatterPay-Backend
 ```
 
 __3. Complete .env file__: 
@@ -71,10 +68,18 @@ __3. Complete .env file__:
 Create a .env file in the root folder and populate it with the following keys and values:
 
 ```bash
-ALCHEMY_API_KEY=your_api_key
-MONGO_URI=your_mongo_uri
-SIGNING_KEY=evm_private_key
-RPC_URL=https://public.stackup.sh/api/v1/node/ethereum-sepolia
+ALCHEMY_API_KEY=
+INFURA_API_KEY=
+MONGO_URI=
+SIGNING_KEY=
+RPC_URL=
+THRIDWEB_CLIENT_ID=
+THIRDWEB_CLIENT_SECRET=
+SCROLLSCAN_API_KEY=
+ETHERSCAN_API_KEY=
+FACTORY_ADDRESS=
+PRIVATE_KEY=
+MONGO_URI_CHATTERPAY=
 ```
 
 __4. Install Dependencies__:
@@ -86,33 +91,34 @@ bun install
 __5. Start Server__:
 
 ```bash
-bun run src/index.ts
+bun run dev
 ```
 
-Then, open brower in: `http://localhost:3000`.
-
+Then, open in: `http://localhost:3000`.
 
 # Additional Info
 
 ## Project Structure
 
 - `src/`:
-  - `controllers/`: Controllers Logics.
-  - `models/`: Data Models definitiion.
-  - `routes/`: Routes definition.
-  - `services/`: Business Logic.
-  - `utils/`: Utiliti Functions.
-  - `index.ts`: Application Entry Point.
+  - `api/`: Definition of API paths.
+  - `controllers/`: Helpers that interact with the DB and other services.
+  - `services/`: Business logic.
+  - `models/`: Data model definitions.
+  - `middleware/`: Custom middleware.
+  - `utils/`: Utility functions.
+  - `config/`: Application configurations.
+  - `types/`: Type and interface definitions.
+  - `constants/`: Constants and enumerations.
+  - `errors/`: Custom error classes.
+  - `index.ts`: Application entry point.
 - `tests/`: Unit Tests.
-- `config/`: Configuration Files.
 - `.gitignore`: Specifies files and directories ignored by Git.
 - `package.json`: Project configuration and dependencies.
 - `tsconfig.json`: TypeScript configuration.
 - `README.md`: This File.
 - `.env.example`: Example Environment File.
 
-
 ## Source Code Documentation
 
-- We use JSDoc to document our functions and classes.
-- Make sure to keep the comments updated as the code changes.
+- We use JSDoc (in english) to document our code.

@@ -1,7 +1,7 @@
-import { Document, model, Schema } from 'mongoose';
+import { model, Schema, Document } from 'mongoose';
 
 // Interfaz que representa el documento en la colección 'nfts'
-interface INFT extends Document {
+export interface INFT extends Document {
   channel_user_id: string;
   id: number;
   wallet: string;

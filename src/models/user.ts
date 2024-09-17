@@ -1,4 +1,4 @@
-import { Schema, model, Document } from 'mongoose';
+import { model, Schema, Document } from 'mongoose';
 
 export interface IUser extends Document {
   name: string;
@@ -36,5 +36,3 @@ export async function getWalletByPhoneNumber(phoneNumber: string): Promise<strin
     throw new Error('No se pudo obtener la wallet');
   }
 }
-
-export default User;
