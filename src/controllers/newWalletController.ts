@@ -1,9 +1,9 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 
 import { User } from "../models/user";
+import { issueTokensCore } from "./tokenController";
 import { authenticate } from "./transactionController";
 import { computeProxyAddressFromPhone } from "../services/predictWalletService";
-import { issueTokensCore } from "./tokenController";
 
 /**
  * Creates a new wallet and user for the given phone number.

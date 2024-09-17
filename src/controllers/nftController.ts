@@ -2,11 +2,11 @@ import { ethers } from "ethers";
 import { FastifyReply, FastifyRequest } from "fastify";
 
 import NFTModel, { getLastId } from "../models/nft";
+import { issueTokensCore } from "./tokenController";
 import { getWalletByPhoneNumber } from "../models/user";
 import { sendMintNotification } from "./replyController";
 import { executeWalletCreation } from "./newWalletController";
 import { getNetworkConfig } from "../services/networkService";
-import { issueTokensCore } from "./tokenController";
 
 export interface NFTInfo {
     description: string;
