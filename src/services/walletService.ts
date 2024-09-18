@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+import { BigNumber, ethers } from 'ethers';
 import * as crypto from 'crypto';
 
 import entryPoint from "../utils/entryPoint.json";
@@ -13,12 +13,14 @@ import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts/fact
  */
 interface UserOperation {
     sender: string;
-    nonce: string;
+    nonce: BigNumber;
     initCode: string;
     callData: string;
-    accountGasLimits: ethers.BigNumber;
-    preVerificationGas: ethers.BigNumber;
-    gasFees: ethers.BigNumber;
+    callGasLimit: BigNumber;
+    verificationGasLimit: BigNumber;
+    preVerificationGas: BigNumber;
+    maxFeePerGas: BigNumber;
+    maxPriorityFeePerGas: BigNumber;
     paymasterAndData: string;
     signature: string;
 }
@@ -71,7 +73,7 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
         const tx = await factory.createProxy(proxy.EOAAddress, { gasLimit: 1000000 });
         await tx.wait();
     }
-
+    console.log("User wallet is: ", proxy.proxyAddress)
     const chatterPay = new ethers.Contract(proxy.proxyAddress, chatterPayABI, signer);
     return { provider, signer, backendSigner, chatterPay, proxy };
 }
@@ -103,49 +105,137 @@ async function setupERC20(tokenAddress: string, signer: ethers.Wallet) {
  * @param signer - The signer to use for the operation.
  * @returns A promise that resolves to the created UserOperation.
  */
-async function createUserOperation(chatterPay: ethers.Contract, erc20: ethers.Contract, to: string, amount: string, proxyAddress: string, signer: ethers.Wallet): Promise<UserOperation> {
-    const amount_bn = ethers.utils.parseUnits(amount, 18);
+async function createUserOperation(
+    entrypoint: ethers.Contract,
+    chatterPay: ethers.Contract,
+    erc20: ethers.Contract,
+    to: string,
+    amount: string,
+    proxyAddress: string,
+): Promise<UserOperation> {
+    console.log("Creating UserOperation...");
+    console.log("Proxy Address:", proxyAddress);
+    console.log("To Address:", to);
+    console.log("Amount:", amount);
+
+    // Asegúrate de que 'to' sea una dirección válida
+    if (!ethers.utils.isAddress(to)) {
+        throw new Error("Invalid 'to' address");
+    }
+
+    // Asegúrate de que 'amount' sea un número válido
+    let amount_bn;
+    try {
+        amount_bn = ethers.utils.parseUnits(amount, 18);
+    } catch (error) {
+        throw new Error("Invalid amount");
+    }
+    console.log("Amount in BigNumber:", amount_bn.toString());
+
     const transferEncode = erc20.interface.encodeFunctionData("transfer", [to, amount_bn]);
+    console.log("Transfer Encode:", transferEncode);
+
     const transferCallData = chatterPay.interface.encodeFunctionData("execute", [erc20.address, 0, transferEncode]);
+    console.log("Transfer Call Data:", transferCallData);
 
-    const nonce = await signer.provider!.getTransactionCount(proxyAddress) + 1;
+    const nonce = await entrypoint.getNonce(proxyAddress, 0);
+    console.log("Nonce:", nonce.toString());
 
-    return {
+    const userOp: UserOperation = {
         sender: proxyAddress,
-        nonce: ethers.BigNumber.from(nonce).toHexString(),
-        initCode: "",
+        nonce,
+        initCode: "0x",
         callData: transferCallData,
-        accountGasLimits: ethers.BigNumber.from("10000000"),
-        preVerificationGas: ethers.BigNumber.from(16777216),
-        gasFees: ethers.BigNumber.from("1000000"),
-        paymasterAndData: "",
-        signature: ""
+        callGasLimit: BigNumber.from(1000000), // Aumentado
+        verificationGasLimit: BigNumber.from(1000000), // Aumentado
+        preVerificationGas: BigNumber.from(100000), // Aumentado
+        maxFeePerGas: BigNumber.from(ethers.utils.parseUnits("20", "gwei")),
+        maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits("1", "gwei")),
+        paymasterAndData: "0x",
+        signature: "0x",
     };
+
+    console.log("Created UserOperation:", JSON.stringify(userOp, (key, value) => 
+        typeof value === 'bigint' ? value.toString() : value
+    , 2));
+
+    return userOp;
 }
 
-/**
- * Signs a user operation.
- * 
- * @param userOperation - The user operation to sign.
- * @param entrypoint - The entrypoint contract instance.
- * @param signer - The signer to use for signing.
- * @returns A promise that resolves to the signed UserOperation.
- */
-async function signUserOperation(userOperation: UserOperation, entrypoint: ethers.Contract, signer: ethers.Wallet): Promise<UserOperation> {
-    const userOpHash = await entrypoint.getUserOpHash([
-        userOperation.sender,
-        userOperation.nonce,
-        userOperation.initCode,
-        userOperation.callData,
-        userOperation.accountGasLimits,
-        userOperation.preVerificationGas,
-        userOperation.gasFees,
-        userOperation.paymasterAndData,
-        userOperation.signature
-    ]);
-    const userOpSignature = await signer.signMessage(userOpHash);
-    return { ...userOperation, signature: userOpSignature };
+function getUserOpHash(userOp: UserOperation, entryPointAddress: string, chainId: number): string {
+    const userOpHash = hashUserOp(userOp);
+    const enc = ethers.utils.defaultAbiCoder.encode(
+        ['bytes32', 'address', 'uint256'],
+        [userOpHash, entryPointAddress, chainId]
+    );
+    return ethers.utils.keccak256(enc);
 }
+
+function hashUserOp(userOp: UserOperation): string {
+    const hashedInitCode = ethers.utils.keccak256(userOp.initCode);
+    const hashedCallData = ethers.utils.keccak256(userOp.callData);
+    const hashedPaymasterAndData = ethers.utils.keccak256(userOp.paymasterAndData);
+
+    const enc = ethers.utils.defaultAbiCoder.encode(
+        ['address', 'uint256', 'bytes32', 'bytes32', 'uint256', 'uint256', 'uint256', 'uint256', 'uint256', 'bytes32'],
+        [userOp.sender, userOp.nonce, hashedInitCode, hashedCallData, userOp.callGasLimit, userOp.verificationGasLimit, 
+        userOp.preVerificationGas, userOp.maxFeePerGas, userOp.maxPriorityFeePerGas, hashedPaymasterAndData]
+    );
+
+    return ethers.utils.keccak256(enc);
+}
+
+async function signUserOperation(userOperation: UserOperation, entrypoint: ethers.Contract, signer: ethers.Wallet): Promise<UserOperation> {
+    console.log("Getting UserOp hash");
+
+    const fixedUserOperation: UserOperation = {
+        ...userOperation,
+        initCode: userOperation.initCode || '0x',
+        paymasterAndData: userOperation.paymasterAndData || '0x',
+        signature: userOperation.signature || '0x'
+    };
+
+    console.log('Fixed User Operation:', JSON.stringify(fixedUserOperation, (key, value) => 
+        typeof value === 'bigint' ? value.toString() : value
+    , 2));
+
+    const chainId = await signer.getChainId();
+    const userOpHash = getUserOpHash(fixedUserOperation, entrypoint.address, chainId);
+
+    console.log("signing UserOp", userOpHash);
+    const userOpSignature = await signer.signMessage(ethers.utils.arrayify(userOpHash));
+
+    return { ...fixedUserOperation, signature: userOpSignature };
+}
+
+async function simulateTransaction(
+    entrypoint: ethers.Contract,
+    userOperation: UserOperation,
+    signer: ethers.Wallet
+) {
+    try {
+        const result = await entrypoint.callStatic.handleOps(
+            [userOperation],
+            signer.address,
+            { from: signer.address, gasLimit: 2000000 } // Aumentado el gasLimit
+        );
+        console.log("Simulation successful:", result);
+        return true;
+    } catch (error) {
+        console.error("Simulation failed:", error);
+        if (error.errorName) {
+            console.error("Error name:", error.errorName);
+        }
+        if (error.errorArgs) {
+            console.error("Error arguments:", error.errorArgs);
+        }
+        if (error.reason) {
+            console.error("Error reason:", error.reason);
+        }
+        return false;
+    }
+}
+
 
 /**
  * Sends a user operation for token transfer.
@@ -180,12 +270,20 @@ export async function sendUserOperation(
     await checkBalance(erc20, proxy.proxyAddress, amount);
     await ensureSignerHasEth(signer, backendSigner, provider);
 
+    console.log("Getting network config");
     const networkConfig = await getNetworkConfig();
     const entrypoint = new ethers.Contract(networkConfig.entryPoint, entryPoint, signer);
-
-    let userOperation = await createUserOperation(chatterPay, erc20, to, amount, proxy.proxyAddress, signer);
+    
+    console.log("Creating user op");
+    let userOperation = await createUserOperation(entrypoint, chatterPay, erc20, to, amount, proxy.proxyAddress);
+    
+    console.log("Signing user op");
     userOperation = await signUserOperation(userOperation, entrypoint, signer);
+    
+    // Llamar a esta función antes de ejecutar la transacción real
+    await simulateTransaction(entrypoint, userOperation, signer);
 
+    console.log("Executing user op");
     return executeTransfer(entrypoint, userOperation, signer, backendSigner);
 }
 
@@ -245,17 +343,93 @@ async function executeTransfer(
 ): Promise<{ transactionHash: string; }> {
     try {
         const entrypoint_backend = entrypoint.connect(backendSigner);
+        console.log("Preparing handleOps parameters");
+        
+        console.log("Original UserOperation:", JSON.stringify(userOperation, (key, value) => 
+            typeof value === 'bigint' ? value.toString() : value
+        , 2));
+
+        // Additional checks
+        console.log("Checking nonce...");
+        const currentNonce = await entrypoint.getNonce(userOperation.sender, 0);
+        console.log(`Current nonce for ${userOperation.sender}: ${currentNonce}`);
+        console.log(`UserOperation nonce: ${userOperation.nonce}`);
+        if (currentNonce.toString() !== userOperation.nonce) {
+            console.warn("Nonce mismatch. This might cause the transaction to fail.");
+        }
+
+        console.log("Checking gas limits...");
+        const block = await backendSigner.provider.getBlock('latest');
+        console.log(`Current block gas limit: ${block.gasLimit}`);
+        console.log(`UserOperation total gas: ${
+            ethers.BigNumber.from(userOperation.callGasLimit)
+            .add(userOperation.verificationGasLimit)
+            .add(userOperation.preVerificationGas)
+        }`);
+
+        // Ensure all fields are properly converted and not undefined
+        const safeUserOp = {
+            sender: userOperation.sender,
+            nonce: userOperation.nonce.toHexString(), // Convertir BigNumber a string hexadecimal
+            initCode: userOperation.initCode || '0x',
+            callData: userOperation.callData,
+            callGasLimit: userOperation.callGasLimit.toHexString(),
+            verificationGasLimit: userOperation.verificationGasLimit.toHexString(),
+            preVerificationGas: userOperation.preVerificationGas.toHexString(),
+            maxFeePerGas: userOperation.maxFeePerGas.toHexString(),
+            maxPriorityFeePerGas: userOperation.maxPriorityFeePerGas.toHexString(),
+            paymasterAndData: userOperation.paymasterAndData || '0x',
+            signature: userOperation.signature
+        };
+
+        console.log("Safe UserOperation:", JSON.stringify(safeUserOp, null, 2));
+
+        console.log("Checking callData...");
+        console.log("CallData length:", safeUserOp.callData.length);
+        console.log("CallData:", safeUserOp.callData);
+
+        console.log("Sending handleOps");
         const tx = await entrypoint_backend.handleOps(
-            [userOperation],
+            [safeUserOp],
             signer.address,
-            { gasLimit: 1000000 }
+            { gasLimit: 2000000 } // Aumentado el gasLimit
         );
 
+        console.log("Transaction sent, waiting for confirmation");
+        console.log("Transaction hash:", tx.hash);
+        
         const receipt = await tx.wait();
+        console.log("Transaction receipt:", JSON.stringify(receipt, null, 2));
+        
+        if (receipt.status === 0) {
+            console.error("Transaction failed");
+            
+            // Try to get more info about the failure
+            try {
+                const failureReason = await backendSigner.provider.call(tx, tx.blockNumber);
+                console.error("Failure reason:", failureReason);
+            } catch (callError) {
+                console.error("Error getting failure reason:", callError);
+                if (callError.error && callError.error.message) {
+                    console.error("Detailed error message:", callError.error.message);
+                }
+            }
+            
+            throw new Error("Transaction failed");
+        }
+        
         console.log(`User Operation execute confirmed in block ${receipt.blockNumber}`);
         return { transactionHash: receipt.transactionHash };
     } catch (error) {
         console.error('Error sending User Operation transaction:', error);
+        if (error.reason) console.error('Error reason:', error.reason);
+        if (error.code) console.error('Error code:', error.code);
+        if (error.method) console.error('Error method:', error.method);
+        if (error.transaction) {
+            console.error("Failed transaction data:", error?.transaction?.data);
+        }
+        if (error.error && error.error.message) console.error('Internal error message:', error.error.message);
+        if (error.stack) console.error('Error stack:', error.stack);
         throw error;
     }
 }
