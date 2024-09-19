@@ -233,6 +233,7 @@ const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
  */
 const executeTransaction = async (from: IUser, to: IUser | { wallet: string }, token: string, amount: string, chain_id: number) => {
 	console.log("Sending user operation...");
+	
 	const result = await sendUserOperation(
 		from.wallet,
 		from.phone_number,
@@ -242,7 +243,19 @@ const executeTransaction = async (from: IUser, to: IUser | { wallet: string }, t
 		chain_id
 	);
 
-	if (!result) return;
+	/*
+	Native transfer
+
+	const result = await sendUserOperation(
+		from.wallet,
+		from.phone_number,
+		to.wallet,
+		"0.00001", // Amount in ETH
+		534351 // Chain ID (optional, defaults to 534351 for Scroll)
+	); 
+	*/
+
+	if (!result || !result.transactionHash) return;
 
 	await Transaction.create({
 		trx_hash: result?.transactionHash ?? "",

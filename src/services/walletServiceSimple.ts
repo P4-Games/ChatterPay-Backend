@@ -1,4 +1,3 @@
-// Mi archivo
 import * as crypto from 'crypto';
 import { ethers, BigNumber } from 'ethers';
 
@@ -74,36 +73,18 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
 }
 
 /**
- * Sets up an ERC20 contract instance.
- * 
- * @param tokenAddress - The address of the ERC20 token contract.
- * @param signer - The signer to use for the contract.
- * @returns A promise that resolves to the ERC20 contract instance.
- */
-async function setupERC20(tokenAddress: string, signer: ethers.Wallet) {
-    return new ethers.Contract(tokenAddress, [
-        'function transfer(address to, uint256 amount) returns (bool)',
-        'function balanceOf(address owner) view returns (uint256)',
-        'function approve(address spender, uint256 amount) returns (bool)',
-        'function allowance(address owner, address spender) view returns (uint256)',
-    ], signer);
-}
-
-/**
- * Creates a user operation for token transfer.
+ * Creates a user operation for ETH transfer.
  * 
  * @param entrypoint - The entrypoint contract instance.
  * @param chatterPay - The ChatterPay contract instance.
- * @param erc20 - The ERC20 token contract instance.
  * @param to - The recipient's address.
- * @param amount - The amount of tokens to transfer.
+ * @param amount - The amount of ETH to transfer.
  * @param proxyAddress - The proxy address to use for the operation.
  * @returns A promise that resolves to the created UserOperation.
  */
 async function createUserOperation(
     entrypoint: ethers.Contract,
     chatterPay: ethers.Contract,
-    erc20: ethers.Contract,
     to: string,
     amount: string,
     proxyAddress: string,
@@ -113,24 +94,14 @@ async function createUserOperation(
     console.log("To Address:", to);
     console.log("Amount:", amount);
 
-    // Ensure 'to' is a valid address
     if (!ethers.utils.isAddress(to)) {
         throw new Error("Invalid 'to' address");
     }
 
-    // Ensure 'amount' is a valid number
-    let amount_bn;
-    try {
-        amount_bn = ethers.utils.parseUnits(amount, 18);
-    } catch (error) {
-        throw new Error("Invalid amount");
-    }
-    console.log("Amount in BigNumber:", amount_bn.toString());
+    const amount_bn = ethers.utils.parseEther(amount);
+    console.log("Amount in Wei:", amount_bn.toString());
 
-    const transferEncode = erc20.interface.encodeFunctionData("transfer", [to, amount_bn]);
-    console.log("Transfer Encode:", transferEncode);
-
-    const transferCallData = chatterPay.interface.encodeFunctionData("execute", [erc20.address, 0, transferEncode]);
+    const transferCallData = chatterPay.interface.encodeFunctionData("execute", [to, amount_bn, "0x"]);
     console.log("Transfer Call Data:", transferCallData);
 
     const nonce = await entrypoint.getNonce(proxyAddress, 0);
@@ -141,9 +112,9 @@ async function createUserOperation(
         nonce,
         initCode: "0x",
         callData: transferCallData,
-        callGasLimit: BigNumber.from(1000000),
-        verificationGasLimit: BigNumber.from(1000000),
-        preVerificationGas: BigNumber.from(1000000),
+        callGasLimit: BigNumber.from(300000),
+        verificationGasLimit: BigNumber.from(150000),
+        preVerificationGas: BigNumber.from(50000),
         maxFeePerGas: BigNumber.from(ethers.utils.parseUnits("20", "gwei")),
         maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits("1", "gwei")),
         paymasterAndData: "0x",
@@ -155,23 +126,6 @@ async function createUserOperation(
     , 2));
 
     return userOp;
-}
-
-/**
- * Computes the hash of a user operation.
- * 
- * @param userOp - The user operation to hash.
- * @param entryPointAddress - The address of the entry point contract.
- * @param chainId - The chain ID.
- * @returns The computed hash as a hexadecimal string.
- */
-function getUserOpHash(userOp: UserOperation, entryPointAddress: string, chainId: number): string {
-    const userOpHash = hashUserOp(userOp);
-    const enc = ethers.utils.defaultAbiCoder.encode(
-        ['bytes32', 'address', 'uint256'],
-        [userOpHash, entryPointAddress, chainId]
-    );
-    return ethers.utils.keccak256(enc);
 }
 
 /**
@@ -195,48 +149,62 @@ function hashUserOp(userOp: UserOperation): string {
 }
 
 /**
+ * Computes the full hash of a user operation, including the entrypoint and chain ID.
+ * 
+ * @param userOp - The user operation.
+ * @param entrypointAddress - The address of the entrypoint contract.
+ * @param chainId - The chain ID.
+ * @returns The computed hash as a hexadecimal string.
+ */
+function getUserOpHash(userOp: UserOperation, entrypointAddress: string, chainId: number): string {
+    const userOpHash = hashUserOp(userOp);
+    const enc = ethers.utils.defaultAbiCoder.encode(
+        ['bytes32', 'address', 'uint256'],
+        [userOpHash, entrypointAddress, chainId]
+    );
+    return ethers.utils.keccak256(enc);
+}
+
+/**
  * Signs a user operation.
  * 
  * @param userOperation - The user operation to sign.
- * @param entrypoint - The entrypoint contract instance.
+ * @param entrypointAddress - The address of the entrypoint contract.
  * @param signer - The signer to use for signing.
  * @returns A promise that resolves to the signed UserOperation.
  */
-async function signUserOperation(userOperation: UserOperation, entrypoint: ethers.Contract, signer: ethers.Wallet): Promise<UserOperation> {
+async function signUserOperation(
+    userOperation: UserOperation, 
+    entrypointAddress: string, 
+    signer: ethers.Signer
+): Promise<UserOperation> {
+    console.log("Preparing UserOperation for signing");
+
+    const fixedUserOperation: UserOperation = {
+        ...userOperation,
+        initCode: userOperation.initCode || '0x',
+        paymasterAndData: userOperation.paymasterAndData || '0x',
+        signature: '0x' // We set this to '0x' before signing
+    };
+
+    console.log('Fixed User Operation:', JSON.stringify(fixedUserOperation, (key, value) => 
+        typeof value === 'bigint' ? value.toString() : value
+    , 2));
+
     const chainId = await signer.getChainId();
-    console.log("Chain ID:", chainId);
+    const userOpHash = getUserOpHash(fixedUserOperation, entrypointAddress, chainId);
 
-    const userOpHash = getUserOpHash(userOperation, entrypoint.address, chainId);
-    console.log("UserOpHash to sign:", userOpHash);
+    console.log("Signing UserOp hash:", userOpHash);
+    
+    // Note: We're using signMessage here, which prepends the Ethereum Signed Message prefix
+    // This is correct if your contract is expecting this prefix. If not, use signTransaction instead.
+    const userOpSignature = await signer.signMessage(ethers.utils.arrayify(userOpHash));
 
-    const signature = await signer._signTypedData(
-        {
-            name: 'UserOperation',
-            version: '1',
-            chainId,
-            verifyingContract: entrypoint.address,
-        },
-        {
-            UserOperation: [
-                { name: 'sender', type: 'address' },
-                { name: 'nonce', type: 'uint256' },
-                { name: 'initCode', type: 'bytes' },
-                { name: 'callData', type: 'bytes' },
-                { name: 'callGasLimit', type: 'uint256' },
-                { name: 'verificationGasLimit', type: 'uint256' },
-                { name: 'preVerificationGas', type: 'uint256' },
-                { name: 'maxFeePerGas', type: 'uint256' },
-                { name: 'maxPriorityFeePerGas', type: 'uint256' },
-                { name: 'paymasterAndData', type: 'bytes' },
-            ],
-        },
-        userOperation
-    );
+    console.log("Signature:", userOpSignature);
 
-    console.log("Generated signature:", signature);
-
-    return { ...userOperation, signature };
+    return { ...fixedUserOperation, signature: userOpSignature };
 }
+
 
 /**
  * Simulates a transaction to check if it will be successful.
@@ -255,7 +223,7 @@ async function simulateTransaction(
         const result = await entrypoint.callStatic.handleOps(
             [userOperation],
             signer.address,
-            { from: signer.address, gasLimit: 2000000 } // Increased gasLimit
+            { from: signer.address, gasLimit: 2000000 }
         );
         console.log("Simulation successful:", result);
         return true;
@@ -266,13 +234,12 @@ async function simulateTransaction(
 }
 
 /**
- * Sends a user operation for token transfer.
+ * Sends a user operation for ETH transfer.
  * 
  * @param from - The sender's address.
  * @param fromNumber - The sender's phone number.
  * @param to - The recipient's address.
- * @param tokenAddress - The address of the token to transfer.
- * @param amount - The amount of tokens to transfer.
+ * @param amount - The amount of ETH to transfer.
  * @param chain_id - The chain ID (default is 534351 for Scroll).
  * @returns A promise that resolves to an object containing the transaction hash.
  * @throws Error if there's an issue during the process.
@@ -281,7 +248,6 @@ export async function sendUserOperation(
     from: string,
     fromNumber: string,
     to: string,
-    tokenAddress: string,
     amount: string,
     chain_id: number = 534351
 ): Promise<{ transactionHash: string; }> {
@@ -293,9 +259,8 @@ export async function sendUserOperation(
 
     const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
     const { provider, signer, backendSigner, chatterPay, proxy, accountExists } = await setupContracts(blockchain, privateKey, fromNumber);
-    const erc20 = await setupERC20(tokenAddress, signer);
 
-    await checkBalance(erc20, proxy.proxyAddress, amount);
+    await checkBalance(provider, proxy.proxyAddress, amount);
     await ensureSignerHasEth(signer, backendSigner, provider);
 
     console.log("Getting network config");
@@ -308,48 +273,18 @@ export async function sendUserOperation(
     }
     
     console.log("Creating user op");
-    let userOperation = await createUserOperation(entrypoint, chatterPay, erc20, to, amount, proxy.proxyAddress);
+    let userOperation = await createUserOperation(entrypoint, chatterPay, to, amount, proxy.proxyAddress);
     
     console.log("Signing user op");
-    userOperation = await signUserOperation(userOperation, entrypoint, signer);
+    userOperation = await signUserOperation(userOperation, entrypoint.address, signer);
     
-    function recoverSigner(userOp: UserOperation, entryPointAddress: string, chainId: number): string {
-        const domain = {
-            name: 'UserOperation',
-            version: '1',
-            chainId,
-            verifyingContract: entryPointAddress,
-        };
-    
-        const types = {
-            UserOperation: [
-                { name: 'sender', type: 'address' },
-                { name: 'nonce', type: 'uint256' },
-                { name: 'initCode', type: 'bytes' },
-                { name: 'callData', type: 'bytes' },
-                { name: 'callGasLimit', type: 'uint256' },
-                { name: 'verificationGasLimit', type: 'uint256' },
-                { name: 'preVerificationGas', type: 'uint256' },
-                { name: 'maxFeePerGas', type: 'uint256' },
-                { name: 'maxPriorityFeePerGas', type: 'uint256' },
-                { name: 'paymasterAndData', type: 'bytes' },
-            ],
-        };
-    
-        return ethers.utils.verifyTypedData(domain, types, userOp, userOp.signature);
-    }
-    
-    // Usa esto para verificar
-    const recoveredSigner = recoverSigner(userOperation, entrypoint.address, await signer.getChainId());
-    console.log("Recovered signer:", recoveredSigner);
-    console.log("Expected signer:", await signer.getAddress());
-
     console.log("Simulating transaction")
-    // const simulationResult = await simulateTransaction(entrypoint, userOperation, signer);
-    // if(simulationResult) {
+    const simulationResult = await simulateTransaction(entrypoint, userOperation, signer);
+
+    if(simulationResult) {
         console.log("Executing user op");
         return executeTransfer(entrypoint, userOperation, signer, backendSigner);
-    // } 
+    } 
 
     console.log("Simulation unsuccessful, one or more parameters are wrong")
     return {
@@ -360,16 +295,16 @@ export async function sendUserOperation(
 /**
  * Checks if the account has sufficient balance for the transfer.
  *  
- * @param erc20 - The ERC20 token contract instance.
+ * @param provider - The Ethereum provider.
  * @param proxyAddress - The proxy address to check the balance for.
  * @param amount - The amount to check against.
  * @throws Error if the balance is insufficient.
  */
-async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount: string) {
-    const amount_bn = ethers.utils.parseUnits(amount, 18);
-    const balanceCheck = await erc20.balanceOf(proxyAddress);
+async function checkBalance(provider: ethers.providers.JsonRpcProvider, proxyAddress: string, amount: string) {
+    const amount_bn = ethers.utils.parseEther(amount);
+    const balanceCheck = await provider.getBalance(proxyAddress);
     if (balanceCheck.lt(amount_bn)) {
-        throw new Error(`Insufficient balance. Required: ${amount}, Available: ${ethers.utils.formatUnits(balanceCheck, 18)}`);
+        throw new Error(`Insufficient balance. Required: ${amount} ETH, Available: ${ethers.utils.formatEther(balanceCheck)} ETH`);
     }
 }
 
@@ -396,7 +331,7 @@ export async function ensureSignerHasEth(signer: ethers.Wallet, backendSigner: e
 }
 
 /**
- * Executes the token transfer.
+ * Executes the ETH transfer.
  * 
  * @param entrypoint - The entrypoint contract instance.
  * @param userOperation - The user operation to execute.
@@ -462,7 +397,7 @@ async function executeTransfer(
         const tx = await entrypoint_backend.handleOps(
             [safeUserOp],
             signer.address,
-            { gasLimit: 2000000 } // Increased gasLimit
+            { gasLimit: 2000000 }
         );
 
         console.log("Transaction sent, waiting for confirmation");
