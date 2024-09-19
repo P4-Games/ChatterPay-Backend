@@ -1,12 +1,11 @@
-import { BigNumber, ethers } from 'ethers';
 import * as crypto from 'crypto';
+import { ethers, BigNumber } from 'ethers';
 
 import entryPoint from "../utils/entryPoint.json";
 import { getNetworkConfig } from "./networkService";
 import chatterPayABI from "../utils/chatterPayABI.json";
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { computeProxyAddressFromPhone } from './predictWalletService';
-import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts/factories/ChatterPayWalletFactory__factory';
 
 /**
  * Represents a user operation in the ChatterPay system.
@@ -49,7 +48,7 @@ async function getBlockchain(chain_id: number): Promise<IBlockchain> {
  */
 function generatePrivateKey(seedPrivateKey: string, fromNumber: string): string {
     const seed = seedPrivateKey + fromNumber;
-    return `0x${  crypto.createHash('sha256').update(seed).digest('hex')}`;
+    return `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
 }
 
 /**
@@ -64,20 +63,14 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
     const provider = new ethers.providers.JsonRpcProvider(blockchain.rpc);
     const signer = new ethers.Wallet(privateKey, provider);
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
-    const factory = ChatterPayWalletFactory__factory.connect(blockchain.factoryAddress, backendSigner);
-
     const proxy = await computeProxyAddressFromPhone(fromNumber);
     const code = await provider.getCode(proxy.proxyAddress);
-    if (code === '0x') {
-        console.log(`Creating new wallet for EOA: ${proxy.EOAAddress}, will result in: ${proxy.proxyAddress}...`);
-        const tx = await factory.createProxy(proxy.EOAAddress, { gasLimit: 1000000 });
-        await tx.wait();
-    }
-    console.log("User wallet is: ", proxy.proxyAddress)
-    const chatterPay = new ethers.Contract(proxy.proxyAddress, chatterPayABI, signer);
-    return { provider, signer, backendSigner, chatterPay, proxy };
-}
+    const accountExists = code !== '0x';
 
+    const chatterPay = new ethers.Contract(proxy.proxyAddress, chatterPayABI, signer);
+    
+    return { provider, signer, backendSigner, chatterPay, proxy, accountExists };
+}
 /**
  * Sets up an ERC20 contract instance.
  * 
@@ -139,16 +132,16 @@ async function createUserOperation(
     console.log("Transfer Call Data:", transferCallData);
 
     const nonce = await entrypoint.getNonce(proxyAddress, 0);
-    console.log("Nonce:", nonce.toString());
+    console.log("Proxy Nonce:", nonce.toString());
 
     const userOp: UserOperation = {
         sender: proxyAddress,
         nonce,
         initCode: "0x",
         callData: transferCallData,
-        callGasLimit: BigNumber.from(1000000), // Aumentado
-        verificationGasLimit: BigNumber.from(1000000), // Aumentado
-        preVerificationGas: BigNumber.from(100000), // Aumentado
+        callGasLimit: BigNumber.from(2000000), // Aumentado
+        verificationGasLimit: BigNumber.from(2000000), // Aumentado
+        preVerificationGas: BigNumber.from(200000), // Aumentado
         maxFeePerGas: BigNumber.from(ethers.utils.parseUnits("20", "gwei")),
         maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits("1", "gwei")),
         paymasterAndData: "0x",
@@ -223,15 +216,6 @@ async function simulateTransaction(
         return true;
     } catch (error) {
         console.error("Simulation failed:", error);
-        if (error.errorName) {
-            console.error("Error name:", error.errorName);
-        }
-        if (error.errorArgs) {
-            console.error("Error arguments:", error.errorArgs);
-        }
-        if (error.reason) {
-            console.error("Error reason:", error.reason);
-        }
         return false;
     }
 }
@@ -264,7 +248,7 @@ export async function sendUserOperation(
     }
 
     const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
-    const { provider, signer, backendSigner, chatterPay, proxy } = await setupContracts(blockchain, privateKey, fromNumber);
+    const { provider, signer, backendSigner, chatterPay, proxy, accountExists } = await setupContracts(blockchain, privateKey, fromNumber);
     const erc20 = await setupERC20(tokenAddress, signer);
 
     await checkBalance(erc20, proxy.proxyAddress, amount);
@@ -273,6 +257,11 @@ export async function sendUserOperation(
     console.log("Getting network config");
     const networkConfig = await getNetworkConfig();
     const entrypoint = new ethers.Contract(networkConfig.entryPoint, entryPoint, signer);
+
+    console.log("Validating account")
+    if (!accountExists) {
+        throw new Error(`Account ${proxy.proxyAddress} does not exist. Cannot proceed with transfer.`);
+    }
     
     console.log("Creating user op");
     let userOperation = await createUserOperation(entrypoint, chatterPay, erc20, to, amount, proxy.proxyAddress);
@@ -280,11 +269,19 @@ export async function sendUserOperation(
     console.log("Signing user op");
     userOperation = await signUserOperation(userOperation, entrypoint, signer);
     
+    console.log("Simulating transaction")
     // Llamar a esta función antes de ejecutar la transacción real
-    await simulateTransaction(entrypoint, userOperation, signer);
+    const simulationResult = await simulateTransaction(entrypoint, userOperation, signer);
 
-    console.log("Executing user op");
-    return executeTransfer(entrypoint, userOperation, signer, backendSigner);
+    if(simulationResult) {
+        console.log("Executing user op");
+        return executeTransfer(entrypoint, userOperation, signer, backendSigner);
+    } 
+
+    console.log("Simulation unsuccesful, one or more parameters are wrong")
+    return {
+        transactionHash: ""
+    };
 }
 
 /**
@@ -344,7 +341,7 @@ async function executeTransfer(
     try {
         const entrypoint_backend = entrypoint.connect(backendSigner);
         console.log("Preparing handleOps parameters");
-        
+
         console.log("Original UserOperation:", JSON.stringify(userOperation, (key, value) => 
             typeof value === 'bigint' ? value.toString() : value
         , 2));
@@ -392,7 +389,7 @@ async function executeTransfer(
         const tx = await entrypoint_backend.handleOps(
             [safeUserOp],
             signer.address,
-            { gasLimit: 2000000 } // Aumentado el gasLimit
+            { gasLimit: 200000 } // Aumentado el gasLimit
         );
 
         console.log("Transaction sent, waiting for confirmation");
@@ -410,9 +407,6 @@ async function executeTransfer(
                 console.error("Failure reason:", failureReason);
             } catch (callError) {
                 console.error("Error getting failure reason:", callError);
-                if (callError.error && callError.error.message) {
-                    console.error("Detailed error message:", callError.error.message);
-                }
             }
             
             throw new Error("Transaction failed");
@@ -422,14 +416,6 @@ async function executeTransfer(
         return { transactionHash: receipt.transactionHash };
     } catch (error) {
         console.error('Error sending User Operation transaction:', error);
-        if (error.reason) console.error('Error reason:', error.reason);
-        if (error.code) console.error('Error code:', error.code);
-        if (error.method) console.error('Error method:', error.method);
-        if (error.transaction) {
-            console.error("Failed transaction data:", error?.transaction?.data);
-        }
-        if (error.error && error.error.message) console.error('Internal error message:', error.error.message);
-        if (error.stack) console.error('Error stack:', error.stack);
         throw error;
     }
 }
