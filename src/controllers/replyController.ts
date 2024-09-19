@@ -6,8 +6,9 @@ import { getNetworkConfig } from '../services/networkService';
 import { UserConversation, userConversationSchema } from '../models/userConversation';
 
 const mongoUrl = process.env?.MONGO_URI_CHATTERPAY ?? "";
-const DATA_TOKEN = 'ddbe7f0e3d93447486efa9ef77954ae7';
-const API_URL = 'https://chatterpay-i7bji6tiqa-uc.a.run.app/chatbot/conversations/send-message';
+
+const DATA_TOKEN = process.env?.DATA_TOKEN ?? "";
+const API_URL = process.env?.API_URL_CHATTERPAY ?? "";
 
 interface OperatorReplyPayload {
     data_token: string;
