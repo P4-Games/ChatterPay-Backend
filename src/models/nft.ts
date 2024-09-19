@@ -9,6 +9,7 @@ export interface INFT extends Document {
   metadata: {
     image_url: string;
     description: string;
+    geolocation?: string;
   };
 }
 
@@ -20,7 +21,8 @@ const NFTSchema = new Schema<INFT>({
   trxId: { type: String, required: true },
   metadata: {
     image_url: { type: String, required: true },
-    description: { type: String, required: true }
+    description: { type: String, required: true },
+    geolocation: { type: String, required: false }
   }
 });
 

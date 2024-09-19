@@ -64,7 +64,8 @@ export const mintNFT = async (
         Body: {
             channel_user_id: string;
             url: string,
-            mensaje: string
+            mensaje: string,
+            geolocation?: string,
         };
     }>,
     reply: FastifyReply
@@ -95,7 +96,8 @@ export const mintNFT = async (
         trxId: data.transactionHash,
         metadata: {
             image_url: url,
-            description: mensaje
+            description: mensaje,
+            geolocation: request.body.geolocation || null
         }
     });
 
