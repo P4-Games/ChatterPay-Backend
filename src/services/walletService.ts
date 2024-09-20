@@ -149,33 +149,53 @@ async function createUserOperation(
     const nonce = await entrypoint.getNonce(proxyAddress, 0);
     console.log("Proxy Nonce:", nonce.toString());
 
-   // Ajustamos estos valores a cantidades más razonables
-   const verificationGasLimit = BigNumber.from(100000);  // Reducido de 1000000
-   const callGasLimit = BigNumber.from(200000);  // Reducido de 1000000
-   const preVerificationGas = BigNumber.from(5000);  // Reducido de 1000000
-   
-   // Usamos valores más realistas para las tarifas de gas
-   const maxFeePerGas = BigNumber.from(ethers.utils.parseUnits("50", "gwei"));  // Ajustado a un valor más típico
-   const maxPriorityFeePerGas = BigNumber.from(ethers.utils.parseUnits("2", "gwei"));  // Ajustado a un valor más típico
+    const verificationGasLimit = BigNumber.from(1000000);  // Adjusted based on your latest transaction
+    const callGasLimit = BigNumber.from(1000000);  // Adjusted based on your latest transaction
+    const preVerificationGas = BigNumber.from(100000);  // Adjusted based on your latest transaction
+    const maxFeePerGas = BigNumber.from(ethers.utils.parseUnits("1.5", "gwei"));  // Adjusted
+    const maxPriorityFeePerGas = BigNumber.from(ethers.utils.parseUnits("0.5", "gwei"));  // Adjusted
 
-   const accountGasLimits = packGasParameters(verificationGasLimit, callGasLimit);
-   const gasFees = packGasParameters(maxFeePerGas, maxPriorityFeePerGas);
+    const accountGasLimits = ethers.utils.hexZeroPad(
+        ethers.utils.hexlify((verificationGasLimit.shl(128)).add(callGasLimit)),
+        32
+    );
+    const gasFees = ethers.utils.hexZeroPad(
+        ethers.utils.hexlify((maxFeePerGas.shl(128)).add(maxPriorityFeePerGas)),
+        32
+    );
 
-   const userOp: PackedUserOperation = {
-       sender: proxyAddress,
-       nonce: ethers.utils.hexZeroPad(ethers.utils.hexlify(nonce), 32),
-       initCode: "0x",
-       callData: transferCallData,
-       accountGasLimits,
-       preVerificationGas: ethers.utils.hexlify(preVerificationGas),
-       gasFees,
-       paymasterAndData: "0x",
-       signature: "0x",
-   };
+    const userOp: PackedUserOperation = {
+        sender: proxyAddress,
+        nonce: ethers.utils.hexZeroPad(ethers.utils.hexlify(nonce), 32),
+        initCode: "0x",
+        callData: transferCallData,
+        accountGasLimits,
+        preVerificationGas: ethers.utils.hexlify(preVerificationGas),
+        gasFees,
+        paymasterAndData: "0x",
+        signature: "0x",  // Inicialmente vacío, se llenará más tarde
+    };
 
-   console.log("Created UserOperation:", JSON.stringify(userOp, null, 2));
+    console.log("Created UserOperation:", JSON.stringify(userOp, null, 2));
 
-   return userOp;
+    return userOp;
+}
+
+async function simulateValidation(entrypoint: ethers.Contract, userOp: PackedUserOperation) {
+    try {
+        // Crear un beneficiario dummy para la simulación
+        const dummyBeneficiary = ethers.constants.AddressZero;
+
+        // Llamar a handleOps con callStatic para simular la transacción
+        const result = await entrypoint.callStatic.handleOps([userOp], dummyBeneficiary);
+        console.log("Simulation result:", result);
+        return result;
+    } catch (error) {
+        console.error("Simulation failed:", error);
+        // Registra el objeto de error completo para más detalles
+        console.log("Full error object:", JSON.stringify(error, null, 2));
+        throw error;
+    }
 }
 
 async function calculatePrefund(userOp: PackedUserOperation): Promise<BigNumber> {
@@ -241,28 +261,31 @@ async function ensureAccountHasPrefund(
  * @returns The computed hash as a hexadecimal string.
  */
 function getUserOpHash(userOp: PackedUserOperation, entryPointAddress: string, chainId: number): string {
-    const packed = ethers.utils.defaultAbiCoder.encode(
-        ['address', 'uint256', 'bytes32', 'bytes32', 'bytes32', 'uint256', 'bytes32', 'bytes32', 'bytes32'],
-        [
-            userOp.sender,
-            userOp.nonce,
-            ethers.utils.keccak256(userOp.initCode),
-            ethers.utils.keccak256(userOp.callData),
-            userOp.accountGasLimits,
-            userOp.preVerificationGas,
-            userOp.gasFees,
-            ethers.utils.keccak256(userOp.paymasterAndData),
-            ethers.utils.keccak256(userOp.signature)
-        ]
+    const hashedUserOp = ethers.utils.keccak256(
+        ethers.utils.defaultAbiCoder.encode(
+            ['address', 'uint256', 'bytes32', 'bytes32', 'bytes32', 'uint256', 'bytes32', 'bytes32', 'bytes32'],
+            [
+                userOp.sender,
+                userOp.nonce,
+                ethers.utils.keccak256(userOp.initCode),
+                ethers.utils.keccak256(userOp.callData),
+                userOp.accountGasLimits,
+                userOp.preVerificationGas,
+                userOp.gasFees,
+                ethers.utils.keccak256(userOp.paymasterAndData),
+                ethers.utils.keccak256(userOp.signature)
+            ]
+        )
     );
-    const userOpHash = ethers.utils.keccak256(packed);
+
     return ethers.utils.keccak256(
         ethers.utils.defaultAbiCoder.encode(
             ['bytes32', 'address', 'uint256'],
-            [userOpHash, entryPointAddress, chainId]
+            [hashedUserOp, entryPointAddress, chainId]
         )
     );
 }
+
 
 /**
  * Signs a user operation.
@@ -272,7 +295,11 @@ function getUserOpHash(userOp: PackedUserOperation, entryPointAddress: string, c
  * @param signer - The signer to use for signing.
  * @returns A promise that resolves to the signed UserOperation.
  */
-async function signUserOperation(userOperation: PackedUserOperation, entrypoint: ethers.Contract, signer: ethers.Wallet): Promise<PackedUserOperation> {
+async function signUserOperation(
+    userOperation: PackedUserOperation,
+    entrypoint: ethers.Contract,
+    signer: ethers.Wallet
+): Promise<PackedUserOperation> {
     const chainId = await signer.getChainId();
     console.log("Chain ID:", chainId);
 
@@ -282,7 +309,14 @@ async function signUserOperation(userOperation: PackedUserOperation, entrypoint:
     const signature = await signer.signMessage(ethers.utils.arrayify(userOpHash));
     console.log("Generated signature:", signature);
 
-    return { ...userOperation, signature };
+    // Convertir la firma a formato [v, r, s]
+    const { v, r, s } = ethers.utils.splitSignature(signature);
+    const packedSignature = ethers.utils.defaultAbiCoder.encode(
+        ['uint8', 'bytes32', 'bytes32'],
+        [v, r, s]
+    );
+
+    return { ...userOperation, signature: packedSignature };
 }
 
 /**
@@ -330,25 +364,36 @@ export async function sendUserOperation(
 
         console.log("Creating user op");
         let userOperation = await createUserOperation(entrypoint, chatterPay, erc20, to, amount, proxy.proxyAddress);
-
+        
         console.log("Signing user op");
         userOperation = await signUserOperation(userOperation, entrypoint, signer);
+
+        console.log("Simulating validation");
+        await simulateValidation(entrypoint, userOperation);
 
         console.log("Ensuring account has enough prefund");
         await ensureAccountHasPrefund(entrypoint, userOperation, backendSigner);
 
         console.log("Sending handleOps transaction");
         const tx = await entrypoint.handleOps([userOperation], backendSigner.address, {
-            gasLimit: 3000000, // Increased gas limit
+            gasLimit: 2000000,
         });
         console.log("Transaction sent:", tx.hash);
 
         const receipt = await tx.wait();
+        console.log("Transaction receipt:", JSON.stringify(receipt, null, 2));
+
+        if (receipt.status === 0) {
+            console.error("Transaction failed. Full receipt:", JSON.stringify(receipt, null, 2));
+            throw new Error("Transaction failed");
+        }
+
         console.log("Transaction confirmed in block:", receipt.blockNumber);
 
         return { transactionHash: receipt.transactionHash };
     } catch (error) {
         console.error("Error in sendUserOperation:", error);
+        console.log("Full error object:", JSON.stringify(error, null, 2));
         throw error;
     }
 }
