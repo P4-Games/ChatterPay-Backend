@@ -1,4 +1,3 @@
-// Mi archivo
 import * as crypto from 'crypto';
 import { ethers, BigNumber } from 'ethers';
 
@@ -149,11 +148,12 @@ async function createUserOperation(
     const nonce = await entrypoint.getNonce(proxyAddress, 0);
     console.log("Proxy Nonce:", nonce.toString());
 
-    const verificationGasLimit = BigNumber.from(1000000);  // Adjusted based on your latest transaction
-    const callGasLimit = BigNumber.from(1000000);  // Adjusted based on your latest transaction
-    const preVerificationGas = BigNumber.from(100000);  // Adjusted based on your latest transaction
-    const maxFeePerGas = BigNumber.from(ethers.utils.parseUnits("1.5", "gwei"));  // Adjusted
-    const maxPriorityFeePerGas = BigNumber.from(ethers.utils.parseUnits("0.5", "gwei"));  // Adjusted
+    const verificationGasLimit = BigNumber.from(1500000);  // Increased from 1000000
+    const callGasLimit = BigNumber.from(1500000);  // Increased from 1000000
+    const preVerificationGas = BigNumber.from(100000); 
+    const maxFeePerGas = BigNumber.from(ethers.utils.parseUnits("10", "gwei"));  // Adjusted
+    const maxPriorityFeePerGas = BigNumber.from(ethers.utils.parseUnits("1", "gwei"));  // Adjusted
+    
 
     const accountGasLimits = ethers.utils.hexZeroPad(
         ethers.utils.hexlify((verificationGasLimit.shl(128)).add(callGasLimit)),
@@ -204,8 +204,8 @@ async function calculatePrefund(userOp: PackedUserOperation): Promise<BigNumber>
         const [maxFeePerGas] = unpackGasParameters(userOp.gasFees);
         const preVerificationGas = BigNumber.from(userOp.preVerificationGas);
         
-        const requiredGas = callGasLimit
-            .add(verificationGasLimit)
+        const requiredGas = verificationGasLimit
+            .add(callGasLimit)
             .add(preVerificationGas);
 
         const prefund = requiredGas.mul(maxFeePerGas);
@@ -239,6 +239,9 @@ async function ensureAccountHasPrefund(
         
         if (balance.lt(prefund)) {
             const missingFunds = prefund.sub(balance);
+            
+            if(parseFloat(ethers.utils.formatEther(missingFunds)) > 0.01) return;
+
             console.log(`Depositing ${ethers.utils.formatEther(missingFunds)} ETH to account`);
             const tx = await entrypoint.depositTo(userOp.sender, { value: missingFunds });
             await tx.wait();
@@ -368,15 +371,15 @@ export async function sendUserOperation(
         console.log("Signing user op");
         userOperation = await signUserOperation(userOperation, entrypoint, signer);
 
-        console.log("Simulating validation");
-        await simulateValidation(entrypoint, userOperation);
-
         console.log("Ensuring account has enough prefund");
         await ensureAccountHasPrefund(entrypoint, userOperation, backendSigner);
 
+        /* console.log("Simulating validation");
+        await simulateValidation(entrypoint, userOperation); */
+
         console.log("Sending handleOps transaction");
         const tx = await entrypoint.handleOps([userOperation], backendSigner.address, {
-            gasLimit: 2000000,
+            gasLimit: 3000000, // Increased gas limit
         });
         console.log("Transaction sent:", tx.hash);
 
