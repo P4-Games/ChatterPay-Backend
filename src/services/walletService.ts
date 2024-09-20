@@ -6,6 +6,8 @@ import { getNetworkConfig } from "./networkService";
 import chatterPayABI from "../utils/chatterPayABI.json";
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { computeProxyAddressFromPhone } from './predictWalletService';
+import { getBundlerUrl, validateBundlerUrl } from '../utils/bundler';
+import { waitForUserOperationReceipt } from '../utils/waitForTX';
 
 /**
  * Represents a user operation in the ChatterPay system.
@@ -58,12 +60,23 @@ function generatePrivateKey(seedPrivateKey: string, fromNumber: string): string 
  * @returns An object containing the provider, signers, and contracts.
  */
 async function setupContracts(blockchain: IBlockchain, privateKey: string, fromNumber: string) {
-    const provider = new ethers.providers.JsonRpcProvider(blockchain.rpc);
+    const bundlerUrl = getBundlerUrl(blockchain.chain_id);
+    if (!bundlerUrl) {
+        throw new Error(`Unsupported chain ID: ${blockchain.chain_id}`);
+    }
+
+    console.log(`Validating bundler URL: ${bundlerUrl}`);
+    const isValidBundler = await validateBundlerUrl(bundlerUrl);
+    if (!isValidBundler) {
+        throw new Error(`Invalid or unreachable bundler URL: ${bundlerUrl}`);
+    }
+
+    const provider = new ethers.providers.JsonRpcProvider(bundlerUrl);
     const signer = new ethers.Wallet(privateKey, provider);
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
     const proxy = await computeProxyAddressFromPhone(fromNumber);
-    const code = await provider.getCode(proxy.proxyAddress);
-    const accountExists = code !== '0x';
+    //const code = await provider.getCode(proxy.proxyAddress);
+    const accountExists = true;
 
     const chatterPay = new ethers.Contract(proxy.proxyAddress, chatterPayABI, signer);
 
@@ -374,26 +387,22 @@ export async function sendUserOperation(
         console.log("Ensuring account has enough prefund");
         await ensureAccountHasPrefund(entrypoint, userOperation, backendSigner);
 
-        /* console.log("Simulating validation");
-        await simulateValidation(entrypoint, userOperation); */
+        console.log("Sending user operation to bundler");
+        const bundlerResponse = await provider.send('eth_sendUserOperation', [userOperation, entrypoint.address]);
+        console.log("Bundler response:", bundlerResponse);
 
-        console.log("Sending handleOps transaction");
-        const tx = await entrypoint.handleOps([userOperation], backendSigner.address, {
-            gasLimit: 3000000, // Increased gas limit
-        });
-        console.log("Transaction sent:", tx.hash);
-
-        const receipt = await tx.wait();
+        // Wait for the transaction to be mined
+        console.log("Waiting for transaction to be mined...");
+        const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
         console.log("Transaction receipt:", JSON.stringify(receipt, null, 2));
 
-        if (receipt.status === 0) {
-            console.error("Transaction failed. Full receipt:", JSON.stringify(receipt, null, 2));
-            throw new Error("Transaction failed");
+        if (!receipt || !receipt.success) {
+            throw new Error("Transaction failed or not found");
         }
 
-        console.log("Transaction confirmed in block:", receipt.blockNumber);
+        console.log("Transaction confirmed in block:", receipt.receipt.blockNumber);
 
-        return { transactionHash: receipt.transactionHash };
+        return { transactionHash: receipt.receipt.transactionHash };
     } catch (error) {
         console.error("Error in sendUserOperation:", error);
         console.log("Full error object:", JSON.stringify(error, null, 2));

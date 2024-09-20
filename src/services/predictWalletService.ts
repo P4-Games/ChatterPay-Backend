@@ -52,8 +52,8 @@ export interface ComputedAddress {
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
     const networkConfig = await getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
-        name: "scroll-sepolia",
-        chainId: 534351,
+        name: "arbitrum-sepolia",
+        chainId: 421614,
     });
 
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
