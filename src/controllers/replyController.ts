@@ -6,8 +6,8 @@ import { getNetworkConfig } from '../services/networkService';
 import { UserConversation, userConversationSchema } from '../models/userConversation';
 
 const mongoUrl = process.env?.MONGO_URI_CHATTERPAY ?? "";
-const DATA_TOKEN = 'ddbe7f0e3d93447486efa9ef77954ae7';
-const API_URL = 'https://chatterpay-i7bji6tiqa-uc.a.run.app/chatbot/conversations/send-message';
+const DATA_TOKEN = process.env?.DATA_TOKEN ?? "";
+const BOT_API_URL = process.env?.BOT_API_URL ?? "";
 
 interface OperatorReplyPayload {
     data_token: string;
@@ -50,7 +50,8 @@ async function updateUserConversationStatus(channelUserId: string, newStatus: st
  */
 async function sendOperatorReply(payload: OperatorReplyPayload): Promise<unknown> {
     try {
-        const response = await axios.post(API_URL, payload, {
+        const sendMsgEndpint = `${BOT_API_URL}/chatbot/conversations/send-message`
+        const response = await axios.post(sendMsgEndpint, payload, {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${payload.data_token}`
