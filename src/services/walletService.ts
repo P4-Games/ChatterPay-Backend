@@ -3,6 +3,7 @@ import * as crypto from 'crypto';
 
 import entryPoint from "../utils/entryPoint.json";
 import { getNetworkConfig } from "./networkService";
+import { getDynamicGas } from '../utils/dynamicGas';
 import chatterPayABI from "../utils/chatterPayABI.json";
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { computeProxyAddressFromPhone } from './predictWalletService';
@@ -68,7 +69,9 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
     const code = await provider.getCode(proxy.proxyAddress);
     if (code === '0x') {
         console.log(`Creating new wallet for EOA: ${proxy.EOAAddress}, will result in: ${proxy.proxyAddress}...`);
-        const tx = await factory.createProxy(proxy.EOAAddress, { gasLimit: 1000000 });
+        const tx = await factory.createProxy(proxy.EOAAddress, { 
+            gasLimit: await getDynamicGas(factory, 'createProxy', [proxy.EOAAddress]),
+        });
         await tx.wait();
     }
 
