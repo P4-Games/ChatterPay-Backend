@@ -1,13 +1,14 @@
+import axios from 'axios';
 import * as crypto from 'crypto';
 import { ethers, BigNumber } from 'ethers';
-import axios from 'axios';
+
 import entryPoint from "../utils/entryPoint.json";
 import { getNetworkConfig } from "./networkService";
 import chatterPayABI from "../utils/chatterPayABI.json";
 import Blockchain, { IBlockchain } from '../models/blockchain';
-import { computeProxyAddressFromPhone } from './predictWalletService';
-import { getBundlerUrl, validateBundlerUrl } from '../utils/bundler';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
+import { getBundlerUrl, validateBundlerUrl } from '../utils/bundler';
+import { computeProxyAddressFromPhone } from './predictWalletService';
 
 /**
  * Represents a user operation in the ChatterPay system.
@@ -77,7 +78,7 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
     const signer = new ethers.Wallet(privateKey, provider);
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
     const proxy = await computeProxyAddressFromPhone(fromNumber);
-    //const code = await provider.getCode(proxy.proxyAddress);
+    // const code = await provider.getCode(proxy.proxyAddress);
     const accountExists = true;
 
     const chatterPay = new ethers.Contract(proxy.proxyAddress, chatterPayABI, signer);
@@ -99,20 +100,6 @@ async function setupERC20(tokenAddress: string, signer: ethers.Wallet) {
         'function approve(address spender, uint256 amount) returns (bool)',
         'function allowance(address owner, address spender) view returns (uint256)',
     ], signer);
-}
-
-function packGasParameters(verificationGasLimit: BigNumber, callGasLimit: BigNumber): string {
-    // Pack verificationGasLimit and callGasLimit into a single 256-bit value
-    const packed = verificationGasLimit.shl(128).add(callGasLimit);
-    return ethers.utils.hexZeroPad(ethers.utils.hexlify(packed), 32);
-}
-
-function unpackGasParameters(packedValue: string): [BigNumber, BigNumber] {
-    const value = BigNumber.from(packedValue);
-    const mask = BigNumber.from(2).pow(128).sub(1);
-    const value2 = value.and(mask);
-    const value1 = value.shr(128);
-    return [value1, value2];
 }
 
 /**
@@ -168,14 +155,14 @@ async function createUserOperation(
 
     const userOp: PackedUserOperation = {
         sender: proxyAddress,
-        nonce: nonce,
+        nonce,
         initCode: "0x",
         callData: transferCallData,
-        callGasLimit: callGasLimit,
-        verificationGasLimit: verificationGasLimit,
-        preVerificationGas: preVerificationGas,
-        maxFeePerGas: maxFeePerGas,
-        maxPriorityFeePerGas: maxPriorityFeePerGas,
+        callGasLimit,
+        verificationGasLimit,
+        preVerificationGas,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
         paymasterAndData: "0x",
         signature: "0x",  // Inicialmente vacío, se llenará más tarde
     };
@@ -185,10 +172,10 @@ async function createUserOperation(
 
 async function calculatePrefund(userOp: PackedUserOperation): Promise<BigNumber> {
     try {
-        const verificationGasLimit = userOp.verificationGasLimit;
-        const callGasLimit = userOp.callGasLimit;
-        const preVerificationGas = userOp.preVerificationGas;
-        const maxFeePerGas = userOp.maxFeePerGas;
+        const {verificationGasLimit} = userOp;
+        const {callGasLimit} = userOp;
+        const {preVerificationGas} = userOp;
+        const {maxFeePerGas} = userOp;
         
         const requiredGas = verificationGasLimit
             .add(callGasLimit)
@@ -407,7 +394,7 @@ async function sendUserOperationToBundler(
     bundlerUrl: string,
     userOperation: PackedUserOperation,
     entryPointAddress: string
-): Promise<any> {
+): Promise<string> {
     try {
         const serializedUserOp = serializeUserOperation(userOperation);
         console.log("Serialized UserOperation:", JSON.stringify(serializedUserOp, null, 2));
@@ -436,10 +423,9 @@ async function sendUserOperationToBundler(
             throw new Error('Bundler did not return a result');
         }
 
-        return response.data.result;
-    } catch (error: any) {
-        console.error('Error sending user operation to bundler:', error.message);
-        console.error('Error details:', error.response?.data || error);
+        return response.data.result as string;
+    } catch (error: unknown) {
+        console.error('Error sending user operation to bundler:', error instanceof Error ? error.message : 'Unknown error');
         throw error;
     }
 }
@@ -451,15 +437,15 @@ async function sendUserOperationToBundler(
  * @returns The ABI-encoded packed user operation as a hex string.
  */
 function packUserOp(userOp: PackedUserOperation): string {
-    const sender = userOp.sender;
-    const nonce = userOp.nonce;
+    const {sender} = userOp;
+    const {nonce} = userOp;
     const hashInitCode = ethers.utils.keccak256(userOp.initCode);
     const hashCallData = ethers.utils.keccak256(userOp.callData);
-    const callGasLimit = userOp.callGasLimit;
-    const verificationGasLimit = userOp.verificationGasLimit;
-    const preVerificationGas = userOp.preVerificationGas;
-    const maxFeePerGas = userOp.maxFeePerGas;
-    const maxPriorityFeePerGas = userOp.maxPriorityFeePerGas;
+    const {callGasLimit} = userOp;
+    const {verificationGasLimit} = userOp;
+    const {preVerificationGas} = userOp;
+    const {maxFeePerGas} = userOp;
+    const {maxPriorityFeePerGas} = userOp;
     const hashPaymasterAndData = ethers.utils.keccak256(userOp.paymasterAndData);
 
     const types = [
@@ -526,7 +512,7 @@ function getUserOpHash(userOp: PackedUserOperation, entryPointAddress: string, c
     return finalUserOpHash;
 }
 
-function serializeUserOperation(userOp: PackedUserOperation): any {
+function serializeUserOperation(userOp: PackedUserOperation): Record<string, string> {
     return {
         sender: userOp.sender,
         nonce: ethers.utils.hexlify(userOp.nonce),
