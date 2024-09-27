@@ -6,7 +6,7 @@ import { ethers } from "ethers";
  * @returns {string} (The url)
  */
 export function getBundlerUrl(chainId: number): string {
-    const bundlerUrls: { [key: number]: string } = {
+    const bundlerUrls: { [key: number]: string | undefined } = {
         1: 'https://public.stackup.sh/api/v1/node/ethereum-mainnet',
         11155111: 'https://public.stackup.sh/api/v1/node/ethereum-sepolia',
         137: 'https://public.stackup.sh/api/v1/node/polygon-mainnet',
@@ -18,7 +18,7 @@ export function getBundlerUrl(chainId: number): string {
         56: 'https://public.stackup.sh/api/v1/node/bsc-mainnet',
         97: 'https://public.stackup.sh/api/v1/node/bsc-testnet',
         42161: 'https://public.stackup.sh/api/v1/node/arbitrum-one',
-        421614: 'https://arbitrum-sepolia.voltaire.candidewallet.com/rpc',
+        421614: process.env.ARBITRUM_SEPOLIA_RPC_URL,
         8453: 'https://public.stackup.sh/api/v1/node/base-mainnet',
         84532: 'https://public.stackup.sh/api/v1/node/base-sepolia',
     };
