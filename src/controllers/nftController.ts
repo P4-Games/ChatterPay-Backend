@@ -5,6 +5,7 @@ import NFTModel, { getLastId } from "../models/nft";
 import { issueTokensCore } from "./tokenController";
 import { getWalletByPhoneNumber } from "../models/user";
 import { sendMintNotification } from "./replyController";
+import { executeWithDynamicGas } from "../utils/dynamicGas";
 import { executeWalletCreation } from "./newWalletController";
 import { getNetworkConfig } from "../services/networkService";
 
@@ -37,16 +38,18 @@ const mint_eth_nft = async (
     );
 
     try {
-        const tx = await nftContract.safeMint(recipientAddress, tokenURI, {
-            gasLimit: 500000
-        });
+
+        const tx = await executeWithDynamicGas(
+            nftContract,
+            'safeMint',
+            [recipientAddress, tokenURI],
+            10
+        );
 
         console.log("Transaction sent: ", tx.hash);
+        console.log("Transaction confirmed: ", tx.transactionHash);
 
-        const receipt = await tx.wait();
-        console.log("Transaction confirmed: ", receipt.transactionHash);
-
-        return receipt;
+        return tx.receipt;
     } catch (error) {
         console.error("Error minting NFT: ", error);
         throw new Error("Minting failed");
