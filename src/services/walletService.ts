@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 
 import entryPoint from "../utils/entryPoint.json";
 import { getNetworkConfig } from "./networkService";
-import { getDynamicGas } from '../utils/dynamicGas';
+import { executeWithDynamicGas, getDynamicGas } from '../utils/dynamicGas';
 import chatterPayABI from "../utils/chatterPayABI.json";
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { computeProxyAddressFromPhone } from './predictWalletService';
@@ -222,7 +222,7 @@ export async function ensureSignerHasEth(signer: ethers.Wallet, backendSigner: e
         const tx = await backendSigner.sendTransaction({
             to: await signer.getAddress(),
             value: ethers.utils.parseEther('0.001'),
-            gasLimit: 210000,
+            gasLimit: 210000, // Fixed gas limit for ETH transfer
         });
         await tx.wait();
         console.log('ETH sent to signer');
@@ -248,15 +248,9 @@ async function executeTransfer(
 ): Promise<{ transactionHash: string; }> {
     try {
         const entrypoint_backend = entrypoint.connect(backendSigner);
-        const tx = await entrypoint_backend.handleOps(
-            [userOperation],
-            signer.address,
-            { gasLimit: 1000000 }
-        );
-
-        const receipt = await tx.wait();
-        console.log(`User Operation execute confirmed in block ${receipt.blockNumber}`);
-        return { transactionHash: receipt.transactionHash };
+        const tx = await executeWithDynamicGas(entrypoint_backend, 'handleOps', [[userOperation], signer.address]);
+        console.log(`User Operation execute confirmed in block ${tx.receipt.blockNumber}`);
+        return { transactionHash: tx.transactionHash };
     } catch (error) {
         console.error('Error sending User Operation transaction:', error);
         throw error;
