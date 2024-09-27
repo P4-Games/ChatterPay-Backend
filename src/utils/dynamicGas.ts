@@ -1,4 +1,4 @@
-import { Contract, BigNumber } from 'ethers';
+import { ethers , Contract, BigNumber } from 'ethers';
 
 /**
  * Execute a transaction with a dynamic gas limit.
@@ -73,4 +73,42 @@ export async function getDynamicGas( contract: Contract, methodName: string, arg
     .div(BigNumber.from(100));
 
     return gasLimit;
+}
+
+/**
+ * Calculate gas limit based on the address and call data.
+ * 
+ * @param provider - An ethers provider instance.
+ * @param to - The address to which the transaction is sent.
+ * @param callData - The call data for the transaction.
+ * @param gasBufferPercentage - Percentage of gas to add to the estimated gas.
+ * @returns Gas limit for the transaction.
+ * @throws Error if the gas estimation fails.
+ */
+export async function getDynamicGas_callData(
+    provider: ethers.providers.Provider,
+    to: string,
+    callData: string,
+    gasBufferPercentage: number = 10
+): Promise<BigNumber> {
+    try {
+        // Estimar el gas necesario para la transacción
+        const estimatedGas: BigNumber = await provider.estimateGas({
+            to,
+            data: callData,
+        });
+
+        // Aplicar el buffer al gas estimado
+        const gasLimit: BigNumber = estimatedGas
+            .mul(BigNumber.from(100 + gasBufferPercentage))
+            .div(BigNumber.from(100));
+
+        return gasLimit;
+    } catch (error) {
+        if (error instanceof Error) {
+            throw new Error(`Failed to estimate gas: ${error.message}`);
+        } else {
+            throw new Error(`Failed to estimate gas: ${error}`);
+        }
+    }
 }
