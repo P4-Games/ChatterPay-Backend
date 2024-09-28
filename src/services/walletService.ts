@@ -262,6 +262,16 @@ async function signUserOperation(
     return { ...userOperation, signature };
 }
 
+async function validateChatterPayState(
+    chatterPay: ethers.Contract,
+) {
+    console.log("Validating ChatterPay state...");
+    
+    const entryPointAddress = await chatterPay.getEntryPoint();
+    console.log("ChatterPay EntryPoint:", entryPointAddress);
+    
+}
+
 /**
  * Sends a user operation for token transfer.
  * 
@@ -309,6 +319,8 @@ export async function sendUserOperation(
             throw new Error(`Account ${proxy.proxyAddress} does not exist. Cannot proceed with transfer.`);
         }
 
+        await validateChatterPayState(chatterPay);
+
         console.log("Creating user op");
         let userOperation = await createUserOperation(entrypoint, chatterPay, erc20, to, amount, proxy.proxyAddress);
         
@@ -317,6 +329,9 @@ export async function sendUserOperation(
 
         console.log("Ensuring account has enough prefund");
         await ensureAccountHasPrefund(entrypoint, userOperation, backendSigner);
+
+        console.log("Estimating gas for user operation");
+        await estimateUserOperationGas(bundlerUrl, userOperation, networkConfig.entryPoint);
 
         console.log("Sending user operation to bundler");
         const bundlerResponse = await sendUserOperationToBundler(bundlerUrl, userOperation, entrypoint.address);
@@ -489,6 +504,42 @@ function packUserOp(userOp: PackedUserOperation): string {
 function hashUserOp(userOp: PackedUserOperation): string {
     const packedUserOp = packUserOp(userOp);
     return ethers.utils.keccak256(packedUserOp);
+}
+
+/**
+ * Estimates the gas that will be used in the UserOperation
+ */
+async function estimateUserOperationGas(
+    bundlerUrl: string,
+    userOperation: PackedUserOperation,
+    entryPointAddress: string
+): Promise<void> {
+    try {
+        const serializedUserOp = serializeUserOperation(userOperation);
+        const payload = {
+            jsonrpc: '2.0',
+            method: 'eth_estimateUserOperationGas',
+            params: [serializedUserOp, entryPointAddress],
+            id: Date.now(),
+        };
+
+        const response = await axios.post(bundlerUrl, payload, {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (response.data.error) {
+            console.error('Gas estimation error:', response.data.error);
+            throw new Error(`Gas estimation failed: ${response.data.error.message}`);
+        }
+
+        console.log("Gas Estimation:", response.data.result);
+        // You can use these estimates to update your userOperation if needed
+    } catch (error) {
+        console.error('Error estimating gas:', error);
+        throw error;
+    }
 }
 
 /**
