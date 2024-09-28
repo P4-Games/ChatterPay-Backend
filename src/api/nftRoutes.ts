@@ -1,6 +1,12 @@
 import { FastifyInstance } from 'fastify';
 
-import { getNFT, mintNFT, getAllNFTs, getLastNFT, mintExistingNFT } from '../controllers/nftController';
+import {
+    getNFT,
+    mintNFT,
+    getAllNFTs,
+    getLastNFT,
+    mintExistingNFT,
+} from '../controllers/nftController';
 
 /**
  * Configures routes related to NFTs.

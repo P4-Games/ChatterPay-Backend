@@ -11,9 +11,13 @@ type BlockchainBody = IBlockchain | Partial<IBlockchain>;
  * @param reply - The FastifyReply object.
  * @param operation - The operation being performed.
  */
-const handleBlockchainError = (error: unknown, reply: FastifyReply, operation: string): FastifyReply => {
-  console.error(`Error ${operation} blockchain:`, error);
-  return reply.status(500).send({ message: 'Internal Server Error' });
+const handleBlockchainError = (
+    error: unknown,
+    reply: FastifyReply,
+    operation: string,
+): FastifyReply => {
+    console.error(`Error ${operation} blockchain:`, error);
+    return reply.status(500).send({ message: 'Internal Server Error' });
 };
 
 /**
@@ -23,16 +27,16 @@ const handleBlockchainError = (error: unknown, reply: FastifyReply, operation: s
  * @returns A promise resolving to the FastifyReply object.
  */
 export const createBlockchain = async (
-  request: FastifyRequest<{ Body: IBlockchain }>,
-  reply: FastifyReply
+    request: FastifyRequest<{ Body: IBlockchain }>,
+    reply: FastifyReply,
 ): Promise<FastifyReply> => {
-  try {
-    const newBlockchain = new Blockchain(request.body);
-    await newBlockchain.save();
-    return await reply.status(201).send(newBlockchain);
-  } catch (error) {
-    return handleBlockchainError(error, reply, 'creating');
-  }
+    try {
+        const newBlockchain = new Blockchain(request.body);
+        await newBlockchain.save();
+        return await reply.status(201).send(newBlockchain);
+    } catch (error) {
+        return handleBlockchainError(error, reply, 'creating');
+    }
 };
 
 /**
@@ -42,15 +46,15 @@ export const createBlockchain = async (
  * @returns A promise resolving to the FastifyReply object.
  */
 export const getAllBlockchains = async (
-  request: FastifyRequest,
-  reply: FastifyReply
+    request: FastifyRequest,
+    reply: FastifyReply,
 ): Promise<FastifyReply> => {
-  try {
-    const blockchains = await Blockchain.find();
-    return await reply.status(200).send(blockchains);
-  } catch (error) {
-    return handleBlockchainError(error, reply, 'fetching');
-  }
+    try {
+        const blockchains = await Blockchain.find();
+        return await reply.status(200).send(blockchains);
+    } catch (error) {
+        return handleBlockchainError(error, reply, 'fetching');
+    }
 };
 
 /**
@@ -60,19 +64,19 @@ export const getAllBlockchains = async (
  * @returns A promise resolving to the FastifyReply object.
  */
 export const getBlockchainById = async (
-  request: FastifyRequest<{ Params: BlockchainParams }>,
-  reply: FastifyReply
+    request: FastifyRequest<{ Params: BlockchainParams }>,
+    reply: FastifyReply,
 ): Promise<FastifyReply> => {
-  const { id } = request.params;
-  try {
-    const blockchain = await Blockchain.findById(id);
-    if (!blockchain) {
-      return await reply.status(404).send({ message: 'Blockchain not found' });
+    const { id } = request.params;
+    try {
+        const blockchain = await Blockchain.findById(id);
+        if (!blockchain) {
+            return await reply.status(404).send({ message: 'Blockchain not found' });
+        }
+        return await reply.status(200).send(blockchain);
+    } catch (error) {
+        return handleBlockchainError(error, reply, 'fetching');
     }
-    return await reply.status(200).send(blockchain);
-  } catch (error) {
-    return handleBlockchainError(error, reply, 'fetching');
-  }
 };
 
 /**
@@ -82,19 +86,21 @@ export const getBlockchainById = async (
  * @returns A promise resolving to the FastifyReply object.
  */
 export const updateBlockchain = async (
-  request: FastifyRequest<{ Params: BlockchainParams; Body: BlockchainBody }>,
-  reply: FastifyReply
+    request: FastifyRequest<{ Params: BlockchainParams; Body: BlockchainBody }>,
+    reply: FastifyReply,
 ): Promise<FastifyReply> => {
-  const { id } = request.params;
-  try {
-    const updatedBlockchain = await Blockchain.findByIdAndUpdate(id, request.body, { new: true });
-    if (!updatedBlockchain) {
-      return await reply.status(404).send({ message: 'Blockchain not found' });
+    const { id } = request.params;
+    try {
+        const updatedBlockchain = await Blockchain.findByIdAndUpdate(id, request.body, {
+            new: true,
+        });
+        if (!updatedBlockchain) {
+            return await reply.status(404).send({ message: 'Blockchain not found' });
+        }
+        return await reply.status(200).send(updatedBlockchain);
+    } catch (error) {
+        return handleBlockchainError(error, reply, 'updating');
     }
-    return await reply.status(200).send(updatedBlockchain);
-  } catch (error) {
-    return handleBlockchainError(error, reply, 'updating');
-  }
 };
 
 /**
@@ -104,19 +110,19 @@ export const updateBlockchain = async (
  * @returns A promise resolving to the FastifyReply object.
  */
 export const deleteBlockchain = async (
-  request: FastifyRequest<{ Params: BlockchainParams }>,
-  reply: FastifyReply
+    request: FastifyRequest<{ Params: BlockchainParams }>,
+    reply: FastifyReply,
 ): Promise<FastifyReply> => {
-  const { id } = request.params;
-  try {
-    const deletedBlockchain = await Blockchain.findByIdAndDelete(id);
-    if (!deletedBlockchain) {
-      return await reply.status(404).send({ message: 'Blockchain not found' });
+    const { id } = request.params;
+    try {
+        const deletedBlockchain = await Blockchain.findByIdAndDelete(id);
+        if (!deletedBlockchain) {
+            return await reply.status(404).send({ message: 'Blockchain not found' });
+        }
+        return await reply.status(200).send({ message: 'Blockchain deleted' });
+    } catch (error) {
+        return handleBlockchainError(error, reply, 'deleting');
     }
-    return await reply.status(200).send({ message: 'Blockchain deleted' });
-  } catch (error) {
-    return handleBlockchainError(error, reply, 'deleting');
-  }
 };
 
 /**
@@ -125,16 +131,18 @@ export const deleteBlockchain = async (
  * @returns A promise resolving to an object containing rpc, entryPoint, and signingKey.
  * @throws An error if the blockchain is not found or if there's an error fetching the details.
  */
-export const getBlockchainDetailsByChainId = async (chain_id: number): Promise<{ rpc: string; entryPoint: string; signingKey: string }> => {
-  try {
-    const blockchain = await Blockchain.findOne({ chain_id });
-    if (!blockchain) {
-      throw new Error('Blockchain not found');
+export const getBlockchainDetailsByChainId = async (
+    chain_id: number,
+): Promise<{ rpc: string; entryPoint: string; signingKey: string }> => {
+    try {
+        const blockchain = await Blockchain.findOne({ chain_id });
+        if (!blockchain) {
+            throw new Error('Blockchain not found');
+        }
+        const { rpc, entryPoint, signingKey } = blockchain;
+        return { rpc, entryPoint, signingKey };
+    } catch (error) {
+        console.error('Error fetching blockchain details:', error);
+        throw new Error('Failed to fetch blockchain details');
     }
-    const { rpc, entryPoint, signingKey } = blockchain;
-    return { rpc, entryPoint, signingKey };
-  } catch (error) {
-    console.error('Error fetching blockchain details:', error);
-    throw new Error('Failed to fetch blockchain details');
-  }
 };

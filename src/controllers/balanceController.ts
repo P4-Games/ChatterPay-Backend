@@ -6,7 +6,7 @@ import { NFTInfo, getPhoneNFTs } from './nftController';
 import { getNetworkConfig } from '../services/networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
 
-type Currency = "USD" | "UYU" | "ARS" | "BRL";
+type Currency = 'USD' | 'UYU' | 'ARS' | 'BRL';
 
 interface TokenInfo {
     symbol: string;
@@ -38,28 +38,36 @@ interface BalanceResponse {
 }
 
 const API_URLs: [Currency, string][] = [
-    ["UYU", "https://criptoya.com/api/ripio/USDT/UYU"],
-    ["ARS", "https://criptoya.com/api/ripio/USDT/ARS"],
-    ["BRL", "https://criptoya.com/api/ripio/USDT/BRL"],
+    ['UYU', 'https://criptoya.com/api/ripio/USDT/UYU'],
+    ['ARS', 'https://criptoya.com/api/ripio/USDT/ARS'],
+    ['BRL', 'https://criptoya.com/api/ripio/USDT/BRL'],
 ];
 
 const tokenInfo: TokenInfo[] = [
-    { symbol: "USDT", address: USDT_ADDRESS, rateUSD: 1 },
-    { symbol: "WETH", address: WETH_ADDRESS, rateUSD: 2700 },
+    { symbol: 'USDT', address: USDT_ADDRESS, rateUSD: 1 },
+    { symbol: 'WETH', address: WETH_ADDRESS, rateUSD: 2700 },
 ];
 
 /**
  * Fetches the balance of a specific token for a given address.
  */
-async function getContractBalance(contractAddress: string, signer: ethers.Wallet, address: string): Promise<string> {
+async function getContractBalance(
+    contractAddress: string,
+    signer: ethers.Wallet,
+    address: string,
+): Promise<string> {
     try {
-        const erc20 = new ethers.Contract(contractAddress, [
-            'function balanceOf(address owner) view returns (uint256)',
-        ], signer);
+        const erc20 = new ethers.Contract(
+            contractAddress,
+            ['function balanceOf(address owner) view returns (uint256)'],
+            signer,
+        );
         const balance = await erc20.balanceOf(address);
         return ethers.utils.formatUnits(balance, 18);
     } catch (error) {
-        console.error(`Error getting balance: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        console.error(
+            `Error getting balance: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
         return '0';
     }
 }
@@ -68,21 +76,25 @@ async function getContractBalance(contractAddress: string, signer: ethers.Wallet
  * Fetches fiat quotes from API.
  */
 async function getFiatQuotes(): Promise<FiatQuote[]> {
-    return Promise.all(API_URLs.map(async ([currency, url]) => {
-        const response = await fetch(url);
-        const data = await response.json();
-        return { currency, rate: data.bid };
-    }));
+    return Promise.all(
+        API_URLs.map(async ([currency, url]) => {
+            const response = await fetch(url);
+            const data = await response.json();
+            return { currency, rate: data.bid };
+        }),
+    );
 }
 
 /**
  * Fetches token balances for a given address.
  */
 async function getTokenBalances(signer: ethers.Wallet, address: string): Promise<TokenBalance[]> {
-    return Promise.all(tokenInfo.map(async (token) => {
-        const balance = await getContractBalance(token.address, signer, address);
-        return { ...token, balance };
-    }));
+    return Promise.all(
+        tokenInfo.map(async (token) => {
+            const balance = await getContractBalance(token.address, signer, address);
+            return { ...token, balance };
+        }),
+    );
 }
 
 /**
@@ -92,15 +104,15 @@ function calculateBalances(tokenBalances: TokenBalance[], fiatQuotes: FiatQuote[
     return tokenBalances.map(({ symbol, balance, rateUSD }) => {
         const balanceUSD = parseFloat(balance) * rateUSD;
         return {
-            network: "Scroll Sepolia",
+            network: 'Scroll Sepolia',
             token: symbol,
             balance: parseFloat(balance),
             balance_conv: {
                 USD: balanceUSD,
-                UYU: balanceUSD * (fiatQuotes.find(q => q.currency === "UYU")?.rate ?? 1),
-                ARS: balanceUSD * (fiatQuotes.find(q => q.currency === "ARS")?.rate ?? 1),
-                BRL: balanceUSD * (fiatQuotes.find(q => q.currency === "BRL")?.rate ?? 1),
-            }
+                UYU: balanceUSD * (fiatQuotes.find((q) => q.currency === 'UYU')?.rate ?? 1),
+                ARS: balanceUSD * (fiatQuotes.find((q) => q.currency === 'ARS')?.rate ?? 1),
+                BRL: balanceUSD * (fiatQuotes.find((q) => q.currency === 'BRL')?.rate ?? 1),
+            },
         };
     });
 }
@@ -109,12 +121,15 @@ function calculateBalances(tokenBalances: TokenBalance[], fiatQuotes: FiatQuote[
  * Calculates total balances across all currencies.
  */
 function calculateTotals(balances: BalanceInfo[]): Record<Currency, number> {
-    return balances.reduce((acc, balance) => {
-        (Object.keys(balance.balance_conv) as Currency[]).forEach(currency => {
-            acc[currency] = (acc[currency] || 0) + balance.balance_conv[currency];
-        });
-        return acc;
-    }, {} as Record<Currency, number>);
+    return balances.reduce(
+        (acc, balance) => {
+            (Object.keys(balance.balance_conv) as Currency[]).forEach((currency) => {
+                acc[currency] = (acc[currency] || 0) + balance.balance_conv[currency];
+            });
+            return acc;
+        },
+        {} as Record<Currency, number>,
+    );
 }
 
 /**
@@ -136,7 +151,7 @@ async function getAddressBalance(address: string, reply: FastifyReply): Promise<
         const [fiatQuotes, tokenBalances, NFTs] = await Promise.all([
             getFiatQuotes(),
             getTokenBalances(signer, address),
-            getPhoneNFTs(user.phone_number)
+            getPhoneNFTs(user.phone_number),
         ]);
 
         const balances = calculateBalances(tokenBalances, fiatQuotes);
@@ -146,7 +161,7 @@ async function getAddressBalance(address: string, reply: FastifyReply): Promise<
             balances,
             totals,
             certificates: NFTs.nfts,
-            wallet: address
+            wallet: address,
         };
 
         return await reply.status(200).send(response);
@@ -159,7 +174,10 @@ async function getAddressBalance(address: string, reply: FastifyReply): Promise<
 /**
  * Handles wallet balance request.
  */
-export const walletBalance = async (request: FastifyRequest<{ Params: { wallet: string } }>, reply: FastifyReply) => {
+export const walletBalance = async (
+    request: FastifyRequest<{ Params: { wallet: string } }>,
+    reply: FastifyReply,
+) => {
     const { wallet } = request.params;
 
     if (!wallet) {
@@ -173,7 +191,9 @@ export const walletBalance = async (request: FastifyRequest<{ Params: { wallet: 
  * Handles balance request by phone number.
  */
 export const balanceByPhoneNumber = async (request: FastifyRequest, reply: FastifyReply) => {
-    const phone = new URL(`http://localhost:3000/${request.url}`).searchParams.get('channel_user_id');
+    const phone = new URL(`http://localhost:3000/${request.url}`).searchParams.get(
+        'channel_user_id',
+    );
 
     if (!phone) {
         return reply.status(400).send({ message: 'Phone number is required' });

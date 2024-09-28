@@ -8,15 +8,15 @@ import { walletBalance, balanceByPhoneNumber } from '../controllers/balanceContr
  * @returns {Promise<void>}
  */
 export const balanceRoutes = async (fastify: FastifyInstance): Promise<void> => {
-  /**
-   * Route to get the balance of a wallet
-   * @route GET /balance/:wallet
-   */
-  fastify.get('/balance/:wallet', walletBalance);
+    /**
+     * Route to get the balance of a wallet
+     * @route GET /balance/:wallet
+     */
+    fastify.get('/balance/:wallet', walletBalance);
 
-  /**
-   * Route to get the balance by phone number
-   * @route GET /balance_by_phone/
-   */
-  fastify.get('/balance_by_phone/', balanceByPhoneNumber);
+    /**
+     * Route to get the balance by phone number
+     * @route GET /balance_by_phone/
+     */
+    fastify.get('/balance_by_phone/', balanceByPhoneNumber);
 };

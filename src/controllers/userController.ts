@@ -8,15 +8,18 @@ import { User, IUser } from '../models/user';
  * @param {FastifyReply} reply - The Fastify reply object.
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object.
  */
-export const createUser = async (request: FastifyRequest<{ Body: IUser }>, reply: FastifyReply): Promise<FastifyReply> => {
-  try {
-    const newUser = new User(request.body);
-    await newUser.save();
-    return await reply.status(201).send(newUser);
-  } catch (error) {
-    console.error('Error creating user:', error);
-    return reply.status(400).send({ message: 'Bad Request' });
-  }
+export const createUser = async (
+    request: FastifyRequest<{ Body: IUser }>,
+    reply: FastifyReply,
+): Promise<FastifyReply> => {
+    try {
+        const newUser = new User(request.body);
+        await newUser.save();
+        return await reply.status(201).send(newUser);
+    } catch (error) {
+        console.error('Error creating user:', error);
+        return reply.status(400).send({ message: 'Bad Request' });
+    }
 };
 
 /**
@@ -25,14 +28,17 @@ export const createUser = async (request: FastifyRequest<{ Body: IUser }>, reply
  * @param {FastifyReply} reply - The Fastify reply object.
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing all users.
  */
-export const getAllUsers = async (request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply> => {
-  try {
-    const users = await User.find();
-    return await reply.status(200).send(users);
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    return reply.status(400).send({ message: 'Bad Request' });
-  }
+export const getAllUsers = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+): Promise<FastifyReply> => {
+    try {
+        const users = await User.find();
+        return await reply.status(200).send(users);
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        return reply.status(400).send({ message: 'Bad Request' });
+    }
 };
 
 /**
@@ -41,21 +47,24 @@ export const getAllUsers = async (request: FastifyRequest, reply: FastifyReply):
  * @param {FastifyReply} reply - The Fastify reply object.
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the found user or an error message.
  */
-export const getUserById = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply): Promise<FastifyReply> => {
-  const { id } = request.params as { id: string };
+export const getUserById = async (
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+): Promise<FastifyReply> => {
+    const { id } = request.params as { id: string };
 
-  try {
-    const user = await User.findById(id);
+    try {
+        const user = await User.findById(id);
 
-    if (!user) {
-      return await reply.status(404).send({ message: 'User not found' });
+        if (!user) {
+            return await reply.status(404).send({ message: 'User not found' });
+        }
+
+        return await reply.status(200).send(user);
+    } catch (error) {
+        console.error('Error fetching user:', error);
+        return reply.status(400).send({ message: 'Bad Request' });
     }
-
-    return await reply.status(200).send(user);
-  } catch (error) {
-    console.error('Error fetching user:', error);
-    return reply.status(400).send({ message: 'Bad Request' });
-  }
 };
 
 /**
@@ -64,21 +73,24 @@ export const getUserById = async (request: FastifyRequest<{ Params: { id: string
  * @param {FastifyReply} reply - The Fastify reply object.
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the updated user or an error message.
  */
-export const updateUser = async (request: FastifyRequest<{ Params: { id: string }, Body: Partial<IUser> }>, reply: FastifyReply): Promise<FastifyReply> => {
-  const { id } = request.params as { id: string };
+export const updateUser = async (
+    request: FastifyRequest<{ Params: { id: string }; Body: Partial<IUser> }>,
+    reply: FastifyReply,
+): Promise<FastifyReply> => {
+    const { id } = request.params as { id: string };
 
-  try {
-    const updatedUser = await User.findByIdAndUpdate(id, request.body, { new: true });
+    try {
+        const updatedUser = await User.findByIdAndUpdate(id, request.body, { new: true });
 
-    if (!updatedUser) {
-      return await reply.status(404).send({ message: 'User not found' });
+        if (!updatedUser) {
+            return await reply.status(404).send({ message: 'User not found' });
+        }
+
+        return await reply.status(200).send(updatedUser);
+    } catch (error) {
+        console.error('Error updating user:', error);
+        return reply.status(400).send({ message: 'Bad Request' });
     }
-
-    return await reply.status(200).send(updatedUser);
-  } catch (error) {
-    console.error('Error updating user:', error);
-    return reply.status(400).send({ message: 'Bad Request' });
-  }
 };
 
 /**
@@ -87,19 +99,22 @@ export const updateUser = async (request: FastifyRequest<{ Params: { id: string 
  * @param {FastifyReply} reply - The Fastify reply object.
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing a success message or an error message.
  */
-export const deleteUser = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply): Promise<FastifyReply> => {
-  const { id } = request.params as { id: string };
+export const deleteUser = async (
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+): Promise<FastifyReply> => {
+    const { id } = request.params as { id: string };
 
-  try {
-    const deletedUser = await User.findByIdAndDelete(id);
+    try {
+        const deletedUser = await User.findByIdAndDelete(id);
 
-    if (!deletedUser) {
-      return await reply.status(404).send({ message: 'User not found' });
+        if (!deletedUser) {
+            return await reply.status(404).send({ message: 'User not found' });
+        }
+
+        return await reply.status(200).send({ message: 'User deleted' });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        return reply.status(400).send({ message: 'Bad Request' });
     }
-
-    return await reply.status(200).send({ message: 'User deleted' });
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    return reply.status(400).send({ message: 'Bad Request' });
-  }
 };

@@ -4,12 +4,7 @@
         "node": true,
         "es2021": true
     },
-    "plugins": [
-        "perfectionist",
-        "unused-imports",
-        "@typescript-eslint",
-        "prettier"
-    ],
+    "plugins": ["perfectionist", "unused-imports", "@typescript-eslint", "prettier"],
     "extends": [
         "eslint:recommended",
         "plugin:@typescript-eslint/recommended",
@@ -31,10 +26,7 @@
             }
         },
         "import/parsers": {
-            "@typescript-eslint/parser": [
-                ".ts",
-                ".tsx"
-            ]
+            "@typescript-eslint/parser": [".ts", ".tsx"]
         }
     },
     "rules": {
@@ -99,22 +91,11 @@
                 "type": "line-length",
                 "newlines-between": "always",
                 "groups": [
-                    [
-                        "builtin",
-                        "external"
-                    ],
+                    ["builtin", "external"],
                     "internal-type",
                     "internal",
-                    [
-                        "parent-type",
-                        "sibling-type",
-                        "index-type"
-                    ],
-                    [
-                        "parent",
-                        "sibling",
-                        "index"
-                    ],
+                    ["parent-type", "sibling-type", "index-type"],
+                    ["parent", "sibling", "index"],
                     "object",
                     "unknown"
                 ],
@@ -123,9 +104,7 @@
                         "internal": "src/**"
                     }
                 },
-                "internal-pattern": [
-                    "src/**"
-                ]
+                "internal-pattern": ["src/**"]
             }
         ]
     }

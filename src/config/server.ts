@@ -6,14 +6,14 @@ import { setupMiddleware } from '../middleware/bodyParser';
 
 /**
  * Starts the Fastify server with all necessary configurations.
- * 
+ *
  * @returns {Promise<FastifyInstance>} A promise that resolves to the configured Fastify server instance
  */
 export async function startServer(): Promise<FastifyInstance> {
     const server: FastifyInstance = Fastify({
         ignoreDuplicateSlashes: true,
         ignoreTrailingSlash: true,
-        logger: true
+        logger: true,
     });
 
     const PORT: number = Number(process.env.PORT) || 3000;
