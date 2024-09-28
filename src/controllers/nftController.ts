@@ -7,6 +7,7 @@ import { getWalletByPhoneNumber } from '../models/user';
 import { sendMintNotification } from './replyController';
 import { executeWalletCreation } from './newWalletController';
 import { getNetworkConfig } from '../services/networkService';
+import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
 export interface NFTInfo {
     description: string;
@@ -86,14 +87,30 @@ export const mintNFT = async (
         return false;
     }
 
+    const fileName = `photo_${new_id}_${Date.now()}.jpg`;
+
+    const processedImage = await downloadAndProcessImage(url);
+    // upload to IPFS
+    const ipfsImageUrl = await uploadToIpfs(processedImage, fileName);
+    // upload to ICP
+    const icpImageUrl = await uploadToICP(processedImage, fileName);
+
     await NFTModel.create({
         id: new_id,
         channel_user_id,
         wallet: address_of_user,
         trxId: data.transactionHash,
+        copy_of: null,
+        original: false,
+        timestamp: new Date(),
         metadata: {
-            image_url: url,
+            image_url: {
+                gcp: url,
+                icp: icpImageUrl!,
+                ipfs: ipfsImageUrl!,
+            },
             description: mensaje,
+            geolocation: request.body.geolocation || null,
         },
     });
 
