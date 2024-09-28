@@ -122,7 +122,26 @@ export async function sendSwapNotification(
 }
 
 /**
- * Sends a notification for minting certificates and on-chain memories.
+ * Sends a notification for minting certificates in-progress and on-chain memories.
+ */
+export async function sendMintInProgressNotification(channel_user_id: string): Promise<void> {
+    try {
+        console.log('Sending mint-in progress notification');
+
+        const payload: OperatorReplyPayload = {
+            data_token: `${botDataToken}`,
+            channel_user_id,
+            message: `El certificado en NFT está siendo generado. Por favor, espera un momento. Te notificaré cuando esté listo.`,
+        };
+        await sendOperatorReply(payload);
+    } catch (error) {
+        console.error('Error in sendMintInProgressNotification:', error.message);
+        throw error;
+    }
+}
+
+/**
+ * Sends a notification for minted certificates and on-chain memories.
  */
 export async function sendMintNotification(channel_user_id: string, id: number): Promise<void> {
     try {
