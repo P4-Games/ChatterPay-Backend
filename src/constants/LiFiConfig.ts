@@ -1,6 +1,6 @@
 /**
- * LiFi Protocol configuration constants. 
- * 
+ * LiFi Protocol configuration constants.
+ *
  * LiFi is a DEX aggregator that will be used for swaps and crosschain transfers in the future. Only supported in mainnet
  */
 
