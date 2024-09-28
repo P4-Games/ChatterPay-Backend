@@ -261,9 +261,6 @@ async function simulateValidation(
         console.log("Local simulation successful");
     } catch (error) {
         console.error("Local simulation failed:", error);
-        if (error.errorArgs) {
-            console.error("Error args:", error.errorArgs);
-        }
     }
 }
 
