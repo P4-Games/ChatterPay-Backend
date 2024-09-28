@@ -64,6 +64,7 @@ export const mintNFT = async (
             channel_user_id: string;
             url: string;
             mensaje: string;
+            geolocation?: string;
         };
     }>,
     reply: FastifyReply,
