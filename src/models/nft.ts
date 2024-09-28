@@ -1,6 +1,20 @@
 import { model, Schema, Document } from 'mongoose';
 
 // Interfaz que representa el documento en la colección 'nfts'
+
+export interface INFTMetadata {
+    image_url: {
+        gcp?: string;
+        icp?: string;
+        ipfs?: string;
+    };
+    description: string;
+    geolocation?: {
+        latitud: string;
+        longitud: string;
+    };
+}
+
 export interface INFT extends Document {
     channel_user_id: string;
     id: number;
@@ -9,18 +23,7 @@ export interface INFT extends Document {
     copy_of?: number;
     original?: boolean;
     timestamp?: Date;
-    metadata: {
-        image_url: {
-            gcp?: string;
-            icp?: string;
-            ipfs?: string;
-        };
-        description: string;
-        geolocation?: {
-            latitud: string;
-            longitud: string;
-        };
-    };
+    metadata: INFTMetadata;
 }
 
 // Definir el esquema de Mongoose

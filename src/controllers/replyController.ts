@@ -131,7 +131,7 @@ export async function sendMintInProgressNotification(channel_user_id: string): P
         const payload: OperatorReplyPayload = {
             data_token: `${botDataToken}`,
             channel_user_id,
-            message: `¡Tu certificado se está generando! Por favor, aguarda unos minutos.!`,
+            message: `El certificado en NFT está siendo generado. Por favor, espera un momento. Te notificaré cuando esté listo.`,
         };
         await sendOperatorReply(payload);
     } catch (error) {

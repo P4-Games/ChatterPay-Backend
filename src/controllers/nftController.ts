@@ -4,7 +4,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { issueTokensCore } from './tokenController';
 import { getWalletByPhoneNumber } from '../models/user';
 import { defaultNftImage } from '../constants/contracts';
-import NFTModel, { INFT, getLastId } from '../models/nft';
+import NFTModel, { INFT, INFTMetadata, getLastId } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
 import { executeWalletCreation } from './newWalletController';
 import { sendMintNotification, sendMintInProgressNotification } from './replyController';
@@ -34,6 +34,7 @@ const mint_eth_nft = async (
             networkConfig.chatterNFTAddress,
             ['function safeMint(address to, string memory uri) public returns (uint256)'],
             backendSigner,
+            tokenURI.toString()
         );
 
         console.log(
@@ -185,62 +186,66 @@ export const mintExistingNFT = async (
     }>,
     reply: FastifyReply,
 ): Promise<boolean> => {
-    const { channel_user_id, id } = request.body;
-
-    let address_of_user = await getWalletByPhoneNumber(channel_user_id);
-
-    if (!address_of_user) {
-        console.log('La wallet del usuario no existe. Creando...');
-        address_of_user = await executeWalletCreation(channel_user_id);
-
-        // Issue demo tokens to the user. This will be later removed in mainnet
-        issueTokensCore(address_of_user);
-    }
-
-    reply.status(200).send({ message: 'El certificado en NFT está siendo generado.' });
-
-    const nfts: INFT[] = await NFTModel.find({ id: parseInt(id, 10) });
-
-    if (!nfts) {
-        reply.status(400).send({ message: 'El NFT no existe.' });
-        return false;
-    }
-
-    let data;
     try {
-        const nfImageURL = new URL(nfts[0].metadata.image_url.gcp ?? defaultNftImage);
-        data = await mint_eth_nft(address_of_user, nfImageURL);
+        const { channel_user_id, id } = request.body;
+
+        let address_of_user = await getWalletByPhoneNumber(channel_user_id);
+
+        if (!address_of_user) {
+            console.log('La wallet del usuario no existe. Creando...');
+            address_of_user = await executeWalletCreation(channel_user_id);
+
+            // Issue demo tokens to the user. This will be later removed in mainnet
+            issueTokensCore(address_of_user);
+        }
+
+        const nfts: INFT[] = await NFTModel.find({ id: parseInt(id, 10) });
+
+        if (!nfts) {
+            reply.status(400).send({ message: 'El NFT no existe.' });
+            return false;
+        }
+
+        let data;
+        try {
+            const nfImageURL = new URL(nfts[0].metadata.image_url.gcp ?? defaultNftImage);
+            data = await mint_eth_nft(address_of_user, nfImageURL);
+        } catch (error) {
+            console.error('Error al mintear NFT:', error);
+            throw error;
+        }
+
+        const defaultMetadata: INFTMetadata = {
+            image_url: {
+                gcp: '',
+                icp: '',
+                ipfs: '',
+            },
+            description: '',
+            geolocation: {
+                latitud: '',
+                longitud: '',
+            },
+        };
+
+        await NFTModel.create({
+            id,
+            channel_user_id,
+            copy_of: id,
+            original: false,
+            timestamp: new Date(),
+            wallet: address_of_user,
+            trxId: data.transactionHash,
+            metadata: nfts[0].metadata ? nfts[0].metadata : defaultMetadata,
+        });
+
+        sendMintNotification(channel_user_id, id);
+        reply.status(200).send({ message: 'Certificado NFT generado.' });
+        return true;
     } catch (error) {
-        console.error('Error al mintear NFT:', error);
+        console.error('Error en mintExistingNFT', error.message);
         throw error;
     }
-
-    await NFTModel.create({
-        id,
-        channel_user_id,
-        copy_of: id,
-        original: false,
-        timestamp: new Date(),
-        wallet: address_of_user,
-        trxId: data.transactionHash,
-        metadata: nfts[0].metadata
-            ? nfts[0].metadata
-            : {
-                  image_url: {
-                      gcp: '',
-                      icp: '',
-                      ipfs: '',
-                  },
-                  description: '',
-                  geolocation: {
-                      latitud: '',
-                      longitud: '',
-                  },
-              },
-    });
-
-    sendMintNotification(channel_user_id, id);
-    return true;
 };
 
 /**
