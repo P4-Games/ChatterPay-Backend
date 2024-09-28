@@ -65,24 +65,9 @@ cd ChatterPay-Backend
 
 __3. Complete .env file__: 
 
-Create a .env file in the root folder and populate it with the following keys and values:
+Create a .env file in the root folder and populate it with keys and values described in [.env.example file](./.env.example).
 
-```bash
-ALCHEMY_API_KEY=
-INFURA_API_KEY=
-MONGO_URI=
-SIGNING_KEY=
-RPC_URL=
-THRIDWEB_CLIENT_ID=
-THIRDWEB_CLIENT_SECRET=
-SCROLLSCAN_API_KEY=
-ETHERSCAN_API_KEY=
-FACTORY_ADDRESS=
-PRIVATE_KEY=
-MONGO_URI_CHATTERPAY=
-```
-
-__4. Install Dependencies__:
+**4. Install Dependencies**:
 
 ```bash
 bun install
