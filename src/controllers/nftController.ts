@@ -96,6 +96,15 @@ export const mintNFT = async (
         throw error;
     }
 
+
+    // OPTIMISTIC RESPONSE: respond quickly to the user and process the rest of the flow asynchronously.
+    try {
+        await sendMintNotification(channel_user_id, new_id);
+    } catch (error) {
+        console.error('Error al enviar notificación de minteo de NFT', error.message);
+        throw error;
+    }
+
     const fileName = `photo_${new_id}_${Date.now()}.jpg`;
     let processedImage;
     let ipfsImageUrl = '';
@@ -147,13 +156,6 @@ export const mintNFT = async (
         });
     } catch (error) {
         console.error('Error al grabar NFT en bdd', error);
-        throw error;
-    }
-
-    try {
-        await sendMintNotification(channel_user_id, new_id);
-    } catch (error) {
-        console.error('Error al enviar notificación de minteo de NFT', error.message);
         throw error;
     }
 
