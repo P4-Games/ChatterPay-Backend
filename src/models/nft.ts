@@ -29,6 +29,9 @@ const NFTSchema = new Schema<INFT>({
     id: { type: Number, required: true },
     wallet: { type: String, required: true },
     trxId: { type: String, required: true },
+    copy_of: { type: Number, required: false },
+    original: { type: Boolean, required: false },
+    timestamp: { type: Date, required: false },
     metadata: {
         image_url: {
             type: new Schema(
