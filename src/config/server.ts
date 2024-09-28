@@ -1,3 +1,4 @@
+import rateLimit from '@fastify/rate-limit';
 import Fastify, { FastifyInstance } from 'fastify';
 
 import { setupSwagger } from './swagger';
@@ -14,6 +15,12 @@ export async function startServer(): Promise<FastifyInstance> {
         ignoreDuplicateSlashes: true,
         ignoreTrailingSlash: true,
         logger: true,
+    });
+
+    await server.register(rateLimit, {
+        max: 400,
+        timeWindow: '1 minute',
+        message: 'Demasiadas solicitudes, por favor inténtelo de nuevo más tarde.',
     });
 
     const PORT: number = Number(process.env.PORT) || 3000;
