@@ -2,12 +2,12 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import NFTModel, { getLastId } from '../models/nft';
-import { getWalletByPhoneNumber } from '../models/user';
-import { getNetworkConfig } from '../services/networkService';
-import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/uploadServices';
-import { executeWalletCreation } from './newWalletController';
-import { sendMintNotification } from './replyController';
 import { issueTokensCore } from './tokenController';
+import { getWalletByPhoneNumber } from '../models/user';
+import { sendMintNotification } from './replyController';
+import { getNetworkConfig } from '../services/networkService';
+import { executeWalletCreation } from './newWalletController';
+import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
 export interface NFTInfo {
     description: string;
@@ -29,13 +29,13 @@ const mint_eth_nft = async (
         const networkConfig = await getNetworkConfig(421614); // arbitrum sepolia
         const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
         const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
-            const nftContract = new ethers.Contract(
+        const nftContract = new ethers.Contract(
             networkConfig.chatterNFTAddress,
             ['function safeMint(address to, string memory uri) public returns (uint256)'],
             backendSigner,
         );
-    
-        console.log('Safe minting...')
+
+        console.log('Safe minting...');
         const tx = await nftContract.safeMint(recipientAddress, tokenURI, {
             gasLimit: 500000,
         });
@@ -86,20 +86,19 @@ export const mintNFT = async (
         data = await mint_eth_nft(address_of_user, new_id);
     } catch (error) {
         console.error('Error al mintear NFT:', error);
-        throw error
+        throw error;
     }
 
     const fileName = `photo_${new_id}_${Date.now()}.jpg`;
-    let processedImage
-    let ipfsImageUrl = ''
-    let icpImageUrl = '' 
+    let processedImage;
+    let ipfsImageUrl = '';
+    let icpImageUrl = '';
     try {
         processedImage = await downloadAndProcessImage(url);
     } catch (error) {
         console.error('Error al descargar la imagen del NFT:', error);
-        throw error
+        throw error;
     }
-
 
     try {
         ipfsImageUrl = await uploadToIpfs(processedImage, fileName);
@@ -181,7 +180,7 @@ export const mintExistingNFT = async (
         data = await mint_eth_nft(address_of_user, new_id);
     } catch (error) {
         console.error('Error al mintear NFT:', error);
-        throw error
+        throw error;
     }
 
     await NFTModel.create({
@@ -192,16 +191,17 @@ export const mintExistingNFT = async (
         timestamp: new Date(),
         wallet: address_of_user,
         trxId: data.transactionHash,
-        metadata: nft?.[0]?.metadata ? nft?.[0]?.metadata : 
-        {
-            image_url: {
-                gcp: '',
-                icp: '',
-                ipfs: '',
-            },
-            description: '',
-            geolocation: null
-        }
+        metadata: nft?.[0]?.metadata
+            ? nft?.[0]?.metadata
+            : {
+                  image_url: {
+                      gcp: '',
+                      icp: '',
+                      ipfs: '',
+                  },
+                  description: '',
+                  geolocation: null,
+              },
     });
 
     sendMintNotification(channel_user_id, new_id);
