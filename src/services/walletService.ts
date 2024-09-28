@@ -95,16 +95,38 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
  * @returns A promise that resolves to the ERC20 contract instance.
  */
 async function setupERC20(tokenAddress: string, signer: ethers.Wallet) {
-    return new ethers.Contract(
-        tokenAddress,
-        [
-            'function transfer(address to, uint256 amount) returns (bool)',
-            'function balanceOf(address owner) view returns (uint256)',
-            'function approve(address spender, uint256 amount) returns (bool)',
-            'function allowance(address owner, address spender) view returns (uint256)',
-        ],
-        signer,
-    );
+    return new ethers.Contract(tokenAddress, [
+        'function transfer(address to, uint256 amount) returns (bool)',
+        'function balanceOf(address owner) view returns (uint256)',
+        'function approve(address spender, uint256 amount) returns (bool)',
+        'function allowance(address owner, address spender) view returns (uint256)',
+        'function decimals() view returns (uint8)',
+        'function symbol() view returns (string)'
+    ], signer);
+}
+
+function decodeCallData(callData: string) {
+    const iface = new ethers.utils.Interface([
+        "function execute(address dest, uint256 value, bytes calldata func)"
+    ]);
+    const decoded = iface.decodeFunctionData("execute", callData);
+    console.log("Decoded callData:");
+    console.log("  Destination:", decoded.dest);
+    console.log("  Value:", decoded.value.toString());
+    console.log("  Function:", decoded.func);
+    
+    // Try to decode the inner function call (transfer)
+    try {
+        const tokenIface = new ethers.utils.Interface([
+            "function transfer(address to, uint256 amount)"
+        ]);
+        const innerDecoded = tokenIface.decodeFunctionData("transfer", decoded.func);
+        console.log("Decoded transfer:");
+        console.log("  To:", innerDecoded.to);
+        console.log("  Amount:", innerDecoded.amount.toString());
+    } catch (error) {
+        console.log("Failed to decode inner function:", error);
+    }
 }
 
 /**
@@ -152,9 +174,9 @@ async function createUserOperation(
     const nonce = await entrypoint.getNonce(proxyAddress, 0);
     console.log("Proxy Nonce:", nonce.toString());
 
-    const verificationGasLimit = BigNumber.from(1500000);  // Increased from 1000000
-    const callGasLimit = BigNumber.from(1500000);  // Increased from 1000000
-    const preVerificationGas = BigNumber.from(400000); 
+    const verificationGasLimit = BigNumber.from(120532);  // Increased from 1000000
+    const callGasLimit = BigNumber.from(410000);  // Increased from 1000000
+    const preVerificationGas = BigNumber.from(255943); 
     const maxFeePerGas = BigNumber.from(ethers.utils.parseUnits("10", "gwei"));  // Adjusted
     const maxPriorityFeePerGas = BigNumber.from(ethers.utils.parseUnits("1", "gwei"));  // Adjusted
 
@@ -230,6 +252,21 @@ async function ensureAccountHasPrefund(
     }
 }
 
+async function simulateValidation(
+    entrypoint: ethers.Contract,
+    userOperation: PackedUserOperation
+) {
+    try {
+        await entrypoint.callStatic.simulateValidation(userOperation);
+        console.log("Local simulation successful");
+    } catch (error) {
+        console.error("Local simulation failed:", error);
+        if (error.errorArgs) {
+            console.error("Error args:", error.errorArgs);
+        }
+    }
+}
+
 /**
  * Signs the UserOperation, replicating the contract's signature verification process.
  * 
@@ -266,15 +303,6 @@ async function signUserOperation(
     return { ...userOperation, signature };
 }
 
-async function validateChatterPayState(
-    chatterPay: ethers.Contract,
-) {
-    console.log("Validating ChatterPay state...");
-    
-    const entryPointAddress = await chatterPay.getEntryPoint();
-    console.log("ChatterPay EntryPoint:", entryPointAddress);
-    
-}
 
 /**
  * Sends a user operation for token transfer.
@@ -323,19 +351,20 @@ export async function sendUserOperation(
             throw new Error(`Account ${proxy.proxyAddress} does not exist. Cannot proceed with transfer.`);
         }
 
-        await validateChatterPayState(chatterPay);
-
         console.log("Creating user op");
         let userOperation = await createUserOperation(entrypoint, chatterPay, erc20, to, amount, proxy.proxyAddress);
-        
+        decodeCallData(userOperation.callData);
+
+        await simulateValidation(entrypoint, userOperation);
+
         console.log("Signing user op");
         userOperation = await signUserOperation(userOperation, networkConfig.entryPoint, signer);
 
         console.log("Ensuring account has enough prefund");
         await ensureAccountHasPrefund(entrypoint, userOperation, backendSigner);
 
-        console.log("Estimating gas for user operation");
-        await estimateUserOperationGas(bundlerUrl, userOperation, networkConfig.entryPoint);
+        // console.log("Estimating gas for user operation");
+        // await estimateUserOperationGas(bundlerUrl, userOperation, networkConfig.entryPoint);
 
         console.log("Sending user operation to bundler");
         const bundlerResponse = await sendUserOperationToBundler(bundlerUrl, userOperation, entrypoint.address);
