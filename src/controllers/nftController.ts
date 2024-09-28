@@ -35,6 +35,12 @@ const mint_eth_nft = async (
             backendSigner,
         );
 
+        console.log(
+            'nft contract: ',
+            networkConfig.chatterNFTAddress,
+            networkConfig.rpc,
+            backendSigner.address,
+        );
         console.log('Safe minting...');
         const tx = await nftContract.safeMint(recipientAddress, tokenURI, {
             gasLimit: 500000,
@@ -64,12 +70,13 @@ export const mintNFT = async (
             channel_user_id: string;
             url: string;
             mensaje: string;
-            geolocation?: string;
+            latitud: string;
+            longitud: string;
         };
     }>,
     reply: FastifyReply,
 ): Promise<boolean> => {
-    const { channel_user_id, url, mensaje } = request.body;
+    const { channel_user_id, url, mensaje, latitud, longitud } = request.body;
     const address_of_user = await getWalletByPhoneNumber(channel_user_id);
 
     if (!address_of_user) {
@@ -94,6 +101,7 @@ export const mintNFT = async (
     let ipfsImageUrl = '';
     let icpImageUrl = '';
     try {
+        console.info('Obteniendo imagen de NFT');
         processedImage = await downloadAndProcessImage(url);
     } catch (error) {
         console.error('Error al descargar la imagen del NFT:', error);
@@ -114,26 +122,40 @@ export const mintNFT = async (
         // no throw error!
     }
 
-    await NFTModel.create({
-        id: new_id,
-        channel_user_id,
-        wallet: address_of_user,
-        trxId: data.transactionHash,
-        copy_of: null,
-        original: true,
-        timestamp: new Date(),
-        metadata: {
-            image_url: {
-                gcp: url || '',
-                icp: icpImageUrl! || '',
-                ipfs: ipfsImageUrl! || '',
+    try {
+        console.info('guardando NFT en bdd');
+        await NFTModel.create({
+            id: new_id,
+            channel_user_id,
+            wallet: address_of_user,
+            trxId: data.transactionHash,
+            copy_of: null,
+            original: true,
+            timestamp: new Date(),
+            metadata: {
+                image_url: {
+                    gcp: url || '',
+                    icp: icpImageUrl! || '',
+                    ipfs: ipfsImageUrl! || '',
+                },
+                description: mensaje || '',
+                geolocation: {
+                    latitud: latitud || '',
+                    longitud: longitud || '',
+                },
             },
-            description: mensaje,
-            geolocation: request.body.geolocation || null,
-        },
-    });
+        });
+    } catch (error) {
+        console.error('Error al grabar NFT en bdd', error);
+        throw error;
+    }
 
-    sendMintNotification(channel_user_id, new_id);
+    try {
+        await sendMintNotification(channel_user_id, new_id);
+    } catch (error) {
+        console.error('Error al enviar notificación de minteo de NFT', error.message);
+        throw error;
+    }
 
     return true;
 };
@@ -200,7 +222,10 @@ export const mintExistingNFT = async (
                       ipfs: '',
                   },
                   description: '',
-                  geolocation: null,
+                  geolocation: {
+                      latitud: '',
+                      longitud: '',
+                  },
               },
     });
 
