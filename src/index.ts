@@ -5,7 +5,7 @@ import { setupGracefulShutdown } from './utils/shutdown';
 /**
  * The main function that initializes the application.
  * It connects to the database, starts the server, and sets up graceful shutdown.
- * 
+ *
  * @throws {Error} If there's an error starting the application
  */
 async function main(): Promise<void> {

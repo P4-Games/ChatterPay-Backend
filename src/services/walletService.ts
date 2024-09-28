@@ -2,9 +2,9 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import { ethers, BigNumber } from 'ethers';
 
-import entryPoint from "../utils/entryPoint.json";
-import { getNetworkConfig } from "./networkService";
-import chatterPayABI from "../utils/chatterPayABI.json";
+import entryPoint from '../utils/entryPoint.json';
+import { getNetworkConfig } from './networkService';
+import chatterPayABI from '../utils/chatterPayABI.json';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { getBundlerUrl, validateBundlerUrl } from '../utils/bundler';
@@ -29,7 +29,7 @@ interface PackedUserOperation {
 
 /**
  * Retrieves the blockchain information for a given chain ID.
- * 
+ *
  * @param chain_id - The ID of the blockchain to retrieve.
  * @returns A promise that resolves to the blockchain information.
  * @throws Error if the blockchain with the given chain ID is not found.
@@ -44,7 +44,7 @@ async function getBlockchain(chain_id: number): Promise<IBlockchain> {
 
 /**
  * Generates a private key from a seed private key and a phone number.
- * 
+ *
  * @param seedPrivateKey - The seed private key.
  * @param fromNumber - The phone number to use in key generation.
  * @returns The generated private key as a hexadecimal string.
@@ -56,7 +56,7 @@ function generatePrivateKey(seedPrivateKey: string, fromNumber: string): string 
 
 /**
  * Sets up the necessary contracts and signers for the ChatterPay system.
- * 
+ *
  * @param blockchain - The blockchain information.
  * @param privateKey - The private key to use for signing.
  * @param fromNumber - The phone number associated with the account.
@@ -89,18 +89,22 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
 
 /**
  * Sets up an ERC20 contract instance.
- * 
+ *
  * @param tokenAddress - The address of the ERC20 token contract.
  * @param signer - The signer to use for the contract.
  * @returns A promise that resolves to the ERC20 contract instance.
  */
 async function setupERC20(tokenAddress: string, signer: ethers.Wallet) {
-    return new ethers.Contract(tokenAddress, [
-        'function transfer(address to, uint256 amount) returns (bool)',
-        'function balanceOf(address owner) view returns (uint256)',
-        'function approve(address spender, uint256 amount) returns (bool)',
-        'function allowance(address owner, address spender) view returns (uint256)',
-    ], signer);
+    return new ethers.Contract(
+        tokenAddress,
+        [
+            'function transfer(address to, uint256 amount) returns (bool)',
+            'function balanceOf(address owner) view returns (uint256)',
+            'function approve(address spender, uint256 amount) returns (bool)',
+            'function allowance(address owner, address spender) view returns (uint256)',
+        ],
+        signer,
+    );
 }
 
 /**
@@ -274,7 +278,7 @@ async function validateChatterPayState(
 
 /**
  * Sends a user operation for token transfer.
- * 
+ *
  * @param from - The sender's address.
  * @param fromNumber - The sender's phone number.
  * @param to - The recipient's address.
@@ -370,18 +374,24 @@ async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount
     const balanceCheck = await erc20.balanceOf(proxyAddress);
     console.log(`Checking balance for ${proxyAddress}: ${ethers.utils.formatUnits(balanceCheck, 18)}`);
     if (balanceCheck.lt(amount_bn)) {
-        throw new Error(`Insufficient balance. Required: ${amount}, Available: ${ethers.utils.formatUnits(balanceCheck, 18)}`);
+        throw new Error(
+            `Insufficient balance. Required: ${amount}, Available: ${ethers.utils.formatUnits(balanceCheck, 18)}`,
+        );
     }
 }
 
 /**
  * Ensures that the signer has enough ETH for gas fees.
- * 
+ *
  * @param signer - The signer wallet.
  * @param backendSigner - The backend signer wallet.
  * @param provider - The Ethereum provider.
  */
-export async function ensureSignerHasEth(signer: ethers.Wallet, backendSigner: ethers.Wallet, provider: ethers.providers.JsonRpcProvider): Promise<void> {
+export async function ensureSignerHasEth(
+    signer: ethers.Wallet,
+    backendSigner: ethers.Wallet,
+    provider: ethers.providers.JsonRpcProvider,
+): Promise<void> {
     const EOABalance = await provider.getBalance(await signer.getAddress());
     console.log(`Signer balance: ${ethers.utils.formatEther(EOABalance)} ETH`);
     if (EOABalance.lt(ethers.utils.parseEther('0.0008'))) {

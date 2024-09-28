@@ -1,8 +1,8 @@
-import { ethers } from "ethers";
+import { ethers } from 'ethers';
 
-import { User } from "../models/user"
-import { getNetworkConfig } from "../services/networkService";
-import { computeProxyAddressFromPhone } from "../services/predictWalletService";
+import { User } from '../models/user';
+import { getNetworkConfig } from '../services/networkService';
+import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 
 /**
  * Retrieves a signer for a given phone number.
@@ -18,7 +18,7 @@ export const getSigner = async (phone_number: string): Promise<ethers.Wallet> =>
         throw new Error(`User with phone number ${phone_number} not found`);
     }
 
-    const {privateKey} = await computeProxyAddressFromPhone(phone_number);
+    const { privateKey } = await computeProxyAddressFromPhone(phone_number);
 
     const networkConfig = await getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
@@ -26,4 +26,4 @@ export const getSigner = async (phone_number: string): Promise<ethers.Wallet> =>
     const signer = new ethers.Wallet(privateKey, provider);
 
     return signer;
-}
+};
