@@ -74,7 +74,8 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
         throw new Error(`Invalid or unreachable bundler URL: ${bundlerUrl}`);
     }
 
-    const provider = new ethers.providers.JsonRpcProvider(process.env.ARBITRUM_SEPOLIA_RPC_URL);
+    const network = await getNetworkConfig(421614);
+    const provider = new ethers.providers.JsonRpcProvider(network.rpc);
     const signer = new ethers.Wallet(privateKey, provider);
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
     const proxy = await computeProxyAddressFromPhone(fromNumber);
