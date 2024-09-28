@@ -96,6 +96,15 @@ export const mintNFT = async (
         throw error;
     }
 
+
+    // OPTIMISTIC RESPONSE: respond quickly to the user and process the rest of the flow asynchronously.
+    try {
+        await sendMintNotification(channel_user_id, new_id);
+    } catch (error) {
+        console.error('Error al enviar notificación de minteo de NFT', error.message);
+        throw error;
+    }
+
     const fileName = `photo_${new_id}_${Date.now()}.jpg`;
     let processedImage;
     let ipfsImageUrl = '';
@@ -150,13 +159,6 @@ export const mintNFT = async (
         throw error;
     }
 
-    try {
-        await sendMintNotification(channel_user_id, new_id);
-    } catch (error) {
-        console.error('Error al enviar notificación de minteo de NFT', error.message);
-        throw error;
-    }
-
     return true;
 };
 
@@ -195,20 +197,22 @@ export const mintExistingNFT = async (
         reply.status(400).send({ message: 'El NFT no existe.' });
         return false;
     }
-    const new_id = (await getLastId()) + 1;
+    // const new_id = (await getLastId()) + 1;
 
     let data;
     try {
-        data = await mint_eth_nft(address_of_user, new_id);
+        // data = await mint_eth_nft(address_of_user, new_id);
+        data = await mint_eth_nft(address_of_user, id);
     } catch (error) {
         console.error('Error al mintear NFT:', error);
         throw error;
     }
 
     await NFTModel.create({
-        id: new_id,
+        // id: new_id,
+        id,
         channel_user_id,
-        copy_of: nft?.[0]?.id,
+        copy_of: id, // nft?.[0]?.id,
         original: false,
         timestamp: new Date(),
         wallet: address_of_user,
@@ -229,7 +233,8 @@ export const mintExistingNFT = async (
               },
     });
 
-    sendMintNotification(channel_user_id, new_id);
+    // sendMintNotification(channel_user_id, new_id);
+    sendMintNotification(channel_user_id, id);
 
     return true;
 };
@@ -281,7 +286,7 @@ export const getLastNFT = async (
 ): Promise<void> => {
     try {
         const { channel_user_id } = request.query;
-
+        console.log('buscando last_nft para channel_user_id', channel_user_id)
         const nft = (await NFTModel.find({ channel_user_id })).sort((a, b) => b.id - a.id)?.[0];
 
         if (nft) {
@@ -291,6 +296,7 @@ export const getLastNFT = async (
         } else {
             reply.status(404).send({ message: 'NFT not found' });
         }
+
     } catch (error) {
         console.error('Error al obtener el NFT:', error);
         reply.status(500).send({ message: 'Internal Server Error' });
