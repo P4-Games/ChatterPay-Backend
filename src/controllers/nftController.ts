@@ -127,8 +127,6 @@ export const mintNFT = async (
             mensaje || '',
             nfImageURL.toString(),
         );
-
-        console.log('nft data minted', data);
     } catch (error) {
         console.error('Error al mintear NFT:', error);
         throw error;
@@ -196,11 +194,10 @@ export const mintNFT = async (
         });
     } catch (error) {
         console.error('Error al grabar NFT en bdd', error);
-        throw error;
+        return reply.status(500).send({ message: 'Error al guardar el NFT.' });
     }
 
-    reply.status(200).send({ message: 'NFT minted.' });
-    return true;
+    return reply.status(200).send({ message: 'NFT minted.' });
 };
 
 /**
@@ -364,7 +361,7 @@ export const getPhoneNFTs = async (
 
         return {
             count: nfts.length,
-            nfts: nfts.map((nft) => ({
+            nfts: nfts.map((nft: INFT) => ({
                 description: nft.metadata.description,
                 url: `https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.chatterNFTAddress}/${nft.id}`,
             })),
