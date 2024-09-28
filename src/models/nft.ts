@@ -6,9 +6,20 @@ export interface INFT extends Document {
     id: number;
     wallet: string;
     trxId: string;
+    copy_of?: number;
+    original?: boolean;
+    timestamp?: Date;
     metadata: {
-        image_url: string;
+        image_url: {
+            gcp?: string;
+            icp?: string;
+            ipfs?: string;
+        };
         description: string;
+        geolocation?: {
+            longitud: string;
+            latitud: string;
+        };
     };
 }
 
@@ -19,8 +30,28 @@ const NFTSchema = new Schema<INFT>({
     wallet: { type: String, required: true },
     trxId: { type: String, required: true },
     metadata: {
-        image_url: { type: String, required: true },
+        image_url: {
+            type: new Schema(
+                {
+                    gcp: { type: String, required: false },
+                    icp: { type: String, required: false },
+                    ipfs: { type: String, required: false },
+                },
+                { _id: false },
+            ),
+            required: true,
+        },
         description: { type: String, required: true },
+        geolocation: {
+            type: new Schema(
+                {
+                    longitud: { type: String, required: true },
+                    latitud: { type: String, required: true },
+                },
+                { _id: false },
+            ),
+            required: false,
+        },
     },
 });
 
