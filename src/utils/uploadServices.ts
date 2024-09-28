@@ -53,6 +53,7 @@ export const getImageDetails = async (imageUrl: string) => {
 // Funciones de carga
 
 export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promise<string> {
+    console.info('subinedo imagen a ICP');
     const canisterId = process.env.ICP_CANISTER_ID;
     const FOLDER_UPLOAD = 'uploads';
 
@@ -101,10 +102,10 @@ export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promis
 }
 
 export async function uploadToIpfs(imageBuffer: Buffer, fileName: string): Promise<string> {
-    const pinata = new PinataSDK({ pinataJWTKey: process.env.PINATA_JWT });
+    console.info('subinedo imagen a IPFS');
 
     try {
-        // Create a readable stream from the buffer
+        const pinata = new PinataSDK({ pinataJWTKey: process.env.PINATA_JWT });
         const readableStream = new Readable();
         readableStream.push(imageBuffer);
         readableStream.push(null);

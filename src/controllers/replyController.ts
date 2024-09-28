@@ -5,9 +5,8 @@ import { connectToMongoDB } from './dbConnections';
 import { getNetworkConfig } from '../services/networkService';
 import { UserConversation, userConversationSchema } from '../models/userConversation';
 
-const mongoUrl = process.env?.MONGO_URI_CHATTERPAY ?? '';
-const BOT_DATA_TOKEN = process.env?.BOT_DATA_TOKEN ?? '';
-const BOT_API_URL = process.env?.BOT_API_URL ?? '';
+const botDataToken = process.env?.BOT_DATA_TOKEN ?? '';
+const botApiUrl = process.env?.BOT_API_URL ?? '';
 
 interface OperatorReplyPayload {
     data_token: string;
@@ -24,6 +23,7 @@ interface NetworkConfig {
  * Connects to MongoDB and returns the UserConversation model.
  */
 async function getUserConversationModel(): Promise<mongoose.Model<UserConversation>> {
+    const mongoUrl = process.env?.MONGO_URI_CHATTERPAY ?? '';
     const connection = await connectToMongoDB(mongoUrl);
     return connection.model('user_conversations', userConversationSchema);
 }
@@ -53,17 +53,16 @@ async function updateUserConversationStatus(
  */
 async function sendOperatorReply(payload: OperatorReplyPayload): Promise<unknown> {
     try {
-        const sendMsgEndpint = `${BOT_API_URL}/chatbot/conversations/send-message`;
+        const sendMsgEndpint = `${botApiUrl}/chatbot/conversations/send-message`;
         const response = await axios.post(sendMsgEndpint, payload, {
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${payload.data_token}`,
             },
         });
         console.log('API Response:', response.data);
         return response.data;
     } catch (error) {
-        console.error('Error sending operator reply:', error);
+        console.error('Error sending operator reply:', error.messa);
         throw error;
     }
 }
@@ -82,7 +81,7 @@ export async function sendTransferNotification(
         await updateUserConversationStatus(channel_user_id, 'operator');
 
         const payload: OperatorReplyPayload = {
-            data_token: BOT_DATA_TOKEN,
+            data_token: `${botDataToken}`,
             channel_user_id,
             message: `${from} te envio ${amount} ${token} 💸. \n Ya estan disponibles en tu billetera ChatterPay! 🥳`,
         };
@@ -111,7 +110,7 @@ export async function sendSwapNotification(
         const networkConfig: NetworkConfig = await getNetworkConfig();
 
         const payload: OperatorReplyPayload = {
-            data_token: BOT_DATA_TOKEN,
+            data_token: `${botDataToken}`,
             channel_user_id,
             message: `🔄 Intercambiaste ${amount} ${token} por ${Math.round(parseFloat(result) * 1e2) / 1e2} ${outputToken}! 🔄 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${transactionHash}`,
         };
@@ -131,13 +130,13 @@ export async function sendMintNotification(channel_user_id: string, id: number):
         const networkConfig: NetworkConfig = await getNetworkConfig(421614);
 
         const payload: OperatorReplyPayload = {
-            data_token: BOT_DATA_TOKEN,
+            data_token: `${botDataToken}`,
             channel_user_id,
             message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.chatterNFTAddress}/${id}`,
         };
         await sendOperatorReply(payload);
     } catch (error) {
-        console.error('Error in sendMintNotification:', error);
+        console.error('Error in sendMintNotification:', error.message);
         throw error;
     }
 }
@@ -159,7 +158,7 @@ export async function sendOutgoingTransferNotification(
         const networkConfig: NetworkConfig = await getNetworkConfig();
 
         const payload: OperatorReplyPayload = {
-            data_token: BOT_DATA_TOKEN,
+            data_token: `${botDataToken}`,
             channel_user_id,
             message: `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${txHash}`,
         };
