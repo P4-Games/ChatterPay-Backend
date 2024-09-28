@@ -4,7 +4,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { issueTokensCore } from './tokenController';
 import { getWalletByPhoneNumber } from '../models/user';
 import { defaultNftImage } from '../constants/contracts';
-import NFTModel, { INFT, INFTMetadata, getLastId } from '../models/nft';
+import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
 import { executeWalletCreation } from './newWalletController';
 import { sendMintNotification, sendMintInProgressNotification } from './replyController';
@@ -18,42 +18,67 @@ export interface NFTInfo {
 /**
  * Mints an NFT on the Ethereum network.
  * @param {string} recipientAddress - The address to receive the minted NFT.
- * @param {number} tokenURI - The token URI for the NFT.
- * @returns {Promise<ethers.ContractReceipt>} The transaction receipt.
+ * @param {string} name - The name of the NFT.
+ * @param {string} description - The description of the NFT.
+ * @param {string} image - The URL of the image associated with the NFT.
+ * @returns {Promise<{ receipt: ethers.ContractReceipt, tokenId: ethers.BigNumber }>} An object containing the transaction receipt and the minted token ID.
  * @throws {Error} If minting fails.
  */
 const mint_eth_nft = async (
     recipientAddress: string,
-    tokenURI: URL,
-): Promise<ethers.ContractReceipt> => {
+    name: string,
+    description: string,
+    image: string,
+): Promise<{ receipt: ethers.ContractReceipt; tokenId: ethers.BigNumber }> => {
     try {
-        const networkConfig = await getNetworkConfig(421614); // arbitrum sepolia
+        // Obtener la configuración de la red (por ejemplo, arbitrum sepolia)
+        const networkConfig = await getNetworkConfig(421614);
         const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
+
+        // Configurar el signer utilizando la clave privada del backend
         const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+
+        // Crear una instancia del contrato usando ethers.js
         const nftContract = new ethers.Contract(
             networkConfig.chatterNFTAddress,
-            ['function safeMint(address to, string memory uri) public returns (uint256)'],
+            [
+                'function safeMint(address to, string memory image) public returns (uint256)',
+                'event Minted(address indexed to, uint256 indexed tokenId)',
+            ],
             backendSigner,
-            tokenURI.toString()
         );
 
         console.log(
             'nft contract: ',
+            nftContract.address,
             networkConfig.chatterNFTAddress,
             networkConfig.rpc,
             backendSigner.address,
         );
+
         console.log('Safe minting...');
-        const tx = await nftContract.safeMint(recipientAddress, tokenURI, {
+
+        const tx = await nftContract.safeMint(recipientAddress, image, {
             gasLimit: 500000,
         });
 
         console.log('Transaction sent: ', tx.hash);
 
+        // Esperar a que la transacción se confirme
         const receipt = await tx.wait();
         console.log('Transaction confirmed: ', receipt.transactionHash);
 
-        return receipt;
+        // Filtrar el evento Minted para obtener el tokenId
+        const event = receipt.events?.find((e) => e.event === 'Minted');
+
+        if (!event) {
+            throw new Error('Minted event not found in transaction receipt');
+        }
+
+        const tokenId = event.args?.tokenId;
+        console.log('Token ID minted: ', tokenId.toString());
+
+        return { receipt, tokenId };
     } catch (error) {
         console.error('Error minting NFT: ', error);
         throw new Error('Minting failed');
@@ -96,16 +121,23 @@ export const mintNFT = async (
     let data;
     try {
         const nfImageURL = new URL(url ?? defaultNftImage);
-        data = await mint_eth_nft(address_of_user, nfImageURL);
+        data = await mint_eth_nft(
+            address_of_user,
+            'chatterpay-nft',
+            mensaje || '',
+            nfImageURL.toString(),
+        );
+
+        console.log('nft data minted', data);
     } catch (error) {
         console.error('Error al mintear NFT:', error);
         throw error;
     }
 
     // OPTIMISTIC RESPONSE: respond quickly to the user and process the rest of the flow asynchronously.
-    const new_id = (await getLastId()) + 1;
+    const nftMintedId = data.tokenId;
     try {
-        await sendMintNotification(channel_user_id, new_id);
+        await sendMintNotification(channel_user_id, nftMintedId);
     } catch (error) {
         console.error('Error al enviar notificación de minteo de NFT', error.message);
         throw error;
@@ -142,10 +174,10 @@ export const mintNFT = async (
     try {
         console.info('guardando NFT en bdd');
         await NFTModel.create({
-            id: new_id,
+            id: nftMintedId,
             channel_user_id,
             wallet: address_of_user,
-            trxId: data.transactionHash,
+            trxId: data.receipt.transactionHash,
             copy_of: null,
             original: true,
             timestamp: new Date(),
@@ -200,6 +232,7 @@ export const mintExistingNFT = async (
         }
 
         const nfts: INFT[] = await NFTModel.find({ id: parseInt(id, 10) });
+        const nft = nfts[0];
 
         if (!nfts) {
             reply.status(400).send({ message: 'El NFT no existe.' });
@@ -208,8 +241,13 @@ export const mintExistingNFT = async (
 
         let data;
         try {
-            const nfImageURL = new URL(nfts[0].metadata.image_url.gcp ?? defaultNftImage);
-            data = await mint_eth_nft(address_of_user, nfImageURL);
+            const nfImageURL = new URL(nft.metadata.image_url.gcp ?? defaultNftImage);
+            data = await mint_eth_nft(
+                address_of_user,
+                'chatterpay-nft-copy',
+                `copia de nft ${nft.id}`,
+                nfImageURL.toString(),
+            );
         } catch (error) {
             console.error('Error al mintear NFT:', error);
             throw error;
@@ -229,14 +267,14 @@ export const mintExistingNFT = async (
         };
 
         await NFTModel.create({
-            id,
+            id: data.tokenId,
             channel_user_id,
             copy_of: id,
             original: false,
             timestamp: new Date(),
             wallet: address_of_user,
-            trxId: data.transactionHash,
-            metadata: nfts[0].metadata ? nfts[0].metadata : defaultMetadata,
+            trxId: data.receipt.transactionHash,
+            metadata: nft.metadata ? nft.metadata : defaultMetadata,
         });
 
         sendMintNotification(channel_user_id, id);
