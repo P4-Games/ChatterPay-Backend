@@ -4,7 +4,7 @@ import web3 from '../utils/web3_config';
 import { User, IUser } from '../models/user';
 import Blockchain from '../models/blockchain';
 import { USDT_ADDRESS } from '../constants/contracts';
-import { sendUserOperation } from '../services/walletService';
+import { sendUserOperation } from '../services/transferService';
 import Transaction, { ITransaction } from '../models/transaction';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { sendTransferNotification, sendOutgoingTransferNotification } from './replyController';
