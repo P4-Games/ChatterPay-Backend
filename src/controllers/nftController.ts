@@ -69,7 +69,7 @@ const mint_eth_nft = async (
         console.log('Transaction confirmed: ', receipt.transactionHash);
 
         // Filtrar el evento Minted para obtener el tokenId
-        const event = receipt.events?.find((e) => e.event === 'Minted');
+        const event = receipt.events?.find((e: { event: string; }) => e.event === 'Minted');
 
         if (!event) {
             throw new Error('Minted event not found in transaction receipt');
@@ -110,13 +110,8 @@ export const mintNFT = async (
         reply.status(400).send({ message: 'La wallet del usuario no existe.' });
         return false;
     }
-
-    try {
-        await sendMintInProgressNotification(channel_user_id);
-    } catch (error) {
-        console.error('Error al enviar notificación de minteo de NFT', error.message);
-        throw error;
-    }
+    
+    reply.status(200).send({ message: 'El certificado se está generando...'})
 
     let data;
     try {
@@ -133,11 +128,11 @@ export const mintNFT = async (
     }
 
     // OPTIMISTIC RESPONSE: respond quickly to the user and process the rest of the flow asynchronously.
-    const nftMintedId = data.tokenId;
+    const nftMintedId = data.tokenId.toNumber();
     try {
         await sendMintNotification(channel_user_id, nftMintedId);
     } catch (error) {
-        console.error('Error al enviar notificación de minteo de NFT', error.message);
+        console.error('Error al enviar notificación de minteo de NFT', error instanceof Error ? error.message : String(error));
         throw error;
     }
 
@@ -146,7 +141,6 @@ export const mintNFT = async (
         console.info('Obteniendo imagen de NFT');
         processedImage = await downloadAndProcessImage(url); // always jpg
     } catch (error) {
-        reply.status(400).send({ message: 'Hubo un error al obtener la imagen del NFT' });
         console.error('Error al descargar la imagen del NFT:', error);
         throw error;
     }
@@ -194,10 +188,10 @@ export const mintNFT = async (
         });
     } catch (error) {
         console.error('Error al grabar NFT en bdd', error);
-        return reply.status(500).send({ message: 'Error al guardar el NFT.' });
+        return false;
     }
 
-    return reply.status(200).send({ message: 'NFT minted.' });
+    return true;
 };
 
 /**
@@ -235,6 +229,8 @@ export const mintExistingNFT = async (
             reply.status(400).send({ message: 'El NFT no existe.' });
             return false;
         }
+        
+        reply.status(200).send({ message: 'El certificado esta siendo generado...' });
 
         let data;
         try {
@@ -274,11 +270,11 @@ export const mintExistingNFT = async (
             metadata: nft.metadata ? nft.metadata : defaultMetadata,
         });
 
-        sendMintNotification(channel_user_id, id);
-        reply.status(200).send({ message: 'Certificado NFT generado.' });
+        sendMintNotification(channel_user_id, parseInt(id, 10));
+
         return true;
-    } catch (error) {
-        console.error('Error en mintExistingNFT', error.message);
+    } catch (error: unknown) {
+        console.error('Error en mintExistingNFT', error instanceof Error ? error.message : 'Unknown error');
         throw error;
     }
 };
