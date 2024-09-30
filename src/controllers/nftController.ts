@@ -399,3 +399,44 @@ export const getAllNFTs = async (
 
     return reply.status(200).send(result);
 };
+
+/**
+ * Retrieves the NFT information by its token ID.
+ * @param {FastifyRequest} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<void>} The NFT information.
+ */
+export const getNftList = async (
+    request: FastifyRequest<{
+        Params: {
+            tokenId: number;
+        };
+    }>,
+    reply: FastifyReply,
+): Promise<void> => {
+    const { tokenId } = request.params;
+    try {
+        const nfts = await NFTModel.find({ id: tokenId });
+
+        if (nfts.length === 0) {
+            return await reply.status(400).send({ message: 'NFT not found' });
+        }
+
+        const nft = nfts[0];
+        if (nft.original) {
+            return await reply.status(200).send({
+                original: nft,
+                copies: await NFTModel.find({ copy_of: tokenId }),
+            });
+        }
+
+        const originalNft = (await NFTModel.find({ id: nft.copy_of }))?.[0];
+        return await reply.status(200).send({
+            original: originalNft,
+            copy: nft,
+        });
+    } catch (error) {
+        console.error('Error al obtener el NFT:', error);
+        return reply.status(500).send({ message: 'Internal Server Error' });
+    }
+}
