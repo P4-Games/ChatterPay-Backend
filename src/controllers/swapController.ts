@@ -90,7 +90,7 @@ async function executeSwap(
         const approveTx = await signer.sendTransaction({
             to: proxyAddress,
             data: approveCallData,
-            gasLimit: 300000,
+            gasLimit: 3000000,
         });
         await approveTx.wait();
         console.log('Approval transaction confirmed');
