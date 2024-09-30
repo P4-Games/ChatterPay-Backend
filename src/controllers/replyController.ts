@@ -62,8 +62,8 @@ async function sendOperatorReply(payload: OperatorReplyPayload): Promise<unknown
         console.log('API Response:', response.data);
         return response.data;
     } catch (error) {
-        console.error('Error sending operator reply:', error.messa);
-        throw error;
+        console.error('Error sending operator reply:', error instanceof Error ? error.message : String(error));
+        throw new Error('Failed to send operator reply');
     }
 }
 
@@ -134,8 +134,8 @@ export async function sendMintInProgressNotification(channel_user_id: string): P
             message: `El certificado en NFT está siendo generado. Por favor, espera un momento. Te notificaré cuando esté listo.`,
         };
         await sendOperatorReply(payload);
-    } catch (error) {
-        console.error('Error in sendMintInProgressNotification:', error.message);
+    } catch (error: unknown) {
+        console.error('Error in sendMintInProgressNotification:', error instanceof Error ? error.message : 'Unknown error');
         throw error;
     }
 }
@@ -154,8 +154,8 @@ export async function sendMintNotification(channel_user_id: string, id: number):
             message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.chatterNFTAddress}/${id}`,
         };
         await sendOperatorReply(payload);
-    } catch (error) {
-        console.error('Error in sendMintNotification:', error.message);
+    } catch (error: unknown) {
+        console.error('Error in sendMintNotification:', error instanceof Error ? error.message : 'Unknown error');
         throw error;
     }
 }
