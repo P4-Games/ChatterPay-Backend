@@ -70,7 +70,7 @@ const mint_eth_nft = async (
         console.log('Transaction confirmed: ', receipt.transactionHash);
 
         // Filtrar el evento Minted para obtener el tokenId
-        const event = receipt.events?.find((e) => e.event === 'Minted');
+        const event = receipt.events?.find((e: { event: string; }) => e.event === 'Minted');
 
         if (!event) {
             throw new Error('Minted event not found in transaction receipt');
@@ -282,11 +282,15 @@ export const mintExistingNFT = async (
             metadata: nft.metadata ? nft.metadata : defaultMetadata,
         });
 
-        sendMintNotification(channel_user_id, id);
+        sendMintNotification(channel_user_id, parseInt(id, 10));
         reply.status(200).send({ message: 'Certificado NFT generado.' });
         return true;
     } catch (error) {
-        console.error('Error en mintExistingNFT', error.message);
+        if (error instanceof Error) {
+            console.error('Error en mintExistingNFT', error.message);
+        } else {
+            console.error('Error en mintExistingNFT', error);
+        }
         throw error;
     }
 };
