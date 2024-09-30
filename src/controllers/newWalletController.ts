@@ -1,9 +1,9 @@
-import { FastifyReply, FastifyRequest } from "fastify";
+import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { User } from "../models/user";
-import { issueTokensCore } from "./tokenController";
-import { authenticate } from "./transactionController";
-import { computeProxyAddressFromPhone } from "../services/predictWalletService";
+import { User } from '../models/user';
+import { issueTokensCore } from './tokenController';
+import { authenticate } from './transactionController';
+import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 
 /**
  * Creates a new wallet and user for the given phone number.
@@ -20,7 +20,7 @@ export const executeWalletCreation = async (phone_number: string): Promise<strin
         wallet: predictedWallet.proxyAddress,
         privateKey: predictedWallet.privateKey,
         code: null,
-        photo: "/assets/images/avatars/generic_user.jpg",
+        photo: '/assets/images/avatars/generic_user.jpg',
         email: null,
         name: null,
     });
@@ -28,7 +28,7 @@ export const executeWalletCreation = async (phone_number: string): Promise<strin
     await newUser.save();
 
     return predictedWallet.proxyAddress;
-}
+};
 
 /**
  * Handles the creation of a new wallet.
@@ -42,7 +42,7 @@ export const createWallet = async (
             channel_user_id: string;
         };
     }>,
-    reply: FastifyReply
+    reply: FastifyReply,
 ): Promise<FastifyReply> => {
     try {
         authenticate(request);
@@ -52,28 +52,29 @@ export const createWallet = async (
         const phone_number = channel_user_id;
 
         if (!phone_number || phone_number.length > 15) {
-            return await reply.status(400).send({ message: "Número de teléfono no válido" });
+            return await reply.status(400).send({ message: 'Número de teléfono no válido' });
         }
 
         // Check if user already exists
         const existingUser = await User.findOne({ phone_number });
         if (existingUser) {
-            return await reply.status(200).send({ message: `El usuario ya existe, tu wallet es ${existingUser.wallet}` });
+            return await reply
+                .status(200)
+                .send({ message: `El usuario ya existe, tu wallet es ${existingUser.wallet}` });
         }
 
         const wallet = await executeWalletCreation(phone_number);
 
         // Issue demo tokens to the user. This will be later removed in mainnet
-        issueTokensCore(wallet)
+        issueTokensCore(wallet);
 
         return await reply.status(200).send({
-            message: "La wallet fue creada exitosamente!",
+            message: 'La wallet fue creada exitosamente!',
             // walletHash: predictedWallet.EOAAddress,
-            walletAddress: wallet
+            walletAddress: wallet,
         });
-
     } catch (error) {
-        console.error("Error creando una wallet:", error);
-        return reply.status(500).send({ message: "Error interno del servidor" });
+        console.error('Error creando una wallet:', error);
+        return reply.status(500).send({ message: 'Error interno del servidor' });
     }
 };

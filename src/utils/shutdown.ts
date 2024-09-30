@@ -5,7 +5,7 @@ import { FastifyInstance } from 'fastify';
 
 /**
  * Sets up a graceful shutdown process for the server and database connection.
- * 
+ *
  * @param {FastifyInstance} server - The Fastify server instance
  */
 export function setupGracefulShutdown(server: FastifyInstance): void {

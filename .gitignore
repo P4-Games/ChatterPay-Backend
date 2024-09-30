@@ -43,8 +43,15 @@ coverage/
 # Archivos de respaldo
 *.bak
 
+# locks
+package-lock.json
+yarn.lock
+
 # Archivos de caché
 .cache/
+
+# internal
+.todo
 
 # Otros archivos y directorios que podrían ser específicos de tu proyecto
 # Agrega aquí cualquier otro archivo o directorio que quieras ignorar

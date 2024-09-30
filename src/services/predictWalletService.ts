@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
-import { getNetworkConfig } from "./networkService";
+import { getNetworkConfig } from './networkService';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 import { getDynamicGas } from '../utils/dynamicGas';
 
@@ -13,7 +13,7 @@ export interface PhoneNumberToAddress {
 
 /**
  * Generates a deterministic Ethereum address from a phone number.
- * 
+ *
  * @param {string} phoneNumber - The phone number to generate the address from.
  * @returns {PhoneNumberToAddress} An object containing the hashed private key, private key, and public key.
  * @throws {Error} If the seed private key is not found in environment variables.
@@ -25,7 +25,7 @@ function phoneNumberToAddress(phoneNumber: string): PhoneNumberToAddress {
     }
 
     const seed = seedPrivateKey + phoneNumber;
-    const privateKey = `0x${  crypto.createHash('sha256').update(seed).digest('hex')}`;
+    const privateKey = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
     const wallet = new ethers.Wallet(privateKey);
     const publicKey = wallet.address;
     const hashedPrivateKey = crypto.createHash('sha256').update(privateKey).digest('hex');
@@ -33,7 +33,7 @@ function phoneNumberToAddress(phoneNumber: string): PhoneNumberToAddress {
     return {
         hashedPrivateKey,
         privateKey,
-        publicKey
+        publicKey,
     };
 }
 
@@ -45,7 +45,7 @@ export interface ComputedAddress {
 
 /**
  * Computes the proxy address for a given phone number.
- * 
+ *
  * @param {string} phoneNumber - The phone number to compute the proxy address for.
  * @returns {Promise<ComputedAddress>} A promise that resolves to an object containing the proxy address, EOA address, and private key.
  * @throws {Error} If there's an error in the computation process.
@@ -53,16 +53,21 @@ export interface ComputedAddress {
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
     const networkConfig = await getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
-        name: "scroll-sepolia",
+        name: 'scroll-sepolia',
         chainId: 534351,
     });
 
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
-    const factory = ChatterPayWalletFactory__factory.connect(networkConfig.factoryAddress, backendSigner);
+    const factory = ChatterPayWalletFactory__factory.connect(
+        networkConfig.factoryAddress,
+        backendSigner,
+    );
 
     const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(phoneNumber);
 
-    const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, { gasLimit: 1000000 });
+    const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
+        gasLimit: 1000000,
+    });
 
     const code = await provider.getCode(proxyAddress);
     if (code === '0x') {
@@ -77,14 +82,17 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
         await tx.wait();
     }
 
-    console.log("Data: ", JSON.stringify({
-        proxyAddress,
-        EOAAddress: ownerAddress.publicKey,
-    }));
+    console.log(
+        'Data: ',
+        JSON.stringify({
+            proxyAddress,
+            EOAAddress: ownerAddress.publicKey,
+        }),
+    );
 
     return {
         proxyAddress,
         EOAAddress: ownerAddress.publicKey,
-        privateKey: ownerAddress.hashedPrivateKey
-    }
+        privateKey: ownerAddress.hashedPrivateKey,
+    };
 }
