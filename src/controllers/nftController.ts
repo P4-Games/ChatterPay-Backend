@@ -1,14 +1,14 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { issueTokensCore } from './tokenController';
-import { getWalletByPhoneNumber } from '../models/user';
 import { defaultNftImage } from '../constants/contracts';
-import { sendMintNotification } from './replyController';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
+import { getWalletByPhoneNumber } from '../models/user';
 import { getNetworkConfig } from '../services/networkService';
+import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/uploadServices';
 import { executeWalletCreation } from './newWalletController';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
+import { sendMintNotification } from './replyController';
+import { issueTokensCore } from './tokenController';
 
 export interface NFTInfo {
     description: string;
@@ -56,10 +56,10 @@ const mint_eth_nft = async (
             backendSigner.address,
         );
 
-        console.log('Safe minting...');
+        console.log('Safe minting', recipientAddress, image);
 
         const tx = await nftContract.safeMint(recipientAddress, image, {
-            gasLimit: 500000,
+            gasLimit: 3000000,
         });
 
         console.log('Transaction sent: ', tx.hash);
