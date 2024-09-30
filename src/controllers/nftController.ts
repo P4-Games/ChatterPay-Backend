@@ -1,15 +1,16 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { defaultNftImage } from '../constants/contracts';
-import NFTModel, { INFT, INFTMetadata } from '../models/nft';
-import { getWalletByPhoneNumber } from '../models/user';
-import { getNetworkConfig } from '../services/networkService';
-import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/uploadServices';
-import { executeWalletCreation } from './newWalletController';
-import { sendMintNotification } from './replyController';
-import { issueTokensCore } from './tokenController';
 import { isValidUrl } from '../utils/paramsUtils';
+import { issueTokensCore } from './tokenController';
+import { getDynamicGas } from '../utils/dynamicGas';
+import { getWalletByPhoneNumber } from '../models/user';
+import { defaultNftImage } from '../constants/contracts';
+import { sendMintNotification } from './replyController';
+import NFTModel, { INFT, INFTMetadata } from '../models/nft';
+import { getNetworkConfig } from '../services/networkService';
+import { executeWalletCreation } from './newWalletController';
+import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
 export interface NFTInfo {
     description: string;
@@ -60,7 +61,7 @@ const mint_eth_nft = async (
         console.log('Safe minting', recipientAddress, image);
 
         const tx = await nftContract.safeMint(recipientAddress, image, {
-            gasLimit: 3000000,
+            gasLimit: await getDynamicGas(nftContract, 'safeMint', [recipientAddress, image]),
         });
 
         console.log('Transaction sent: ', tx.hash);
@@ -70,7 +71,7 @@ const mint_eth_nft = async (
         console.log('Transaction confirmed: ', receipt.transactionHash);
 
         // Filtrar el evento Minted para obtener el tokenId
-        const event = receipt.events?.find((e) => e.event === 'Minted');
+        const event = receipt.events?.find((e: { event: string; }) => e.event === 'Minted');
 
         if (!event) {
             throw new Error('Minted event not found in transaction receipt');
@@ -285,11 +286,11 @@ export const mintExistingNFT = async (
             metadata: nft.metadata ? nft.metadata : defaultMetadata,
         });
 
-        sendMintNotification(channel_user_id, id);
+        sendMintNotification(channel_user_id, parseInt(id, 10));
         reply.status(200).send({ message: 'Certificado NFT generado.' });
         return true;
     } catch (error) {
-        console.error('Error en mintExistingNFT', error.message);
+        console.error('Error en mintExistingNFT', (error as Error).message);
         throw error;
     }
 };
