@@ -2,6 +2,8 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { isValidUrl } from '../utils/paramsUtils';
+import { issueTokensCore } from './tokenController';
+import { getDynamicGas } from '../utils/dynamicGas';
 import { getWalletByPhoneNumber } from '../models/user';
 import { defaultNftImage } from '../constants/contracts';
 import { sendMintNotification } from './replyController';
@@ -59,7 +61,7 @@ const mint_eth_nft = async (
         console.log('Safe minting', recipientAddress, image);
 
         const tx = await nftContract.safeMint(recipientAddress, image, {
-            gasLimit: 3000000,
+            gasLimit: await getDynamicGas(nftContract, 'safeMint', [recipientAddress, image]),
         });
 
         console.log('Transaction sent: ', tx.hash);
@@ -285,11 +287,7 @@ export const mintExistingNFT = async (
         reply.status(200).send({ message: 'Certificado NFT generado.' });
         return true;
     } catch (error) {
-        if (error instanceof Error) {
-            console.error('Error en mintExistingNFT', error.message);
-        } else {
-            console.error('Error en mintExistingNFT', error);
-        }
+        console.error('Error en mintExistingNFT', (error as Error).message);
         throw error;
     }
 };

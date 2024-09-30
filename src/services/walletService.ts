@@ -1,9 +1,10 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
-import entryPoint from '../utils/entryPoint.json';
-import { getNetworkConfig } from './networkService';
-import chatterPayABI from '../utils/chatterPayABI.json';
+import entryPoint from "../utils/entryPoint.json";
+import { getNetworkConfig } from "./networkService";
+import { executeWithDynamicGas, getDynamicGas } from '../utils/dynamicGas';
+import chatterPayABI from "../utils/chatterPayABI.json";
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts/factories/ChatterPayWalletFactory__factory';
@@ -70,10 +71,10 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
     const proxy = await computeProxyAddressFromPhone(fromNumber);
     const code = await provider.getCode(proxy.proxyAddress);
     if (code === '0x') {
-        console.log(
-            `Creating new wallet for EOA: ${proxy.EOAAddress}, will result in: ${proxy.proxyAddress}...`,
-        );
-        const tx = await factory.createProxy(proxy.EOAAddress, { gasLimit: 1000000 });
+        console.log(`Creating new wallet for EOA: ${proxy.EOAAddress}, will result in: ${proxy.proxyAddress}...`);
+        const tx = await factory.createProxy(proxy.EOAAddress, { 
+            gasLimit: await getDynamicGas(factory, 'createProxy', [proxy.EOAAddress]),
+        });
         await tx.wait();
     }
 
@@ -260,7 +261,7 @@ export async function ensureSignerHasEth(
         const tx = await backendSigner.sendTransaction({
             to: await signer.getAddress(),
             value: ethers.utils.parseEther('0.001'),
-            gasLimit: 210000,
+            gasLimit: 210000, // Fixed gas limit for ETH transfer
         });
         await tx.wait();
         console.log('ETH sent to signer');
@@ -286,13 +287,9 @@ async function executeTransfer(
 ): Promise<{ transactionHash: string }> {
     try {
         const entrypoint_backend = entrypoint.connect(backendSigner);
-        const tx = await entrypoint_backend.handleOps([userOperation], signer.address, {
-            gasLimit: 1000000,
-        });
-
-        const receipt = await tx.wait();
-        console.log(`User Operation execute confirmed in block ${receipt.blockNumber}`);
-        return { transactionHash: receipt.transactionHash };
+        const tx = await executeWithDynamicGas(entrypoint_backend, 'handleOps', [[userOperation], signer.address]);
+        console.log(`User Operation execute confirmed in block ${tx.receipt.blockNumber}`);
+        return { transactionHash: tx.transactionHash };
     } catch (error) {
         console.error('Error sending User Operation transaction:', error);
         throw error;

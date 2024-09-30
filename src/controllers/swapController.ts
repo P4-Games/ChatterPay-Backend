@@ -2,14 +2,15 @@ import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import Transaction from '../models/transaction';
-import { authenticate } from './transactionController';
-import chatterPayABI from '../utils/chatterPayABI.json';
-import { sendSwapNotification } from './replyController';
-import { getNetworkConfig } from '../services/networkService';
-import { ensureSignerHasEth } from '../services/walletService';
-import { computeProxyAddressFromPhone } from '../services/predictWalletService';
-import { USDT_ADDRESS, WETH_ADDRESS, SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
+import Transaction from "../models/transaction";
+import { authenticate } from "./transactionController";
+import chatterPayABI from "../utils/chatterPayABI.json";
+import { sendSwapNotification } from "./replyController";
+import { getNetworkConfig } from "../services/networkService";
+import { ensureSignerHasEth } from "../services/walletService";
+import { computeProxyAddressFromPhone } from "../services/predictWalletService";
+import { WETH_ADDRESS, USDT_ADDRESS, SIMPLE_SWAP_ADDRESS } from "../constants/contracts";
+import { executeWithDynamicGas, getDynamicGas_callData } from "../utils/dynamicGas";
 
 interface SwapBody {
     channel_user_id: string;
@@ -74,6 +75,7 @@ async function executeSwap(
         signer,
     );
     const chatterPay = new ethers.Contract(proxyAddress, chatterPayABI, signer);
+    const provider = signer.provider!;
 
     try {
         // 1. Approve tokens
@@ -90,7 +92,7 @@ async function executeSwap(
         const approveTx = await signer.sendTransaction({
             to: proxyAddress,
             data: approveCallData,
-            gasLimit: 3000000,
+            gasLimit: await getDynamicGas_callData(provider, tokenAddress, approveEncode),
         });
         await approveTx.wait();
         console.log('Approval transaction confirmed');
@@ -110,7 +112,7 @@ async function executeSwap(
         const swapTx = await signer.sendTransaction({
             to: proxyAddress,
             data: swapCallData,
-            gasLimit: 500000,
+            gasLimit: await getDynamicGas_callData(provider, proxyAddress, swapEncode),
         });
         const receipt = await swapTx.wait();
         console.log(`Swap transaction confirmed in block ${receipt.blockNumber}`);
