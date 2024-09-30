@@ -9,6 +9,7 @@ import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/upl
 import { executeWalletCreation } from './newWalletController';
 import { sendMintNotification } from './replyController';
 import { issueTokensCore } from './tokenController';
+import { isValidUrl } from '../utils/paramsUtils';
 
 export interface NFTInfo {
     description: string;
@@ -105,6 +106,10 @@ export const mintNFT = async (
 ): Promise<boolean> => {
     const { channel_user_id, url, mensaje, latitud, longitud } = request.body;
 
+    if (!isValidUrl(url)) {
+        return reply.status(400).send({ message: 'La URL proporcionada no es válida.' });
+    }
+
     const address_of_user = await getWalletByPhoneNumber(channel_user_id);
     if (!address_of_user) {
         return reply.status(400).send({ message: 'La wallet del usuario no existe.' });
@@ -148,7 +153,7 @@ const processNftMint = async (
         await sendMintNotification(channel_user_id, nftMintedId);
     } catch (error) {
         console.error('Error al enviar notificación de minteo de NFT', (error as Error).message);
-        // Aquí no se responde con error para que continúe el proceso de minteo
+        // No se lanza error aquí para continuar con el proceso
     }
 
     let processedImage;
