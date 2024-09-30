@@ -1,9 +1,9 @@
 import axios from 'axios';
 import mongoose from 'mongoose';
 
-import { connectToMongoDB } from './dbConnections';
-import { getNetworkConfig } from '../services/networkService';
 import { UserConversation, userConversationSchema } from '../models/userConversation';
+import { getNetworkConfig } from '../services/networkService';
+import { connectToMongoDB } from './dbConnections';
 
 const botDataToken = process.env?.BOT_DATA_TOKEN ?? '';
 const botApiUrl = process.env?.BOT_API_URL ?? '';
@@ -51,7 +51,7 @@ async function updateUserConversationStatus(
 /**
  * Sends an operator reply to the API.
  */
-async function sendOperatorReply(payload: OperatorReplyPayload): Promise<unknown> {
+async function sendBotMessage(payload: OperatorReplyPayload): Promise<unknown> {
     try {
         const sendMsgEndpint = `${botApiUrl}/chatbot/conversations/send-message`;
         const response = await axios.post(sendMsgEndpint, payload, {
@@ -59,11 +59,11 @@ async function sendOperatorReply(payload: OperatorReplyPayload): Promise<unknown
                 'Content-Type': 'application/json',
             },
         });
-        console.log('API Response:', response.data);
+        console.log('API Response:', payload.channel_user_id, payload.message, response.data);
         return response.data;
     } catch (error) {
-        console.error('Error sending operator reply:', error instanceof Error ? error.message : String(error));
-        throw new Error('Failed to send operator reply');
+        console.error('Error sending operator reply:', (error as Error).message);
+        throw error;
     }
 }
 
@@ -85,7 +85,7 @@ export async function sendTransferNotification(
             channel_user_id,
             message: `${from} te envio ${amount} ${token} 💸. \n Ya estan disponibles en tu billetera ChatterPay! 🥳`,
         };
-        await sendOperatorReply(payload);
+        await sendBotMessage(payload);
 
         await updateUserConversationStatus(channel_user_id, 'assistant');
     } catch (error) {
@@ -114,7 +114,7 @@ export async function sendSwapNotification(
             channel_user_id,
             message: `🔄 Intercambiaste ${amount} ${token} por ${Math.round(parseFloat(result) * 1e2) / 1e2} ${outputToken}! 🔄 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${transactionHash}`,
         };
-        await sendOperatorReply(payload);
+        await sendBotMessage(payload);
     } catch (error) {
         console.error('Error in sendSwapNotification:', error);
         throw error;
@@ -124,6 +124,7 @@ export async function sendSwapNotification(
 /**
  * Sends a notification for minting certificates in-progress and on-chain memories.
  */
+/*
 export async function sendMintInProgressNotification(channel_user_id: string): Promise<void> {
     try {
         console.log('Sending mint-in progress notification');
@@ -133,12 +134,13 @@ export async function sendMintInProgressNotification(channel_user_id: string): P
             channel_user_id,
             message: `El certificado en NFT está siendo generado. Por favor, espera un momento. Te notificaré cuando esté listo.`,
         };
-        await sendOperatorReply(payload);
-    } catch (error: unknown) {
-        console.error('Error in sendMintInProgressNotification:', error instanceof Error ? error.message : 'Unknown error');
+        await sendBotMessage(payload);
+    } catch (error) {
+        console.error('Error in sendMintInProgressNotification:', error.message);
         throw error;
     }
 }
+*/
 
 /**
  * Sends a notification for minted certificates and on-chain memories.
@@ -153,9 +155,9 @@ export async function sendMintNotification(channel_user_id: string, id: number):
             channel_user_id,
             message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.chatterNFTAddress}/${id}`,
         };
-        await sendOperatorReply(payload);
-    } catch (error: unknown) {
-        console.error('Error in sendMintNotification:', error instanceof Error ? error.message : 'Unknown error');
+        await sendBotMessage(payload);
+    } catch (error) {
+        console.error('Error in sendMintNotification:', (error as Error).message);
         throw error;
     }
 }
@@ -181,7 +183,7 @@ export async function sendOutgoingTransferNotification(
             channel_user_id,
             message: `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${txHash}`,
         };
-        await sendOperatorReply(payload);
+        await sendBotMessage(payload);
 
         await updateUserConversationStatus(channel_user_id, 'assistant');
     } catch (error) {
