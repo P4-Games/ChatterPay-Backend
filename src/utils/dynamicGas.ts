@@ -32,13 +32,13 @@ export async function executeWithDynamicGas(
     const txOptions = {
         gasLimit,
     };
-
+    console.log("Executing transaction with gas limit:", gasLimit.toString());
     // Enviar la transacción utilizando el gas calculado
     const tx = await contract[methodName](...args, txOptions);
-
+    console.log(`Transaction sent with hash: ${tx.hash}`);
     // Esperar a que la transacción se confirme
     const receipt = await tx.wait();
-
+    console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
     return {
         hash: tx.hash,
         transactionHash: receipt.transactionHash,
@@ -71,7 +71,7 @@ export async function getDynamicGas( contract: Contract, methodName: string, arg
     const gasLimit: BigNumber = estimatedGas
     .mul(BigNumber.from(100 + gasBufferPercentage))
     .div(BigNumber.from(100));
-
+    console.log("Gas limit:", gasLimit.toString());
     return gasLimit;
 }
 
@@ -102,7 +102,7 @@ export async function getDynamicGas_callData(
         const gasLimit: BigNumber = estimatedGas
             .mul(BigNumber.from(100 + gasBufferPercentage))
             .div(BigNumber.from(100));
-
+        console.log("Gas limit:", gasLimit.toString());
         return gasLimit;
     } catch (error) {
         if (error instanceof Error) {
