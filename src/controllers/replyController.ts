@@ -62,8 +62,8 @@ async function sendBotMessage(payload: OperatorReplyPayload): Promise<unknown> {
         console.log('API Response:', response.data);
         return response.data;
     } catch (error) {
-        console.error('Error sending operator reply:', error instanceof Error ? error.message : String(error));
-        throw new Error('Failed to send operator reply');
+        console.error('Error sending operator reply:', error.messa);
+        throw error;
     }
 }
 
@@ -124,6 +124,7 @@ export async function sendSwapNotification(
 /**
  * Sends a notification for minting certificates in-progress and on-chain memories.
  */
+/*
 export async function sendMintInProgressNotification(channel_user_id: string): Promise<void> {
     try {
         console.log('Sending mint-in progress notification');
@@ -134,11 +135,12 @@ export async function sendMintInProgressNotification(channel_user_id: string): P
             message: `El certificado en NFT está siendo generado. Por favor, espera un momento. Te notificaré cuando esté listo.`,
         };
         await sendBotMessage(payload);
-    } catch (error: unknown) {
-        console.error('Error in sendMintInProgressNotification:', error instanceof Error ? error.message : 'Unknown error');
+    } catch (error) {
+        console.error('Error in sendMintInProgressNotification:', error.message);
         throw error;
     }
 }
+*/
 
 /**
  * Sends a notification for minted certificates and on-chain memories.
@@ -154,8 +156,8 @@ export async function sendMintNotification(channel_user_id: string, id: number):
             message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.chatterNFTAddress}/${id}`,
         };
         await sendBotMessage(payload);
-    } catch (error: unknown) {
-        console.error('Error in sendMintNotification:', error instanceof Error ? error.message : 'Unknown error');
+    } catch (error) {
+        console.error('Error in sendMintNotification:', error.message);
         throw error;
     }
 }
