@@ -6,6 +6,7 @@ import {
     getAllNFTs,
     getLastNFT,
     mintExistingNFT,
+    getNftList
 } from '../controllers/nftController';
 
 /**
@@ -43,6 +44,17 @@ const nftRoutes = async (fastify: FastifyInstance): Promise<void> => {
      * @route GET /last_nft/
      */
     fastify.get('/last_nft/', getLastNFT);
+
+    /**
+     * Route to get NFT information by its token ID.
+     * @route GET /nft_info/:tokenId
+     * @param {number} tokenId - Token ID
+     * @returns {object} original NFT information
+     * @returns {list} list of NFTs copied from the original NFT if id is original
+     * @returns {object} copied NFT information if NFT is copied
+     */
+
+    fastify.get('/nft_info/:tokenId', getNftList)
 };
 
 export default nftRoutes;
