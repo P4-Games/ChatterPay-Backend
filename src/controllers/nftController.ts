@@ -234,9 +234,6 @@ export const mintExistingNFT = async (
         if (!address_of_user) {
             console.log('La wallet del usuario no existe. Creando...');
             address_of_user = await executeWalletCreation(channel_user_id);
-
-            // Issue demo tokens to the user. This will be later removed in mainnet
-            issueTokensCore(address_of_user);
         }
 
         const nfts: INFT[] = await NFTModel.find({ id: parseInt(id, 10) });
