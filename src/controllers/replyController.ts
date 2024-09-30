@@ -1,9 +1,9 @@
 import axios from 'axios';
 import mongoose from 'mongoose';
 
-import { connectToMongoDB } from './dbConnections';
-import { getNetworkConfig } from '../services/networkService';
 import { UserConversation, userConversationSchema } from '../models/userConversation';
+import { getNetworkConfig } from '../services/networkService';
+import { connectToMongoDB } from './dbConnections';
 
 const botDataToken = process.env?.BOT_DATA_TOKEN ?? '';
 const botApiUrl = process.env?.BOT_API_URL ?? '';
@@ -59,10 +59,10 @@ async function sendBotMessage(payload: OperatorReplyPayload): Promise<unknown> {
                 'Content-Type': 'application/json',
             },
         });
-        console.log('API Response:', response.data);
+        console.log('API Response:', payload.channel_user_id, payload.message, response.data);
         return response.data;
     } catch (error) {
-        console.error('Error sending operator reply:', error.messa);
+        console.error('Error sending operator reply:', (error as Error).message);
         throw error;
     }
 }
@@ -157,7 +157,7 @@ export async function sendMintNotification(channel_user_id: string, id: number):
         };
         await sendBotMessage(payload);
     } catch (error) {
-        console.error('Error in sendMintNotification:', error.message);
+        console.error('Error in sendMintNotification:', (error as Error).message);
         throw error;
     }
 }
