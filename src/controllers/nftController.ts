@@ -1,15 +1,14 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { defaultNftImage } from '../constants/contracts';
-import NFTModel, { INFT, INFTMetadata } from '../models/nft';
-import { getWalletByPhoneNumber } from '../models/user';
-import { getNetworkConfig } from '../services/networkService';
-import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/uploadServices';
-import { executeWalletCreation } from './newWalletController';
-import { sendMintNotification } from './replyController';
-import { issueTokensCore } from './tokenController';
 import { isValidUrl } from '../utils/paramsUtils';
+import { getWalletByPhoneNumber } from '../models/user';
+import { defaultNftImage } from '../constants/contracts';
+import { sendMintNotification } from './replyController';
+import NFTModel, { INFT, INFTMetadata } from '../models/nft';
+import { getNetworkConfig } from '../services/networkService';
+import { executeWalletCreation } from './newWalletController';
+import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
 export interface NFTInfo {
     description: string;
