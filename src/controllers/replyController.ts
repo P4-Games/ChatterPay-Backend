@@ -109,7 +109,7 @@ export async function sendMintInProgressNotification(channel_user_id: string): P
 /**
  * Sends a notification for minted certificates and on-chain memories.
  */
-export async function sendMintNotification(channel_user_id: string, id: number): Promise<void> {
+export async function sendMintNotification(channel_user_id: string, id: string): Promise<void> {
     try {
         console.log('Sending mint notification');
         const networkConfig: IBlockchain = await getNetworkConfig(421614);
@@ -117,7 +117,7 @@ export async function sendMintNotification(channel_user_id: string, id: number):
         const payload: OperatorReplyPayload = {
             data_token: `${botDataToken}`,
             channel_user_id,
-            message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.chatterNFTAddress}/${id}`,
+            message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.contracts.hatterNFTAddress}/${id}`,
         };
         await sendBotMessage(payload);
     } catch (error) {
