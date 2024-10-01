@@ -14,40 +14,6 @@ interface OperatorReplyPayload {
     message: string;
 }
 
-interface NetworkConfig {
-    explorer: string;
-    chatterNFTAddress: string;
-}
-
-/**
- * Connects to MongoDB and returns the UserConversation model.
- */
-async function getUserConversationModel(): Promise<mongoose.Model<UserConversation>> {
-    const mongoUrl = process.env?.MONGO_URI_CHATTERPAY ?? '';
-    const connection = await connectToMongoDB(mongoUrl);
-    return connection.model('user_conversations', userConversationSchema);
-}
-
-/**
- * Updates the user conversation status in the database.
- */
-async function updateUserConversationStatus(
-    channelUserId: string,
-    newStatus: string,
-): Promise<void> {
-    try {
-        const userConversation = await getUserConversationModel();
-        await userConversation.findOneAndUpdate(
-            { channel_user_id: channelUserId },
-            { $set: { control: newStatus } },
-        );
-        console.log('Status update successful');
-    } catch (error) {
-        console.error('Error updating user_conversations', error);
-        throw error;
-    }
-}
-
 /**
  * Sends an operator reply to the API.
  */
