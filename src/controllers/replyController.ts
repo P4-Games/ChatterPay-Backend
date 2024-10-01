@@ -117,7 +117,7 @@ export async function sendMintNotification(channel_user_id: string, id: string):
         const payload: OperatorReplyPayload = {
             data_token: `${botDataToken}`,
             channel_user_id,
-            message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.contracts.hatterNFTAddress}/${id}`,
+            message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.contracts.chatterNFTAddress}/${id}`,
         };
         await sendBotMessage(payload);
     } catch (error) {
