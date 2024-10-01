@@ -6,12 +6,14 @@ export interface IBlockchain extends Document {
     rpc: string;
     logo: string;
     explorer: string;
-    signingKey: string;
-    entryPoint: string;
-    factoryAddress: string;
-    chatterPayAddress: string;
-    chatterPayBeaconAddress: string;
-    chatterNFTAddress: string;
+    scan_apikey: string;
+    contracts: {
+        entryPoint: string,
+        factoryAddress : string,
+        chatterPayAddress: string,
+        chatterPayBeaconAddress: string,
+        chatterNFTAddress: string
+    }
 }
 
 const blockchainSchema = new Schema<IBlockchain>({
@@ -20,12 +22,14 @@ const blockchainSchema = new Schema<IBlockchain>({
     rpc: { type: String, required: true },
     logo: { type: String, required: true },
     explorer: { type: String, required: true },
-    signingKey: { type: String, required: true },
-    entryPoint: { type: String, required: true },
-    factoryAddress: { type: String, required: true },
-    chatterPayAddress: { type: String, required: true },
-    chatterPayBeaconAddress: { type: String, required: true },
-    chatterNFTAddress: { type: String, required: true },
+    scan_apikey: { type: String, required: true },
+    contracts: {
+        entryPoint: { type: String, required: false },
+        factoryAddress: { type: String, required: false },
+        chatterPayAddress: { type: String, required: false },
+        chatterPayBeaconAddress: { type: String, required: false },
+        chatterNFTAddress: { type: String, required: false },
+    },
 });
 
 const Blockchain = model<IBlockchain>('Blockchain', blockchainSchema, 'blockchains');
