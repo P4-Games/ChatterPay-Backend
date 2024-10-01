@@ -8,12 +8,12 @@ export interface IBlockchain extends Document {
     explorer: string;
     scan_apikey: string;
     contracts: {
-        entryPoint: string,
-        factoryAddress : string,
-        chatterPayAddress: string,
-        chatterPayBeaconAddress: string,
-        chatterNFTAddress: string
-    }
+        entryPoint: string;
+        factoryAddress: string;
+        chatterPayAddress: string;
+        chatterPayBeaconAddress: string;
+        chatterNFTAddress: string;
+    };
 }
 
 const blockchainSchema = new Schema<IBlockchain>({

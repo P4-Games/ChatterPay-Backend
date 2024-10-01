@@ -1,9 +1,9 @@
 import axios from 'axios';
 import mongoose from 'mongoose';
 
-import { UserConversation, userConversationSchema } from '../models/userConversation';
-import { getNetworkConfig } from '../services/networkService';
 import { connectToMongoDB } from './dbConnections';
+import { getNetworkConfig } from '../services/networkService';
+import { UserConversation, userConversationSchema } from '../models/userConversation';
 
 const botDataToken = process.env?.BOT_DATA_TOKEN ?? '';
 const botApiUrl = process.env?.BOT_API_URL ?? '';

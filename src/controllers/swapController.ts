@@ -2,15 +2,15 @@ import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import Transaction from "../models/transaction";
-import { authenticate } from "./transactionController";
-import chatterPayABI from "../utils/chatterPayABI.json";
-import { sendSwapNotification } from "./replyController";
-import { getNetworkConfig } from "../services/networkService";
-import { ensureSignerHasEth } from "../services/walletService";
-import { computeProxyAddressFromPhone } from "../services/predictWalletService";
-import { WETH_ADDRESS, USDT_ADDRESS, SIMPLE_SWAP_ADDRESS } from "../constants/contracts";
-import { executeWithDynamicGas, getDynamicGas_callData } from "../utils/dynamicGas";
+import Transaction from '../models/transaction';
+import { authenticate } from './transactionController';
+import chatterPayABI from '../utils/chatterPayABI.json';
+import { sendSwapNotification } from './replyController';
+import { getDynamicGas_callData } from '../utils/dynamicGas';
+import { getNetworkConfig } from '../services/networkService';
+import { ensureSignerHasEth } from '../services/walletService';
+import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import { WETH_ADDRESS, USDT_ADDRESS, SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
 
 interface SwapBody {
     channel_user_id: string;
