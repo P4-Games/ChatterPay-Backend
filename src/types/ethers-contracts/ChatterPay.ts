@@ -2,159 +2,150 @@
 /* tslint:disable */
 /* eslint-disable */
 import type {
-  BaseContract,
-  BigNumber,
-  BigNumberish,
-  BytesLike,
-  CallOverrides,
-  ContractTransaction,
-  Overrides,
-  PopulatedTransaction,
-  Signer,
-  utils,
-} from "ethers";
-import type { FunctionFragment, Result } from "@ethersproject/abi";
-import type { Listener, Provider } from "@ethersproject/providers";
-import type {
-  TypedEventFilter,
-  TypedEvent,
-  TypedListener,
-  OnEvent,
-} from "./common";
+    BaseContract,
+    BigNumber,
+    BigNumberish,
+    BytesLike,
+    CallOverrides,
+    ContractTransaction,
+    Overrides,
+    PopulatedTransaction,
+    Signer,
+    utils,
+} from 'ethers';
+import type { FunctionFragment, Result } from '@ethersproject/abi';
+import type { Listener, Provider } from '@ethersproject/providers';
+import type { TypedEventFilter, TypedEvent, TypedListener, OnEvent } from './common';
 
 export interface ChatterPayInterface extends utils.Interface {
-  functions: {
-    "execute(address,uint256,bytes)": FunctionFragment;
-    "initialize(address,address,address,address)": FunctionFragment;
-  };
+    functions: {
+        'execute(address,uint256,bytes)': FunctionFragment;
+        'initialize(address,address,address,address)': FunctionFragment;
+    };
 
-  getFunction(
-    nameOrSignatureOrTopic: "execute" | "initialize"
-  ): FunctionFragment;
+    getFunction(nameOrSignatureOrTopic: 'execute' | 'initialize'): FunctionFragment;
 
-  encodeFunctionData(
-    functionFragment: "execute",
-    values: [string, BigNumberish, BytesLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "initialize",
-    values: [string, string, string, string]
-  ): string;
+    encodeFunctionData(
+        functionFragment: 'execute',
+        values: [string, BigNumberish, BytesLike],
+    ): string;
+    encodeFunctionData(
+        functionFragment: 'initialize',
+        values: [string, string, string, string],
+    ): string;
 
-  decodeFunctionResult(functionFragment: "execute", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "initialize", data: BytesLike): Result;
+    decodeFunctionResult(functionFragment: 'execute', data: BytesLike): Result;
+    decodeFunctionResult(functionFragment: 'initialize', data: BytesLike): Result;
 
-  events: {};
+    events: {};
 }
 
 export interface ChatterPay extends BaseContract {
-  connect(signerOrProvider: Signer | Provider | string): this;
-  attach(addressOrName: string): this;
-  deployed(): Promise<this>;
+    connect(signerOrProvider: Signer | Provider | string): this;
+    attach(addressOrName: string): this;
+    deployed(): Promise<this>;
 
-  interface: ChatterPayInterface;
+    interface: ChatterPayInterface;
 
-  queryFilter<TEvent extends TypedEvent>(
-    event: TypedEventFilter<TEvent>,
-    fromBlockOrBlockhash?: string | number | undefined,
-    toBlock?: string | number | undefined
-  ): Promise<Array<TEvent>>;
+    queryFilter<TEvent extends TypedEvent>(
+        event: TypedEventFilter<TEvent>,
+        fromBlockOrBlockhash?: string | number | undefined,
+        toBlock?: string | number | undefined,
+    ): Promise<Array<TEvent>>;
 
-  listeners<TEvent extends TypedEvent>(
-    eventFilter?: TypedEventFilter<TEvent>
-  ): Array<TypedListener<TEvent>>;
-  listeners(eventName?: string): Array<Listener>;
-  removeAllListeners<TEvent extends TypedEvent>(
-    eventFilter: TypedEventFilter<TEvent>
-  ): this;
-  removeAllListeners(eventName?: string): this;
-  off: OnEvent<this>;
-  on: OnEvent<this>;
-  once: OnEvent<this>;
-  removeListener: OnEvent<this>;
+    listeners<TEvent extends TypedEvent>(
+        eventFilter?: TypedEventFilter<TEvent>,
+    ): Array<TypedListener<TEvent>>;
+    listeners(eventName?: string): Array<Listener>;
+    removeAllListeners<TEvent extends TypedEvent>(eventFilter: TypedEventFilter<TEvent>): this;
+    removeAllListeners(eventName?: string): this;
+    off: OnEvent<this>;
+    on: OnEvent<this>;
+    once: OnEvent<this>;
+    removeListener: OnEvent<this>;
 
-  functions: {
+    functions: {
+        execute(
+            dest: string,
+            value: BigNumberish,
+            func: BytesLike,
+            overrides?: Overrides & { from?: string },
+        ): Promise<ContractTransaction>;
+
+        initialize(
+            entryPoint: string,
+            owner: string,
+            l1Storage: string,
+            paymaster: string,
+            overrides?: Overrides & { from?: string },
+        ): Promise<ContractTransaction>;
+    };
+
     execute(
-      dest: string,
-      value: BigNumberish,
-      func: BytesLike,
-      overrides?: Overrides & { from?: string }
+        dest: string,
+        value: BigNumberish,
+        func: BytesLike,
+        overrides?: Overrides & { from?: string },
     ): Promise<ContractTransaction>;
 
     initialize(
-      entryPoint: string,
-      owner: string,
-      l1Storage: string,
-      paymaster: string,
-      overrides?: Overrides & { from?: string }
+        entryPoint: string,
+        owner: string,
+        l1Storage: string,
+        paymaster: string,
+        overrides?: Overrides & { from?: string },
     ): Promise<ContractTransaction>;
-  };
 
-  execute(
-    dest: string,
-    value: BigNumberish,
-    func: BytesLike,
-    overrides?: Overrides & { from?: string }
-  ): Promise<ContractTransaction>;
+    callStatic: {
+        execute(
+            dest: string,
+            value: BigNumberish,
+            func: BytesLike,
+            overrides?: CallOverrides,
+        ): Promise<void>;
 
-  initialize(
-    entryPoint: string,
-    owner: string,
-    l1Storage: string,
-    paymaster: string,
-    overrides?: Overrides & { from?: string }
-  ): Promise<ContractTransaction>;
+        initialize(
+            entryPoint: string,
+            owner: string,
+            l1Storage: string,
+            paymaster: string,
+            overrides?: CallOverrides,
+        ): Promise<void>;
+    };
 
-  callStatic: {
-    execute(
-      dest: string,
-      value: BigNumberish,
-      func: BytesLike,
-      overrides?: CallOverrides
-    ): Promise<void>;
+    filters: {};
 
-    initialize(
-      entryPoint: string,
-      owner: string,
-      l1Storage: string,
-      paymaster: string,
-      overrides?: CallOverrides
-    ): Promise<void>;
-  };
+    estimateGas: {
+        execute(
+            dest: string,
+            value: BigNumberish,
+            func: BytesLike,
+            overrides?: Overrides & { from?: string },
+        ): Promise<BigNumber>;
 
-  filters: {};
+        initialize(
+            entryPoint: string,
+            owner: string,
+            l1Storage: string,
+            paymaster: string,
+            overrides?: Overrides & { from?: string },
+        ): Promise<BigNumber>;
+    };
 
-  estimateGas: {
-    execute(
-      dest: string,
-      value: BigNumberish,
-      func: BytesLike,
-      overrides?: Overrides & { from?: string }
-    ): Promise<BigNumber>;
+    populateTransaction: {
+        execute(
+            dest: string,
+            value: BigNumberish,
+            func: BytesLike,
+            overrides?: Overrides & { from?: string },
+        ): Promise<PopulatedTransaction>;
 
-    initialize(
-      entryPoint: string,
-      owner: string,
-      l1Storage: string,
-      paymaster: string,
-      overrides?: Overrides & { from?: string }
-    ): Promise<BigNumber>;
-  };
-
-  populateTransaction: {
-    execute(
-      dest: string,
-      value: BigNumberish,
-      func: BytesLike,
-      overrides?: Overrides & { from?: string }
-    ): Promise<PopulatedTransaction>;
-
-    initialize(
-      entryPoint: string,
-      owner: string,
-      l1Storage: string,
-      paymaster: string,
-      overrides?: Overrides & { from?: string }
-    ): Promise<PopulatedTransaction>;
-  };
+        initialize(
+            entryPoint: string,
+            owner: string,
+            l1Storage: string,
+            paymaster: string,
+            overrides?: Overrides & { from?: string },
+        ): Promise<PopulatedTransaction>;
+    };
 }

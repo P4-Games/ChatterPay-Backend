@@ -1,0 +1,111 @@
+{
+    "root": true,
+    "env": {
+        "node": true,
+        "es2021": true
+    },
+    "plugins": ["perfectionist", "unused-imports", "@typescript-eslint", "prettier"],
+    "extends": [
+        "eslint:recommended",
+        "plugin:@typescript-eslint/recommended",
+        "airbnb-base",
+        "airbnb-typescript/base",
+        "prettier"
+    ],
+    "parser": "@typescript-eslint/parser",
+    "parserOptions": {
+        "ecmaVersion": "latest",
+        "sourceType": "module",
+        "project": "./tsconfig.json"
+    },
+    "settings": {
+        "import/resolver": {
+            "typescript": {
+                "alwaysTryTypes": true,
+                "project": "./tsconfig.json"
+            }
+        },
+        "import/parsers": {
+            "@typescript-eslint/parser": [".ts", ".tsx"]
+        }
+    },
+    "rules": {
+        "no-console": 0,
+        "no-unused-vars": "off",
+        "no-param-reassign": 0,
+        "no-underscore-dangle": 0,
+        "no-restricted-exports": 0,
+        "import/prefer-default-export": 0,
+        "@typescript-eslint/naming-convention": 0,
+        "@typescript-eslint/no-use-before-define": 0,
+        "prefer-destructuring": [
+            1,
+            {
+                "object": true,
+                "array": false
+            }
+        ],
+        "@typescript-eslint/no-unused-vars": [
+            1,
+            {
+                "args": "none"
+            }
+        ],
+        // unused-imports
+        "unused-imports/no-unused-imports": 1,
+        "unused-imports/no-unused-vars": [
+            0,
+            {
+                "vars": "all",
+                "varsIgnorePattern": "^_",
+                "args": "after-used",
+                "argsIgnorePattern": "^_"
+            }
+        ],
+        // perfectionist
+        "perfectionist/sort-named-imports": [
+            1,
+            {
+                "order": "asc",
+                "type": "line-length"
+            }
+        ],
+        "perfectionist/sort-named-exports": [
+            1,
+            {
+                "order": "asc",
+                "type": "line-length"
+            }
+        ],
+        "perfectionist/sort-exports": [
+            1,
+            {
+                "order": "asc",
+                "type": "line-length"
+            }
+        ],
+        "perfectionist/sort-imports": [
+            1,
+            {
+                "order": "asc",
+                "type": "line-length",
+                "newlines-between": "always",
+                "groups": [
+                    ["builtin", "external"],
+                    "internal-type",
+                    "internal",
+                    ["parent-type", "sibling-type", "index-type"],
+                    ["parent", "sibling", "index"],
+                    "object",
+                    "unknown"
+                ],
+                "custom-groups": {
+                    "value": {
+                        "internal": "src/**"
+                    }
+                },
+                "internal-pattern": ["src/**"]
+            }
+        ]
+    }
+}

@@ -1,14 +1,16 @@
-import { FastifyReply, FastifyRequest } from "fastify";
-import { authenticate } from "./transactionController";
-import { ethers } from "ethers";
-import { WETH_ADDRESS, USDT_ADDRESS, SIMPLE_SWAP_ADDRESS } from "../constants/contracts";
-import { SCROLL_CONFIG } from "../constants/networks";
+import { ethers } from 'ethers';
 import * as crypto from 'crypto';
-import chatterPayABI from "../chatterPayABI.json";
-import { ensureSignerHasEth } from "../services/walletService";
-import { computeProxyAddressFromPhone } from "../services/predictWalletService";
-import { sendSwapNotification, sendTransferNotification } from "./replyController";
-import Transaction from "../models/transaction";
+import { FastifyReply, FastifyRequest } from 'fastify';
+
+import Transaction from '../models/transaction';
+import { authenticate } from './transactionController';
+import chatterPayABI from '../utils/chatterPayABI.json';
+import { sendSwapNotification } from './replyController';
+import { getDynamicGas_callData } from '../utils/dynamicGas';
+import { getNetworkConfig } from '../services/networkService';
+import { ensureSignerHasEth } from '../services/walletService';
+import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import { WETH_ADDRESS, USDT_ADDRESS, SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
 
 interface SwapBody {
     channel_user_id: string;
@@ -17,79 +19,107 @@ interface SwapBody {
     amount: number;
 }
 
+interface SwapResult {
+    approveTransactionHash: string;
+    swapTransactionHash: string;
+}
+
+/**
+ * Validates the input for the swap operation.
+ * @param inputs The swap inputs to validate.
+ * @returns An error message if validation fails, or an empty string if validation succeeds.
+ */
 const validateInputs = (inputs: SwapBody): string => {
     const { channel_user_id, inputCurrency, outputCurrency, amount } = inputs;
 
     if (!channel_user_id || !inputCurrency || !outputCurrency) {
-        return "Missing required fields: address, inputCurrency, or outputCurrency";
+        return 'Missing required fields: address, inputCurrency, or outputCurrency';
     }
 
     if (channel_user_id.length > 15) {
-        return "El número de telefono no es válido";
+        return 'El número de telefono no es válido';
     }
 
     if (inputCurrency === outputCurrency) {
-        return "Input and output currencies must be different";
+        return 'Input and output currencies must be different';
     }
 
-    if (amount === undefined) {
-        return "Either inputAmount or outputAmount must be provided";
+    if (amount === undefined || amount <= 0) {
+        return 'Amount must be provided and greater than 0';
     }
 
-    if (amount !== undefined && amount <= 0) {
-        return "Amount must be greater than 0";
-    }
-
-    return "";
+    return '';
 };
 
+/**
+ * Executes the swap operation.
+ * @param simpleSwap The SimpleSwap contract instance.
+ * @param isWETHtoUSDT Whether the swap is from WETH to USDT.
+ * @param amount The amount to swap.
+ * @param proxyAddress The proxy address to use for the swap.
+ * @param signer The signer to use for transactions.
+ * @returns An object containing the approve and swap transaction hashes.
+ */
 async function executeSwap(
     simpleSwap: ethers.Contract,
     isWETHtoUSDT: boolean,
     amount: string,
     proxyAddress: string,
-    signer: ethers.Wallet
-) {
+    signer: ethers.Wallet,
+): Promise<SwapResult> {
     const amount_bn = ethers.utils.parseUnits(amount, 18);
     const tokenAddress = isWETHtoUSDT ? WETH_ADDRESS : USDT_ADDRESS;
-    const tokenContract = new ethers.Contract(tokenAddress, [
-        "function approve(address spender, uint256 amount) public returns (bool)"
-    ], signer);
+    const tokenContract = new ethers.Contract(
+        tokenAddress,
+        ['function approve(address spender, uint256 amount) public returns (bool)'],
+        signer,
+    );
     const chatterPay = new ethers.Contract(proxyAddress, chatterPayABI, signer);
+    const provider = signer.provider!;
 
     try {
         // 1. Approve tokens
-        console.log(`Approving ${isWETHtoUSDT ? "WETH" : "USDT"} for swap...`);
-        const approveEncode = tokenContract.interface.encodeFunctionData("approve", [SIMPLE_SWAP_ADDRESS, amount_bn]);
-        const approveCallData = chatterPay.interface.encodeFunctionData("execute", [tokenAddress, 0, approveEncode]);
+        console.log(`Approving ${isWETHtoUSDT ? 'WETH' : 'USDT'} for swap...`);
+        const approveEncode = tokenContract.interface.encodeFunctionData('approve', [
+            SIMPLE_SWAP_ADDRESS,
+            amount_bn,
+        ]);
+        const approveCallData = chatterPay.interface.encodeFunctionData('execute', [
+            tokenAddress,
+            0,
+            approveEncode,
+        ]);
         const approveTx = await signer.sendTransaction({
             to: proxyAddress,
             data: approveCallData,
-            gasLimit: 300000,
+            gasLimit: await getDynamicGas_callData(provider, tokenAddress, approveEncode),
         });
         await approveTx.wait();
-        console.log("Approval transaction confirmed");
+        console.log('Approval transaction confirmed');
 
         // 2. Execute swap
-        console.log(`Swapping ${isWETHtoUSDT ? "WETH for USDT" : "USDT for WETH"}...`);
-        let swapEncode;
-        if (isWETHtoUSDT) {
-            swapEncode = simpleSwap.interface.encodeFunctionData("swapWETHforUSDT", [amount_bn]);
-        } else {
-            swapEncode = simpleSwap.interface.encodeFunctionData("swapUSDTforWETH", [amount_bn]);
-        }  
-        const swapCallData = chatterPay.interface.encodeFunctionData("execute", [SIMPLE_SWAP_ADDRESS, 0, swapEncode]);
+        console.log(`Swapping ${isWETHtoUSDT ? 'WETH for USDT' : 'USDT for WETH'}...`);
+        const swapEncode = simpleSwap.interface.encodeFunctionData(
+            isWETHtoUSDT ? 'swapWETHforUSDT' : 'swapUSDTforWETH',
+            [amount_bn],
+        );
+        const swapCallData = chatterPay.interface.encodeFunctionData('execute', [
+            SIMPLE_SWAP_ADDRESS,
+            0,
+            swapEncode,
+        ]);
 
         const swapTx = await signer.sendTransaction({
             to: proxyAddress,
             data: swapCallData,
-            gasLimit: 500000,
+            gasLimit: await getDynamicGas_callData(provider, proxyAddress, swapEncode),
         });
         const receipt = await swapTx.wait();
         console.log(`Swap transaction confirmed in block ${receipt.blockNumber}`);
-        return { 
+
+        return {
             approveTransactionHash: approveTx.hash,
-            swapTransactionHash: receipt.transactionHash 
+            swapTransactionHash: receipt.transactionHash,
         };
     } catch (error) {
         console.error('Error in swap process:', error);
@@ -97,105 +127,163 @@ async function executeSwap(
     }
 }
 
-export const swap = async (
-    request: FastifyRequest<{ Body: SwapBody }>,
-    reply: FastifyReply
-) => {
+/**
+ * Generates a deterministic wallet for a user.
+ * @param channel_user_id The user's channel ID.
+ * @returns An object containing the signer and proxy address.
+ */
+async function generateUserWallet(channel_user_id: string) {
+    const seedPrivateKey = process.env.PRIVATE_KEY;
+    if (!seedPrivateKey) {
+        throw new Error('Seed private key not found in environment variables');
+    }
+
+    const seed = seedPrivateKey + channel_user_id;
+    const privateKey = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
+
+    const networkConfig = await getNetworkConfig();
+    const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
+    const signer = new ethers.Wallet(privateKey, provider);
+    const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+
+    await ensureSignerHasEth(signer, backendSigner, provider);
+
+    const proxy = await computeProxyAddressFromPhone(channel_user_id);
+
+    return { signer, proxyAddress: proxy.proxyAddress };
+}
+
+/**
+ * Saves the transaction details to the database.
+ * @param tx The transaction details.
+ * @param walletFrom The sender's wallet address.
+ * @param walletTo The recipient's wallet address.
+ * @param amount The transaction amount.
+ * @param currency The currency of the transaction.
+ */
+async function saveTransaction(
+    tx: string,
+    walletFrom: string,
+    walletTo: string,
+    amount: number,
+    currency: string,
+) {
+    await Transaction.create({
+        trx_hash: tx,
+        wallet_from: walletFrom,
+        wallet_to: walletTo,
+        type: 'transfer',
+        date: new Date(),
+        status: 'completed',
+        amount,
+        token: currency,
+    });
+}
+
+/**
+ * Handles the swap operation.
+ * @param request The FastifyRequest object containing the swap details.
+ * @param reply The FastifyReply object for sending the response.
+ */
+export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: FastifyReply) => {
     try {
+        // Authenticate the request
         authenticate(request);
 
+        // Extract swap details from request body
         const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
 
+        // Validate inputs
         const validationError = validateInputs(request.body);
         if (validationError) {
-            return reply.status(400).send({ message: validationError });
+            return await reply.status(400).send({ message: validationError });
         }
 
-        reply.status(200).send({ message: "Intercambio de monedas en progreso, puede tardar unos minutos..." });
+        // Send initial response to client
+        reply
+            .status(200)
+            .send({ message: 'Intercambio de monedas en progreso, puede tardar unos minutos...' });
 
-        // Generate a deterministic wallet from the user's address
-        const seedPrivateKey = process.env.PRIVATE_KEY;
-        if (!seedPrivateKey) {
-            throw new Error('Seed private key not found in environment variables');
-        }
+        // Generate user wallet
+        const { signer, proxyAddress } = await generateUserWallet(channel_user_id);
 
-        // Create a deterministic seed for generating the wallet
-        const seed = seedPrivateKey + channel_user_id;
+        console.log('Wallet of the signer: ', await signer.getAddress());
 
-        // Generate a deterministic private key
-        const privateKey = '0x' + crypto.createHash('sha256').update(seed).digest('hex');
+        // Create SimpleSwap contract instance (Custom demo contract for swapping between these two tokens)
+        const simpleSwap = new ethers.Contract(
+            SIMPLE_SWAP_ADDRESS,
+            [
+                'function swapWETHforUSDT(uint256 wethAmount) external',
+                'function swapUSDTforWETH(uint256 usdtAmount) external',
+            ],
+            signer,
+        );
 
-        // 1. Connect to the contracts
-        const provider = new ethers.providers.JsonRpcProvider(SCROLL_CONFIG.RPC_URL);
-        const signer = new ethers.Wallet(privateKey, provider);
-        const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
-
-        await ensureSignerHasEth(signer, backendSigner, provider);
-
-        const proxy = await computeProxyAddressFromPhone(channel_user_id);
-
-        const simpleSwap = new ethers.Contract(SIMPLE_SWAP_ADDRESS, [
-            "function swapWETHforUSDT(uint256 wethAmount) external",
-            "function swapUSDTforWETH(uint256 usdtAmount) external"
-        ], signer);
-
-        console.log("Wallet of the signer: ", await signer.getAddress());
-        
-        // 2. Determine swap direction and amount
-        const isWETHtoUSDT = inputCurrency.toUpperCase() === "WETH" && outputCurrency.toUpperCase() === "USDT";
+        // Determine swap direction and prepare input amount
+        const isWETHtoUSDT =
+            inputCurrency.toUpperCase() === 'WETH' && outputCurrency.toUpperCase() === 'USDT';
         const inputAmount = amount.toString();
 
-        // 3. Execute approval and swap
-        const erc20 = new ethers.Contract(outputCurrency === "WETH" ? WETH_ADDRESS : USDT_ADDRESS, [
-            'function balanceOf(address owner) view returns (uint256)',
-        ], signer);
+        // Create ERC20 contract instance for balance checks
+        const erc20 = new ethers.Contract(
+            isWETHtoUSDT ? WETH_ADDRESS : USDT_ADDRESS,
+            ['function balanceOf(address owner) view returns (uint256)'],
+            signer,
+        );
 
-        const balance = await erc20.balanceOf(proxy.proxyAddress);
-        console.log(`User balance of ${inputCurrency}: ${ethers.utils.formatUnits(balance, 18)}`);
+        // Check initial balance
+        const initialBalance = await erc20.balanceOf(proxyAddress);
+        console.log(
+            `User initial balance of ${inputCurrency}: ${ethers.utils.formatUnits(initialBalance, 18)}`,
+        );
 
-        const tx = await executeSwap(simpleSwap, isWETHtoUSDT, inputAmount, proxy.proxyAddress, signer);
+        // Execute swap
+        const tx = await executeSwap(simpleSwap, isWETHtoUSDT, inputAmount, proxyAddress, signer);
 
-        reply.status(200).send({ 
-            message: "Swap completed successfully", 
+        // Check final balance
+        const finalBalance = await erc20.balanceOf(proxyAddress);
+        console.log(
+            `User final balance of ${outputCurrency}: ${ethers.utils.formatUnits(finalBalance, 18)}`,
+        );
+
+        // Calculate swap result
+        const result = ethers.utils.formatUnits(finalBalance.sub(initialBalance), 18);
+
+        // Send swap notification
+        await sendSwapNotification(
+            channel_user_id,
+            inputCurrency,
+            amount.toString(),
+            result,
+            outputCurrency,
+            tx.swapTransactionHash,
+        );
+
+        // Save transactions
+        await saveTransaction(
+            tx.approveTransactionHash,
+            proxyAddress,
+            SIMPLE_SWAP_ADDRESS,
+            parseFloat(inputAmount),
+            inputCurrency,
+        );
+        await saveTransaction(
+            tx.swapTransactionHash,
+            SIMPLE_SWAP_ADDRESS,
+            proxyAddress,
+            parseFloat(result),
+            outputCurrency,
+        );
+
+        // Return success response
+        return await reply.status(200).send({
+            message: 'Swap completed successfully',
             approveTransactionHash: tx.approveTransactionHash,
-            swapTransactionHash: tx.swapTransactionHash 
+            swapTransactionHash: tx.swapTransactionHash,
         });
-
-        //Check user balance of the output currency
-        const outputBalance = await erc20.balanceOf(proxy.proxyAddress);
-        console.log(`User balance of ${outputCurrency}: ${ethers.utils.formatUnits(outputBalance, 18)}`);
-
-        //Calculate difference between input and output balances
-        const result = ethers.utils.formatUnits(outputBalance.sub(balance), 18);
-
-        sendSwapNotification(channel_user_id, inputCurrency, amount.toString(), result, outputCurrency, tx.swapTransactionHash)
-
-        //Save transaction objects for the swap in the database
-        await Transaction.create({
-            trx_hash: tx.approveTransactionHash,
-            wallet_from: proxy.proxyAddress,
-            wallet_to: SIMPLE_SWAP_ADDRESS,
-            type: "transfer",
-            date: new Date(),
-            status: "completed",
-            amount: parseFloat(inputAmount),
-            token: inputCurrency,
-        });
-        
-        await Transaction.create({
-            trx_hash: tx.swapTransactionHash,
-            wallet_from: SIMPLE_SWAP_ADDRESS,
-            wallet_to: proxy.proxyAddress,
-            type: "transfer",
-            date: new Date(),
-            status: "completed",
-            amount: parseFloat(result),
-            token: outputCurrency,
-        })
-
-        return;
     } catch (error) {
-        console.error("Error swapping tokens:", error);
-        return reply.status(500).send({ message: "Internal Server Error" });
+        // Handle errors
+        console.error('Error swapping tokens:', error);
+        return reply.status(500).send({ message: 'Internal Server Error' });
     }
 };
