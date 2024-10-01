@@ -51,7 +51,7 @@ async function updateUserConversationStatus(
 /**
  * Sends an operator reply to the API.
  */
-async function sendBotMessage(payload: OperatorReplyPayload): Promise<unknown> {
+async function sendBotMessage(payload: OperatorReplyPayload): Promise<string> {
     try {
         const sendMsgEndpint = `${botApiUrl}/chatbot/conversations/send-message`;
         const response = await axios.post(sendMsgEndpint, payload, {
@@ -75,19 +75,19 @@ export async function sendTransferNotification(
     from: string | null,
     amount: string,
     token: string,
-): Promise<void> {
+): Promise<string> {
     try {
-        console.log('Sending transfer notification');
-        await updateUserConversationStatus(channel_user_id, 'operator');
+        console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
 
         const payload: OperatorReplyPayload = {
             data_token: `${botDataToken}`,
             channel_user_id,
             message: `${from} te envio ${amount} ${token} 💸. \n Ya estan disponibles en tu billetera ChatterPay! 🥳`,
         };
-        await sendBotMessage(payload);
+        const data = await sendBotMessage(payload);
 
-        await updateUserConversationStatus(channel_user_id, 'assistant');
+        console.log('Notification sent:', data);
+        return data;
     } catch (error) {
         console.error('Error in sendTransferNotification:', error);
         throw error;
@@ -171,10 +171,9 @@ export async function sendOutgoingTransferNotification(
     amount: string,
     token: string,
     txHash: string,
-): Promise<void> {
+): Promise<string> {
     try {
         console.log('Sending outgoing transfer notification');
-        await updateUserConversationStatus(channel_user_id, 'operator');
 
         const networkConfig: NetworkConfig = await getNetworkConfig();
 
@@ -183,9 +182,9 @@ export async function sendOutgoingTransferNotification(
             channel_user_id,
             message: `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${txHash}`,
         };
-        await sendBotMessage(payload);
-
-        await updateUserConversationStatus(channel_user_id, 'assistant');
+        const data = await sendBotMessage(payload);
+        console.log('Notification sent:', data);
+        return data;
     } catch (error) {
         console.error('Error in sendOutgoingTransferNotification:', error);
         throw error;
