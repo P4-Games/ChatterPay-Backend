@@ -1,9 +1,7 @@
 import axios from 'axios';
-import mongoose from 'mongoose';
 
-import { connectToMongoDB } from './dbConnections';
+import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from '../services/networkService';
-import { UserConversation, userConversationSchema } from '../models/userConversation';
 
 const botDataToken = process.env?.BOT_DATA_TOKEN ?? '';
 const botApiUrl = process.env?.BOT_API_URL ?? '';
@@ -73,7 +71,7 @@ export async function sendSwapNotification(
 ): Promise<void> {
     try {
         console.log('Sending swap notification');
-        const networkConfig: NetworkConfig = await getNetworkConfig();
+        const networkConfig: IBlockchain = await getNetworkConfig();
 
         const payload: OperatorReplyPayload = {
             data_token: `${botDataToken}`,
@@ -114,7 +112,7 @@ export async function sendMintInProgressNotification(channel_user_id: string): P
 export async function sendMintNotification(channel_user_id: string, id: number): Promise<void> {
     try {
         console.log('Sending mint notification');
-        const networkConfig: NetworkConfig = await getNetworkConfig(421614);
+        const networkConfig: IBlockchain = await getNetworkConfig(421614);
 
         const payload: OperatorReplyPayload = {
             data_token: `${botDataToken}`,
@@ -141,7 +139,7 @@ export async function sendOutgoingTransferNotification(
     try {
         console.log('Sending outgoing transfer notification');
 
-        const networkConfig: NetworkConfig = await getNetworkConfig();
+        const networkConfig: IBlockchain = await getNetworkConfig();
 
         const payload: OperatorReplyPayload = {
             data_token: `${botDataToken}`,

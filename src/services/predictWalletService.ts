@@ -1,8 +1,9 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
-import { getNetworkConfig } from './networkService';
+import { IBlockchain } from '../models/blockchain';
 import { getDynamicGas } from '../utils/dynamicGas';
+import { getNetworkConfig } from './networkService';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {
@@ -51,7 +52,7 @@ export interface ComputedAddress {
  * @throws {Error} If there's an error in the computation process.
  */
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
-    const networkConfig = await getNetworkConfig();
+    const networkConfig: IBlockchain = await getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
         name: 'scroll-sepolia',
         chainId: 534351,
@@ -59,7 +60,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
 
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
     const factory = ChatterPayWalletFactory__factory.connect(
-        networkConfig.factoryAddress,
+        networkConfig.contracts.factoryAddress,
         backendSigner,
     );
 

@@ -212,7 +212,7 @@ export async function sendUserOperation(
     await ensureSignerHasEth(signer, backendSigner, provider);
 
     const networkConfig = await getNetworkConfig();
-    const entrypoint = new ethers.Contract(networkConfig.entryPoint, entryPoint, signer);
+    const entrypoint = new ethers.Contract(networkConfig.contracts.entryPoint, entryPoint, signer);
 
     let userOperation = await createUserOperation(
         chatterPay,
