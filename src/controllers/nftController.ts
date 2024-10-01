@@ -2,7 +2,6 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { isValidUrl } from '../utils/paramsUtils';
-import { issueTokensCore } from './tokenController';
 import { getDynamicGas } from '../utils/dynamicGas';
 import { getWalletByPhoneNumber } from '../models/user';
 import { defaultNftImage } from '../constants/contracts';
@@ -71,7 +70,7 @@ const mint_eth_nft = async (
         console.log('Transaction confirmed: ', receipt.transactionHash);
 
         // Filtrar el evento Minted para obtener el tokenId
-        const event = receipt.events?.find((e: { event: string; }) => e.event === 'Minted');
+        const event = receipt.events?.find((e: { event: string }) => e.event === 'Minted');
 
         if (!event) {
             throw new Error('Minted event not found in transaction receipt');
@@ -149,7 +148,7 @@ const processNftMint = async (
     }
 
     // OPTIMISTIC RESPONSE: respond quickly to the user and process the rest of the flow asynchronously.
-    const nftMintedId = data.tokenId.toNumber();
+    const nftMintedId = data.tokenId.toString();
     try {
         await sendMintNotification(channel_user_id, nftMintedId);
     } catch (error) {
@@ -283,7 +282,7 @@ export const mintExistingNFT = async (
             metadata: nft.metadata ? nft.metadata : defaultMetadata,
         });
 
-        sendMintNotification(channel_user_id, parseInt(id, 10));
+        sendMintNotification(channel_user_id, id);
         reply.status(200).send({ message: 'Certificado NFT generado.' });
         return true;
     } catch (error) {
@@ -437,4 +436,4 @@ export const getNftList = async (
         console.error('Error al obtener el NFT:', error);
         return reply.status(500).send({ message: 'Internal Server Error' });
     }
-}
+};

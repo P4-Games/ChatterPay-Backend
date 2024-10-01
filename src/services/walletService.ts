@@ -1,12 +1,12 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
-import entryPoint from "../utils/entryPoint.json";
-import { getNetworkConfig } from "./networkService";
-import { executeWithDynamicGas, getDynamicGas } from '../utils/dynamicGas';
-import chatterPayABI from "../utils/chatterPayABI.json";
+import entryPoint from '../utils/entryPoint.json';
+import { getNetworkConfig } from './networkService';
+import chatterPayABI from '../utils/chatterPayABI.json';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { computeProxyAddressFromPhone } from './predictWalletService';
+import { getDynamicGas, executeWithDynamicGas } from '../utils/dynamicGas';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts/factories/ChatterPayWalletFactory__factory';
 
 /**
@@ -71,8 +71,10 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
     const proxy = await computeProxyAddressFromPhone(fromNumber);
     const code = await provider.getCode(proxy.proxyAddress);
     if (code === '0x') {
-        console.log(`Creating new wallet for EOA: ${proxy.EOAAddress}, will result in: ${proxy.proxyAddress}...`);
-        const tx = await factory.createProxy(proxy.EOAAddress, { 
+        console.log(
+            `Creating new wallet for EOA: ${proxy.EOAAddress}, will result in: ${proxy.proxyAddress}...`,
+        );
+        const tx = await factory.createProxy(proxy.EOAAddress, {
             gasLimit: await getDynamicGas(factory, 'createProxy', [proxy.EOAAddress]),
         });
         await tx.wait();
@@ -287,7 +289,10 @@ async function executeTransfer(
 ): Promise<{ transactionHash: string }> {
     try {
         const entrypoint_backend = entrypoint.connect(backendSigner);
-        const tx = await executeWithDynamicGas(entrypoint_backend, 'handleOps', [[userOperation], signer.address]);
+        const tx = await executeWithDynamicGas(entrypoint_backend, 'handleOps', [
+            [userOperation],
+            signer.address,
+        ]);
         console.log(`User Operation execute confirmed in block ${tx.receipt.blockNumber}`);
         return { transactionHash: tx.transactionHash };
     } catch (error) {

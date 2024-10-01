@@ -6,10 +6,10 @@ import mongoose from 'mongoose';
  * @throws {Error} If the connection to MongoDB fails
  */
 export async function connectToDatabase(): Promise<void> {
-    console.debug("Connecting to database");
-    console.debug("MONGO_URI: ", process.env.MONGO_URI);
+    console.debug('Connecting to database');
+    console.debug('MONGO_URI: ', process.env.MONGO_URI);
     const MongoURI: string = process.env.MONGO_URI ?? 'mongodb://localhost:27017/chatterpay';
-    console.debug("MongoURI: ", MongoURI);
+    console.debug('MongoURI: ', MongoURI);
     try {
         await mongoose.connect(MongoURI);
         console.log('MongoDB connected');

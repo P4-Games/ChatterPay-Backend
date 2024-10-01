@@ -2,8 +2,8 @@ import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
 import { getNetworkConfig } from './networkService';
-import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 import { getDynamicGas } from '../utils/dynamicGas';
+import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {
     hashedPrivateKey: string;
@@ -71,13 +71,11 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
 
     const code = await provider.getCode(proxyAddress);
     if (code === '0x') {
-        console.log(`Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}...`);
-        const tx = await factory.createProxy(ownerAddress.publicKey, { 
-            gasLimit: await getDynamicGas(
-                factory,
-                'createProxy',
-                [ownerAddress.publicKey]
-            ) 
+        console.log(
+            `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}...`,
+        );
+        const tx = await factory.createProxy(ownerAddress.publicKey, {
+            gasLimit: await getDynamicGas(factory, 'createProxy', [ownerAddress.publicKey]),
         });
         await tx.wait();
     }
