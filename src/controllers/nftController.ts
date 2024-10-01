@@ -41,7 +41,7 @@ const mint_eth_nft = async (
 
         // Crear una instancia del contrato usando ethers.js
         const nftContract = new ethers.Contract(
-            networkConfig.chatterNFTAddress,
+            networkConfig.contracts.chatterNFTAddress,
             [
                 'function safeMint(address to, string memory image) public returns (uint256)',
                 'event Minted(address indexed to, uint256 indexed tokenId)',
@@ -52,7 +52,7 @@ const mint_eth_nft = async (
         console.log(
             'nft contract: ',
             nftContract.address,
-            networkConfig.chatterNFTAddress,
+            networkConfig.contracts.chatterNFTAddress,
             networkConfig.rpc,
             backendSigner.address,
         );
@@ -371,7 +371,7 @@ export const getPhoneNFTs = async (
             count: nfts.length,
             nfts: nfts.map((nft: INFT) => ({
                 description: nft.metadata.description,
-                url: `https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.chatterNFTAddress}/${nft.id}`,
+                url: `https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.contracts.chatterNFTAddress}/${nft.id}`,
             })),
         };
     } catch (error) {
