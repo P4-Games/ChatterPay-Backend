@@ -1,0 +1,81 @@
+steps:
+  # Para para generar un .env para que sea tomado por el step de build.
+  # Las variables serán tomadas de la definición del "trigger",  
+  # "variables de sustitución", en Google Cloud Build.
+  # en gcp, se tiene que poner como nombre de cada variable, el unserscore 
+  # como prefijo. Ejemplo: "_APP_ENV"
+  #
+  - name: 'gcr.io/cloud-builders/npm'
+    id: CreateEnv
+    args: ['run', 'create-env']
+    env:
+      - ALCHEMY_API_KEY=${_ALCHEMY_API_KEY}
+      - INFURA_API_KEY=${_INFURA_API_KEY}
+      - MONGO_URI=${_MONGO_URI}
+      - THRIDWEB_CLIENT_ID=${_THRIDWEB_CLIENT_ID}
+      - THIRDWEB_CLIENT_SECRET=${_THIRDWEB_CLIENT_SECRET}
+      - PRIVATE_KEY=${_PRIVATE_KEY}
+      - SIGNING_KEY=${_SIGNING_KEY}
+      - PINATA_JWT=${_PINATA_JWT}
+      - GATEWAY_URL=${_GATEWAY_URL}
+      - ICP_CANISTER_ID=${_ICP_CANISTER_ID}
+      - ICP_MNEMONIC=${_ICP_MNEMONIC}
+      - BOT_API_URL=${_BOT_API_URL}
+      - BOT_DATA_TOKEN=${_BOT_DATA_TOKEN}
+
+  # build the container images
+  - name: "gcr.io/cloud-builders/docker"
+    id: Build
+    args: [
+      "build", 
+      "--no-cache", 
+      "-t", 
+      "$_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA", 
+      "--build-arg", "ALCHEMY_API_KEY=${_ALCHEMY_API_KEY}",
+      "--build-arg", "INFURA_API_KEY=${_INFURA_API_KEY}",
+      "--build-arg", "MONGO_URI=${_MONGO_URI}",
+      "--build-arg", "THRIDWEB_CLIENT_ID=${_THRIDWEB_CLIENT_ID}",
+      "--build-arg", "THIRDWEB_CLIENT_SECRET=${_THIRDWEB_CLIENT_SECRET}",
+      "--build-arg", "PRIVATE_KEY=${_PRIVATE_KEY}",
+      "--build-arg", "SIGNING_KEY=${_SIGNING_KEY}",
+      "--build-arg", "PINATA_JWT=${_PINATA_JWT}",
+      "--build-arg", "GATEWAY_URL=${_GATEWAY_URL}",
+      "--build-arg", "ICP_CANISTER_ID=${_ICP_CANISTER_ID}",
+      "--build-arg", "ICP_MNEMONIC=${_ICP_MNEMONIC}",
+      "--build-arg", "BOT_API_URL=${_BOT_API_URL}",
+      "--build-arg", "BOT_DATA_TOKEN=${_BOT_DATA_TOKEN}",
+      "."
+    ]
+
+  # push the container images to Container Registry
+  - name: "gcr.io/cloud-builders/docker"
+    id: Push
+    args: [
+      "push", 
+      "$_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA"
+    ]
+
+  # Deploy container images to Cloud Run
+  - name: "gcr.io/cloud-builders/gcloud"
+    id: Deploy
+    entrypoint: gcloud
+    args: [
+      "run",
+      "deploy",
+      "$_SERVICE_NAME",
+      "--platform",
+      "managed",
+      "--region",
+      "$_DEPLOY_REGION",
+      "--image",
+      "$_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA",
+      "--labels",
+      "managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID",
+      "--quiet",
+      "--allow-unauthenticated",
+    ]
+images:
+  - $_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY
