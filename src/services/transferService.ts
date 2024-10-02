@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 
+import { gasService } from './gasService';
 import entryPoint from '../utils/entryPoint.json';
 import { getBlockchain } from './blockchainService';
 import { getNetworkConfig } from './networkService';
@@ -7,7 +8,7 @@ import { generatePrivateKey } from '../utils/keyGenerator';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { setupERC20, setupContracts } from './contractSetupService';
-import { signUserOperation, createUserOperation, ensureAccountHasPrefund } from './userOperationService';
+import { signUserOperation, createUserOperation } from './userOperationService';
 
 /**
  * Sends a user operation for token transfer.
@@ -58,11 +59,21 @@ export async function sendUserOperation(
         console.log("Creating user op");
         let userOperation = await createUserOperation(entrypoint, chatterPay, erc20, to, amount, proxy.proxyAddress);
 
+        const gasServiceConfig = gasService.createConfig(
+            process.env.ARBITRUM_SEPOLIA_RPC_URL!,
+            process.env.ALCHEMY_POLICY_ID!,
+            networkConfig.contracts.entryPoint,
+            networkConfig.rpc
+        );
+
+        console.log("Applying paymaster data to user op");
+        userOperation = await gasService.applyPaymasterDataToUserOp(gasServiceConfig, userOperation, signer);
+
         console.log("Signing user op");
         userOperation = await signUserOperation(userOperation, networkConfig.contracts.entryPoint, signer);
 
-        console.log("Ensuring account has enough prefund");
-        await ensureAccountHasPrefund(entrypoint, userOperation, backendSigner);
+        // console.log("Ensuring account has enough prefund");
+        // await ensureAccountHasPrefund(entrypoint, userOperation, backendSigner);
 
         console.log("Sending user operation to bundler");
         const bundlerResponse = await sendUserOperationToBundler(bundlerUrl, userOperation, entrypoint.address);
