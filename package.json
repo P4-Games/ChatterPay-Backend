@@ -1,14 +1,24 @@
 {
-    "name": "eth-arg",
+    "name": "chatterpay-backend",
+    "license": "MIT",
+    "private": false,
+    "author": "P4-games",
+    "version": "1.0.0",
+    "description": "Crypto a un mensaje de distancia!",
     "module": "src/index.ts",
     "type": "module",
     "scripts": {
         "start": "bun run src/index.ts",
+        "build": "bun build src/index.ts",
         "generate-types": "typechain --target=ethers-v5 './src/artifacts/**/*.json'",
         "dev": "bun --watch src/index.ts",
         "lint": "eslint . --ext .ts",
         "lint:fix": "eslint . --ext .ts --fix",
-        "format": "prettier --write ."
+        "format": "prettier --write .",
+        "create-env": "printenv > .env",
+        "pre-commit": "npm run format && npm run lint:fix",
+        "docker:build": "bash ./scripts/docker-build.sh",
+        "docker:run": "bash docker run -d -p 3000:3000 --name chatterpay-back-app-container chatterpay-back-app"
     },
     "devDependencies": {
         "@types/bun": "latest",
@@ -60,6 +70,7 @@
         "fastify-rate-limit": "^5.9.0",
         "fastify-swagger": "^5.2.0",
         "form-data": "^4.0.0",
+        "husky": "^9.1.6",
         "logger": "^0.0.1",
         "mongoose": "^8.5.2",
         "pinata-web3": "^0.4.1",
@@ -71,5 +82,10 @@
     },
     "trustedDependencies": [
         "es5-ext"
-    ]
+    ],
+    "husky": {
+        "hooks": {
+            "pre-commit": "npm run pre-commit"
+        }
+    }
 }
