@@ -1,5 +1,10 @@
 {
-    "name": "eth-arg",
+    "name": "chatterpay-backend",
+    "license": "MIT",
+    "private": false,
+    "author": "P4-games",
+    "version": "1.0.0",
+    "description": "Crypto a un mensaje de distancia!",
     "module": "src/index.ts",
     "type": "module",
     "scripts": {
