@@ -1,13 +1,12 @@
 import axios from 'axios';
 import { ethers, BigNumber } from 'ethers';
 
+import { getNetworkConfig } from './networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
 
 /** URLs and API Keys */
 const SCROLL_TESTNET_API = 'https://api-sepolia.scrollscan.com/api';
 const SEPOLIA_API = 'https://api-sepolia.etherscan.io/api';
-const SCROLL_API_KEY = process.env?.SCROLLSCAN_API_KEY ?? '';
-const SEPOLIA_API_KEY = process.env?.ETHERSCAN_API_KEY ?? '';
 
 const WALLETS_TO_MONITOR: string[] = ['WALLET1', 'WALLET2', 'WALLET3'];
 
@@ -138,18 +137,21 @@ async function findApproximateDepositTransactions(
     wallet: string,
     depositAmount: BigNumber,
 ): Promise<DepositTransaction[]> {
+    const networkConfigScroll = await getNetworkConfig(534352);
+    const networkConfiEtjereum = await getNetworkConfig(1);
+
     let depositTxs = await findApproximateDepositTransactionsOnNetwork(
         wallet,
         depositAmount,
         SCROLL_TESTNET_API,
-        SCROLL_API_KEY,
+        networkConfigScroll.scan_apikey,
     );
     if (depositTxs.length === 0) {
         depositTxs = await findApproximateDepositTransactionsOnNetwork(
             wallet,
             depositAmount,
             SEPOLIA_API,
-            SEPOLIA_API_KEY,
+            networkConfiEtjereum.scan_apikey,
         );
     }
     return depositTxs;
