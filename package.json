@@ -9,11 +9,15 @@
     "type": "module",
     "scripts": {
         "start": "bun run src/index.ts",
+        "build": "bun build src/index.ts",
         "generate-types": "typechain --target=ethers-v5 './src/artifacts/**/*.json'",
         "dev": "bun --watch src/index.ts",
         "lint": "eslint . --ext .ts",
         "lint:fix": "eslint . --ext .ts --fix",
-        "format": "prettier --write ."
+        "format": "prettier --write .",
+        "create-env": "printenv > .env",
+        "docker:build": "bash ./scripts/docker-build.sh",
+        "docker:run": "bash docker run -d -p 3000:3000 --name chatterpay-back-app-container chatterpay-back-app"
     },
     "devDependencies": {
         "@types/bun": "latest",
