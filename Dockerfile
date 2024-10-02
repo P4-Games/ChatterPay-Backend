@@ -45,6 +45,7 @@ COPY src ./src
 
 # Expone el puerto en el que se ejecuta la aplicación
 EXPOSE 3000
-
+ENV PORT 3000
 # Comando para ejecutar la aplicación
 CMD ["bun", "start"]
+
