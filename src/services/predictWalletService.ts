@@ -58,7 +58,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
 
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
     const factory = ChatterPayWalletFactory__factory.connect(
-        networkConfig.factoryAddress,
+        networkConfig.contracts.factoryAddress,
         backendSigner,
     );
 
@@ -67,6 +67,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
     const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
         gasLimit: 1000000,
     });
+    console.log(`Computed proxy address: ${proxyAddress}`);
 
     const code = await provider.getCode(proxyAddress);
     if (code === '0x') {

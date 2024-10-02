@@ -78,7 +78,7 @@ export async function createUserOperation(
 
     const verificationGasLimit = BigNumber.from(120532);
     const callGasLimit = BigNumber.from(410000);
-    const preVerificationGas = BigNumber.from(255943); 
+    const preVerificationGas = BigNumber.from(300_000); 
     const maxFeePerGas = BigNumber.from(ethers.utils.parseUnits("10", "gwei"));
     const maxPriorityFeePerGas = BigNumber.from(ethers.utils.parseUnits("1", "gwei"));
 
