@@ -1,6 +1,8 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
+import { IBlockchain } from '../models/blockchain';
+import { getDynamicGas } from '../utils/dynamicGas';
 import { getNetworkConfig } from './networkService';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
@@ -50,7 +52,7 @@ export interface ComputedAddress {
  * @throws {Error} If there's an error in the computation process.
  */
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
-    const networkConfig = await getNetworkConfig();
+    const networkConfig: IBlockchain = await getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
         name: "arbitrum-sepolia",
         chainId: 421614,
@@ -74,7 +76,9 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
         console.log(
             `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}...`,
         );
-        const tx = await factory.createProxy(ownerAddress.publicKey, { gasLimit: 1000000 });
+        const tx = await factory.createProxy(ownerAddress.publicKey, {
+            gasLimit: await getDynamicGas(factory, 'createProxy', [ownerAddress.publicKey]),
+        });
         await tx.wait();
     }
 

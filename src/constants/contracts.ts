@@ -19,3 +19,6 @@ export const USDT_ADDRESS = "0xB983f7176fB3d2D87c30943D3d5C80351fE26e2b";
 export const SIMPLE_SWAP_ADDRESS = "0x2493CeB3Ae366eF75bfaA1851B80a420F729F048";
 export const defaultNftImage =
     'https://storage.googleapis.com/chatbot-multimedia/chatterpay/default/default_nft.png';
+
+export const NFT_UPLOAD_IMAGE_ICP = process.env.NFT_UPLOAD_IMAGE_ICP === 'true' ?? true;
+export const NFT_UPLOAD_IMAGE_IPFS = process.env.NFT_UPLOAD_IMAGE_IPFS === 'true' ?? true;

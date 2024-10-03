@@ -1,18 +1,24 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { issueTokensCore } from './tokenController';
+import { isValidUrl } from '../utils/paramsUtils';
+import { getDynamicGas } from '../utils/dynamicGas';
 import { getWalletByPhoneNumber } from '../models/user';
 import { defaultNftImage } from '../constants/contracts';
+import { sendMintNotification } from './replyController';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
 import { executeWalletCreation } from './newWalletController';
-import { sendMintNotification, sendMintInProgressNotification } from './replyController';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
 export interface NFTInfo {
     description: string;
     url: string;
+}
+
+interface NFTData {
+    receipt: ethers.ContractReceipt;
+    tokenId: ethers.BigNumber;
 }
 
 /**
@@ -40,7 +46,7 @@ const mint_eth_nft = async (
 
         // Crear una instancia del contrato usando ethers.js
         const nftContract = new ethers.Contract(
-            networkConfig.chatterNFTAddress,
+            networkConfig.contracts.chatterNFTAddress,
             [
                 'function safeMint(address to, string memory image) public returns (uint256)',
                 'event Minted(address indexed to, uint256 indexed tokenId)',
@@ -50,16 +56,15 @@ const mint_eth_nft = async (
 
         console.log(
             'nft contract: ',
-            nftContract.address,
-            networkConfig.chatterNFTAddress,
+            networkConfig.contracts.chatterNFTAddress,
             networkConfig.rpc,
             backendSigner.address,
         );
 
-        console.log('Safe minting...');
+        console.log('Safe minting', recipientAddress, image);
 
         const tx = await nftContract.safeMint(recipientAddress, image, {
-            gasLimit: 500000,
+            gasLimit: await getDynamicGas(nftContract, 'safeMint', [recipientAddress, image]),
         });
 
         console.log('Transaction sent: ', tx.hash);
@@ -69,7 +74,7 @@ const mint_eth_nft = async (
         console.log('Transaction confirmed: ', receipt.transactionHash);
 
         // Filtrar el evento Minted para obtener el tokenId
-        const event = receipt.events?.find((e) => e.event === 'Minted');
+        const event = receipt.events?.find((e: { event: string }) => e.event === 'Minted');
 
         if (!event) {
             throw new Error('Minted event not found in transaction receipt');
@@ -102,27 +107,53 @@ export const mintNFT = async (
         };
     }>,
     reply: FastifyReply,
-): Promise<boolean> => {
+): Promise<void> => {
     const { channel_user_id, url, mensaje, latitud, longitud } = request.body;
+
+    if (!isValidUrl(url)) {
+        return reply.status(400).send({ message: 'La URL proporcionada no es válida.' });
+    }
 
     const address_of_user = await getWalletByPhoneNumber(channel_user_id);
     if (!address_of_user) {
-        reply.status(400).send({ message: 'La wallet del usuario no existe.' });
-        return false;
+        return reply.status(400).send({ message: 'La wallet del usuario no existe.' });
     }
 
-    try {
-        await sendMintInProgressNotification(channel_user_id);
-    } catch (error) {
-        console.error('Error al enviar notificación de minteo de NFT', error.message);
-        throw error;
-    }
+    reply.status(200).send({ message: `El certificado se está generando` });
 
-    let data;
+    // Continuar el procesamiento en segundo plano sin await
+    processNftMint(address_of_user, channel_user_id, url, mensaje)
+        .then((nftData) => {
+            persistNftInBdd(
+                address_of_user,
+                channel_user_id,
+                url,
+                mensaje,
+                latitud,
+                longitud,
+                nftData,
+            );
+        })
+        .catch((error) => {
+            console.error('Error al procesar el minteo del NFT:', error.message);
+        });
+
+    // Retorna void explícitamente
+    return Promise.resolve();
+};
+
+const processNftMint = async (
+    address_of_user: string,
+    channel_user_id: string,
+    url: string,
+    mensaje: string,
+): Promise<NFTData> => {
+    let data: NFTData;
+
     try {
         const nfImageURL = new URL(url ?? defaultNftImage);
         data = await mint_eth_nft(
-            address_of_user,
+            address_of_user!,
             'chatterpay-nft',
             mensaje || '',
             nfImageURL.toString(),
@@ -132,58 +163,51 @@ export const mintNFT = async (
         throw error;
     }
 
-    // OPTIMISTIC RESPONSE: respond quickly to the user and process the rest of the flow asynchronously.
-    const nftMintedId = data.tokenId;
+    const nftMintedId = data.tokenId.toString();
     try {
         await sendMintNotification(channel_user_id, nftMintedId);
     } catch (error) {
-        console.error('Error al enviar notificación de minteo de NFT', error.message);
-        throw error;
+        console.error('Error al enviar notificación de minteo de NFT', (error as Error).message);
+        // No se lanza error aquí para continuar con el proceso
     }
 
+    return data;
+};
+
+const persistNftInBdd = async (
+    address_of_user: string,
+    channel_user_id: string,
+    url: string,
+    mensaje: string,
+    latitud: string,
+    longitud: string,
+    nftData: NFTData,
+) => {
     let processedImage;
     try {
         console.info('Obteniendo imagen de NFT');
         processedImage = await downloadAndProcessImage(url); // always jpg
     } catch (error) {
-        reply.status(400).send({ message: 'Hubo un error al obtener la imagen del NFT' });
-        console.error('Error al descargar la imagen del NFT:', error);
-        throw error;
+        console.error('Error al descargar la imagen del NFT:', (error as Error).message);
+        return;
     }
 
-    const fileName = `${channel_user_id.toString()}_${Date.now()}.jpg`;
-    let ipfsImageUrl = '';
-    let icpImageUrl = '';
-
+    // Guardar los detalles iniciales del NFT en la base de datos.
     try {
-        ipfsImageUrl = await uploadToIpfs(processedImage, fileName);
-    } catch (error) {
-        console.error('Error al subir la imagen a IPFS', error);
-        // no throw error!
-    }
-
-    try {
-        icpImageUrl = await uploadToICP(processedImage, fileName);
-    } catch (error) {
-        console.error('Error al subir la imagen a ICP', error);
-        // no throw error!
-    }
-
-    try {
-        console.info('guardando NFT en bdd');
+        console.info('Guardando NFT inicial en bdd');
         await NFTModel.create({
-            id: nftMintedId,
+            id: nftData.tokenId.toString(),
             channel_user_id,
             wallet: address_of_user,
-            trxId: data.receipt.transactionHash,
+            trxId: nftData.receipt.transactionHash,
             copy_of: null,
             original: true,
             timestamp: new Date(),
             metadata: {
                 image_url: {
                     gcp: url || '',
-                    icp: icpImageUrl! || '',
-                    ipfs: ipfsImageUrl! || '',
+                    icp: '',
+                    ipfs: '',
                 },
                 description: mensaje || '',
                 geolocation: {
@@ -193,11 +217,43 @@ export const mintNFT = async (
             },
         });
     } catch (error) {
-        console.error('Error al grabar NFT en bdd', error);
-        return reply.status(500).send({ message: 'Error al guardar el NFT.' });
+        console.error('Error al grabar NFT inicial en bdd', (error as Error).message);
+        return; // Si falla la creación inicial, no tiene sentido continuar
     }
 
-    return reply.status(200).send({ message: 'NFT minted.' });
+    const fileName = `${channel_user_id.toString()}_${Date.now()}.jpg`;
+    let ipfsImageUrl = '';
+    let icpImageUrl = '';
+
+    try {
+        ipfsImageUrl = await uploadToIpfs(processedImage, fileName);
+    } catch (error) {
+        console.error('Error al subir la imagen a IPFS', (error as Error).message);
+        // No se lanza error aquí para continuar con el proceso
+    }
+
+    try {
+        icpImageUrl = await uploadToICP(processedImage, fileName);
+    } catch (error) {
+        console.error('Error al subir la imagen a ICP', (error as Error).message);
+        // No se lanza error aquí para continuar con el proceso
+    }
+
+    // Actualizar las URLs de IPFS e ICP en la base de datos
+    try {
+        console.info('Actualizando URLs de IPFS e ICP en bdd');
+        await NFTModel.updateOne(
+            { id: nftData.tokenId.toString() },
+            {
+                $set: {
+                    'metadata.image_url.icp': icpImageUrl || '',
+                    'metadata.image_url.ipfs': ipfsImageUrl || '',
+                },
+            },
+        );
+    } catch (error) {
+        console.error('Error al actualizar NFT en bdd', (error as Error).message);
+    }
 };
 
 /**
@@ -223,9 +279,6 @@ export const mintExistingNFT = async (
         if (!address_of_user) {
             console.log('La wallet del usuario no existe. Creando...');
             address_of_user = await executeWalletCreation(channel_user_id);
-
-            // Issue demo tokens to the user. This will be later removed in mainnet
-            issueTokensCore(address_of_user);
         }
 
         const nfts: INFT[] = await NFTModel.find({ id: parseInt(id, 10) });
@@ -278,7 +331,7 @@ export const mintExistingNFT = async (
         reply.status(200).send({ message: 'Certificado NFT generado.' });
         return true;
     } catch (error) {
-        console.error('Error en mintExistingNFT', error.message);
+        console.error('Error en mintExistingNFT', (error as Error).message);
         throw error;
     }
 };
@@ -363,7 +416,7 @@ export const getPhoneNFTs = async (
             count: nfts.length,
             nfts: nfts.map((nft: INFT) => ({
                 description: nft.metadata.description,
-                url: `https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.chatterNFTAddress}/${nft.id}`,
+                url: `https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.contracts.chatterNFTAddress}/${nft.id}`,
             })),
         };
     } catch (error) {
@@ -387,4 +440,87 @@ export const getAllNFTs = async (
     const result = await getPhoneNFTs(phone_number);
 
     return reply.status(200).send(result);
+};
+
+/**
+ * Retrieves the NFT information by its token ID.
+ * @param {FastifyRequest} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<void>} The NFT information.
+ */
+export const getNftList = async (
+    request: FastifyRequest<{
+        Params: {
+            tokenId: number;
+        };
+    }>,
+    reply: FastifyReply,
+): Promise<void> => {
+    const { tokenId } = request.params;
+    try {
+        const nfts = await NFTModel.find({ id: tokenId });
+
+        if (nfts.length === 0) {
+            return await reply.status(400).send({ message: 'NFT not found' });
+        }
+
+        const nft = nfts[0];
+        if (nft.original) {
+            return await reply.status(200).send({
+                original: nft,
+                copies: await NFTModel.find({ copy_of: tokenId }),
+            });
+        }
+
+        const originalNft = (await NFTModel.find({ id: nft.copy_of }))?.[0];
+        return await reply.status(200).send({
+            original: originalNft,
+            copy: nft,
+        });
+    } catch (error) {
+        console.error('Error al obtener el NFT:', error);
+        return reply.status(500).send({ message: 'Internal Server Error' });
+    }
+};
+
+/**
+ * Retrieves the NFT metadata required by the smart contract to be displayed on OpenSea.
+ * @param {FastifyRequest} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<void>} The NFT metadata required by openSea.
+ */
+export const getNftMetadataRequiredByOpenSea = async (
+    request: FastifyRequest<{
+        Params: {
+            tokenId: number;
+        };
+    }>,
+    reply: FastifyReply,
+): Promise<void> => {
+    const { tokenId } = request.params;
+    try {
+        const nfts: INFT[] = await NFTModel.find({ id: tokenId });
+        console.log('1', tokenId);
+        if (nfts.length === 0) {
+            return await reply.status(400).send({ message: 'NFT not found' });
+        }
+
+        const nft: INFT = nfts[0];
+
+        return await reply.status(200).send({
+            id: nft.id,
+            name: 'Chatterpay',
+            description: nft.metadata.description,
+            image: nft.metadata.image_url.gcp || defaultNftImage,
+            attributes: {
+                id: nft.id,
+                copy_if: nft.copy_of || '',
+                original: nft.original || false,
+                geolocation: nft.metadata.geolocation,
+            },
+        });
+    } catch (error) {
+        console.error('Error al obtener el NFT:', error);
+        return reply.status(500).send({ message: 'Internal Server Error' });
+    }
 };

@@ -17,7 +17,7 @@ export interface INFTMetadata {
 
 export interface INFT extends Document {
     channel_user_id: string;
-    id: number;
+    id: string;
     wallet: string;
     trxId: string;
     copy_of?: number;
@@ -29,7 +29,7 @@ export interface INFT extends Document {
 // Definir el esquema de Mongoose
 const NFTSchema = new Schema<INFT>({
     channel_user_id: { type: String, required: true },
-    id: { type: Number, required: true },
+    id: { type: String, required: true },
     wallet: { type: String, required: true },
     trxId: { type: String, required: true },
     copy_of: { type: Number, required: false },
