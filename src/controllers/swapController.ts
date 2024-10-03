@@ -4,11 +4,11 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import Transaction from '../models/transaction';
 import { authenticate } from './transactionController';
-import { getChatterPayWalletABI, getERC20ABI } from '../services/bucketService';
 import { sendSwapNotification } from './replyController';
 import { getDynamicGas_callData } from '../utils/dynamicGas';
 import { getNetworkConfig } from '../services/networkService';
 import { ensureSignerHasEth } from '../services/walletService';
+import { getERC20ABI, getChatterPayWalletABI } from '../services/bucketService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { WETH_ADDRESS, USDT_ADDRESS, SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
 

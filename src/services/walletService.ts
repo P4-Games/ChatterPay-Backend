@@ -5,8 +5,8 @@ import { getNetworkConfig } from './networkService';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 import { getDynamicGas, executeWithDynamicGas } from '../utils/dynamicGas';
+import { getEntryPointABI, getChatterPayWalletABI } from './bucketService';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts/factories/ChatterPayWalletFactory__factory';
-import { getChatterPayWalletABI, getEntryPointABI } from './bucketService';
 
 const chatterPayABI = await getChatterPayWalletABI();
 const entryPoint = await getEntryPointABI();
