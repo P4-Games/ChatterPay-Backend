@@ -5,8 +5,7 @@ import { getNetworkConfig } from './networkService';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 import { getDynamicGas, executeWithDynamicGas } from '../utils/dynamicGas';
-import { getEntryPointABI, getChatterPayWalletABI } from './bucketService';
-import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts/factories/ChatterPayWalletFactory__factory';
+import { getEntryPointABI, getChatterPayWalletABI, getChatterPayWalletFactoryABI } from './bucketService';
 
 const chatterPayABI = await getChatterPayWalletABI();
 const entryPoint = await getEntryPointABI();
@@ -65,10 +64,9 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
     const provider = new ethers.providers.JsonRpcProvider(blockchain.rpc);
     const signer = new ethers.Wallet(privateKey, provider);
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
-    const factory = ChatterPayWalletFactory__factory.connect(
-        blockchain.contracts.factoryAddress,
-        backendSigner,
-    );
+    const factoryABI = await getChatterPayWalletFactoryABI();
+
+    const factory = new ethers.Contract(blockchain.contracts.factoryAddress, factoryABI, backendSigner);
 
     const proxy = await computeProxyAddressFromPhone(fromNumber);
     const code = await provider.getCode(proxy.proxyAddress);

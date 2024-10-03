@@ -1,7 +1,10 @@
+import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 import { Storage } from '@google-cloud/storage';
 
 import { GCP_BUCKET_NAME, GCP_KEYFILE_PATH } from '../constants/constants';
+
+export type ABI = ethers.ContractInterface;
 
 // Initialize the cache
 const cache = new NodeCache({ stdTTL: 3600 });
@@ -12,7 +15,7 @@ const storage = new Storage({
 });
 
 // Function to get file from the GCP bucket
-export const getGcpFile = async (fileName: string): Promise<Record<string, unknown>> => {
+export const getGcpFile = async (fileName: string): Promise<ABI> => {
     try {
         const bucket = storage.bucket(GCP_BUCKET_NAME);
         const file = bucket.file(fileName);
@@ -27,8 +30,8 @@ export const getGcpFile = async (fileName: string): Promise<Record<string, unkno
 };
 
 // Function to read the ABI file from cache
-export const getFile = async (fileName: string): Promise<Record<string, unknown>> => {
-    let abi = cache.get<Record<string, unknown>>(fileName);
+export const getFile = async (fileName: string): Promise<ABI> => {
+    let abi = cache.get<ABI>(fileName);
 
     if (!abi) {
         abi = await getGcpFile(fileName);
@@ -38,7 +41,6 @@ export const getFile = async (fileName: string): Promise<Record<string, unknown>
     return abi;
 };
 
-export type ABI = Record<string, unknown>;
 
 // Function to get ERC20 ABI from the GCP bucket
 export const getERC20ABI = async (): Promise<ABI> => getFile('ERC20.json');
