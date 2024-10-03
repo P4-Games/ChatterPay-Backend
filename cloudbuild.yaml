@@ -23,6 +23,8 @@ steps:
       - ICP_MNEMONIC=${_ICP_MNEMONIC}
       - BOT_API_URL=${_BOT_API_URL}
       - BOT_DATA_TOKEN=${_BOT_DATA_TOKEN}
+      - GCP_BUCKET_NAME=${_GCP_BUCKET_NAME}
+      - GCP_KEYFILE_PATH=${_GCP_KEYFILE_PATH}
 
   # build the container images
   - name: "gcr.io/cloud-builders/docker"
@@ -48,6 +50,8 @@ steps:
       "--build-arg", "ICP_MNEMONIC=${_ICP_MNEMONIC}",
       "--build-arg", "BOT_API_URL=${_BOT_API_URL}",
       "--build-arg", "BOT_DATA_TOKEN=${_BOT_DATA_TOKEN}",
+      "--build-arg", "GCP_BUCKET_NAME=${_GCP_BUCKET_NAME}",
+      "--build-arg", "GCP_KEYFILE_PATH=${_GCP_KEYFILE_PATH}",
       "."
     ]
 
