@@ -1,13 +1,17 @@
 import { Storage } from '@google-cloud/storage';
+const NodeCache = require('node-cache');
 import { GCP_BUCKET_NAME, GCP_KEYFILE_PATH } from '../constants/constants';
 
-// Inicializa el cliente de GCP Storage
+// Initialize the cache
+const cache = new NodeCache({ stdTTL: 3600 });
+
+// Initialize the GCP storage
 const storage = new Storage({
     keyFilename: GCP_KEYFILE_PATH
 });
 
 // Function to get file from the GCP bucket
-export const getFile = async (fileName: string): Promise<any> => {
+export const getGcpFile = async (fileName: string): Promise<any> => {
     try {
         const bucket = storage.bucket(GCP_BUCKET_NAME);
         const file = bucket.file(fileName);
@@ -16,8 +20,21 @@ export const getFile = async (fileName: string): Promise<any> => {
         // Parsear JSON
         return JSON.parse(fileContents.toString());
     } catch (error) {
-        console.error('Error al leer el archivo ABI:', error);
-        throw new Error('Error al obtener el archivo ABI');
+        console.error('Error al leer el archivo desde GCP:', error);
+        throw new Error('Error al obtener el archivo desde GCP');
+    }
+};
+
+// Function to read the ABI file from cache
+export const getFile = async (fileName: string): Promise<any> => {
+    const abi = cache.get(fileName);
+    if (abi) {
+
+        return abi;
+    } else {
+        const abi = await getGcpFile(fileName);
+        cache.set(fileName, abi);
+        return abi;
     }
 };
 
