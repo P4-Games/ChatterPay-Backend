@@ -66,7 +66,7 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
     const signer = new ethers.Wallet(privateKey, provider);
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
     const factory = ChatterPayWalletFactory__factory.connect(
-        blockchain.factoryAddress,
+        blockchain.contracts.factoryAddress,
         backendSigner,
     );
 
