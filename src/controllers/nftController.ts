@@ -1,15 +1,15 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { isValidUrl } from '../utils/paramsUtils';
-import { getDynamicGas } from '../utils/dynamicGas';
-import { getWalletByPhoneNumber } from '../models/user';
-import { sendMintNotification } from './replyController';
-import NFTModel, { INFT, INFTMetadata } from '../models/nft';
-import { getNetworkConfig } from '../services/networkService';
-import { executeWalletCreation } from './newWalletController';
 import { defaultNftImage, networkChainIds } from '../constants/contracts';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
+import NFTModel, { INFT, INFTMetadata } from '../models/nft';
+import { getWalletByPhoneNumber } from '../models/user';
+import { getNetworkConfig } from '../services/networkService';
+import { getDynamicGas } from '../utils/dynamicGas';
+import { isValidUrl } from '../utils/paramsUtils';
+import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/uploadServices';
+import { executeWalletCreation } from './newWalletController';
+import { sendMintNotification } from './replyController';
 
 export interface NFTInfo {
     description: string;
@@ -215,11 +215,13 @@ const persistNftInBdd = async (
             channel_user_id,
             wallet: address_of_user,
             trxId: nftData.receipt.transactionHash,
-            copy_of: null,
+            timestamp: new Date(),
             original: true,
             total_of_this: 1,
+            copy_of: null,
+            copy_of_original: null,
             copy_order: 1,
-            timestamp: new Date(),
+            copy_order_original: 1,
             metadata: {
                 image_url: {
                     gcp: url || '',
@@ -291,11 +293,13 @@ export const mintExistingNFT = async (
     try {
         const { channel_user_id, id } = request.body;
 
-        const nfts: INFT[] = await NFTModel.find({ id: parseInt(id, 10) });
+        // Verify that the NFT to copy exists
+        const nfts: INFT[] = await NFTModel.find({ id });
         if (!nfts || nfts.length === 0) {
             return await reply.status(400).send({ message: 'El NFT no existe.' });
         }
 
+        // Verify that the user exists
         let address_of_user = await getWalletByPhoneNumber(channel_user_id);
         if (!address_of_user) {
             console.log('La wallet del usuario no existe. Creando...');
@@ -303,42 +307,64 @@ export const mintExistingNFT = async (
             console.log('Wallet creada.');
         }
 
+        // optimistic response
         reply.status(200).send({ message: `El certificado se está generando` });
 
-        const nft = nfts[0];
+        // mint
+        const nftCopyOf = nfts[0];
         let nftData: NFTData;
         try {
-            const nfImageURL = new URL(nft.metadata.image_url.gcp ?? defaultNftImage);
+            const nfImageURL = new URL(nftCopyOf.metadata.image_url.gcp ?? defaultNftImage);
             nftData = await mint_eth_nft(
                 address_of_user,
                 'chatterpay-nft-copy',
-                `copia de nft ${nft.id}`,
+                `nft-copy`,
                 nfImageURL.toString(),
             );
         } catch (error) {
             console.error('Error al mintear NFT:', error);
             return await Promise.resolve();
         }
-
         await sendMintNotification(channel_user_id, nftData.tokenId.toString());
+
+
+        // search by NFT original
+        let copy_of_original = nftCopyOf.id
+        let copy_order_original = nftCopyOf.total_of_this + 1
+
+        if (!nftCopyOf.original) { 
+            // Se esta copiando de una copia. Entonces, se busca el original
+            console.log('Searching by nft original.');
+            const nftOriginal: INFT | null = await NFTModel.findOne({ id: nftCopyOf.copy_of_original });
+            if (nftOriginal) {
+                copy_of_original = nftOriginal.id
+                copy_order_original = nftOriginal.total_of_this + 1
+
+                // update total_of_this in the ORIGINAL NFT
+                console.log('Updating original NFT total_of_this field.');
+                await NFTModel.updateOne({ _id: nftOriginal._id }, { $inc: { total_of_this: 1 } });
+            }
+        }
 
         console.log('Saving NFT copy in database.');
         await NFTModel.create({
             id: nftData.tokenId,
             channel_user_id,
-            original: false,
-            copy_of: id,
-            copy_order: nft.total_of_this + 1,
-            total_of_this: 1,
             timestamp: new Date(),
+            original: false,
+            total_of_this: 1,
+            copy_of: nftCopyOf.id,
+            copy_order: nftCopyOf.total_of_this + 1,
+            copy_of_original,
+            copy_order_original,
             wallet: address_of_user,
             trxId: nftData.receipt.transactionHash,
-            metadata: nft.metadata ? nft.metadata : defaultMetadata,
+            metadata: nftCopyOf.metadata ? nftCopyOf.metadata : defaultMetadata,
         });
 
         // update total_of_this in the copied NFT
-        console.log('Updating original NFT total_of_this field.');
-        await NFTModel.updateOne({ _id: nft._id }, { $inc: { total_of_this: 1 } });
+        console.log('Updating copied NFT total_of_this field.');
+        await NFTModel.updateOne({ _id: nftCopyOf._id }, { $inc: { total_of_this: 1 } });
 
         console.log('NFT copy end.');
     } catch (error) {
@@ -527,10 +553,12 @@ export const getNftMetadataRequiredByOpenSea = async (
             image: nft.metadata.image_url.gcp || defaultNftImage,
             attributes: {
                 id: nft.id,
-                original: nft.original || true,
+                original: nft.original,
+                total_of_this: nft.total_of_this,
                 copy_of: nft.copy_of || '',
-                copy_order: nft.copy_order || 1,
-                total_of_this: nft.total_of_this || 1,
+                copy_order: nft.copy_order,
+                copy_of_original : nft.copy_order_original,
+                copy_order_original: nft.copy_order_original,
                 creation_date: nft.timestamp,
                 geolocation: nft.metadata.geolocation,
                 image_urls: nft.metadata.image_url,
