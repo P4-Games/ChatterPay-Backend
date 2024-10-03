@@ -8,6 +8,7 @@ import { HttpAgent } from '@dfinity/agent';
 import { AssetManager } from '@dfinity/assets';
 import { Ed25519KeyIdentity } from '@dfinity/identity';
 import { mnemonicToSeed, validateMnemonic } from 'bip39';
+import { NFT_UPLOAD_IMAGE_ICP, NFT_UPLOAD_IMAGE_IPFS } from '../constants/contracts';
 
 dotenv.config();
 
@@ -53,7 +54,12 @@ export const getImageDetails = async (imageUrl: string) => {
 // Funciones de carga
 
 export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promise<string> {
-    console.info('subinedo imagen a ICP');
+    if (!NFT_UPLOAD_IMAGE_ICP) {
+        console.info('upload NFT image to ICP disabled');
+        return '';
+    }
+
+    console.info('Subiendo imagen a ICP');
     const canisterId = process.env.ICP_CANISTER_ID;
     const FOLDER_UPLOAD = 'uploads';
 
@@ -102,7 +108,12 @@ export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promis
 }
 
 export async function uploadToIpfs(imageBuffer: Buffer, fileName: string): Promise<string> {
-    console.info('subinedo imagen a IPFS');
+    if (!NFT_UPLOAD_IMAGE_IPFS) {
+        console.info('upload NFT image to IPFS disabled');
+        return '';
+    }
+
+    console.info('Subiendo imagen a IPFS');
 
     try {
         const pinata = new PinataSDK({ pinataJWTKey: process.env.PINATA_JWT });
