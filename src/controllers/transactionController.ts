@@ -3,9 +3,9 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import web3 from '../utils/web3_config';
 import { User, IUser } from '../models/user';
 import Blockchain from '../models/blockchain';
-import { USDT_ADDRESS } from '../constants/contracts';
 import { sendUserOperation } from '../services/walletService';
 import Transaction, { ITransaction } from '../models/transaction';
+import { USDT_ADDRESS, networkChainIds } from '../constants/contracts';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { sendTransferNotification, sendOutgoingTransferNotification } from './replyController';
 
@@ -199,7 +199,7 @@ const validateInputs = (inputs: MakeTransactionInputs): string => {
         return 'El símbolo del token no es válido';
     }
     try {
-        const newChainID = chain_id ? parseInt(chain_id, 10) : 534351;
+        const newChainID = chain_id ? parseInt(chain_id, 10) : networkChainIds.default;
         Blockchain.findOne({ chain_id: newChainID });
     } catch {
         return 'La blockchain no esta registrada';
@@ -312,7 +312,13 @@ export const makeTransaction = async (
             toUser = await getOrCreateUser(to);
         }
 
-        await executeTransaction(fromUser, toUser, token, amount, parseInt(chain_id, 10) ?? 534351);
+        await executeTransaction(
+            fromUser,
+            toUser,
+            token,
+            amount,
+            parseInt(chain_id, 10) ?? networkChainIds.default,
+        );
 
         return await reply
             .status(200)

@@ -4,11 +4,11 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { isValidUrl } from '../utils/paramsUtils';
 import { getDynamicGas } from '../utils/dynamicGas';
 import { getWalletByPhoneNumber } from '../models/user';
-import { defaultNftImage } from '../constants/contracts';
 import { sendMintNotification } from './replyController';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
 import { executeWalletCreation } from './newWalletController';
+import { defaultNftImage, networkChainIds } from '../constants/contracts';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
 export interface NFTInfo {
@@ -20,6 +20,19 @@ interface NFTData {
     receipt: ethers.ContractReceipt;
     tokenId: ethers.BigNumber;
 }
+
+const defaultMetadata: INFTMetadata = {
+    image_url: {
+        gcp: '',
+        icp: '',
+        ipfs: '',
+    },
+    description: '',
+    geolocation: {
+        latitud: '',
+        longitud: '',
+    },
+};
 
 /**
  * Mints an NFT on the Ethereum network.
@@ -35,10 +48,10 @@ const mint_eth_nft = async (
     name: string,
     description: string,
     image: string,
-): Promise<{ receipt: ethers.ContractReceipt; tokenId: ethers.BigNumber }> => {
+): Promise<NFTData> => {
     try {
         // Obtener la configuración de la red (por ejemplo, arbitrum sepolia)
-        const networkConfig = await getNetworkConfig(421614);
+        const networkConfig = await getNetworkConfig(networkChainIds.arbitrumSepolia);
         const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
 
         // Configurar el signer utilizando la clave privada del backend
@@ -138,6 +151,8 @@ export const mintNFT = async (
             console.error('Error al procesar el minteo del NFT:', error.message);
         });
 
+    console.log('NFT mint end.');
+
     // Retorna void explícitamente
     return Promise.resolve();
 };
@@ -202,6 +217,7 @@ const persistNftInBdd = async (
             trxId: nftData.receipt.transactionHash,
             copy_of: null,
             original: true,
+            total_of_this: 1,
             timestamp: new Date(),
             metadata: {
                 image_url: {
@@ -270,29 +286,29 @@ export const mintExistingNFT = async (
         };
     }>,
     reply: FastifyReply,
-): Promise<boolean> => {
+): Promise<void> => {
     try {
         const { channel_user_id, id } = request.body;
 
-        let address_of_user = await getWalletByPhoneNumber(channel_user_id);
+        const nfts: INFT[] = await NFTModel.find({ id: parseInt(id, 10) });
+        if (!nfts || nfts.length === 0) {
+            return await reply.status(400).send({ message: 'El NFT no existe.' });
+        }
 
+        let address_of_user = await getWalletByPhoneNumber(channel_user_id);
         if (!address_of_user) {
             console.log('La wallet del usuario no existe. Creando...');
             address_of_user = await executeWalletCreation(channel_user_id);
+            console.log('Wallet creada.');
         }
 
-        const nfts: INFT[] = await NFTModel.find({ id: parseInt(id, 10) });
+        reply.status(200).send({ message: `El certificado se está generando` });
+
         const nft = nfts[0];
-
-        if (!nfts) {
-            reply.status(400).send({ message: 'El NFT no existe.' });
-            return false;
-        }
-
-        let data;
+        let nftData: NFTData;
         try {
             const nfImageURL = new URL(nft.metadata.image_url.gcp ?? defaultNftImage);
-            data = await mint_eth_nft(
+            nftData = await mint_eth_nft(
                 address_of_user,
                 'chatterpay-nft-copy',
                 `copia de nft ${nft.id}`,
@@ -300,40 +316,35 @@ export const mintExistingNFT = async (
             );
         } catch (error) {
             console.error('Error al mintear NFT:', error);
-            throw error;
+            return await Promise.resolve();
         }
 
-        const defaultMetadata: INFTMetadata = {
-            image_url: {
-                gcp: '',
-                icp: '',
-                ipfs: '',
-            },
-            description: '',
-            geolocation: {
-                latitud: '',
-                longitud: '',
-            },
-        };
+        await sendMintNotification(channel_user_id, nftData.tokenId.toString());
 
+        console.log('Saving NFT copy in database.');
         await NFTModel.create({
-            id: data.tokenId,
+            id: nftData.tokenId,
             channel_user_id,
-            copy_of: id,
             original: false,
+            copy_of: id,
+            total_of_this: 1,
             timestamp: new Date(),
             wallet: address_of_user,
-            trxId: data.receipt.transactionHash,
+            trxId: nftData.receipt.transactionHash,
             metadata: nft.metadata ? nft.metadata : defaultMetadata,
         });
 
-        sendMintNotification(channel_user_id, id);
-        reply.status(200).send({ message: 'Certificado NFT generado.' });
-        return true;
+        // update total_of_this in the copied NFT
+        console.log('Updating original NFT total_of_this field.');
+        await NFTModel.updateOne({ _id: nft._id }, { $inc: { total_of_this: 1 } });
+
+        console.log('NFT copy end.');
     } catch (error) {
         console.error('Error en mintExistingNFT', (error as Error).message);
-        throw error;
     }
+
+    // Retorna void explícitamente
+    return Promise.resolve();
 };
 
 /**
@@ -409,7 +420,7 @@ export const getPhoneNFTs = async (
     phone_number: string,
 ): Promise<{ count: number; nfts: NFTInfo[] }> => {
     try {
-        const networkConfig = await getNetworkConfig(421614);
+        const networkConfig = await getNetworkConfig(networkChainIds.arbitrumSepolia);
         const nfts = await NFTModel.find({ channel_user_id: phone_number });
 
         return {
@@ -468,7 +479,7 @@ export const getNftList = async (
         if (nft.original) {
             return await reply.status(200).send({
                 original: nft,
-                copies: await NFTModel.find({ copy_of: tokenId }),
+                copies: await NFTModel.find({ copy_of: tokenId.toString() }),
             });
         }
 
@@ -500,7 +511,7 @@ export const getNftMetadataRequiredByOpenSea = async (
     const { tokenId } = request.params;
     try {
         const nfts: INFT[] = await NFTModel.find({ id: tokenId });
-        console.log('1', tokenId);
+
         if (nfts.length === 0) {
             return await reply.status(400).send({ message: 'NFT not found' });
         }
@@ -514,9 +525,12 @@ export const getNftMetadataRequiredByOpenSea = async (
             image: nft.metadata.image_url.gcp || defaultNftImage,
             attributes: {
                 id: nft.id,
-                copy_if: nft.copy_of || '',
-                original: nft.original || false,
+                original: nft.original || true,
+                copy_of: nft.copy_of || '',
+                total_of_this: nft.total_of_this || 1,
+                creation_date: nft.timestamp,
                 geolocation: nft.metadata.geolocation,
+                image_urls: nft.metadata.image_url,
             },
         });
     } catch (error) {
