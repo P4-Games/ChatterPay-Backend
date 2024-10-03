@@ -21,6 +21,7 @@ export interface INFT extends Document {
     wallet: string;
     trxId: string;
     copy_of?: string;
+    copy_order?: number;
     original?: boolean;
     total_of_this: number;
     timestamp?: Date;
@@ -34,6 +35,7 @@ const NFTSchema = new Schema<INFT>({
     wallet: { type: String, required: true },
     trxId: { type: String, required: true },
     copy_of: { type: String, required: false },
+    copy_order: { type: Number, required: false },
     original: { type: Boolean, required: false },
     total_of_this: { type: Number, required: true },
     timestamp: { type: Date, required: false },
