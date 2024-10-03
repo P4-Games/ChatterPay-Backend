@@ -1,13 +1,15 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
-import entryPoint from '../utils/entryPoint.json';
 import { getNetworkConfig } from './networkService';
-import chatterPayABI from '../utils/chatterPayABI.json';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 import { getDynamicGas, executeWithDynamicGas } from '../utils/dynamicGas';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts/factories/ChatterPayWalletFactory__factory';
+import { getChatterPayWalletABI, getEntryPointABI } from './bucketService';
+
+const chatterPayABI = await getChatterPayWalletABI();
+const entryPoint = await getEntryPointABI();
 
 /**
  * Represents a user operation in the ChatterPay system.
