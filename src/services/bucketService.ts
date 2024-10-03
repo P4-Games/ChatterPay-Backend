@@ -1,5 +1,6 @@
+import NodeCache from 'node-cache';
 import { Storage } from '@google-cloud/storage';
-const NodeCache = require('node-cache');
+
 import { GCP_BUCKET_NAME, GCP_KEYFILE_PATH } from '../constants/constants';
 
 // Initialize the cache
@@ -11,7 +12,7 @@ const storage = new Storage({
 });
 
 // Function to get file from the GCP bucket
-export const getGcpFile = async (fileName: string): Promise<any> => {
+export const getGcpFile = async (fileName: string): Promise<Record<string, unknown>> => {
     try {
         const bucket = storage.bucket(GCP_BUCKET_NAME);
         const file = bucket.file(fileName);
@@ -26,39 +27,30 @@ export const getGcpFile = async (fileName: string): Promise<any> => {
 };
 
 // Function to read the ABI file from cache
-export const getFile = async (fileName: string): Promise<any> => {
-    const abi = cache.get(fileName);
-    if (abi) {
+export const getFile = async (fileName: string): Promise<Record<string, unknown>> => {
+    let abi = cache.get<Record<string, unknown>>(fileName);
 
-        return abi;
-    } else {
-        const abi = await getGcpFile(fileName);
+    if (!abi) {
+        abi = await getGcpFile(fileName);
         cache.set(fileName, abi);
-        return abi;
     }
+
+    return abi;
 };
+
+export type ABI = Record<string, unknown>;
 
 // Function to get ERC20 ABI from the GCP bucket
-export const getERC20ABI = async (): Promise<any> => {
-    return getFile('ERC20.json');
-};
+export const getERC20ABI = async (): Promise<ABI> => getFile('ERC20.json');
 
 // Function to get ChatterPay NFT ABI from the GCP bucket
-export const getChatterPayNFTABI = async (): Promise<any> => {
-    return getFile('ChatterPayNFT.json');
-};
+export const getChatterPayNFTABI = async (): Promise<ABI> => getFile('ChatterPayNFT.json');
 
 // Function to get ChatterPay Wallet ABI from the GCP bucket
-export const getChatterPayWalletABI = async (): Promise<any> => {
-    return getFile('ChatterPayWallet.json');
-};
+export const getChatterPayWalletABI = async (): Promise<ABI> => getFile('ChatterPayWallet.json');
 
 // Function to get ChatterPay Wallet Factory ABI from the GCP bucket
-export const getChatterPayWalletFactoryABI = async (): Promise<any> => {
-    return getFile('ChatterPayWalletFactory.json');
-};
+export const getChatterPayWalletFactoryABI = async (): Promise<ABI> => getFile('ChatterPayWalletFactory.json');
 
 // Function to get EntryPoint ABI from the GCP bucket
-export const getEntryPointABI = async (): Promise<any> => {
-    return getFile('EntryPoint.json');
-};
+export const getEntryPointABI = async (): Promise<ABI> => getFile('EntryPoint.json');
