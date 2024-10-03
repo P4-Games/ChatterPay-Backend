@@ -437,3 +437,45 @@ export const getNftList = async (
         return reply.status(500).send({ message: 'Internal Server Error' });
     }
 };
+
+/**
+ * Retrieves the NFT metadata required by the smart contract to be displayed on OpenSea.
+ * @param {FastifyRequest} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<void>} The NFT metadata required by openSea.
+ */
+export const getNftMetadataRequiredByOpenSea = async (
+    request: FastifyRequest<{
+        Params: {
+            tokenId: number;
+        };
+    }>,
+    reply: FastifyReply,
+): Promise<void> => {
+    const { tokenId } = request.params;
+    try {
+        const nfts: INFT[] = await NFTModel.find({ id: tokenId });
+        console.log('1', tokenId);
+        if (nfts.length === 0) {
+            return await reply.status(400).send({ message: 'NFT not found' });
+        }
+
+        const nft: INFT = nfts[0];
+
+        return await reply.status(200).send({
+            id: nft.id,
+            name: 'Chatterpay',
+            description: nft.metadata.description,
+            image: nft.metadata.image_url.gcp || defaultNftImage,
+            attributes: {
+                id: nft.id,
+                copy_if: nft.copy_of || '',
+                original: nft.original || false,
+                geolocation: nft.metadata.geolocation,
+            },
+        });
+    } catch (error) {
+        console.error('Error al obtener el NFT:', error);
+        return reply.status(500).send({ message: 'Internal Server Error' });
+    }
+};
