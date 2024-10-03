@@ -199,7 +199,7 @@ const validateInputs = (inputs: MakeTransactionInputs): string => {
         return 'El símbolo del token no es válido';
     }
     try {
-        const newChainID = chain_id ? parseInt(chain_id, 10) : 534351;
+        const newChainID = chain_id ? parseInt(chain_id, 10) : networkChainIds.default;
         Blockchain.findOne({ chain_id: newChainID });
     } catch {
         return 'La blockchain no esta registrada';
@@ -312,7 +312,13 @@ export const makeTransaction = async (
             toUser = await getOrCreateUser(to);
         }
 
-        await executeTransaction(fromUser, toUser, token, amount, parseInt(chain_id, 10) ?? 534351);
+        await executeTransaction(
+            fromUser,
+            toUser,
+            token,
+            amount,
+            parseInt(chain_id, 10) ?? networkChainIds.default,
+        );
 
         return await reply
             .status(200)

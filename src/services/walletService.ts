@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
 import entryPoint from '../utils/entryPoint.json';
 import { getNetworkConfig } from './networkService';
 import chatterPayABI from '../utils/chatterPayABI.json';
+import { networkChainIds } from '../constants/contracts';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 import { getDynamicGas, executeWithDynamicGas } from '../utils/dynamicGas';
@@ -192,7 +193,7 @@ export async function sendUserOperation(
     to: string,
     tokenAddress: string,
     amount: string,
-    chain_id: number = 534351,
+    chain_id: number = networkChainIds.default,
 ): Promise<{ transactionHash: string }> {
     const blockchain = await getBlockchain(chain_id);
     const seedPrivateKey = process.env.PRIVATE_KEY;

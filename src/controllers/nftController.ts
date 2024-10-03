@@ -409,7 +409,7 @@ export const getPhoneNFTs = async (
     phone_number: string,
 ): Promise<{ count: number; nfts: NFTInfo[] }> => {
     try {
-        const networkConfig = await getNetworkConfig(421614);
+        const networkConfig = await getNetworkConfig(networkChainIds.arbitrumSepolia);
         const nfts = await NFTModel.find({ channel_user_id: phone_number });
 
         return {

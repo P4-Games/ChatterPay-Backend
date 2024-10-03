@@ -8,6 +8,7 @@ import { HttpAgent } from '@dfinity/agent';
 import { AssetManager } from '@dfinity/assets';
 import { Ed25519KeyIdentity } from '@dfinity/identity';
 import { mnemonicToSeed, validateMnemonic } from 'bip39';
+
 import { NFT_UPLOAD_IMAGE_ICP, NFT_UPLOAD_IMAGE_IPFS } from '../constants/contracts';
 
 dotenv.config();
