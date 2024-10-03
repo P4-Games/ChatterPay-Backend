@@ -500,7 +500,7 @@ export const getNftMetadataRequiredByOpenSea = async (
     const { tokenId } = request.params;
     try {
         const nfts: INFT[] = await NFTModel.find({ id: tokenId });
-        console.log('1', tokenId);
+
         if (nfts.length === 0) {
             return await reply.status(400).send({ message: 'NFT not found' });
         }
@@ -514,9 +514,12 @@ export const getNftMetadataRequiredByOpenSea = async (
             image: nft.metadata.image_url.gcp || defaultNftImage,
             attributes: {
                 id: nft.id,
-                copy_if: nft.copy_of || '',
-                original: nft.original || false,
+                original: nft.original || true,
+                copy_of: nft.copy_of || '',
+                total_of_this: nft.total_of_this || 1,
+                creation_date: nft.timestamp,
                 geolocation: nft.metadata.geolocation,
+                image_urls: nft.metadata.image_url,
             },
         });
     } catch (error) {
