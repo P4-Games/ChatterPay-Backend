@@ -218,6 +218,7 @@ const persistNftInBdd = async (
             copy_of: null,
             original: true,
             total_of_this: 1,
+            copy_order: 1,
             timestamp: new Date(),
             metadata: {
                 image_url: {
@@ -327,6 +328,7 @@ export const mintExistingNFT = async (
             channel_user_id,
             original: false,
             copy_of: id,
+            copy_order: nft.total_of_this + 1,
             total_of_this: 1,
             timestamp: new Date(),
             wallet: address_of_user,
@@ -527,6 +529,7 @@ export const getNftMetadataRequiredByOpenSea = async (
                 id: nft.id,
                 original: nft.original || true,
                 copy_of: nft.copy_of || '',
+                copy_order: nft.copy_order || 1,
                 total_of_this: nft.total_of_this || 1,
                 creation_date: nft.timestamp,
                 geolocation: nft.metadata.geolocation,
