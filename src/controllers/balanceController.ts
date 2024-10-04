@@ -2,10 +2,10 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { User } from '../models/user';
+import { SIGNING_KEY } from '../constants/environment';
 import { NFTInfo, getPhoneNFTs } from './nftController';
 import { getNetworkConfig } from '../services/networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
-import { SIGNING_KEY } from '../constants/environment';
 
 type Currency = 'USD' | 'UYU' | 'ARS' | 'BRL';
 

@@ -2,9 +2,9 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import Token, { IToken } from '../models/token';
+import { SIGNING_KEY } from '../constants/environment';
 import { getNetworkConfig } from '../services/networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
-import { SIGNING_KEY } from '../constants/environment';
 
 /**
  * Creates a new token

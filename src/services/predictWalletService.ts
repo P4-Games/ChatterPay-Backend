@@ -4,8 +4,8 @@ import * as crypto from 'crypto';
 import { IBlockchain } from '../models/blockchain';
 import { getDynamicGas } from '../utils/dynamicGas';
 import { getNetworkConfig } from './networkService';
-import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { networkChainIds } from '../constants/contracts';
+import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {

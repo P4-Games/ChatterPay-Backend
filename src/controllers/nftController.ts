@@ -1,16 +1,16 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { defaultNftImage, networkChainIds } from '../constants/contracts';
-import NFTModel, { INFT, INFTMetadata } from '../models/nft';
-import { getWalletByPhoneNumber } from '../models/user';
-import { getNetworkConfig } from '../services/networkService';
-import { getDynamicGas } from '../utils/dynamicGas';
 import { isValidUrl } from '../utils/paramsUtils';
-import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/uploadServices';
-import { executeWalletCreation } from './newWalletController';
-import { sendMintNotification } from './replyController';
+import { getDynamicGas } from '../utils/dynamicGas';
 import { SIGNING_KEY } from '../constants/environment';
+import { getWalletByPhoneNumber } from '../models/user';
+import { sendMintNotification } from './replyController';
+import NFTModel, { INFT, INFTMetadata } from '../models/nft';
+import { getNetworkConfig } from '../services/networkService';
+import { executeWalletCreation } from './newWalletController';
+import { defaultNftImage, networkChainIds } from '../constants/contracts';
+import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
 export interface NFTInfo {
     description: string;

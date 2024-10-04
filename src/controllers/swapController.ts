@@ -9,9 +9,9 @@ import { sendSwapNotification } from './replyController';
 import { getDynamicGas_callData } from '../utils/dynamicGas';
 import { getNetworkConfig } from '../services/networkService';
 import { ensureSignerHasEth } from '../services/walletService';
+import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { WETH_ADDRESS, USDT_ADDRESS, SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
-import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 
 interface SwapBody {
     channel_user_id: string;
