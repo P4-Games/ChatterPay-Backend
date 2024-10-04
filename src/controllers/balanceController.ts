@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { User } from '../models/user';
+import { SIGNING_KEY } from '../constants/environment';
 import { NFTInfo, getPhoneNFTs } from './nftController';
 import { getNetworkConfig } from '../services/networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
@@ -138,7 +139,7 @@ function calculateTotals(balances: BalanceInfo[]): Record<Currency, number> {
 async function getAddressBalance(address: string, reply: FastifyReply): Promise<FastifyReply> {
     const networkConfig = await getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-    const signer = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+    const signer = new ethers.Wallet(SIGNING_KEY!, provider);
 
     console.log(`Fetching balance for address: ${address}`);
     const user = await User.findOne({ wallet: address });

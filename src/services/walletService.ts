@@ -6,6 +6,7 @@ import { getNetworkConfig } from './networkService';
 import chatterPayABI from '../utils/chatterPayABI.json';
 import { networkChainIds } from '../constants/contracts';
 import Blockchain, { IBlockchain } from '../models/blockchain';
+import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 import { getDynamicGas, executeWithDynamicGas } from '../utils/dynamicGas';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts/factories/ChatterPayWalletFactory__factory';
@@ -63,7 +64,7 @@ function generatePrivateKey(seedPrivateKey: string, fromNumber: string): string 
 async function setupContracts(blockchain: IBlockchain, privateKey: string, fromNumber: string) {
     const provider = new ethers.providers.JsonRpcProvider(blockchain.rpc);
     const signer = new ethers.Wallet(privateKey, provider);
-    const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const factory = ChatterPayWalletFactory__factory.connect(
         blockchain.contracts.factoryAddress,
         backendSigner,
@@ -132,7 +133,7 @@ async function createUserOperation(
         transferEncode,
     ]);
 
-    const nonce = (await signer.provider!.getTransactionCount(proxyAddress)) + 1;
+    const nonce = (await signer.provider.getTransactionCount(proxyAddress)) + 1;
 
     return {
         sender: proxyAddress,
@@ -196,12 +197,11 @@ export async function sendUserOperation(
     chain_id: number = networkChainIds.default,
 ): Promise<{ transactionHash: string }> {
     const blockchain = await getBlockchain(chain_id);
-    const seedPrivateKey = process.env.PRIVATE_KEY;
-    if (!seedPrivateKey) {
+    if (!PRIVATE_KEY) {
         throw new Error('Seed private key not found in environment variables');
     }
 
-    const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
+    const privateKey = generatePrivateKey(PRIVATE_KEY, fromNumber);
     const { provider, signer, backendSigner, chatterPay, proxy } = await setupContracts(
         blockchain,
         privateKey,

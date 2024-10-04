@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 
+import { MONGO_URI } from '../constants/environment';
+
 /**
  * Connects to the MongoDB database using the provided URI or a default local URI.
  *
@@ -7,7 +9,7 @@ import mongoose from 'mongoose';
  */
 export async function connectToDatabase(): Promise<void> {
     console.debug('Connecting to database');
-    const MongoURI: string = process.env.MONGO_URI ?? 'mongodb://localhost:27017/chatterpay';
+    const MongoURI: string = MONGO_URI ?? 'mongodb://localhost:27017/chatterpay';
     try {
         await mongoose.connect(MongoURI);
         console.log('MongoDB connected');
