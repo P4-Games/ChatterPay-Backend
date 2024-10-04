@@ -83,7 +83,7 @@ export async function sendUserOperation(
         const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
         console.log("Transaction receipt:", JSON.stringify(receipt, null, 2));
 
-        if (!receipt || !receipt.success) {
+        if (!receipt?.success) {
             throw new Error("Transaction failed or not found");
         }
 
