@@ -59,15 +59,15 @@ export async function sendUserOperation(
         console.log("Creating user op");
         let userOperation = await createUserOperation(entrypoint, chatterPay, erc20, to, amount, proxy.proxyAddress);
 
-        const gasServiceConfig = gasService.createConfig(
-            process.env.ARBITRUM_SEPOLIA_RPC_URL!,
-            process.env.ALCHEMY_POLICY_ID!,
-            networkConfig.contracts.entryPoint,
-            networkConfig.rpc
-        );
+        // const gasServiceConfig = gasService.createConfig(
+        //     process.env.ARBITRUM_SEPOLIA_RPC_URL!,
+        //     process.env.ALCHEMY_POLICY_ID!,
+        //     networkConfig.contracts.entryPoint,
+        //     networkConfig.rpc
+        // );
 
-        console.log("Applying paymaster data to user op");
-        userOperation = await gasService.applyPaymasterDataToUserOp(gasServiceConfig, userOperation, signer);
+        // console.log("Applying paymaster data to user op");
+        // userOperation = await gasService.applyPaymasterDataToUserOp(gasServiceConfig, userOperation, signer);
 
         console.log("Signing user op");
         userOperation = await signUserOperation(userOperation, networkConfig.contracts.entryPoint, signer);

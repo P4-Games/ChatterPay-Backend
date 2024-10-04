@@ -73,14 +73,15 @@ export async function createUserOperation(
     const transferCallData = chatterPay.interface.encodeFunctionData("execute", [erc20.address, 0, transferEncode]);
     console.log("Transfer Call Data:", transferCallData);
 
-    const nonce = await entrypoint.getNonce(proxyAddress, 0);
+    const nonce = await entrypoint.getNonce(proxyAddress, 1); // @tomas hardcoded key value
     console.log("Proxy Nonce:", nonce.toString());
 
     const verificationGasLimit = BigNumber.from(120532);
     const callGasLimit = BigNumber.from(410000);
-    const preVerificationGas = BigNumber.from(500_000);
+    const preVerificationGas = BigNumber.from(600_000);
     const maxFeePerGas = BigNumber.from(ethers.utils.parseUnits("10", "gwei"));
     const maxPriorityFeePerGas = BigNumber.from(ethers.utils.parseUnits("1", "gwei"));
+    const paymasterAndData = "0x0BfB698F4Df1414dc829BDC0Eb577895BE396376"; // @tomas hardcoded paymaster address
 
     const userOp: PackedUserOperation = {
         sender: proxyAddress,
@@ -92,7 +93,7 @@ export async function createUserOperation(
         preVerificationGas,
         maxFeePerGas,
         maxPriorityFeePerGas,
-        paymasterAndData: "0x",
+        paymasterAndData: paymasterAndData,
         signature: "0x",  // Inicialmente vacío, se llenará más tarde
     };
 

@@ -145,14 +145,14 @@ export async function sendUserOperation(
         const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } = await setupContracts(blockchain, privateKey, fromNumber);
 
         const networkConfig = await getNetworkConfig();
-        const entrypoint = new ethers.Contract(networkConfig.entryPoint, entryPoint, backendSigner);
+        const entrypoint = new ethers.Contract(networkConfig.contracts.entryPoint, entryPoint, backendSigner);
 
         if (!accountExists) {
             throw new Error(`Account ${proxy.proxyAddress} does not exist. Cannot proceed with transfer.`);
         }
 
         let userOperation = await createUserOperation(entrypoint, chatterPay, to, proxy.proxyAddress);
-        userOperation = await signUserOperation(userOperation, networkConfig.entryPoint, signer);
+        userOperation = await signUserOperation(userOperation, networkConfig.contracts.entryPoint, signer);
 
         await ensureAccountHasPrefund(entrypoint, userOperation, backendSigner);
 
