@@ -12,8 +12,7 @@ const cache = new NodeCache({ stdTTL: 3600 });
 export const getGcpFile = async (urlFile: string): Promise<ABI> => {
     try {
         const response = await axios.get(urlFile);
-        const fileContents = response.data;
-        return JSON.parse(fileContents.toString());
+        return response.data;
     } catch (error) {
         console.error('Error al leer el archivo desde GCP:', error);
         throw new Error('Error al obtener el archivo desde GCP');
