@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
 import { IBlockchain } from '../models/blockchain';
 import { getDynamicGas } from '../utils/dynamicGas';
 import { getNetworkConfig } from './networkService';
+import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { networkChainIds } from '../constants/contracts';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
@@ -21,7 +22,7 @@ export interface PhoneNumberToAddress {
  * @throws {Error} If the seed private key is not found in environment variables.
  */
 function phoneNumberToAddress(phoneNumber: string): PhoneNumberToAddress {
-    const seedPrivateKey = process.env.PRIVATE_KEY;
+    const seedPrivateKey = PRIVATE_KEY;
     if (!seedPrivateKey) {
         throw new Error('Seed private key not found in environment variables');
     }
@@ -59,7 +60,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
         chainId: networkChainIds.scrollSepoliaTestnet,
     });
 
-    const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const factory = ChatterPayWalletFactory__factory.connect(
         networkConfig.contracts.factoryAddress,
         backendSigner,

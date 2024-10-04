@@ -3,6 +3,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 
 import { setupSwagger } from './swagger';
 import { setupRoutes } from '../api/routes';
+import { PORT } from '../constants/environment';
 import { setupMiddleware } from '../middleware/bodyParser';
 
 /**
@@ -20,10 +21,12 @@ export async function startServer(): Promise<FastifyInstance> {
     await server.register(rateLimit, {
         max: 400,
         timeWindow: '1 minute',
-        message: 'Demasiadas solicitudes, por favor inténtelo de nuevo más tarde.',
+        errorResponseBuilder: () => ({
+            code: 429,
+            error: 'Too Many Requests',
+            message: 'Demasiadas solicitudes, por favor inténtelo de nuevo más tarde.',
+        }),
     });
-
-    const PORT: number = Number(process.env.PORT) || 3000;
 
     await setupMiddleware(server);
     await setupRoutes(server);
