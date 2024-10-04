@@ -3,6 +3,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { isValidUrl } from '../utils/paramsUtils';
 import { getDynamicGas } from '../utils/dynamicGas';
+import { SIGNING_KEY } from '../constants/environment';
 import { getWalletByPhoneNumber } from '../models/user';
 import { sendMintNotification } from './replyController';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
