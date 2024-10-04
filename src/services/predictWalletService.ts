@@ -6,7 +6,7 @@ import { getDynamicGas } from '../utils/dynamicGas';
 import { getNetworkConfig } from './networkService';
 import { networkChainIds } from '../constants/contracts';
 import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
-import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
+import { getChatterPayWalletFactoryABI } from './bucketService';
 
 export interface PhoneNumberToAddress {
     hashedPrivateKey: string;
@@ -58,12 +58,9 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
         name: 'scroll-sepolia',
         chainId: networkChainIds.scrollSepoliaTestnet,
     });
-
-    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-    const factory = ChatterPayWalletFactory__factory.connect(
-        networkConfig.contracts.factoryAddress,
-        backendSigner,
-    );
+    const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+    const factoryABI = await getChatterPayWalletFactoryABI();
+    const factory = new ethers.Contract(networkConfig.contracts.factoryAddress, factoryABI, backendSigner);
 
     const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(phoneNumber);
 

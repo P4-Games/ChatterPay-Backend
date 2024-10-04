@@ -4,11 +4,11 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import Transaction from '../models/transaction';
 import { authenticate } from './transactionController';
-import chatterPayABI from '../utils/chatterPayABI.json';
 import { sendSwapNotification } from './replyController';
 import { getDynamicGas_callData } from '../utils/dynamicGas';
 import { getNetworkConfig } from '../services/networkService';
 import { ensureSignerHasEth } from '../services/walletService';
+import { getERC20ABI, getChatterPayWalletABI } from '../services/bucketService';
 import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { WETH_ADDRESS, USDT_ADDRESS, SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
@@ -70,12 +70,10 @@ async function executeSwap(
 ): Promise<SwapResult> {
     const amount_bn = ethers.utils.parseUnits(amount, 18);
     const tokenAddress = isWETHtoUSDT ? WETH_ADDRESS : USDT_ADDRESS;
-    const tokenContract = new ethers.Contract(
-        tokenAddress,
-        ['function approve(address spender, uint256 amount) public returns (bool)'],
-        signer,
-    );
-    const chatterPay = new ethers.Contract(proxyAddress, chatterPayABI, signer);
+    const erc20abi = await getERC20ABI();
+    const tokenContract = new ethers.Contract(tokenAddress, erc20abi, signer);
+    const chatterpayWalletAbi = await getChatterPayWalletABI();
+    const chatterPay = new ethers.Contract(proxyAddress, chatterpayWalletAbi, signer);
     const provider = signer.provider!;
 
     try {
