@@ -11,11 +11,13 @@ const {
   ICP_CANISTER_ID,
   ICP_MNEMONIC,
   INFURA_API_KEY,
+  BOT_DATA_TOKEN,
+  BOT_API_URL,
   NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
   NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
 } = process.env;
 
-export { PINATA_JWT, PRIVATE_KEY, SIGNING_KEY, ICP_MNEMONIC, INFURA_API_KEY, ICP_CANISTER_ID };
+export { PINATA_JWT, PRIVATE_KEY, SIGNING_KEY, BOT_API_URL, ICP_MNEMONIC, INFURA_API_KEY, BOT_DATA_TOKEN, ICP_CANISTER_ID };
 
 export const PORT = Number(envPort) || 3000;
 export const MONGO_URI = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';

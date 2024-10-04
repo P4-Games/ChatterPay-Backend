@@ -9,8 +9,9 @@ import { MONGO_URI } from '../constants/environment';
  */
 export async function connectToDatabase(): Promise<void> {
     console.debug('Connecting to database');
+    const MongoURI: string = MONGO_URI ?? 'mongodb://localhost:27017/chatterpay';
     try {
-        await mongoose.connect(MONGO_URI);
+        await mongoose.connect(MongoURI);
         console.log('MongoDB connected');
     } catch (error) {
         console.error('Failed to connect to MongoDB:', error);

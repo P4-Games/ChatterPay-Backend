@@ -3,7 +3,6 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { isValidUrl } from '../utils/paramsUtils';
 import { getDynamicGas } from '../utils/dynamicGas';
-import { SIGNING_KEY } from '../constants/environment';
 import { getWalletByPhoneNumber } from '../models/user';
 import { sendMintNotification } from './replyController';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
@@ -169,7 +168,7 @@ const processNftMint = async (
     try {
         const nfImageURL = new URL(url ?? defaultNftImage);
         data = await mint_eth_nft(
-            address_of_user!,
+            address_of_user,
             'chatterpay-nft',
             mensaje || '',
             nfImageURL.toString(),
@@ -333,7 +332,7 @@ export const mintExistingNFT = async (
         let copy_of_original = nftCopyOf.id
         let copy_order_original = nftCopyOf.total_of_this + 1
 
-        if (!nftCopyOf.original) { 
+        if (!nftCopyOf.original) {
             // Se esta copiando de una copia. Entonces, se busca el original
             console.log('Searching by nft original.');
             const nftOriginal: INFT | null = await NFTModel.findOne({ id: nftCopyOf.copy_of_original });
@@ -551,14 +550,14 @@ export const getNftMetadataRequiredByOpenSea = async (
             id: nft.id,
             name: 'Chatterpay',
             description: nft.metadata.description,
-            image: nft.metadata.image_url.gcp || defaultNftImage,
+            image: nft.metadata.image_url.gcp ?? defaultNftImage,
             attributes: {
                 id: nft.id,
                 original: nft.original,
                 total_of_this: nft.total_of_this,
-                copy_of: nft.copy_of || '',
+                copy_of: nft.copy_of ?? '',
                 copy_order: nft.copy_order,
-                copy_of_original : nft.copy_order_original,
+                copy_of_original: nft.copy_order_original,
                 copy_order_original: nft.copy_order_original,
                 creation_date: nft.timestamp,
                 geolocation: nft.metadata.geolocation,
