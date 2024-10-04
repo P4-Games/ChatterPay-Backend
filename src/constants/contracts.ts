@@ -16,6 +16,3 @@ export const networkChainIds = {
     scrollSepoliaTestnet: 534351,
     default: 534351,
 };
-
-export const NFT_UPLOAD_IMAGE_ICP = process.env.NFT_UPLOAD_IMAGE_ICP === 'true' ?? true;
-export const NFT_UPLOAD_IMAGE_IPFS = process.env.NFT_UPLOAD_IMAGE_IPFS === 'true' ?? true;
