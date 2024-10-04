@@ -2,7 +2,7 @@ import axios from 'axios';
 import { ethers, BigNumber } from 'ethers';
 
 import { getNetworkConfig } from './networkService';
-import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
+import { USDT_ADDRESS, WETH_ADDRESS, networkChainIds } from '../constants/contracts';
 
 /** URLs and API Keys */
 const SCROLL_TESTNET_API = 'https://api-sepolia.scrollscan.com/api';
@@ -137,8 +137,8 @@ async function findApproximateDepositTransactions(
     wallet: string,
     depositAmount: BigNumber,
 ): Promise<DepositTransaction[]> {
-    const networkConfigScroll = await getNetworkConfig(534352);
-    const networkConfiEtjereum = await getNetworkConfig(1);
+    const networkConfigScroll = await getNetworkConfig(networkChainIds.scroll);
+    const networkConfiEtjereum = await getNetworkConfig(networkChainIds.ethereum);
 
     let depositTxs = await findApproximateDepositTransactionsOnNetwork(
         wallet,

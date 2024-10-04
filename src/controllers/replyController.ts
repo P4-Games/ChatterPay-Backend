@@ -1,10 +1,9 @@
 import axios from 'axios';
 
 import { IBlockchain } from '../models/blockchain';
+import { networkChainIds } from '../constants/contracts';
 import { getNetworkConfig } from '../services/networkService';
-
-const botDataToken = process.env?.BOT_DATA_TOKEN ?? '';
-const botApiUrl = process.env?.BOT_API_URL ?? '';
+import { BOT_API_URL, BOT_DATA_TOKEN } from '../constants/environment';
 
 interface OperatorReplyPayload {
     data_token: string;
@@ -17,7 +16,7 @@ interface OperatorReplyPayload {
  */
 async function sendBotMessage(payload: OperatorReplyPayload): Promise<string> {
     try {
-        const sendMsgEndpint = `${botApiUrl}/chatbot/conversations/send-message`;
+        const sendMsgEndpint = `${BOT_API_URL}/chatbot/conversations/send-message`;
         const response = await axios.post(sendMsgEndpint, payload, {
             headers: {
                 'Content-Type': 'application/json',
@@ -44,7 +43,7 @@ export async function sendTransferNotification(
         console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
 
         const payload: OperatorReplyPayload = {
-            data_token: `${botDataToken}`,
+            data_token: BOT_DATA_TOKEN!,
             channel_user_id,
             message: `${from} te envio ${amount} ${token} 💸. \n Ya estan disponibles en tu billetera ChatterPay! 🥳`,
         };
@@ -74,7 +73,7 @@ export async function sendSwapNotification(
         const networkConfig: IBlockchain = await getNetworkConfig();
 
         const payload: OperatorReplyPayload = {
-            data_token: `${botDataToken}`,
+            data_token: BOT_DATA_TOKEN!,
             channel_user_id,
             message: `🔄 Intercambiaste ${amount} ${token} por ${Math.round(parseFloat(result) * 1e2) / 1e2} ${outputToken}! 🔄 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${transactionHash}`,
         };
@@ -112,10 +111,10 @@ export async function sendMintInProgressNotification(channel_user_id: string): P
 export async function sendMintNotification(channel_user_id: string, id: string): Promise<void> {
     try {
         console.log('Sending mint notification');
-        const networkConfig: IBlockchain = await getNetworkConfig(421614);
+        const networkConfig: IBlockchain = await getNetworkConfig(networkChainIds.arbitrumSepolia);
 
         const payload: OperatorReplyPayload = {
-            data_token: `${botDataToken}`,
+            data_token: BOT_DATA_TOKEN!,
             channel_user_id,
             message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.contracts.chatterNFTAddress}/${id}`,
         };
@@ -142,7 +141,7 @@ export async function sendOutgoingTransferNotification(
         const networkConfig: IBlockchain = await getNetworkConfig();
 
         const payload: OperatorReplyPayload = {
-            data_token: `${botDataToken}`,
+            data_token: BOT_DATA_TOKEN!,
             channel_user_id,
             message: `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${txHash}`,
         };

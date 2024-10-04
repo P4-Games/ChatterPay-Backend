@@ -7,5 +7,12 @@ export const SIMPLE_SWAP_ADDRESS = '0x7c38F638Bb821Cf8E5A8c59460f5C6a992a9cBAE';
 export const defaultNftImage =
     'https://storage.googleapis.com/chatbot-multimedia/chatterpay/default/default_nft.png';
 
-export const NFT_UPLOAD_IMAGE_ICP = process.env.NFT_UPLOAD_IMAGE_ICP === 'true' ?? true;
-export const NFT_UPLOAD_IMAGE_IPFS = process.env.NFT_UPLOAD_IMAGE_IPFS === 'true' ?? true;
+export const networkChainIds = {
+    ethereum: 1,
+    ethereumSepolia: 11155111,
+    arbitrum: 42161,
+    arbitrumSepolia: 421614,
+    scroll: 534352,
+    scrollSepoliaTestnet: 534351,
+    default: 534351,
+};
