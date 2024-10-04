@@ -11,7 +11,6 @@ import { getNetworkConfig } from '../services/networkService';
 import { ensureSignerHasEth } from '../services/walletService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { WETH_ADDRESS, USDT_ADDRESS, SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
-import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 
 interface SwapBody {
     channel_user_id: string;
@@ -134,7 +133,7 @@ async function executeSwap(
  * @returns An object containing the signer and proxy address.
  */
 async function generateUserWallet(channel_user_id: string) {
-    const seedPrivateKey = PRIVATE_KEY;
+    const seedPrivateKey = process.env.PRIVATE_KEY;
     if (!seedPrivateKey) {
         throw new Error('Seed private key not found in environment variables');
     }
@@ -145,7 +144,7 @@ async function generateUserWallet(channel_user_id: string) {
     const networkConfig = await getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const signer = new ethers.Wallet(privateKey, provider);
-    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
 
     await ensureSignerHasEth(signer, backendSigner, provider);
 

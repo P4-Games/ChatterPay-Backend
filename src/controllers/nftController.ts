@@ -10,7 +10,6 @@ import { isValidUrl } from '../utils/paramsUtils';
 import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/uploadServices';
 import { executeWalletCreation } from './newWalletController';
 import { sendMintNotification } from './replyController';
-import { SIGNING_KEY } from '../constants/environment';
 
 export interface NFTInfo {
     description: string;
@@ -56,7 +55,7 @@ const mint_eth_nft = async (
         const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
 
         // Configurar el signer utilizando la clave privada del backend
-        const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+        const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
 
         // Crear una instancia del contrato usando ethers.js
         const nftContract = new ethers.Contract(
