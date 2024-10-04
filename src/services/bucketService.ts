@@ -34,16 +34,16 @@ export const getFile = async (fileName: string): Promise<ABI> => {
 
 
 // Function to get ERC20 ABI from the GCP bucket
-export const getERC20ABI = async (): Promise<ABI> => getFile('ERC20.json');
+export const getERC20ABI = async (): Promise<ABI> => getFile(GCP_IMAGES.ERC20);
 
 // Function to get ChatterPay NFT ABI from the GCP bucket
-export const getChatterPayNFTABI = async (): Promise<ABI> => getFile('ChatterPayNFT.json');
+export const getChatterPayNFTABI = async (): Promise<ABI> => getFile(GCP_IMAGES.ChatterPayNFT);
 
 // Function to get ChatterPay Wallet ABI from the GCP bucket
-export const getChatterPayWalletABI = async (): Promise<ABI> => getFile('ChatterPayWallet.json');
+export const getChatterPayWalletABI = async (): Promise<ABI> => getFile(GCP_IMAGES.ChatterPayWallet);
 
 // Function to get ChatterPay Wallet Factory ABI from the GCP bucket
-export const getChatterPayWalletFactoryABI = async (): Promise<ABI> => getFile('ChatterPayWalletFactory.json');
+export const getChatterPayWalletFactoryABI = async (): Promise<ABI> => getFile(GCP_IMAGES.ChatterPayWalletFactory);
 
 // Function to get EntryPoint ABI from the GCP bucket
-export const getEntryPointABI = async (): Promise<ABI> => getFile('EntryPoint.json');
+export const getEntryPointABI = async (): Promise<ABI> => getFile(GCP_IMAGES.EntryPoint);
