@@ -4,7 +4,6 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import Token, { IToken } from '../models/token';
 import { getNetworkConfig } from '../services/networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
-import { SIGNING_KEY } from '../constants/environment';
 
 /**
  * Creates a new token
@@ -187,7 +186,7 @@ async function mintToken(
  * @returns A promise that resolves to an array of MintResult objects
  */
 export async function issueTokensCore(recipientAddress: string): Promise<MintResult[]> {
-    const signingKey = SIGNING_KEY!;
+    const signingKey = process.env.SIGNING_KEY!;
     const amount: string = '1000';
     const network = await getNetworkConfig();
     const provider: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(
