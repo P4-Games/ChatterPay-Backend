@@ -1,27 +1,18 @@
 import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
-import { Storage } from '@google-cloud/storage';
-
-import { GCP_BUCKET_NAME, GCP_KEYFILE_PATH } from '../constants/constants';
+import { GCP_IMAGES } from '../constants/environment';
+import axios from 'axios';
 
 export type ABI = ethers.ContractInterface;
 
 // Initialize the cache
 const cache = new NodeCache({ stdTTL: 3600 });
 
-// Initialize the GCP storage
-const storage = new Storage({
-    keyFilename: GCP_KEYFILE_PATH
-});
-
 // Function to get file from the GCP bucket
-export const getGcpFile = async (fileName: string): Promise<ABI> => {
+export const getGcpFile = async (urlFile: string): Promise<ABI> => {
     try {
-        const bucket = storage.bucket(GCP_BUCKET_NAME);
-        const file = bucket.file(fileName);
-        const [fileContents] = await file.download();
-
-        // Parsear JSON
+        const response = await axios.get(urlFile);
+        const fileContents = response.data;
         return JSON.parse(fileContents.toString());
     } catch (error) {
         console.error('Error al leer el archivo desde GCP:', error);
