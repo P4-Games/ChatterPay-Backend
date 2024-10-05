@@ -1,7 +1,8 @@
+import axios from 'axios';
 import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
+
 import { GCP_ABIs } from '../constants/environment';
-import axios from 'axios';
 
 export type ABI = ethers.ContractInterface;
 
@@ -31,7 +32,6 @@ export const getFile = async (fileName: string): Promise<ABI> => {
     return abi;
 };
 
-
 // Function to get ERC20 ABI from the GCP bucket
 export const getERC20ABI = async (): Promise<ABI> => getFile(GCP_ABIs.ERC20);
 
@@ -42,7 +42,8 @@ export const getChatterPayNFTABI = async (): Promise<ABI> => getFile(GCP_ABIs.Ch
 export const getChatterPayWalletABI = async (): Promise<ABI> => getFile(GCP_ABIs.ChatterPayWallet);
 
 // Function to get ChatterPay Wallet Factory ABI from the GCP bucket
-export const getChatterPayWalletFactoryABI = async (): Promise<ABI> => getFile(GCP_ABIs.ChatterPayWalletFactory);
+export const getChatterPayWalletFactoryABI = async (): Promise<ABI> =>
+    getFile(GCP_ABIs.ChatterPayWalletFactory);
 
 // Function to get EntryPoint ABI from the GCP bucket
 export const getEntryPointABI = async (): Promise<ABI> => getFile(GCP_ABIs.EntryPoint);
