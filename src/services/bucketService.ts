@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
-import { GCP_IMAGES } from '../constants/environment';
+import { GCP_ABIs } from '../constants/environment';
 import axios from 'axios';
 
 export type ABI = ethers.ContractInterface;
@@ -33,16 +33,16 @@ export const getFile = async (fileName: string): Promise<ABI> => {
 
 
 // Function to get ERC20 ABI from the GCP bucket
-export const getERC20ABI = async (): Promise<ABI> => getFile(GCP_IMAGES.ERC20);
+export const getERC20ABI = async (): Promise<ABI> => getFile(GCP_ABIs.ERC20);
 
 // Function to get ChatterPay NFT ABI from the GCP bucket
-export const getChatterPayNFTABI = async (): Promise<ABI> => getFile(GCP_IMAGES.ChatterPayNFT);
+export const getChatterPayNFTABI = async (): Promise<ABI> => getFile(GCP_ABIs.ChatterPayNFT);
 
 // Function to get ChatterPay Wallet ABI from the GCP bucket
-export const getChatterPayWalletABI = async (): Promise<ABI> => getFile(GCP_IMAGES.ChatterPayWallet);
+export const getChatterPayWalletABI = async (): Promise<ABI> => getFile(GCP_ABIs.ChatterPayWallet);
 
 // Function to get ChatterPay Wallet Factory ABI from the GCP bucket
-export const getChatterPayWalletFactoryABI = async (): Promise<ABI> => getFile(GCP_IMAGES.ChatterPayWalletFactory);
+export const getChatterPayWalletFactoryABI = async (): Promise<ABI> => getFile(GCP_ABIs.ChatterPayWalletFactory);
 
 // Function to get EntryPoint ABI from the GCP bucket
-export const getEntryPointABI = async (): Promise<ABI> => getFile(GCP_IMAGES.EntryPoint);
+export const getEntryPointABI = async (): Promise<ABI> => getFile(GCP_ABIs.EntryPoint);

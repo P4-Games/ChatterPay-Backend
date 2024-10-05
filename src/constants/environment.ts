@@ -23,7 +23,7 @@ export const PORT = Number(envPort) || 3000;
 export const MONGO_URI = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
 export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' ?? true;
 export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' ?? true;
-export const GCP_IMAGES = {
+export const GCP_ABIs = {
   ChatterPayWallet:"https://storage.googleapis.com/chatbot-multimedia/chatterpay/ABIs/ChatterPayWallet.json",
   ChatterPayWalletFactory: "https://storage.googleapis.com/chatbot-multimedia/chatterpay/ABIs/ChatterPayWalletFactory.json",
   ChatterPayNFT: "https://storage.googleapis.com/chatbot-multimedia/chatterpay/ABIs/ChatterPayNFT.json",
