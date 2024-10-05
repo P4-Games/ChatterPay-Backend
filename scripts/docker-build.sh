@@ -24,5 +24,7 @@ docker build \
     --build-arg ICP_MNEMONIC="$ICP_MNEMONIC" \
     --build-arg BOT_API_URL="$BOT_API_URL" \
     --build-arg BOT_DATA_TOKEN="$BOT_DATA_TOKEN" \
+    --build-arg NFT_UPLOAD_IMAGE_ICP="$NFT_UPLOAD_IMAGE_ICP" \
+    --build-arg NFT_UPLOAD_IMAGE_IPFS="$NFT_UPLOAD_IMAGE_IPFS" \
     -t chatterpay-back-app ..
 

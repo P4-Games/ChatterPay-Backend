@@ -1,3 +1,4 @@
+import { networkChainIds } from '../constants/contracts';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 
 /**
@@ -8,7 +9,9 @@ import Blockchain, { IBlockchain } from '../models/blockchain';
  * @returns {Promise<IBlockchain>} A promise that resolves to the network configuration.
  * @throws {Error} If the network configuration is not found.
  */
-export async function getNetworkConfig(chainId: number = 534351): Promise<IBlockchain> {
+export async function getNetworkConfig(
+    chainId: number = networkChainIds.default,
+): Promise<IBlockchain> {
     const network = await Blockchain.findOne({ chain_id: chainId });
     if (!network) {
         throw new Error(`Network configuration not found for chain ID ${chainId}`);

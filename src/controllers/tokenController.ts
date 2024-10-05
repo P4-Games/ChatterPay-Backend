@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import Token, { IToken } from '../models/token';
+import { SIGNING_KEY } from '../constants/environment';
 import { getNetworkConfig } from '../services/networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
 
@@ -186,13 +187,12 @@ async function mintToken(
  * @returns A promise that resolves to an array of MintResult objects
  */
 export async function issueTokensCore(recipientAddress: string): Promise<MintResult[]> {
-    const signingKey = process.env.SIGNING_KEY!;
     const amount: string = '1000';
     const network = await getNetworkConfig();
     const provider: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(
         network.rpc,
     );
-    const signer: ethers.Wallet = new ethers.Wallet(signingKey, provider);
+    const signer: ethers.Wallet = new ethers.Wallet(SIGNING_KEY!, provider);
     const tokenAddresses: string[] = [USDT_ADDRESS, WETH_ADDRESS];
 
     // Get the current nonce for the signer
