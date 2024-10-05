@@ -1,16 +1,15 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
+import entryPoint from '../utils/entryPoint.json';
 import { getNetworkConfig } from './networkService';
+import chatterPayABI from '../utils/chatterPayABI.json';
 import { networkChainIds } from '../constants/contracts';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 import { getDynamicGas, executeWithDynamicGas } from '../utils/dynamicGas';
-import { getEntryPointABI, getChatterPayWalletABI, getChatterPayWalletFactoryABI } from './bucketService';
-
-const chatterPayABI = await getChatterPayWalletABI();
-const entryPoint = await getEntryPointABI();
+import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts/factories/ChatterPayWalletFactory__factory';
 
 /**
  * Represents a user operation in the ChatterPay system.
@@ -66,9 +65,10 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
     const provider = new ethers.providers.JsonRpcProvider(blockchain.rpc);
     const signer = new ethers.Wallet(privateKey, provider);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-    const factoryABI = await getChatterPayWalletFactoryABI();
-
-    const factory = new ethers.Contract(blockchain.contracts.factoryAddress, factoryABI, backendSigner);
+    const factory = ChatterPayWalletFactory__factory.connect(
+        blockchain.contracts.factoryAddress,
+        backendSigner,
+    );
 
     const proxy = await computeProxyAddressFromPhone(fromNumber);
     const code = await provider.getCode(proxy.proxyAddress);
