@@ -1,16 +1,16 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { isValidUrl } from '../utils/paramsUtils';
-import { getDynamicGas } from '../utils/dynamicGas';
-import { SIGNING_KEY } from '../constants/environment';
-import { getWalletByPhoneNumber } from '../models/user';
-import { sendMintNotification } from './replyController';
-import NFTModel, { INFT, INFTMetadata } from '../models/nft';
-import { getNetworkConfig } from '../services/networkService';
-import { executeWalletCreation } from './newWalletController';
 import { defaultNftImage, networkChainIds } from '../constants/contracts';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
+import { SIGNING_KEY } from '../constants/environment';
+import NFTModel, { INFT, INFTMetadata } from '../models/nft';
+import { getWalletByPhoneNumber } from '../models/user';
+import { getNetworkConfig } from '../services/networkService';
+import { getDynamicGas } from '../utils/dynamicGas';
+import { isValidUrl } from '../utils/paramsUtils';
+import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/uploadServices';
+import { executeWalletCreation } from './newWalletController';
+import { sendMintNotification } from './replyController';
 
 export interface NFTInfo {
     description: string;
@@ -328,18 +328,19 @@ export const mintExistingNFT = async (
         }
         await sendMintNotification(channel_user_id, nftData.tokenId.toString());
 
-
         // search by NFT original
-        let copy_of_original = nftCopyOf.id
-        let copy_order_original = nftCopyOf.total_of_this + 1
+        let copy_of_original = nftCopyOf.id;
+        let copy_order_original = nftCopyOf.total_of_this + 1;
 
         if (!nftCopyOf.original) {
             // Se esta copiando de una copia. Entonces, se busca el original
             console.log('Searching by nft original.');
-            const nftOriginal: INFT | null = await NFTModel.findOne({ id: nftCopyOf.copy_of_original });
+            const nftOriginal: INFT | null = await NFTModel.findOne({
+                id: nftCopyOf.copy_of_original,
+            });
             if (nftOriginal) {
-                copy_of_original = nftOriginal.id
-                copy_order_original = nftOriginal.total_of_this + 1
+                copy_of_original = nftOriginal.id;
+                copy_order_original = nftOriginal.total_of_this + 1;
 
                 // update total_of_this in the ORIGINAL NFT
                 console.log('Updating original NFT total_of_this field.');
