@@ -25,6 +25,7 @@ steps:
           - BOT_DATA_TOKEN=${_BOT_DATA_TOKEN}
           - NFT_UPLOAD_IMAGE_ICP=${_NFT_UPLOAD_IMAGE_ICP}
           - NFT_UPLOAD_IMAGE_IPFS=${_NFT_UPLOAD_IMAGE_IPFS}
+          - GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}
 
     # build the container images
     - name: 'gcr.io/cloud-builders/docker'
@@ -69,6 +70,8 @@ steps:
               'NFT_UPLOAD_IMAGE_ICP=${_NFT_UPLOAD_IMAGE_ICP}',
               '--build-arg',
               'NFT_UPLOAD_IMAGE_IPFS=${_NFT_UPLOAD_IMAGE_IPFS}',
+              '--build-arg',
+              'GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}',
               '.',
           ]
 

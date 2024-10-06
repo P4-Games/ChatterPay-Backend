@@ -596,10 +596,6 @@ export const getNftMetadataRequiredByOpenSea = async (
                     value: nft.original,
                 },
                 {
-                    trait_type: 'Total Minted of This',
-                    value: nft.total_of_this,
-                },
-                {
                     trait_type: 'Copy of ID',
                     value: nft.copy_of ?? '',
                 },
@@ -622,23 +618,23 @@ export const getNftMetadataRequiredByOpenSea = async (
                 },
                 {
                     trait_type: 'Latitude',
-                    value: nft.metadata.geolocation?.latitud,
+                    value: nft.metadata.geolocation?.latitud || '',
                 },
                 {
                     trait_type: 'Longitude',
-                    value: nft.metadata.geolocation?.longitud,
+                    value: nft.metadata.geolocation?.longitud || '',
                 },
                 {
                     trait_type: 'GCP Image',
-                    value: nft.metadata.image_url.gcp,
+                    value: nft.metadata.image_url.gcp || '',
                 },
                 {
                     trait_type: 'IFPS Image',
-                    value: nft.metadata.image_url.ipfs,
+                    value: nft.metadata.image_url.ipfs || '',
                 },
                 {
                     trait_type: 'ICP Image',
-                    value: nft.metadata.image_url.icp,
+                    value: nft.metadata.image_url.icp || '',
                 },
             ],
         });
