@@ -93,7 +93,7 @@ async function setupContracts(blockchain: IBlockchain, privateKey: string, fromN
  * @param signer - The signer to use for the contract.
  * @returns A promise that resolves to the ERC20 contract instance.
  */
-async function setupERC20(tokenAddress: string, signer: ethers.Wallet) {
+export async function setupERC20(tokenAddress: string, signer: ethers.Wallet) {
     return new ethers.Contract(
         tokenAddress,
         [

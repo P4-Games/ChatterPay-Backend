@@ -133,7 +133,7 @@ async function executeSwap(
  * @param channel_user_id The user's channel ID.
  * @returns An object containing the signer and proxy address.
  */
-async function generateUserWallet(channel_user_id: string) {
+export async function generateUserWallet(channel_user_id: string) {
     if (!PRIVATE_KEY) {
         throw new Error('Seed private key not found in environment variables');
     }
