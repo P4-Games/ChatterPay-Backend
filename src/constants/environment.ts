@@ -15,6 +15,7 @@ const {
     BOT_API_URL,
     NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
     NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
+    DEFAULT_CHAIN_ID,
 } = process.env;
 
 export {
@@ -26,6 +27,7 @@ export {
     INFURA_API_KEY,
     BOT_DATA_TOKEN,
     ICP_CANISTER_ID,
+    DEFAULT_CHAIN_ID
 };
 
 export const PORT = Number(envPort) || 3000;
