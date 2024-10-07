@@ -3,20 +3,22 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const {
-    PORT: envPort,
-    MONGO_URI: envMongoUri,
-    PRIVATE_KEY,
-    SIGNING_KEY,
-    PINATA_JWT,
-    ICP_CANISTER_ID,
-    ICP_MNEMONIC,
-    INFURA_API_KEY,
-    BOT_DATA_TOKEN,
-    BOT_API_URL,
-    NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
-    NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
-    DEFAULT_CHAIN_ID,
+  PORT: envPort,
+  MONGO_URI: envMongoUri,
+  PRIVATE_KEY,
+  SIGNING_KEY,
+  PINATA_JWT,
+  ICP_CANISTER_ID,
+  ICP_MNEMONIC,
+  INFURA_API_KEY,
+  BOT_DATA_TOKEN,
+  BOT_API_URL,
+  NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
+  NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
+  DEFAULT_CHAIN_ID: envDefaultChainId,
 } = process.env;
+
+const DEFAULT_CHAIN_ID = Number(envDefaultChainId);
 
 export {
     PINATA_JWT,
