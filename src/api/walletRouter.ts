@@ -13,4 +13,10 @@ export const walletRouter = async (fastify: FastifyInstance): Promise<void> => {
      * @route POST /create_wallet/
      */
     fastify.post('/create_wallet/', createWallet);
+
+    /**
+     * Route to withdraw funds from a wallet
+     * @route POST /withdraw_funds/
+     */
+    fastify.post('/withdraw_funds/', withdrawFunds);
 };
