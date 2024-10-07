@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
-
+import { DEFAULT_CHAIN_ID } from '../constants/environment';
 import entryPoint from '../utils/entryPoint.json';
 import { getNetworkConfig } from './networkService';
 import chatterPayABI from '../utils/chatterPayABI.json';
@@ -299,5 +299,35 @@ async function executeTransfer(
     } catch (error) {
         console.error('Error sending User Operation transaction:', error);
         throw error;
+    }
+}
+
+/**
+ * Set Wallet for a user by channel_user_id
+ * @param channel_user_id - The channel_user_id of the user
+ * @param chain_id - The chain ID 
+ * @returns A promise that resolves to an object Contract whos address is the wallet address
+ * @throws Error if there's an issue during the process
+ */
+export async function setWallet(channel_user_id: string, chain_id: number = DEFAULT_CHAIN_ID) {
+    const blockchain = await getBlockchain(chain_id);
+    if (!PRIVATE_KEY) {
+        console.error('Seed private key not found in environment variables');
+        throw new Error('Seed private key not found in environment variables');
+    }
+
+    const privateKey = (() => { try { return generatePrivateKey(PRIVATE_KEY, channel_user_id); } catch (e) { console.error("Error generating private key for wallet."); throw e; } })();
+
+    try {
+        const { provider, signer, backendSigner, proxy } = await setupContracts(
+            blockchain,
+            privateKey,
+            channel_user_id,
+        );
+        console.log("Wallet set up successfully at: ", proxy.proxyAddress);
+        return proxy;
+    } catch (e) {
+        console.error("Error setting up contracts for wallet.");
+        throw e;
     }
 }
