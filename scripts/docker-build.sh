@@ -26,5 +26,6 @@ docker build \
     --build-arg BOT_DATA_TOKEN="$BOT_DATA_TOKEN" \
     --build-arg NFT_UPLOAD_IMAGE_ICP="$NFT_UPLOAD_IMAGE_ICP" \
     --build-arg NFT_UPLOAD_IMAGE_IPFS="$NFT_UPLOAD_IMAGE_IPFS" \
+    --build-arg DEFAULT_CHAIN_ID="$DEFAULT_CHAIN_ID" \
     -t chatterpay-back-app ..
 
