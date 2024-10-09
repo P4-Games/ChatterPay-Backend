@@ -20,7 +20,7 @@ export async function startServer(): Promise<FastifyInstance> {
     });
 
     await server.register(rateLimit, {
-        max: 400,
+        max: 50,
         timeWindow: '1 minute',
         errorResponseBuilder: () => ({
             code: 429,
