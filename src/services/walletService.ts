@@ -133,7 +133,7 @@ async function createUserOperation(
         transferEncode,
     ]);
 
-    const nonce = (await signer.provider!.getTransactionCount(proxyAddress)) + 1;
+    const nonce = (await signer.provider.getTransactionCount(proxyAddress)) + 1;
 
     return {
         sender: proxyAddress,
@@ -197,12 +197,11 @@ export async function sendUserOperation(
     chain_id: number = networkChainIds.default,
 ): Promise<{ transactionHash: string }> {
     const blockchain = await getBlockchain(chain_id);
-    const seedPrivateKey = PRIVATE_KEY;
-    if (!seedPrivateKey) {
+    if (!PRIVATE_KEY) {
         throw new Error('Seed private key not found in environment variables');
     }
 
-    const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
+    const privateKey = generatePrivateKey(PRIVATE_KEY, fromNumber);
     const { provider, signer, backendSigner, chatterPay, proxy } = await setupContracts(
         blockchain,
         privateKey,

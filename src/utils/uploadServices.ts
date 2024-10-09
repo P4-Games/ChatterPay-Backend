@@ -9,7 +9,13 @@ import { AssetManager } from '@dfinity/assets';
 import { Ed25519KeyIdentity } from '@dfinity/identity';
 import { mnemonicToSeed, validateMnemonic } from 'bip39';
 
-import { PINATA_JWT, ICP_MNEMONIC, ICP_CANISTER_ID, NFT_UPLOAD_IMAGE_ICP, NFT_UPLOAD_IMAGE_IPFS } from '../constants/environment';
+import {
+    PINATA_JWT,
+    ICP_MNEMONIC,
+    ICP_CANISTER_ID,
+    NFT_UPLOAD_IMAGE_ICP,
+    NFT_UPLOAD_IMAGE_IPFS,
+} from '../constants/environment';
 
 dotenv.config();
 

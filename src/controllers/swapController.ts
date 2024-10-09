@@ -134,12 +134,11 @@ async function executeSwap(
  * @returns An object containing the signer and proxy address.
  */
 async function generateUserWallet(channel_user_id: string) {
-    const seedPrivateKey = PRIVATE_KEY;
-    if (!seedPrivateKey) {
+    if (!PRIVATE_KEY) {
         throw new Error('Seed private key not found in environment variables');
     }
 
-    const seed = seedPrivateKey + channel_user_id;
+    const seed = PRIVATE_KEY + channel_user_id;
     const privateKey = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
 
     const networkConfig = await getNetworkConfig();

@@ -169,7 +169,7 @@ const processNftMint = async (
     try {
         const nfImageURL = new URL(url ?? defaultNftImage);
         data = await mint_eth_nft(
-            address_of_user!,
+            address_of_user,
             'chatterpay-nft',
             mensaje || '',
             nfImageURL.toString(),
@@ -328,18 +328,19 @@ export const mintExistingNFT = async (
         }
         await sendMintNotification(channel_user_id, nftData.tokenId.toString());
 
-
         // search by NFT original
-        let copy_of_original = nftCopyOf.id
-        let copy_order_original = nftCopyOf.total_of_this + 1
+        let copy_of_original = nftCopyOf.id;
+        let copy_order_original = nftCopyOf.total_of_this + 1;
 
-        if (!nftCopyOf.original) { 
+        if (!nftCopyOf.original) {
             // Se esta copiando de una copia. Entonces, se busca el original
             console.log('Searching by nft original.');
-            const nftOriginal: INFT | null = await NFTModel.findOne({ id: nftCopyOf.copy_of_original });
+            const nftOriginal: INFT | null = await NFTModel.findOne({
+                id: nftCopyOf.copy_of_original,
+            });
             if (nftOriginal) {
-                copy_of_original = nftOriginal.id
-                copy_order_original = nftOriginal.total_of_this + 1
+                copy_of_original = nftOriginal.id;
+                copy_order_original = nftOriginal.total_of_this + 1;
 
                 // update total_of_this in the ORIGINAL NFT
                 console.log('Updating original NFT total_of_this field.');
@@ -551,14 +552,14 @@ export const getNftMetadataRequiredByOpenSea = async (
             id: nft.id,
             name: 'Chatterpay',
             description: nft.metadata.description,
-            image: nft.metadata.image_url.gcp || defaultNftImage,
+            image: nft.metadata.image_url.gcp ?? defaultNftImage,
             attributes: {
                 id: nft.id,
                 original: nft.original,
                 total_of_this: nft.total_of_this,
-                copy_of: nft.copy_of || '',
+                copy_of: nft.copy_of ?? '',
                 copy_order: nft.copy_order,
-                copy_of_original : nft.copy_order_original,
+                copy_of_original: nft.copy_order_original,
                 copy_order_original: nft.copy_order_original,
                 creation_date: nft.timestamp,
                 geolocation: nft.metadata.geolocation,

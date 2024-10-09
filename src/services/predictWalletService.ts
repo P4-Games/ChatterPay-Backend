@@ -22,12 +22,11 @@ export interface PhoneNumberToAddress {
  * @throws {Error} If the seed private key is not found in environment variables.
  */
 function phoneNumberToAddress(phoneNumber: string): PhoneNumberToAddress {
-    const seedPrivateKey = PRIVATE_KEY;
-    if (!seedPrivateKey) {
+    if (!PRIVATE_KEY) {
         throw new Error('Seed private key not found in environment variables');
     }
 
-    const seed = seedPrivateKey + phoneNumber;
+    const seed = PRIVATE_KEY + phoneNumber;
     const privateKey = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
     const wallet = new ethers.Wallet(privateKey);
     const publicKey = wallet.address;
