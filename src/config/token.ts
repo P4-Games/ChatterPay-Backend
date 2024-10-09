@@ -46,3 +46,24 @@ export async function getTokens(): Promise<{frontendToken: string, chatizaloToke
 
   return { frontendToken, chatizaloToken };
 }
+
+/**
+ * Represents the possible token types that can be verified
+ */
+export type TokenResponse = 'frontend' | 'chatizalo' | null;
+
+/**
+ * Verifies the provided token against known tokens
+ * @param {string} providedToken - The token to verify
+ * @returns {Promise<TokenResponse>} The type of token if verified, or null if not
+ */
+export async function verifyToken(providedToken: string): Promise<TokenResponse> {
+  const { frontendToken, chatizaloToken } = await getTokens();
+
+  let res: TokenResponse = null;
+
+  if (providedToken === frontendToken) res = 'frontend';
+  if (providedToken === chatizaloToken) res = 'chatizalo';
+
+  return res;
+}
