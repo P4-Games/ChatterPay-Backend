@@ -13,10 +13,11 @@ const {
     INFURA_API_KEY,
     BOT_DATA_TOKEN,
     BOT_API_URL,
-    GCP_PK,
     NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
     NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
     GCP_BUCKET_BASE_URL,
+    FRONTEND_TOKEN,
+    CHATIZALO_TOKEN
 } = process.env;
 
 export {
@@ -27,17 +28,14 @@ export {
     ICP_MNEMONIC,
     INFURA_API_KEY,
     BOT_DATA_TOKEN,
+    FRONTEND_TOKEN,
     ICP_CANISTER_ID,
-    GCP_BUCKET_BASE_URL,
+    CHATIZALO_TOKEN,
+    GCP_BUCKET_BASE_URL
 };
 
 export const PORT = Number(envPort) || 3000;
 export const MONGO_URI = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
-
-export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
-export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' || true;
-
-export const GCP_PRIVATE_KEY = Buffer.from((GCP_PK ?? ""), "base64").toString().split(String.raw`\n`).join("\n");
 
 export const GCP_ABIs = {
     ChatterPayWallet: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPayWallet.json`,
@@ -46,3 +44,5 @@ export const GCP_ABIs = {
     EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/EntryPoint.json`,
     ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/ERC20.json`,
 };
+export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
+export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' || true;
