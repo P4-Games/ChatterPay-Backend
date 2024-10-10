@@ -1,6 +1,6 @@
-import { FastifyInstance } from 'fastify';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi, { FastifySwaggerUiOptions } from '@fastify/swagger-ui';
+import { FastifyInstance } from 'fastify';
 
 /**
  * Sets up Swagger documentation for the Fastify server.

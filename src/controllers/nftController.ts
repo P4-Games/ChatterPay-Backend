@@ -7,11 +7,11 @@ import { getDynamicGas } from '../utils/dynamicGas';
 import { SIGNING_KEY } from '../constants/environment';
 import { getWalletByPhoneNumber } from '../models/user';
 import { sendMintNotification } from './replyController';
+import { defaultNftImage, networkChainIds } from '../constants/contracts';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
+import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/uploadServices';
 import { executeWalletCreation } from './newWalletController';
-import { defaultNftImage, networkChainIds } from '../constants/contracts';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
 export interface NFTInfo {
     description: string;
@@ -193,6 +193,17 @@ export const generateNftOriginal = async (
 
     reply.status(200).send({ message: `El certificado se está generando` });
 
+    return;
+};
+
+const persistNftInBdd = async (
+    address_of_user: string,
+    channel_user_id: string,
+    url: string,
+    mensaje: string,
+    latitud: string,
+    longitud: string,
+) => {
     let processedImage;
     try {
         console.info('Obteniendo imagen de NFT');
@@ -252,6 +263,39 @@ export const generateNftOriginal = async (
     } catch (error) {
         console.error('Error al enviar notificación de minteo de NFT', (error as Error).message);
         // No se lanza error aquí para continuar con el proceso
+    }
+
+    // Guardar los detalles iniciales del NFT en la base de datos.
+    try {
+        console.info('Guardando NFT inicial en bdd');
+        await NFTModel.create({
+            id: nftData.tokenId.toString(),
+            channel_user_id,
+            wallet: address_of_user,
+            trxId: nftData.receipt.transactionHash,
+            timestamp: new Date(),
+            original: true,
+            total_of_this: 1,
+            copy_of: null,
+            copy_of_original: null,
+            copy_order: 1,
+            copy_order_original: 1,
+            metadata: {
+                image_url: {
+                    gcp: url || '',
+                    icp: '',
+                    ipfs: '',
+                },
+                description: mensaje || '',
+                geolocation: {
+                    latitud: latitud || '',
+                    longitud: longitud || '',
+                },
+            },
+        });
+    } catch (error) {
+        console.error('Error al grabar NFT inicial en bdd', (error as Error).message);
+        return; // Si falla la creación inicial, no tiene sentido continuar
     }
 
     const fileName = `${channel_user_id.toString()}_${Date.now()}.jpg`;
