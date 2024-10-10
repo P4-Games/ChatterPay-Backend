@@ -221,7 +221,7 @@ export const balanceByPhoneNumber = async (request: FastifyRequest, reply: Fasti
  * @param reply Fastify Reply
  */
 export const checkExternalDeposits = async (request: FastifyRequest, reply: FastifyReply) => {
-    fetchExternalDeposits();
+    const depositsStatus = await fetchExternalDeposits();
 
-    return reply.status(200).send({ status: 'OK' });
+    return reply.status(200).send({ status: depositsStatus });
 };
