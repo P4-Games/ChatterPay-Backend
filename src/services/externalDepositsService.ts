@@ -6,9 +6,10 @@ import { LastProcessedBlock } from '../models/lastProcessedBlock';
 import { sendTransferNotification } from '../controllers/replyController';
 
 /**
- * The GraphQL API URL for querying external deposits.
+ * The GraphQL API URLs for querying external deposits.
  */
-const GRAPH_API_URL = 'https://api.studio.thegraph.com/query/91286/balance-sepolia/version/latest';
+const GRAPH_API_URL_USDT = 'https://api.studio.thegraph.com/query/91286/balance-sepolia/version/latest';
+const GRAPH_API_URL_WETH = 'https://api.studio.thegraph.com/query/91286/balance-sepolia-weth/version/latest';
 
 /**
  * GraphQL query to fetch external deposits.
@@ -66,16 +67,23 @@ export async function fetchExternalDeposits() {
       receivers: ecosystemAddresses
     };
 
-    // Execute the GraphQL query
-    const data = await request<{ transfers: Transfer[] }>(GRAPH_API_URL, QUERY_EXTERNAL_DEPOSITS, variables);
+    // Execute the GraphQL queries for both USDT and WETH
+    const [dataUSDT, dataWETH] = await Promise.all([
+      request<{ transfers: Transfer[] }>(GRAPH_API_URL_USDT, QUERY_EXTERNAL_DEPOSITS, variables),
+      request<{ transfers: Transfer[] }>(GRAPH_API_URL_WETH, QUERY_EXTERNAL_DEPOSITS, variables)
+    ]);
 
-    // Filter out internal transfers
-    const externalDeposits = data.transfers.filter(
+    // Combine and filter out internal transfers
+    const allTransfers = [...dataUSDT.transfers.map(t => ({ ...t, token: 'USDT' })), 
+                          ...dataWETH.transfers.map(t => ({ ...t, token: 'WETH' }))];
+    const externalDeposits = allTransfers.filter(
       transfer => !ecosystemAddresses.includes(transfer.from.toLowerCase())
     );
 
     // Process each external deposit
-    await Promise.all(externalDeposits.map(processExternalDeposit));
+    await Promise.all(externalDeposits.map(transfer => 
+      processExternalDeposit(transfer, transfer.token)
+    ));
 
     // Update the last processed block
     if (externalDeposits.length > 0) {
@@ -90,23 +98,24 @@ export async function fetchExternalDeposits() {
     
     return `No se encontraron nuevos depósitos desde el bloque ${fromBlock}`;
   } catch (error) {
-    return 'Error fetching external deposits:';
+    return `Error fetching external deposits: ${error}`;
   }
 }
 
 /**
  * Processes a single external deposit.
  * @async
- * @param {Transfer} transfer - The transfer object to process.
+ * @param {Transfer & { token: string }} transfer - The transfer object to process.
+ * @param {string} token - The token type (USDT or WETH).
  */
-async function processExternalDeposit(transfer: Transfer) {
+async function processExternalDeposit(transfer: Transfer & { token: string }, token: string) {
   const user = await User.findOne({ wallet: { $regex: new RegExp(`^${transfer.to}$`, 'i') } });
 
   if (user) {
     const value = (Number(transfer.value) / 1e18).toFixed(2);
     
     // Send incoming transfer notification message, and record tx data
-    sendTransferNotification(user.phone_number, null, value, "USDT")
+    sendTransferNotification(user.phone_number, null, value, token);
     
     new Transaction({
       trx_hash: transfer.id,
@@ -116,9 +125,9 @@ async function processExternalDeposit(transfer: Transfer) {
       date: new Date(),
       status: 'completed',
       amount: value,
-      token: 'USDT'
+      token
     }).save();
   } else {
-    console.log(`Transfer detected, not processed: ${JSON.stringify(transfer)}`)
+    console.log(`Transfer detected, not processed: ${JSON.stringify(transfer)}`);
   }
 }
