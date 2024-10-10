@@ -4,9 +4,9 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { User } from '../models/user';
 import { SIGNING_KEY } from '../constants/environment';
 import { NFTInfo, getPhoneNFTs } from './nftController';
-import { verifyAlchemySignature } from '../utils/alchemy';
 import { getNetworkConfig } from '../services/networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
+import { fetchExternalDeposits } from '../services/externalDepositsService';
 
 type Currency = 'USD' | 'UYU' | 'ARS' | 'BRL';
 
@@ -216,36 +216,12 @@ export const balanceByPhoneNumber = async (request: FastifyRequest, reply: Fasti
 };
 
 /**
- * Handles the USDT transfer event notification used by Alchemy Webhooks
+ * Handles the query for external deposits made to ChatterPay wallets
  * @param request Fastify Request
  * @param reply Fastify Reply
  */
-export const notifyUSDTEvent = async (request: FastifyRequest, reply: FastifyReply) => {
-    const signature = request.headers['x-alchemy-signature'] as string;
-    
-    if (!signature || !verifyAlchemySignature(signature, request.body)) {
-        return reply.status(401).send({ error: 'Invalid signature' });
-    }
-
-    // TODO: Process event
-
-    return reply.status(200).send({ status: 'OK' });
-};
-
-
-/**
- * Handles the WETH transfer event notification used by Alchemy Webhooks
- * @param request Fastify Request
- * @param reply Fastify Reply
- */
-export const notifyWETHEvent = async (request: FastifyRequest, reply: FastifyReply) => {
-    const signature = request.headers['x-alchemy-signature'] as string;
-    
-    if (!signature || !verifyAlchemySignature(signature, request.body)) {
-        return reply.status(401).send({ error: 'Invalid signature' });
-    }
-
-    // TODO: Process event
+export const checkExternalDeposits = async (request: FastifyRequest, reply: FastifyReply) => {
+    fetchExternalDeposits();
 
     return reply.status(200).send({ status: 'OK' });
 };

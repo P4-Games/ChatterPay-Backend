@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 
-import { walletBalance, notifyUSDTEvent, notifyWETHEvent, balanceByPhoneNumber } from '../controllers/balanceController';
+import { walletBalance, balanceByPhoneNumber, checkExternalDeposits } from '../controllers/balanceController';
 
 /**
  * Configures routes related to wallet balances.
@@ -24,11 +24,5 @@ export const balanceRoutes = async (fastify: FastifyInstance): Promise<void> => 
      * Route to notify USDT events (used by Alchemy webhooks)
      * @route POST /notify/usdt
      */
-    fastify.get('/notify/usdt', notifyUSDTEvent);
-    
-    /**
-     * Route to notify WETH events (used by Alchemy webhooks)
-     * @route POST /notify/weth
-     */
-    fastify.get('/notify/weth', notifyWETHEvent);
+    fastify.get('/check_deposits', checkExternalDeposits);
 };
