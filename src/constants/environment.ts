@@ -16,7 +16,6 @@ const {
     NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
     NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
     GCP_BUCKET_BASE_URL,
-    BITQUERY_API_KEY,
 } = process.env;
 
 export {
@@ -28,7 +27,6 @@ export {
     INFURA_API_KEY,
     BOT_DATA_TOKEN,
     ICP_CANISTER_ID,
-    BITQUERY_API_KEY,
     GCP_BUCKET_BASE_URL
 };
 
