@@ -15,5 +15,5 @@ export const networkChainIds = {
     arbitrumSepolia: 421614,
     scroll: 534352,
     scrollSepoliaTestnet: 534351,
-    default: 534351,
+    default: 421614,
 };

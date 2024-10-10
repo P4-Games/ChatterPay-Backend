@@ -200,7 +200,7 @@ export async function issueTokensCore(recipientAddress: string): Promise<MintRes
     console.log(`Current Nonce: ${currentNonce}`)
 
     const mintPromises: Promise<MintResult>[] = tokenAddresses.map((tokenAddress, index) =>
-        mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index + 1),
+        mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index),
     );
 
     const mintResults = await Promise.all(mintPromises);
