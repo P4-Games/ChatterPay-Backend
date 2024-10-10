@@ -16,6 +16,7 @@ const {
     NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
     NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
     GCP_BUCKET_BASE_URL,
+    ALCHEMY_AUTH_TOKEN
 } = process.env;
 
 export {
@@ -27,7 +28,8 @@ export {
     INFURA_API_KEY,
     BOT_DATA_TOKEN,
     ICP_CANISTER_ID,
-    GCP_BUCKET_BASE_URL,
+    ALCHEMY_AUTH_TOKEN,
+    GCP_BUCKET_BASE_URL
 };
 
 export const PORT = Number(envPort) || 3000;
