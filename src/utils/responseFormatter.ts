@@ -3,7 +3,6 @@ import { FastifyReply } from 'fastify';
 export interface SuccessResponse {
     status: 'success';
     data: {
-        id: string;
         message: string;
         [key: string]: unknown;
     };
@@ -20,11 +19,10 @@ export interface ErrorResponse {
     timestamp: string;
 }
 
-export function returnSuccessResponse(reply: FastifyReply, id: string, message: string, additionalData?: { [key: string]: unknown }) {
+export function returnSuccessResponse(reply: FastifyReply, message: string, additionalData?: { [key: string]: unknown }) {
     const response: SuccessResponse = {
         status: 'success',
         data: {
-            id,
             message,
             ...additionalData,
         },
