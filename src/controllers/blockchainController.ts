@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import Blockchain, { IBlockchain } from '../models/blockchain';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
 type BlockchainParams = { id: string };
 type BlockchainBody = IBlockchain | Partial<IBlockchain>;
@@ -17,7 +18,7 @@ const handleBlockchainError = (
     operation: string,
 ): FastifyReply => {
     console.error(`Error ${operation} blockchain:`, error);
-    return reply.status(500).send({ message: 'Internal Server Error' });
+    return returnErrorResponse(reply, 400, `Error ${operation} blockchain`);
 };
 
 /**
@@ -33,9 +34,12 @@ export const createBlockchain = async (
     try {
         const newBlockchain = new Blockchain(request.body);
         await newBlockchain.save();
-        return await reply.status(201).send(newBlockchain);
+        console.log("Blockchain Saved")
+        return await returnSuccessResponse(reply, 'Blockchain created successfully', newBlockchain.toJSON());
     } catch (error) {
-        return handleBlockchainError(error, reply, 'creating');
+        console.error("Error creating blockchain");
+        console.error("Error details: ", error);
+        return returnErrorResponse(reply, 400, 'Failed to create blockchain');
     }
 };
 
@@ -51,9 +55,11 @@ export const getAllBlockchains = async (
 ): Promise<FastifyReply> => {
     try {
         const blockchains = await Blockchain.find();
-        return await reply.status(200).send(blockchains);
+        return await returnSuccessResponse(reply, 'Blockchains fetched successfully', { blockchains });
     } catch (error) {
-        return handleBlockchainError(error, reply, 'fetching');
+        console.error("Error fetching blockchains");
+        console.error("Error details: ", error);
+        return returnErrorResponse(reply, 400, 'Failed to fetch blockchains');
     }
 };
 
@@ -71,11 +77,14 @@ export const getBlockchainById = async (
     try {
         const blockchain = await Blockchain.findById(id);
         if (!blockchain) {
-            return await reply.status(404).send({ message: 'Blockchain not found' });
+            console.warn("Blockchain not found");
+            return await returnErrorResponse(reply, 404, 'Blockchain not found');
         }
-        return await reply.status(200).send(blockchain);
+        return await returnSuccessResponse(reply, 'Blockchain fetched successfully', blockchain.toJSON());
     } catch (error) {
-        return handleBlockchainError(error, reply, 'fetching');
+        console.error("Error fetching blockchain");
+        console.error("Error details: ", error);
+        return returnErrorResponse(reply, 400, 'Failed to fetch blockchain');
     }
 };
 
@@ -95,11 +104,14 @@ export const updateBlockchain = async (
             new: true,
         });
         if (!updatedBlockchain) {
-            return await reply.status(404).send({ message: 'Blockchain not found' });
+            console.warn("Blockchain not found");
+            return await returnErrorResponse(reply, 404, 'Blockchain not found');
         }
-        return await reply.status(200).send(updatedBlockchain);
+        return await returnSuccessResponse(reply, 'Blockchain updated successfully', updatedBlockchain.toJSON());
     } catch (error) {
-        return handleBlockchainError(error, reply, 'updating');
+        console.error("Error updating blockchain");
+        console.error("Error details: ", error);
+        return returnErrorResponse(reply, 400, 'Failed to update blockchain');
     }
 };
 
@@ -117,11 +129,14 @@ export const deleteBlockchain = async (
     try {
         const deletedBlockchain = await Blockchain.findByIdAndDelete(id);
         if (!deletedBlockchain) {
-            return await reply.status(404).send({ message: 'Blockchain not found' });
+            console.warn("Blockchain not found");
+            return await returnErrorResponse(reply, 404, 'Blockchain not found');
         }
-        return await reply.status(200).send({ message: 'Blockchain deleted' });
+        return await returnSuccessResponse(reply, 'Blockchain deleted successfully');
     } catch (error) {
-        return handleBlockchainError(error, reply, 'deleting');
+        console.error("Error deleting blockchain");
+        console.error("Error details: ", error);
+        return returnErrorResponse(reply, 400, 'Failed to delete blockchain');
     }
 };
 
