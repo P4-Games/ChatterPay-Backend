@@ -7,21 +7,6 @@ type BlockchainParams = { id: string };
 type BlockchainBody = IBlockchain | Partial<IBlockchain>;
 
 /**
- * Handles errors in blockchain operations.
- * @param error - The error object.
- * @param reply - The FastifyReply object.
- * @param operation - The operation being performed.
- */
-const handleBlockchainError = (
-    error: unknown,
-    reply: FastifyReply,
-    operation: string,
-): FastifyReply => {
-    console.error(`Error ${operation} blockchain:`, error);
-    return returnErrorResponse(reply, 400, `Error ${operation} blockchain`);
-};
-
-/**
  * Creates a new blockchain entry in the database.
  * @param request - The FastifyRequest object containing the blockchain data.
  * @param reply - The FastifyReply object.
@@ -137,27 +122,5 @@ export const deleteBlockchain = async (
         console.error("Error deleting blockchain");
         console.error("Error details: ", error);
         return returnErrorResponse(reply, 400, 'Failed to delete blockchain');
-    }
-};
-
-/**
- * Retrieves specific blockchain details by chain ID.
- * @param chain_id - The chain ID of the blockchain.
- * @returns A promise resolving to an object containing rpc, entryPoint, and signingKey.
- * @throws An error if the blockchain is not found or if there's an error fetching the details.
- */
-export const getBlockchainDetailsByChainId = async (
-    chain_id: number,
-): Promise<{ rpc: string; entryPoint: string; signingKey: string }> => {
-    try {
-        const blockchain = await Blockchain.findOne({ chain_id });
-        if (!blockchain) {
-            throw new Error('Blockchain not found');
-        }
-        const { rpc, entryPoint, signingKey } = blockchain;
-        return { rpc, entryPoint, signingKey };
-    } catch (error) {
-        console.error('Error fetching blockchain details:', error);
-        throw new Error('Failed to fetch blockchain details');
     }
 };
