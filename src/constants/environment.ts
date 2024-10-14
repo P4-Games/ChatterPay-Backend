@@ -27,7 +27,7 @@ export {
     INFURA_API_KEY,
     BOT_DATA_TOKEN,
     ICP_CANISTER_ID,
-    GCP_BUCKET_BASE_URL,
+    GCP_BUCKET_BASE_URL
 };
 
 export const PORT = Number(envPort) || 3000;
