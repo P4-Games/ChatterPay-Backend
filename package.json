@@ -74,7 +74,6 @@
         "graphql": "^16.9.0",
         "graphql-request": "^5.1.0",
         "husky": "^9.1.6",
-        "jsonwebtoken": "^9.0.2",
         "logger": "^0.0.1",
         "mongoose": "^8.5.2",
         "node-cache": "^5.1.2",
