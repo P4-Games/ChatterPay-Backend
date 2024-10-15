@@ -5,7 +5,6 @@ import { setupSwagger } from './swagger';
 import { setupRoutes } from '../api/routes';
 import { PORT } from '../constants/environment';
 import { setupMiddleware } from '../middleware/bodyParser';
-import { authMiddleware } from '../middleware/authMiddleware';
 
 /**
  * Starts the Fastify server with all necessary configurations.
@@ -28,8 +27,6 @@ export async function startServer(): Promise<FastifyInstance> {
             message: 'Demasiadas solicitudes, por favor inténtelo de nuevo más tarde.',
         }),
     });
-
-    server.addHook('onRequest', authMiddleware);
 
     await setupMiddleware(server);
     await setupRoutes(server);

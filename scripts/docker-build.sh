@@ -27,7 +27,5 @@ docker build \
     --build-arg NFT_UPLOAD_IMAGE_ICP="$NFT_UPLOAD_IMAGE_ICP" \
     --build-arg NFT_UPLOAD_IMAGE_IPFS="$NFT_UPLOAD_IMAGE_IPFS" \
     --build-arg GCP_BUCKET_BASE_URL="$GCP_BUCKET_BASE_URL" \
-    --build-arg CHATIZALO_TOKEN="$CHATIZALO_TOKEN" \
-    --build-arg FRONTEND_TOKEN="$FRONTEND_TOKEN" \
     -t chatterpay-back-app ..
 
