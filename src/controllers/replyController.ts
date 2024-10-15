@@ -42,11 +42,16 @@ export async function sendTransferNotification(
     try {
         console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
 
+        const message = from ? 
+            `${from} te envió ${amount} ${token} 💸. \nYa estan disponibles en tu billetera ChatterPay! 🥳` :
+            `Recibiste ${amount} ${token} 💸. \nYa estan disponibles en tu billetera ChatterPay! 🥳`;
+        
         const payload: OperatorReplyPayload = {
             data_token: BOT_DATA_TOKEN!,
             channel_user_id,
-            message: `${from} te envio ${amount} ${token} 💸. \n Ya estan disponibles en tu billetera ChatterPay! 🥳`,
+            message,
         };
+
         const data = await sendBotMessage(payload);
 
         console.log('Notification sent:', data);
