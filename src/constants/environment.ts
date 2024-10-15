@@ -16,6 +16,8 @@ const {
     NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
     NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
     GCP_BUCKET_BASE_URL,
+    FRONTEND_TOKEN,
+    CHATIZALO_TOKEN
 } = process.env;
 
 export {
@@ -26,7 +28,9 @@ export {
     ICP_MNEMONIC,
     INFURA_API_KEY,
     BOT_DATA_TOKEN,
+    FRONTEND_TOKEN,
     ICP_CANISTER_ID,
+    CHATIZALO_TOKEN,
     GCP_BUCKET_BASE_URL
 };
 
