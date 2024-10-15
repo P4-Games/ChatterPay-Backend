@@ -60,7 +60,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
 
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
     const factory = ChatterPayWalletFactory__factory.connect(
-        "0x18EaE7E630B3DE19126633B8cAfc60B6604Db06A", // @tomas hardcoded: networkConfig.contracts.factoryAddress
+        networkConfig.contracts.factoryAddress,
         backendSigner,
     );
 
