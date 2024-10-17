@@ -7,6 +7,7 @@ import { NFTInfo, getPhoneNFTs } from './nftController';
 import { getNetworkConfig } from '../services/networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { fetchExternalDeposits } from '../services/externalDepositsService';
 
 type Currency = 'USD' | 'UYU' | 'ARS' | 'BRL';
 
@@ -216,4 +217,15 @@ export const balanceByPhoneNumber = async (request: FastifyRequest, reply: Fasti
         console.error('Error fetching user balance:', error);
         return reply.status(500).send({ message: 'Internal Server Error' });
     }
+};
+
+/**
+ * Handles the query for external deposits made to ChatterPay wallets
+ * @param request Fastify Request
+ * @param reply Fastify Reply
+ */
+export const checkExternalDeposits = async (request: FastifyRequest, reply: FastifyReply) => {
+    const depositsStatus = await fetchExternalDeposits();
+
+    return reply.status(200).send({ status: depositsStatus });
 };
