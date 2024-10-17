@@ -5,6 +5,7 @@ import Token, { IToken } from '../models/token';
 import { SIGNING_KEY } from '../constants/environment';
 import { getNetworkConfig } from '../services/networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
 /**
  * Creates a new token
@@ -19,10 +20,10 @@ export const createToken = async (
     try {
         const newToken = new Token(request.body);
         await newToken.save();
-        return await reply.status(201).send(newToken);
+        return await returnSuccessResponse(reply, 'Token created successfully', newToken.toJSON());
     } catch (error) {
         console.error('Error creating token:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Error creating token', (error as Error).message);
     }
 };
 
@@ -38,10 +39,10 @@ export const getAllTokens = async (
 ): Promise<FastifyReply> => {
     try {
         const tokens = await Token.find();
-        return await reply.status(200).send(tokens);
+        return await returnSuccessResponse(reply, 'Tokens fetched successfully', { tokens });
     } catch (error) {
         console.error('Error fetching tokens:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Failed to fetch tokens');
     }
 };
 
@@ -61,13 +62,13 @@ export const getTokenById = async (
         const token = await Token.findById(id);
 
         if (!token) {
-            return await reply.status(404).send({ message: 'Token not found' });
+            return await returnErrorResponse(reply, 404, 'Token not found');
         }
 
-        return await reply.status(200).send(token);
+        return await returnSuccessResponse(reply, 'Token fetched successfully', token.toJSON());
     } catch (error) {
         console.error('Error fetching token:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Failed to fetch token');
     }
 };
 
@@ -87,13 +88,13 @@ export const updateToken = async (
         const updatedToken = await Token.findByIdAndUpdate(id, request.body, { new: true });
 
         if (!updatedToken) {
-            return await reply.status(404).send({ message: 'Token not found' });
+            return await returnErrorResponse(reply, 404, 'Token not found');
         }
 
-        return await reply.status(200).send(updatedToken);
+        return await returnSuccessResponse(reply, 'Token updated successfully', updatedToken.toJSON());
     } catch (error) {
         console.error('Error updating token:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Failed to update token');
     }
 };
 
@@ -113,13 +114,13 @@ export const deleteToken = async (
         const deletedToken = await Token.findByIdAndDelete(id);
 
         if (!deletedToken) {
-            return await reply.status(404).send({ message: 'Token not found' });
+            return await returnErrorResponse(reply, 404, 'Token not found');
         }
 
-        return await reply.status(200).send({ message: 'Token deleted' });
+        return await returnSuccessResponse(reply, 'Token deleted successfully');
     } catch (error) {
         console.error('Error deleting token:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Failed to delete token');
     }
 };
 
@@ -229,6 +230,6 @@ export const issueTokensHandler = async (
         });
     } catch (error) {
         console.error('Error minting tokens:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Bad Request');
     }
 };
