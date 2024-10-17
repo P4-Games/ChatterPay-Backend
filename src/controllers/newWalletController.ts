@@ -4,6 +4,7 @@ import { User } from '../models/user';
 import { issueTokensCore } from './tokenController';
 import { authenticate } from './transactionController';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
 /**
  * Creates a new wallet and user for the given phone number.
@@ -52,15 +53,16 @@ export const createWallet = async (
         const phone_number = channel_user_id;
 
         if (!phone_number || phone_number.length > 15) {
-            return await reply.status(400).send({ message: 'Número de teléfono no válido' });
+            return await returnErrorResponse(reply, 400, 'Phone number is invalid');
         }
 
         // Check if user already exists
         const existingUser = await User.findOne({ phone_number });
         if (existingUser) {
-            return await reply
-                .status(200)
-                .send({ message: `El usuario ya existe, tu wallet es ${existingUser.wallet}` });
+            return await returnSuccessResponse(
+                reply,
+                `The user already exists, your wallet is ${existingUser.wallet}`,
+            )
         }
 
         const wallet = await executeWalletCreation(phone_number);
@@ -68,13 +70,11 @@ export const createWallet = async (
         // Issue demo tokens to the user. This will be later removed in mainnet
         issueTokensCore(wallet);
 
-        return await reply.status(200).send({
-            message: 'La wallet fue creada exitosamente!',
-            // walletHash: predictedWallet.EOAAddress,
+        return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
             walletAddress: wallet,
         });
     } catch (error) {
         console.error('Error creando una wallet:', error);
-        return reply.status(500).send({ message: 'Error interno del servidor' });
+        return returnErrorResponse(reply, 400, 'An error occurred while creating the wallet');
     }
 };
