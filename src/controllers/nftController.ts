@@ -601,7 +601,7 @@ export const getNftMetadataRequiredByOpenSea = async (
                 },
                 {
                     trait_type: 'Order from Copy',
-                    value: nft.copy_order,
+                    value: nft.copy_order.toString(),
                 },
                 {
                     trait_type: 'Copy of Original ID',
@@ -609,7 +609,7 @@ export const getNftMetadataRequiredByOpenSea = async (
                 },
                 {
                     trait_type: 'Order from Original',
-                    value: nft.copy_order_original,
+                    value: nft.copy_order_original.toString(),
                 },
                 {
                     display_type: 'date',
