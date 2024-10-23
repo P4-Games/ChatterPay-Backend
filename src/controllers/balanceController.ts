@@ -6,6 +6,7 @@ import { SIGNING_KEY } from '../constants/environment';
 import { NFTInfo, getPhoneNFTs } from './nftController';
 import { getNetworkConfig } from '../services/networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 
 type Currency = 'USD' | 'UYU' | 'ARS' | 'BRL';
@@ -183,10 +184,11 @@ export const walletBalance = async (
     const { wallet } = request.params;
 
     if (!wallet) {
-        return reply.status(400).send({ message: 'Wallet address is required' });
+        console.warn('Wallet address is required');
+        return returnErrorResponse(reply, 400, 'Wallet address is required');
     }
 
-    return getAddressBalance(wallet, reply);
+    return returnSuccessResponse(reply, "Wallet balance fetched successfully", await getAddressBalance(wallet, reply));
 };
 
 /**
@@ -198,17 +200,19 @@ export const balanceByPhoneNumber = async (request: FastifyRequest, reply: Fasti
     );
 
     if (!phone) {
-        return reply.status(400).send({ message: 'Phone number is required' });
+        console.warn('Phone number is required');
+        return returnErrorResponse(reply, 400, "Phone number is required")
     }
 
     try {
         const user = await User.findOne({ phone_number: phone });
 
         if (!user) {
-            return await reply.status(404).send({ message: 'User not found' });
+            console.warn(`User not found for phone number: ${phone}`);
+            return await returnErrorResponse(reply, 404, "User not found")
         }
 
-        return await getAddressBalance(user.wallet, reply);
+        return await returnSuccessResponse(reply, "Wallet balance fetched successfully", await getAddressBalance(user.wallet, reply));
     } catch (error) {
         console.error('Error fetching user balance:', error);
         return reply.status(500).send({ message: 'Internal Server Error' });

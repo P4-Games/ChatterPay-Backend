@@ -8,6 +8,7 @@ import Transaction, { ITransaction } from '../models/transaction';
 import { USDT_ADDRESS, networkChainIds } from '../constants/contracts';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { sendTransferNotification, sendOutgoingTransferNotification } from './replyController';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {
@@ -32,21 +33,21 @@ export const checkTransactionStatus = async (
     try {
         const transaction = await Transaction.findOne({ trx_hash });
         if (!transaction) {
-            return await reply.status(404).send({ message: 'Transaction not found' });
+            return await returnErrorResponse(reply, 404, 'Transaction not found');
         }
 
         const receipt = await web3.eth.getTransactionReceipt(trx_hash);
         if (!receipt) {
-            return await reply.status(200).send({ status: 'pending' });
+            return await returnSuccessResponse(reply, 'pending');
         }
 
         transaction.status = receipt.status ? 'completed' : 'failed';
         await transaction.save();
 
-        return await reply.status(200).send({ status: transaction.status });
+        return await returnSuccessResponse(reply, transaction.status);
     } catch (error) {
         console.error('Error checking transaction status:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Bad Request');
     }
 };
 
@@ -60,10 +61,10 @@ export const createTransaction = async (
     try {
         const newTransaction = new Transaction(request.body);
         await newTransaction.save();
-        return await reply.status(201).send(newTransaction);
+        return await returnSuccessResponse(reply, 'Transaction created successfully', newTransaction.toJSON());
     } catch (error) {
         console.error('Error creating transaction:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Error creating transaction', (error as Error).message);
     }
 };
 
@@ -84,7 +85,7 @@ export const getAllTransactions = async (
             Transaction.countDocuments(),
         ]);
 
-        return await reply.status(200).send({
+        return await returnSuccessResponse(reply, 'Transactions fetched successfully', {
             transactions,
             currentPage: page,
             totalPages: Math.ceil(total / limit),
@@ -92,7 +93,7 @@ export const getAllTransactions = async (
         });
     } catch (error) {
         console.error('Error fetching transactions:', error);
-        return reply.status(500).send({ message: 'Internal Server Error' });
+        return returnErrorResponse(reply, 400, 'Error fetching transactions', (error as Error).message);
     }
 };
 
@@ -108,12 +109,12 @@ export const getTransactionById = async (
     try {
         const transaction = await Transaction.findById(id);
         if (!transaction) {
-            return await reply.status(404).send({ message: 'Transaction not found' });
+            return await returnErrorResponse(reply, 404, 'Transaction not found');
         }
-        return await reply.status(200).send(transaction);
+        return await returnSuccessResponse(reply, 'Transaction fetched successfully', transaction.toJSON());
     } catch (error) {
         console.error('Error fetching transaction:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Error fetching transaction', (error as Error).message);
     }
 };
 
@@ -134,12 +135,12 @@ export const updateTransaction = async (
             new: true,
         });
         if (!updatedTransaction) {
-            return await reply.status(404).send({ message: 'Transaction not found' });
+            return await returnErrorResponse(reply, 404, 'Transaction not found');
         }
-        return await reply.status(200).send(updatedTransaction);
+        return await returnSuccessResponse(reply, 'Transaction updated successfully', updatedTransaction.toJSON());
     } catch (error) {
         console.error('Error updating transaction:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Error updating transaction', (error as Error).message);
     }
 };
 
@@ -155,12 +156,12 @@ export const deleteTransaction = async (
     try {
         const deletedTransaction = await Transaction.findByIdAndDelete(id);
         if (!deletedTransaction) {
-            return await reply.status(404).send({ message: 'Transaction not found' });
+            return await returnErrorResponse(reply, 404, 'Transaction not found');
         }
-        return await reply.status(200).send({ message: 'Transaction deleted' });
+        return await returnSuccessResponse(reply, 'Transaction deleted successfully');
     } catch (error) {
         console.error('Error deleting transaction:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Error deleting transaction', (error as Error).message);
     }
 };
 
@@ -295,14 +296,12 @@ export const makeTransaction = async (
 
         const validationError = validateInputs({ channel_user_id, to, token, amount, chain_id });
         if (validationError) {
-            return await reply.status(400).send({ message: validationError });
+            return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
         }
 
         const fromUser = await User.findOne({ phone_number: channel_user_id });
         if (!fromUser) {
-            return await reply
-                .status(400)
-                .send({ message: 'Debes tener una wallet creada para poder transferir' });
+            return await returnErrorResponse(reply, 400, 'Error making transaction', 'User not found. You must have an account to make a transaction');
         }
 
         let toUser: IUser | { wallet: string };
@@ -320,12 +319,10 @@ export const makeTransaction = async (
             parseInt(chain_id, 10) ?? networkChainIds.default,
         );
 
-        return await reply
-            .status(200)
-            .send({ message: 'Transaccion en progreso... Esto puede tardar unos minutos.' });
+        return await returnSuccessResponse(reply, 'Transaction in progress... This may take a few minutes');
     } catch (error) {
         console.error('Error making transaction:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Error making transaction', (error as Error).message);
     }
 };
 
@@ -344,9 +341,9 @@ export const listenTransactions = async (
         authenticate(request);
         const { address } = request.body;
         // TODO: Use transaction service
-        return await reply.status(200).send({ message: `Listening transactions for: ${address}` });
+        return await returnSuccessResponse(reply, `Listening transactions for: ${address}`);
     } catch (error) {
         console.error('Error listening transactions:', error);
-        return reply.status(400).send({ message: 'Bad Request' });
+        return returnErrorResponse(reply, 400, 'Bad Request');
     }
 };
