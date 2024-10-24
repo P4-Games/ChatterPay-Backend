@@ -1,12 +1,9 @@
 import axios from 'axios';
-import mongoose from 'mongoose';
 
-import { connectToMongoDB } from './dbConnections';
+import { IBlockchain } from '../models/blockchain';
+import { networkChainIds } from '../constants/contracts';
 import { getNetworkConfig } from '../services/networkService';
-import { UserConversation, userConversationSchema } from '../models/userConversation';
-
-const botDataToken = process.env?.BOT_DATA_TOKEN ?? '';
-const botApiUrl = process.env?.BOT_API_URL ?? '';
+import { BOT_API_URL, BOT_DATA_TOKEN } from '../constants/environment';
 
 interface OperatorReplyPayload {
     data_token: string;
@@ -14,55 +11,21 @@ interface OperatorReplyPayload {
     message: string;
 }
 
-interface NetworkConfig {
-    explorer: string;
-    chatterNFTAddress: string;
-}
-
-/**
- * Connects to MongoDB and returns the UserConversation model.
- */
-async function getUserConversationModel(): Promise<mongoose.Model<UserConversation>> {
-    const mongoUrl = process.env?.MONGO_URI_CHATTERPAY ?? '';
-    const connection = await connectToMongoDB(mongoUrl);
-    return connection.model('user_conversations', userConversationSchema);
-}
-
-/**
- * Updates the user conversation status in the database.
- */
-async function updateUserConversationStatus(
-    channelUserId: string,
-    newStatus: string,
-): Promise<void> {
-    try {
-        const userConversation = await getUserConversationModel();
-        await userConversation.findOneAndUpdate(
-            { channel_user_id: channelUserId },
-            { $set: { control: newStatus } },
-        );
-        console.log('Status update successful');
-    } catch (error) {
-        console.error('Error updating user_conversations', error);
-        throw error;
-    }
-}
-
 /**
  * Sends an operator reply to the API.
  */
-async function sendOperatorReply(payload: OperatorReplyPayload): Promise<unknown> {
+async function sendBotMessage(payload: OperatorReplyPayload): Promise<string> {
     try {
-        const sendMsgEndpint = `${botApiUrl}/chatbot/conversations/send-message`;
+        const sendMsgEndpint = `${BOT_API_URL}/chatbot/conversations/send-message`;
         const response = await axios.post(sendMsgEndpint, payload, {
             headers: {
                 'Content-Type': 'application/json',
             },
         });
-        console.log('API Response:', response.data);
+        console.log('API Response:', payload.channel_user_id, payload.message, response.data);
         return response.data;
     } catch (error) {
-        console.error('Error sending operator reply:', error.messa);
+        console.error('Error sending operator reply:', (error as Error).message);
         throw error;
     }
 }
@@ -75,19 +38,24 @@ export async function sendTransferNotification(
     from: string | null,
     amount: string,
     token: string,
-): Promise<void> {
+): Promise<string> {
     try {
-        console.log('Sending transfer notification');
-        await updateUserConversationStatus(channel_user_id, 'operator');
+        console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
 
+        const message = from ? 
+            `${from} te envió ${amount} ${token} 💸. \nYa estan disponibles en tu billetera ChatterPay! 🥳` :
+            `Recibiste ${amount} ${token} 💸. \nYa estan disponibles en tu billetera ChatterPay! 🥳`;
+        
         const payload: OperatorReplyPayload = {
-            data_token: `${botDataToken}`,
+            data_token: BOT_DATA_TOKEN!,
             channel_user_id,
-            message: `${from} te envio ${amount} ${token} 💸. \n Ya estan disponibles en tu billetera ChatterPay! 🥳`,
+            message,
         };
-        await sendOperatorReply(payload);
 
-        await updateUserConversationStatus(channel_user_id, 'assistant');
+        const data = await sendBotMessage(payload);
+
+        console.log('Notification sent:', data);
+        return data;
     } catch (error) {
         console.error('Error in sendTransferNotification:', error);
         throw error;
@@ -107,14 +75,14 @@ export async function sendSwapNotification(
 ): Promise<void> {
     try {
         console.log('Sending swap notification');
-        const networkConfig: NetworkConfig = await getNetworkConfig();
+        const networkConfig: IBlockchain = await getNetworkConfig();
 
         const payload: OperatorReplyPayload = {
-            data_token: `${botDataToken}`,
+            data_token: BOT_DATA_TOKEN!,
             channel_user_id,
             message: `🔄 Intercambiaste ${amount} ${token} por ${Math.round(parseFloat(result) * 1e2) / 1e2} ${outputToken}! 🔄 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${transactionHash}`,
         };
-        await sendOperatorReply(payload);
+        await sendBotMessage(payload);
     } catch (error) {
         console.error('Error in sendSwapNotification:', error);
         throw error;
@@ -124,6 +92,7 @@ export async function sendSwapNotification(
 /**
  * Sends a notification for minting certificates in-progress and on-chain memories.
  */
+/*
 export async function sendMintInProgressNotification(channel_user_id: string): Promise<void> {
     try {
         console.log('Sending mint-in progress notification');
@@ -133,29 +102,30 @@ export async function sendMintInProgressNotification(channel_user_id: string): P
             channel_user_id,
             message: `El certificado en NFT está siendo generado. Por favor, espera un momento. Te notificaré cuando esté listo.`,
         };
-        await sendOperatorReply(payload);
+        await sendBotMessage(payload);
     } catch (error) {
         console.error('Error in sendMintInProgressNotification:', error.message);
         throw error;
     }
 }
+*/
 
 /**
  * Sends a notification for minted certificates and on-chain memories.
  */
-export async function sendMintNotification(channel_user_id: string, id: number): Promise<void> {
+export async function sendMintNotification(channel_user_id: string, id: string): Promise<void> {
     try {
         console.log('Sending mint notification');
-        const networkConfig: NetworkConfig = await getNetworkConfig(421614);
+        const networkConfig: IBlockchain = await getNetworkConfig(networkChainIds.arbitrumSepolia);
 
         const payload: OperatorReplyPayload = {
-            data_token: `${botDataToken}`,
+            data_token: BOT_DATA_TOKEN!,
             channel_user_id,
-            message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.chatterNFTAddress}/${id}`,
+            message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.contracts.chatterNFTAddress}/${id}`,
         };
-        await sendOperatorReply(payload);
+        await sendBotMessage(payload);
     } catch (error) {
-        console.error('Error in sendMintNotification:', error.message);
+        console.error('Error in sendMintNotification:', (error as Error).message);
         throw error;
     }
 }
@@ -169,21 +139,20 @@ export async function sendOutgoingTransferNotification(
     amount: string,
     token: string,
     txHash: string,
-): Promise<void> {
+): Promise<string> {
     try {
         console.log('Sending outgoing transfer notification');
-        await updateUserConversationStatus(channel_user_id, 'operator');
 
-        const networkConfig: NetworkConfig = await getNetworkConfig();
+        const networkConfig: IBlockchain = await getNetworkConfig();
 
         const payload: OperatorReplyPayload = {
-            data_token: `${botDataToken}`,
+            data_token: BOT_DATA_TOKEN!,
             channel_user_id,
             message: `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${txHash}`,
         };
-        await sendOperatorReply(payload);
-
-        await updateUserConversationStatus(channel_user_id, 'assistant');
+        const data = await sendBotMessage(payload);
+        console.log('Notification sent:', data);
+        return data;
     } catch (error) {
         console.error('Error in sendOutgoingTransferNotification:', error);
         throw error;

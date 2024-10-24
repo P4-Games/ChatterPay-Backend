@@ -1,7 +1,10 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
+import { IBlockchain } from '../models/blockchain';
+import { getDynamicGas } from '../utils/dynamicGas';
 import { getNetworkConfig } from './networkService';
+import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {
@@ -18,12 +21,11 @@ export interface PhoneNumberToAddress {
  * @throws {Error} If the seed private key is not found in environment variables.
  */
 function phoneNumberToAddress(phoneNumber: string): PhoneNumberToAddress {
-    const seedPrivateKey = process.env.PRIVATE_KEY;
-    if (!seedPrivateKey) {
+    if (!PRIVATE_KEY) {
         throw new Error('Seed private key not found in environment variables');
     }
 
-    const seed = seedPrivateKey + phoneNumber;
+    const seed = PRIVATE_KEY + phoneNumber;
     const privateKey = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
     const wallet = new ethers.Wallet(privateKey);
     const publicKey = wallet.address;
@@ -50,15 +52,15 @@ export interface ComputedAddress {
  * @throws {Error} If there's an error in the computation process.
  */
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
-    const networkConfig = await getNetworkConfig();
+    const networkConfig: IBlockchain = await getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
-        name: "arbitrum-sepolia",
-        chainId: 421614,
+        name: 'arbitrum-sepolia',
+        chainId: networkConfig.chain_id,
     });
 
-    const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const factory = ChatterPayWalletFactory__factory.connect(
-        networkConfig.factoryAddress,
+        networkConfig.contracts.factoryAddress,
         backendSigner,
     );
 
@@ -73,7 +75,9 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
         console.log(
             `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}...`,
         );
-        const tx = await factory.createProxy(ownerAddress.publicKey, { gasLimit: 1000000 });
+        const tx = await factory.createProxy(ownerAddress.publicKey, {
+            gasLimit: await getDynamicGas(factory, 'createProxy', [ownerAddress.publicKey]),
+        });
         await tx.wait();
     }
 

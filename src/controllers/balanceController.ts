@@ -2,9 +2,12 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { User } from '../models/user';
+import { SIGNING_KEY } from '../constants/environment';
 import { NFTInfo, getPhoneNFTs } from './nftController';
 import { getNetworkConfig } from '../services/networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { fetchExternalDeposits } from '../services/externalDepositsService';
 
 type Currency = 'USD' | 'UYU' | 'ARS' | 'BRL';
 
@@ -138,7 +141,7 @@ function calculateTotals(balances: BalanceInfo[]): Record<Currency, number> {
 async function getAddressBalance(address: string, reply: FastifyReply): Promise<FastifyReply> {
     const networkConfig = await getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-    const signer = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+    const signer = new ethers.Wallet(SIGNING_KEY!, provider);
 
     console.log(`Fetching balance for address: ${address}`);
     const user = await User.findOne({ wallet: address });
@@ -181,10 +184,11 @@ export const walletBalance = async (
     const { wallet } = request.params;
 
     if (!wallet) {
-        return reply.status(400).send({ message: 'Wallet address is required' });
+        console.warn('Wallet address is required');
+        return returnErrorResponse(reply, 400, 'Wallet address is required');
     }
 
-    return getAddressBalance(wallet, reply);
+    return returnSuccessResponse(reply, "Wallet balance fetched successfully", await getAddressBalance(wallet, reply));
 };
 
 /**
@@ -196,19 +200,32 @@ export const balanceByPhoneNumber = async (request: FastifyRequest, reply: Fasti
     );
 
     if (!phone) {
-        return reply.status(400).send({ message: 'Phone number is required' });
+        console.warn('Phone number is required');
+        return returnErrorResponse(reply, 400, "Phone number is required")
     }
 
     try {
         const user = await User.findOne({ phone_number: phone });
 
         if (!user) {
-            return await reply.status(404).send({ message: 'User not found' });
+            console.warn(`User not found for phone number: ${phone}`);
+            return await returnErrorResponse(reply, 404, "User not found")
         }
 
-        return await getAddressBalance(user.wallet, reply);
+        return await returnSuccessResponse(reply, "Wallet balance fetched successfully", await getAddressBalance(user.wallet, reply));
     } catch (error) {
         console.error('Error fetching user balance:', error);
         return reply.status(500).send({ message: 'Internal Server Error' });
     }
+};
+
+/**
+ * Handles the query for external deposits made to ChatterPay wallets
+ * @param request Fastify Request
+ * @param reply Fastify Reply
+ */
+export const checkExternalDeposits = async (request: FastifyRequest, reply: FastifyReply) => {
+    const depositsStatus = await fetchExternalDeposits();
+
+    return reply.status(200).send({ status: depositsStatus });
 };

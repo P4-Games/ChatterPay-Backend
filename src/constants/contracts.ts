@@ -1,21 +1,19 @@
+import { GCP_BUCKET_BASE_URL } from "./environment";
+
 /**
  * These are the demo token contracts used for testing purposes in Scroll Sepolia
  */
+export const WETH_ADDRESS = '0xE9C723D01393a437bac13CE8f925A5bc8E1c335c';
+export const USDT_ADDRESS = '0xe6B817E31421929403040c3e42A6a5C5D2958b4A';
+export const SIMPLE_SWAP_ADDRESS = '0x7c38F638Bb821Cf8E5A8c59460f5C6a992a9cBAE';
+export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
 
-/*
-    Scroll Sepolia
-
-    export const WETH_ADDRESS = "0xAb9c2e04398ad9e9369360de77c011516a5aef99";
-    export const USDT_ADDRESS = "0xfE2af1D55F7da5eD75f63aF5fD61136e1F92c4f9";
-    export const SIMPLE_SWAP_ADDRESS = "0x7c38F638Bb821Cf8E5A8c59460f5C6a992a9cBAE";
-*/
-
-/**
- * Arbitrum sepolia
- */
-
-export const WETH_ADDRESS = "0x7BA164d1F23d7bA7F007AfB1fE59A9f3967F1Cde";
-export const USDT_ADDRESS = "0xB983f7176fB3d2D87c30943D3d5C80351fE26e2b";
-export const SIMPLE_SWAP_ADDRESS = "0x2493CeB3Ae366eF75bfaA1851B80a420F729F048";
-export const defaultNftImage =
-    'https://storage.googleapis.com/chatbot-multimedia/chatterpay/default/default_nft.png';
+export const networkChainIds = {
+    ethereum: 1,
+    ethereumSepolia: 11155111,
+    arbitrum: 42161,
+    arbitrumSepolia: 421614,
+    scroll: 534352,
+    scrollSepoliaTestnet: 534351,
+    default: 421614,
+};

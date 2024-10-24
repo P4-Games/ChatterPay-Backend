@@ -9,6 +9,14 @@ import { AssetManager } from '@dfinity/assets';
 import { Ed25519KeyIdentity } from '@dfinity/identity';
 import { mnemonicToSeed, validateMnemonic } from 'bip39';
 
+import {
+    PINATA_JWT,
+    ICP_MNEMONIC,
+    ICP_CANISTER_ID,
+    NFT_UPLOAD_IMAGE_ICP,
+    NFT_UPLOAD_IMAGE_IPFS,
+} from '../constants/environment';
+
 dotenv.config();
 
 // Funciones auxiliares
@@ -53,24 +61,28 @@ export const getImageDetails = async (imageUrl: string) => {
 // Funciones de carga
 
 export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promise<string> {
-    console.info('subinedo imagen a ICP');
-    const canisterId = process.env.ICP_CANISTER_ID;
+    if (!NFT_UPLOAD_IMAGE_ICP) {
+        console.info('upload NFT image to ICP disabled');
+        return '';
+    }
+
+    console.info('Subiendo imagen a ICP');
     const FOLDER_UPLOAD = 'uploads';
 
-    if (!canisterId) {
+    if (!ICP_CANISTER_ID) {
         throw new Error('CANISTER_ID is not set in the environment variables');
     }
 
-    if (!process.env.ICP_MNEMONIC) {
+    if (!ICP_MNEMONIC) {
         throw new Error('MNEMONIC is not set in the environment variables');
     }
 
-    const identity = await generateIdentityFromMnemonic(process.env.ICP_MNEMONIC);
+    const identity = await generateIdentityFromMnemonic(ICP_MNEMONIC);
     const agent = await createAgent(identity);
 
-    const assetManager = new AssetManager({ canisterId, agent });
+    const assetManager = new AssetManager({ canisterId: ICP_CANISTER_ID, agent });
     const batch = assetManager.batch();
-    const url = `https://${canisterId}.icp0.io/${FOLDER_UPLOAD}/${fileName}`;
+    const url = `https://${ICP_CANISTER_ID}.icp0.io/${FOLDER_UPLOAD}/${fileName}`;
 
     try {
         const key = await batch.store(imageBuffer, {
@@ -102,10 +114,15 @@ export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promis
 }
 
 export async function uploadToIpfs(imageBuffer: Buffer, fileName: string): Promise<string> {
-    console.info('subinedo imagen a IPFS');
+    if (!NFT_UPLOAD_IMAGE_IPFS) {
+        console.info('upload NFT image to IPFS disabled');
+        return '';
+    }
+
+    console.info('Subiendo imagen a IPFS');
 
     try {
-        const pinata = new PinataSDK({ pinataJWTKey: process.env.PINATA_JWT });
+        const pinata = new PinataSDK({ pinataJWTKey: PINATA_JWT });
         const readableStream = new Readable();
         readableStream.push(imageBuffer);
         readableStream.push(null);
