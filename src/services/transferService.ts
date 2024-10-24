@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 
+import { gasService } from './gasService';
 import entryPoint from '../utils/entryPoint.json';
 import { getBlockchain } from './blockchainService';
 import { getNetworkConfig } from './networkService';
@@ -7,7 +8,7 @@ import { generatePrivateKey } from '../utils/keyGenerator';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { setupERC20, setupContracts } from './contractSetupService';
-import { signUserOperation, createUserOperation, ensureAccountHasPrefund } from './userOperationService';
+import { signUserOperation, createUserOperation } from './userOperationService';
 
 /**
  * Sends a user operation for token transfer.
@@ -60,9 +61,21 @@ export async function sendUserOperation(
 
         console.log("Signing user op");
         userOperation = await signUserOperation(userOperation, networkConfig.contracts.entryPoint, signer);
+        // const gasServiceConfig = gasService.createConfig(
+        //     process.env.ARBITRUM_SEPOLIA_RPC_URL!,
+        //     process.env.ALCHEMY_POLICY_ID!,
+        //     networkConfig.contracts.entryPoint,
+        //     networkConfig.rpc
+        // );
 
-        console.log("Ensuring account has enough prefund");
-        await ensureAccountHasPrefund(entrypoint, userOperation, backendSigner);
+        // console.log("Applying paymaster data to user op");
+        // userOperation = await gasService.applyPaymasterDataToUserOp(gasServiceConfig, userOperation, signer);
+
+        console.log("Signing user op");
+        userOperation = await signUserOperation(userOperation, networkConfig.contracts.entryPoint, signer);
+
+        // console.log("Ensuring account has enough prefund");
+        // await ensureAccountHasPrefund(entrypoint, userOperation, backendSigner);
 
         console.log("Sending user operation to bundler");
         const bundlerResponse = await sendUserOperationToBundler(bundlerUrl, userOperation, entrypoint.address);
@@ -72,7 +85,7 @@ export async function sendUserOperation(
         const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
         console.log("Transaction receipt:", JSON.stringify(receipt, null, 2));
 
-        if (!receipt || !receipt.success) {
+        if (!receipt?.success) {
             throw new Error("Transaction failed or not found");
         }
 
@@ -95,6 +108,7 @@ export async function sendUserOperation(
  * @throws Error if the balance is insufficient.
  */
 async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount: string) {
+    console.log("ERC20 ADDRESS", erc20.address)
     console.log(`Checking balance for ${proxyAddress}...`);
     const amount_bn = ethers.utils.parseUnits(amount, 18);
     const balanceCheck = await erc20.balanceOf(proxyAddress);

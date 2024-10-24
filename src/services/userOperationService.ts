@@ -16,7 +16,7 @@ export function decodeCallData(callData: string) {
     console.log("  Destination:", decoded.dest);
     console.log("  Value:", decoded.value.toString());
     console.log("  Function:", decoded.func);
-    
+
     // Try to decode the inner function call (transfer)
     try {
         const tokenIface = new ethers.utils.Interface([
@@ -78,9 +78,10 @@ export async function createUserOperation(
 
     const verificationGasLimit = BigNumber.from(120532);
     const callGasLimit = BigNumber.from(410000);
-    const preVerificationGas = BigNumber.from(255943); 
+    const preVerificationGas = BigNumber.from(600_000);
     const maxFeePerGas = BigNumber.from(ethers.utils.parseUnits("10", "gwei"));
     const maxPriorityFeePerGas = BigNumber.from(ethers.utils.parseUnits("1", "gwei"));
+    const paymasterAndData = "0xDb76177b0b3fe903B12EDfa2c34929cE9512B1dd"; // @tomas hardcoded paymaster address
 
     const userOp: PackedUserOperation = {
         sender: proxyAddress,
@@ -92,7 +93,7 @@ export async function createUserOperation(
         preVerificationGas,
         maxFeePerGas,
         maxPriorityFeePerGas,
-        paymasterAndData: "0x",
+        paymasterAndData: paymasterAndData,
         signature: "0x",  // Inicialmente vacío, se llenará más tarde
     };
 
@@ -106,11 +107,11 @@ export async function createUserOperation(
  */
 export async function calculatePrefund(userOp: PackedUserOperation): Promise<BigNumber> {
     try {
-        const {verificationGasLimit} = userOp;
-        const {callGasLimit} = userOp;
-        const {preVerificationGas} = userOp;
-        const {maxFeePerGas} = userOp;
-        
+        const { verificationGasLimit } = userOp;
+        const { callGasLimit } = userOp;
+        const { preVerificationGas } = userOp;
+        const { maxFeePerGas } = userOp;
+
         const requiredGas = verificationGasLimit
             .add(callGasLimit)
             .add(preVerificationGas);
@@ -146,10 +147,10 @@ export async function ensureAccountHasPrefund(
     try {
         const prefund = await calculatePrefund(userOp);
         const balance = await entrypoint.balanceOf(userOp.sender);
-        
+
         console.log(`Required prefund: ${ethers.utils.formatEther(prefund)} ETH`);
         console.log(`Current balance: ${ethers.utils.formatEther(balance)} ETH`);
-        
+
         if (balance.lt(prefund)) {
             const missingFunds = prefund.sub(balance);
             console.log(`Depositing ${ethers.utils.formatEther(missingFunds)} ETH to account`);
