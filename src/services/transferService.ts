@@ -48,7 +48,7 @@ export async function sendUserOperation(
 
         console.log("Getting network config");
         const networkConfig = await getNetworkConfig();
-        const entrypoint = new ethers.Contract(networkConfig.entryPoint, entryPoint, backendSigner);
+        const entrypoint = new ethers.Contract(networkConfig.contracts.entryPoint, entryPoint, backendSigner);
 
         console.log("Validating account");
         if (!accountExists) {
@@ -59,7 +59,7 @@ export async function sendUserOperation(
         let userOperation = await createUserOperation(entrypoint, chatterPay, erc20, to, amount, proxy.proxyAddress);
 
         console.log("Signing user op");
-        userOperation = await signUserOperation(userOperation, networkConfig.entryPoint, signer);
+        userOperation = await signUserOperation(userOperation, networkConfig.contracts.entryPoint, signer);
 
         console.log("Ensuring account has enough prefund");
         await ensureAccountHasPrefund(entrypoint, userOperation, backendSigner);

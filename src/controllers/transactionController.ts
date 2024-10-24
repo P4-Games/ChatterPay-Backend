@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import web3 from '../utils/web3_config';
 import { User, IUser } from '../models/user';
 import Blockchain from '../models/blockchain';
-import { sendUserOperation } from '../services/walletService';
+import { sendUserOperation } from '../services/transferService';
 import Transaction, { ITransaction } from '../models/transaction';
 import { USDT_ADDRESS, networkChainIds } from '../constants/contracts';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
