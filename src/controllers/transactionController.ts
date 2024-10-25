@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import web3 from '../utils/web3_config';
 import { User, IUser } from '../models/user';
 import Blockchain from '../models/blockchain';
-import { sendTransferNotification } from './replyController';
+import { sendOutgoingTransferNotification, sendTransferNotification } from './replyController';
 import { getNetworkConfig } from '../services/networkService';
 import { sendUserOperation } from '../services/transferService';
 import Transaction, { ITransaction } from '../models/transaction';
@@ -271,10 +271,15 @@ const executeTransaction = async (from: IUser, to: IUser | { wallet: string }, t
         
         sendTransferNotification(toNumber, fromName, amount, token);
         
-        const networkConfig = await getNetworkConfig();
-        const transferNotification = `Enviar al usuario el siguiente mensaje: "💸 Enviaste ${amount} ${token} a ${toNumber}! 💸" Agregando el siguiente link del comprobante usando la tool específica para ello: ${networkConfig.explorer}/tx/${result.transactionHash}`; 
+        sendOutgoingTransferNotification(
+            from.phone_number,
+            toNumber,
+            amount,
+            token,
+            result.transactionHash,
+        );
         
-        return transferNotification;
+        return "";
     } catch (error) {
         console.error('Error sending notifications:', error);
         return "La transacción falló, los fondos se mantienen en tu cuenta";
@@ -308,7 +313,7 @@ export const makeTransaction = async (
             toUser = await getOrCreateUser(to);
         }
 
-        const executionStatus = await executeTransaction(
+        executeTransaction(
             fromUser,
             toUser,
             token,
@@ -316,7 +321,7 @@ export const makeTransaction = async (
             chain_id ? parseInt(chain_id, 10) : networkChainIds.default,
         );
 
-        return await returnSuccessResponse(reply, executionStatus);
+        return await returnSuccessResponse(reply, "La transferencia está en proceso, puede tardar unos minutos... ");
     } catch (error) {
         console.error('Error making transaction:', error);
         return returnErrorResponse(reply, 400, 'Error making transaction', (error as Error).message);
