@@ -67,7 +67,7 @@ steps:
               '--build-arg',
               'GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}',
               '--build-arg',
-              '_ARBITRUM_SEPOLIA_RPC_URL=${_ARBITRUM_SEPOLIA_RPC_URL}',
+              'ARBITRUM_SEPOLIA_RPC_URL=${_ARBITRUM_SEPOLIA_RPC_URL}',
               '--build-arg',
               'CHATIZALO_TOKEN=$$CHATIZALO_TOKEN',
               '--build-arg',

@@ -107,7 +107,7 @@ function calculateBalances(tokenBalances: TokenBalance[], fiatQuotes: FiatQuote[
     return tokenBalances.map(({ symbol, balance, rateUSD }) => {
         const balanceUSD = parseFloat(balance) * rateUSD;
         return {
-            network: 'Scroll Sepolia',
+            network: 'Arbitrum Sepolia',
             token: symbol,
             balance: parseFloat(balance),
             balance_conv: {
