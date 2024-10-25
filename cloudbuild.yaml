@@ -67,9 +67,9 @@ steps:
               '--build-arg',
               'GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}',
               '--build-arg',
-              'CHATIZALO_TOKEN=${CHATIZALO_TOKEN}',
+              'CHATIZALO_TOKEN=$$CHATIZALO_TOKEN',
               '--build-arg',
-              'FRONTEND_TOKEN=${FRONTEND_TOKEN}',
+              'FRONTEND_TOKEN=$$FRONTEND_TOKEN',
               '.',
           ]
       secretEnv: ['CHATIZALO_TOKEN', 'FRONTEND_TOKEN']
