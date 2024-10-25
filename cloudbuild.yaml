@@ -1,10 +1,4 @@
 steps:
-    # Para para generar un .env para que sea tomado por el step de build.
-    # Las variables serán tomadas de la definición del "trigger",
-    # "variables de sustitución", en Google Cloud Build.
-    # en gcp, se tiene que poner como nombre de cada variable, el unserscore
-    # como prefijo. Ejemplo: "_APP_ENV"
-    #
     - name: 'gcr.io/cloud-builders/npm'
       id: CreateEnv
       args: ['run', 'create-env']
@@ -26,8 +20,8 @@ steps:
           - NFT_UPLOAD_IMAGE_ICP=${_NFT_UPLOAD_IMAGE_ICP}
           - NFT_UPLOAD_IMAGE_IPFS=${_NFT_UPLOAD_IMAGE_IPFS}
           - GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}
+      secretEnv: ['CHATIZALO_TOKEN', 'FRONTEND_TOKEN']
 
-    # build the container images
     - name: 'gcr.io/cloud-builders/docker'
       id: Build
       args:
@@ -72,10 +66,14 @@ steps:
               'NFT_UPLOAD_IMAGE_IPFS=${_NFT_UPLOAD_IMAGE_IPFS}',
               '--build-arg',
               'GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}',
+              '--build-arg',
+              'CHATIZALO_TOKEN=${CHATIZALO_TOKEN}',
+              '--build-arg',
+              'FRONTEND_TOKEN=${FRONTEND_TOKEN}',
               '.',
           ]
+      secretEnv: ['CHATIZALO_TOKEN', 'FRONTEND_TOKEN']
 
-    # push the container images to Container Registry
     - name: 'gcr.io/cloud-builders/docker'
       id: Push
       args:
@@ -84,7 +82,6 @@ steps:
               '$_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA',
           ]
 
-    # Deploy container images to Cloud Run
     - name: 'gcr.io/cloud-builders/gcloud'
       id: Deploy
       entrypoint: gcloud
