@@ -39,7 +39,6 @@ export async function sendTransferNotification(
     from: string | null,
     amount: string,
     token: string,
-    txHash?: string,
 ): Promise<string> {
     try {
         console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
@@ -53,7 +52,7 @@ export async function sendTransferNotification(
         const payload: OperatorReplyPayload = {
             data_token: BOT_DATA_TOKEN!,
             channel_user_id,
-            message,
+            message
         };
 
         const data = await sendBotMessage(payload);
