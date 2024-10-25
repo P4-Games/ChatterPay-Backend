@@ -1,5 +1,4 @@
 import { ethers, BigNumber } from 'ethers';
-
 import { getUserOpHash } from '../utils/userOperation';
 import { PackedUserOperation } from '../types/userOperation';
 
@@ -33,14 +32,6 @@ export function decodeCallData(callData: string) {
 
 /**
  * Creates a user operation for token transfer.
- * 
- * @param entrypoint - The entrypoint contract instance.
- * @param chatterPay - The ChatterPay contract instance.
- * @param erc20 - The ERC20 token contract instance.
- * @param to - The recipient's address.
- * @param amount - The amount of tokens to transfer.
- * @param proxyAddress - The proxy address to use for the operation.
- * @returns A promise that resolves to the created UserOperation.
  */
 export async function createUserOperation(
     entrypoint: ethers.Contract,
@@ -76,41 +67,62 @@ export async function createUserOperation(
     const nonce = await entrypoint.getNonce(proxyAddress, 0);
     console.log("Proxy Nonce:", nonce.toString());
 
-    const verificationGasLimit = BigNumber.from(120532);
-    const callGasLimit = BigNumber.from(410000);
-    const preVerificationGas = BigNumber.from(600_000);
-    const maxFeePerGas = BigNumber.from(ethers.utils.parseUnits("10", "gwei"));
-    const maxPriorityFeePerGas = BigNumber.from(ethers.utils.parseUnits("1", "gwei"));
-    const paymasterAndData = "0xDb76177b0b3fe903B12EDfa2c34929cE9512B1dd"; // @tomas hardcoded paymaster address
-
+    // Use high fixed values for gas
     const userOp: PackedUserOperation = {
         sender: proxyAddress,
         nonce,
         initCode: "0x",
         callData: transferCallData,
-        callGasLimit,
-        verificationGasLimit,
-        preVerificationGas,
-        maxFeePerGas,
-        maxPriorityFeePerGas,
-        paymasterAndData: paymasterAndData,
-        signature: "0x",  // Inicialmente vacío, se llenará más tarde
+        verificationGasLimit: BigNumber.from(74908),
+        callGasLimit: BigNumber.from(79728),
+        preVerificationGas: BigNumber.from(94542),
+        maxFeePerGas: BigNumber.from(ethers.utils.parseUnits("24", "gwei")),
+        maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits("2", "gwei")),
+        paymasterAndData: "0x6fbe3Ba983808a2d3e70D453762109c2BAAAEAA1",
+        signature: "0x", // Empty signature initially
     };
 
     return userOp;
 }
 
 /**
+ * Signs the UserOperation.
+ */
+export async function signUserOperation(
+    userOperation: PackedUserOperation,
+    entryPointAddress: string,
+    signer: ethers.Wallet
+): Promise<PackedUserOperation> {
+    console.log("\nSigning UserOperation...");
+    
+    const chainId = await signer.getChainId();
+    console.log("Chain ID:", chainId);
+
+    console.log("Computing userOpHash...");
+    const userOpHash = getUserOpHash(userOperation, entryPointAddress, chainId);
+    console.log("UserOpHash:", userOpHash);
+
+    const signature = await signer.signMessage(ethers.utils.arrayify(userOpHash));
+    console.log("Generated signature:", signature);
+
+    const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(userOpHash), signature);
+    console.log("Recovered address:", recoveredAddress);
+    console.log("Signer address:", await signer.getAddress());
+
+    if (recoveredAddress.toLowerCase() !== (await signer.getAddress()).toLowerCase()) {
+        throw new Error("Signature verification failed on client side");
+    }
+
+    console.log("UserOperation signed successfully");
+    return { ...userOperation, signature };
+}
+
+/**
  * Calculates the prefund amount required for a UserOperation.
- * @param userOp - The UserOperation to calculate the prefund for.
- * @returns A promise that resolves to the calculated prefund amount as a BigNumber.
  */
 export async function calculatePrefund(userOp: PackedUserOperation): Promise<BigNumber> {
     try {
-        const { verificationGasLimit } = userOp;
-        const { callGasLimit } = userOp;
-        const { preVerificationGas } = userOp;
-        const { maxFeePerGas } = userOp;
+        const { verificationGasLimit, callGasLimit, preVerificationGas, maxFeePerGas } = userOp;
 
         const requiredGas = verificationGasLimit
             .add(callGasLimit)
@@ -118,13 +130,13 @@ export async function calculatePrefund(userOp: PackedUserOperation): Promise<Big
 
         const prefund = requiredGas.mul(maxFeePerGas);
 
-        console.log("Prefund calculation details:");
-        console.log(`Verification Gas Limit: ${verificationGasLimit.toString()}`);
-        console.log(`Call Gas Limit: ${callGasLimit.toString()}`);
-        console.log(`Pre-Verification Gas: ${preVerificationGas.toString()}`);
-        console.log(`Max Fee Per Gas: ${ethers.utils.formatUnits(maxFeePerGas, "gwei")} gwei`);
-        console.log(`Total Required Gas: ${requiredGas.toString()}`);
-        console.log(`Calculated Prefund: ${ethers.utils.formatEther(prefund)} ETH`);
+        console.log("\nPrefund calculation details:");
+        console.log(`- Verification Gas Limit: ${verificationGasLimit.toString()}`);
+        console.log(`- Call Gas Limit: ${callGasLimit.toString()}`);
+        console.log(`- Pre-Verification Gas: ${preVerificationGas.toString()}`);
+        console.log(`- Max Fee Per Gas: ${ethers.utils.formatUnits(maxFeePerGas, "gwei")} gwei`);
+        console.log(`- Total Required Gas: ${requiredGas.toString()}`);
+        console.log(`- Calculated Prefund: ${ethers.utils.formatEther(prefund)} ETH`);
 
         return prefund;
     } catch (error) {
@@ -134,10 +146,7 @@ export async function calculatePrefund(userOp: PackedUserOperation): Promise<Big
 }
 
 /**
- * Ensures that the account associated with the UserOperation has sufficient prefund.
- * @param entrypoint - The entrypoint contract instance.
- * @param userOp - The UserOperation to check and fund.
- * @param signer - The signer wallet.
+ * Ensures that the account has sufficient prefund with detailed logging.
  */
 export async function ensureAccountHasPrefund(
     entrypoint: ethers.Contract,
@@ -148,15 +157,24 @@ export async function ensureAccountHasPrefund(
         const prefund = await calculatePrefund(userOp);
         const balance = await entrypoint.balanceOf(userOp.sender);
 
-        console.log(`Required prefund: ${ethers.utils.formatEther(prefund)} ETH`);
-        console.log(`Current balance: ${ethers.utils.formatEther(balance)} ETH`);
+        console.log("\nChecking prefund requirements:");
+        console.log(`- Required prefund: ${ethers.utils.formatEther(prefund)} ETH`);
+        console.log(`- Current balance: ${ethers.utils.formatEther(balance)} ETH`);
 
         if (balance.lt(prefund)) {
             const missingFunds = prefund.sub(balance);
-            console.log(`Depositing ${ethers.utils.formatEther(missingFunds)} ETH to account`);
-            const tx = await entrypoint.depositTo(userOp.sender, { value: missingFunds });
+            console.log(`\nDepositing ${ethers.utils.formatEther(missingFunds)} ETH to account`);
+            
+            const tx = await entrypoint.depositTo(userOp.sender, { 
+                value: missingFunds,
+                gasLimit: 500000
+            });
             await tx.wait();
             console.log("Deposit transaction confirmed");
+            
+            // Verify the new balance
+            const newBalance = await entrypoint.balanceOf(userOp.sender);
+            console.log(`New balance after deposit: ${ethers.utils.formatEther(newBalance)} ETH`);
         } else {
             console.log("Account has sufficient prefund");
         }
@@ -164,57 +182,4 @@ export async function ensureAccountHasPrefund(
         console.error("Error ensuring account has prefund:", error);
         throw error;
     }
-}
-
-/**
- * Simulates the validation of a UserOperation.
- * @param entrypoint - The entrypoint contract instance.
- * @param userOperation - The UserOperation to simulate.
- */
-export async function simulateValidation(
-    entrypoint: ethers.Contract,
-    userOperation: PackedUserOperation
-) {
-    try {
-        await entrypoint.callStatic.simulateValidation(userOperation);
-        console.log("Local simulation successful");
-    } catch (error) {
-        console.error("Local simulation failed:", error);
-    }
-}
-
-/**
- * Signs the UserOperation, replicating the contract's signature verification process.
- * 
- * @param userOperation - The UserOperation object.
- * @param entryPointAddress - The address of the EntryPoint contract.
- * @param signer - The ethers.js Wallet instance representing the signer.
- * @returns The UserOperation with the signature field populated.
- */
-export async function signUserOperation(
-    userOperation: PackedUserOperation,
-    entryPointAddress: string,
-    signer: ethers.Wallet
-): Promise<PackedUserOperation> {
-    const chainId = await signer.getChainId();
-    console.log("Chain ID:", chainId);
-
-    console.log("Computing userOpHash...");
-    const userOpHash = getUserOpHash(userOperation, entryPointAddress, chainId);
-    console.log("UserOpHash:", userOpHash);
-
-    // Sign the userOpHash digest directly
-    const signature = await signer.signMessage(ethers.utils.arrayify(userOpHash));
-    console.log("Generated signature:", signature);
-
-    // Verify the signature
-    const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(userOpHash), signature);
-    console.log("Recovered address:", recoveredAddress);
-    console.log("Signer address:", await signer.getAddress());
-
-    if (recoveredAddress.toLowerCase() !== (await signer.getAddress()).toLowerCase()) {
-        throw new Error("Signature verification failed on client side");
-    }
-
-    return { ...userOperation, signature };
 }

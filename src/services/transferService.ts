@@ -61,21 +61,6 @@ export async function sendUserOperation(
 
         console.log("Signing user op");
         userOperation = await signUserOperation(userOperation, networkConfig.contracts.entryPoint, signer);
-        // const gasServiceConfig = gasService.createConfig(
-        //     process.env.ARBITRUM_SEPOLIA_RPC_URL!,
-        //     process.env.ALCHEMY_POLICY_ID!,
-        //     networkConfig.contracts.entryPoint,
-        //     networkConfig.rpc
-        // );
-
-        // console.log("Applying paymaster data to user op");
-        // userOperation = await gasService.applyPaymasterDataToUserOp(gasServiceConfig, userOperation, signer);
-
-        console.log("Signing user op");
-        userOperation = await signUserOperation(userOperation, networkConfig.contracts.entryPoint, signer);
-
-        // console.log("Ensuring account has enough prefund");
-        // await ensureAccountHasPrefund(entrypoint, userOperation, backendSigner);
 
         console.log("Sending user operation to bundler");
         const bundlerResponse = await sendUserOperationToBundler(bundlerUrl, userOperation, entrypoint.address);
