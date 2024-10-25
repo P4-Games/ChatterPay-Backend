@@ -39,6 +39,7 @@ export async function sendTransferNotification(
     from: string | null,
     amount: string,
     token: string,
+    txHash?: string,
 ): Promise<string> {
     try {
         console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
