@@ -49,8 +49,8 @@ export async function sendTransferNotification(
         if(!isValidPhoneNumber(channel_user_id)) return "";
 
         const message = from ? 
-            `${from} te envió ${amount} ${token} 💸. \nYa estan disponibles en tu billetera ChatterPay! 🥳` :
-            `Recibiste ${amount} ${token} 💸. \nYa estan disponibles en tu billetera ChatterPay! 🥳`;
+            `${from} te envió ${amount} ${token} 💸. Ya estan disponibles en tu billetera ChatterPay! 🥳` :
+            `Recibiste ${amount} ${token} 💸. Ya estan disponibles en tu billetera ChatterPay! 🥳`;
         
         const payload: OperatorReplyPayload = {
             data_token: BOT_DATA_TOKEN!,
