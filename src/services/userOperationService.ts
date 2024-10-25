@@ -78,7 +78,7 @@ export async function createUserOperation(
         preVerificationGas: BigNumber.from(94542),
         maxFeePerGas: BigNumber.from(ethers.utils.parseUnits("24", "gwei")),
         maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits("2", "gwei")),
-        paymasterAndData: "0x6fbe3Ba983808a2d3e70D453762109c2BAAAEAA1",
+        paymasterAndData: "0xDb76177b0b3fe903B12EDfa2c34929cE9512B1dd",
         signature: "0x", // Empty signature initially
     };
 
