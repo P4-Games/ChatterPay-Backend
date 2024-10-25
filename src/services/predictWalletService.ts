@@ -4,7 +4,6 @@ import * as crypto from 'crypto';
 import { IBlockchain } from '../models/blockchain';
 import { getDynamicGas } from '../utils/dynamicGas';
 import { getNetworkConfig } from './networkService';
-import { networkChainIds } from '../constants/contracts';
 import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
@@ -55,8 +54,8 @@ export interface ComputedAddress {
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
     const networkConfig: IBlockchain = await getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
-        name: 'scroll-sepolia',
-        chainId: networkChainIds.scrollSepoliaTestnet,
+        name: 'arbitrum-sepolia',
+        chainId: networkConfig.chain_id,
     });
 
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
@@ -70,6 +69,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
     const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
         gasLimit: 1000000,
     });
+    console.log(`Computed proxy address: ${proxyAddress}`);
 
     const code = await provider.getCode(proxyAddress);
     if (code === '0x') {

@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { User } from '../models/user';
-import { authenticate } from './transactionController';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
 interface UploadBody {
@@ -45,21 +45,22 @@ export const uploadImage: RouteHandlerMethod = async (
     reply: FastifyReply,
 ): Promise<FastifyReply> => {
     try {
-        authenticate(request);
-
         const { phone_number, image_url } = request.body as UploadBody;
 
         if (!phone_number) {
-            return await reply.status(400).send({ message: 'Número de teléfono no proporcionado' });
+            console.warn('Phone number not provided');
+            return await returnErrorResponse(reply, 400, 'Phone number not provided');
         }
 
         if (!image_url) {
-            return await reply.status(400).send({ message: 'URL de imagen no proporcionada' });
+            console.warn('Image URL not provided');
+            return await returnErrorResponse(reply, 400, 'Image URL not provided');
         }
 
         const user = await User.findOne({ phone_number });
         if (!user) {
-            return await reply.status(404).send({ message: 'Usuario no encontrado' });
+            console.warn('User not found:', phone_number);
+            return await returnErrorResponse(reply, 404, 'Usuario no encontrado');
         }
 
         const fileName = `profile_${phone_number}_${Date.now()}.jpg`;
@@ -69,18 +70,17 @@ export const uploadImage: RouteHandlerMethod = async (
             user.photo = uploadResult.ipfs_url ?? '';
             await user.save();
 
-            return await reply.status(200).send({
-                message: 'Imagen subida exitosamente',
+            console.log('Image uploaded successfully:', uploadResult);
+            return await returnSuccessResponse(reply, "Imagen subida exitosamente", {
                 icp_url: uploadResult.icp_url,
                 ipfs_url: uploadResult.ipfs_url,
             });
         }
-        return await reply.status(500).send({
-            message: 'Error al subir imagen',
-            error: uploadResult.error,
-        });
+
+        console.error('Error uploading image:', uploadResult.error);
+        return await returnErrorResponse(reply, 500, 'Error uploading image', uploadResult.error);
     } catch (error) {
-        console.error('Error en uploadImage:', error);
-        return reply.status(500).send({ message: 'Error interno del servidor' });
+        console.error('Error uploading image:', error);
+        return returnErrorResponse(reply, 500, 'Error interno del servidor');
     }
 };

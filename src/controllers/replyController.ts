@@ -4,6 +4,7 @@ import { IBlockchain } from '../models/blockchain';
 import { networkChainIds } from '../constants/contracts';
 import { getNetworkConfig } from '../services/networkService';
 import { BOT_API_URL, BOT_DATA_TOKEN } from '../constants/environment';
+import { isValidPhoneNumber } from '../utils/validations';
 
 interface OperatorReplyPayload {
     data_token: string;
@@ -17,6 +18,9 @@ interface OperatorReplyPayload {
 async function sendBotMessage(payload: OperatorReplyPayload): Promise<string> {
     try {
         const sendMsgEndpint = `${BOT_API_URL}/chatbot/conversations/send-message`;
+        
+        console.log(sendMsgEndpint);
+       
         const response = await axios.post(sendMsgEndpint, payload, {
             headers: {
                 'Content-Type': 'application/json',
@@ -42,11 +46,18 @@ export async function sendTransferNotification(
     try {
         console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
 
+        if(!isValidPhoneNumber(channel_user_id)) return "";
+
+        const message = from ? 
+            `${from} te envió ${amount} ${token} 💸. Ya estan disponibles en tu billetera ChatterPay! 🥳` :
+            `Recibiste ${amount} ${token} 💸. Ya estan disponibles en tu billetera ChatterPay! 🥳`;
+        
         const payload: OperatorReplyPayload = {
             data_token: BOT_DATA_TOKEN!,
             channel_user_id,
-            message: `${from} te envio ${amount} ${token} 💸. \n Ya estan disponibles en tu billetera ChatterPay! 🥳`,
+            message
         };
+
         const data = await sendBotMessage(payload);
 
         console.log('Notification sent:', data);
@@ -137,6 +148,8 @@ export async function sendOutgoingTransferNotification(
 ): Promise<string> {
     try {
         console.log('Sending outgoing transfer notification');
+        
+        if(!isValidPhoneNumber(channel_user_id)) return "";
 
         const networkConfig: IBlockchain = await getNetworkConfig();
 

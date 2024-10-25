@@ -2,11 +2,11 @@ import { FastifyInstance } from 'fastify';
 
 import {
     getNFT,
-    mintNFT,
     getAllNFTs,
     getLastNFT,
     getNftList,
-    mintExistingNFT,
+    generateNftCopy,
+    generateNftOriginal,
     getNftMetadataRequiredByOpenSea,
 } from '../controllers/nftController';
 
@@ -20,13 +20,13 @@ const nftRoutes = async (fastify: FastifyInstance): Promise<void> => {
      * Route to mint a new NFT.
      * @route POST /nft/
      */
-    fastify.post('/nft/', mintNFT);
+    fastify.post('/nft/', generateNftOriginal);
 
     /**
      * Route to mint an existing NFT.
      * @route POST /mint_existing/
      */
-    fastify.post('/mint_existing/', mintExistingNFT);
+    fastify.post('/mint_existing/', generateNftCopy);
 
     /**
      * Route to get all NFTs.
@@ -42,9 +42,9 @@ const nftRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
     /**
      * Route to get a NFT metadata specific to smart contract.
-     * @route GET /nft/metadata/sc/:id
+     * @route GET /nft/metadata/opensea/:id
      */
-    fastify.get('/nft/metadata/opensea/:tokenId', getNftMetadataRequiredByOpenSea);
+    fastify.get('/nft/metadata/opensea/:id', getNftMetadataRequiredByOpenSea);
 
     /**
      * Route to get the last NFT.

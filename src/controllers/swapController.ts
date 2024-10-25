@@ -3,12 +3,11 @@ import * as crypto from 'crypto';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import Transaction from '../models/transaction';
-import { authenticate } from './transactionController';
 import chatterPayABI from '../utils/chatterPayABI.json';
 import { sendSwapNotification } from './replyController';
 import { getDynamicGas_callData } from '../utils/dynamicGas';
 import { getNetworkConfig } from '../services/networkService';
-import { ensureSignerHasEth } from '../services/walletService';
+import { ensureSignerHasEth } from '../services/transferService';
 import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { WETH_ADDRESS, USDT_ADDRESS, SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
@@ -187,9 +186,6 @@ async function saveTransaction(
  */
 export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: FastifyReply) => {
     try {
-        // Authenticate the request
-        authenticate(request);
-
         // Extract swap details from request body
         const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
 
