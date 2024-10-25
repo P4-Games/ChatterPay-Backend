@@ -1,6 +1,5 @@
 import { ethers } from 'ethers';
 
-import { gasService } from './gasService';
 import entryPoint from '../utils/entryPoint.json';
 import { getBlockchain } from './blockchainService';
 import { getNetworkConfig } from './networkService';
@@ -8,7 +7,7 @@ import { generatePrivateKey } from '../utils/keyGenerator';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { setupERC20, setupContracts } from './contractSetupService';
-import { signUserOperation, createUserOperation } from './userOperationService';
+import { signUserOperation, createUserOperation, ensurePaymasterHasPrefund } from './userOperationService';
 
 /**
  * Sends a user operation for token transfer.
@@ -50,6 +49,8 @@ export async function sendUserOperation(
         console.log("Getting network config");
         const networkConfig = await getNetworkConfig();
         const entrypoint = new ethers.Contract(networkConfig.contracts.entryPoint, entryPoint, backendSigner);
+        
+        await ensurePaymasterHasPrefund(entrypoint, networkConfig.contracts.paymasterAddress!)
 
         console.log("Validating account");
         if (!accountExists) {
@@ -57,7 +58,7 @@ export async function sendUserOperation(
         }
 
         console.log("Creating user op");
-        let userOperation = await createUserOperation(entrypoint, chatterPay, erc20, to, amount, proxy.proxyAddress);
+        let userOperation = await createUserOperation(entrypoint, chatterPay, erc20, to, amount, proxy.proxyAddress, networkConfig.contracts.paymasterAddress!);
 
         console.log("Signing user op");
         userOperation = await signUserOperation(userOperation, networkConfig.contracts.entryPoint, signer);

@@ -13,6 +13,7 @@ export interface IBlockchain extends Document {
         chatterPayAddress: string;
         chatterPayBeaconAddress: string;
         chatterNFTAddress: string;
+        paymasterAddress?: string;
     };
 }
 

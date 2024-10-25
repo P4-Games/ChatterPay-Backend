@@ -1,4 +1,5 @@
 import { ethers, BigNumber } from 'ethers';
+
 import { getUserOpHash } from '../utils/userOperation';
 import { PackedUserOperation } from '../types/userOperation';
 
@@ -40,6 +41,7 @@ export async function createUserOperation(
     to: string,
     amount: string,
     proxyAddress: string,
+    paymasterAndData: string,
 ): Promise<PackedUserOperation> {
     console.log("Creating UserOperation...");
     console.log("Proxy Address:", proxyAddress);
@@ -61,8 +63,8 @@ export async function createUserOperation(
     const transferEncode = erc20.interface.encodeFunctionData("transfer", [to, amount_bn]);
     console.log("Transfer Encode:", transferEncode);
 
-    const transferCallData = chatterPay.interface.encodeFunctionData("execute", [erc20.address, 0, transferEncode]);
-    console.log("Transfer Call Data:", transferCallData);
+    const callData = chatterPay.interface.encodeFunctionData("execute", [erc20.address, 0, transferEncode]);
+    console.log("Transfer Call Data:", callData);
 
     const nonce = await entrypoint.getNonce(proxyAddress, 0);
     console.log("Proxy Nonce:", nonce.toString());
@@ -72,13 +74,13 @@ export async function createUserOperation(
         sender: proxyAddress,
         nonce,
         initCode: "0x",
-        callData: transferCallData,
+        callData,
         verificationGasLimit: BigNumber.from(74908),
         callGasLimit: BigNumber.from(79728),
         preVerificationGas: BigNumber.from(94542),
         maxFeePerGas: BigNumber.from(ethers.utils.parseUnits("24", "gwei")),
         maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits("2", "gwei")),
-        paymasterAndData: "0xDb76177b0b3fe903B12EDfa2c34929cE9512B1dd",
+        paymasterAndData,
         signature: "0x", // Empty signature initially
     };
 
@@ -118,54 +120,29 @@ export async function signUserOperation(
 }
 
 /**
- * Calculates the prefund amount required for a UserOperation.
+ * Ensures that the paymaster has sufficient prefund with detailed logging.
  */
-export async function calculatePrefund(userOp: PackedUserOperation): Promise<BigNumber> {
-    try {
-        const { verificationGasLimit, callGasLimit, preVerificationGas, maxFeePerGas } = userOp;
-
-        const requiredGas = verificationGasLimit
-            .add(callGasLimit)
-            .add(preVerificationGas);
-
-        const prefund = requiredGas.mul(maxFeePerGas);
-
-        console.log("\nPrefund calculation details:");
-        console.log(`- Verification Gas Limit: ${verificationGasLimit.toString()}`);
-        console.log(`- Call Gas Limit: ${callGasLimit.toString()}`);
-        console.log(`- Pre-Verification Gas: ${preVerificationGas.toString()}`);
-        console.log(`- Max Fee Per Gas: ${ethers.utils.formatUnits(maxFeePerGas, "gwei")} gwei`);
-        console.log(`- Total Required Gas: ${requiredGas.toString()}`);
-        console.log(`- Calculated Prefund: ${ethers.utils.formatEther(prefund)} ETH`);
-
-        return prefund;
-    } catch (error) {
-        console.error("Error calculating prefund:", error);
-        throw new Error("Failed to calculate prefund");
-    }
-}
-
-/**
- * Ensures that the account has sufficient prefund with detailed logging.
- */
-export async function ensureAccountHasPrefund(
+export async function ensurePaymasterHasPrefund(
     entrypoint: ethers.Contract,
-    userOp: PackedUserOperation,
-    signer: ethers.Wallet
+    paymaster: string
 ): Promise<void> {
     try {
-        const prefund = await calculatePrefund(userOp);
-        const balance = await entrypoint.balanceOf(userOp.sender);
+        const balance = await entrypoint.balanceOf(paymaster);
 
         console.log("\nChecking prefund requirements:");
-        console.log(`- Required prefund: ${ethers.utils.formatEther(prefund)} ETH`);
         console.log(`- Current balance: ${ethers.utils.formatEther(balance)} ETH`);
 
-        if (balance.lt(prefund)) {
-            const missingFunds = prefund.sub(balance);
+        const minBalance = ethers.utils.parseEther("0.15");
+        const targetBalance = ethers.utils.parseEther("0.3");
+
+        console.log(`- Minimum required balance: ${ethers.utils.formatEther(minBalance)} ETH`);
+        console.log(`- Target balance if deposit needed: ${ethers.utils.formatEther(targetBalance)} ETH`);
+
+        if (balance.lt(minBalance)) {
+            const missingFunds = targetBalance.sub(balance);
             console.log(`\nDepositing ${ethers.utils.formatEther(missingFunds)} ETH to account`);
             
-            const tx = await entrypoint.depositTo(userOp.sender, { 
+            const tx = await entrypoint.depositTo(paymaster, { 
                 value: missingFunds,
                 gasLimit: 500000
             });
@@ -173,7 +150,7 @@ export async function ensureAccountHasPrefund(
             console.log("Deposit transaction confirmed");
             
             // Verify the new balance
-            const newBalance = await entrypoint.balanceOf(userOp.sender);
+            const newBalance = await entrypoint.balanceOf(paymaster);
             console.log(`New balance after deposit: ${ethers.utils.formatEther(newBalance)} ETH`);
         } else {
             console.log("Account has sufficient prefund");
