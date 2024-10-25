@@ -18,6 +18,9 @@ interface OperatorReplyPayload {
 async function sendBotMessage(payload: OperatorReplyPayload): Promise<string> {
     try {
         const sendMsgEndpint = `${BOT_API_URL}/chatbot/conversations/send-message`;
+        
+        console.log(sendMsgEndpint);
+       
         const response = await axios.post(sendMsgEndpint, payload, {
             headers: {
                 'Content-Type': 'application/json',
