@@ -313,7 +313,7 @@ export const makeTransaction = async (
             toUser,
             token,
             amount,
-            parseInt(chain_id, 10) ?? networkChainIds.default,
+            chain_id ? parseInt(chain_id, 10) : networkChainIds.default,
         );
 
         return await returnSuccessResponse(reply, executionStatus);
