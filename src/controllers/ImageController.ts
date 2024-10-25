@@ -1,7 +1,6 @@
 import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { User } from '../models/user';
-import { authenticate } from './transactionController';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
@@ -46,8 +45,6 @@ export const uploadImage: RouteHandlerMethod = async (
     reply: FastifyReply,
 ): Promise<FastifyReply> => {
     try {
-        authenticate(request);
-
         const { phone_number, image_url } = request.body as UploadBody;
 
         if (!phone_number) {

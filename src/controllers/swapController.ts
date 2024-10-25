@@ -3,7 +3,6 @@ import * as crypto from 'crypto';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import Transaction from '../models/transaction';
-import { authenticate } from './transactionController';
 import chatterPayABI from '../utils/chatterPayABI.json';
 import { sendSwapNotification } from './replyController';
 import { getDynamicGas_callData } from '../utils/dynamicGas';
@@ -187,9 +186,6 @@ async function saveTransaction(
  */
 export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: FastifyReply) => {
     try {
-        // Authenticate the request
-        authenticate(request);
-
         // Extract swap details from request body
         const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
 
