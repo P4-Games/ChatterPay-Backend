@@ -166,15 +166,6 @@ export const deleteTransaction = async (
     }
 };
 
-/**
- * Middleware to authenticate using the token in the header.
- */
-export const authenticate = (request: FastifyRequest) => {
-    const token = request.headers.authorization;
-    if (!token || token !== 'chatterPayToken') {
-        throw new Error('Unauthorized');
-    }
-};
 
 /**
  * Validates the inputs for making a transaction.
@@ -340,7 +331,6 @@ export const listenTransactions = async (
     reply: FastifyReply,
 ) => {
     try {
-        authenticate(request);
         const { address } = request.body;
         // TODO: Use transaction service
         return await returnSuccessResponse(reply, `Listening transactions for: ${address}`);

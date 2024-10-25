@@ -2,7 +2,6 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { User } from '../models/user';
 import { issueTokensCore } from './tokenController';
-import { authenticate } from './transactionController';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
@@ -46,8 +45,6 @@ export const createWallet = async (
     reply: FastifyReply,
 ): Promise<FastifyReply> => {
     try {
-        authenticate(request);
-
         const { channel_user_id } = request.body;
 
         const phone_number = channel_user_id;
