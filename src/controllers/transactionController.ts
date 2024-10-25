@@ -269,7 +269,7 @@ const executeTransaction = async (from: IUser, to: IUser | { wallet: string }, t
         const fromName = from.name ?? from.phone_number ?? 'Alguien';
         const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
         
-        sendTransferNotification(toNumber, fromName, amount, token, result.transactionHash);
+        sendTransferNotification(toNumber, fromName, amount, token);
         
         const networkConfig = await getNetworkConfig();
         const transferNotification = `Enviar al usuario el siguiente mensaje: "💸 Enviaste ${amount} ${token} a ${toNumber}! 💸" Agregando el siguiente link del comprobante usando la tool específica para ello: ${networkConfig.explorer}/tx/${result.transactionHash}`; 
