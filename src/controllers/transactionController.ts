@@ -3,11 +3,12 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import web3 from '../utils/web3_config';
 import { User, IUser } from '../models/user';
 import Blockchain from '../models/blockchain';
-import { sendUserOperation } from '../services/walletService';
+import { sendTransferNotification } from './replyController';
+import { getNetworkConfig } from '../services/networkService';
+import { sendUserOperation } from '../services/transferService';
 import Transaction, { ITransaction } from '../models/transaction';
 import { USDT_ADDRESS, networkChainIds } from '../constants/contracts';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
-import { sendTransferNotification, sendOutgoingTransferNotification } from './replyController';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
 type PaginationQuery = { page?: string; limit?: string };
@@ -236,25 +237,21 @@ const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
 
 /**
  * Executes a transaction between two users.
+ * Returns a string that will be used as a reply for the sender
  */
-const executeTransaction = async (
-    from: IUser,
-    to: IUser | { wallet: string },
-    token: string,
-    amount: string,
-    chain_id: number,
-) => {
-    console.log('Sending user operation...');
-    const result = await sendUserOperation(
-        from.wallet,
-        from.phone_number,
-        to.wallet,
-        TOKEN_ADDRESS,
-        amount,
-        chain_id,
-    );
+const executeTransaction = async (from: IUser, to: IUser | { wallet: string }, token: string, amount: string, chain_id: number): Promise<string> => {
+	console.log("Sending user operation...");
+	
+	const result = await sendUserOperation(
+		from.wallet,
+		from.phone_number,
+		to.wallet,
+		TOKEN_ADDRESS,
+		amount,
+		chain_id
+	);
 
-    if (!result) return;
+	if (!result || !result.transactionHash) return "La transacción falló, los fondos se mantienen en tu cuenta";
 
     await Transaction.create({
         trx_hash: result?.transactionHash ?? '',
@@ -271,16 +268,16 @@ const executeTransaction = async (
         console.log('Trying to notificate transfer');
         const fromName = from.name ?? from.phone_number ?? 'Alguien';
         const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
-        await sendTransferNotification(toNumber, fromName, amount, token);
-        await sendOutgoingTransferNotification(
-            from.phone_number,
-            toNumber,
-            amount,
-            token,
-            result.transactionHash,
-        );
+        
+        sendTransferNotification(toNumber, fromName, amount, token, result.transactionHash);
+        
+        const networkConfig = await getNetworkConfig();
+        const transferNotification = `Enviar al usuario el siguiente mensaje: "💸 Enviaste ${amount} ${token} a ${toNumber}! 💸" Agregando el siguiente link del comprobante usando la tool específica para ello: ${networkConfig.explorer}/tx/${result.transactionHash}`; 
+        
+        return transferNotification;
     } catch (error) {
         console.error('Error sending notifications:', error);
+        return "La transacción falló, los fondos se mantienen en tu cuenta";
     }
 };
 
@@ -311,7 +308,7 @@ export const makeTransaction = async (
             toUser = await getOrCreateUser(to);
         }
 
-        await executeTransaction(
+        const executionStatus = await executeTransaction(
             fromUser,
             toUser,
             token,
@@ -319,7 +316,7 @@ export const makeTransaction = async (
             parseInt(chain_id, 10) ?? networkChainIds.default,
         );
 
-        return await returnSuccessResponse(reply, 'Transaction in progress... This may take a few minutes');
+        return await returnSuccessResponse(reply, executionStatus);
     } catch (error) {
         console.error('Error making transaction:', error);
         return returnErrorResponse(reply, 400, 'Error making transaction', (error as Error).message);

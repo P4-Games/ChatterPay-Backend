@@ -8,7 +8,7 @@ import chatterPayABI from '../utils/chatterPayABI.json';
 import { sendSwapNotification } from './replyController';
 import { getDynamicGas_callData } from '../utils/dynamicGas';
 import { getNetworkConfig } from '../services/networkService';
-import { ensureSignerHasEth } from '../services/walletService';
+import { ensureSignerHasEth } from '../services/transferService';
 import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { WETH_ADDRESS, USDT_ADDRESS, SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
