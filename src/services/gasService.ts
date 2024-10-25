@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { ethers, BigNumber } from 'ethers';
 
-import { PackedUserOperation } from '../types/userOperation';
 import { getUserOpHash } from '../utils/userOperation';
+import { PackedUserOperation } from '../types/userOperation';
 
 interface AlchemyGasResponse {
     paymasterAndData: string;

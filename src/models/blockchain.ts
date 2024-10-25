@@ -30,6 +30,7 @@ const blockchainSchema = new Schema<IBlockchain>({
         chatterPayAddress: { type: String, required: false },
         chatterPayBeaconAddress: { type: String, required: false },
         chatterNFTAddress: { type: String, required: false },
+        paymasterAddress: { type: String, required: false },
     },
 });
 

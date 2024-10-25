@@ -6,8 +6,8 @@ import { SIGNING_KEY } from '../constants/environment';
 import { NFTInfo, getPhoneNFTs } from './nftController';
 import { getNetworkConfig } from '../services/networkService';
 import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
 type Currency = 'USD' | 'UYU' | 'ARS' | 'BRL';
 

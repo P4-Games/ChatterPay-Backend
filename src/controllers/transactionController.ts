@@ -278,8 +278,10 @@ const executeTransaction = async (from: IUser, to: IUser | { wallet: string }, t
         console.log('Trying to notificate transfer');
         const fromName = from.name ?? from.phone_number ?? 'Alguien';
         const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
-        await sendTransferNotification(toNumber, fromName, amount, token);
-        await sendOutgoingTransferNotification(
+        
+        sendTransferNotification(toNumber, fromName, amount, token);
+        
+        sendOutgoingTransferNotification(
             from.phone_number,
             toNumber,
             amount,

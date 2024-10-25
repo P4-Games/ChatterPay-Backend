@@ -156,7 +156,7 @@ export async function ensurePaymasterHasPrefund(
             console.log("Account has sufficient prefund");
         }
     } catch (error) {
-        console.error("Error ensuring account has prefund:", error);
+        console.error("Error ensuring paymaster has prefund:", error);
         throw error;
     }
 }

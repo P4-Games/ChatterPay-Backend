@@ -4,6 +4,7 @@ import { IBlockchain } from '../models/blockchain';
 import { networkChainIds } from '../constants/contracts';
 import { getNetworkConfig } from '../services/networkService';
 import { BOT_API_URL, BOT_DATA_TOKEN } from '../constants/environment';
+import { isValidPhoneNumber } from '../utils/validations';
 
 interface OperatorReplyPayload {
     data_token: string;
@@ -41,6 +42,8 @@ export async function sendTransferNotification(
 ): Promise<string> {
     try {
         console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
+
+        if(!isValidPhoneNumber(channel_user_id)) return "";
 
         const message = from ? 
             `${from} te envió ${amount} ${token} 💸. \nYa estan disponibles en tu billetera ChatterPay! 🥳` :
@@ -142,6 +145,8 @@ export async function sendOutgoingTransferNotification(
 ): Promise<string> {
     try {
         console.log('Sending outgoing transfer notification');
+        
+        if(!isValidPhoneNumber(channel_user_id)) return "";
 
         const networkConfig: IBlockchain = await getNetworkConfig();
 
