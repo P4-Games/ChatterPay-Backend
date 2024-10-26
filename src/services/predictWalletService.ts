@@ -69,6 +69,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
     const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
         gasLimit: 1000000,
     });
+    console.log(`Computed proxy address: ${proxyAddress}`);
 
     const code = await provider.getCode(proxyAddress);
     if (code === '0x') {

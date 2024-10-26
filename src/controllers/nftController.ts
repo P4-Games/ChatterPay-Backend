@@ -11,6 +11,7 @@ import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
 import { executeWalletCreation } from './newWalletController';
 import { defaultNftImage, networkChainIds } from '../constants/contracts';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
 export interface NFTInfo {
@@ -183,15 +184,17 @@ export const generateNftOriginal = async (
     const { channel_user_id, url, mensaje, latitud, longitud } = request.body;
 
     if (!isValidUrl(url)) {
-        return reply.status(400).send({ message: 'La URL proporcionada no es válida.' });
+        console.warn("The provided URL is not valid.");
+        return returnErrorResponse(reply, 400, "The provided URL is not valid.");
     }
 
     const address_of_user = await getWalletByPhoneNumber(channel_user_id);
     if (!address_of_user) {
-        return reply.status(400).send({ message: 'La wallet del usuario no existe.' });
+        console.warn("Wallet User doesnt exists.");
+        return returnErrorResponse(reply, 400, "Wallet User doesnt exists.")
     }
 
-    reply.status(200).send({ message: `El certificado se está generando` });
+    return returnSuccessResponse(reply, "The certificate is being generated")
 
     let processedImage;
     try {
@@ -205,7 +208,7 @@ export const generateNftOriginal = async (
     // Guardar los detalles iniciales del NFT en la base de datos.
     let mongoData;
     try {
-        console.info('Guardando NFT inicial en bdd');
+        console.info("Saving NFT Data into MongoDB")
         mongoData = await NFTModel.create({
             channel_user_id,
             wallet: address_of_user,
@@ -232,17 +235,15 @@ export const generateNftOriginal = async (
             },
         });
     } catch (error) {
-        console.error('Error al grabar NFT inicial en bdd', (error as Error).message);
+        console.error("Error saving NFT data into DB.", (error as Error).message);
         return Promise.resolve(); // Si falla la creación inicial, no tiene sentido continuar
     }
 
-    console.log('mongoData', mongoData);
-
     let nftData: NFTData;
     try {
-        nftData = await mintNftOriginal(address_of_user, (mongoData._id as ObjectId).toString());
+        nftData = await mintNftOriginal(address_of_user!, (mongoData._id as ObjectId).toString());
     } catch (error) {
-        console.error('Error al mintear NFT:', error);
+        console.error("Error minting NFT", error);
         return Promise.resolve();
     }
     const nftMintedId = nftData.tokenId.toString();
@@ -250,7 +251,7 @@ export const generateNftOriginal = async (
     try {
         await sendMintNotification(channel_user_id, nftMintedId);
     } catch (error) {
-        console.error('Error al enviar notificación de minteo de NFT', (error as Error).message);
+        console.warn('Error al enviar notificación de minteo de NFT', (error as Error).message);
         // No se lanza error aquí para continuar con el proceso
     }
 
@@ -261,14 +262,14 @@ export const generateNftOriginal = async (
     try {
         ipfsImageUrl = await uploadToIpfs(processedImage, fileName);
     } catch (error) {
-        console.error('Error al subir la imagen a IPFS', (error as Error).message);
+        console.warn('Error al subir la imagen a IPFS', (error as Error).message);
         // No se lanza error aquí para continuar con el proceso
     }
 
     try {
         icpImageUrl = await uploadToICP(processedImage, fileName);
     } catch (error) {
-        console.error('Error al subir la imagen a ICP', (error as Error).message);
+        console.warn('Error al subir la imagen a ICP', (error as Error).message);
         // No se lanza error aquí para continuar con el proceso
     }
 
@@ -314,21 +315,21 @@ export const generateNftCopy = async (
         // Verify that the NFT to copy exists
         const nfts: INFT[] = await NFTModel.find({ id });
         if (!nfts || nfts.length === 0) {
-            return await reply.status(400).send({ message: 'El NFT no existe.' });
+            return await returnErrorResponse(reply, 400, "The NFT doesn't exist.");
         }
         const nftCopyOf = nfts[0];
 
         // Verify that the user exists
         let address_of_user = await getWalletByPhoneNumber(channel_user_id);
         if (!address_of_user) {
-            console.log('La wallet del usuario no existe. Creando...');
+            console.log('The user wallet does not exist. Creating...');
             address_of_user = await executeWalletCreation(channel_user_id);
-            console.log('Wallet creada.');
+            console.log('Wallet created.');
         }
 
         // optimistic response
         console.log('sending notification: el certificado se está generando');
-        reply.status(200).send({ message: `El certificado se está generando` });
+        returnSuccessResponse(reply, 'The certificate is being generated');
 
         // search by NFT original
         let copy_of_original = nftCopyOf.id;
@@ -417,6 +418,7 @@ export const getNFT = async (
         };
     }>,
     reply: FastifyReply,
+// eslint-disable-next-line consistent-return
 ): Promise<void> => {
     try {
         const { id } = request.params;
@@ -424,16 +426,16 @@ export const getNFT = async (
         const nft = (await NFTModel.find({ id }))?.[0];
 
         if (nft) {
-            reply.send({
+            return await returnSuccessResponse(reply, "NFT found", {
                 image: nft.metadata.image_url,
                 description: nft.metadata.description,
             });
-        } else {
-            reply.status(404).send({ message: 'NFT not found' });
-        }
+        } 
+        return await returnErrorResponse(reply, 404, "NFT not found");
+
     } catch (error) {
-        console.error('Error al obtener el NFT:', error);
-        reply.status(500).send({ message: 'Internal Server Error' });
+        console.error('Error retrieving the NFT:', error);
+        return returnErrorResponse(reply, 500, "Internal Server Error");
     }
 };
 
@@ -449,10 +451,11 @@ export const getLastNFT = async (
         };
     }>,
     reply: FastifyReply,
+// eslint-disable-next-line consistent-return
 ): Promise<void> => {
     try {
         const { channel_user_id } = request.query;
-        console.log('buscando last_nft para channel_user_id', channel_user_id);
+        console.log('Searching last_nft for channel_user_id', channel_user_id);
         const nft = (await NFTModel.find({ channel_user_id })).sort((a, b) => b.id - a.id)?.[0];
 
         if (nft) {
@@ -460,11 +463,11 @@ export const getLastNFT = async (
                 `https://api.whatsapp.com/send/?phone=5491164629653&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`,
             );
         } else {
-            reply.status(404).send({ message: 'NFT not found' });
+            return await returnErrorResponse(reply, 404, "NFT not found");
         }
     } catch (error) {
-        console.error('Error al obtener el NFT:', error);
-        reply.status(500).send({ message: 'Internal Server Error' });
+        console.error('Error getting NFT:', error);
+        return returnErrorResponse(reply, 500, "Internal Server Error");
     }
 };
 
@@ -489,7 +492,7 @@ export const getPhoneNFTs = async (
             })),
         };
     } catch (error) {
-        console.error('Error al obtener los NFTs:', error);
+        console.error('Error getting NFTs:', error);
         throw new Error('Internal Server Error');
     }
 };
@@ -508,7 +511,7 @@ export const getAllNFTs = async (
 
     const result = await getPhoneNFTs(phone_number);
 
-    return reply.status(200).send(result);
+    return returnSuccessResponse(reply, 'NFTs fetched successfully', result);
 };
 
 /**
@@ -535,20 +538,20 @@ export const getNftList = async (
 
         const nft = nfts[0];
         if (nft.original) {
-            return await reply.status(200).send({
+            return await returnSuccessResponse(reply, "Original NFT found", {
                 original: nft,
                 copies: await NFTModel.find({ copy_of: tokenId.toString() }),
             });
         }
 
         const originalNft = (await NFTModel.find({ id: nft.copy_of }))?.[0];
-        return await reply.status(200).send({
+        return await returnSuccessResponse(reply, "Original NFT found", {
             original: originalNft,
             copy: nft,
         });
     } catch (error) {
         console.error('Error al obtener el NFT:', error);
-        return reply.status(500).send({ message: 'Internal Server Error' });
+        return returnErrorResponse(reply, 500, "Internal Server Error");
     }
 };
 

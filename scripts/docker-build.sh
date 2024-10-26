@@ -24,8 +24,11 @@ docker build \
     --build-arg ICP_MNEMONIC="$ICP_MNEMONIC" \
     --build-arg BOT_API_URL="$BOT_API_URL" \
     --build-arg BOT_DATA_TOKEN="$BOT_DATA_TOKEN" \
+    --build-arg ARBITRUM_SEPOLIA_RPC_URL="$ARBITRUM_SEPOLIA_RPC_URL" \
     --build-arg NFT_UPLOAD_IMAGE_ICP="$NFT_UPLOAD_IMAGE_ICP" \
     --build-arg NFT_UPLOAD_IMAGE_IPFS="$NFT_UPLOAD_IMAGE_IPFS" \
     --build-arg GCP_BUCKET_BASE_URL="$GCP_BUCKET_BASE_URL" \
+    --build-arg CHATIZALO_TOKEN="$CHATIZALO_TOKEN" \
+    --build-arg FRONTEND_TOKEN="$FRONTEND_TOKEN" \
     -t chatterpay-back-app ..
 
