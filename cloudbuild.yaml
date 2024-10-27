@@ -100,7 +100,19 @@ steps:
               'managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID',
               '--quiet',
               '--allow-unauthenticated',
-          ]
+  - name: "bash"
+    script: |
+      #!/usr/bin/env bash
+      echo "CHATIZALO_TOKEN en cloudbuild.yaml 1: $CHATIZALO_TOKEN"
+      echo "FRONTEND_TOKEN en cloudbuild.yaml 2: $FRONTEND_TOKEN"
+      echo "PRIVATE_KEY en cloudbuild.yaml 3: $PRIVATE_KEY"
+      echo "SIGNING_KEY en cloudbuild.yaml 4: $SIGNING_KEY"
+    secretEnv: [
+      'CHATIZALO_TOKEN', 
+      'FRONTEND_TOKEN', 
+      'PRIVATE_KEY', 
+      'SIGNING_KEY'
+    ]
 
 availableSecrets:
     secretManager:
