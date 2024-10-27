@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { verifyToken, TokenResponse } from '../config/token';
+import { TokenResponse, verifyToken } from '../config/token';
 
 /**
  * Middleware function to authenticate requests using a Bearer token.
@@ -20,6 +20,11 @@ import { verifyToken, TokenResponse } from '../config/token';
  * 5. If any step fails, it sends a 401 response with an error message.
  */
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  // Skip authentication for the /ping endpoint
+  if (request.url === '/ping') {
+    return;
+  }
+
   const authHeader: string | undefined = request.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

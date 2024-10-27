@@ -14,7 +14,7 @@ docker build \
     --build-arg ALCHEMY_API_KEY="$ALCHEMY_API_KEY" \
     --build-arg INFURA_API_KEY="$INFURA_API_KEY" \
     --build-arg MONGO_URI="$MONGO_URI" \
-    --build-arg THRIDWEB_CLIENT_ID="$THRIDWEB_CLIENT_ID" \
+    --build-arg THIRDWEB_CLIENT_ID="$THIRDWEB_CLIENT_ID" \
     --build-arg THIRDWEB_CLIENT_SECRET="$THIRDWEB_CLIENT_SECRET" \
     --build-arg PRIVATE_KEY="$PRIVATE_KEY" \
     --build-arg SIGNING_KEY="$SIGNING_KEY" \
