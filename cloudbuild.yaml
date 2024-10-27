@@ -9,8 +9,6 @@ steps:
           - MONGO_URI=${_MONGO_URI}
           - THIRDWEB_CLIENT_ID=${_THIRDWEB_CLIENT_ID}
           - THIRDWEB_CLIENT_SECRET=${_THIRDWEB_CLIENT_SECRET}
-          - PRIVATE_KEY=${_PRIVATE_KEY}
-          - SIGNING_KEY=${_SIGNING_KEY}
           - PINATA_JWT=${_PINATA_JWT}
           - GATEWAY_URL=${_GATEWAY_URL}
           - ICP_CANISTER_ID=${_ICP_CANISTER_ID}
@@ -20,7 +18,7 @@ steps:
           - NFT_UPLOAD_IMAGE_ICP=${_NFT_UPLOAD_IMAGE_ICP}
           - NFT_UPLOAD_IMAGE_IPFS=${_NFT_UPLOAD_IMAGE_IPFS}
           - GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}
-      secretEnv: ['CHATIZALO_TOKEN', 'FRONTEND_TOKEN']
+      secretEnv: ['CHATIZALO_TOKEN', 'FRONTEND_TOKEN', 'PRIVATE_KEY', 'SIGNING_KEY']
 
     - name: 'gcr.io/cloud-builders/docker'
       id: Build
@@ -45,9 +43,9 @@ steps:
               '--build-arg',
               'THIRDWEB_CLIENT_SECRET=${_THIRDWEB_CLIENT_SECRET}',
               '--build-arg',
-              'PRIVATE_KEY=${_PRIVATE_KEY}',
+              'PRIVATE_KEY=$$PRIVATE_KEY',
               '--build-arg',
-              'SIGNING_KEY=${_SIGNING_KEY}',
+              'SIGNING_KEY=$$SIGNING_KEY',
               '--build-arg',
               'PINATA_JWT=${_PINATA_JWT}',
               '--build-arg',
@@ -74,7 +72,7 @@ steps:
               'FRONTEND_TOKEN=$$FRONTEND_TOKEN',
               '.',
           ]
-      secretEnv: ['CHATIZALO_TOKEN', 'FRONTEND_TOKEN']
+      secretEnv: ['CHATIZALO_TOKEN', 'FRONTEND_TOKEN', 'PRIVATE_KEY', 'SIGNING_KEY']
 
     - name: 'gcr.io/cloud-builders/docker'
       id: Push
