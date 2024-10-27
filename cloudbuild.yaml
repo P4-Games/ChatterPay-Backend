@@ -7,7 +7,7 @@ steps:
           - ALCHEMY_API_KEY=${_ALCHEMY_API_KEY}
           - INFURA_API_KEY=${_INFURA_API_KEY}
           - MONGO_URI=${_MONGO_URI}
-          - THRIDWEB_CLIENT_ID=${_THRIDWEB_CLIENT_ID}
+          - THIRDWEB_CLIENT_ID=${_THIRDWEB_CLIENT_ID}
           - THIRDWEB_CLIENT_SECRET=${_THIRDWEB_CLIENT_SECRET}
           - PRIVATE_KEY=${_PRIVATE_KEY}
           - SIGNING_KEY=${_SIGNING_KEY}
@@ -41,7 +41,7 @@ steps:
               '--build-arg',
               'MONGO_URI=${_MONGO_URI}',
               '--build-arg',
-              'THRIDWEB_CLIENT_ID=${_THRIDWEB_CLIENT_ID}',
+              'THIRDWEB_CLIENT_ID=${_THIRDWEB_CLIENT_ID}',
               '--build-arg',
               'THIRDWEB_CLIENT_SECRET=${_THIRDWEB_CLIENT_SECRET}',
               '--build-arg',
