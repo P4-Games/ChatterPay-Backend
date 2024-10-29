@@ -20,8 +20,8 @@ import { TokenResponse, verifyToken } from '../config/token';
  * 5. If any step fails, it sends a 401 response with an error message.
  */
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  // Skip authentication for the /ping endpoint
-  if (request.url === '/ping') {
+  // Skip authentication for the /ping endpoint, and the opensea NFT metadata 
+  if (request.url === '/ping' || request.url.startsWith("/nft/metadata/opensea/")) {
     return;
   }
 
