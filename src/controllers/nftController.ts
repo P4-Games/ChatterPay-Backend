@@ -194,7 +194,7 @@ export const generateNftOriginal = async (
         return returnErrorResponse(reply, 400, "Wallet User doesnt exists.")
     }
 
-    return returnSuccessResponse(reply, "The certificate is being generated")
+    returnSuccessResponse(reply, "The certificate is being generated")
 
     let processedImage;
     try {
