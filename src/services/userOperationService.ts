@@ -1,8 +1,8 @@
 import { ethers, BigNumber } from 'ethers';
 
 import { getUserOpHash } from '../utils/userOperation';
-import { PackedUserOperation } from '../types/userOperation';
 import { createPaymasterAndData } from '../utils/paymaster';
+import { PackedUserOperation } from '../types/userOperation';
 
 /**
  * Decodes the callData of a UserOperation and logs the decoded information.
