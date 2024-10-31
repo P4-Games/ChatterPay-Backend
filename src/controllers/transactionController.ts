@@ -1,4 +1,4 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import web3 from '../utils/web3_config';
 import { User, IUser } from '../models/user';
@@ -19,11 +19,126 @@ type MakeTransactionInputs = {
     chain_id: string;
 };
 
-const TOKEN_ADDRESS = USDT_ADDRESS; // Demo USDT en Devnet Scroll # add wETH
+const TOKEN_ADDRESS = USDT_ADDRESS;
 
 /**
- * Checks the status of a transaction.
+ * Validates the inputs for making a transaction.
  */
+const validateInputs = (inputs: MakeTransactionInputs): string => {
+    const { channel_user_id, to, token, amount, chain_id } = inputs;
+
+    if (!channel_user_id || !to || !token || !amount) {
+        return 'Alguno o multiples campos están vacíos';
+    }
+    if (Number.isNaN(parseFloat(amount))) {
+        return 'El monto ingresado no es correcto';
+    }
+    if (channel_user_id === to) {
+        return 'No puedes enviar dinero a ti mismo';
+    }
+    if (
+        channel_user_id.length > 15 ||
+        (to.startsWith('0x') && !Number.isNaN(parseInt(to, 10)) && to.length <= 15)
+    ) {
+        return 'El número de telefono no es válido';
+    }
+    if (token.length > 5) {
+        return 'El símbolo del token no es válido';
+    }
+    try {
+        const newChainID = chain_id ? parseInt(chain_id, 10) : networkChainIds.default;
+        Blockchain.findOne({ chain_id: newChainID });
+    } catch {
+        return 'La blockchain no esta registrada';
+    }
+    return '';
+};
+
+/**
+ * Gets or creates a user based on the phone number.
+ */
+const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
+    let user = await User.findOne({ phone_number: phoneNumber });
+
+    if (!user) {
+        console.log(
+            `Número de telefono ${phoneNumber} no registrado en ChatterPay, registrando...`,
+        );
+        const predictedWallet = await computeProxyAddressFromPhone(phoneNumber);
+        user = await User.create({
+            phone_number: phoneNumber,
+            wallet: predictedWallet.EOAAddress,
+            privateKey: predictedWallet.privateKey,
+            name: `+${phoneNumber}`,
+        });
+
+        console.log(
+            `Número de telefono ${phoneNumber} registrado con la wallet ${predictedWallet.EOAAddress}`,
+        );
+    }
+
+    return user;
+};
+
+/**
+ * Executes a transaction between two users and handles the notifications.
+ */
+const executeTransaction = async (
+    fastify: FastifyInstance,
+    from: IUser, 
+    to: IUser | { wallet: string }, 
+    token: string, 
+    amount: string, 
+    chain_id: number
+): Promise<string> => {
+    console.log("Sending user operation...");
+
+    const result = await sendUserOperation(
+        fastify,
+        from.phone_number,
+        to.wallet,
+        TOKEN_ADDRESS,
+        amount,
+        chain_id
+    );
+
+    if (!result || !result.transactionHash) {
+        return "La transacción falló, los fondos se mantienen en tu cuenta";
+    }
+
+    await Transaction.create({
+        trx_hash: result.transactionHash,
+        wallet_from: from.wallet,
+        wallet_to: to.wallet,
+        type: 'transfer',
+        date: new Date(),
+        status: 'completed',
+        amount: parseFloat(amount),
+        token: 'USDT',
+    });
+
+    try {
+        console.log('Trying to notificate transfer');
+        const fromName = from.name ?? from.phone_number ?? 'Alguien';
+        const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
+        
+        sendTransferNotification(toNumber, fromName, amount, token);
+        sendOutgoingTransferNotification(
+            from.phone_number,
+            toNumber,
+            amount,
+            token,
+            result.transactionHash,
+        );
+        
+        return "";
+    } catch (error) {
+        console.error('Error sending notifications:', error);
+        return "La transacción falló, los fondos se mantienen en tu cuenta";
+    }
+};
+
+// Rest of the transaction controller functions remain the same...
 export const checkTransactionStatus = async (
     request: FastifyRequest<{ Params: { trx_hash: string } }>,
     reply: FastifyReply,
@@ -165,117 +280,6 @@ export const deleteTransaction = async (
     }
 };
 
-
-/**
- * Validates the inputs for making a transaction.
- */
-const validateInputs = (inputs: MakeTransactionInputs): string => {
-    const { channel_user_id, to, token, amount, chain_id } = inputs;
-
-    if (!channel_user_id || !to || !token || !amount) {
-        return 'Alguno o multiples campos están vacíos';
-    }
-    if (Number.isNaN(parseFloat(amount))) {
-        return 'El monto ingresado no es correcto';
-    }
-    if (channel_user_id === to) {
-        return 'No puedes enviar dinero a ti mismo';
-    }
-    if (
-        channel_user_id.length > 15 ||
-        (to.startsWith('0x') && !Number.isNaN(parseInt(to, 10)) && to.length <= 15)
-    ) {
-        return 'El número de telefono no es válido';
-    }
-    if (token.length > 5) {
-        return 'El símbolo del token no es válido';
-    }
-    try {
-        const newChainID = chain_id ? parseInt(chain_id, 10) : networkChainIds.default;
-        Blockchain.findOne({ chain_id: newChainID });
-    } catch {
-        return 'La blockchain no esta registrada';
-    }
-    return '';
-};
-
-/**
- * Gets or creates a user based on the phone number.
- */
-const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
-    let user = await User.findOne({ phone_number: phoneNumber });
-
-    if (!user) {
-        console.log(
-            `Número de telefono ${phoneNumber} no registrado en ChatterPay, registrando...`,
-        );
-        const predictedWallet = await computeProxyAddressFromPhone(phoneNumber);
-        user = await User.create({
-            phone_number: phoneNumber,
-            wallet: predictedWallet.EOAAddress,
-            privateKey: predictedWallet.privateKey,
-            name: `+${phoneNumber}`,
-        });
-
-        console.log(
-            `Número de telefono ${phoneNumber} registrado con la wallet ${predictedWallet.EOAAddress}`,
-        );
-    }
-
-    return user;
-};
-
-/**
- * Executes a transaction between two users.
- * Returns a string that will be used as a reply for the sender
- */
-const executeTransaction = async (from: IUser, to: IUser | { wallet: string }, token: string, amount: string, chain_id: number): Promise<string> => {
-	console.log("Sending user operation...");
-	
-	const result = await sendUserOperation(
-		from.wallet,
-		from.phone_number,
-		to.wallet,
-		TOKEN_ADDRESS,
-		amount,
-		chain_id
-	);
-
-	if (!result || !result.transactionHash) return "La transacción falló, los fondos se mantienen en tu cuenta";
-
-    await Transaction.create({
-        trx_hash: result?.transactionHash ?? '',
-        wallet_from: from.wallet,
-        wallet_to: to.wallet,
-        type: 'transfer',
-        date: new Date(),
-        status: 'completed',
-        amount: parseFloat(amount),
-        token: 'USDT',
-    });
-
-    try {
-        console.log('Trying to notificate transfer');
-        const fromName = from.name ?? from.phone_number ?? 'Alguien';
-        const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
-        
-        sendTransferNotification(toNumber, fromName, amount, token);
-        
-        sendOutgoingTransferNotification(
-            from.phone_number,
-            toNumber,
-            amount,
-            token,
-            result.transactionHash,
-        );
-        
-        return "";
-    } catch (error) {
-        console.error('Error sending notifications:', error);
-        return "La transacción falló, los fondos se mantienen en tu cuenta";
-    }
-};
-
 /**
  * Handles the make transaction request.
  */
@@ -304,6 +308,7 @@ export const makeTransaction = async (
         }
 
         executeTransaction(
+            request.server,
             fromUser,
             toUser,
             token,
