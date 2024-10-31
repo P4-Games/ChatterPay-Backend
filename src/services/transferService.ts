@@ -58,8 +58,17 @@ export async function sendUserOperation(
         }
 
         console.log("Creating user op");
-        let userOperation = await createUserOperation(entrypoint, chatterPay, erc20, to, amount, proxy.proxyAddress, networkConfig.contracts.paymasterAddress!);
-
+        let userOperation = await createUserOperation(
+            entrypoint,
+            chatterPay,
+            erc20,
+            to,
+            amount,
+            proxy.proxyAddress,
+            networkConfig.contracts.paymasterAddress!,
+            backendSigner
+        );
+        
         console.log("Signing user op");
         userOperation = await signUserOperation(userOperation, networkConfig.contracts.entryPoint, signer);
 

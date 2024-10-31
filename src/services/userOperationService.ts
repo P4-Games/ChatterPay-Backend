@@ -2,6 +2,7 @@ import { ethers, BigNumber } from 'ethers';
 
 import { getUserOpHash } from '../utils/userOperation';
 import { PackedUserOperation } from '../types/userOperation';
+import { createPaymasterAndData } from '../utils/paymaster';
 
 /**
  * Decodes the callData of a UserOperation and logs the decoded information.
@@ -34,6 +35,9 @@ export function decodeCallData(callData: string) {
 /**
  * Creates a user operation for token transfer.
  */
+/**
+ * Creates a user operation for token transfer.
+ */
 export async function createUserOperation(
     entrypoint: ethers.Contract,
     chatterPay: ethers.Contract,
@@ -41,7 +45,8 @@ export async function createUserOperation(
     to: string,
     amount: string,
     proxyAddress: string,
-    paymasterAndData: string,
+    paymasterAddress: string,
+    backendSigner: ethers.Signer, // New parameter for backend signer
 ): Promise<PackedUserOperation> {
     console.log("Creating UserOperation...");
     console.log("Proxy Address:", proxyAddress);
@@ -68,6 +73,15 @@ export async function createUserOperation(
 
     const nonce = await entrypoint.getNonce(proxyAddress, 0);
     console.log("Proxy Nonce:", nonce.toString());
+
+    // Create paymasterAndData with signature and expiration
+    const paymasterAndData = await createPaymasterAndData(
+        paymasterAddress,
+        proxyAddress,
+        backendSigner,
+        3600 // 1 hour validity
+    );
+    console.log("Generated paymasterAndData:", paymasterAndData);
 
     // Use high fixed values for gas
     const userOp: PackedUserOperation = {
