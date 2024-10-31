@@ -18,7 +18,7 @@ export const PUBLIC_ROUTES = [
 export const isPublicRoute = (route: string): boolean => (
     PUBLIC_ROUTES.some(publicRoute => {
         if (publicRoute.includes("*")) {
-            return route.startsWith(publicRoute.replace("*", ""))
+            return route.startsWith(publicRoute.replace(/\*/g, ""))
         }
         if (publicRoute.includes("<id>")) {
             // Match exactly /nft/ followed by numbers only and nothing after
