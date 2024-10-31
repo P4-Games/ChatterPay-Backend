@@ -1,6 +1,25 @@
 import { ethers } from "ethers";
 
-interface UserOperationReceipt {
+export interface UserOperationReceiptData {
+    transactionHash: string;
+    transactionIndex: string;
+    blockHash: string;
+    blockNumber: string;
+    from: string;
+    to: string;
+    cumulativeGasUsed: string;
+    gasUsed: string;
+    contractAddress: string | null;
+    logs: Array<{
+        address: string;
+        topics: string[];
+        data: string;
+    }>;
+    logsBloom: string;
+    status: string;
+} 
+
+export interface UserOperationReceipt {
     userOpHash: string;
     entryPoint: string;
     sender: string;
@@ -15,24 +34,7 @@ interface UserOperationReceipt {
         topics: string[];
         data: string;
     }>;
-    receipt: {
-        transactionHash: string;
-        transactionIndex: string;
-        blockHash: string;
-        blockNumber: string;
-        from: string;
-        to: string;
-        cumulativeGasUsed: string;
-        gasUsed: string;
-        contractAddress: string | null;
-        logs: Array<{
-            address: string;
-            topics: string[];
-            data: string;
-        }>;
-        logsBloom: string;
-        status: string;
-    };
+    receipt: UserOperationReceiptData;
 }
 
 export async function waitForUserOperationReceipt(

@@ -38,7 +38,8 @@ export const getAllTokens = async (
     reply: FastifyReply,
 ): Promise<FastifyReply> => {
     try {
-        const tokens = await Token.find();
+        // Use the cached tokens from fastify instance
+        const { tokens } = request.server;
         return await returnSuccessResponse(reply, 'Tokens fetched successfully', { tokens });
     } catch (error) {
         console.error('Error fetching tokens:', error);
