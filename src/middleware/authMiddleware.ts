@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { TokenResponse, verifyToken } from '../config/token';
 import { isPublicRoute } from '../config/publicRoutes';
+import { verifyToken, TokenResponse } from '../config/token';
 
 /**
  * Middleware function to authenticate requests using a Bearer token.
