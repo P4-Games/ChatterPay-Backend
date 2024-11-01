@@ -113,7 +113,7 @@ export async function sendUserOperation(
 /**
  * Helper function to check if the account has sufficient balance for the transfer.
  */
-async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount: string) {
+export async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount: string) {
     console.log("ERC20 ADDRESS", erc20.address)
     console.log(`Checking balance for ${proxyAddress}...`);
     const amount_bn = ethers.utils.parseUnits(amount, 18);
