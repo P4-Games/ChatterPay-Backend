@@ -1,10 +1,8 @@
 import { ethers } from 'ethers';
-import { FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import Token, { IToken } from '../models/token';
 import { SIGNING_KEY } from '../constants/environment';
-import { getNetworkConfig } from '../services/networkService';
-import { USDT_ADDRESS, WETH_ADDRESS } from '../constants/contracts';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
 /**
@@ -60,8 +58,12 @@ export const getTokenById = async (
     const { id } = request.params as { id: string };
 
     try {
-        const token = await Token.findById(id);
-
+        // Use the cached tokens from fastify instance
+        const { tokens } = request.server;
+        
+        // Find the token in the cached array
+        const token = tokens.find((tokenItem: IToken) => tokenItem.id.toString() === id);
+        
         if (!token) {
             return await returnErrorResponse(reply, 404, 'Token not found');
         }
@@ -174,11 +176,10 @@ async function mintToken(
         nonce,
         gasPrice: adjustedGasPrice,
     });
-    const result: ethers.ContractReceipt = await tx.wait();
-
+    
     return {
         tokenAddress,
-        txHash: result.transactionHash,
+        txHash: tx.hash,
     };
 }
 
@@ -188,18 +189,31 @@ async function mintToken(
  * @param recipientAddress - The address to receive the minted tokens
  * @returns A promise that resolves to an array of MintResult objects
  */
-export async function issueTokensCore(recipientAddress: string): Promise<MintResult[]> {
+export async function issueTokensCore(
+    recipientAddress: string,
+    fastify: FastifyInstance
+): Promise<MintResult[]> {
     const amount: string = '1000';
-    const network = await getNetworkConfig();
+    const { networkConfig, tokens } = fastify;
+    
+    // Create provider using network config from decorator
     const provider: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(
-        network.rpc,
+        networkConfig.rpc
     );
     const signer: ethers.Wallet = new ethers.Wallet(SIGNING_KEY!, provider);
-    const tokenAddresses: string[] = [USDT_ADDRESS, WETH_ADDRESS];
+
+    // Get tokens for the current chain from the decorator
+    const chainTokens = tokens.filter(token => token.chain_id === networkConfig.chain_id);
+    const tokenAddresses: string[] = chainTokens.map(token => token.address);
+
+    if (tokenAddresses.length === 0) {
+        throw new Error(`No tokens found for chain ${networkConfig.chain_id}`);
+    }
 
     // Get the current nonce for the signer
     const currentNonce: number = await provider.getTransactionCount(signer.address);
-    console.log(`Current Nonce: ${currentNonce}`)
+    console.log(`Current Nonce: ${currentNonce}`);
+    console.log(`Minting tokens on chain ${networkConfig.chain_id} for tokens:`, tokenAddresses);
 
     const mintPromises: Promise<MintResult>[] = tokenAddresses.map((tokenAddress, index) =>
         mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index),
@@ -224,7 +238,7 @@ export const issueTokensHandler = async (
     const { address }: { address: string } = request.body;
 
     try {
-        const results = await issueTokensCore(address);
+        const results = await issueTokensCore(address, request.server);
 
         return await reply.status(201).send({
             message: 'Tokens minted successfully',
@@ -232,6 +246,9 @@ export const issueTokensHandler = async (
         });
     } catch (error) {
         console.error('Error minting tokens:', error);
+        if (error instanceof Error) {
+            return returnErrorResponse(reply, 400, 'Bad Request', error.message);
+        }
         return returnErrorResponse(reply, 400, 'Bad Request');
     }
 };
