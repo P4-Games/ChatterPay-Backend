@@ -7,7 +7,6 @@ import {
     deleteTransaction,
     getAllTransactions,
     getTransactionById,
-    listenTransactions,
     checkTransactionStatus,
 } from '../controllers/transactionController';
 
@@ -58,12 +57,6 @@ const transactionRoutes = async (fastify: FastifyInstance): Promise<void> => {
      * @route POST /make_transaction/
      */
     fastify.post('/make_transaction/', makeTransaction);
-
-    /**
-     * Route to listen for transactions
-     * @route POST /listen_transactions/
-     */
-    fastify.post('/listen_transactions/', listenTransactions);
 };
 
 export default transactionRoutes;

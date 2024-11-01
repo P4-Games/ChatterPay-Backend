@@ -1,28 +1,27 @@
 import { ethers } from 'ethers';
+import { FastifyInstance } from 'fastify';
 
 import entryPoint from '../utils/entryPoint.json';
 import { getBlockchain } from './blockchainService';
-import { getNetworkConfig } from './networkService';
 import { generatePrivateKey } from '../utils/keyGenerator';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { setupERC20, setupContracts } from './contractSetupService';
-import { signUserOperation, createUserOperation, ensurePaymasterHasPrefund } from './userOperationService';
+import {
+    addPaymasterData,
+    ensurePaymasterHasPrefund
+} from './paymasterService';
+import { 
+    signUserOperation, 
+    createTransferCallData, 
+    createGenericUserOperation,
+} from './userOperationService';
 
 /**
  * Sends a user operation for token transfer.
- *
- * @param from - The sender's address.
- * @param fromNumber - The sender's phone number.
- * @param to - The recipient's address.
- * @param tokenAddress - The address of the token to transfer.
- * @param amount - The amount of tokens to transfer.
- * @param chain_id - The chain ID (default is 534351 for Scroll).
- * @returns A promise that resolves to an object containing the transaction hash.
- * @throws Error if there's an issue during the process.
  */
 export async function sendUserOperation(
-    from: string,
+    fastify: FastifyInstance,
     fromNumber: string,
     to: string,
     tokenAddress: string,
@@ -37,7 +36,8 @@ export async function sendUserOperation(
         }
 
         const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
-        const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } = await setupContracts(blockchain, privateKey, fromNumber);
+        const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } = 
+            await setupContracts(blockchain, privateKey, fromNumber);
         const erc20 = await setupERC20(tokenAddress, signer);
         console.log("Contracts and signers set up");
 
@@ -46,8 +46,7 @@ export async function sendUserOperation(
         await ensureSignerHasEth(signer, backendSigner, provider);
         console.log("Signer has enough ETH");
 
-        console.log("Getting network config");
-        const networkConfig = await getNetworkConfig();
+        const { networkConfig } = fastify;
         const entrypoint = new ethers.Contract(networkConfig.contracts.entryPoint, entryPoint, backendSigner);
         
         await ensurePaymasterHasPrefund(entrypoint, networkConfig.contracts.paymasterAddress!)
@@ -57,23 +56,40 @@ export async function sendUserOperation(
             throw new Error(`Account ${proxy.proxyAddress} does not exist. Cannot proceed with transfer.`);
         }
 
-        console.log("Creating user op");
-        let userOperation = await createUserOperation(
-            entrypoint,
-            chatterPay,
-            erc20,
-            to,
-            amount,
+        // Create transfer-specific call data
+        const callData = createTransferCallData(chatterPay, erc20, to, amount);
+
+        // Get the nonce
+        const nonce = await entrypoint.getNonce(proxy.proxyAddress, 0);
+        console.log("Nonce:", nonce.toString());
+
+        // Create the base user operation
+        let userOperation = await createGenericUserOperation(
+            callData,
             proxy.proxyAddress,
+            nonce
+        );
+        
+        // Add paymaster data
+        userOperation = await addPaymasterData(
+            userOperation,
             networkConfig.contracts.paymasterAddress!,
             backendSigner
         );
         
-        console.log("Signing user op");
-        userOperation = await signUserOperation(userOperation, networkConfig.contracts.entryPoint, signer);
+        // Sign the user operation
+        userOperation = await signUserOperation(
+            userOperation, 
+            networkConfig.contracts.entryPoint, 
+            signer
+        );
 
         console.log("Sending user operation to bundler");
-        const bundlerResponse = await sendUserOperationToBundler(bundlerUrl, userOperation, entrypoint.address);
+        const bundlerResponse = await sendUserOperationToBundler(
+            bundlerUrl, 
+            userOperation, 
+            entrypoint.address
+        );
         console.log("Bundler response:", bundlerResponse);
 
         console.log("Waiting for transaction to be mined...");
@@ -95,12 +111,7 @@ export async function sendUserOperation(
 }
 
 /**
- * Checks if the account has sufficient balance for the transfer.
- *  
- * @param erc20 - The ERC20 token contract instance.
- * @param proxyAddress - The proxy address to check the balance for.
- * @param amount - The amount to check against.
- * @throws Error if the balance is insufficient.
+ * Helper function to check if the account has sufficient balance for the transfer.
  */
 async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount: string) {
     console.log("ERC20 ADDRESS", erc20.address)
@@ -116,11 +127,7 @@ async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount
 }
 
 /**
- * Ensures that the signer has enough ETH for gas fees.
- *
- * @param signer - The signer wallet.
- * @param backendSigner - The backend signer wallet.
- * @param provider - The Ethereum provider.
+ * Helper function to ensure the signer has enough ETH for gas fees.
  */
 export async function ensureSignerHasEth(
     signer: ethers.Wallet,

@@ -1,178 +1,211 @@
 import axios from 'axios';
+import { FastifyInstance } from 'fastify';
 import { ethers, BigNumber } from 'ethers';
 
-import { getNetworkConfig } from './networkService';
-import { USDT_ADDRESS, WETH_ADDRESS, networkChainIds } from '../constants/contracts';
-
-/** URLs and API Keys */
-const SCROLL_TESTNET_API = 'https://api-sepolia.scrollscan.com/api';
-const SEPOLIA_API = 'https://api-sepolia.etherscan.io/api';
-
-const WALLETS_TO_MONITOR: string[] = ['WALLET1', 'WALLET2', 'WALLET3'];
-
-/** Ethereum Provider */
-const provider: ethers.providers.Provider = new ethers.providers.JsonRpcProvider(
-    'URL_DEL_PROVEEDOR',
-);
-
-/** Represents the wallet balances */
+/** Type definitions */
 interface WalletBalance {
     eth: BigNumber;
-    usdt: BigNumber;
-    usdc: BigNumber;
+    tokenBalances: Map<string, BigNumber>;
 }
 
-/** Map to store the last known balance */
-const lastKnownBalances: Map<string, WalletBalance> = new Map();
-
-/** Represents a deposit */
 interface DepositTransaction {
     hash: string;
     value: BigNumber;
     url: string;
 }
 
+interface TokenBalance {
+    token: string;
+    current: BigNumber;
+    last: BigNumber;
+    formatter: (val: BigNumber) => string;
+}
+
+interface NetworkScanConfig {
+    apiUrl: string;
+    apiKey: string;
+    explorer: string;
+}
+
+/** Map to store the last known balance */
+const lastKnownBalances: Map<string, WalletBalance> = new Map();
+
 /**
- * Obtains ERC20 balance of an address
- * @param tokenAddress - Contract address of the token
- * @param walletAddress - User wallet address
- * @returns Token balance as a BigNumber
+ * Gets the network scan configuration based on chain ID
  */
-async function getTokenBalance(tokenAddress: string, walletAddress: string): Promise<BigNumber> {
-    const tokenContract = new ethers.Contract(
-        tokenAddress,
-        ['function balanceOf(address) view returns (uint256)'],
-        provider,
-    );
-    return tokenContract.balanceOf(walletAddress);
+function getNetworkScanConfig(chainId: number): NetworkScanConfig {
+    switch (chainId) {
+        case 534351: // Scroll Sepolia
+            return {
+                apiUrl: 'https://api-sepolia.scrollscan.com/api',
+                apiKey: process.env.SCROLL_SCAN_API_KEY || '',
+                explorer: 'https://sepolia.scrollscan.com',
+            };
+        case 11155111: // Ethereum Sepolia
+            return {
+                apiUrl: 'https://api-sepolia.etherscan.io/api',
+                apiKey: process.env.ETHERSCAN_API_KEY || '',
+                explorer: 'https://sepolia.etherscan.io',
+            };
+        default:
+            throw new Error(`Unsupported chain ID: ${chainId}`);
+    }
 }
 
 /**
- * Verifies the balances and deposits for all the tracked wallets
+ * Gets ERC20 balance of an address
  */
-async function checkBalancesAndDeposits(): Promise<void> {
-    console.log('Verificando balances y depósitos...');
+async function getTokenBalance(
+    tokenAddress: string,
+    walletAddress: string,
+    provider: ethers.providers.Provider
+): Promise<BigNumber> {
+    try {
+        const tokenContract = new ethers.Contract(
+            tokenAddress,
+            ['function balanceOf(address) view returns (uint256)'],
+            provider
+        );
+        const balance = await tokenContract.balanceOf(walletAddress);
+        
+        return balance;
+    } catch (error) {
+        console.error(`Error getting balance for token ${tokenAddress}:`, error);
+        return BigNumber.from(0);
+    }
+}
 
-    const balanceChecks = WALLETS_TO_MONITOR.map(async (wallet) => {
-        try {
-            const ethBalance = await provider.getBalance(wallet);
-            const usdtBalance = await getTokenBalance(USDT_ADDRESS, wallet);
-            const usdcBalance = await getTokenBalance(WETH_ADDRESS, wallet);
+/**
+ * Process balance changes for a wallet
+ */
+async function processBalanceChanges(
+    wallet: string,
+    balanceChanges: TokenBalance[],
+    fastify: FastifyInstance
+): Promise<void> {
+    const changedBalances = balanceChanges.filter(({ current, last }) => current.gt(last));
 
-            const lastBalance = lastKnownBalances.get(wallet) || {
-                eth: BigNumber.from(0),
-                usdt: BigNumber.from(0),
-                usdc: BigNumber.from(0),
-            };
-
-            const balanceChanges = [
-                {
-                    token: 'ETH',
-                    current: ethBalance,
-                    last: lastBalance.eth,
-                    formatter: ethers.utils.formatEther,
-                },
-                {
-                    token: 'USDT',
-                    current: usdtBalance,
-                    last: lastBalance.usdt,
-                    formatter: (val: BigNumber) => ethers.utils.formatUnits(val, 6),
-                },
-                {
-                    token: 'USDC',
-                    current: usdcBalance,
-                    last: lastBalance.usdc,
-                    formatter: (val: BigNumber) => ethers.utils.formatUnits(val, 6),
-                },
-            ];
-
-            const changedBalances = balanceChanges.filter(({ current, last }) => current.gt(last));
-
-            const depositChecks = changedBalances.map(
-                async ({ token, current, last, formatter }) => {
-                    const deposit = current.sub(last);
-                    console.log(
-                        `Detectado cambio en balance de ${token} - Nuevo balance: ${formatter(current)} ${token}`,
-                    );
-
-                    if (token === 'ETH') {
-                        const depositTxs = await findApproximateDepositTransactions(
-                            wallet,
-                            deposit,
-                        );
-                        if (depositTxs.length > 0) {
-                            console.log(`Depósitos aproximados encontrados:`);
-                            depositTxs.forEach((tx) => {
-                                console.log(`- ${ethers.utils.formatEther(tx.value)} ETH`);
-                                console.log(`  Hash: ${tx.hash}`);
-                                console.log(`  URL: ${tx.url}`);
-                            });
-                        }
-                    }
-                },
+    await Promise.all(
+        changedBalances.map(async ({ token, current, last, formatter }) => {
+            const deposit = current.sub(last);
+            console.log(
+                `Detected ${token} balance change - New balance: ${formatter(current)} ${token}`
             );
 
-            await Promise.all(depositChecks);
-
-            lastKnownBalances.set(wallet, {
-                eth: ethBalance,
-                usdt: usdtBalance,
-                usdc: usdcBalance,
-            });
-        } catch (error) {
-            console.error(`Error al verificar el balance de ${wallet}:`, error);
-        }
-    });
-
-    await Promise.all(balanceChecks);
+            if (token === 'ETH') {
+                const depositTxs = await findApproximateDepositTransactions(
+                    wallet,
+                    deposit,
+                    fastify
+                );
+                if (depositTxs.length > 0) {
+                    console.log('Approximate deposits found:');
+                    depositTxs.forEach((tx) => {
+                        console.log(`- ${ethers.utils.formatEther(tx.value)} ETH`);
+                        console.log(`  Hash: ${tx.hash}`);
+                        console.log(`  URL: ${tx.url}`);
+                    });
+                }
+            }
+        })
+    );
 }
 
 /**
- * Search for transactions in two networks
- * @param wallet - Wallet address
- * @param depositAmount - Deposit amount
- * @returns Approximate deposit transactions array
+ * Checks balances and deposits for a specific wallet
+ */
+async function checkWalletBalances(
+    wallet: string,
+    fastify: FastifyInstance
+): Promise<void> {
+    const { networkConfig, tokens } = fastify;
+    const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
+
+    try {
+        // Get ETH balance
+        const ethBalance = await provider.getBalance(wallet);
+
+        // Get token balances
+        const tokenBalances = new Map<string, BigNumber>();
+        await Promise.all(
+            tokens
+                .filter(token => token.chain_id === networkConfig.chain_id)
+                .map(async (token) => {
+                    const balance = await getTokenBalance(token.address, wallet, provider);
+                    tokenBalances.set(token.symbol, balance);
+                })
+        );
+
+        // Get last known balances or initialize with zeros
+        const lastBalance = lastKnownBalances.get(wallet) || {
+            eth: BigNumber.from(0),
+            tokenBalances: new Map<string, BigNumber>()
+        };
+
+        // Create balance changes array
+        const balanceChanges: TokenBalance[] = [
+            {
+                token: 'ETH',
+                current: ethBalance,
+                last: lastBalance.eth,
+                formatter: ethers.utils.formatEther
+            },
+            ...Array.from(tokenBalances.entries()).map(([symbol, balance]) => ({
+                token: symbol,
+                current: balance,
+                last: lastBalance.tokenBalances.get(symbol) || BigNumber.from(0),
+                formatter: (val: BigNumber) => ethers.utils.formatUnits(val, 18)
+            }))
+        ];
+
+        await processBalanceChanges(wallet, balanceChanges, fastify);
+
+        // Update last known balances
+        lastKnownBalances.set(wallet, {
+            eth: ethBalance,
+            tokenBalances
+        });
+    } catch (error) {
+        console.error(`Error checking balance for ${wallet}:`, error);
+    }
+}
+
+/**
+ * Main function to check balances and deposits for all monitored wallets
+ */
+async function checkBalancesAndDeposits(fastify: FastifyInstance): Promise<void> {
+    console.log('Checking balances and deposits...');
+    await Promise.all(WALLETS_TO_MONITOR.map(wallet => checkWalletBalances(wallet, fastify)));
+}
+
+/**
+ * Search for transactions in supported networks
  */
 async function findApproximateDepositTransactions(
     wallet: string,
     depositAmount: BigNumber,
+    fastify: FastifyInstance
 ): Promise<DepositTransaction[]> {
-    const networkConfigScroll = await getNetworkConfig(networkChainIds.scroll);
-    const networkConfiEtjereum = await getNetworkConfig(networkChainIds.ethereum);
-
-    let depositTxs = await findApproximateDepositTransactionsOnNetwork(
+    const { networkConfig } = fastify;
+    const scanConfig = getNetworkScanConfig(networkConfig.chain_id);
+    
+    return findApproximateDepositTransactionsOnNetwork(
         wallet,
         depositAmount,
-        SCROLL_TESTNET_API,
-        networkConfigScroll.scan_apikey,
+        scanConfig
     );
-    if (depositTxs.length === 0) {
-        depositTxs = await findApproximateDepositTransactionsOnNetwork(
-            wallet,
-            depositAmount,
-            SEPOLIA_API,
-            networkConfiEtjereum.scan_apikey,
-        );
-    }
-    return depositTxs;
 }
 
 /**
- * Search for deposit transactions in a specified network.
- * @param wallet - Wallet address
- * @param depositAmount - Deposit amount
- * @param apiUrl - API URL
- * @param apiKey - API KEY
- * @returns Approximate deposit transactions array
+ * Search for deposit transactions in a specified network
  */
 async function findApproximateDepositTransactionsOnNetwork(
     wallet: string,
     depositAmount: BigNumber,
-    apiUrl: string,
-    apiKey: string,
+    scanConfig: NetworkScanConfig
 ): Promise<DepositTransaction[]> {
     try {
-        const response = await axios.get(apiUrl, {
+        const response = await axios.get(scanConfig.apiUrl, {
             params: {
                 module: 'account',
                 action: 'txlist',
@@ -180,12 +213,12 @@ async function findApproximateDepositTransactionsOnNetwork(
                 startblock: 0,
                 endblock: 99999999,
                 sort: 'desc',
-                apikey: apiKey,
+                apikey: scanConfig.apiKey,
             },
         });
 
         if (response.data.status === '1' && response.data.result.length > 0) {
-            const oneHourAgo = Date.now() - 3600000; // 1 hora en milisegundos
+            const oneHourAgo = Date.now() - 3600000;
             const relevantTxs = response.data.result
                 .filter(
                     (tx: { to: string; timeStamp: string; value: string }) =>
@@ -196,24 +229,15 @@ async function findApproximateDepositTransactionsOnNetwork(
                 .map((tx: { hash: string; value: string }) => ({
                     hash: tx.hash,
                     value: BigNumber.from(tx.value),
-                    url: apiUrl.includes('scrollscan')
-                        ? `https://sepolia.scrollscan.com/tx/${tx.hash}`
-                        : `https://sepolia.etherscan.io/tx/${tx.hash}`,
+                    url: `${scanConfig.explorer}/tx/${tx.hash}`,
                 }));
 
             return relevantTxs.reduce(
-                (
-                    matchingTxs: DepositTransaction[],
-                    tx: {
-                        value: {
-                            lte: (arg0: ethers.BigNumber) => unknown;
-                            gt: (arg0: ethers.BigNumber) => unknown;
-                        };
-                    },
-                ) => {
+                (matchingTxs: DepositTransaction[], tx: DepositTransaction) => {
                     const remainingAmount = depositAmount.sub(
                         matchingTxs.reduce((sum, mtx) => sum.add(mtx.value), BigNumber.from(0)),
                     );
+                    
                     if (remainingAmount.lte(0)) return matchingTxs;
 
                     if (
@@ -229,10 +253,10 @@ async function findApproximateDepositTransactionsOnNetwork(
             );
         }
 
-        console.log(`No se encontraron transacciones de depósito aproximadas en la red.`);
+        console.log(`No approximate deposit transactions found in the network.`);
         return [];
     } catch (error) {
-        console.error('Error al buscar las transacciones de depósito:', error);
+        console.error('Error searching for deposit transactions:', error);
         return [];
     }
 }
