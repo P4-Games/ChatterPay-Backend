@@ -14,7 +14,11 @@ import { computeProxyAddressFromPhone } from './predictWalletService';
  * @returns An object containing the setup contracts and providers.
  * @throws Error if the chain ID is unsupported or the bundler URL is invalid.
  */
-export async function setupContracts(blockchain: IBlockchain, privateKey: string, fromNumber: string) {
+export async function setupContracts(
+    blockchain: IBlockchain,
+    privateKey: string,
+    fromNumber: string,
+) {
     const bundlerUrl = getBundlerUrl(blockchain.chain_id);
     if (!bundlerUrl) {
         throw new Error(`Unsupported chain ID: ${blockchain.chain_id}`);
@@ -45,12 +49,16 @@ export async function setupContracts(blockchain: IBlockchain, privateKey: string
  * @returns An ethers.Contract instance for the ERC20 token.
  */
 export async function setupERC20(tokenAddress: string, signer: ethers.Wallet) {
-    return new ethers.Contract(tokenAddress, [
-        'function transfer(address to, uint256 amount) returns (bool)',
-        'function balanceOf(address owner) view returns (uint256)',
-        'function approve(address spender, uint256 amount) returns (bool)',
-        'function allowance(address owner, address spender) view returns (uint256)',
-        'function decimals() view returns (uint8)',
-        'function symbol() view returns (string)'
-    ], signer);
+    return new ethers.Contract(
+        tokenAddress,
+        [
+            'function transfer(address to, uint256 amount) returns (bool)',
+            'function balanceOf(address owner) view returns (uint256)',
+            'function approve(address spender, uint256 amount) returns (bool)',
+            'function allowance(address owner, address spender) view returns (uint256)',
+            'function decimals() view returns (uint8)',
+            'function symbol() view returns (string)',
+        ],
+        signer,
+    );
 }

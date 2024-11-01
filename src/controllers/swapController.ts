@@ -26,16 +26,16 @@ interface TokenAddresses {
 function getTokenAddresses(
     fastify: FastifyInstance,
     inputCurrency: string,
-    outputCurrency: string
+    outputCurrency: string,
 ): TokenAddresses {
     const { tokens, networkConfig } = fastify;
-    const chainTokens = tokens.filter(token => token.chain_id === networkConfig.chain_id);
+    const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chain_id);
 
     const inputToken = chainTokens.find(
-        t => t.symbol.toLowerCase() === inputCurrency.toLowerCase()
+        (t) => t.symbol.toLowerCase() === inputCurrency.toLowerCase(),
     );
     const outputToken = chainTokens.find(
-        t => t.symbol.toLowerCase() === outputCurrency.toLowerCase()
+        (t) => t.symbol.toLowerCase() === outputCurrency.toLowerCase(),
     );
 
     if (!inputToken || !outputToken) {
@@ -44,17 +44,14 @@ function getTokenAddresses(
 
     return {
         input: inputToken.address,
-        output: outputToken.address
+        output: outputToken.address,
     };
 }
 
 /**
  * Validates the input for the swap operation.
  */
-const validateInputs = async (
-    inputs: SwapBody,
-    fastify: FastifyInstance
-): Promise<string> => {
+const validateInputs = async (inputs: SwapBody, fastify: FastifyInstance): Promise<string> => {
     const { channel_user_id, inputCurrency, outputCurrency, amount } = inputs;
 
     if (!channel_user_id || !inputCurrency || !outputCurrency) {
@@ -137,9 +134,8 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
             tokenAddresses,
             amount.toString(),
             request.server.networkConfig.chain_id,
-            isWETHtoUSDT
+            isWETHtoUSDT,
         );
-
 
         const { networkConfig } = request.server;
         const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
@@ -149,7 +145,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
         const outputToken = new ethers.Contract(
             tokenAddresses.output,
             ['function balanceOf(address owner) view returns (uint256)'],
-            backendSigner
+            backendSigner,
         );
 
         const { proxyAddress } = await computeProxyAddressFromPhone(channel_user_id);

@@ -1,4 +1,4 @@
-import { ethers } from "ethers";
+import { ethers } from 'ethers';
 
 /**
  * Returns a valid public Bundler RPC URL from Stackup given a chain id

@@ -1,4 +1,4 @@
-import { ethers } from "ethers";
+import { ethers } from 'ethers';
 
 export interface UserOperationReceiptData {
     transactionHash: string;
@@ -17,7 +17,7 @@ export interface UserOperationReceiptData {
     }>;
     logsBloom: string;
     status: string;
-} 
+}
 
 export interface UserOperationReceipt {
     userOpHash: string;
@@ -41,12 +41,13 @@ export async function waitForUserOperationReceipt(
     provider: ethers.providers.JsonRpcProvider,
     userOpHash: string,
     timeout = 60000,
-    interval = 5000
+    interval = 5000,
 ): Promise<UserOperationReceipt> {
     return new Promise((resolve, reject) => {
         const startTime = Date.now();
         const checkReceipt = () => {
-            provider.send('eth_getUserOperationReceipt', [userOpHash])
+            provider
+                .send('eth_getUserOperationReceipt', [userOpHash])
                 .then((receipt: UserOperationReceipt | null) => {
                     if (receipt) {
                         resolve(receipt);
@@ -56,7 +57,7 @@ export async function waitForUserOperationReceipt(
                         reject(new Error('Timeout waiting for user operation receipt'));
                     }
                 })
-                .catch(error => {
+                .catch((error) => {
                     if (Date.now() - startTime < timeout) {
                         setTimeout(checkReceipt, interval);
                     } else {

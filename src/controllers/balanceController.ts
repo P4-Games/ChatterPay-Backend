@@ -63,20 +63,22 @@ const API_URLs: [Currency, string][] = [
 async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
     try {
         const priceMap = new Map<string, number>();
-        
+
         // USDT is always 1 USD
         priceMap.set('USDT', 1);
-        
+
         // Filter out USDT as we already set its price
-        const symbolsToFetch = symbols.filter(s => s !== 'USDT');
-        
+        const symbolsToFetch = symbols.filter((s) => s !== 'USDT');
+
         if (symbolsToFetch.length === 0) return priceMap;
 
         // Get prices for all symbols against USDT
         const promises = symbolsToFetch.map(async (symbol) => {
             try {
                 symbol = symbol.replace('WETH', 'ETH');
-                const response = await fetch(`https://api.binance.us/api/v3/ticker/price?symbol=${symbol}USDT`);
+                const response = await fetch(
+                    `https://api.binance.us/api/v3/ticker/price?symbol=${symbol}USDT`,
+                );
                 const data = await response.json();
                 if (data.price) {
                     console.log(`Price for ${symbol}: ${data.price} USDT`);
@@ -96,7 +98,7 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
     } catch (error) {
         console.error('Error fetching token prices from Binance:', error);
         // Return a map with 0 prices in case of error, except USDT which is always 1
-        return new Map(symbols.map(symbol => [symbol, symbol === 'USDT' ? 1 : 0]));
+        return new Map(symbols.map((symbol) => [symbol, symbol === 'USDT' ? 1 : 0]));
     }
 }
 
@@ -107,18 +109,18 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
  */
 async function getTokenInfo(fastify: FastifyInstance): Promise<TokenInfo[]> {
     const { tokens, networkConfig } = fastify;
-    const chainTokens = tokens.filter(token => token.chain_id === networkConfig.chain_id);
-    
+    const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chain_id);
+
     // Get all unique symbols
-    const symbols = [...new Set(chainTokens.map(token => token.symbol))];
-    
+    const symbols = [...new Set(chainTokens.map((token) => token.symbol))];
+
     // Fetch current prices from Binance
     const prices = await getTokenPrices(symbols);
-    
-    return chainTokens.map(token => ({
+
+    return chainTokens.map((token) => ({
         symbol: token.symbol,
         address: token.address,
-        rateUSD: prices.get(token.symbol) || 0
+        rateUSD: prices.get(token.symbol) || 0,
     }));
 }
 
@@ -177,9 +179,9 @@ async function getFiatQuotes(): Promise<FiatQuote[]> {
  * @returns Array of token balances
  */
 async function getTokenBalances(
-    signer: ethers.Wallet, 
+    signer: ethers.Wallet,
     address: string,
-    fastify: FastifyInstance
+    fastify: FastifyInstance,
 ): Promise<TokenBalance[]> {
     const tokenInfo = await getTokenInfo(fastify);
     return Promise.all(
@@ -198,9 +200,9 @@ async function getTokenBalances(
  * @returns Array of detailed balance information
  */
 function calculateBalances(
-    tokenBalances: TokenBalance[], 
+    tokenBalances: TokenBalance[],
     fiatQuotes: FiatQuote[],
-    networkName: string
+    networkName: string,
 ): BalanceInfo[] {
     return tokenBalances.map(({ symbol, balance, rateUSD }) => {
         const balanceUSD = parseFloat(balance) * rateUSD;
@@ -235,17 +237,13 @@ function calculateTotals(balances: BalanceInfo[]): Record<Currency, number> {
     );
 }
 
-
 /**
  * Route handler for checking external deposits
  * @param request - Fastify request object
  * @param reply - Fastify reply object
  * @returns Promise resolving to deposits status
  */
-export const checkExternalDeposits = async (
-    request: FastifyRequest, 
-    reply: FastifyReply
-) => {
+export const checkExternalDeposits = async (request: FastifyRequest, reply: FastifyReply) => {
     const depositsStatus = await fetchExternalDeposits();
     return reply.status(200).send({ status: depositsStatus });
 };
@@ -258,9 +256,9 @@ export const checkExternalDeposits = async (
  * @returns Fastify reply with balance information
  */
 async function getAddressBalance(
-    address: string, 
+    address: string,
     reply: FastifyReply,
-    fastify: FastifyInstance
+    fastify: FastifyInstance,
 ): Promise<FastifyReply> {
     const { networkConfig } = fastify;
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
@@ -290,7 +288,7 @@ async function getAddressBalance(
             wallet: address,
         };
 
-        return await returnSuccessResponse(reply, "Wallet balance fetched successfully", response);
+        return await returnSuccessResponse(reply, 'Wallet balance fetched successfully', response);
     } catch (error) {
         console.error('Error fetching wallet balance:', error);
         return returnErrorResponse(reply, 500, 'Internal Server Error');
@@ -318,8 +316,8 @@ export const walletBalance = async (
  * Route handler for getting balance by phone number
  */
 export const balanceByPhoneNumber = async (
-    request: FastifyRequest, 
-    reply: FastifyReply
+    request: FastifyRequest,
+    reply: FastifyReply,
 ): Promise<FastifyReply> => {
     const phone = new URL(`http://localhost:3000/${request.url}`).searchParams.get(
         'channel_user_id',
@@ -327,7 +325,7 @@ export const balanceByPhoneNumber = async (
 
     if (!phone) {
         console.warn('Phone number is required');
-        return returnErrorResponse(reply, 400, "Phone number is required");
+        return returnErrorResponse(reply, 400, 'Phone number is required');
     }
 
     try {
@@ -335,7 +333,7 @@ export const balanceByPhoneNumber = async (
 
         if (!user) {
             console.warn(`User not found for phone number: ${phone}`);
-            return await returnErrorResponse(reply, 404, "User not found");
+            return await returnErrorResponse(reply, 404, 'User not found');
         }
 
         return await getAddressBalance(user.wallet, reply, request.server);
@@ -343,4 +341,4 @@ export const balanceByPhoneNumber = async (
         console.error('Error fetching user balance:', error);
         return returnErrorResponse(reply, 500, 'Internal Server Error');
     }
-}
+};

@@ -32,18 +32,18 @@ const createGasServiceConfig = (
     apiKey: string,
     policyId: string,
     entryPoint: string,
-    network: string = 'arb-sepolia'
+    network: string = 'arb-sepolia',
 ): GasServiceConfig => ({
     apiKey,
     policyId,
     entryPoint,
-    network
+    network,
 });
 
 export async function generateDummySignature(
     userOperation: Partial<PackedUserOperation>,
     entryPointAddress: string,
-    chainId: number
+    chainId: number,
 ): Promise<string> {
     // Crear una versión "dummy" de la UserOperation
     const dummyUserOp: PackedUserOperation = {
@@ -57,7 +57,7 @@ export async function generateDummySignature(
         maxFeePerGas: userOperation.maxFeePerGas || ethers.constants.Zero,
         maxPriorityFeePerGas: userOperation.maxPriorityFeePerGas || ethers.constants.Zero,
         paymasterAndData: userOperation.paymasterAndData ?? '0x',
-        signature: '0x'
+        signature: '0x',
     };
 
     // Calcular el hash de la operación dummy
@@ -68,17 +68,16 @@ export async function generateDummySignature(
     const dummyWallet = ethers.Wallet.createRandom();
     const dummySignature = await dummyWallet.signMessage(ethers.utils.arrayify(userOpHash));
 
-    console.log("Generated dummy signature:", dummySignature);
+    console.log('Generated dummy signature:', dummySignature);
 
     return dummySignature;
 }
-
 
 export async function getPaymasterAndData(
     config: GasServiceConfig,
     userOp: Partial<PackedUserOperation>,
     signer: ethers.Signer,
-    overrides?: GasOverrides
+    overrides?: GasOverrides,
 ): Promise<AlchemyGasResponse> {
     const chainId = await signer.getChainId();
     const dummySignature = await generateDummySignature(userOp, config.entryPoint, chainId);
@@ -104,9 +103,9 @@ export async function getPaymasterAndData(
     };
 
     try {
-        const response = await axios.post(process.env.ARBITRUM_SEPOLIA_RPC_URL ?? "", payload, {
+        const response = await axios.post(process.env.ARBITRUM_SEPOLIA_RPC_URL ?? '', payload, {
             headers: {
-                'accept': 'application/json',
+                accept: 'application/json',
                 'content-type': 'application/json',
             },
         });
@@ -120,13 +119,13 @@ export async function getPaymasterAndData(
         console.error('Error fetching paymaster data:', error);
         throw error;
     }
-};
+}
 
 const applyPaymasterDataToUserOp = async (
     config: GasServiceConfig,
     userOp: Partial<PackedUserOperation>,
     signer: ethers.Signer,
-    overrides?: GasOverrides
+    overrides?: GasOverrides,
 ): Promise<PackedUserOperation> => {
     const gasData = await getPaymasterAndData(config, userOp, signer, overrides);
 

@@ -58,7 +58,7 @@ export const getUserById = async (
         const user = await User.findById(id);
 
         if (!user) {
-            console.warn("User not found");
+            console.warn('User not found');
             return await returnErrorResponse(reply, 404, 'User not found');
         }
 
@@ -85,11 +85,15 @@ export const updateUser = async (
         const updatedUser = await User.findByIdAndUpdate(id, request.body, { new: true });
 
         if (!updatedUser) {
-            console.warn("User not found");
+            console.warn('User not found');
             return await returnErrorResponse(reply, 404, 'User not found');
         }
 
-        return await returnSuccessResponse(reply, 'User updated successfully', updatedUser.toJSON());
+        return await returnSuccessResponse(
+            reply,
+            'User updated successfully',
+            updatedUser.toJSON(),
+        );
     } catch (error) {
         console.error('Error updating user:', error);
         return returnErrorResponse(reply, 400, 'Bad Request');

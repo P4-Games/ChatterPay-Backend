@@ -19,7 +19,11 @@ export interface ErrorResponse {
     timestamp: string;
 }
 
-export function returnSuccessResponse(reply: FastifyReply, message: string, additionalData?: { [key: string]: unknown }) {
+export function returnSuccessResponse(
+    reply: FastifyReply,
+    message: string,
+    additionalData?: { [key: string]: unknown },
+) {
     const response: SuccessResponse = {
         status: 'success',
         data: {
@@ -31,7 +35,12 @@ export function returnSuccessResponse(reply: FastifyReply, message: string, addi
     return reply.status(200).send(response);
 }
 
-export function returnErrorResponse(reply: FastifyReply, code: number, message: string, details?: string) {
+export function returnErrorResponse(
+    reply: FastifyReply,
+    code: number,
+    message: string,
+    details?: string,
+) {
     const response: ErrorResponse = {
         status: 'error',
         data: {

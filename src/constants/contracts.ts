@@ -1,4 +1,4 @@
-import { GCP_BUCKET_BASE_URL } from "./environment";
+import { GCP_BUCKET_BASE_URL } from './environment';
 
 /**
  * These are the demo token contracts used for testing purposes in Scroll Sepolia

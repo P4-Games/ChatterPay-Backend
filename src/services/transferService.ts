@@ -7,13 +7,10 @@ import { generatePrivateKey } from '../utils/keyGenerator';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { setupERC20, setupContracts } from './contractSetupService';
+import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
 import {
-    addPaymasterData,
-    ensurePaymasterHasPrefund
-} from './paymasterService';
-import { 
-    signUserOperation, 
-    createTransferCallData, 
+    signUserOperation,
+    createTransferCallData,
     createGenericUserOperation,
 } from './userOperationService';
 
@@ -26,8 +23,8 @@ export async function sendUserOperation(
     to: string,
     tokenAddress: string,
     amount: string,
-    chain_id: number
-): Promise<{ transactionHash: string; }> {
+    chain_id: number,
+): Promise<{ transactionHash: string }> {
     try {
         const blockchain = await getBlockchain(chain_id);
         const seedPrivateKey = process.env.PRIVATE_KEY;
@@ -36,24 +33,30 @@ export async function sendUserOperation(
         }
 
         const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
-        const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } = 
+        const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } =
             await setupContracts(blockchain, privateKey, fromNumber);
         const erc20 = await setupERC20(tokenAddress, signer);
-        console.log("Contracts and signers set up");
+        console.log('Contracts and signers set up');
 
         await checkBalance(erc20, proxy.proxyAddress, amount);
-        console.log("Balance check passed");
+        console.log('Balance check passed');
         await ensureSignerHasEth(signer, backendSigner, provider);
-        console.log("Signer has enough ETH");
+        console.log('Signer has enough ETH');
 
         const { networkConfig } = fastify;
-        const entrypoint = new ethers.Contract(networkConfig.contracts.entryPoint, entryPoint, backendSigner);
-        
-        await ensurePaymasterHasPrefund(entrypoint, networkConfig.contracts.paymasterAddress!)
+        const entrypoint = new ethers.Contract(
+            networkConfig.contracts.entryPoint,
+            entryPoint,
+            backendSigner,
+        );
 
-        console.log("Validating account");
+        await ensurePaymasterHasPrefund(entrypoint, networkConfig.contracts.paymasterAddress!);
+
+        console.log('Validating account');
         if (!accountExists) {
-            throw new Error(`Account ${proxy.proxyAddress} does not exist. Cannot proceed with transfer.`);
+            throw new Error(
+                `Account ${proxy.proxyAddress} does not exist. Cannot proceed with transfer.`,
+            );
         }
 
         // Create transfer-specific call data
@@ -61,51 +64,47 @@ export async function sendUserOperation(
 
         // Get the nonce
         const nonce = await entrypoint.getNonce(proxy.proxyAddress, 0);
-        console.log("Nonce:", nonce.toString());
+        console.log('Nonce:', nonce.toString());
 
         // Create the base user operation
-        let userOperation = await createGenericUserOperation(
-            callData,
-            proxy.proxyAddress,
-            nonce
-        );
-        
+        let userOperation = await createGenericUserOperation(callData, proxy.proxyAddress, nonce);
+
         // Add paymaster data
         userOperation = await addPaymasterData(
             userOperation,
             networkConfig.contracts.paymasterAddress!,
-            backendSigner
+            backendSigner,
         );
-        
+
         // Sign the user operation
         userOperation = await signUserOperation(
-            userOperation, 
-            networkConfig.contracts.entryPoint, 
-            signer
+            userOperation,
+            networkConfig.contracts.entryPoint,
+            signer,
         );
 
-        console.log("Sending user operation to bundler");
+        console.log('Sending user operation to bundler');
         const bundlerResponse = await sendUserOperationToBundler(
-            bundlerUrl, 
-            userOperation, 
-            entrypoint.address
+            bundlerUrl,
+            userOperation,
+            entrypoint.address,
         );
-        console.log("Bundler response:", bundlerResponse);
+        console.log('Bundler response:', bundlerResponse);
 
-        console.log("Waiting for transaction to be mined...");
+        console.log('Waiting for transaction to be mined...');
         const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
-        console.log("Transaction receipt:", JSON.stringify(receipt, null, 2));
+        console.log('Transaction receipt:', JSON.stringify(receipt, null, 2));
 
         if (!receipt?.success) {
-            throw new Error("Transaction failed or not found");
+            throw new Error('Transaction failed or not found');
         }
 
-        console.log("Transaction confirmed in block:", receipt.receipt.blockNumber);
+        console.log('Transaction confirmed in block:', receipt.receipt.blockNumber);
 
         return { transactionHash: receipt.receipt.transactionHash };
     } catch (error) {
-        console.error("Error in sendUserOperation:", error);
-        console.log("Full error object:", JSON.stringify(error, null, 2));
+        console.error('Error in sendUserOperation:', error);
+        console.log('Full error object:', JSON.stringify(error, null, 2));
         throw error;
     }
 }
@@ -114,11 +113,13 @@ export async function sendUserOperation(
  * Helper function to check if the account has sufficient balance for the transfer.
  */
 export async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount: string) {
-    console.log("ERC20 ADDRESS", erc20.address)
+    console.log('ERC20 ADDRESS', erc20.address);
     console.log(`Checking balance for ${proxyAddress}...`);
     const amount_bn = ethers.utils.parseUnits(amount, 18);
     const balanceCheck = await erc20.balanceOf(proxyAddress);
-    console.log(`Checking balance for ${proxyAddress}: ${ethers.utils.formatUnits(balanceCheck, 18)}`);
+    console.log(
+        `Checking balance for ${proxyAddress}: ${ethers.utils.formatUnits(balanceCheck, 18)}`,
+    );
     if (balanceCheck.lt(amount_bn)) {
         throw new Error(
             `Insufficient balance. Required: ${amount}, Available: ${ethers.utils.formatUnits(balanceCheck, 18)}`,

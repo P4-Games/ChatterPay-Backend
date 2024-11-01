@@ -60,10 +60,10 @@ export const getTokenById = async (
     try {
         // Use the cached tokens from fastify instance
         const { tokens } = request.server;
-        
+
         // Find the token in the cached array
         const token = tokens.find((tokenItem: IToken) => tokenItem.id.toString() === id);
-        
+
         if (!token) {
             return await returnErrorResponse(reply, 404, 'Token not found');
         }
@@ -94,7 +94,11 @@ export const updateToken = async (
             return await returnErrorResponse(reply, 404, 'Token not found');
         }
 
-        return await returnSuccessResponse(reply, 'Token updated successfully', updatedToken.toJSON());
+        return await returnSuccessResponse(
+            reply,
+            'Token updated successfully',
+            updatedToken.toJSON(),
+        );
     } catch (error) {
         console.error('Error updating token:', error);
         return returnErrorResponse(reply, 400, 'Failed to update token');
@@ -176,7 +180,7 @@ async function mintToken(
         nonce,
         gasPrice: adjustedGasPrice,
     });
-    
+
     return {
         tokenAddress,
         txHash: tx.hash,
@@ -191,20 +195,20 @@ async function mintToken(
  */
 export async function issueTokensCore(
     recipientAddress: string,
-    fastify: FastifyInstance
+    fastify: FastifyInstance,
 ): Promise<MintResult[]> {
     const amount: string = '1000';
     const { networkConfig, tokens } = fastify;
-    
+
     // Create provider using network config from decorator
     const provider: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(
-        networkConfig.rpc
+        networkConfig.rpc,
     );
     const signer: ethers.Wallet = new ethers.Wallet(SIGNING_KEY!, provider);
 
     // Get tokens for the current chain from the decorator
-    const chainTokens = tokens.filter(token => token.chain_id === networkConfig.chain_id);
-    const tokenAddresses: string[] = chainTokens.map(token => token.address);
+    const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chain_id);
+    const tokenAddresses: string[] = chainTokens.map((token) => token.address);
 
     if (tokenAddresses.length === 0) {
         throw new Error(`No tokens found for chain ${networkConfig.chain_id}`);
