@@ -322,24 +322,3 @@ export const makeTransaction = async (
         return returnErrorResponse(reply, 400, 'Error making transaction', (error as Error).message);
     }
 };
-
-/**
- * Handles the listen transactions request.
- */
-export const listenTransactions = async (
-    request: FastifyRequest<{
-        Body: {
-            address: string;
-        };
-    }>,
-    reply: FastifyReply,
-) => {
-    try {
-        const { address } = request.body;
-        // TODO: Use transaction service
-        return await returnSuccessResponse(reply, `Listening transactions for: ${address}`);
-    } catch (error) {
-        console.error('Error listening transactions:', error);
-        return returnErrorResponse(reply, 400, 'Bad Request');
-    }
-};
