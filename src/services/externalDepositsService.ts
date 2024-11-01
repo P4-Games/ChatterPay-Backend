@@ -4,6 +4,7 @@ import { User } from '../models/user';
 import Transaction from '../models/transaction';
 import { LastProcessedBlock } from '../models/lastProcessedBlock';
 import { sendTransferNotification } from '../controllers/replyController';
+import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
 
 /**
  * The GraphQL API URLs for querying external deposits.
@@ -73,11 +74,12 @@ export async function fetchExternalDeposits() {
       request<{ transfers: Transfer[] }>(GRAPH_API_URL_WETH, QUERY_EXTERNAL_DEPOSITS, variables)
     ]);
 
-    // Combine and filter out internal transfers
+    // Combine and filter out internal transfers and SimpleSwap transfers
     const allTransfers = [...dataUSDT.transfers.map(t => ({ ...t, token: 'USDT' })), 
                           ...dataWETH.transfers.map(t => ({ ...t, token: 'WETH' }))];
     const externalDeposits = allTransfers.filter(
-      transfer => !ecosystemAddresses.includes(transfer.from.toLowerCase())
+      transfer => !ecosystemAddresses.includes(transfer.from.toLowerCase()) && 
+                 transfer.from.toLowerCase() !== SIMPLE_SWAP_ADDRESS.toLowerCase()
     );
 
     // Process each external deposit
