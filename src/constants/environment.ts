@@ -17,7 +17,7 @@ const {
     NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
     GCP_BUCKET_BASE_URL,
     FRONTEND_TOKEN,
-    CHATIZALO_TOKEN
+    CHATIZALO_TOKEN,
 } = process.env;
 
 export {
@@ -31,7 +31,7 @@ export {
     FRONTEND_TOKEN,
     ICP_CANISTER_ID,
     CHATIZALO_TOKEN,
-    GCP_BUCKET_BASE_URL
+    GCP_BUCKET_BASE_URL,
 };
 
 export const PORT = Number(envPort) || 3000;

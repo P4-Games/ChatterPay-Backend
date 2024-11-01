@@ -11,10 +11,10 @@ export type TokenResponse = 'frontend' | 'chatizalo' | null;
  * @returns {Promise<TokenResponse>} The type of token if verified, or null if not
  */
 export async function verifyToken(providedToken: string): Promise<TokenResponse> {
-  let res: TokenResponse = null;
+    let res: TokenResponse = null;
 
-  if (providedToken === FRONTEND_TOKEN) res = 'frontend';
-  if (providedToken === CHATIZALO_TOKEN) res = 'chatizalo';
+    if (providedToken === FRONTEND_TOKEN) res = 'frontend';
+    if (providedToken === CHATIZALO_TOKEN) res = 'chatizalo';
 
-  return res;
+    return res;
 }

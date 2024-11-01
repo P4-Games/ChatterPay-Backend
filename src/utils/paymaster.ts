@@ -12,7 +12,7 @@ export async function createPaymasterAndData(
     paymasterAddress: string,
     proxyAddress: string,
     backendSigner: ethers.Signer,
-    validityDurationSeconds: number = 3600 // 1 hour default
+    validityDurationSeconds: number = 3600, // 1 hour default
 ): Promise<string> {
     // Get current timestamp and add validity duration
     const currentTimestamp = Math.floor(Date.now() / 1000); // Current time in seconds
@@ -21,7 +21,7 @@ export async function createPaymasterAndData(
     // Create message hash (proxy address + expiration timestamp)
     const messageHash = ethers.utils.solidityKeccak256(
         ['address', 'uint64'],
-        [proxyAddress, expirationTimestamp]
+        [proxyAddress, expirationTimestamp],
     );
 
     // Sign the message
@@ -29,17 +29,10 @@ export async function createPaymasterAndData(
     const signature = await backendSigner.signMessage(messageHashBytes);
 
     // Convert expiration to bytes8 (uint64)
-    const expirationBytes = ethers.utils.hexZeroPad(
-        ethers.utils.hexlify(expirationTimestamp),
-        8
-    );
+    const expirationBytes = ethers.utils.hexZeroPad(ethers.utils.hexlify(expirationTimestamp), 8);
 
     // Concatenate all components
-    const paymasterAndData = ethers.utils.hexConcat([
-        paymasterAddress,
-        signature,
-        expirationBytes
-    ]);
+    const paymasterAndData = ethers.utils.hexConcat([paymasterAddress, signature, expirationBytes]);
 
     return paymasterAndData;
 }
@@ -65,7 +58,7 @@ export function decodePaymasterAndData(paymasterAndData: string): {
 
     // Convert expiration bytes to number
     const expirationTimestamp = Number(ethers.BigNumber.from(expirationBytes));
-    
+
     // Check if expired
     const currentTimestamp = Math.floor(Date.now() / 1000);
     const hasExpired = currentTimestamp > expirationTimestamp;
@@ -74,7 +67,7 @@ export function decodePaymasterAndData(paymasterAndData: string): {
         paymasterAddress,
         signature,
         expirationTimestamp,
-        hasExpired
+        hasExpired,
     };
 }
 
@@ -88,10 +81,10 @@ export function decodePaymasterAndData(paymasterAndData: string): {
 export function verifyPaymasterSignature(
     paymasterAndData: string,
     proxyAddress: string,
-    backendAddress: string
+    backendAddress: string,
 ): boolean {
     const decoded = decodePaymasterAndData(paymasterAndData);
-    
+
     // If expired, signature is invalid
     if (decoded.hasExpired) {
         return false;
@@ -100,17 +93,14 @@ export function verifyPaymasterSignature(
     // Recreate the message hash
     const messageHash = ethers.utils.solidityKeccak256(
         ['address', 'uint64'],
-        [proxyAddress, decoded.expirationTimestamp]
+        [proxyAddress, decoded.expirationTimestamp],
     );
 
     // Verify the signature
     try {
         const messageHashBytes = ethers.utils.arrayify(messageHash);
-        const recoveredAddress = ethers.utils.verifyMessage(
-            messageHashBytes,
-            decoded.signature
-        );
-        
+        const recoveredAddress = ethers.utils.verifyMessage(messageHashBytes, decoded.signature);
+
         return recoveredAddress.toLowerCase() === backendAddress.toLowerCase();
     } catch (error) {
         console.error('Error verifying signature:', error);

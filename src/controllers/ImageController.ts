@@ -71,7 +71,7 @@ export const uploadImage: RouteHandlerMethod = async (
             await user.save();
 
             console.log('Image uploaded successfully:', uploadResult);
-            return await returnSuccessResponse(reply, "Imagen subida exitosamente", {
+            return await returnSuccessResponse(reply, 'Imagen subida exitosamente', {
                 icp_url: uploadResult.icp_url,
                 ipfs_url: uploadResult.ipfs_url,
             });

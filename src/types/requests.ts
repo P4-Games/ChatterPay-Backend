@@ -20,7 +20,7 @@ export interface SimpleQuerystring {
 export type IDParam = BaseParams<{ id: number }>;
 
 /**
- * Interface for GET requests with string id parameter  
+ * Interface for GET requests with string id parameter
  */
 export type IDStringParam = BaseParams<{ id: string }>;
 

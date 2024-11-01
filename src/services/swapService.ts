@@ -8,14 +8,8 @@ import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { setupERC20, setupContracts } from './contractSetupService';
-import {
-    addPaymasterData,
-    ensurePaymasterHasPrefund
-} from './paymasterService';
-import { 
-    signUserOperation, 
-    createGenericUserOperation,
-} from './userOperationService';
+import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
+import { signUserOperation, createGenericUserOperation } from './userOperationService';
 
 export interface TokenAddresses {
     input: string;
@@ -32,15 +26,18 @@ function createApproveCallData(
     amount: string,
 ): string {
     const amount_bn = ethers.utils.parseUnits(amount, 18);
-    const approveEncode = tokenContract.interface.encodeFunctionData("approve", [spender, amount_bn]);
-    console.log("Approve Encode:", approveEncode);
+    const approveEncode = tokenContract.interface.encodeFunctionData('approve', [
+        spender,
+        amount_bn,
+    ]);
+    console.log('Approve Encode:', approveEncode);
 
-    const callData = chatterPay.interface.encodeFunctionData("execute", [
+    const callData = chatterPay.interface.encodeFunctionData('execute', [
         tokenContract.address,
         0,
-        approveEncode
+        approveEncode,
     ]);
-    console.log("Approve Call Data:", callData);
+    console.log('Approve Call Data:', callData);
 
     return callData;
 }
@@ -56,17 +53,17 @@ function createSwapCallData(
 ): string {
     const amount_bn = ethers.utils.parseUnits(amount, 18);
     const swapEncode = swapContract.interface.encodeFunctionData(
-        isWETHtoUSDT ? "swapWETHforUSDT" : "swapUSDTforWETH",
-        [amount_bn]
+        isWETHtoUSDT ? 'swapWETHforUSDT' : 'swapUSDTforWETH',
+        [amount_bn],
     );
-    console.log("Swap Encode:", swapEncode);
+    console.log('Swap Encode:', swapEncode);
 
-    const callData = chatterPay.interface.encodeFunctionData("execute", [
+    const callData = chatterPay.interface.encodeFunctionData('execute', [
         swapContract.address,
         0,
-        swapEncode
+        swapEncode,
     ]);
-    console.log("Swap Call Data:", callData);
+    console.log('Swap Call Data:', callData);
 
     return callData;
 }
@@ -74,12 +71,8 @@ function createSwapCallData(
 /**
  * Helper function to check balances
  */
-async function checkBalance(
-    tokenContract: ethers.Contract, 
-    proxyAddress: string, 
-    amount: string
-) {
-    console.log("Token Address:", tokenContract.address);
+async function checkBalance(tokenContract: ethers.Contract, proxyAddress: string, amount: string) {
+    console.log('Token Address:', tokenContract.address);
     console.log(`Checking balance for ${proxyAddress}...`);
     const amount_bn = ethers.utils.parseUnits(amount, 18);
     const balanceCheck = await tokenContract.balanceOf(proxyAddress);
@@ -102,44 +95,40 @@ async function executeOperation(
     entrypoint: ethers.Contract,
     bundlerUrl: string,
     proxyAddress: string,
-    provider: ethers.providers.JsonRpcProvider
+    provider: ethers.providers.JsonRpcProvider,
 ): Promise<string> {
     // Get the nonce
     const nonce = await entrypoint.getNonce(proxyAddress, 0);
-    console.log("Nonce:", nonce.toString());
+    console.log('Nonce:', nonce.toString());
 
     // Create the base user operation
-    let userOperation = await createGenericUserOperation(
-        callData,
-        proxyAddress,
-        nonce
-    );
-    
+    let userOperation = await createGenericUserOperation(callData, proxyAddress, nonce);
+
     // Add paymaster data - Usamos el backendSigner que recibimos como parámetro
     userOperation = await addPaymasterData(
         userOperation,
         fastify.networkConfig.contracts.paymasterAddress!,
-        backendSigner
+        backendSigner,
     );
-    
+
     // Sign the user operation
     userOperation = await signUserOperation(
-        userOperation, 
-        fastify.networkConfig.contracts.entryPoint, 
-        signer
+        userOperation,
+        fastify.networkConfig.contracts.entryPoint,
+        signer,
     );
 
     // Send to bundler
     const bundlerResponse = await sendUserOperationToBundler(
-        bundlerUrl, 
-        userOperation, 
-        entrypoint.address
+        bundlerUrl,
+        userOperation,
+        entrypoint.address,
     );
 
     // Wait for receipt
     const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
     if (!receipt?.success) {
-        throw new Error("Transaction failed or not found");
+        throw new Error('Transaction failed or not found');
     }
 
     return receipt.receipt.transactionHash;
@@ -154,7 +143,7 @@ export async function executeSwap(
     tokenAddresses: TokenAddresses,
     amount: string,
     chain_id: number,
-    isWETHtoUSDT: boolean
+    isWETHtoUSDT: boolean,
 ): Promise<{ approveTransactionHash: string; swapTransactionHash: string }> {
     try {
         const blockchain = await getBlockchain(chain_id);
@@ -164,21 +153,25 @@ export async function executeSwap(
         }
 
         const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
-        const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } = 
+        const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } =
             await setupContracts(blockchain, privateKey, fromNumber);
         const inputToken = await setupERC20(tokenAddresses.input, signer);
-        
-        console.log("Contracts and signers set up");
+
+        console.log('Contracts and signers set up');
 
         await checkBalance(inputToken, proxy.proxyAddress, amount);
-        console.log("Balance check passed");
+        console.log('Balance check passed');
 
         const { networkConfig } = fastify;
-        const entrypoint = new ethers.Contract(networkConfig.contracts.entryPoint, entryPoint, backendSigner);
-        
-        await ensurePaymasterHasPrefund(entrypoint, networkConfig.contracts.paymasterAddress!)
+        const entrypoint = new ethers.Contract(
+            networkConfig.contracts.entryPoint,
+            entryPoint,
+            backendSigner,
+        );
 
-        console.log("Validating account");
+        await ensurePaymasterHasPrefund(entrypoint, networkConfig.contracts.paymasterAddress!);
+
+        console.log('Validating account');
         if (!accountExists) {
             throw new Error(`Account ${proxy.proxyAddress} does not exist`);
         }
@@ -190,7 +183,7 @@ export async function executeSwap(
                 'function swapWETHforUSDT(uint256 wethAmount) external',
                 'function swapUSDTforWETH(uint256 usdtAmount) external',
             ],
-            provider
+            provider,
         );
 
         // 1. Execute approve operation
@@ -199,7 +192,7 @@ export async function executeSwap(
             chatterPay,
             inputToken,
             SIMPLE_SWAP_ADDRESS,
-            amount
+            amount,
         );
 
         const approveHash = await executeOperation(
@@ -210,17 +203,12 @@ export async function executeSwap(
             entrypoint,
             bundlerUrl,
             proxy.proxyAddress,
-            provider
+            provider,
         );
 
         // 2. Execute swap operation
         console.log('Executing swap operation...');
-        const swapCallData = createSwapCallData(
-            chatterPay,
-            simpleSwap,
-            isWETHtoUSDT,
-            amount
-        );
+        const swapCallData = createSwapCallData(chatterPay, simpleSwap, isWETHtoUSDT, amount);
 
         const swapHash = await executeOperation(
             fastify,
@@ -230,15 +218,15 @@ export async function executeSwap(
             entrypoint,
             bundlerUrl,
             proxy.proxyAddress,
-            provider
+            provider,
         );
 
         return {
             approveTransactionHash: approveHash,
-            swapTransactionHash: swapHash
+            swapTransactionHash: swapHash,
         };
     } catch (error) {
-        console.error("Error in executeSwap:", error);
+        console.error('Error in executeSwap:', error);
         throw error;
     }
 }

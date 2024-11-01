@@ -23,7 +23,7 @@ type MakeTransactionInputs = {
 function getTokenAddress(fastify: FastifyInstance, tokenSymbol: string, chainId: number): string {
     const { tokens } = fastify;
     const token = tokens.find(
-        t => t.symbol.toLowerCase() === tokenSymbol.toLowerCase() && t.chain_id === chainId
+        (t) => t.symbol.toLowerCase() === tokenSymbol.toLowerCase() && t.chain_id === chainId,
     );
 
     if (!token) {
@@ -36,7 +36,10 @@ function getTokenAddress(fastify: FastifyInstance, tokenSymbol: string, chainId:
 /**
  * Validates the inputs for making a transaction.
  */
-const validateInputs = async (inputs: MakeTransactionInputs, fastify: FastifyInstance): Promise<string> => {
+const validateInputs = async (
+    inputs: MakeTransactionInputs,
+    fastify: FastifyInstance,
+): Promise<string> => {
     const { channel_user_id, to, token, amount, chain_id } = inputs;
     const { networkConfig } = fastify;
 
@@ -107,13 +110,13 @@ const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
  */
 const executeTransaction = async (
     fastify: FastifyInstance,
-    from: IUser, 
-    to: IUser | { wallet: string }, 
-    tokenSymbol: string, 
-    amount: string, 
-    chain_id: number
+    from: IUser,
+    to: IUser | { wallet: string },
+    tokenSymbol: string,
+    amount: string,
+    chain_id: number,
 ): Promise<string> => {
-    console.log("Sending user operation...");
+    console.log('Sending user operation...');
 
     // Get token address from decorator
     const tokenAddress = getTokenAddress(fastify, tokenSymbol, chain_id);
@@ -124,11 +127,11 @@ const executeTransaction = async (
         to.wallet,
         tokenAddress,
         amount,
-        chain_id
+        chain_id,
     );
 
     if (!result || !result.transactionHash) {
-        return "La transacción falló, los fondos se mantienen en tu cuenta";
+        return 'La transacción falló, los fondos se mantienen en tu cuenta';
     }
 
     await Transaction.create({
@@ -146,7 +149,7 @@ const executeTransaction = async (
         console.log('Trying to notificate transfer');
         const fromName = from.name ?? from.phone_number ?? 'Alguien';
         const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
-        
+
         sendTransferNotification(toNumber, fromName, amount, tokenSymbol);
         sendOutgoingTransferNotification(
             from.phone_number,
@@ -155,11 +158,11 @@ const executeTransaction = async (
             tokenSymbol,
             result.transactionHash,
         );
-        
-        return "";
+
+        return '';
     } catch (error) {
         console.error('Error sending notifications:', error);
-        return "La transacción falló, los fondos se mantienen en tu cuenta";
+        return 'La transacción falló, los fondos se mantienen en tu cuenta';
     }
 };
 
@@ -203,10 +206,19 @@ export const createTransaction = async (
     try {
         const newTransaction = new Transaction(request.body);
         await newTransaction.save();
-        return await returnSuccessResponse(reply, 'Transaction created successfully', newTransaction.toJSON());
+        return await returnSuccessResponse(
+            reply,
+            'Transaction created successfully',
+            newTransaction.toJSON(),
+        );
     } catch (error) {
         console.error('Error creating transaction:', error);
-        return returnErrorResponse(reply, 400, 'Error creating transaction', (error as Error).message);
+        return returnErrorResponse(
+            reply,
+            400,
+            'Error creating transaction',
+            (error as Error).message,
+        );
     }
 };
 
@@ -235,7 +247,12 @@ export const getAllTransactions = async (
         });
     } catch (error) {
         console.error('Error fetching transactions:', error);
-        return returnErrorResponse(reply, 400, 'Error fetching transactions', (error as Error).message);
+        return returnErrorResponse(
+            reply,
+            400,
+            'Error fetching transactions',
+            (error as Error).message,
+        );
     }
 };
 
@@ -253,10 +270,19 @@ export const getTransactionById = async (
         if (!transaction) {
             return await returnErrorResponse(reply, 404, 'Transaction not found');
         }
-        return await returnSuccessResponse(reply, 'Transaction fetched successfully', transaction.toJSON());
+        return await returnSuccessResponse(
+            reply,
+            'Transaction fetched successfully',
+            transaction.toJSON(),
+        );
     } catch (error) {
         console.error('Error fetching transaction:', error);
-        return returnErrorResponse(reply, 400, 'Error fetching transaction', (error as Error).message);
+        return returnErrorResponse(
+            reply,
+            400,
+            'Error fetching transaction',
+            (error as Error).message,
+        );
     }
 };
 
@@ -279,10 +305,19 @@ export const updateTransaction = async (
         if (!updatedTransaction) {
             return await returnErrorResponse(reply, 404, 'Transaction not found');
         }
-        return await returnSuccessResponse(reply, 'Transaction updated successfully', updatedTransaction.toJSON());
+        return await returnSuccessResponse(
+            reply,
+            'Transaction updated successfully',
+            updatedTransaction.toJSON(),
+        );
     } catch (error) {
         console.error('Error updating transaction:', error);
-        return returnErrorResponse(reply, 400, 'Error updating transaction', (error as Error).message);
+        return returnErrorResponse(
+            reply,
+            400,
+            'Error updating transaction',
+            (error as Error).message,
+        );
     }
 };
 
@@ -303,7 +338,12 @@ export const deleteTransaction = async (
         return await returnSuccessResponse(reply, 'Transaction deleted successfully');
     } catch (error) {
         console.error('Error deleting transaction:', error);
-        return returnErrorResponse(reply, 400, 'Error deleting transaction', (error as Error).message);
+        return returnErrorResponse(
+            reply,
+            400,
+            'Error deleting transaction',
+            (error as Error).message,
+        );
     }
 };
 
@@ -320,12 +360,22 @@ export const makeTransaction = async (
 
         const validationError = await validateInputs(request.body, request.server);
         if (validationError) {
-            return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
+            return await returnErrorResponse(
+                reply,
+                400,
+                'Error making transaction',
+                validationError,
+            );
         }
 
         const fromUser = await User.findOne({ phone_number: channel_user_id });
         if (!fromUser) {
-            return await returnErrorResponse(reply, 400, 'Error making transaction', 'User not found. You must have an account to make a transaction');
+            return await returnErrorResponse(
+                reply,
+                400,
+                'Error making transaction',
+                'User not found. You must have an account to make a transaction',
+            );
         }
 
         let toUser: IUser | { wallet: string };
@@ -344,9 +394,17 @@ export const makeTransaction = async (
             chain_id ? parseInt(chain_id, 10) : networkConfig.chain_id,
         );
 
-        return await returnSuccessResponse(reply, "La transferencia está en proceso, puede tardar unos minutos... ");
+        return await returnSuccessResponse(
+            reply,
+            'La transferencia está en proceso, puede tardar unos minutos... ',
+        );
     } catch (error) {
         console.error('Error making transaction:', error);
-        return returnErrorResponse(reply, 400, 'Error making transaction', (error as Error).message);
+        return returnErrorResponse(
+            reply,
+            400,
+            'Error making transaction',
+            (error as Error).message,
+        );
     }
 };

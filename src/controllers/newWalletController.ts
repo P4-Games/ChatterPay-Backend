@@ -59,13 +59,13 @@ export const createWallet = async (
             return await returnSuccessResponse(
                 reply,
                 `The user already exists, your wallet is ${existingUser.wallet}`,
-            )
+            );
         }
 
-        console.log("Creating wallet...")
+        console.log('Creating wallet...');
         const wallet = await executeWalletCreation(phone_number);
-        
-        console.log("Issuing tokens...")
+
+        console.log('Issuing tokens...');
         // Issue demo tokens to the user. This will be later removed in mainnet
         issueTokensCore(wallet);
 

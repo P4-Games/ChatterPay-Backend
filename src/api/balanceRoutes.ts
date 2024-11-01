@@ -1,6 +1,10 @@
 import { FastifyInstance } from 'fastify';
 
-import { walletBalance, balanceByPhoneNumber, checkExternalDeposits } from '../controllers/balanceController';
+import {
+    walletBalance,
+    balanceByPhoneNumber,
+    checkExternalDeposits,
+} from '../controllers/balanceController';
 
 /**
  * Configures routes related to wallet balances.
