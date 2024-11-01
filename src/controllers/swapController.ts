@@ -3,10 +3,10 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import Transaction from '../models/transaction';
 import { executeSwap } from '../services/swapService';
+import { SIGNING_KEY } from '../constants/environment';
 import { sendSwapNotification } from './replyController';
 import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
-import { SIGNING_KEY } from '../constants/environment';
 
 interface SwapBody {
     channel_user_id: string;
