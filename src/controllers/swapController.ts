@@ -1,16 +1,15 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
-import { FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import Transaction from '../models/transaction';
 import chatterPayABI from '../utils/chatterPayABI.json';
 import { sendSwapNotification } from './replyController';
 import { getDynamicGas_callData } from '../utils/dynamicGas';
-import { getNetworkConfig } from '../services/networkService';
+import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
 import { ensureSignerHasEth } from '../services/transferService';
 import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
-import { WETH_ADDRESS, USDT_ADDRESS, SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
 
 interface SwapBody {
     channel_user_id: string;
@@ -24,12 +23,46 @@ interface SwapResult {
     swapTransactionHash: string;
 }
 
+interface TokenAddresses {
+    input: string;
+    output: string;
+}
+
+/**
+ * Gets token addresses from the decorator based on symbols
+ */
+function getTokenAddresses(
+    fastify: FastifyInstance,
+    inputCurrency: string,
+    outputCurrency: string
+): TokenAddresses {
+    const { tokens, networkConfig } = fastify;
+    const chainTokens = tokens.filter(token => token.chain_id === networkConfig.chain_id);
+
+    const inputToken = chainTokens.find(
+        t => t.symbol.toLowerCase() === inputCurrency.toLowerCase()
+    );
+    const outputToken = chainTokens.find(
+        t => t.symbol.toLowerCase() === outputCurrency.toLowerCase()
+    );
+
+    if (!inputToken || !outputToken) {
+        throw new Error('Invalid token symbols for the current network');
+    }
+
+    return {
+        input: inputToken.address,
+        output: outputToken.address
+    };
+}
+
 /**
  * Validates the input for the swap operation.
- * @param inputs The swap inputs to validate.
- * @returns An error message if validation fails, or an empty string if validation succeeds.
  */
-const validateInputs = (inputs: SwapBody): string => {
+const validateInputs = async (
+    inputs: SwapBody,
+    fastify: FastifyInstance
+): Promise<string> => {
     const { channel_user_id, inputCurrency, outputCurrency, amount } = inputs;
 
     if (!channel_user_id || !inputCurrency || !outputCurrency) {
@@ -48,17 +81,18 @@ const validateInputs = (inputs: SwapBody): string => {
         return 'Amount must be provided and greater than 0';
     }
 
+    // Validate tokens exist in current network
+    try {
+        getTokenAddresses(fastify, inputCurrency, outputCurrency);
+    } catch (error) {
+        return 'Invalid token symbols for the current network';
+    }
+
     return '';
 };
 
 /**
  * Executes the swap operation.
- * @param simpleSwap The SimpleSwap contract instance.
- * @param isWETHtoUSDT Whether the swap is from WETH to USDT.
- * @param amount The amount to swap.
- * @param proxyAddress The proxy address to use for the swap.
- * @param signer The signer to use for transactions.
- * @returns An object containing the approve and swap transaction hashes.
  */
 async function executeSwap(
     simpleSwap: ethers.Contract,
@@ -66,9 +100,10 @@ async function executeSwap(
     amount: string,
     proxyAddress: string,
     signer: ethers.Wallet,
+    tokenAddresses: TokenAddresses,
 ): Promise<SwapResult> {
     const amount_bn = ethers.utils.parseUnits(amount, 18);
-    const tokenAddress = isWETHtoUSDT ? WETH_ADDRESS : USDT_ADDRESS;
+    const tokenAddress = isWETHtoUSDT ? tokenAddresses.input : tokenAddresses.output;
     const tokenContract = new ethers.Contract(
         tokenAddress,
         ['function approve(address spender, uint256 amount) public returns (bool)'],
@@ -129,10 +164,8 @@ async function executeSwap(
 
 /**
  * Generates a deterministic wallet for a user.
- * @param channel_user_id The user's channel ID.
- * @returns An object containing the signer and proxy address.
  */
-async function generateUserWallet(channel_user_id: string) {
+async function generateUserWallet(channel_user_id: string, fastify: FastifyInstance) {
     if (!PRIVATE_KEY) {
         throw new Error('Seed private key not found in environment variables');
     }
@@ -140,7 +173,7 @@ async function generateUserWallet(channel_user_id: string) {
     const seed = PRIVATE_KEY + channel_user_id;
     const privateKey = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
 
-    const networkConfig = await getNetworkConfig();
+    const { networkConfig } = fastify;
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const signer = new ethers.Wallet(privateKey, provider);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
@@ -154,11 +187,6 @@ async function generateUserWallet(channel_user_id: string) {
 
 /**
  * Saves the transaction details to the database.
- * @param tx The transaction details.
- * @param walletFrom The sender's wallet address.
- * @param walletTo The recipient's wallet address.
- * @param amount The transaction amount.
- * @param currency The currency of the transaction.
  */
 async function saveTransaction(
     tx: string,
@@ -181,16 +209,13 @@ async function saveTransaction(
 
 /**
  * Handles the swap operation.
- * @param request The FastifyRequest object containing the swap details.
- * @param reply The FastifyReply object for sending the response.
  */
 export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: FastifyReply) => {
     try {
-        // Extract swap details from request body
         const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
 
         // Validate inputs
-        const validationError = validateInputs(request.body);
+        const validationError = await validateInputs(request.body, request.server);
         if (validationError) {
             return await reply.status(400).send({ message: validationError });
         }
@@ -200,12 +225,15 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
             .status(200)
             .send({ message: 'Intercambio de monedas en progreso, puede tardar unos minutos...' });
 
+        // Get token addresses from decorator
+        const tokenAddresses = getTokenAddresses(request.server, inputCurrency, outputCurrency);
+
         // Generate user wallet
-        const { signer, proxyAddress } = await generateUserWallet(channel_user_id);
+        const { signer, proxyAddress } = await generateUserWallet(channel_user_id, request.server);
 
         console.log('Wallet of the signer: ', await signer.getAddress());
 
-        // Create SimpleSwap contract instance (Custom demo contract for swapping between these two tokens)
+        // Create SimpleSwap contract instance
         const simpleSwap = new ethers.Contract(
             SIMPLE_SWAP_ADDRESS,
             [
@@ -222,7 +250,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
         // Create ERC20 contract instance for balance checks
         const erc20 = new ethers.Contract(
-            isWETHtoUSDT ? WETH_ADDRESS : USDT_ADDRESS,
+            isWETHtoUSDT ? tokenAddresses.input : tokenAddresses.output,
             ['function balanceOf(address owner) view returns (uint256)'],
             signer,
         );
@@ -234,7 +262,14 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
         );
 
         // Execute swap
-        const tx = await executeSwap(simpleSwap, isWETHtoUSDT, inputAmount, proxyAddress, signer);
+        const tx = await executeSwap(
+            simpleSwap, 
+            isWETHtoUSDT, 
+            inputAmount, 
+            proxyAddress, 
+            signer,
+            tokenAddresses
+        );
 
         // Check final balance
         const finalBalance = await erc20.balanceOf(proxyAddress);
@@ -271,14 +306,12 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
             outputCurrency,
         );
 
-        // Return success response
         return await reply.status(200).send({
             message: 'Swap completed successfully',
             approveTransactionHash: tx.approveTransactionHash,
             swapTransactionHash: tx.swapTransactionHash,
         });
     } catch (error) {
-        // Handle errors
         console.error('Error swapping tokens:', error);
         return reply.status(500).send({ message: 'Internal Server Error' });
     }
