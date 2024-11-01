@@ -114,7 +114,7 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
   const user = await User.findOne({ wallet: { $regex: new RegExp(`^${transfer.to}$`, 'i') } });
 
   if (user) {
-    const value = (Number(transfer.value) / 1e18).toFixed(2);
+    const value = (Number(transfer.value) / 1e18).toFixed(4);
     
     // Send incoming transfer notification message, and record tx data
     sendTransferNotification(user.phone_number, null, value, token);
