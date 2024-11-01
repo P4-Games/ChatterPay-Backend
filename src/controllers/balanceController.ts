@@ -76,7 +76,7 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
         const promises = symbolsToFetch.map(async (symbol) => {
             try {
                 symbol = symbol.replace('WETH', 'ETH');
-                const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}USDT`);
+                const response = await fetch(`https://api.binance.us/api/v3/ticker/price?symbol=${symbol}USDT`);
                 const data = await response.json();
                 if (data.price) {
                     console.log(`Price for ${symbol}: ${data.price} USDT`);
