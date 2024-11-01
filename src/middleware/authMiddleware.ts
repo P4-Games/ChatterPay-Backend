@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { TokenResponse, verifyToken } from '../config/token';
+import { isPublicRoute } from '../config/publicRoutes';
+import { verifyToken, TokenResponse } from '../config/token';
 
 /**
  * Middleware function to authenticate requests using a Bearer token.
@@ -21,7 +22,7 @@ import { TokenResponse, verifyToken } from '../config/token';
  */
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   // Skip authentication for the /ping endpoint, and the opensea NFT metadata 
-  if (request.url === '/ping' || request.url.startsWith("/nft/metadata/opensea/")) {
+  if (isPublicRoute(request.url)) {
     return;
   }
 

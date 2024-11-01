@@ -2,9 +2,9 @@ import axios from 'axios';
 
 import { IBlockchain } from '../models/blockchain';
 import { networkChainIds } from '../constants/contracts';
+import { isValidPhoneNumber } from '../utils/validations';
 import { getNetworkConfig } from '../services/networkService';
 import { BOT_API_URL, BOT_DATA_TOKEN } from '../constants/environment';
-import { isValidPhoneNumber } from '../utils/validations';
 
 interface OperatorReplyPayload {
     data_token: string;

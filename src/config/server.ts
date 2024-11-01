@@ -5,6 +5,7 @@ import { setupSwagger } from './swagger';
 import { setupRoutes } from '../api/routes';
 import { PORT } from '../constants/environment';
 import { setupMiddleware } from '../middleware/bodyParser';
+import networkConfigPlugin from '../plugins/networkConfig';
 import { authMiddleware } from '../middleware/authMiddleware';
 
 /**
@@ -30,6 +31,9 @@ export async function startServer(): Promise<FastifyInstance> {
     });
 
     server.addHook('onRequest', authMiddleware);
+
+    // Register the network config plugin
+    await server.register(networkConfigPlugin);
 
     await setupMiddleware(server);
     await setupRoutes(server);

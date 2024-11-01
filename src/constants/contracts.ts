@@ -3,9 +3,7 @@ import { GCP_BUCKET_BASE_URL } from "./environment";
 /**
  * These are the demo token contracts used for testing purposes in Scroll Sepolia
  */
-export const WETH_ADDRESS = '0xE9C723D01393a437bac13CE8f925A5bc8E1c335c';
-export const USDT_ADDRESS = '0xe6B817E31421929403040c3e42A6a5C5D2958b4A';
-export const SIMPLE_SWAP_ADDRESS = '0x7c38F638Bb821Cf8E5A8c59460f5C6a992a9cBAE';
+export const SIMPLE_SWAP_ADDRESS = '0xd1D3ec40941da7d74e07D5Da240be35cd6c2574D';
 export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
 
 export const networkChainIds = {

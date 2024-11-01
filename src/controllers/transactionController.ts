@@ -1,15 +1,12 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import web3 from '../utils/web3_config';
 import { User, IUser } from '../models/user';
-import Blockchain from '../models/blockchain';
-import { sendOutgoingTransferNotification, sendTransferNotification } from './replyController';
-import { getNetworkConfig } from '../services/networkService';
 import { sendUserOperation } from '../services/transferService';
 import Transaction, { ITransaction } from '../models/transaction';
-import { USDT_ADDRESS, networkChainIds } from '../constants/contracts';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { sendTransferNotification, sendOutgoingTransferNotification } from './replyController';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {
@@ -17,10 +14,154 @@ type MakeTransactionInputs = {
     to: string;
     token: string;
     amount: string;
-    chain_id: string;
+    chain_id?: string;
 };
 
-const TOKEN_ADDRESS = USDT_ADDRESS; // Demo USDT en Devnet Scroll # add wETH
+/**
+ * Gets token address from the decorator
+ */
+function getTokenAddress(fastify: FastifyInstance, tokenSymbol: string, chainId: number): string {
+    const { tokens } = fastify;
+    const token = tokens.find(
+        t => t.symbol.toLowerCase() === tokenSymbol.toLowerCase() && t.chain_id === chainId
+    );
+
+    if (!token) {
+        throw new Error(`Token ${tokenSymbol} not found for chain ${chainId}`);
+    }
+
+    return token.address;
+}
+
+/**
+ * Validates the inputs for making a transaction.
+ */
+const validateInputs = async (inputs: MakeTransactionInputs, fastify: FastifyInstance): Promise<string> => {
+    const { channel_user_id, to, token, amount, chain_id } = inputs;
+    const { networkConfig } = fastify;
+
+    if (!channel_user_id || !to || !token || !amount) {
+        return 'Alguno o multiples campos están vacíos';
+    }
+    if (Number.isNaN(parseFloat(amount))) {
+        return 'El monto ingresado no es correcto';
+    }
+    if (channel_user_id === to) {
+        return 'No puedes enviar dinero a ti mismo';
+    }
+    if (
+        channel_user_id.length > 15 ||
+        (to.startsWith('0x') && !Number.isNaN(parseInt(to, 10)) && to.length <= 15)
+    ) {
+        return 'El número de telefono no es válido';
+    }
+    if (token.length > 5) {
+        return 'El símbolo del token no es válido';
+    }
+
+    const targetChainId = chain_id ? parseInt(chain_id, 10) : networkConfig.chain_id;
+
+    // Validate chain_id
+    if (targetChainId !== networkConfig.chain_id) {
+        return 'La blockchain seleccionada no está disponible actualmente';
+    }
+
+    // Validate token exists in the network
+    try {
+        getTokenAddress(fastify, token, targetChainId);
+    } catch {
+        return 'El token no está disponible en la red seleccionada';
+    }
+
+    return '';
+};
+
+/**
+ * Gets or creates a user based on the phone number.
+ */
+const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
+    let user = await User.findOne({ phone_number: phoneNumber });
+
+    if (!user) {
+        console.log(
+            `Número de telefono ${phoneNumber} no registrado en ChatterPay, registrando...`,
+        );
+        const predictedWallet = await computeProxyAddressFromPhone(phoneNumber);
+        user = await User.create({
+            phone_number: phoneNumber,
+            wallet: predictedWallet.EOAAddress,
+            privateKey: predictedWallet.privateKey,
+            name: `+${phoneNumber}`,
+        });
+
+        console.log(
+            `Número de telefono ${phoneNumber} registrado con la wallet ${predictedWallet.EOAAddress}`,
+        );
+    }
+
+    return user;
+};
+
+/**
+ * Executes a transaction between two users and handles the notifications.
+ */
+const executeTransaction = async (
+    fastify: FastifyInstance,
+    from: IUser, 
+    to: IUser | { wallet: string }, 
+    tokenSymbol: string, 
+    amount: string, 
+    chain_id: number
+): Promise<string> => {
+    console.log("Sending user operation...");
+
+    // Get token address from decorator
+    const tokenAddress = getTokenAddress(fastify, tokenSymbol, chain_id);
+
+    const result = await sendUserOperation(
+        fastify,
+        from.phone_number,
+        to.wallet,
+        tokenAddress,
+        amount,
+        chain_id
+    );
+
+    if (!result || !result.transactionHash) {
+        return "La transacción falló, los fondos se mantienen en tu cuenta";
+    }
+
+    await Transaction.create({
+        trx_hash: result.transactionHash,
+        wallet_from: from.wallet,
+        wallet_to: to.wallet,
+        type: 'transfer',
+        date: new Date(),
+        status: 'completed',
+        amount: parseFloat(amount),
+        token: tokenSymbol,
+    });
+
+    try {
+        console.log('Trying to notificate transfer');
+        const fromName = from.name ?? from.phone_number ?? 'Alguien';
+        const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
+        
+        sendTransferNotification(toNumber, fromName, amount, tokenSymbol);
+        sendOutgoingTransferNotification(
+            from.phone_number,
+            toNumber,
+            amount,
+            tokenSymbol,
+            result.transactionHash,
+        );
+        
+        return "";
+    } catch (error) {
+        console.error('Error sending notifications:', error);
+        return "La transacción falló, los fondos se mantienen en tu cuenta";
+    }
+};
 
 /**
  * Checks the status of a transaction.
@@ -166,117 +307,6 @@ export const deleteTransaction = async (
     }
 };
 
-
-/**
- * Validates the inputs for making a transaction.
- */
-const validateInputs = (inputs: MakeTransactionInputs): string => {
-    const { channel_user_id, to, token, amount, chain_id } = inputs;
-
-    if (!channel_user_id || !to || !token || !amount) {
-        return 'Alguno o multiples campos están vacíos';
-    }
-    if (Number.isNaN(parseFloat(amount))) {
-        return 'El monto ingresado no es correcto';
-    }
-    if (channel_user_id === to) {
-        return 'No puedes enviar dinero a ti mismo';
-    }
-    if (
-        channel_user_id.length > 15 ||
-        (to.startsWith('0x') && !Number.isNaN(parseInt(to, 10)) && to.length <= 15)
-    ) {
-        return 'El número de telefono no es válido';
-    }
-    if (token.length > 5) {
-        return 'El símbolo del token no es válido';
-    }
-    try {
-        const newChainID = chain_id ? parseInt(chain_id, 10) : networkChainIds.default;
-        Blockchain.findOne({ chain_id: newChainID });
-    } catch {
-        return 'La blockchain no esta registrada';
-    }
-    return '';
-};
-
-/**
- * Gets or creates a user based on the phone number.
- */
-const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
-    let user = await User.findOne({ phone_number: phoneNumber });
-
-    if (!user) {
-        console.log(
-            `Número de telefono ${phoneNumber} no registrado en ChatterPay, registrando...`,
-        );
-        const predictedWallet = await computeProxyAddressFromPhone(phoneNumber);
-        user = await User.create({
-            phone_number: phoneNumber,
-            wallet: predictedWallet.EOAAddress,
-            privateKey: predictedWallet.privateKey,
-            name: `+${phoneNumber}`,
-        });
-
-        console.log(
-            `Número de telefono ${phoneNumber} registrado con la wallet ${predictedWallet.EOAAddress}`,
-        );
-    }
-
-    return user;
-};
-
-/**
- * Executes a transaction between two users.
- * Returns a string that will be used as a reply for the sender
- */
-const executeTransaction = async (from: IUser, to: IUser | { wallet: string }, token: string, amount: string, chain_id: number): Promise<string> => {
-	console.log("Sending user operation...");
-	
-	const result = await sendUserOperation(
-		from.wallet,
-		from.phone_number,
-		to.wallet,
-		TOKEN_ADDRESS,
-		amount,
-		chain_id
-	);
-
-	if (!result || !result.transactionHash) return "La transacción falló, los fondos se mantienen en tu cuenta";
-
-    await Transaction.create({
-        trx_hash: result?.transactionHash ?? '',
-        wallet_from: from.wallet,
-        wallet_to: to.wallet,
-        type: 'transfer',
-        date: new Date(),
-        status: 'completed',
-        amount: parseFloat(amount),
-        token: 'USDT',
-    });
-
-    try {
-        console.log('Trying to notificate transfer');
-        const fromName = from.name ?? from.phone_number ?? 'Alguien';
-        const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
-        
-        sendTransferNotification(toNumber, fromName, amount, token);
-        
-        sendOutgoingTransferNotification(
-            from.phone_number,
-            toNumber,
-            amount,
-            token,
-            result.transactionHash,
-        );
-        
-        return "";
-    } catch (error) {
-        console.error('Error sending notifications:', error);
-        return "La transacción falló, los fondos se mantienen en tu cuenta";
-    }
-};
-
 /**
  * Handles the make transaction request.
  */
@@ -286,8 +316,9 @@ export const makeTransaction = async (
 ) => {
     try {
         const { channel_user_id, to, token, amount, chain_id } = request.body;
+        const { networkConfig } = request.server;
 
-        const validationError = validateInputs({ channel_user_id, to, token, amount, chain_id });
+        const validationError = await validateInputs(request.body, request.server);
         if (validationError) {
             return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
         }
@@ -305,37 +336,17 @@ export const makeTransaction = async (
         }
 
         executeTransaction(
+            request.server,
             fromUser,
             toUser,
             token,
             amount,
-            chain_id ? parseInt(chain_id, 10) : networkChainIds.default,
+            chain_id ? parseInt(chain_id, 10) : networkConfig.chain_id,
         );
 
         return await returnSuccessResponse(reply, "La transferencia está en proceso, puede tardar unos minutos... ");
     } catch (error) {
         console.error('Error making transaction:', error);
         return returnErrorResponse(reply, 400, 'Error making transaction', (error as Error).message);
-    }
-};
-
-/**
- * Handles the listen transactions request.
- */
-export const listenTransactions = async (
-    request: FastifyRequest<{
-        Body: {
-            address: string;
-        };
-    }>,
-    reply: FastifyReply,
-) => {
-    try {
-        const { address } = request.body;
-        // TODO: Use transaction service
-        return await returnSuccessResponse(reply, `Listening transactions for: ${address}`);
-    } catch (error) {
-        console.error('Error listening transactions:', error);
-        return returnErrorResponse(reply, 400, 'Bad Request');
     }
 };
