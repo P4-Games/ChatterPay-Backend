@@ -86,7 +86,7 @@ export async function sendSwapNotification(
         const payload: OperatorReplyPayload = {
             data_token: BOT_DATA_TOKEN!,
             channel_user_id,
-            message: `🔄 Intercambiaste ${amount} ${token} por ${Math.round(parseFloat(result) * 1e2) / 1e2} ${outputToken}! 🔄 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${transactionHash}`,
+            message: `🔄 Intercambiaste ${amount} ${token} por ${Math.round(parseFloat(result) * 1e4) / 1e4} ${outputToken}! 🔄 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${transactionHash}`,
         };
         await sendBotMessage(payload);
     } catch (error) {
@@ -127,7 +127,7 @@ export async function sendMintNotification(channel_user_id: string, id: string):
         const payload: OperatorReplyPayload = {
             data_token: BOT_DATA_TOKEN!,
             channel_user_id,
-            message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://testnets.opensea.io/assets/arbitrum-sepolia/${networkConfig.contracts.chatterNFTAddress}/${id}`,
+            message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://chatterpay.net/nfts/share/${id}`,
         };
         await sendBotMessage(payload);
     } catch (error) {
