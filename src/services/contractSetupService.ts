@@ -26,7 +26,7 @@ export async function setupContracts(blockchain: IBlockchain, privateKey: string
         throw new Error(`Invalid or unreachable bundler URL: ${bundlerUrl}`);
     }
 
-    const network = await getNetworkConfig(421614);
+    const network = await getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(network.rpc);
     const signer = new ethers.Wallet(privateKey, provider);
     const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
