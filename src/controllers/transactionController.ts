@@ -2,10 +2,8 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import web3 from '../utils/web3_config';
 import { User, IUser } from '../models/user';
-import Blockchain from '../models/blockchain';
 import { sendUserOperation } from '../services/transferService';
 import Transaction, { ITransaction } from '../models/transaction';
-import { USDT_ADDRESS, networkChainIds } from '../constants/contracts';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import { sendTransferNotification, sendOutgoingTransferNotification } from './replyController';
@@ -16,16 +14,31 @@ type MakeTransactionInputs = {
     to: string;
     token: string;
     amount: string;
-    chain_id: string;
+    chain_id?: string;
 };
 
-const TOKEN_ADDRESS = USDT_ADDRESS;
+/**
+ * Gets token address from the decorator
+ */
+function getTokenAddress(fastify: FastifyInstance, tokenSymbol: string, chainId: number): string {
+    const { tokens } = fastify;
+    const token = tokens.find(
+        t => t.symbol.toLowerCase() === tokenSymbol.toLowerCase() && t.chain_id === chainId
+    );
+
+    if (!token) {
+        throw new Error(`Token ${tokenSymbol} not found for chain ${chainId}`);
+    }
+
+    return token.address;
+}
 
 /**
  * Validates the inputs for making a transaction.
  */
-const validateInputs = (inputs: MakeTransactionInputs): string => {
+const validateInputs = async (inputs: MakeTransactionInputs, fastify: FastifyInstance): Promise<string> => {
     const { channel_user_id, to, token, amount, chain_id } = inputs;
+    const { networkConfig } = fastify;
 
     if (!channel_user_id || !to || !token || !amount) {
         return 'Alguno o multiples campos están vacíos';
@@ -45,12 +58,21 @@ const validateInputs = (inputs: MakeTransactionInputs): string => {
     if (token.length > 5) {
         return 'El símbolo del token no es válido';
     }
-    try {
-        const newChainID = chain_id ? parseInt(chain_id, 10) : networkChainIds.default;
-        Blockchain.findOne({ chain_id: newChainID });
-    } catch {
-        return 'La blockchain no esta registrada';
+
+    const targetChainId = chain_id ? parseInt(chain_id, 10) : networkConfig.chain_id;
+
+    // Validate chain_id
+    if (targetChainId !== networkConfig.chain_id) {
+        return 'La blockchain seleccionada no está disponible actualmente';
     }
+
+    // Validate token exists in the network
+    try {
+        getTokenAddress(fastify, token, targetChainId);
+    } catch {
+        return 'El token no está disponible en la red seleccionada';
+    }
+
     return '';
 };
 
@@ -87,17 +109,20 @@ const executeTransaction = async (
     fastify: FastifyInstance,
     from: IUser, 
     to: IUser | { wallet: string }, 
-    token: string, 
+    tokenSymbol: string, 
     amount: string, 
     chain_id: number
 ): Promise<string> => {
     console.log("Sending user operation...");
 
+    // Get token address from decorator
+    const tokenAddress = getTokenAddress(fastify, tokenSymbol, chain_id);
+
     const result = await sendUserOperation(
         fastify,
         from.phone_number,
         to.wallet,
-        TOKEN_ADDRESS,
+        tokenAddress,
         amount,
         chain_id
     );
@@ -114,7 +139,7 @@ const executeTransaction = async (
         date: new Date(),
         status: 'completed',
         amount: parseFloat(amount),
-        token: 'USDT',
+        token: tokenSymbol,
     });
 
     try {
@@ -122,12 +147,12 @@ const executeTransaction = async (
         const fromName = from.name ?? from.phone_number ?? 'Alguien';
         const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
         
-        sendTransferNotification(toNumber, fromName, amount, token);
+        sendTransferNotification(toNumber, fromName, amount, tokenSymbol);
         sendOutgoingTransferNotification(
             from.phone_number,
             toNumber,
             amount,
-            token,
+            tokenSymbol,
             result.transactionHash,
         );
         
@@ -138,7 +163,9 @@ const executeTransaction = async (
     }
 };
 
-// Rest of the transaction controller functions remain the same...
+/**
+ * Checks the status of a transaction.
+ */
 export const checkTransactionStatus = async (
     request: FastifyRequest<{ Params: { trx_hash: string } }>,
     reply: FastifyReply,
@@ -289,8 +316,9 @@ export const makeTransaction = async (
 ) => {
     try {
         const { channel_user_id, to, token, amount, chain_id } = request.body;
+        const { networkConfig } = request.server;
 
-        const validationError = validateInputs({ channel_user_id, to, token, amount, chain_id });
+        const validationError = await validateInputs(request.body, request.server);
         if (validationError) {
             return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
         }
@@ -313,7 +341,7 @@ export const makeTransaction = async (
             toUser,
             token,
             amount,
-            chain_id ? parseInt(chain_id, 10) : networkChainIds.default,
+            chain_id ? parseInt(chain_id, 10) : networkConfig.chain_id,
         );
 
         return await returnSuccessResponse(reply, "La transferencia está en proceso, puede tardar unos minutos... ");
