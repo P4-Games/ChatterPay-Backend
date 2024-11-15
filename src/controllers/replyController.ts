@@ -1,7 +1,6 @@
 import axios from 'axios';
 
 import { IBlockchain } from '../models/blockchain';
-import { networkChainIds } from '../constants/contracts';
 import { isValidPhoneNumber } from '../utils/validations';
 import { getNetworkConfig } from '../services/networkService';
 import { BOT_API_URL, BOT_DATA_TOKEN } from '../constants/environment';
@@ -122,7 +121,6 @@ export async function sendMintInProgressNotification(channel_user_id: string): P
 export async function sendMintNotification(channel_user_id: string, id: string): Promise<void> {
     try {
         console.log('Sending mint notification');
-        const networkConfig: IBlockchain = await getNetworkConfig(networkChainIds.arbitrumSepolia);
 
         const payload: OperatorReplyPayload = {
             data_token: BOT_DATA_TOKEN!,
@@ -163,6 +161,22 @@ export async function sendOutgoingTransferNotification(
         return data;
     } catch (error) {
         console.error('Error in sendOutgoingTransferNotification:', error);
+        throw error;
+    }
+}
+
+// Create a function to send login verification codes
+export async function sendVerificationCode(channel_user_id: string, code: number, appName: string): Promise<void> {
+    try {
+        console.log('Sending verification code:', code);
+        const payload: OperatorReplyPayload = {
+            data_token: BOT_DATA_TOKEN!,
+            channel_user_id,
+            message: `🔐 Your verification code for ${appName} is: *${code}*`,
+        };
+        await sendBotMessage(payload);
+    } catch (error) {
+        console.error('Error in sendVerificationCode:', error);
         throw error;
     }
 }
