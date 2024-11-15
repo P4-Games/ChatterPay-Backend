@@ -11,7 +11,7 @@ export const PUBLIC_ROUTES = [
     "/balance/*",
     "/business/connect",
     "/business/verify",
-    "/business/qr/*",
+    "/qr/*",
 ]
 
 /**

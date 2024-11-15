@@ -3,6 +3,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { Business } from '../models/business';
 import { PaymentOrder, IPaymentOrder } from '../models/payments';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { Cashier } from '../models/cashier';
 
 export const createPaymentOrder = async (
     request: FastifyRequest<{ Body: IPaymentOrder }>,
@@ -127,8 +128,14 @@ export const getQRCodeDetails = async (
 ): Promise<FastifyReply> => {
     try {
         // Get the latest pending payment order for this QR code
+        console.log('Fetching QR code details:', request.params.id);
+        const cashier = await Cashier.findOne({ uniqueId: request.params.id });
+        if (!cashier) {
+            return await returnErrorResponse(reply, 404, 'Cashier not found');
+        }
+
         const latestPayment = await PaymentOrder.findOne({ 
-            qrCodeId: request.params.id,
+            cashier: cashier._id,
             status: 'pending'
         }).sort({ createdAt: -1 });
 
@@ -137,7 +144,7 @@ export const getQRCodeDetails = async (
         }
 
         // Get the business details
-        const business = await Business.findById(latestPayment.cashier);
+        const business = await Business.findById(cashier.business);
         if (!business) {
             return await returnErrorResponse(reply, 404, 'Business not found');
         }

@@ -14,6 +14,7 @@ import { connectRoutes } from './business/connectRoutes';
 import { cashierRoutes } from './business/cashierRoutes';
 import { paymentRoutes } from './business/paymentRoutes';
 import { businessRoutes } from './business/businessRoutes';
+import { QRPublicRoutes } from './business/QRPublicRoutes';
 
 /**
  * Sets up all routes for the Fastify server.
@@ -37,4 +38,5 @@ export async function setupRoutes(server: FastifyInstance): Promise<void> {
     server.register(businessRoutes);
     server.register(cashierRoutes);
     server.register(paymentRoutes);
+    server.register(QRPublicRoutes);
 }

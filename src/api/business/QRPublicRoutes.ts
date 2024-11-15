@@ -7,5 +7,5 @@ export async function QRPublicRoutes(fastify: FastifyInstance) {
     /**
      * Retrieves a QR Code ID and the associated business information, to perform the payment (public route)
      */
-    fastify.post('/qr/:id', getQRCodeDetails);
+    fastify.get('/qr/:id', getQRCodeDetails);
 }
