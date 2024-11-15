@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
+import { Business } from '../models/business';
 import { PaymentOrder, IPaymentOrder } from '../models/payments';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
@@ -117,5 +118,45 @@ export const deletePaymentOrder = async (
     } catch (error) {
         console.error('Error deleting payment order:', error);
         return returnErrorResponse(reply, 400, 'Bad Request');
+    }
+};
+
+export const getQRCodeDetails = async (
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply
+): Promise<FastifyReply> => {
+    try {
+        // Get the latest pending payment order for this QR code
+        const latestPayment = await PaymentOrder.findOne({ 
+            qrCodeId: request.params.id,
+            status: 'pending'
+        }).sort({ createdAt: -1 });
+
+        if (!latestPayment) {
+            return await returnErrorResponse(reply, 404, 'No pending payment found for this QR code');
+        }
+
+        // Get the business details
+        const business = await Business.findById(latestPayment.cashier);
+        if (!business) {
+            return await returnErrorResponse(reply, 404, 'Business not found');
+        }
+
+        return await returnSuccessResponse(reply, 'QR code details fetched successfully', {
+            qrCodeId: request.params.id,
+            payURL: `https://api.whatsapp.com/send/?phone=5491164629653&text=Hi,%20I%20confirm%20to%20pay%20the%20QR%20code%20with%20the%20ID: ${latestPayment.cashier}`,
+            payment: {
+                amount: latestPayment.amount,
+                currency: latestPayment.currency,
+                createdAt: latestPayment.createdAt
+            },
+            business: {
+                name: business.name,
+                logo: business.photo
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching QR code details:', error);
+        return returnErrorResponse(reply, 400, 'Failed to fetch QR code details');
     }
 };

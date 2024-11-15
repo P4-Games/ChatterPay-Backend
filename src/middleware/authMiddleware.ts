@@ -46,6 +46,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     }
 
     request.headers.tokenType = 'business';
+    return;
   }
 
   if (!tokenType) {

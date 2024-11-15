@@ -11,5 +11,5 @@ export async function connectRoutes(fastify: FastifyInstance) {
     /**
      * Retrieves a list of all cashiers in the system
      */
-    fastify.get('/business/verify', verifyConnect);
+    fastify.post('/business/verify', verifyConnect);
 }

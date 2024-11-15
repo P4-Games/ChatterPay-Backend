@@ -3,6 +3,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { User } from '../models/user';
 import { sendVerificationCode } from './replyController';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { generateToken } from '../utils/jwt';
 
 /**
  * Creates a new cashier record in the database
@@ -18,7 +19,7 @@ export const connectWithChatterPayAccount = async (
 ): Promise<FastifyReply> => {
     try {
         // Find user account
-        const user = await User.find({ channel_user_id: request.body.channel_user_id });
+        const user = await User.findOne({ phone_number: request.body.channel_user_id });
 
         if (!user) {
             console.warn("User not found");
@@ -29,7 +30,7 @@ export const connectWithChatterPayAccount = async (
         const randomCode = Math.floor(100000 + Math.random() * 900000);
         
         // Update the user code field optimistically with the generated code
-        User.findByIdAndUpdate(user?.[0]?.id, { code: randomCode }, { new: true });
+        await User.findByIdAndUpdate(user?._id, { code: randomCode });
 
         // Send message with the code
         sendVerificationCode(request.body.channel_user_id, randomCode, request.body.app_name);
@@ -45,15 +46,14 @@ export const verifyConnect = async (
     request: FastifyRequest<{
         Body: {
             channel_user_id: string,
-            code: number,
-            app_name: string
+            code: number
         }
     }>,
     reply: FastifyReply
 ): Promise<FastifyReply> => {
     try {
         // Find user by channel_user_id
-        const user = await User.find({ channel_user_id: request.body.channel_user_id });
+        const user = await User.find({ phone_number: request.body.channel_user_id });
 
         if (!user?.[0]) {
             return await returnErrorResponse(reply, 404, 'User not found');
@@ -71,10 +71,14 @@ export const verifyConnect = async (
 
         return await returnSuccessResponse(reply, 'Account verified successfully', {
             ok: true,
+            access_token: generateToken({
+                appName: 'chatterpay-sdk',
+                channelUserId: request.body.channel_user_id,
+                userId: user[0].id,
+            }),
             user: {
                 id: user[0].id,
                 status: 'verified',
-                app_name: request.body.app_name
             }
         });
 

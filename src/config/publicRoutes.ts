@@ -9,6 +9,9 @@ export const PUBLIC_ROUTES = [
     "/last_nft*",
     "/nft_info*",
     "/balance/*",
+    "/business/connect",
+    "/business/verify",
+    "/business/qr/*",
 ]
 
 /**
