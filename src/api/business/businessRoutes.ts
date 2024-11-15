@@ -17,7 +17,7 @@ export async function businessRoutes(fastify: FastifyInstance) {
      * Fetches a specific business by its ID
      */
     fastify.get('/business/:id', getBusinessById);
-
+    
     /**
      * Updates an existing business record with new information
      */

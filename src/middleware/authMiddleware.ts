@@ -1,6 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
+import { verifyJWTToken } from '../utils/jwt';
 import { isPublicRoute } from '../config/publicRoutes';
+import { isBusinessRoute } from '../config/businessRoutes';
 import { verifyToken, TokenResponse } from '../config/token';
 
 /**
@@ -36,6 +38,15 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   const token: string = authHeader.split(' ')[1];
 
   const tokenType: TokenResponse = await verifyToken(token);
+
+  if(isBusinessRoute(request.url) && !tokenType) {
+    if (!verifyJWTToken(token)) {
+      reply.code(401).send({ error: 'Token inválido' });
+      return;
+    }
+
+    request.headers.tokenType = 'business';
+  }
 
   if (!tokenType) {
     reply.code(401).send({ error: 'Token inválido' });

@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 
-import { uploadImage, uploadPDF } from '../controllers/ImageController';
+import { uploadPDF, uploadImage } from '../controllers/ImageController';
 
 /**
  * Configures routes related to upload.
