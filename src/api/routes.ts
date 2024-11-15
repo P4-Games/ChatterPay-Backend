@@ -12,8 +12,8 @@ import blockchainRoutes from './blockchainRoutes';
 import transactionRoutes from './transactionRoutes';
 import { connectRoutes } from './business/connectRoutes';
 import { cashierRoutes } from './business/cashierRoutes';
-import { businessRoutes } from './business/businessRoutes';
 import { paymentRoutes } from './business/paymentRoutes';
+import { businessRoutes } from './business/businessRoutes';
 
 /**
  * Sets up all routes for the Fastify server.

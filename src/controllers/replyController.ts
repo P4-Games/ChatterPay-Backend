@@ -1,7 +1,6 @@
 import axios from 'axios';
 
 import { IBlockchain } from '../models/blockchain';
-import { networkChainIds } from '../constants/contracts';
 import { isValidPhoneNumber } from '../utils/validations';
 import { getNetworkConfig } from '../services/networkService';
 import { BOT_API_URL, BOT_DATA_TOKEN } from '../constants/environment';
@@ -122,7 +121,6 @@ export async function sendMintInProgressNotification(channel_user_id: string): P
 export async function sendMintNotification(channel_user_id: string, id: string): Promise<void> {
     try {
         console.log('Sending mint notification');
-        const networkConfig: IBlockchain = await getNetworkConfig(networkChainIds.arbitrumSepolia);
 
         const payload: OperatorReplyPayload = {
             data_token: BOT_DATA_TOKEN!,
