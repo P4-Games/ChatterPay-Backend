@@ -166,3 +166,19 @@ export async function sendOutgoingTransferNotification(
         throw error;
     }
 }
+
+// Create a function to send login verification codes
+export async function sendVerificationCode(channel_user_id: string, code: number, appName: string): Promise<void> {
+    try {
+        console.log('Sending verification code:', code);
+        const payload: OperatorReplyPayload = {
+            data_token: BOT_DATA_TOKEN!,
+            channel_user_id,
+            message: `🔐 Your verification code for ${appName} is: *${code}*`,
+        };
+        await sendBotMessage(payload);
+    } catch (error) {
+        console.error('Error in sendVerificationCode:', error);
+        throw error;
+    }
+}

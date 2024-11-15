@@ -17,11 +17,15 @@ const {
     NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
     GCP_BUCKET_BASE_URL,
     FRONTEND_TOKEN,
+    JWT_SECRET,
+    JWT_EXPIRY,
     CHATIZALO_TOKEN
 } = process.env;
 
 export {
     PINATA_JWT,
+    JWT_SECRET,
+    JWT_EXPIRY,
     PRIVATE_KEY,
     SIGNING_KEY,
     BOT_API_URL,

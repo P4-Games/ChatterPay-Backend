@@ -10,6 +10,10 @@ import { walletRouter } from './walletRouter';
 import { balanceRoutes } from './balanceRoutes';
 import blockchainRoutes from './blockchainRoutes';
 import transactionRoutes from './transactionRoutes';
+import { connectRoutes } from './business/connectRoutes';
+import { cashierRoutes } from './business/cashierRoutes';
+import { businessRoutes } from './business/businessRoutes';
+import { paymentRoutes } from './business/paymentRoutes';
 
 /**
  * Sets up all routes for the Fastify server.
@@ -27,4 +31,10 @@ export async function setupRoutes(server: FastifyInstance): Promise<void> {
     server.register(swapRoutes);
     server.register(nftRoutes);
     server.register(uploadRoutes);
+
+    // Business / SDK
+    server.register(connectRoutes);
+    server.register(businessRoutes);
+    server.register(cashierRoutes);
+    server.register(paymentRoutes);
 }
