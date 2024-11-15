@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 
-import { uploadImage } from '../controllers/ImageController';
+import { uploadImage, uploadPDF } from '../controllers/ImageController';
 
 /**
  * Configures routes related to upload.
@@ -13,6 +13,7 @@ const uploadRoutes = async (fastify: FastifyInstance): Promise<void> => {
      * @route POST /upload
      */
     fastify.post('/upload', uploadImage);
+    fastify.post('/upload_pdf', uploadPDF);
 };
 
 export default uploadRoutes;
