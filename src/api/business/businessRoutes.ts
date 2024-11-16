@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 
-import { createBusiness, deleteBusiness, updateBusiness, getBusinessById, getAllBusinesses } from '../../controllers/businessController';
+import { createBusiness, deleteBusiness, updateBusiness, getBusinessById, getAllBusinesses, getBusinessByPhone } from '../../controllers/businessController';
 
 export async function businessRoutes(fastify: FastifyInstance) {
     /**
@@ -17,6 +17,11 @@ export async function businessRoutes(fastify: FastifyInstance) {
      * Fetches a specific business by its ID
      */
     fastify.get('/business/:id', getBusinessById);
+    
+    /**
+     * Fetches a specific business by phone number
+     */
+    fastify.get('/business-by-phone/:number', getBusinessByPhone);
     
     /**
      * Updates an existing business record with new information
