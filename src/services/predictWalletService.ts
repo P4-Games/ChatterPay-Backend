@@ -80,7 +80,8 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
         );
         const tx = await factory.createProxy(ownerAddress.publicKey, {
             gasLimit: await getDynamicGas(factory, 'createProxy', [ownerAddress.publicKey]),
-            maxPriorityFeePerGas: ethers.utils.parseUnits('40', 'gwei'),
+            maxFeePerGas: ethers.utils.parseUnits('40', 'gwei'),
+            maxPriorityFeePerGas: ethers.utils.parseUnits('30', 'gwei'),
         });
         await tx.wait();
     }
