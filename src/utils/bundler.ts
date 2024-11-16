@@ -9,7 +9,7 @@ export function getBundlerUrl(chainId: number): string {
     const bundlerUrls: { [key: number]: string | undefined } = {
         1: 'https://public.stackup.sh/api/v1/node/ethereum-mainnet',
         11155111: 'https://public.stackup.sh/api/v1/node/ethereum-sepolia',
-        137: 'https://public.stackup.sh/api/v1/node/polygon-mainnet',
+        137: `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
         80001: 'https://public.stackup.sh/api/v1/node/polygon-mumbai',
         43114: 'https://public.stackup.sh/api/v1/node/avalanche-mainnet',
         43113: 'https://public.stackup.sh/api/v1/node/avalanche-fuji',
