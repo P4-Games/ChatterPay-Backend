@@ -3,6 +3,7 @@
 */
 export const BUSINESS_ROUTES = [
     "/business*",
+    "/execute_contract_call*"
 ]
 
 /**
