@@ -68,6 +68,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
 
     const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
         gasLimit: 1000000,
+        maxPriorityFeePerGas: ethers.utils.parseUnits('40', 'gwei'),
     });
     console.log(`Computed proxy address: ${proxyAddress}`);
 
@@ -78,6 +79,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
         );
         const tx = await factory.createProxy(ownerAddress.publicKey, {
             gasLimit: await getDynamicGas(factory, 'createProxy', [ownerAddress.publicKey]),
+            maxPriorityFeePerGas: ethers.utils.parseUnits('40', 'gwei'),
         });
         await tx.wait();
     }

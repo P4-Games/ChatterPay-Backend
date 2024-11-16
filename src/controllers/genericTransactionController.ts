@@ -95,6 +95,7 @@ async function processContractCall(
                 to: await signer.getAddress(),
                 value: ethers.utils.parseEther('0.001'),
                 gasLimit: 210000,
+                maxPriorityFeePerGas: ethers.utils.parseUnits('40', 'gwei'),
             });
             await tx.wait();
         }
