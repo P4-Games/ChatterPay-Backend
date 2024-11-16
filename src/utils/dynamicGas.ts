@@ -62,7 +62,7 @@ export async function getDynamicGas(
     contract: Contract,
     methodName: string,
     args: unknown[],
-    gasBufferPercentage: number = 10,
+    gasBufferPercentage: number = 200,
 ): Promise<BigNumber> {
     // Verificar que el método existe en el contrato
     if (typeof contract[methodName] !== 'function') {

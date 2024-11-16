@@ -67,7 +67,7 @@ export const createWallet = async (
         
         console.log("Issuing tokens...")
         // Issue demo tokens to the user. This will be later removed in mainnet
-        issueTokensCore(wallet);
+        issueTokensCore(wallet, request.server);
 
         return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
             walletAddress: wallet,
