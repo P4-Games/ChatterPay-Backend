@@ -1,9 +1,9 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { User } from '../models/user';
+import { generateToken } from '../utils/jwt';
 import { sendVerificationCode } from './replyController';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import { generateToken } from '../utils/jwt';
 
 /**
  * Creates a new cashier record in the database
