@@ -1,9 +1,9 @@
-import axios from 'axios';
 import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { User } from '../models/user';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import { uploadToICP, uploadToIpfs, uploadToICPPDF, downloadAndProcessImage } from '../utils/uploadServices';
+import { uploadToICP, uploadToIpfs, downloadAndProcessImage, uploadToICPPDF } from '../utils/uploadServices';
+import axios from 'axios';
 
 interface UploadBody {
     phone_number: string;
