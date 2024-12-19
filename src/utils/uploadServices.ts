@@ -113,55 +113,6 @@ export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promis
     }
 }
 
-export async function uploadToICPPDF(pdfBuffer: Buffer, fileName: string): Promise<string> {
-    console.info('Subiendo PDF a ICP');
-    const FOLDER_UPLOAD = 'pdfs';
-
-    if (!ICP_CANISTER_ID) {
-        throw new Error('CANISTER_ID is not set in the environment variables');
-    }
-
-    if (!ICP_MNEMONIC) {
-        throw new Error('MNEMONIC is not set in the environment variables');
-    }
-
-    const identity = await generateIdentityFromMnemonic(ICP_MNEMONIC);
-    const agent = await createAgent(identity);
-
-    const assetManager = new AssetManager({ canisterId: ICP_CANISTER_ID, agent });
-    const batch = assetManager.batch();
-    const url = `https://${ICP_CANISTER_ID}.icp0.io/${FOLDER_UPLOAD}/${fileName}`;
-
-    try {
-        const key = await batch.store(pdfBuffer, {
-            path: `/${FOLDER_UPLOAD}`,
-            fileName,
-            contentType: 'application/pdf'
-        });
-
-        await batch.commit({
-            onProgress: ({ current, total }) => {
-                console.log(`Progreso de carga a ICP: ${(current / total) * 100}%`);
-            },
-        });
-        console.log('this is my key', key);
-        console.log(`PDF subido con éxito a ICP: ${url}`);
-        return url;
-    } catch (error: unknown) {
-        if (error instanceof Error) {
-            if (error.message.includes('asset already exists')) {
-                console.log(`El PDF ya existe en ICP: ${url}`);
-                return `${url}`;
-            }
-            console.error('Error al subir PDF a ICP:', error);
-            throw error;
-        } else {
-            console.error('Error desconocido al subir PDF a ICP:', error);
-            throw new Error('Error desconocido');
-        }
-    }
-}
-
 export async function uploadToIpfs(imageBuffer: Buffer, fileName: string): Promise<string> {
     if (!NFT_UPLOAD_IMAGE_IPFS) {
         console.info('upload NFT image to IPFS disabled');
