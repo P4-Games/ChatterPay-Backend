@@ -13,6 +13,7 @@ export interface PhoneNumberToAddress {
     publicKey: string;
 }
 
+
 /**
  * Generates a deterministic Ethereum address from a phone number.
  *
@@ -68,8 +69,6 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
 
     const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
         gasLimit: 1000000,
-        maxFeePerGas: ethers.utils.parseUnits('40', 'gwei'),
-        maxPriorityFeePerGas: ethers.utils.parseUnits('30', 'gwei'),
     });
     console.log(`Computed proxy address: ${proxyAddress}`);
 
@@ -80,8 +79,6 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
         );
         const tx = await factory.createProxy(ownerAddress.publicKey, {
             gasLimit: await getDynamicGas(factory, 'createProxy', [ownerAddress.publicKey]),
-            maxFeePerGas: ethers.utils.parseUnits('40', 'gwei'),
-            maxPriorityFeePerGas: ethers.utils.parseUnits('30', 'gwei'),
         });
         await tx.wait();
     }

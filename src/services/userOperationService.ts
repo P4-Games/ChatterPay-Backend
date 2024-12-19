@@ -16,6 +16,7 @@ export async function createGenericUserOperation(
     console.log("Call Data:", callData);
     console.log("Nonce:", nonce.toString());
 
+
     // Use high fixed values for gas
     const userOp: PackedUserOperation = {
         sender,
@@ -25,8 +26,8 @@ export async function createGenericUserOperation(
         verificationGasLimit: BigNumber.from(74908),
         callGasLimit: BigNumber.from(79728),
         preVerificationGas: BigNumber.from(94542),
-        maxFeePerGas: ethers.utils.parseUnits('42', 'gwei'),
-        maxPriorityFeePerGas: ethers.utils.parseUnits('40', 'gwei'),
+        maxFeePerGas: BigNumber.from(ethers.utils.parseUnits("24", "gwei")),
+        maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits("2", "gwei")),
         paymasterAndData: "0x", // Will be filled by the paymaster service
         signature: "0x", // Empty signature initially
     };
@@ -72,7 +73,7 @@ export async function signUserOperation(
     signer: ethers.Wallet
 ): Promise<PackedUserOperation> {
     console.log("\nSigning UserOperation...");
-    
+
     const chainId = await signer.getChainId();
     console.log("Chain ID:", chainId);
 

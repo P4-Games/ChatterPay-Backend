@@ -57,7 +57,7 @@ export async function fetchExternalDeposits() {
     // Get the last processed block number
     const lastProcessedBlock = await LastProcessedBlock.findOne({ networkName: 'ARBITRUM_SEPOLIA' });
     const fromBlock = lastProcessedBlock ? lastProcessedBlock.blockNumber : 0;
-    
+
     // Fetch all user wallet addresses
     const users = await User.find({}, 'wallet');
     const ecosystemAddresses = users.map(user => user.wallet.toLowerCase());
@@ -75,15 +75,15 @@ export async function fetchExternalDeposits() {
     ]);
 
     // Combine and filter out internal transfers and SimpleSwap transfers
-    const allTransfers = [...dataUSDT.transfers.map(t => ({ ...t, token: 'USDT' })), 
-                          ...dataWETH.transfers.map(t => ({ ...t, token: 'WETH' }))];
+    const allTransfers = [...dataUSDT.transfers.map(t => ({ ...t, token: 'USDT' })),
+    ...dataWETH.transfers.map(t => ({ ...t, token: 'WETH' }))];
     const externalDeposits = allTransfers.filter(
-      transfer => !ecosystemAddresses.includes(transfer.from.toLowerCase()) && 
-                 transfer.from.toLowerCase() !== SIMPLE_SWAP_ADDRESS.toLowerCase()
+      transfer => !ecosystemAddresses.includes(transfer.from.toLowerCase()) &&
+        transfer.from.toLowerCase() !== SIMPLE_SWAP_ADDRESS.toLowerCase()
     );
 
     // Process each external deposit
-    await Promise.all(externalDeposits.map(transfer => 
+    await Promise.all(externalDeposits.map(transfer =>
       processExternalDeposit(transfer, transfer.token)
     ));
 
@@ -97,7 +97,7 @@ export async function fetchExternalDeposits() {
       );
       return `Procesados depósitos externos hasta el bloque ${maxBlockProcessed}`;
     }
-    
+
     return `No se encontraron nuevos depósitos desde el bloque ${fromBlock}`;
   } catch (error) {
     return `Error fetching external deposits: ${error}`;
@@ -115,10 +115,10 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
 
   if (user) {
     const value = (Number(transfer.value) / 1e18).toFixed(4);
-    
+
     // Send incoming transfer notification message, and record tx data
     sendTransferNotification(user.phone_number, null, value, token);
-    
+
     new Transaction({
       trx_hash: transfer.id,
       wallet_from: transfer.from,
