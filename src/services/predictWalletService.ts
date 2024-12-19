@@ -96,3 +96,4 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
         privateKey: ownerAddress.hashedPrivateKey,
     };
 }
+
