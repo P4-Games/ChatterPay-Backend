@@ -13,6 +13,7 @@ export interface PhoneNumberToAddress {
     publicKey: string;
 }
 
+
 /**
  * Generates a deterministic Ethereum address from a phone number.
  *
