@@ -31,3 +31,4 @@ export const isPublicRoute = (route: string): boolean => (
         return publicRoute === route
     })
 )
+
