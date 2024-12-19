@@ -1,4 +1,3 @@
-import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { FastifyInstance } from 'fastify';
 
@@ -19,13 +18,6 @@ export async function startServer(): Promise<FastifyInstance> {
         ignoreDuplicateSlashes: true,
         ignoreTrailingSlash: true,
         logger: true,
-    });
-
-    await server.register(cors, {
-        origin: '*',
-        methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization'],
-        credentials: true
     });
 
     await server.register(rateLimit, {

@@ -9,7 +9,6 @@ import {
     getTransactionById,
     checkTransactionStatus,
 } from '../controllers/transactionController';
-import { executeContractCall } from '../controllers/genericTransactionController';
 
 /**
  * Configures routes related to transactions.
@@ -58,12 +57,6 @@ const transactionRoutes = async (fastify: FastifyInstance): Promise<void> => {
      * @route POST /make_transaction/
      */
     fastify.post('/make_transaction/', makeTransaction);
-    
-    /**
-     * Route to make a generic transaction
-     * @route POST /execute_contract_call/
-     */
-    fastify.post('/execute_contract_call/', executeContractCall);
 };
 
 export default transactionRoutes;

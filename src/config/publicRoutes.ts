@@ -9,9 +9,6 @@ export const PUBLIC_ROUTES = [
     "/last_nft*",
     "/nft_info*",
     "/balance/*",
-    "/business/connect",
-    "/business/verify",
-    "/qr/*",
 ]
 
 /**
@@ -26,7 +23,7 @@ export const isPublicRoute = (route: string): boolean => (
             // Match exactly /nft/ followed by numbers only and nothing after
             const nftIdMatch = route.match(/^\/nft\/(\d+)$/);
             if (!nftIdMatch) return false;
-            
+
             // Ensure there are no letters in the id
             const id = nftIdMatch[1];
             return /^\d+$/.test(id);

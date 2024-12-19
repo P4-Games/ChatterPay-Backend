@@ -1,8 +1,9 @@
+import axios from 'axios';
 import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { User } from '../models/user';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
+import { uploadToICP, uploadToIpfs, uploadToICPPDF, downloadAndProcessImage } from '../utils/uploadServices';
 
 interface UploadBody {
     phone_number: string;
@@ -38,6 +39,66 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
             error: (error as Error).message,
         };
     }
+}
+
+async function downloadAndProcessPDF(pdfUrl: string): Promise<Buffer> {
+    try {
+        const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
+        const pdfBuffer = Buffer.from(response.data, 'binary');
+
+        return pdfBuffer;
+    } catch (error) {
+        console.error('Error descargando y procesando el PDF:', error);
+        throw error;
+    }
+}
+
+async function processAndUploadPDF(pdfUrl: string, fileName: string): Promise<UploadResponse> {
+    try {
+        const pdfBuffer = await downloadAndProcessPDF(pdfUrl);
+
+        const icpUrl = await uploadToICPPDF(pdfBuffer, fileName);
+
+        return {
+            success: true,
+            message: 'Imagen subida exitosamente a ICP e IPFS',
+            icp_url: icpUrl,
+        };
+    } catch (error) {
+        console.error('Error procesando y subiendo la imagen:', error);
+        return {
+            success: false,
+            message: 'Error al procesar y subir la imagen',
+            error: (error as Error).message,
+        };
+    }
+}
+
+export const uploadPDF: RouteHandlerMethod = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+): Promise<FastifyReply> => {
+    const { pdf_url } = request.body as { pdf_url: string };
+
+    if (!pdf_url) {
+        console.warn('Image URL not provided');
+        return returnErrorResponse(reply, 400, 'Image URL not provided');
+    }
+
+    const fileName = `pdf_${Date.now()}.pdf`;
+
+    const uploadResult = await processAndUploadPDF(pdf_url, fileName);
+
+    if (uploadResult.success) {
+        console.log('PDF uploaded successfully:', uploadResult);
+        return returnSuccessResponse(reply, "PDF subido exitosamente", {
+            icp_url: uploadResult.icp_url,
+        });
+    }
+
+    console.error('Error uploading PDF:', uploadResult.error);
+
+    return returnErrorResponse(reply, 500, 'Error uploading PDF', uploadResult.error);
 }
 
 export const uploadImage: RouteHandlerMethod = async (
