@@ -72,7 +72,7 @@ export async function signUserOperation(
     signer: ethers.Wallet
 ): Promise<PackedUserOperation> {
     console.log("\nSigning UserOperation...");
-    
+
     const chainId = await signer.getChainId();
     console.log("Chain ID:", chainId);
 
