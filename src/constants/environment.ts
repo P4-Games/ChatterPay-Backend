@@ -1,8 +1,10 @@
 import dotenv from 'dotenv';
+import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
 dotenv.config();
 
 const {
+    BUN_ENV = 'development',
     PORT: envPort,
     MONGO_URI: envMongoUri,
     PRIVATE_KEY,
@@ -18,10 +20,12 @@ const {
     GCP_BUCKET_BASE_URL,
     FRONTEND_TOKEN,
     CHATIZALO_TOKEN,
-    PUSH_CHANNEL_ADDRESS
+    PUSH_CHANNEL_ADDRESS: pushChannelAddress = '',
+    PUSH_CHANNEL_PRIVATE_KEY: pushChannelPrivateKey = ''
 } = process.env;
 
 export {
+    BUN_ENV,
     PINATA_JWT,
     PRIVATE_KEY,
     SIGNING_KEY,
@@ -32,12 +36,11 @@ export {
     FRONTEND_TOKEN,
     ICP_CANISTER_ID,
     CHATIZALO_TOKEN,
-    GCP_BUCKET_BASE_URL,
-    PUSH_CHANNEL_ADDRESS
+    GCP_BUCKET_BASE_URL
 };
 
 export const PORT = Number(envPort) || 3000;
-export const MONGO_URI = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
+export const MONGO_URI: string = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
 
 export const GCP_ABIs = {
     ChatterPayWallet: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPayWallet.json`,
@@ -49,3 +52,8 @@ export const GCP_ABIs = {
 
 export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
 export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' || true;
+
+export const PUSH_NETWORK: string = BUN_ENV.toLowerCase() === 'development' ? '421614' : '42161'
+export const PUSH_ENVIRONMENT: ENV = BUN_ENV.toLowerCase() === 'development' ? ENV.DEV : ENV.PROD
+export const PUSH_CHANNEL_ADDRESS = !pushChannelAddress.startsWith('0x') ? `0x${pushChannelAddress}` : pushChannelAddress;
+export const PUSH_CHANNEL_PRIVATE_KEY = !pushChannelPrivateKey.startsWith('0x') ? `0x${pushChannelPrivateKey}` : pushChannelPrivateKey;

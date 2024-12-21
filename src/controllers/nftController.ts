@@ -249,7 +249,7 @@ export const generateNftOriginal = async (
     const nftMintedId = nftData.tokenId.toString();
 
     try {
-        await sendMintNotification(channel_user_id, nftMintedId);
+        await sendMintNotification(address_of_user, channel_user_id, nftMintedId);
     } catch (error) {
         console.warn('Error sending NFT minting notification:', (error as Error).message);
         // No error is thrown here to continue with the process
@@ -409,7 +409,7 @@ export const generateNftCopy = async (
             },
         );
 
-        await sendMintNotification(channel_user_id, nftData.tokenId.toString());
+        await sendMintNotification(address_of_user, channel_user_id, nftData.tokenId.toString());
 
         console.log('NFT copy end.');
     } catch (error) {

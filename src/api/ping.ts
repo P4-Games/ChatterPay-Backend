@@ -12,3 +12,4 @@ export const pingRoute = async (fastify: FastifyInstance): Promise<void> => {
      */
     fastify.get('/ping', () => ({ status: 'ok', message: 'pong' }));
 };
+

@@ -19,6 +19,7 @@ steps:
       - NFT_UPLOAD_IMAGE_IPFS=${_NFT_UPLOAD_IMAGE_IPFS}
       - GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}
       - PUSH_CHANNEL_ADDRESS=${_PUSH_CHANNEL_ADDRESS}
+      - PUSH_CHANNEL_PRIVATE_KEY=${_PUSH_CHANNEL_PRIVATE_KEY}
     secretEnv: [
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
@@ -76,7 +77,9 @@ steps:
       '--build-arg',
       'FRONTEND_TOKEN=$$FRONTEND_TOKEN',
       '--build-arg',
-      'PUSH_CHANNEL_ADDRESS=$$PUSH_CHANNEL_ADDRESS',
+      'PUSH_CHANNEL_ADDRESS=${_PUSH_CHANNEL_ADDRESS}',
+      '--build-arg',
+      'PUSH_CHANNEL_PRIVATE_KEY=$$PUSH_CHANNEL_PRIVATE_KEY',
       '.'
     ]
     secretEnv: [
