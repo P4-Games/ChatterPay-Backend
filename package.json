@@ -55,6 +55,7 @@
         "@lifi/sdk": "^2.5.1",
         "@openzeppelin/contracts": "^5.0.2",
         "@pinata/sdk": "^2.1.0",
+        "@pushprotocol/restapi": "^1.7.29",
         "@typechain/ethers-v5": "^11.1.2",
         "@typechain/hardhat": "^9.1.0",
         "@types/chai": "^4.3.17",

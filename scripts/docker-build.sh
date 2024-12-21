@@ -30,5 +30,6 @@ docker build \
     --build-arg GCP_BUCKET_BASE_URL="$GCP_BUCKET_BASE_URL" \
     --build-arg CHATIZALO_TOKEN="$CHATIZALO_TOKEN" \
     --build-arg FRONTEND_TOKEN="$FRONTEND_TOKEN" \
+    --build-arg PUSH_CHANNEL_ADDRESS="$PUSH_CHANNEL_ADDRESS" \
     -t chatterpay-back-app ..
 
