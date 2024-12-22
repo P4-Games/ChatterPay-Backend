@@ -1,11 +1,11 @@
-import { ethers } from 'ethers';
 import * as crypto from 'crypto';
+import { ethers } from 'ethers';
 
+import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { IBlockchain } from '../models/blockchain';
+import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 import { getDynamicGas } from '../utils/dynamicGas';
 import { getNetworkConfig } from './networkService';
-import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
-import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {
     hashedPrivateKey: string;
@@ -43,6 +43,7 @@ export interface ComputedAddress {
     proxyAddress: string;
     EOAAddress: string;
     privateKey: string;
+    privateKeyNotHashed: string;
 }
 
 /**
@@ -95,5 +96,6 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
         proxyAddress,
         EOAAddress: ownerAddress.publicKey,
         privateKey: ownerAddress.hashedPrivateKey,
+        privateKeyNotHashed: ownerAddress.privateKey,
     };
 }
