@@ -1,34 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { User } from '../models/user';
-import { issueTokensCore } from './tokenController';
-import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import { IUser, User } from '../models/user';
+import { createUserWithWallet } from '../services/userService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-
-/**
- * Creates a new wallet and user for the given phone number.
- * @param {string} phone_number - The phone number to create the wallet for.
- * @returns {Promise<string>} The proxy address of the created wallet.
- */
-export const executeWalletCreation = async (phone_number: string): Promise<string> => {
-    // Create new wallet
-    const predictedWallet = await computeProxyAddressFromPhone(phone_number);
-
-    // Create new user
-    const newUser = new User({
-        phone_number,
-        wallet: predictedWallet.proxyAddress,
-        privateKey: predictedWallet.privateKey,
-        code: null,
-        photo: '/assets/images/avatars/generic_user.jpg',
-        email: null,
-        name: null,
-    });
-
-    await newUser.save();
-
-    return predictedWallet.proxyAddress;
-};
 
 /**
  * Handles the creation of a new wallet.
@@ -63,14 +37,14 @@ export const createWallet = async (
         }
 
         console.log("Creating wallet...")
-        const wallet = await executeWalletCreation(phone_number);
+        const user: IUser = await createUserWithWallet(phone_number);
         
-        console.log("Issuing tokens...")
+        // console.log("Issuing tokens...")
         // Issue demo tokens to the user. This will be later removed in mainnet
-        issueTokensCore(wallet);
+        // issueTokensCore(wallet);
 
         return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
-            walletAddress: wallet,
+            walletAddress: user.walletEOA,
         });
     } catch (error) {
         console.error('Error creando una wallet:', error);

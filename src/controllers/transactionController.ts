@@ -6,6 +6,7 @@ import { sendUserOperation } from '../services/transferService';
 import Transaction, { ITransaction } from '../models/transaction';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { getOrCreateUser } from '../services/userService';
 import { sendTransferNotification, sendOutgoingTransferNotification } from './replyController';
 
 type PaginationQuery = { page?: string; limit?: string };
@@ -74,32 +75,6 @@ const validateInputs = async (inputs: MakeTransactionInputs, fastify: FastifyIns
     }
 
     return '';
-};
-
-/**
- * Gets or creates a user based on the phone number.
- */
-const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
-    let user = await User.findOne({ phone_number: phoneNumber });
-
-    if (!user) {
-        console.log(
-            `Número de telefono ${phoneNumber} no registrado en ChatterPay, registrando...`,
-        );
-        const predictedWallet = await computeProxyAddressFromPhone(phoneNumber);
-        user = await User.create({
-            phone_number: phoneNumber,
-            wallet: predictedWallet.EOAAddress,
-            privateKey: predictedWallet.privateKey,
-            name: `+${phoneNumber}`,
-        });
-
-        console.log(
-            `Número de telefono ${phoneNumber} registrado con la wallet ${predictedWallet.EOAAddress}`,
-        );
-    }
-
-    return user;
 };
 
 /**
