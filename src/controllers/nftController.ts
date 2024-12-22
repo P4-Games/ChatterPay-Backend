@@ -1,18 +1,18 @@
 import { ethers } from 'ethers';
-import { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { ObjectId } from 'mongoose';
 
-import { isValidUrl } from '../utils/paramsUtils';
-import { getDynamicGas } from '../utils/dynamicGas';
-import { SIGNING_KEY } from '../constants/environment';
-import { getWalletByPhoneNumber } from '../models/user';
-import { sendMintNotification } from './replyController';
-import NFTModel, { INFT, INFTMetadata } from '../models/nft';
-import { getNetworkConfig } from '../services/networkService';
-import { executeWalletCreation } from './newWalletController';
 import { defaultNftImage, networkChainIds } from '../constants/contracts';
+import { SIGNING_KEY } from '../constants/environment';
+import NFTModel, { INFT, INFTMetadata } from '../models/nft';
+import { getWalletByPhoneNumber } from '../models/user';
+import { getNetworkConfig } from '../services/networkService';
+import { createUserWithWallet } from '../services/userService';
+import { getDynamicGas } from '../utils/dynamicGas';
+import { isValidUrl } from '../utils/paramsUtils';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
+import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/uploadServices';
+import { sendMintNotification } from './replyController';
 
 export interface NFTInfo {
     description: string;
@@ -337,7 +337,7 @@ export const generateNftCopy = async (
         let address_of_user = await getWalletByPhoneNumber(channel_user_id);
         if (!address_of_user) {
             console.log('The user wallet does not exist. Creating...');
-            address_of_user = await executeWalletCreation(channel_user_id);
+            address_of_user = await createUserWithWallet(channel_user_id);
             console.log('Wallet created.');
         }
 

@@ -1,9 +1,9 @@
 import { ethers } from 'ethers';
 
 import { IBlockchain } from '../models/blockchain';
-import { getNetworkConfig } from './networkService';
-import chatterPayABI from '../utils/chatterPayABI.json';
 import { getBundlerUrl, validateBundlerUrl } from '../utils/bundler';
+import chatterPayABI from '../utils/chatterPayABI.json';
+import { getNetworkConfig } from './networkService';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 
 /**
@@ -26,7 +26,6 @@ export async function setupContracts(blockchain: IBlockchain, privateKey: string
         throw new Error(`Invalid or unreachable bundler URL: ${bundlerUrl}`);
     }
 
-    console.log('11111111111111')
     const network = await getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(network.rpc);
     const signer = new ethers.Wallet(privateKey, provider);

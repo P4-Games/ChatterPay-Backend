@@ -1,12 +1,12 @@
-import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-import web3 from '../utils/web3_config';
-import { User, IUser } from '../models/user';
-import { sendUserOperation } from '../services/transferService';
 import Transaction, { ITransaction } from '../models/transaction';
-import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import { IUser, User } from '../models/user';
+import { sendUserOperation } from '../services/transferService';
+import { getOrCreateUser } from '../services/userService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import { sendTransferNotification, sendOutgoingTransferNotification } from './replyController';
+import web3 from '../utils/web3_config';
+import { sendOutgoingTransferNotification, sendTransferNotification } from './replyController';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {
@@ -74,32 +74,6 @@ const validateInputs = async (inputs: MakeTransactionInputs, fastify: FastifyIns
     }
 
     return '';
-};
-
-/**
- * Gets or creates a user based on the phone number.
- */
-const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
-    let user = await User.findOne({ phone_number: phoneNumber });
-
-    if (!user) {
-        console.log(
-            `Número de telefono ${phoneNumber} no registrado en ChatterPay, registrando...`,
-        );
-        const predictedWallet = await computeProxyAddressFromPhone(phoneNumber);
-        user = await User.create({
-            phone_number: phoneNumber,
-            wallet: predictedWallet.EOAAddress,
-            privateKey: predictedWallet.privateKey,
-            name: `+${phoneNumber}`,
-        });
-
-        console.log(
-            `Número de telefono ${phoneNumber} registrado con la wallet ${predictedWallet.EOAAddress}`,
-        );
-    }
-
-    return user;
 };
 
 /**
