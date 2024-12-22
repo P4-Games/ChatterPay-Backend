@@ -2,20 +2,13 @@ import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
 import entryPoint from '../utils/entryPoint.json';
-import { getBlockchain } from './blockchainService';
 import { generatePrivateKey } from '../utils/keyGenerator';
-import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
-import { setupERC20, setupContracts } from './contractSetupService';
-import {
-    addPaymasterData,
-    ensurePaymasterHasPrefund
-} from './paymasterService';
-import { 
-    signUserOperation, 
-    createTransferCallData, 
-    createGenericUserOperation,
-} from './userOperationService';
+import { getBlockchain } from './blockchainService';
+import { sendUserOperationToBundler } from './bundlerService';
+import { setupContracts, setupERC20 } from './contractSetupService';
+import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
+import { createGenericUserOperation, createTransferCallData, signUserOperation } from './userOperationService';
 
 /**
  * Sends a user operation for token transfer.
@@ -119,6 +112,7 @@ export async function checkBalance(erc20: ethers.Contract, proxyAddress: string,
     const amount_bn = ethers.utils.parseUnits(amount, 18);
     const balanceCheck = await erc20.balanceOf(proxyAddress);
     console.log(`Checking balance for ${proxyAddress}: ${ethers.utils.formatUnits(balanceCheck, 18)}`);
+ 
     if (balanceCheck.lt(amount_bn)) {
         throw new Error(
             `Insufficient balance. Required: ${amount}, Available: ${ethers.utils.formatUnits(balanceCheck, 18)}`,
