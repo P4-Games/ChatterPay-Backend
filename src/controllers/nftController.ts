@@ -5,7 +5,7 @@ import { ObjectId } from 'mongoose';
 import { defaultNftImage, networkChainIds } from '../constants/contracts';
 import { SIGNING_KEY } from '../constants/environment';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
-import { getWalletByPhoneNumber } from '../models/user';
+import { getWalletByPhoneNumber, IUser } from '../models/user';
 import { getNetworkConfig } from '../services/networkService';
 import { createUserWithWallet } from '../services/userService';
 import { getDynamicGas } from '../utils/dynamicGas';
@@ -337,7 +337,8 @@ export const generateNftCopy = async (
         let address_of_user = await getWalletByPhoneNumber(channel_user_id);
         if (!address_of_user) {
             console.log('The user wallet does not exist. Creating...');
-            address_of_user = await createUserWithWallet(channel_user_id);
+            const user: IUser = await createUserWithWallet(channel_user_id);
+            address_of_user = user.wallet
             console.log('Wallet created.');
         }
 
