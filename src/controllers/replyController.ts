@@ -1,9 +1,11 @@
+import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
 import axios from 'axios';
+import { ethers } from 'ethers';
 
+import { BOT_API_URL, BOT_DATA_TOKEN, PUSH_CHANNEL_ADDRESS, PUSH_CHANNEL_PRIVATE_KEY, PUSH_ENVIRONMENT, PUSH_NETWORK } from '../constants/environment';
 import { IBlockchain } from '../models/blockchain';
-import { isValidPhoneNumber } from '../utils/validations';
 import { getNetworkConfig } from '../services/networkService';
-import { BOT_API_URL, BOT_DATA_TOKEN } from '../constants/environment';
+import { isValidPhoneNumber } from '../utils/validations';
 
 interface OperatorReplyPayload {
     data_token: string;
@@ -30,6 +32,82 @@ async function sendBotMessage(payload: OperatorReplyPayload): Promise<string> {
     } catch (error) {
         console.error('Error sending operator reply:', (error as Error).message);
         throw error;
+    }
+}
+
+/**
+ * 
+ * @param title Notification Title
+ * @param msg Notification Message
+ * @param type 1 -> Broadcast, 3 -> Targeted
+ * @param identityType // 0 -> Minimal, 2 -> Direct Payload
+ */
+export async function sendPushNotificaton(
+    title: string, msg: string, notifyToAddress: string, 
+    type: number = 3, identityType: number = 2) : Promise<boolean> {
+
+    try {
+        const signer = new ethers.Wallet(PUSH_CHANNEL_PRIVATE_KEY)
+        if (!notifyToAddress.startsWith('0x')) {
+            notifyToAddress = `0x${notifyToAddress}`;
+        }
+        const apiResponse = await PushAPIPayloads.sendNotification({
+            signer,
+            type,
+            identityType,
+            notification: {
+                title,
+                body: msg
+            },
+            payload: {
+                title,
+                body: msg,
+                cta: 'https://chatterpay.net',
+                img: 'https://chatterpay.net/assets/images/home/logo.png'
+            },
+            recipients: `eip155:${PUSH_NETWORK}:${notifyToAddress}`, 
+            channel: `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`, 
+            env: PUSH_ENVIRONMENT
+        })
+
+        console.log(`Push notification sent successfully to ${notifyToAddress}:`, apiResponse.status, apiResponse.statusText);
+        return true;
+    } catch (error) {
+        console.error(`Error sending Push Notification to ${notifyToAddress}:`, error instanceof Error ? error.message : 'Unknown');
+        return false;
+    }
+    
+}
+
+export async function subscribeToPushChannel(user_private_key: string, user_address: string): Promise<boolean> {
+    try {
+        if (!user_private_key.startsWith('0x')) {
+            user_private_key = `0x${user_private_key}`;
+        }
+        if (!user_address.startsWith('0x')) {
+            user_address = `0x${user_address}`;
+        }
+
+        const signer = new ethers.Wallet(user_private_key)
+        const subscriptionResponse = await PushAPIChannels.subscribe({
+        signer,
+        channelAddress: `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`,
+        userAddress: `eip155:${PUSH_NETWORK}:${user_address}`, 
+        onSuccess: () => {
+            console.log(`${user_address} successfully subscribed to Push Protocol Channel`);
+        },
+        onError: (error: unknown) => {
+            console.error(`Error trying to subscribe ${user_address} to Push Protocol channel:`, error);
+        },
+        env: PUSH_ENVIRONMENT
+        })
+
+        console.log(`${user_address} Push Protocol Subscription Response:`, subscriptionResponse);
+        return true;
+
+    } catch (error) {
+        console.error(`Error trying to subscribe ${user_address} to Push Channel:`, error instanceof Error ? error.message : 'Unknown');
+        return false;
     }
 }
 
