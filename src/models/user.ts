@@ -8,6 +8,11 @@ export interface IUser extends Document {
     wallet: string;
     code: number;
     privateKey: string;
+    settings?: {
+        notifications: {
+            language: string;
+        };
+    }; 
 }
 
 const userSchema = new Schema<IUser>({
@@ -18,6 +23,11 @@ const userSchema = new Schema<IUser>({
     wallet: { type: String, required: true },
     privateKey: { type: String, required: true },
     code: { type: Number, required: false },
+    settings: { 
+        notifications: {
+            language: { type: String, required: true, default: 'en' } 
+        }
+    }
 });
 
 export const User = model<IUser>('User', userSchema, 'users');
