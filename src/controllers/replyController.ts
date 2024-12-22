@@ -16,7 +16,7 @@ interface OperatorReplyPayload {
 /**
  * Sends an operator reply to the API.
  */
-async function sendBotMessage(payload: OperatorReplyPayload): Promise<string> {
+async function sendBotNotification(payload: OperatorReplyPayload): Promise<string> {
     try {
         const sendMsgEndpint = `${BOT_API_URL}/chatbot/conversations/send-message`;
 
@@ -115,6 +115,7 @@ export async function subscribeToPushChannel(user_private_key: string, user_addr
  * Sends a notification for a transfer.
  */
 export async function sendTransferNotification(
+    address_of_user: string,
     channel_user_id: string,
     from: string | null,
     amount: string,
@@ -122,10 +123,10 @@ export async function sendTransferNotification(
 ): Promise<string> {
     try {
         console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
-
         if (!isValidPhoneNumber(channel_user_id)) return "";
 
-        const message = from ?
+        const title: string = 'Chatterpay: Recibiste fondos!'
+        const message: string = from ?
             `${from} te envió ${amount} ${token} 💸. Ya estan disponibles en tu billetera ChatterPay! 🥳` :
             `Recibiste ${amount} ${token} 💸. Ya estan disponibles en tu billetera ChatterPay! 🥳`;
 
@@ -135,10 +136,11 @@ export async function sendTransferNotification(
             message
         };
 
-        const data = await sendBotMessage(payload);
-
+        const data = await sendBotNotification(payload);
+        sendPushNotificaton(title, message, address_of_user) // avoid await 
         console.log('Notification sent:', data);
         return data;
+
     } catch (error) {
         console.error('Error in sendTransferNotification:', error);
         throw error;
@@ -149,6 +151,7 @@ export async function sendTransferNotification(
  * Sends a notification for a swap.
  */
 export async function sendSwapNotification(
+    address_of_user:string,
     channel_user_id: string,
     token: string,
     amount: string,
@@ -160,12 +163,18 @@ export async function sendSwapNotification(
         console.log('Sending swap notification');
         const networkConfig: IBlockchain = await getNetworkConfig();
 
+        const title = 'Chatterpay: Intercambiaste tokens!'
+        const message:string =  `🔄 Intercambiaste ${amount} ${token} por ${Math.round(parseFloat(result) * 1e4) / 1e4} ${outputToken}! 🔄 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${transactionHash}`;
+
         const payload: OperatorReplyPayload = {
             data_token: BOT_DATA_TOKEN!,
             channel_user_id,
-            message: `🔄 Intercambiaste ${amount} ${token} por ${Math.round(parseFloat(result) * 1e4) / 1e4} ${outputToken}! 🔄 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${transactionHash}`,
+            message
         };
-        await sendBotMessage(payload);
+
+        await sendBotNotification(payload);
+        sendPushNotificaton(title, message, address_of_user) // avoid await 
+
     } catch (error) {
         console.error('Error in sendSwapNotification:', error);
         throw error;
@@ -175,16 +184,21 @@ export async function sendSwapNotification(
 /**
  * Sends a notification for minted certificates and on-chain memories.
  */
-export async function sendMintNotification(channel_user_id: string, id: string): Promise<void> {
+export async function sendMintNotification(address_of_user:string, channel_user_id: string, id: string): Promise<void> {
     try {
         console.log('Sending mint notification');
+        const title = 'Chatterpay: NFT minted!'
+        const message = `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://chatterpay.net/nfts/share/${id}`
 
         const payload: OperatorReplyPayload = {
             data_token: BOT_DATA_TOKEN!,
             channel_user_id,
-            message: `🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉, podes verlo en: https://chatterpay.net/nfts/share/${id}`,
+            message
         };
-        await sendBotMessage(payload);
+        
+        await sendBotNotification(payload);
+        sendPushNotificaton(title, message, address_of_user) // avoid await 
+
     } catch (error) {
         console.error('Error in sendMintNotification:', (error as Error).message);
         throw error;
@@ -195,6 +209,7 @@ export async function sendMintNotification(channel_user_id: string, id: string):
  * Sends a notification for an outgoing transfer.
  */
 export async function sendOutgoingTransferNotification(
+    address_of_user: string,
     channel_user_id: string,
     to: string | null,
     amount: string,
@@ -203,19 +218,24 @@ export async function sendOutgoingTransferNotification(
 ): Promise<string> {
     try {
         console.log('Sending outgoing transfer notification');
-
         if (!isValidPhoneNumber(channel_user_id)) return "";
 
         const networkConfig: IBlockchain = await getNetworkConfig();
 
+        const title: string = 'Chatterpay: Enviaste fondos!';
+        const message: string = `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${txHash}`;
+
         const payload: OperatorReplyPayload = {
             data_token: BOT_DATA_TOKEN!,
             channel_user_id,
-            message: `💸 Enviaste ${amount} ${token} a ${to}! 💸 \n Puedes ver la transacción aquí: ${networkConfig.explorer}/tx/${txHash}`,
+            message
         };
-        const data = await sendBotMessage(payload);
+        
+        const data = await sendBotNotification(payload);
+        sendPushNotificaton(title, message, address_of_user) // avoid await 
         console.log('Notification sent:', data);
         return data;
+
     } catch (error) {
         console.error('Error in sendOutgoingTransferNotification:', error);
         throw error;

@@ -1,13 +1,12 @@
-import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-import web3 from '../utils/web3_config';
-import { User, IUser } from '../models/user';
-import { sendUserOperation } from '../services/transferService';
 import Transaction, { ITransaction } from '../models/transaction';
-import { computeProxyAddressFromPhone } from '../services/predictWalletService';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { IUser, User } from '../models/user';
+import { sendUserOperation } from '../services/transferService';
 import { getOrCreateUser } from '../services/userService';
-import { sendTransferNotification, sendOutgoingTransferNotification } from './replyController';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import web3 from '../utils/web3_config';
+import { sendOutgoingTransferNotification, sendTransferNotification } from './replyController';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {
@@ -122,8 +121,9 @@ const executeTransaction = async (
         const fromName = from.name ?? from.phone_number ?? 'Alguien';
         const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
         
-        sendTransferNotification(toNumber, fromName, amount, tokenSymbol);
+        sendTransferNotification(to.wallet, toNumber, fromName, amount, tokenSymbol);
         sendOutgoingTransferNotification(
+            from.wallet,
             from.phone_number,
             toNumber,
             amount,
