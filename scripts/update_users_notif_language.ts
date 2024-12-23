@@ -9,7 +9,7 @@ dotenv.config();
 
 // Configuración de la URI de MongoDB y otros detalles
 const MONGO_URI: string = process.env.MONGO_URI || "mongodb://localhost:27017/your_database";
-const DB_NAME: string = "chatterpay-main";
+const DB_NAME: string = "chatterpay-dev";
 const COLLECTION_NAME: string = "users";
 
 // Definición del esquema de usuario

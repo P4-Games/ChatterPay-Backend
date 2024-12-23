@@ -121,8 +121,9 @@ const executeTransaction = async (
         const fromName = from.name ?? from.phone_number ?? 'Alguien';
         const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
         
-        sendTransferNotification(toNumber, fromName, amount, tokenSymbol);
+        sendTransferNotification(to.wallet, toNumber, fromName, amount, tokenSymbol);
         sendOutgoingTransferNotification(
+            from.wallet,
             from.phone_number,
             toNumber,
             amount,

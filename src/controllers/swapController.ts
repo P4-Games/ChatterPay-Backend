@@ -1,15 +1,16 @@
 import { ethers } from 'ethers';
-import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-import Transaction from '../models/transaction';
-import { executeSwap } from '../services/swapService';
-import { SIGNING_KEY } from '../constants/environment';
-import { sendSwapNotification } from './replyController';
 import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
+import { SIGNING_KEY } from '../constants/environment';
+import Transaction from '../models/transaction';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import { executeSwap } from '../services/swapService';
+import { sendSwapNotification } from './replyController';
 
 interface SwapBody {
     channel_user_id: string;
+    user_wallet: string;
     inputCurrency: string;
     outputCurrency: string;
     amount: number;
@@ -110,7 +111,7 @@ async function saveTransaction(
  */
 export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: FastifyReply) => {
     try {
-        const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
+        const { channel_user_id, user_wallet, inputCurrency, outputCurrency, amount } = request.body;
 
         // Validate inputs
         const validationError = await validateInputs(request.body, request.server);
@@ -159,6 +160,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
         // Send notifications
         await sendSwapNotification(
+            user_wallet,
             channel_user_id,
             inputCurrency,
             amount.toString(),

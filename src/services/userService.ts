@@ -21,8 +21,11 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
         photo: '/assets/images/avatars/generic_user.jpg',
         email: null,
         name: null,
+        settings: { 
+            notifications: { 
+                language: 'en'
+        }}
     });
-
     await user.save();
 
     // Push
@@ -50,7 +53,7 @@ export const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
     
     const newUser: IUser = await createUserWithWallet(phoneNumber);
     console.log(
-        `Número de telefono ${phoneNumber} registrado con la wallet ${newUser.walletEOA}`,
+        `Número de telefono ${phoneNumber} registrado con la wallet ${newUser.wallet}`,
     );
 
     return newUser;
