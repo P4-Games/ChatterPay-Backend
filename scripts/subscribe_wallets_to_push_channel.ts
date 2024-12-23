@@ -1,22 +1,16 @@
-//
-// set MONGO_URI in env, then:
-// bun run scripts/subscribe_wallets_to_push_channel.ts
-// 
-import * as PushAPI from '@pushprotocol/restapi';
-import { ENV } from '@pushprotocol/restapi/src/lib/constants';
-import * as crypto from 'crypto';
 import dotenv from "dotenv";
 import { ethers } from 'ethers';
 import mongoose from "mongoose";
+import * as crypto from 'crypto';
+import * as PushAPI from '@pushprotocol/restapi';
+import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
 dotenv.config();
 
-// MongoDB configuration
 const MONGO_URI: string = process.env.MONGO_URI || "mongodb://localhost:27017/your_database";
 const DB_NAME: string = "chatterpay-dev";
 const COLLECTION_NAME: string = "users";
 
-// User schema definition
 const userSchema = new mongoose.Schema(
     {
         name: String,
@@ -36,13 +30,12 @@ const userSchema = new mongoose.Schema(
 
 const User = mongoose.model("User", userSchema);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getUsers(): Promise<any[]> {
     try {
         await mongoose.connect(MONGO_URI, { dbName: DB_NAME });
         console.log("Connected to the database");
 
-        const users = await User.find({}); 
+        const users = await User.find({});
         return users;
     } catch (error) {
         console.error("Error getting users", error);
@@ -54,12 +47,12 @@ async function getUsers(): Promise<any[]> {
 }
 
 function getUserData(phoneNumber: string): { pk: string; sk: string } {
-    const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
-    if (!PRIVATE_KEY) {
+    const PRIVATE_KEY_SEED = process.env.PRIVATE_KEY || "";
+    if (!PRIVATE_KEY_SEED) {
         throw new Error("PRIVATE_KEY is not set in the environment variables");
     }
 
-    const seed = PRIVATE_KEY + phoneNumber;
+    const seed = PRIVATE_KEY_SEED + phoneNumber;
     const sk = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
     const wallet = new ethers.Wallet(sk);
 
@@ -69,63 +62,105 @@ function getUserData(phoneNumber: string): { pk: string; sk: string } {
     };
 }
 
-async function subscribeUser(pn: string, sk: string, pk: string): Promise<boolean> {
+async function isUserSubscribed(pk: string): Promise<boolean> {
     try {
-        const signer = new ethers.Wallet(sk);
-        let result:boolean = false;
-
-        await PushAPI.channels.subscribe({
-            channelAddress: 'eip155:421614:0x35dad65F60c1A32c9895BE97f6bcE57D32792E83',
-            userAddress: `eip155:421614:${pk}`,
-            signer,
-            onSuccess: () => {
-                console.log(`${pn}, ${pk}, Subscription successful.`);
-                result = true;
-            },
-            onError: (error) => {
-                console.log(`${pn}, ${pk}, Subscription error!`, error.message);
-                result = false;
-            },
+        const subscriptions = await PushAPI.user.getSubscriptions({
+            user: `eip155:11155111:${pk}`,
             env: ENV.DEV,
         });
 
-        return result;
+        const channelAddress = '0x35dad65F60c1A32c9895BE97f6bcE57D32792E83';
+        return subscriptions.some((sub: { channel: string; }) => sub.channel === channelAddress);
     } catch (error) {
-        console.error('Error during subscription:', error);
+        console.error('Error checking subscription status:', error);
         return false;
     }
 }
 
+async function subscribeUser(pn: string, sk: string, pk: string): Promise<boolean> {
+    const signer = new ethers.Wallet(sk);
+
+    // Función para realizar el intento de suscripción
+    const performSubscription = async (): Promise<boolean> => new Promise<boolean>((resolve) => {
+            PushAPI.channels.subscribe({
+                channelAddress: 'eip155:11155111:0x35dad65F60c1A32c9895BE97f6bcE57D32792E83',
+                userAddress: `eip155:11155111:${pk}`,
+                signer,
+                onSuccess: () => {
+                    console.log(`${pn}, ${pk}, Subscription successful.`);
+                    resolve(true);
+                },
+                onError: (error) => {
+                    console.error(`${pn}, ${pk}, Subscription error:`, error.message);
+                    resolve(false);
+                },
+                env: ENV.DEV,
+            });
+        });
+
+    // Función recursiva para manejar reintentos
+    const retrySubscription = async (attemptCount: number): Promise<boolean> => {
+        if (attemptCount >= 2) {
+            console.error(`${pn}, ${pk}, Subscription failed after maximum retries.`);
+            return false;
+        }
+
+        const result = await performSubscription();
+        if (result) {
+            return true;
+        }
+
+        console.warn(`${pn}, ${pk}, Retrying subscription after delay (${attemptCount + 1}/5)...`);
+        await delay(60000); // Esperar 1 minuto antes de reintentar
+
+        return retrySubscription(attemptCount + 1); // Reintentar con un contador incrementado
+    };
+
+    // Iniciar reintentos desde el primer intento
+    return retrySubscription(0);
+}
+
+
 function delay(ms: number): Promise<void> {
-    // eslint-disable-next-line no-promise-executor-return
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => {setTimeout(resolve, ms)});
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function processUser(user: any): Promise<void> {
+    const phoneNumber = user.phone_number;
+    if (!phoneNumber) {
+        console.warn(`Skipping user without phone number: ${user._id}`);
+        return;
+    }
+
+    try {
+        const { pk, sk } = getUserData(phoneNumber);
+
+        // Check if user is already subscribed
+        const alreadySubscribed = await isUserSubscribed(pk);
+        if (alreadySubscribed) {
+            console.log(`${phoneNumber}, ${pk}, Already subscribed.`);
+            return;
+        }
+
+        const subscribed = await subscribeUser(phoneNumber, sk, pk);
+        if (!subscribed) {
+            console.error(`${phoneNumber}, ${pk}, Subscription failed after retries.`);
+        }
+    } catch (error) {
+        console.error(`Error processing user ${user._id}:`, error);
+    }
 }
 
 async function main(): Promise<void> {
     try {
         const users = await getUsers();
 
-        users.map(async (user) => {
-            const phoneNumber = user.phone_number;
-            if (!phoneNumber) {
-                console.warn(`Skipping user without phone number: ${user._id}`);
-                return `${user._id}, , false`;
-            }
+        // Map users to promises without `await` in the loop
+        const tasks = users.map((user) => processUser(user));
 
-            try {
-                const { pk, sk } = getUserData(phoneNumber);
-
-                // Add delay to prevent rate limit issues
-                await delay(60000);
-
-                const subscribed = await subscribeUser(phoneNumber, sk, pk);
-                return `${phoneNumber}, ${user.wallet || ''}, ${subscribed}`;
-            } catch (error) {
-                console.error(`Error processing user ${user._id}:`, error);
-                return `${phoneNumber}, ${user.wallet || ''}, false`;
-            }
-        })
-
+        // Wait for all tasks to complete
+        await Promise.all(tasks);
     } catch (error) {
         console.error('Error in main execution:', error);
     }
