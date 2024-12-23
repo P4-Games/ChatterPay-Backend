@@ -31,7 +31,7 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
     // Push
     console.log('Push protocol', phoneNumber, predictedWallet.EOAAddress )
     const title = 'Chatterpay: Wallet Created!'
-    const msg = `Your Wallet ${predictedWallet.EOAAddress} was creadted.` 
+    const msg = `Your Wallet ${predictedWallet.EOAAddress} was created.` 
     await subscribeToPushChannel(predictedWallet.privateKeyNotHashed, predictedWallet.EOAAddress)
     sendPushNotificaton(title, msg, predictedWallet.EOAAddress) // avoid await            
 
