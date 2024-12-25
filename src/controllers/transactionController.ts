@@ -41,40 +41,41 @@ const validateInputs = async (inputs: MakeTransactionInputs, fastify: FastifyIns
     const { networkConfig } = fastify;
 
     if (!channel_user_id || !to || !token || !amount) {
-        return 'Alguno o multiples campos están vacíos';
+        return 'One or more fields are empty';
     }
     if (Number.isNaN(parseFloat(amount))) {
-        return 'El monto ingresado no es correcto';
+        return 'The entered amount is invalid';
     }
     if (channel_user_id === to) {
-        return 'No puedes enviar dinero a ti mismo';
+        return 'You cannot send money to yourself';
     }
     if (
         channel_user_id.length > 15 ||
         (to.startsWith('0x') && !Number.isNaN(parseInt(to, 10)) && to.length <= 15)
     ) {
-        return 'El número de telefono no es válido';
+        return 'The phone number is invalid';
     }
     if (token.length > 5) {
-        return 'El símbolo del token no es válido';
+        return 'The token symbol is invalid';
     }
 
     const targetChainId = chain_id ? parseInt(chain_id, 10) : networkConfig.chain_id;
 
     // Validate chain_id
     if (targetChainId !== networkConfig.chain_id) {
-        return 'La blockchain seleccionada no está disponible actualmente';
+        return 'The selected blockchain is currently unavailable';
     }
 
     // Validate token exists in the network
     try {
         getTokenAddress(fastify, token, targetChainId);
     } catch {
-        return 'El token no está disponible en la red seleccionada';
+        return 'The token is not available on the selected network';
     }
 
     return '';
 };
+
 
 /**
  * Executes a transaction between two users and handles the notifications.
@@ -102,7 +103,7 @@ const executeTransaction = async (
     );
 
     if (!result || !result.transactionHash) {
-        return "La transacción falló, los fondos se mantienen en tu cuenta";
+        return "The transaction failed, the funds remain in your account";
     }
 
     await Transaction.create({
@@ -134,7 +135,7 @@ const executeTransaction = async (
         return "";
     } catch (error) {
         console.error('Error sending notifications:', error);
-        return "La transacción falló, los fondos se mantienen en tu cuenta";
+        return "The transaction failed, the funds remain in your account";
     }
 };
 
@@ -319,7 +320,7 @@ export const makeTransaction = async (
             chain_id ? parseInt(chain_id, 10) : networkConfig.chain_id,
         );
 
-        return await returnSuccessResponse(reply, "La transferencia está en proceso, puede tardar unos minutos... ");
+        return await returnSuccessResponse(reply, "The transfer is in progress, it may take a few minutes...");
     } catch (error) {
         console.error('Error making transaction:', error);
         return returnErrorResponse(reply, 400, 'Error making transaction', (error as Error).message);
