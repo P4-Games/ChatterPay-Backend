@@ -3,6 +3,7 @@ import { FastifyInstance } from 'fastify';
 
 import entryPoint from '../utils/entryPoint.json';
 import { getBlockchain } from './blockchainService';
+import { checkWalletBalance } from './walletService';
 import { generatePrivateKey } from '../utils/keyGenerator';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
@@ -32,10 +33,17 @@ export async function sendUserOperation(
         const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } = 
             await setupContracts(blockchain, privateKey, fromNumber);
         const erc20 = await setupERC20(tokenAddress, signer);
-        console.log("Contracts and signers set up");
+        console.log("Contracts and signers set up.", signer.address);
 
-        await checkBalance(erc20, proxy.proxyAddress, amount);
+        const checkBalanceResult = await checkWalletBalance(erc20, proxy.proxyAddress, amount);    
+            
+        if (!checkBalanceResult.enoughBalance) {
+            throw new Error(
+                `Insufficient balance. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}`,
+            );
+        }
         console.log("Balance check passed");
+
         await ensureSignerHasEth(signer, backendSigner, provider);
         console.log("Signer has enough ETH");
 
@@ -103,22 +111,6 @@ export async function sendUserOperation(
     }
 }
 
-/**
- * Helper function to check if the account has sufficient balance for the transfer.
- */
-export async function checkBalance(erc20: ethers.Contract, proxyAddress: string, amount: string) {
-    console.log("ERC20 ADDRESS", erc20.address)
-    console.log(`Checking balance for ${proxyAddress}...`);
-    const amount_bn = ethers.utils.parseUnits(amount, 18);
-    const balanceCheck = await erc20.balanceOf(proxyAddress);
-    console.log(`Checking balance for ${proxyAddress}: ${ethers.utils.formatUnits(balanceCheck, 18)}`);
- 
-    if (balanceCheck.lt(amount_bn)) {
-        throw new Error(
-            `Insufficient balance. Required: ${amount}, Available: ${ethers.utils.formatUnits(balanceCheck, 18)}`,
-        );
-    }
-}
 
 /**
  * Helper function to ensure the signer has enough ETH for gas fees.

@@ -3,6 +3,7 @@ import { FastifyInstance } from 'fastify';
 
 import entryPoint from '../utils/entryPoint.json';
 import { getBlockchain } from './blockchainService';
+import { checkWalletBalance } from './walletService';
 import { generatePrivateKey } from '../utils/keyGenerator';
 import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
 import { sendUserOperationToBundler } from './bundlerService';
@@ -71,25 +72,7 @@ function createSwapCallData(
     return callData;
 }
 
-/**
- * Helper function to check balances
- */
-async function checkBalance(
-    tokenContract: ethers.Contract, 
-    proxyAddress: string, 
-    amount: string
-) {
-    console.log("Token Address:", tokenContract.address);
-    console.log(`Checking balance for ${proxyAddress}...`);
-    const amount_bn = ethers.utils.parseUnits(amount, 18);
-    const balanceCheck = await tokenContract.balanceOf(proxyAddress);
-    console.log(`Balance: ${ethers.utils.formatUnits(balanceCheck, 18)}`);
-    if (balanceCheck.lt(amount_bn)) {
-        throw new Error(
-            `Insufficient balance. Required: ${amount}, Available: ${ethers.utils.formatUnits(balanceCheck, 18)}`,
-        );
-    }
-}
+
 
 /**
  * Executes a user operation with the given callData
@@ -166,11 +149,17 @@ export async function executeSwap(
         const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
         const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } = 
             await setupContracts(blockchain, privateKey, fromNumber);
-        const inputToken = await setupERC20(tokenAddresses.input, signer);
+        const erc20 = await setupERC20(tokenAddresses.input, signer);
         
         console.log("Contracts and signers set up");
 
-        await checkBalance(inputToken, proxy.proxyAddress, amount);
+        const checkBalanceResult = await checkWalletBalance(erc20, proxy.proxyAddress, amount);    
+            
+        if (!checkBalanceResult.enoughBalance) {
+            throw new Error(
+                `Insufficient balance. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}`,
+            );
+        }
         console.log("Balance check passed");
 
         const { networkConfig } = fastify;
@@ -197,7 +186,7 @@ export async function executeSwap(
         console.log('Executing approve operation...');
         const approveCallData = createApproveCallData(
             chatterPay,
-            inputToken,
+            erc20,
             SIMPLE_SWAP_ADDRESS,
             amount
         );
@@ -242,3 +231,4 @@ export async function executeSwap(
         throw error;
     }
 }
+
