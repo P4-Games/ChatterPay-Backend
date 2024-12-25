@@ -1,10 +1,10 @@
 import { gql, request } from 'graphql-request';
 
-import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
-import { LastProcessedBlock } from '../models/lastProcessedBlock';
-import Transaction from '../models/transaction';
 import { User } from '../models/user';
+import Transaction from '../models/transaction';
+import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
 import { sendTransferNotification } from './notificationService';
+import { LastProcessedBlock } from '../models/lastProcessedBlock';
 
 /**
  * The GraphQL API URLs for querying external deposits.

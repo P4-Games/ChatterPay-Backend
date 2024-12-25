@@ -1,11 +1,11 @@
-import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
 import axios from 'axios';
 import { ethers } from 'ethers';
+import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
 
-import { BOT_API_URL, BOT_DATA_TOKEN, PUSH_CHANNEL_ADDRESS, PUSH_CHANNEL_PRIVATE_KEY, PUSH_ENVIRONMENT, PUSH_NETWORK } from '../constants/environment';
 import { IBlockchain } from '../models/blockchain';
-import { isValidPhoneNumber } from '../utils/validations';
 import { getNetworkConfig } from './networkService';
+import { isValidPhoneNumber } from '../utils/validations';
+import { BOT_API_URL, PUSH_NETWORK, BOT_DATA_TOKEN, PUSH_ENVIRONMENT, PUSH_CHANNEL_ADDRESS, PUSH_CHANNEL_PRIVATE_KEY } from '../constants/environment';
 
 interface OperatorReplyPayload {
     data_token: string;

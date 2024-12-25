@@ -1,6 +1,6 @@
-import { IUser, User } from "../models/user";
-import { sendPushNotificaton, sendWalletCreationNotification, subscribeToPushChannel } from "./notificationService";
+import { User, IUser } from "../models/user";
 import { computeProxyAddressFromPhone } from "./predictWalletService";
+import { subscribeToPushChannel, sendWalletCreationNotification } from "./notificationService";
 
 /**
  * Creates a new wallet and user for the given phone number.

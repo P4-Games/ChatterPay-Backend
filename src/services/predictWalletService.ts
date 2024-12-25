@@ -1,11 +1,11 @@
-import * as crypto from 'crypto';
 import { ethers } from 'ethers';
+import * as crypto from 'crypto';
 
-import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { IBlockchain } from '../models/blockchain';
-import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 import { getDynamicGas } from '../utils/dynamicGas';
 import { getNetworkConfig } from './networkService';
+import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
+import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {
     hashedPrivateKey: string;

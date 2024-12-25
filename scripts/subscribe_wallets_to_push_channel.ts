@@ -1,13 +1,13 @@
 //
 // set MONGO_URI in env, then:
 // bun run scripts/subscribe_wallets_to_push_channel.ts
-// 
-import * as PushAPI from '@pushprotocol/restapi';
-import { ENV } from '@pushprotocol/restapi/src/lib/constants';
-import * as crypto from 'crypto';
 import dotenv from "dotenv";
 import { ethers } from 'ethers';
 import mongoose from "mongoose";
+import * as crypto from 'crypto';
+// 
+import * as PushAPI from '@pushprotocol/restapi';
+import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
 import { IUser } from '../src/models/user';
 

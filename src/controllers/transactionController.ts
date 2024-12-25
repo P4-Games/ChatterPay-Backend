@@ -1,12 +1,12 @@
-import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import Transaction, { ITransaction } from '../models/transaction';
-import { IUser, User } from '../models/user';
-import { sendUserOperation } from '../services/transferService';
-import { getOrCreateUser } from '../services/userService';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import web3 from '../utils/web3_config';
-import { sendOutgoingTransferNotification, sendTransferNotification } from '../services/notificationService';
+import { User, IUser } from '../models/user';
+import { getOrCreateUser } from '../services/userService';
+import { sendUserOperation } from '../services/transferService';
+import Transaction, { ITransaction } from '../models/transaction';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { sendTransferNotification, sendOutgoingTransferNotification } from '../services/notificationService';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {
