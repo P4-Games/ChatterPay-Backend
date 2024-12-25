@@ -472,13 +472,23 @@ export const getLastNFT = async (
         console.log('Searching last_nft for channel_user_id', channel_user_id);
         const nft = (await NFTModel.find({ channel_user_id })).sort((a, b) => b.id - a.id)?.[0];
 
-        if (nft) {
-            reply.redirect(
-                `https://api.whatsapp.com/send/?phone=5491164629653&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`,
-            );
-        } else {
+        if (!nft) {
             return await returnErrorResponse(reply, 404, 'NFT not found');
         }
+
+        // Verificar si la solicitud proviene de Postman
+        const isPostman = request.headers['user-agent']?.includes('Postman');
+        const returnUrl = `https://api.whatsapp.com/send/?phone=5491164629653&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`;
+        
+        if (isPostman) {
+            return await reply.send({
+                message: 'URL para compartir el NFT',
+                url: returnUrl
+            });
+        } 
+        
+        reply.redirect(returnUrl);
+        
     } catch (error) {
         console.error('Error getting NFT:', error);
         return returnErrorResponse(reply, 500, 'Internal Server Error');
@@ -585,8 +595,7 @@ export const getNftMetadataRequiredByOpenSea = async (
 ): Promise<void> => {
     const { id: bddId } = request.params;
     try {
-        console.log(bddId);
-        const nfts: INFT[] = await NFTModel.find({ _id: bddId });
+        const nfts: INFT[] = await NFTModel.find({ id: bddId });
 
         if (nfts.length === 0) {
             return await reply.status(400).send({ message: 'NFT not found' });
