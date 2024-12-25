@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { IUser, User } from '../models/user';
+import { User, IUser } from '../models/user';
 import { createUserWithWallet } from '../services/userService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 

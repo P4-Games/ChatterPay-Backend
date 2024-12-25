@@ -1,6 +1,6 @@
-import { sendPushNotificaton, subscribeToPushChannel } from "../controllers/replyController";
-import { IUser, User } from "../models/user";
+import { User, IUser } from "../models/user";
 import { computeProxyAddressFromPhone } from "./predictWalletService";
+import { subscribeToPushChannel, sendWalletCreationNotification } from "./notificationService";
 
 /**
  * Creates a new wallet and user for the given phone number.
@@ -30,10 +30,8 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
 
     // Push
     console.log('Push protocol', phoneNumber, predictedWallet.EOAAddress )
-    const title = 'Chatterpay: Wallet Created!'
-    const msg = `Your Wallet ${predictedWallet.EOAAddress} was created.` 
     await subscribeToPushChannel(predictedWallet.privateKeyNotHashed, predictedWallet.EOAAddress)
-    sendPushNotificaton(title, msg, predictedWallet.EOAAddress) // avoid await            
+    sendWalletCreationNotification(predictedWallet.EOAAddress, phoneNumber) // avoid await            
 
     return user;
 };

@@ -1,9 +1,15 @@
+//
+// set MONGO_URI in env, then:
+// bun run scripts/subscribe_wallets_to_push_channel.ts
 import dotenv from "dotenv";
 import { ethers } from 'ethers';
 import mongoose from "mongoose";
 import * as crypto from 'crypto';
+// 
 import * as PushAPI from '@pushprotocol/restapi';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
+
+import { IUser } from '../src/models/user';
 
 dotenv.config();
 
@@ -11,14 +17,14 @@ const MONGO_URI: string = process.env.MONGO_URI || "mongodb://localhost:27017/yo
 const DB_NAME: string = "chatterpay-dev";
 const COLLECTION_NAME: string = "users";
 
-const userSchema = new mongoose.Schema(
+const userSchema = new mongoose.Schema<IUser>(
     {
         name: String,
         email: String,
         phone_number: String,
         photo: String,
         wallet: String,
-        code: { type: String, default: null },
+        code: { type: Number, default: null },
         settings: {
             notifications: {
                 language: { type: String, default: "en" },
@@ -28,15 +34,18 @@ const userSchema = new mongoose.Schema(
     { collection: COLLECTION_NAME }
 );
 
-const User = mongoose.model("User", userSchema);
+const User = mongoose.model<IUser>("User", userSchema);
 
-async function getUsers(): Promise<any[]> {
+async function getUsers(): Promise<IUser[]> {
     try {
         await mongoose.connect(MONGO_URI, { dbName: DB_NAME });
         console.log("Connected to the database");
+        
+        const users = await User.find({}).lean<IUser>(); // Usamos lean y especificamos el tipo `IUser`
 
-        const users = await User.find({});
-        return users;
+        // @ts-expect-error 'expected error'
+        return users; 
+
     } catch (error) {
         console.error("Error getting users", error);
         return [];
@@ -126,7 +135,7 @@ function delay(ms: number): Promise<void> {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function processUser(user: any): Promise<void> {
+async function processUser(user: IUser): Promise<void> {
     const phoneNumber = user.phone_number;
     if (!phoneNumber) {
         console.warn(`Skipping user without phone number: ${user._id}`);
@@ -157,10 +166,11 @@ async function main(): Promise<void> {
         const users = await getUsers();
 
         // Map users to promises without `await` in the loop
-        const tasks = users.map((user) => processUser(user));
-
-        // Wait for all tasks to complete
-        await Promise.all(tasks);
+        if (users) {
+            const tasks = users.map((user: IUser) => processUser(user));
+            // Wait for all tasks to complete
+            await Promise.all(tasks);
+        }
     } catch (error) {
         console.error('Error in main execution:', error);
     }

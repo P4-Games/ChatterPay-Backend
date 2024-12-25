@@ -1,12 +1,12 @@
 import { ethers } from 'ethers';
-import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
-import { SIGNING_KEY } from '../constants/environment';
 import Transaction from '../models/transaction';
-import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { executeSwap } from '../services/swapService';
-import { sendSwapNotification } from './replyController';
+import { SIGNING_KEY } from '../constants/environment';
+import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
+import { sendSwapNotification } from '../services/notificationService';
+import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 
 interface SwapBody {
     channel_user_id: string;
