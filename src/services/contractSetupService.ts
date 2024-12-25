@@ -1,9 +1,9 @@
 import { ethers } from 'ethers';
 
 import { IBlockchain } from '../models/blockchain';
-import { getBundlerUrl, validateBundlerUrl } from '../utils/bundler';
-import chatterPayABI from '../utils/chatterPayABI.json';
 import { getNetworkConfig } from './networkService';
+import chatterPayABI from '../utils/chatterPayABI.json';
+import { getBundlerUrl, validateBundlerUrl } from '../utils/bundler';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 
 /**

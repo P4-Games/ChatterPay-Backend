@@ -1,18 +1,18 @@
 import { ethers } from 'ethers';
-import { FastifyReply, FastifyRequest } from 'fastify';
 import { ObjectId } from 'mongoose';
+import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { defaultNftImage, networkChainIds } from '../constants/contracts';
+import { isValidUrl } from '../utils/paramsUtils';
+import { getDynamicGas } from '../utils/dynamicGas';
 import { SIGNING_KEY } from '../constants/environment';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
-import { getWalletByPhoneNumber, IUser } from '../models/user';
 import { getNetworkConfig } from '../services/networkService';
+import { IUser, getWalletByPhoneNumber } from '../models/user';
 import { createUserWithWallet } from '../services/userService';
-import { getDynamicGas } from '../utils/dynamicGas';
-import { isValidUrl } from '../utils/paramsUtils';
+import { sendMintNotification } from '../services/notificationService';
+import { defaultNftImage, networkChainIds } from '../constants/contracts';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/uploadServices';
-import { sendMintNotification } from './replyController';
+import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
 export interface NFTInfo {
     description: string;

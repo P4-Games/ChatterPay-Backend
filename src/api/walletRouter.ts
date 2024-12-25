@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 
-import { createWallet } from '../controllers/newWalletController';
+import { createWallet } from '../controllers/walletController';
 
 /**
  * Configures routes related to wallets.

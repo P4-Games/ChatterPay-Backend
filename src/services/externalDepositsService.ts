@@ -3,8 +3,8 @@ import { gql, request } from 'graphql-request';
 import { User } from '../models/user';
 import Transaction from '../models/transaction';
 import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
+import { sendTransferNotification } from './notificationService';
 import { LastProcessedBlock } from '../models/lastProcessedBlock';
-import { sendTransferNotification } from '../controllers/replyController';
 
 /**
  * The GraphQL API URLs for querying external deposits.
@@ -117,8 +117,7 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
     const value = (Number(transfer.value) / 1e18).toFixed(4);
 
     // Send incoming transfer notification message, and record tx data
-    sendTransferNotification(user.phone_number, null, value, token);
-
+    sendTransferNotification(transfer.to, user.phone_number, null, value, token);
     new Transaction({
       trx_hash: transfer.id,
       wallet_from: transfer.from,

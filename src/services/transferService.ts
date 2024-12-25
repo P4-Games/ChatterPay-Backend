@@ -2,13 +2,13 @@ import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
 import entryPoint from '../utils/entryPoint.json';
-import { generatePrivateKey } from '../utils/keyGenerator';
-import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { getBlockchain } from './blockchainService';
+import { generatePrivateKey } from '../utils/keyGenerator';
 import { sendUserOperationToBundler } from './bundlerService';
-import { setupContracts, setupERC20 } from './contractSetupService';
+import { waitForUserOperationReceipt } from '../utils/waitForTX';
+import { setupERC20, setupContracts } from './contractSetupService';
 import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
-import { createGenericUserOperation, createTransferCallData, signUserOperation } from './userOperationService';
+import { signUserOperation, createTransferCallData, createGenericUserOperation } from './userOperationService';
 
 /**
  * Sends a user operation for token transfer.
