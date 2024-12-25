@@ -6,7 +6,7 @@ import { sendUserOperation } from '../services/transferService';
 import { getOrCreateUser } from '../services/userService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import web3 from '../utils/web3_config';
-import { sendOutgoingTransferNotification, sendTransferNotification } from './replyController';
+import { sendOutgoingTransferNotification, sendTransferNotification } from '../services/notificationService';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {

@@ -6,7 +6,7 @@ import { SIGNING_KEY } from '../constants/environment';
 import Transaction from '../models/transaction';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { executeSwap } from '../services/swapService';
-import { sendSwapNotification } from './replyController';
+import { sendSwapNotification } from '../services/notificationService';
 
 interface SwapBody {
     channel_user_id: string;

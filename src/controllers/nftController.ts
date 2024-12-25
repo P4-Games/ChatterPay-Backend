@@ -12,7 +12,7 @@ import { getDynamicGas } from '../utils/dynamicGas';
 import { isValidUrl } from '../utils/paramsUtils';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import { downloadAndProcessImage, uploadToICP, uploadToIpfs } from '../utils/uploadServices';
-import { sendMintNotification } from './replyController';
+import { sendMintNotification } from '../services/notificationService';
 
 export interface NFTInfo {
     description: string;
