@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { ObjectId } from 'mongoose';
+import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { isValidUrl } from '../utils/paramsUtils';
@@ -472,13 +472,23 @@ export const getLastNFT = async (
         console.log('Searching last_nft for channel_user_id', channel_user_id);
         const nft = (await NFTModel.find({ channel_user_id })).sort((a, b) => b.id - a.id)?.[0];
 
-        if (nft) {
-            reply.redirect(
-                `https://api.whatsapp.com/send/?phone=5491164629653&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`,
-            );
-        } else {
+        if (!nft) {
             return await returnErrorResponse(reply, 404, 'NFT not found');
         }
+
+        // Verificar si la solicitud proviene de Postman
+        const isPostman = request.headers['user-agent']?.includes('Postman');
+        const returnUrl = `https://api.whatsapp.com/send/?phone=5491164629653&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`;
+        
+        if (isPostman) {
+            return await reply.send({
+                message: 'URL para compartir el NFT',
+                url: returnUrl
+            });
+        } 
+        
+        reply.redirect(returnUrl);
+        
     } catch (error) {
         console.error('Error getting NFT:', error);
         return returnErrorResponse(reply, 500, 'Internal Server Error');
@@ -578,15 +588,25 @@ export const getNftList = async (
 export const getNftMetadataRequiredByOpenSea = async (
     request: FastifyRequest<{
         Params: {
-            id: string;
+            id: string; // the bdd _id!
         };
     }>,
     reply: FastifyReply,
 ): Promise<void> => {
-    const { id: bddId } = request.params;
+    
     try {
-        console.log(bddId);
-        const nfts: INFT[] = await NFTModel.find({ _id: bddId });
+        // Here, it should search by the _id, as the NFT is minted with that data!
+        // mintNftOriginal(address_of_user!, (mongoData._id as ObjectId).toString())
+        const { id: bddId } = request.params;
+    
+        if (!mongoose.Types.ObjectId.isValid(bddId)) {
+            return await reply.status(400).send({
+                message: 'The parameter "id" must be a valid MongoDB ObjectId format, as the NFT is minted with the _id field.'
+            });
+        }
+
+        const objectId = new mongoose.Types.ObjectId(bddId);
+        const nfts: INFT[] = await NFTModel.find({ _id: objectId });
 
         if (nfts.length === 0) {
             return await reply.status(400).send({ message: 'NFT not found' });
