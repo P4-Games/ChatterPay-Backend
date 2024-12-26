@@ -2,7 +2,7 @@ import { gql, request } from 'graphql-request';
 
 import { User } from '../models/user';
 import Transaction from '../models/transaction';
-import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
+import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
 import { sendTransferNotification } from './notificationService';
 import { LastProcessedBlock } from '../models/lastProcessedBlock';
 

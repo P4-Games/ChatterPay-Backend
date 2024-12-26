@@ -4,7 +4,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import Transaction from '../models/transaction';
 import { executeSwap } from '../services/swapService';
 import { SIGNING_KEY } from '../constants/environment';
-import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
+import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
 import { sendSwapNotification } from '../services/notificationService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 

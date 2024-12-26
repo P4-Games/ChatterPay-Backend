@@ -1,8 +1,5 @@
 import { GCP_BUCKET_BASE_URL } from "./environment";
 
-/**
- * These are the demo token contracts used for testing purposes in Scroll Sepolia
- */
 export const SIMPLE_SWAP_ADDRESS = '0xd1D3ec40941da7d74e07D5Da240be35cd6c2574D';
 export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
 
@@ -15,3 +12,7 @@ export const networkChainIds = {
     scrollSepoliaTestnet: 534351,
     default: 421614,
 };
+
+export const LIFI_SLIPPAGE = 30 / 1000;
+export const LIFI_TYPE = 'SAFEST';
+
