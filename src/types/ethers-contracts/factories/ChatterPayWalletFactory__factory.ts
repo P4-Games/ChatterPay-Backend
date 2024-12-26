@@ -9,66 +9,11 @@ import type {
     ChatterPayWalletFactoryInterface,
 } from '../ChatterPayWalletFactory';
 
-const _abi = [
-    {
-        inputs: [
-            {
-                internalType: 'address',
-                name: '_owner',
-                type: 'address',
-            },
-        ],
-        name: 'createProxy',
-        outputs: [
-            {
-                internalType: 'address',
-                name: '',
-                type: 'address',
-            },
-        ],
-        stateMutability: 'nonpayable',
-        type: 'function',
-    },
-    {
-        inputs: [
-            {
-                internalType: 'address',
-                name: '_owner',
-                type: 'address',
-            },
-        ],
-        name: 'computeProxyAddress',
-        outputs: [
-            {
-                internalType: 'address',
-                name: '',
-                type: 'address',
-            },
-        ],
-        stateMutability: 'view',
-        type: 'function',
-    },
-    {
-        inputs: [],
-        name: 'getProxiesCount',
-        outputs: [
-            {
-                internalType: 'uint256',
-                name: '',
-                type: 'uint256',
-            },
-        ],
-        stateMutability: 'view',
-        type: 'function',
-    },
-] as const;
-
 export class ChatterPayWalletFactory__factory {
-    static readonly abi = _abi;
-    static createInterface(): ChatterPayWalletFactoryInterface {
-        return new utils.Interface(_abi) as ChatterPayWalletFactoryInterface;
+    static createInterface(abi: any): ChatterPayWalletFactoryInterface {
+        return new utils.Interface(abi) as ChatterPayWalletFactoryInterface;
     }
-    static connect(address: string, signerOrProvider: Signer | Provider): ChatterPayWalletFactory {
-        return new Contract(address, _abi, signerOrProvider) as ChatterPayWalletFactory;
+    static connect(address: string, abi: any, signerOrProvider: Signer | Provider): ChatterPayWalletFactory {
+        return new Contract(address, abi, signerOrProvider) as ChatterPayWalletFactory;
     }
 }
