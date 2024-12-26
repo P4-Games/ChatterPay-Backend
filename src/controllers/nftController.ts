@@ -187,8 +187,12 @@ export const generateNftOriginal = async (
 
     const { channel_user_id, url, mensaje, latitud, longitud } = request.body;
 
-    if (!channel_user_id || !url || !mensaje || !latitud || !longitud) {
-        return returnErrorResponse(reply, 400, 'Missing parameters in body. You have to send: channel_user_id, url, mensaje, latitud, longitud');
+    if (!channel_user_id || !url) {
+        return returnErrorResponse(
+            reply,
+            400,
+            'Missing parameters in body. You have to send: channel_user_id, url, mensaje, latitud, longitud'
+        );
     }
 
     if (!isValidUrl(url)) {
