@@ -45,6 +45,10 @@ export const uploadImage: RouteHandlerMethod = async (
     reply: FastifyReply,
 ): Promise<FastifyReply> => {
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
+
         const { phone_number, image_url } = request.body as UploadBody;
 
         if (!phone_number) {
