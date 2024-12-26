@@ -14,6 +14,9 @@ export const createUser = async (
     reply: FastifyReply,
 ): Promise<FastifyReply> => {
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
         const newUser = new User(request.body);
         await newUser.save();
         return await returnSuccessResponse(reply, 'User created successfully', { user: newUser });
@@ -82,6 +85,10 @@ export const updateUser = async (
     const { id } = request.params as { id: string };
 
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
+
         const updatedUser = await User.findByIdAndUpdate(id, request.body, { new: true });
 
         if (!updatedUser) {
