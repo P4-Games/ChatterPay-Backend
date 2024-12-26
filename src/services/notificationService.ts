@@ -35,9 +35,6 @@ interface NotificationTemplate {
 async function sendBotNotification(payload: OperatorReplyPayload): Promise<string> {
     try {
         const sendMsgEndpint = `${BOT_API_URL}/chatbot/conversations/send-message`;
-
-        console.log(sendMsgEndpint);
-
         const response = await axios.post(sendMsgEndpint, payload, {
             headers: {
                 'Content-Type': 'application/json',
@@ -257,7 +254,6 @@ export async function sendTransferNotification(
 
         const data = await sendBotNotification(payload);
         sendPushNotificaton(title, formattedMessage, address_of_user) // avoid await 
-        console.log('Notification sent:', data);
         return data;
 
     } catch (error) {
@@ -366,7 +362,6 @@ export async function sendOutgoingTransferNotification(
         
         const data = await sendBotNotification(payload);
         sendPushNotificaton(title, formattedMessage, address_of_user) // avoid await 
-        console.log('Notification sent:', data);
         return data;
 
     } catch (error) {
