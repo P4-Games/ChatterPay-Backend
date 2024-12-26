@@ -177,6 +177,9 @@ export const createTransaction = async (
     reply: FastifyReply,
 ) => {
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
         const newTransaction = new Transaction(request.body);
         await newTransaction.save();
         return await returnSuccessResponse(reply, 'Transaction created successfully', newTransaction.toJSON());
@@ -249,6 +252,10 @@ export const updateTransaction = async (
     const { id } = request.params;
 
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
+
         const updatedTransaction = await Transaction.findByIdAndUpdate(id, request.body, {
             new: true,
         });
@@ -291,6 +298,10 @@ export const makeTransaction = async (
     reply: FastifyReply,
 ) => {
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
+
         const { channel_user_id, to, token, amount, chain_id } = request.body;
         const { networkConfig } = request.server;
 

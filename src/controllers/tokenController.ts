@@ -16,7 +16,15 @@ export const createToken = async (
     reply: FastifyReply,
 ): Promise<FastifyReply> => {
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
+
         const newToken = new Token(request.body);
+        if (!newToken) {
+            return await returnErrorResponse(reply, 400, 'Missing parameters in body. You have to send: newToken');
+        }
+    
         await newToken.save();
         return await returnSuccessResponse(reply, 'Token created successfully', newToken.toJSON());
     } catch (error) {
@@ -88,6 +96,10 @@ export const updateToken = async (
     const { id } = request.params as { id: string };
 
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
+
         const updatedToken = await Token.findByIdAndUpdate(id, request.body, { new: true });
 
         if (!updatedToken) {
@@ -235,8 +247,16 @@ export const issueTokensHandler = async (
     request: FastifyRequest<{ Body: { address: string } }>,
     reply: FastifyReply,
 ): Promise<FastifyReply> => {
-    const { address }: { address: string } = request.body;
+    
+    if (!request.body) {
+        return returnErrorResponse(reply, 400, 'You have to send a body with this request');
+    }
 
+    const { address }: { address: string } = request.body;
+    if (!address) {
+        return returnErrorResponse(reply, 400, 'Missing parameters in body. You have to send: address');
+    }
+    
     try {
         const results = await issueTokensCore(address, request.server);
 

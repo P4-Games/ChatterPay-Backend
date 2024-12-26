@@ -1,8 +1,8 @@
 import { ethers } from 'ethers';
 
 import { IBlockchain } from '../models/blockchain';
+import { getChatterpayABI } from './bucketService';
 import { getNetworkConfig } from './networkService';
-import chatterPayABI from '../utils/chatterPayABI.json';
 import { getBundlerUrl, validateBundlerUrl } from '../utils/bundler';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 
@@ -33,7 +33,8 @@ export async function setupContracts(blockchain: IBlockchain, privateKey: string
     const proxy = await computeProxyAddressFromPhone(fromNumber);
     const accountExists = true;
 
-    const chatterPay = new ethers.Contract(proxy.proxyAddress, chatterPayABI, signer);
+    const chatterpayABI = await getChatterpayABI()
+    const chatterPay = new ethers.Contract(proxy.proxyAddress, chatterpayABI, signer);
 
     return { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists };
 }

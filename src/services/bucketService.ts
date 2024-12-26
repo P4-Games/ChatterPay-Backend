@@ -47,3 +47,6 @@ export const getChatterPayWalletFactoryABI = async (): Promise<ABI> =>
 
 // Function to get EntryPoint ABI from the GCP bucket
 export const getEntryPointABI = async (): Promise<ABI> => getFile(GCP_ABIs.EntryPoint);
+
+// Function to get chatterpay ABI from the GCP bucket
+export const getChatterpayABI = async (): Promise<ABI> => getFile(GCP_ABIs.ChatterPay);

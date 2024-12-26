@@ -181,7 +181,15 @@ export const generateNftOriginal = async (
     }>,
     reply: FastifyReply,
 ): Promise<void> => {
+    if (!request.body) {
+        return returnErrorResponse(reply, 400, 'You have to send a body with this request');
+    }
+
     const { channel_user_id, url, mensaje, latitud, longitud } = request.body;
+
+    if (!channel_user_id || !url || !mensaje || !latitud || !longitud) {
+        return returnErrorResponse(reply, 400, 'Missing parameters in body. You have to send: channel_user_id, url, mensaje, latitud, longitud');
+    }
 
     if (!isValidUrl(url)) {
         console.warn('The provided URL is not valid.');
@@ -324,8 +332,16 @@ export const generateNftCopy = async (
     reply: FastifyReply,
 ): Promise<void> => {
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
+
         const { channel_user_id, id } = request.body;
 
+        if (!channel_user_id) {
+            return await returnErrorResponse(reply, 400, 'Missing parameters in body. You have to send: channel_user_id');
+        }
+    
         // Verify that the NFT to copy exists
         const nfts: INFT[] = await NFTModel.find({ id });
         if (!nfts || nfts.length === 0) {

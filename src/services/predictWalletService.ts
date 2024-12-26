@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
 import { IBlockchain } from '../models/blockchain';
 import { getDynamicGas } from '../utils/dynamicGas';
 import { getNetworkConfig } from './networkService';
+import { getChatterPayWalletFactoryABI } from './bucketService';
 import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
@@ -61,8 +62,10 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
     });
 
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    const chatterpayWalletFactoryABI = await getChatterPayWalletFactoryABI();
     const factory = ChatterPayWalletFactory__factory.connect(
         networkConfig.contracts.factoryAddress,
+        chatterpayWalletFactoryABI,
         backendSigner,
     );
 

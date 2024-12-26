@@ -17,6 +17,10 @@ export const createBlockchain = async (
     reply: FastifyReply,
 ): Promise<FastifyReply> => {
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
+
         const newBlockchain = new Blockchain(request.body);
         await newBlockchain.save();
         console.log("Blockchain Saved")
@@ -85,6 +89,10 @@ export const updateBlockchain = async (
 ): Promise<FastifyReply> => {
     const { id } = request.params;
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
+
         const updatedBlockchain = await Blockchain.findByIdAndUpdate(id, request.body, {
             new: true,
         });
