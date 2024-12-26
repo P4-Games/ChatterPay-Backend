@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
-import entryPoint from '../utils/entryPoint.json';
+import { getEntryPointABI } from './bucketService';
 import { getBlockchain } from './blockchainService';
 import { checkWalletBalance } from './walletService';
 import { generatePrivateKey } from '../utils/keyGenerator';
@@ -82,13 +82,13 @@ async function executeOperation(
     callData: string,
     signer: ethers.Wallet,
     backendSigner: ethers.Wallet, // Agregamos backendSigner como parámetro
-    entrypoint: ethers.Contract,
+    entrypointContract: ethers.Contract,
     bundlerUrl: string,
     proxyAddress: string,
     provider: ethers.providers.JsonRpcProvider
 ): Promise<string> {
     // Get the nonce
-    const nonce = await entrypoint.getNonce(proxyAddress, 0);
+    const nonce = await entrypointContract.getNonce(proxyAddress, 0);
     console.log("Nonce:", nonce.toString());
 
     // Create the base user operation
@@ -116,7 +116,7 @@ async function executeOperation(
     const bundlerResponse = await sendUserOperationToBundler(
         bundlerUrl, 
         userOperation, 
-        entrypoint.address
+        entrypointContract.address
     );
 
     // Wait for receipt
@@ -163,9 +163,10 @@ export async function executeSwap(
         console.log("Balance check passed");
 
         const { networkConfig } = fastify;
-        const entrypoint = new ethers.Contract(networkConfig.contracts.entryPoint, entryPoint, backendSigner);
+        const entrypointABI = await getEntryPointABI()
+        const entrypointContract = new ethers.Contract(networkConfig.contracts.entryPoint, entrypointABI, backendSigner);
         
-        await ensurePaymasterHasPrefund(entrypoint, networkConfig.contracts.paymasterAddress!)
+        await ensurePaymasterHasPrefund(entrypointContract, networkConfig.contracts.paymasterAddress!)
 
         console.log("Validating account");
         if (!accountExists) {
@@ -196,7 +197,7 @@ export async function executeSwap(
             approveCallData,
             signer,
             backendSigner, // Pasamos el backendSigner
-            entrypoint,
+            entrypointContract,
             bundlerUrl,
             proxy.proxyAddress,
             provider
@@ -216,7 +217,7 @@ export async function executeSwap(
             swapCallData,
             signer,
             backendSigner, // Pasamos el backendSigner
-            entrypoint,
+            entrypointContract,
             bundlerUrl,
             proxy.proxyAddress,
             provider
