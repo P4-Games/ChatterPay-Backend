@@ -35,9 +35,6 @@ interface NotificationTemplate {
 async function sendBotNotification(payload: OperatorReplyPayload): Promise<string> {
     try {
         const sendMsgEndpint = `${BOT_API_URL}/chatbot/conversations/send-message`;
-
-        console.log(sendMsgEndpint);
-
         const response = await axios.post(sendMsgEndpint, payload, {
             headers: {
                 'Content-Type': 'application/json',
@@ -238,7 +235,7 @@ export async function sendTransferNotification(
     from: string | null,
     amount: string,
     token: string,
-): Promise<string> {
+): Promise<unknown> {
     try {
         console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
         if (!isValidPhoneNumber(channel_user_id)) return "";
@@ -257,7 +254,6 @@ export async function sendTransferNotification(
 
         const data = await sendBotNotification(payload);
         sendPushNotificaton(title, formattedMessage, address_of_user) // avoid await 
-        console.log('Notification sent:', data);
         return data;
 
     } catch (error) {
@@ -277,13 +273,15 @@ export async function sendSwapNotification(
     result: string,
     outputToken: string,
     transactionHash: string,
-): Promise<void> {
+): Promise<unknown> {
     try {
         console.log('Sending swap notification');
         const networkConfig: IBlockchain = await getNetworkConfig();
 
         const resultString: string = `${Math.round(parseFloat(result) * 1e4) / 1e4}`;
-        const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Transfer);
+        const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Swap);
+
+
         const formattedMessage = message
         .replaceAll("[AMOUNT]", amount)
         .replaceAll("[TOKEN]", token)
@@ -298,9 +296,10 @@ export async function sendSwapNotification(
             message: formattedMessage
         };
 
-        await sendBotNotification(payload);
+        const data = await sendBotNotification(payload);
         sendPushNotificaton(title, formattedMessage, address_of_user) // avoid await 
-
+        return data;
+        
     } catch (error) {
         console.error('Error in sendSwapNotification:', error);
         throw error;
@@ -310,11 +309,11 @@ export async function sendSwapNotification(
 /**
  * Sends a notification for minted certificates and on-chain memories.
  */
-export async function sendMintNotification(address_of_user:string, channel_user_id: string, id: string): Promise<void> {
+export async function sendMintNotification(address_of_user:string, channel_user_id: string, id: string): Promise<unknown> {
     try {
         console.log('Sending mint notification');
 
-        const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Transfer);
+        const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Mint);
         const formattedMessage = message
         .replaceAll("[ID]", id);
 
@@ -324,8 +323,9 @@ export async function sendMintNotification(address_of_user:string, channel_user_
             message: formattedMessage
         };
         
-        await sendBotNotification(payload);
+        const data = await sendBotNotification(payload);
         sendPushNotificaton(title, formattedMessage, address_of_user) // avoid await 
+        return data;
 
     } catch (error) {
         console.error('Error in sendMintNotification:', (error as Error).message);
@@ -343,14 +343,14 @@ export async function sendOutgoingTransferNotification(
     amount: string,
     token: string,
     txHash: string,
-): Promise<string> {
+): Promise<unknown> {
     try {
         console.log('Sending outgoing transfer notification');
         if (!isValidPhoneNumber(channel_user_id)) return "";
 
         const networkConfig: IBlockchain = await getNetworkConfig();
 
-        const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Transfer);
+        const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.OutgoingTransfer);
         const formattedMessage = message
         .replaceAll("[AMOUNT]", amount)
         .replaceAll("[TOKEN]", token)
@@ -366,7 +366,6 @@ export async function sendOutgoingTransferNotification(
         
         const data = await sendBotNotification(payload);
         sendPushNotificaton(title, formattedMessage, address_of_user) // avoid await 
-        console.log('Notification sent:', data);
         return data;
 
     } catch (error) {
