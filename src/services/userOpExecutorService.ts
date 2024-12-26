@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
-import entryPoint from '../utils/entryPoint.json';
+import { getEntryPointABI } from './bucketService';
 import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
@@ -31,7 +31,8 @@ export async function executeUserOperation(
     const { networkConfig, backendSigner, provider } = fastify;
     console.log("Network config loaded. Entry point:", networkConfig.contracts.entryPoint);
     
-    const entrypoint = new ethers.Contract(networkConfig.contracts.entryPoint, entryPoint, backendSigner);
+    const entrypointABI = await getEntryPointABI()
+    const entrypoint = new ethers.Contract(networkConfig.contracts.entryPoint, entrypointABI, backendSigner);
     console.log("EntryPoint contract initialized");
 
     // Get the nonce
