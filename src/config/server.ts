@@ -26,7 +26,7 @@ export async function startServer(): Promise<FastifyInstance> {
         errorResponseBuilder: () => ({
             code: 429,
             error: 'Too Many Requests',
-            message: 'Demasiadas solicitudes, por favor inténtelo de nuevo más tarde.',
+            message: 'Too many requests, please try again later.'
         }),
     });
 

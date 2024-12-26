@@ -29,7 +29,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   const authHeader: string | undefined = request.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    reply.code(401).send({ error: 'No se proporcionó token de autenticación' });
+    reply.code(401).send({ error: 'Authentication token was not provided' });
     return;
   }
 
@@ -38,7 +38,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   const tokenType: TokenResponse = await verifyToken(token);
 
   if (!tokenType) {
-    reply.code(401).send({ error: 'Token inválido' });
+    reply.code(401).send({ error: 'Invalid Token' });
     return;
   }
 

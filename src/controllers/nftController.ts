@@ -10,7 +10,7 @@ import { getNetworkConfig } from '../services/networkService';
 import { IUser, getWalletByPhoneNumber } from '../models/user';
 import { createUserWithWallet } from '../services/userService';
 import { sendMintNotification } from '../services/notificationService';
-import { defaultNftImage, networkChainIds } from '../constants/contracts';
+import { defaultNftImage, networkChainIds } from '../constants/blockchain';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 

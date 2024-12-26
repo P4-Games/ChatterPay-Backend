@@ -1,7 +1,9 @@
 import { Signer } from 'ethers-5';
 import { LiFi, RouteOptions, RoutesRequest } from '@lifi/sdk';
 
-import { TYPE, SLIPPAGE } from '../constants/LiFiConfig';
+import { LIFI_TYPE, LIFI_SLIPPAGE } from '../constants/blockchain';
+
+
 
 /**
  * Performs a token swap from USDC to WETH using the LiFi SDK.
@@ -29,8 +31,8 @@ export const swapToWETH = async (signer: Signer, amount: string): Promise<string
 
     // Configure route options
     const routeOptions: RouteOptions = {
-        slippage: SLIPPAGE,
-        order: TYPE,
+        slippage: LIFI_SLIPPAGE,
+        order: LIFI_TYPE,
     };
 
     // Set up the route request for USDC to WETH swap

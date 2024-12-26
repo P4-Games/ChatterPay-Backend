@@ -1,5 +1,5 @@
 import { User, IUser } from "../models/user";
-import { computeProxyAddressFromPhone } from "./predictWalletService";
+import { ComputedAddress, computeProxyAddressFromPhone } from "./predictWalletService";
 import { subscribeToPushChannel, sendWalletCreationNotification } from "./notificationService";
 
 /**
@@ -8,10 +8,8 @@ import { subscribeToPushChannel, sendWalletCreationNotification } from "./notifi
  * @returns {Promise<string>} The proxy address of the created wallet.
  */
 export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> => {
-    // Create new wallet
-    const predictedWallet = await computeProxyAddressFromPhone(phoneNumber);
+    const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(phoneNumber);
 
-    // Create new user
     const user = new User({
         phone_number: phoneNumber,
         wallet: predictedWallet.proxyAddress,
@@ -26,9 +24,9 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
                 language: 'en'
         }}
     });
+    
     await user.save();
 
-    // Push
     console.log('Push protocol', phoneNumber, predictedWallet.EOAAddress )
     await subscribeToPushChannel(predictedWallet.privateKeyNotHashed, predictedWallet.EOAAddress)
     sendWalletCreationNotification(predictedWallet.EOAAddress, phoneNumber) // avoid await            
@@ -46,13 +44,13 @@ export const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
     if (user)
         return user
     console.log(
-        `Número de telefono ${phoneNumber} no registrado en ChatterPay, registrando...`,
+        `Phone number ${phoneNumber} not registered in ChatterPay, registering...`,
     );
-    
+        
     const newUser: IUser = await createUserWithWallet(phoneNumber);
     console.log(
-        `Número de telefono ${phoneNumber} registrado con la wallet ${newUser.wallet}`,
+        `Phone number ${phoneNumber} registered with the wallet ${newUser.wallet}`,
     );
-
+    
     return newUser;
 };

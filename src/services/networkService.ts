@@ -1,4 +1,4 @@
-import { networkChainIds } from '../constants/contracts';
+import { networkChainIds } from '../constants/blockchain';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 
 /**

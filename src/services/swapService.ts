@@ -5,7 +5,7 @@ import entryPoint from '../utils/entryPoint.json';
 import { getBlockchain } from './blockchainService';
 import { checkWalletBalance } from './walletService';
 import { generatePrivateKey } from '../utils/keyGenerator';
-import { SIMPLE_SWAP_ADDRESS } from '../constants/contracts';
+import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { setupERC20, setupContracts } from './contractSetupService';
