@@ -19,10 +19,16 @@ export const createWallet = async (
     reply: FastifyReply,
 ): Promise<FastifyReply> => {
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
+
         const { channel_user_id } = request.body;
+        if (!channel_user_id) {
+            return await returnErrorResponse(reply, 400, 'Missing channel_user_id in body');
+        }
 
         const phone_number = channel_user_id;
-
         if (!phone_number || phone_number.length > 15) {
             return await returnErrorResponse(reply, 400, 'Phone number is invalid');
         }
