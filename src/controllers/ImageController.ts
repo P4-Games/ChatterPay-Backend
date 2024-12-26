@@ -26,18 +26,18 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
 
         return {
             success: true,
-            message: 'Imagen subida exitosamente a ICP e IPFS',
+            message: 'Image successfully uploaded to ICP and IPFS',
             icp_url: icpUrl,
             ipfs_url: ipfsUrl,
         };
-    } catch (error) {
-        console.error('Error procesando y subiendo la imagen:', error);
-        return {
-            success: false,
-            message: 'Error al procesar y subir la imagen',
-            error: (error as Error).message,
-        };
-    }
+        } catch (error) {
+            console.error('Error processing and uploading the image:', error);
+            return {
+                success: false,
+                message: 'Error processing and uploading the image',
+                error: (error as Error).message,
+            };
+        }        
 }
 
 export const uploadImage: RouteHandlerMethod = async (
@@ -64,7 +64,7 @@ export const uploadImage: RouteHandlerMethod = async (
         const user = await User.findOne({ phone_number });
         if (!user) {
             console.warn('User not found:', phone_number);
-            return await returnErrorResponse(reply, 404, 'Usuario no encontrado');
+            return await returnErrorResponse(reply, 404, 'User not found');
         }
 
         const fileName = `profile_${phone_number}_${Date.now()}.jpg`;
@@ -75,7 +75,7 @@ export const uploadImage: RouteHandlerMethod = async (
             await user.save();
 
             console.log('Image uploaded successfully:', uploadResult);
-            return await returnSuccessResponse(reply, "Imagen subida exitosamente", {
+            return await returnSuccessResponse(reply, "Image uploaded successfully", {
                 icp_url: uploadResult.icp_url,
                 ipfs_url: uploadResult.ipfs_url,
             });
@@ -85,6 +85,6 @@ export const uploadImage: RouteHandlerMethod = async (
         return await returnErrorResponse(reply, 500, 'Error uploading image', uploadResult.error);
     } catch (error) {
         console.error('Error uploading image:', error);
-        return returnErrorResponse(reply, 500, 'Error interno del servidor');
+        return returnErrorResponse(reply, 500, 'Internal Server Error');
     }
 };
