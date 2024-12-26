@@ -46,13 +46,13 @@ export const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
     if (user)
         return user
     console.log(
-        `Número de telefono ${phoneNumber} no registrado en ChatterPay, registrando...`,
+        `Phone number ${phoneNumber} not registered in ChatterPay, registering...`,
     );
-    
+        
     const newUser: IUser = await createUserWithWallet(phoneNumber);
     console.log(
-        `Número de telefono ${phoneNumber} registrado con la wallet ${newUser.wallet}`,
+        `Phone number ${phoneNumber} registered with the wallet ${newUser.wallet}`,
     );
-
+    
     return newUser;
 };
