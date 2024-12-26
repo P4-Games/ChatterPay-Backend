@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
-import entryPoint from '../utils/entryPoint.json';
+import { getEntryPointABI } from './bucketService';
 import { getBlockchain } from './blockchainService';
 import { checkWalletBalance } from './walletService';
 import { generatePrivateKey } from '../utils/keyGenerator';
@@ -48,9 +48,11 @@ export async function sendUserOperation(
         console.log("Signer has enough ETH");
 
         const { networkConfig } = fastify;
-        const entrypoint = new ethers.Contract(networkConfig.contracts.entryPoint, entryPoint, backendSigner);
-        
-        await ensurePaymasterHasPrefund(entrypoint, networkConfig.contracts.paymasterAddress!)
+        const entrypointABI = await getEntryPointABI()
+        const entrypointContract = new ethers.Contract(networkConfig.contracts.entryPoint, entrypointABI, backendSigner);
+
+
+        await ensurePaymasterHasPrefund(entrypointContract, networkConfig.contracts.paymasterAddress!)
 
         console.log("Validating account");
         if (!accountExists) {
@@ -61,7 +63,7 @@ export async function sendUserOperation(
         const callData = createTransferCallData(chatterPay, erc20, to, amount);
 
         // Get the nonce
-        const nonce = await entrypoint.getNonce(proxy.proxyAddress, 0);
+        const nonce = await entrypointContract.getNonce(proxy.proxyAddress, 0);
         console.log("Nonce:", nonce.toString());
 
         // Create the base user operation
@@ -89,7 +91,7 @@ export async function sendUserOperation(
         const bundlerResponse = await sendUserOperationToBundler(
             bundlerUrl, 
             userOperation, 
-            entrypoint.address
+            entrypointContract.address
         );
         console.log("Bundler response:", bundlerResponse);
 
