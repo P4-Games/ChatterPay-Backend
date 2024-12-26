@@ -235,7 +235,7 @@ export async function sendTransferNotification(
     from: string | null,
     amount: string,
     token: string,
-): Promise<string> {
+): Promise<unknown> {
     try {
         console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
         if (!isValidPhoneNumber(channel_user_id)) return "";
@@ -273,7 +273,7 @@ export async function sendSwapNotification(
     result: string,
     outputToken: string,
     transactionHash: string,
-): Promise<void> {
+): Promise<unknown> {
     try {
         console.log('Sending swap notification');
         const networkConfig: IBlockchain = await getNetworkConfig();
@@ -296,9 +296,10 @@ export async function sendSwapNotification(
             message: formattedMessage
         };
 
-        await sendBotNotification(payload);
+        const data = await sendBotNotification(payload);
         sendPushNotificaton(title, formattedMessage, address_of_user) // avoid await 
-
+        return data;
+        
     } catch (error) {
         console.error('Error in sendSwapNotification:', error);
         throw error;
@@ -308,7 +309,7 @@ export async function sendSwapNotification(
 /**
  * Sends a notification for minted certificates and on-chain memories.
  */
-export async function sendMintNotification(address_of_user:string, channel_user_id: string, id: string): Promise<void> {
+export async function sendMintNotification(address_of_user:string, channel_user_id: string, id: string): Promise<unknown> {
     try {
         console.log('Sending mint notification');
 
@@ -322,8 +323,9 @@ export async function sendMintNotification(address_of_user:string, channel_user_
             message: formattedMessage
         };
         
-        await sendBotNotification(payload);
+        const data = await sendBotNotification(payload);
         sendPushNotificaton(title, formattedMessage, address_of_user) // avoid await 
+        return data;
 
     } catch (error) {
         console.error('Error in sendMintNotification:', (error as Error).message);
@@ -341,7 +343,7 @@ export async function sendOutgoingTransferNotification(
     amount: string,
     token: string,
     txHash: string,
-): Promise<string> {
+): Promise<unknown> {
     try {
         console.log('Sending outgoing transfer notification');
         if (!isValidPhoneNumber(channel_user_id)) return "";
