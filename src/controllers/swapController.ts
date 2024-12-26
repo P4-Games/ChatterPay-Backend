@@ -5,6 +5,7 @@ import Transaction from '../models/transaction';
 import { executeSwap } from '../services/swapService';
 import { SIGNING_KEY } from '../constants/environment';
 import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
+import { returnErrorResponse } from '../utils/responseFormatter';
 import { sendSwapNotification } from '../services/notificationService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 
@@ -111,6 +112,10 @@ async function saveTransaction(
  */
 export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: FastifyReply) => {
     try {
+        if (!request.body) {
+            return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+        }
+
         const { channel_user_id, user_wallet, inputCurrency, outputCurrency, amount } = request.body;
 
         // Validate inputs
