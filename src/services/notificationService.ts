@@ -279,7 +279,9 @@ export async function sendSwapNotification(
         const networkConfig: IBlockchain = await getNetworkConfig();
 
         const resultString: string = `${Math.round(parseFloat(result) * 1e4) / 1e4}`;
-        const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Transfer);
+        const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Swap);
+
+
         const formattedMessage = message
         .replaceAll("[AMOUNT]", amount)
         .replaceAll("[TOKEN]", token)
@@ -310,7 +312,7 @@ export async function sendMintNotification(address_of_user:string, channel_user_
     try {
         console.log('Sending mint notification');
 
-        const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Transfer);
+        const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Mint);
         const formattedMessage = message
         .replaceAll("[ID]", id);
 
@@ -346,7 +348,7 @@ export async function sendOutgoingTransferNotification(
 
         const networkConfig: IBlockchain = await getNetworkConfig();
 
-        const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Transfer);
+        const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.OutgoingTransfer);
         const formattedMessage = message
         .replaceAll("[AMOUNT]", amount)
         .replaceAll("[TOKEN]", token)
