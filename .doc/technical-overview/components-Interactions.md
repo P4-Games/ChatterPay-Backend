@@ -24,7 +24,7 @@
 
 - transferAll => /withdraw_funds, POST
 - getBalancesWithTotalsFromBackend => /balance:walletAddress, GET
-- fethCustomTokens =>  /balance:walletAddress, GET
+- fethCustomTokens => /balance:walletAddress, GET
 
 ## Frontend => BOT
 
@@ -39,7 +39,7 @@
 - sendSwapNotification => chatbot/conversations/send-message
 - sendMintNotification => chatbot/conversations/send-message
 - sendTransferNotification => chatbot/conversations/send-message
-- sendOutgoingTransferNotification => chatbot/conversations/send-message 
+- sendOutgoingTransferNotification => chatbot/conversations/send-message
 
 ## Backend => The Graph
 
@@ -53,27 +53,26 @@
 - sendTransferNotification => Push to Chatterpay Channel
 - sendOutgoingTransferNotification => Push to Chatterpay Channel
 
-
 ## Backend => Smart Contracts
 
-- Create Wallet (/create_wallet) 
-    * ChatterPayWalletFactory.computeProxyAddress
-    * ChatterPayWalletFactory.createProxy
+- Create Wallet (/create_wallet)
+
+  - ChatterPayWalletFactory.computeProxyAddress
+  - ChatterPayWalletFactory.createProxy
 
 - NFT: Mint Original (/nft) => ChatterPayNFT.mintOriginal
 
 - NFT: Mint Copy (/mint_existing) => ChatterPayNFT.mintCopy
 
-- Make Transaction (/make_transaction) 
-    * ChatterPayWalletFactory.computeProxyAddress
-    * [ERC20].approve
-    * Chatterpay.execute
-    * Chatterpay.balanceOf
-    * CHatterpay.transfer
+- Make Transaction (/make_transaction)
 
-- Swap (/swap) 
-    * ChatterPayWalletFactory.computeProxyAddress
-    * SimpleSwap.swapWETHforUSDT
-    * SimpleSwap.swapUSDTforWETH
-    
+  - ChatterPayWalletFactory.computeProxyAddress
+  - [ERC20].approve
+  - Chatterpay.execute
+  - Chatterpay.balanceOf
+  - CHatterpay.transfer
 
+- Swap (/swap)
+  - ChatterPayWalletFactory.computeProxyAddress
+  - SimpleSwap.swapWETHforUSDT
+  - SimpleSwap.swapUSDTforWETH

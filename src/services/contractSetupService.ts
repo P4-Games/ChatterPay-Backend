@@ -40,7 +40,15 @@ export async function setupContracts(
   const chatterpayABI = await getChatterpayABI();
   const chatterPayContract = new ethers.Contract(proxy.proxyAddress, chatterpayABI, signer);
 
-  return { provider, signer, backendSigner, bundlerUrl, chatterPay: chatterPayContract, proxy, accountExists };
+  return {
+    provider,
+    signer,
+    backendSigner,
+    bundlerUrl,
+    chatterPay: chatterPayContract,
+    proxy,
+    accountExists
+  };
 }
 
 /**
