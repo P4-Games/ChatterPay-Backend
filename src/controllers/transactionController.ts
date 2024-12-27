@@ -1,14 +1,17 @@
-import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import Transaction, { ITransaction } from '../models/transaction';
-import { IUser, User } from '../models/user';
-import { getTokenAddress } from '../services/blockchainService';
-import { sendOutgoingTransferNotification, sendTransferNotification } from '../services/notificationService';
-import { sendUserOperation } from '../services/transferService';
+import web3 from '../utils/web3_config';
+import { User, IUser } from '../models/user';
 import { getOrCreateUser } from '../services/userService';
+import { getTokenAddress } from '../services/blockchainService';
+import { sendUserOperation } from '../services/transferService';
+import Transaction, { ITransaction } from '../models/transaction';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import web3 from '../utils/web3_config';
+import {
+  sendTransferNotification,
+  sendOutgoingTransferNotification
+} from '../services/notificationService';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {
@@ -57,7 +60,6 @@ const validateInputs = async (
   if (!tokenAddress) {
     return 'The token is not available on the selected network';
   }
-
 
   return '';
 };
@@ -303,7 +305,7 @@ export const makeTransaction = async (
     const tokenAddress: string = getTokenAddress(
       networkConfig,
       tokensConfig,
-      tokenSymbol || '' // could be missing in body 
+      tokenSymbol || '' // could be missing in body
     );
 
     let validationError: string = await validateInputs(
@@ -311,7 +313,7 @@ export const makeTransaction = async (
       networkConfig.chain_id,
       tokenAddress
     );
-    
+
     if (validationError) {
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
@@ -321,11 +323,16 @@ export const makeTransaction = async (
       validationError = 'User not found. You must have an account to make a transaction';
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
-      
-    const checkBalanceResult = await verifyWalletBalanceInRpc(networkConfig.rpc, tokenAddress, fromUser.wallet, amount);
+
+    const checkBalanceResult = await verifyWalletBalanceInRpc(
+      networkConfig.rpc,
+      tokenAddress,
+      fromUser.wallet,
+      amount
+    );
 
     if (!checkBalanceResult.enoughBalance) {
-      validationError = `Insufficient balance in wwallet ${fromUser.wallet}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`
+      validationError = `Insufficient balance in wwallet ${fromUser.wallet}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
@@ -350,7 +357,6 @@ export const makeTransaction = async (
       reply,
       'The transfer is in progress, it may take a few minutes.'
     );
-
   } catch (error) {
     console.error('Error making transaction:', error);
     return returnErrorResponse(reply, 400, 'Error making transaction', (error as Error).message);

@@ -1,16 +1,16 @@
 import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
-import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
+import { getEntryPointABI } from './bucketService';
+import { verifyWalletBalance } from './walletService';
 import { generatePrivateKey } from '../utils/keyGenerator';
+import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
+import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { getBlockchain, TokenAddresses } from './blockchainService';
-import { getEntryPointABI } from './bucketService';
-import { sendUserOperationToBundler } from './bundlerService';
-import { setupContracts, setupERC20 } from './contractSetupService';
+import { setupERC20, setupContracts } from './contractSetupService';
 import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
-import { createGenericUserOperation, signUserOperation } from './userOperationService';
-import { verifyWalletBalance } from './walletService';
+import { signUserOperation, createGenericUserOperation } from './userOperationService';
 
 /**
  * Creates callData for token approval

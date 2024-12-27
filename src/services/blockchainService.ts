@@ -1,11 +1,10 @@
-import Blockchain, { IBlockchain } from '../models/blockchain';
 import { IToken } from '../models/token';
+import Blockchain, { IBlockchain } from '../models/blockchain';
 
 export interface TokenAddresses {
   tokenAddressInput: string;
   tokenAddressOutput: string;
 }
-
 
 /**
  * Retrieves a blockchain by its chain ID.
@@ -22,7 +21,6 @@ export async function getBlockchain(chain_id: number): Promise<IBlockchain> {
   return blockchain;
 }
 
-
 /**
  * Gets token address based on Token symbols
  */
@@ -31,19 +29,18 @@ export function getTokenAddress(
   blockchainTokens: IToken[],
   lookUpTokenSymbol: string
 ): string {
-
   if (!blockchainTokens) return '';
-  
-  const chainTokens = blockchainTokens.filter((token) => token.chain_id === blockchainConfig.chain_id);
+
+  const chainTokens = blockchainTokens.filter(
+    (token) => token.chain_id === blockchainConfig.chain_id
+  );
 
   const foundToken = chainTokens.find(
     (t) => t.symbol.toLowerCase() === lookUpTokenSymbol.toLowerCase()
   );
 
   return foundToken?.address ?? '';
-
 }
-
 
 /**
  * Gets tokens addresses based on Tokens symbols
@@ -54,7 +51,9 @@ export function getTokensAddresses(
   lookUpTokenSymbolInput: string,
   lookUpTokenSymbolOutput: string
 ): TokenAddresses {
-  const chainTokens = blockchainTokens.filter((token) => token.chain_id === blockchainConfig.chain_id);
+  const chainTokens = blockchainTokens.filter(
+    (token) => token.chain_id === blockchainConfig.chain_id
+  );
 
   const foundTokenInput = chainTokens.find(
     (t) => t.symbol.toLowerCase() === lookUpTokenSymbolInput.toLowerCase()
@@ -67,5 +66,4 @@ export function getTokensAddresses(
     tokenAddressInput: foundTokenInput?.address ?? '',
     tokenAddressOutput: foundTokenOutput?.address ?? ''
   };
-  
 }

@@ -2,10 +2,10 @@ import { ethers } from 'ethers';
 
 /**
  * Helper function to verifiy balance in wallet
- * @param tokenContract 
- * @param walletAddress 
- * @param amountToCheck 
- * @returns 
+ * @param tokenContract
+ * @param walletAddress
+ * @param amountToCheck
+ * @returns
  */
 export async function verifyWalletBalance(
   tokenContract: ethers.Contract,
@@ -31,12 +31,12 @@ export async function verifyWalletBalance(
 }
 
 /**
- * Helper to check token wallet balance in specific rpc 
- * @param rpcUrl 
- * @param tokenAddress 
- * @param walletAddress 
- * @param amountToCheck 
- * @returns 
+ * Helper to check token wallet balance in specific rpc
+ * @param rpcUrl
+ * @param tokenAddress
+ * @param walletAddress
+ * @param amountToCheck
+ * @returns
  */
 export async function verifyWalletBalanceInRpc(
   rpcUrl: string,
@@ -52,5 +52,4 @@ export async function verifyWalletBalanceInRpc(
 
   const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, provider);
   return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
-  
 }
