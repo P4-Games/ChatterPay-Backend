@@ -14,37 +14,37 @@ import { authMiddleware } from '../middleware/authMiddleware';
  * @returns {Promise<FastifyInstance>} A promise that resolves to the configured Fastify server instance
  */
 export async function startServer(): Promise<FastifyInstance> {
-    const server: FastifyInstance = Fastify({
-        ignoreDuplicateSlashes: true,
-        ignoreTrailingSlash: true,
-        logger: true,
-    });
+  const server: FastifyInstance = Fastify({
+    ignoreDuplicateSlashes: true,
+    ignoreTrailingSlash: true,
+    logger: true
+  });
 
-    await server.register(rateLimit, {
-        max: 50,
-        timeWindow: '1 minute',
-        errorResponseBuilder: () => ({
-            code: 429,
-            error: 'Too Many Requests',
-            message: 'Too many requests, please try again later.'
-        }),
-    });
+  await server.register(rateLimit, {
+    max: 50,
+    timeWindow: '1 minute',
+    errorResponseBuilder: () => ({
+      code: 429,
+      error: 'Too Many Requests',
+      message: 'Too many requests, please try again later.'
+    })
+  });
 
-    server.addHook('onRequest', authMiddleware);
+  server.addHook('onRequest', authMiddleware);
 
-    // Register the network config plugin
-    await server.register(networkConfigPlugin);
+  // Register the network config plugin
+  await server.register(networkConfigPlugin);
 
-    await setupMiddleware(server);
-    await setupRoutes(server);
-    await setupSwagger(server);
+  await setupMiddleware(server);
+  await setupRoutes(server);
+  await setupSwagger(server);
 
-    await server.listen({ port: PORT, host: '0.0.0.0' });
+  await server.listen({ port: PORT, host: '0.0.0.0' });
 
-    const address = server.server.address();
-    const port: string | number | undefined = typeof address === 'string' ? address : address?.port;
-    const host: string | undefined = typeof address === 'string' ? address : address?.address;
-    server.log.info(`Server is listening on http://${host}:${port}`);
+  const address = server.server.address();
+  const port: string | number | undefined = typeof address === 'string' ? address : address?.port;
+  const host: string | undefined = typeof address === 'string' ? address : address?.address;
+  server.log.info(`Server is listening on http://${host}:${port}`);
 
-    return server;
+  return server;
 }

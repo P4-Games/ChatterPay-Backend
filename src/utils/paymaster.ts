@@ -9,39 +9,32 @@ import { ethers } from 'ethers';
  * @returns The encoded paymasterAndData bytes
  */
 export async function createPaymasterAndData(
-    paymasterAddress: string,
-    proxyAddress: string,
-    backendSigner: ethers.Signer,
-    validityDurationSeconds: number = 3600 // 1 hour default
+  paymasterAddress: string,
+  proxyAddress: string,
+  backendSigner: ethers.Signer,
+  validityDurationSeconds: number = 3600 // 1 hour default
 ): Promise<string> {
-    // Get current timestamp and add validity duration
-    const currentTimestamp = Math.floor(Date.now() / 1000); // Current time in seconds
-    const expirationTimestamp = currentTimestamp + validityDurationSeconds;
+  // Get current timestamp and add validity duration
+  const currentTimestamp = Math.floor(Date.now() / 1000); // Current time in seconds
+  const expirationTimestamp = currentTimestamp + validityDurationSeconds;
 
-    // Create message hash (proxy address + expiration timestamp)
-    const messageHash = ethers.utils.solidityKeccak256(
-        ['address', 'uint64'],
-        [proxyAddress, expirationTimestamp]
-    );
+  // Create message hash (proxy address + expiration timestamp)
+  const messageHash = ethers.utils.solidityKeccak256(
+    ['address', 'uint64'],
+    [proxyAddress, expirationTimestamp]
+  );
 
-    // Sign the message
-    const messageHashBytes = ethers.utils.arrayify(messageHash);
-    const signature = await backendSigner.signMessage(messageHashBytes);
+  // Sign the message
+  const messageHashBytes = ethers.utils.arrayify(messageHash);
+  const signature = await backendSigner.signMessage(messageHashBytes);
 
-    // Convert expiration to bytes8 (uint64)
-    const expirationBytes = ethers.utils.hexZeroPad(
-        ethers.utils.hexlify(expirationTimestamp),
-        8
-    );
+  // Convert expiration to bytes8 (uint64)
+  const expirationBytes = ethers.utils.hexZeroPad(ethers.utils.hexlify(expirationTimestamp), 8);
 
-    // Concatenate all components
-    const paymasterAndData = ethers.utils.hexConcat([
-        paymasterAddress,
-        signature,
-        expirationBytes
-    ]);
+  // Concatenate all components
+  const paymasterAndData = ethers.utils.hexConcat([paymasterAddress, signature, expirationBytes]);
 
-    return paymasterAndData;
+  return paymasterAndData;
 }
 
 /**
@@ -50,32 +43,32 @@ export async function createPaymasterAndData(
  * @returns Decoded components and validation status
  */
 export function decodePaymasterAndData(paymasterAndData: string): {
-    paymasterAddress: string;
-    signature: string;
-    expirationTimestamp: number;
-    hasExpired: boolean;
+  paymasterAddress: string;
+  signature: string;
+  expirationTimestamp: number;
+  hasExpired: boolean;
 } {
-    // Remove '0x' prefix if present
-    const data = paymasterAndData.startsWith('0x') ? paymasterAndData.slice(2) : paymasterAndData;
+  // Remove '0x' prefix if present
+  const data = paymasterAndData.startsWith('0x') ? paymasterAndData.slice(2) : paymasterAndData;
 
-    // Extract components
-    const paymasterAddress = `0x${data.slice(0, 40)}`; // 20 bytes
-    const signature = `0x${data.slice(40, 40 + 130)}`; // 65 bytes
-    const expirationBytes = `0x${data.slice(40 + 130, 40 + 130 + 16)}`; // 8 bytes
+  // Extract components
+  const paymasterAddress = `0x${data.slice(0, 40)}`; // 20 bytes
+  const signature = `0x${data.slice(40, 40 + 130)}`; // 65 bytes
+  const expirationBytes = `0x${data.slice(40 + 130, 40 + 130 + 16)}`; // 8 bytes
 
-    // Convert expiration bytes to number
-    const expirationTimestamp = Number(ethers.BigNumber.from(expirationBytes));
-    
-    // Check if expired
-    const currentTimestamp = Math.floor(Date.now() / 1000);
-    const hasExpired = currentTimestamp > expirationTimestamp;
+  // Convert expiration bytes to number
+  const expirationTimestamp = Number(ethers.BigNumber.from(expirationBytes));
 
-    return {
-        paymasterAddress,
-        signature,
-        expirationTimestamp,
-        hasExpired
-    };
+  // Check if expired
+  const currentTimestamp = Math.floor(Date.now() / 1000);
+  const hasExpired = currentTimestamp > expirationTimestamp;
+
+  return {
+    paymasterAddress,
+    signature,
+    expirationTimestamp,
+    hasExpired
+  };
 }
 
 /**
@@ -86,34 +79,31 @@ export function decodePaymasterAndData(paymasterAndData: string): {
  * @returns Whether the signature is valid
  */
 export function verifyPaymasterSignature(
-    paymasterAndData: string,
-    proxyAddress: string,
-    backendAddress: string
+  paymasterAndData: string,
+  proxyAddress: string,
+  backendAddress: string
 ): boolean {
-    const decoded = decodePaymasterAndData(paymasterAndData);
-    
-    // If expired, signature is invalid
-    if (decoded.hasExpired) {
-        return false;
-    }
+  const decoded = decodePaymasterAndData(paymasterAndData);
 
-    // Recreate the message hash
-    const messageHash = ethers.utils.solidityKeccak256(
-        ['address', 'uint64'],
-        [proxyAddress, decoded.expirationTimestamp]
-    );
+  // If expired, signature is invalid
+  if (decoded.hasExpired) {
+    return false;
+  }
 
-    // Verify the signature
-    try {
-        const messageHashBytes = ethers.utils.arrayify(messageHash);
-        const recoveredAddress = ethers.utils.verifyMessage(
-            messageHashBytes,
-            decoded.signature
-        );
-        
-        return recoveredAddress.toLowerCase() === backendAddress.toLowerCase();
-    } catch (error) {
-        console.error('Error verifying signature:', error);
-        return false;
-    }
+  // Recreate the message hash
+  const messageHash = ethers.utils.solidityKeccak256(
+    ['address', 'uint64'],
+    [proxyAddress, decoded.expirationTimestamp]
+  );
+
+  // Verify the signature
+  try {
+    const messageHashBytes = ethers.utils.arrayify(messageHash);
+    const recoveredAddress = ethers.utils.verifyMessage(messageHashBytes, decoded.signature);
+
+    return recoveredAddress.toLowerCase() === backendAddress.toLowerCase();
+  } catch (error) {
+    console.error('Error verifying signature:', error);
+    return false;
+  }
 }

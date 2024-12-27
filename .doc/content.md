@@ -2,12 +2,12 @@
 
 ## Technical Overview
 
-* [Componentes Interactions](./technical-overview/componentes-Interactions.md)
+- [Components Interactions](./technical-overview/components-Interactions.md)
 
 ## Development
 
-* [Development Guidelines](./development/development-guidelines.md)
+- [Development Guidelines](./development/development-guidelines.md)
 
 ## Deployment
 
-* [Deploy Guidelines](./deployment/deployment-guidelines.md)
+- [Deployment Guidelines](./deployment/deployment-guidelines.md)

@@ -9,41 +9,41 @@ import { ethers, Contract, BigNumber } from 'ethers';
  * @returns Transaction receipt.
  */
 export async function executeWithDynamicGas(
-    contract: Contract,
-    methodName: string,
-    args: unknown[],
-    gasBufferPercentage: number = 10,
+  contract: Contract,
+  methodName: string,
+  args: unknown[],
+  gasBufferPercentage: number = 10
 ) {
-    // Verificar que el método existe en el contrato
-    if (typeof contract[methodName] !== 'function') {
-        throw new Error(`The method ${methodName} doesnt exists in contract.`);
-    }
+  // Verificar que el método existe en el contrato
+  if (typeof contract[methodName] !== 'function') {
+    throw new Error(`The method ${methodName} doesnt exists in contract.`);
+  }
 
-    // Estimar el gas necesario para la transacción
-    const estimatedGas: BigNumber = await contract.estimateGas[methodName](...args);
+  // Estimar el gas necesario para la transacción
+  const estimatedGas: BigNumber = await contract.estimateGas[methodName](...args);
 
-    // Aplicar el buffer al gas estimado
-    const gasLimit: BigNumber = estimatedGas
-        .mul(BigNumber.from(100 + gasBufferPercentage))
-        .div(BigNumber.from(100));
-    console.debug('estimatedGas:', estimatedGas.toString());
-    console.debug('gasLimit:', gasLimit.toString());
-    // Opciones para la transacción
-    const txOptions = {
-        gasLimit,
-    };
-    console.log('Executing transaction with gas limit:', gasLimit.toString());
-    // Enviar la transacción utilizando el gas calculado
-    const tx = await contract[methodName](...args, txOptions);
-    console.log(`Transaction sent with hash: ${tx.hash}`);
-    // Esperar a que la transacción se confirme
-    const receipt = await tx.wait();
-    console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
-    return {
-        hash: tx.hash,
-        transactionHash: receipt.transactionHash,
-        receipt: tx,
-    };
+  // Aplicar el buffer al gas estimado
+  const gasLimit: BigNumber = estimatedGas
+    .mul(BigNumber.from(100 + gasBufferPercentage))
+    .div(BigNumber.from(100));
+  console.debug('estimatedGas:', estimatedGas.toString());
+  console.debug('gasLimit:', gasLimit.toString());
+  // Opciones para la transacción
+  const txOptions = {
+    gasLimit
+  };
+  console.log('Executing transaction with gas limit:', gasLimit.toString());
+  // Enviar la transacción utilizando el gas calculado
+  const tx = await contract[methodName](...args, txOptions);
+  console.log(`Transaction sent with hash: ${tx.hash}`);
+  // Esperar a que la transacción se confirme
+  const receipt = await tx.wait();
+  console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
+  return {
+    hash: tx.hash,
+    transactionHash: receipt.transactionHash,
+    receipt: tx
+  };
 }
 
 /**
@@ -59,25 +59,25 @@ export async function executeWithDynamicGas(
  */
 
 export async function getDynamicGas(
-    contract: Contract,
-    methodName: string,
-    args: unknown[],
-    gasBufferPercentage: number = 10,
+  contract: Contract,
+  methodName: string,
+  args: unknown[],
+  gasBufferPercentage: number = 10
 ): Promise<BigNumber> {
-    // Verificar que el método existe en el contrato
-    if (typeof contract[methodName] !== 'function') {
-        throw new Error(`The method ${methodName} doesnt exists in contract.`);
-    }
+  // Verificar que el método existe en el contrato
+  if (typeof contract[methodName] !== 'function') {
+    throw new Error(`The method ${methodName} doesnt exists in contract.`);
+  }
 
-    // Estimar el gas necesario para la transacción
-    const estimatedGas: BigNumber = await contract.estimateGas[methodName](...args);
+  // Estimar el gas necesario para la transacción
+  const estimatedGas: BigNumber = await contract.estimateGas[methodName](...args);
 
-    // Aplicar el buffer al gas estimado
-    const gasLimit: BigNumber = estimatedGas
-        .mul(BigNumber.from(100 + gasBufferPercentage))
-        .div(BigNumber.from(100));
-    console.log('Gas limit:', gasLimit.toString());
-    return gasLimit;
+  // Aplicar el buffer al gas estimado
+  const gasLimit: BigNumber = estimatedGas
+    .mul(BigNumber.from(100 + gasBufferPercentage))
+    .div(BigNumber.from(100));
+  console.log('Gas limit:', gasLimit.toString());
+  return gasLimit;
 }
 
 /**
@@ -91,29 +91,29 @@ export async function getDynamicGas(
  * @throws Error if the gas estimation fails.
  */
 export async function getDynamicGas_callData(
-    provider: ethers.providers.Provider,
-    to: string,
-    callData: string,
-    gasBufferPercentage: number = 10,
+  provider: ethers.providers.Provider,
+  to: string,
+  callData: string,
+  gasBufferPercentage: number = 10
 ): Promise<BigNumber> {
-    try {
-        // Estimar el gas necesario para la transacción
-        const estimatedGas: BigNumber = await provider.estimateGas({
-            to,
-            data: callData,
-        });
+  try {
+    // Estimar el gas necesario para la transacción
+    const estimatedGas: BigNumber = await provider.estimateGas({
+      to,
+      data: callData
+    });
 
-        // Aplicar el buffer al gas estimado
-        const gasLimit: BigNumber = estimatedGas
-            .mul(BigNumber.from(100 + gasBufferPercentage))
-            .div(BigNumber.from(100));
-        console.log('Gas limit:', gasLimit.toString());
-        return gasLimit;
-    } catch (error) {
-        if (error instanceof Error) {
-            throw new Error(`Failed to estimate gas: ${error.message}`);
-        } else {
-            throw new Error(`Failed to estimate gas: ${error}`);
-        }
+    // Aplicar el buffer al gas estimado
+    const gasLimit: BigNumber = estimatedGas
+      .mul(BigNumber.from(100 + gasBufferPercentage))
+      .div(BigNumber.from(100));
+    console.log('Gas limit:', gasLimit.toString());
+    return gasLimit;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to estimate gas: ${error.message}`);
+    } else {
+      throw new Error(`Failed to estimate gas: ${error}`);
     }
+  }
 }

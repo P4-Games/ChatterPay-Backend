@@ -8,11 +8,11 @@ import { uploadImage } from '../controllers/ImageController';
  * @returns {Promise<void>}
  */
 const uploadRoutes = async (fastify: FastifyInstance): Promise<void> => {
-    /**
-     * Route to upload an image
-     * @route POST /upload
-     */
-    fastify.post('/upload', uploadImage);
+  /**
+   * Route to upload an image
+   * @route POST /upload
+   */
+  fastify.post('/upload', uploadImage);
 };
 
 export default uploadRoutes;
