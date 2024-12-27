@@ -24,7 +24,7 @@ export async function executeUserOperation(
   signer: ethers.Wallet,
   senderAddress: string
 ): Promise<UserOperationReceiptData> {
-  console.log('Starting executeUserOperation...');
+  console.log('Starting executeUserOperation.');
   console.log('Sender address:', senderAddress);
   console.log('Call data:', callData);
 
@@ -40,16 +40,16 @@ export async function executeUserOperation(
   console.log('EntryPoint contract initialized');
 
   // Get the nonce
-  console.log('Fetching nonce for sender...', senderAddress);
+  console.log('Fetching nonce for sender.', senderAddress);
   const nonce = await entrypointContract.getNonce(senderAddress, 0);
   console.log('Nonce:', nonce.toString());
 
   // Create, add paymaster and sign the UserOperation
-  console.log('Creating generic user operation...');
+  console.log('Creating generic user operation.');
   let userOperation = await createGenericUserOperation(callData, senderAddress, nonce);
   console.log('Generic user operation created');
 
-  console.log('Adding paymaster data...');
+  console.log('Adding paymaster data.');
   userOperation = await addPaymasterData(
     userOperation,
     networkConfig.contracts.paymasterAddress!,
@@ -57,7 +57,7 @@ export async function executeUserOperation(
   );
   console.log('Paymaster data added');
 
-  console.log('Signing user operation...');
+  console.log('Signing user operation.');
   userOperation = await signUserOperation(
     userOperation,
     networkConfig.contracts.entryPoint,
@@ -74,7 +74,7 @@ export async function executeUserOperation(
   );
   console.log('Bundler response:', bundlerResponse);
 
-  console.log('Waiting for transaction to be mined...');
+  console.log('Waiting for transaction to be mined.');
   const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
   console.log('Transaction receipt:', JSON.stringify(receipt, null, 2));
 

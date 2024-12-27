@@ -11,7 +11,7 @@ export async function createGenericUserOperation(
   sender: string,
   nonce: BigNumber
 ): Promise<PackedUserOperation> {
-  console.log('Creating Generic UserOperation...');
+  console.log('Creating Generic UserOperation.');
   console.log('Sender Address:', sender);
   console.log('Call Data:', callData);
   console.log('Nonce:', nonce.toString());
@@ -75,12 +75,12 @@ export async function signUserOperation(
   entryPointAddress: string,
   signer: ethers.Wallet
 ): Promise<PackedUserOperation> {
-  console.log('\nSigning UserOperation...');
+  console.log('\nSigning UserOperation.');
 
   const chainId = await signer.getChainId();
   console.log('Chain ID:', chainId);
 
-  console.log('Computing userOpHash...');
+  console.log('Computing userOpHash.');
   const userOpHash = getUserOpHash(userOperation, entryPointAddress, chainId);
   console.log('UserOpHash:', userOpHash);
 

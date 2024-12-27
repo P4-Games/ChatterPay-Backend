@@ -355,7 +355,7 @@ export const makeTransaction = async (
 
     return await returnSuccessResponse(
       reply,
-      'The transfer is in progress, it may take a few minutes...'
+      'The transfer is in progress, it may take a few minutes.'
     );
   } catch (error) {
     console.error('Error making transaction:', error);

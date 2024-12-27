@@ -100,7 +100,7 @@ export async function sendUserOperation(
     );
     console.log('Bundler response:', bundlerResponse);
 
-    console.log('Waiting for transaction to be mined...');
+    console.log('Waiting for transaction to be mined.');
     const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
     console.log('Transaction receipt:', JSON.stringify(receipt, null, 2));
 
@@ -129,7 +129,7 @@ export async function ensureSignerHasEth(
   const EOABalance = await provider.getBalance(await signer.getAddress());
   console.log(`Signer balance: ${ethers.utils.formatEther(EOABalance)} ETH`);
   if (EOABalance.lt(ethers.utils.parseEther('0.0008'))) {
-    console.log('Sending ETH to signer...');
+    console.log('Sending ETH to signer.');
     const tx = await backendSigner.sendTransaction({
       to: await signer.getAddress(),
       value: ethers.utils.parseEther('0.001'),

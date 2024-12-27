@@ -42,7 +42,7 @@ export const createWallet = async (
       );
     }
 
-    console.log('Creating wallet...');
+    console.log('Creating wallet.');
     const user: IUser = await createUserWithWallet(phone_number);
 
     // console.log("Issuing tokens...")

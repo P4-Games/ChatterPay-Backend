@@ -360,7 +360,7 @@ export const generateNftCopy = async (
     // Verify that the user exists
     let address_of_user = await getWalletByPhoneNumber(channel_user_id);
     if (!address_of_user) {
-      console.log('The user wallet does not exist. Creating...');
+      console.log('The user wallet does not exist. Creating.');
       const user: IUser = await createUserWithWallet(channel_user_id);
       address_of_user = user.wallet;
       console.log('Wallet created.');
