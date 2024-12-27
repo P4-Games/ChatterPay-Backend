@@ -3,8 +3,10 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import web3 from '../utils/web3_config';
 import { User, IUser } from '../models/user';
 import { getOrCreateUser } from '../services/userService';
+import { getTokenAddress } from '../services/blockchainService';
 import { sendUserOperation } from '../services/transferService';
 import Transaction, { ITransaction } from '../models/transaction';
+import { verifyWalletBalanceInRpc } from '../services/walletService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import {
   sendTransferNotification,
@@ -21,30 +23,14 @@ type MakeTransactionInputs = {
 };
 
 /**
- * Gets token address from the decorator
- */
-function getTokenAddress(fastify: FastifyInstance, tokenSymbol: string, chainId: number): string {
-  const { tokens } = fastify;
-  const token = tokens.find(
-    (t) => t.symbol.toLowerCase() === tokenSymbol.toLowerCase() && t.chain_id === chainId
-  );
-
-  if (!token) {
-    throw new Error(`Token ${tokenSymbol} not found for chain ${chainId}`);
-  }
-
-  return token.address;
-}
-
-/**
  * Validates the inputs for making a transaction.
  */
 const validateInputs = async (
   inputs: MakeTransactionInputs,
-  fastify: FastifyInstance
+  currentChainId: number,
+  tokenAddress: string
 ): Promise<string> => {
   const { channel_user_id, to, token, amount, chain_id } = inputs;
-  const { networkConfig } = fastify;
 
   if (!channel_user_id || !to || !token || !amount) {
     return 'One or more fields are empty';
@@ -65,17 +51,13 @@ const validateInputs = async (
     return 'The token symbol is invalid';
   }
 
-  const targetChainId = chain_id ? parseInt(chain_id, 10) : networkConfig.chain_id;
+  const targetChainId = chain_id ? parseInt(chain_id, 10) : currentChainId;
 
-  // Validate chain_id
-  if (targetChainId !== networkConfig.chain_id) {
+  if (targetChainId !== currentChainId) {
     return 'The selected blockchain is currently unavailable';
   }
 
-  // Validate token exists in the network
-  try {
-    getTokenAddress(fastify, token, targetChainId);
-  } catch {
+  if (!tokenAddress) {
     return 'The token is not available on the selected network';
   }
 
@@ -89,14 +71,12 @@ const executeTransaction = async (
   fastify: FastifyInstance,
   from: IUser,
   to: IUser | { wallet: string },
+  tokenAddress: string,
   tokenSymbol: string,
   amount: string,
   chain_id: number
 ): Promise<string> => {
-  console.log('Sending user operation...');
-
-  // Get token address from decorator
-  const tokenAddress = getTokenAddress(fastify, tokenSymbol, chain_id);
+  console.log('Sending user operation.');
 
   const result = await sendUserOperation(
     fastify,
@@ -319,22 +299,41 @@ export const makeTransaction = async (
       return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
 
-    const { channel_user_id, to, token, amount, chain_id } = request.body;
-    const { networkConfig } = request.server;
+    const { channel_user_id, to, token: tokenSymbol, amount, chain_id } = request.body;
+    const { networkConfig, tokens: tokensConfig } = request.server as FastifyInstance;
 
-    const validationError = await validateInputs(request.body, request.server);
+    const tokenAddress: string = getTokenAddress(
+      networkConfig,
+      tokensConfig,
+      tokenSymbol || '' // could be missing in body
+    );
+
+    let validationError: string = await validateInputs(
+      request.body,
+      networkConfig.chain_id,
+      tokenAddress
+    );
+
     if (validationError) {
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
-    const fromUser = await User.findOne({ phone_number: channel_user_id });
+    const fromUser: IUser | null = await User.findOne({ phone_number: channel_user_id });
     if (!fromUser) {
-      return await returnErrorResponse(
-        reply,
-        400,
-        'Error making transaction',
-        'User not found. You must have an account to make a transaction'
-      );
+      validationError = 'User not found. You must have an account to make a transaction';
+      return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
+    }
+
+    const checkBalanceResult = await verifyWalletBalanceInRpc(
+      networkConfig.rpc,
+      tokenAddress,
+      fromUser.wallet,
+      amount
+    );
+
+    if (!checkBalanceResult.enoughBalance) {
+      validationError = `Insufficient balance in wwallet ${fromUser.wallet}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
+      return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
     let toUser: IUser | { wallet: string };
@@ -348,14 +347,15 @@ export const makeTransaction = async (
       request.server,
       fromUser,
       toUser,
-      token,
+      tokenAddress,
+      tokenSymbol,
       amount,
       chain_id ? parseInt(chain_id, 10) : networkConfig.chain_id
     );
 
     return await returnSuccessResponse(
       reply,
-      'The transfer is in progress, it may take a few minutes...'
+      'The transfer is in progress, it may take a few minutes.'
     );
   } catch (error) {
     console.error('Error making transaction:', error);

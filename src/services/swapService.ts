@@ -2,20 +2,15 @@ import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
 import { getEntryPointABI } from './bucketService';
-import { getBlockchain } from './blockchainService';
-import { checkWalletBalance } from './walletService';
+import { verifyWalletBalance } from './walletService';
 import { generatePrivateKey } from '../utils/keyGenerator';
 import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
+import { getBlockchain, TokenAddresses } from './blockchainService';
 import { setupERC20, setupContracts } from './contractSetupService';
 import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
-
-export interface TokenAddresses {
-  input: string;
-  output: string;
-}
 
 /**
  * Creates callData for token approval
@@ -137,11 +132,11 @@ export async function executeSwap(
     const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
     const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } =
       await setupContracts(blockchain, privateKey, fromNumber);
-    const erc20 = await setupERC20(tokenAddresses.input, signer);
+    const erc20 = await setupERC20(tokenAddresses.tokenAddressInput, signer);
 
     console.log('Contracts and signers set up');
 
-    const checkBalanceResult = await checkWalletBalance(erc20, proxy.proxyAddress, amount);
+    const checkBalanceResult = await verifyWalletBalance(erc20, proxy.proxyAddress, amount);
 
     if (!checkBalanceResult.enoughBalance) {
       throw new Error(
@@ -176,14 +171,14 @@ export async function executeSwap(
     );
 
     // 1. Execute approve operation
-    console.log('Executing approve operation...');
+    console.log('Executing approve operation.');
     const approveCallData = createApproveCallData(chatterPay, erc20, SIMPLE_SWAP_ADDRESS, amount);
 
     const approveHash = await executeOperation(
       fastify,
       approveCallData,
       signer,
-      backendSigner, // Pasamos el backendSigner
+      backendSigner,
       entrypointContract,
       bundlerUrl,
       proxy.proxyAddress,
@@ -191,14 +186,14 @@ export async function executeSwap(
     );
 
     // 2. Execute swap operation
-    console.log('Executing swap operation...');
+    console.log('Executing swap operation.');
     const swapCallData = createSwapCallData(chatterPay, simpleSwapContract, isWETHtoUSDT, amount);
 
     const swapHash = await executeOperation(
       fastify,
       swapCallData,
       signer,
-      backendSigner, // Pasamos el backendSigner
+      backendSigner,
       entrypointContract,
       bundlerUrl,
       proxy.proxyAddress,
