@@ -21,7 +21,10 @@ interface SwapBody {
 /**
  * Validates the input for the swap operation.
  */
-const validateInputs = async (inputs: SwapBody, fastify: FastifyInstance): Promise<string> => {
+const validateInputs = async (
+  inputs: SwapBody,
+  tokenAddresses: TokenAddresses
+): Promise<string> => {
   const { channel_user_id, inputCurrency, outputCurrency, amount } = inputs;
 
   if (!channel_user_id || !inputCurrency || !outputCurrency) {
@@ -40,10 +43,7 @@ const validateInputs = async (inputs: SwapBody, fastify: FastifyInstance): Promi
     return 'Amount must be provided and greater than 0';
   }
 
-  // Validate tokens exist in current network
-  try {
-    getTokenAddresses(fastify, inputCurrency, outputCurrency);
-  } catch (error) {
+  if (!tokenAddresses.tokenAddressInput || !tokenAddresses.tokenAddressOutput) {
     return 'Invalid token symbols for the current network';
   }
 
@@ -83,8 +83,15 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     const { channel_user_id, user_wallet, inputCurrency, outputCurrency, amount } = request.body;
 
-    // Validate inputs
-    const validationError = await validateInputs(request.body, request.server);
+    const { tokens: blockchainTokensFromFastify, networkConfig: blockchainConfigFromFastify } =
+      request.server as FastifyInstance;
+    const tokenAddresses: TokenAddresses = getTokensAddresses(
+      blockchainConfigFromFastify,
+      blockchainTokensFromFastify,
+      inputCurrency,
+      outputCurrency
+    );
+    const validationError: string = await validateInputs(request.body, tokenAddresses);
     if (validationError) {
       return await reply.status(400).send({ message: validationError });
     }
@@ -92,10 +99,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     // Send initial response to client
     reply
       .status(200)
-      .send({ message: 'Intercambio de monedas en progreso, puede tardar unos minutos...' });
-
-    // Get token addresses from decorator
-    const tokenAddresses = getTokenAddresses(request.server, inputCurrency, outputCurrency);
+      .send({ message: 'Currency exchange in progress, it may take a few minutes.' });
 
     // Determine swap direction
     const isWETHtoUSDT =
@@ -117,15 +121,19 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     // Create ERC20 contract for balance check
     const outputToken = new ethers.Contract(
-      tokenAddresses.output,
+      tokenAddresses.tokenAddressOutput,
       ['function balanceOf(address owner) view returns (uint256)'],
       backendSigner
     );
 
+    // *******************************************************************************************
+    // TO_REVIEW: Que lógica tiene esto? finalBalance no es igual a initialOutputBalance??
+    // *******************************************************************************************
     const { proxyAddress } = await computeProxyAddressFromPhone(channel_user_id);
     const finalBalance = await outputToken.balanceOf(proxyAddress);
     const initialOutputBalance = await outputToken.balanceOf(proxyAddress);
     const result = ethers.utils.formatUnits(finalBalance.sub(initialOutputBalance), 18);
+    // *******************************************************************************************
 
     // Send notifications
     await sendSwapNotification(

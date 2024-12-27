@@ -171,14 +171,14 @@ export async function executeSwap(
     );
 
     // 1. Execute approve operation
-    console.log('Executing approve operation...');
+    console.log('Executing approve operation.');
     const approveCallData = createApproveCallData(chatterPay, erc20, SIMPLE_SWAP_ADDRESS, amount);
 
     const approveHash = await executeOperation(
       fastify,
       approveCallData,
       signer,
-      backendSigner, // Pasamos el backendSigner
+      backendSigner,
       entrypointContract,
       bundlerUrl,
       proxy.proxyAddress,
@@ -186,14 +186,14 @@ export async function executeSwap(
     );
 
     // 2. Execute swap operation
-    console.log('Executing swap operation...');
+    console.log('Executing swap operation.');
     const swapCallData = createSwapCallData(chatterPay, simpleSwapContract, isWETHtoUSDT, amount);
 
     const swapHash = await executeOperation(
       fastify,
       swapCallData,
       signer,
-      backendSigner, // Pasamos el backendSigner
+      backendSigner,
       entrypointContract,
       bundlerUrl,
       proxy.proxyAddress,
