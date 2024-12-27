@@ -17,39 +17,6 @@ interface SwapBody {
   amount: number;
 }
 
-interface TokenAddresses {
-  input: string;
-  output: string;
-}
-
-/**
- * Gets token addresses from the decorator based on symbols
- */
-function getTokenAddresses(
-  fastify: FastifyInstance,
-  inputCurrency: string,
-  outputCurrency: string
-): TokenAddresses {
-  const { tokens, networkConfig } = fastify;
-  const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chain_id);
-
-  const inputToken = chainTokens.find(
-    (t) => t.symbol.toLowerCase() === inputCurrency.toLowerCase()
-  );
-  const outputToken = chainTokens.find(
-    (t) => t.symbol.toLowerCase() === outputCurrency.toLowerCase()
-  );
-
-  if (!inputToken || !outputToken) {
-    throw new Error('Invalid token symbols for the current network');
-  }
-
-  return {
-    input: inputToken.address,
-    output: outputToken.address
-  };
-}
-
 /**
  * Validates the input for the swap operation.
  */

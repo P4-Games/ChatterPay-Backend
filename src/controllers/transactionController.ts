@@ -21,22 +21,6 @@ type MakeTransactionInputs = {
 };
 
 /**
- * Gets token address from the decorator
- */
-function getTokenAddress(fastify: FastifyInstance, tokenSymbol: string, chainId: number): string {
-  const { tokens } = fastify;
-  const token = tokens.find(
-    (t) => t.symbol.toLowerCase() === tokenSymbol.toLowerCase() && t.chain_id === chainId
-  );
-
-  if (!token) {
-    throw new Error(`Token ${tokenSymbol} not found for chain ${chainId}`);
-  }
-
-  return token.address;
-}
-
-/**
  * Validates the inputs for making a transaction.
  */
 const validateInputs = async (
