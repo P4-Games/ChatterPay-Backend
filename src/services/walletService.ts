@@ -15,8 +15,10 @@ export async function verifyWalletBalance(
   console.log(
     `Checking balance for ${walletAddress} and token ${tokenContract.address}, amount: ${amountToCheck}`
   );
-  const amountToCheckFormatted = ethers.utils.parseUnits(amountToCheck, 18);
   const walletBalance = await tokenContract.balanceOf(walletAddress);
+  const decimals = await tokenContract.decimals();
+  const amountToCheckFormatted = ethers.utils.parseUnits(amountToCheck, decimals);
+
   console.log(`Balance of ${walletAddress}: ${walletBalance}`);
 
   const result = {
