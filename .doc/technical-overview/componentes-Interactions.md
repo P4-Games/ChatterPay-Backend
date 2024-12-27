@@ -1,4 +1,4 @@
-# Chatterpay Component Interactions
+# Chatterpay Components Interactions
 
 ## BOT => Frontend
 
@@ -26,7 +26,7 @@
 - getBalancesWithTotalsFromBackend => /balance:walletAddress, GET
 - fethCustomTokens =>  /balance:walletAddress, GET
 
-## frontend => BOT
+## Frontend => BOT
 
 - Send Message => chatbot/conversations/send-message
 
@@ -57,23 +57,23 @@
 ## Backend => Smart Contracts
 
 - Create Wallet (/create_wallet) 
-    => ChatterPayWalletFactory.computeProxyAddress
-    => ChatterPayWalletFactory.createProxy
+    * ChatterPayWalletFactory.computeProxyAddress
+    * ChatterPayWalletFactory.createProxy
 
 - NFT: Mint Original (/nft) => ChatterPayNFT.mintOriginal
 
 - NFT: Mint Copy (/mint_existing) => ChatterPayNFT.mintCopy
 
 - Make Transaction (/make_transaction) 
-    => ChatterPayWalletFactory.computeProxyAddress
-    => [ERC20].approve
-    => Chatterpay.execute
-    => Chatterpay.balanceOf
-    => CHatterpay.transfer
+    * ChatterPayWalletFactory.computeProxyAddress
+    * [ERC20].approve
+    * Chatterpay.execute
+    * Chatterpay.balanceOf
+    * CHatterpay.transfer
 
 - Swap (/swap) 
-    => ChatterPayWalletFactory.computeProxyAddress
-    => SimpleSwap.swapWETHforUSDT
-    => SimpleSwap.swapUSDTforWETH
+    * ChatterPayWalletFactory.computeProxyAddress
+    * SimpleSwap.swapWETHforUSDT
+    * SimpleSwap.swapUSDTforWETH
     
 
