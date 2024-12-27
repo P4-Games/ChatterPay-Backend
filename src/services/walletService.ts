@@ -1,7 +1,11 @@
 import { ethers } from 'ethers';
 
 /**
- * Helper function to check balances
+ * Helper function to verifiy balance in wallet
+ * @param tokenContract
+ * @param walletAddress
+ * @param amountToCheck
+ * @returns
  */
 export async function verifyWalletBalance(
   tokenContract: ethers.Contract,
