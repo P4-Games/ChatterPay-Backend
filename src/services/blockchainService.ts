@@ -1,5 +1,10 @@
 import Blockchain, { IBlockchain } from '../models/blockchain';
 
+export interface TokenAddresses {
+  tokenAddressInput: string;
+  tokenAddressOutput: string;
+}
+
 /**
  * Retrieves a blockchain by its chain ID.
  *

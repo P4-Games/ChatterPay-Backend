@@ -12,11 +12,6 @@ import { setupERC20, setupContracts } from './contractSetupService';
 import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
 
-export interface TokenAddresses {
-  input: string;
-  output: string;
-}
-
 /**
  * Creates callData for token approval
  */
