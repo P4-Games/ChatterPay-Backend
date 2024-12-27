@@ -12,14 +12,16 @@ export async function verifyWalletBalance(
   walletAddress: string,
   amountToCheck: string
 ) {
+  const symbol: string = await tokenContract.symbol();
   console.log(
-    `Checking balance for ${walletAddress} and token ${tokenContract.address}, amount: ${amountToCheck}`
+    `Checking balance for ${walletAddress} and token ${tokenContract.address}, to spend: ${amountToCheck} ${symbol}`
   );
   const walletBalance = await tokenContract.balanceOf(walletAddress);
   const decimals = await tokenContract.decimals();
   const amountToCheckFormatted = ethers.utils.parseUnits(amountToCheck, decimals);
+  const walletBalanceFormatted = ethers.utils.formatEther(walletBalance);
 
-  console.log(`Balance of ${walletAddress}: ${walletBalance}`);
+  console.log(`Balance of wallet ${walletAddress}: ${walletBalanceFormatted} ${symbol}`);
 
   const result = {
     walletBalance,
@@ -46,8 +48,12 @@ export async function verifyWalletBalanceInRpc(
 ) {
   const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
   const erc20Abi = [
-    'function balanceOf(address account) view returns (uint256)',
-    'function decimals() view returns (uint8)'
+    'function transfer(address to, uint256 amount) returns (bool)',
+    'function balanceOf(address owner) view returns (uint256)',
+    'function approve(address spender, uint256 amount) returns (bool)',
+    'function allowance(address owner, address spender) view returns (uint256)',
+    'function decimals() view returns (uint8)',
+    'function symbol() view returns (string)'
   ];
 
   const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, provider);
