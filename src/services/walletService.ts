@@ -29,3 +29,27 @@ export async function verifyWalletBalance(
 
   return result;
 }
+
+/**
+ * Helper to check token wallet balance in specific rpc
+ * @param rpcUrl
+ * @param tokenAddress
+ * @param walletAddress
+ * @param amountToCheck
+ * @returns
+ */
+export async function verifyWalletBalanceInRpc(
+  rpcUrl: string,
+  tokenAddress: string,
+  walletAddress: string,
+  amountToCheck: string
+) {
+  const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+  const erc20Abi = [
+    'function balanceOf(address account) view returns (uint256)',
+    'function decimals() view returns (uint8)'
+  ];
+
+  const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, provider);
+  return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
+}
