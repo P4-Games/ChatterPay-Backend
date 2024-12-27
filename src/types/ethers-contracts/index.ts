@@ -3,5 +3,4 @@
 /* eslint-disable */
 export type { ChatterPay } from './ChatterPay';
 export type { ChatterPayWalletFactory } from './ChatterPayWalletFactory';
-export { ChatterPay__factory } from './factories/ChatterPay__factory';
 export { ChatterPayWalletFactory__factory } from './factories/ChatterPayWalletFactory__factory';

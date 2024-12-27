@@ -13,19 +13,27 @@ type BlockchainBody = IBlockchain | Partial<IBlockchain>;
  * @returns A promise resolving to the FastifyReply object.
  */
 export const createBlockchain = async (
-    request: FastifyRequest<{ Body: IBlockchain }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Body: IBlockchain }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    try {
-        const newBlockchain = new Blockchain(request.body);
-        await newBlockchain.save();
-        console.log("Blockchain Saved")
-        return await returnSuccessResponse(reply, 'Blockchain created successfully', newBlockchain.toJSON());
-    } catch (error) {
-        console.error("Error creating blockchain");
-        console.error("Error details: ", error);
-        return returnErrorResponse(reply, 400, 'Failed to create blockchain');
+  try {
+    if (!request.body) {
+      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
+
+    const newBlockchain = new Blockchain(request.body);
+    await newBlockchain.save();
+    console.log('Blockchain Saved');
+    return await returnSuccessResponse(
+      reply,
+      'Blockchain created successfully',
+      newBlockchain.toJSON()
+    );
+  } catch (error) {
+    console.error('Error creating blockchain');
+    console.error('Error details: ', error);
+    return returnErrorResponse(reply, 400, 'Failed to create blockchain');
+  }
 };
 
 /**
@@ -35,17 +43,19 @@ export const createBlockchain = async (
  * @returns A promise resolving to the FastifyReply object.
  */
 export const getAllBlockchains = async (
-    request: FastifyRequest,
-    reply: FastifyReply,
+  request: FastifyRequest,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    try {
-        const blockchains = await Blockchain.find();
-        return await returnSuccessResponse(reply, 'Blockchains fetched successfully', { blockchains });
-    } catch (error) {
-        console.error("Error fetching blockchains");
-        console.error("Error details: ", error);
-        return returnErrorResponse(reply, 400, 'Failed to fetch blockchains');
-    }
+  try {
+    const blockchains = await Blockchain.find();
+    return await returnSuccessResponse(reply, 'Blockchains fetched successfully', {
+      blockchains
+    });
+  } catch (error) {
+    console.error('Error fetching blockchains');
+    console.error('Error details: ', error);
+    return returnErrorResponse(reply, 400, 'Failed to fetch blockchains');
+  }
 };
 
 /**
@@ -55,22 +65,26 @@ export const getAllBlockchains = async (
  * @returns A promise resolving to the FastifyReply object.
  */
 export const getBlockchainById = async (
-    request: FastifyRequest<{ Params: BlockchainParams }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Params: BlockchainParams }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    const { id } = request.params;
-    try {
-        const blockchain = await Blockchain.findById(id);
-        if (!blockchain) {
-            console.warn("Blockchain not found");
-            return await returnErrorResponse(reply, 404, 'Blockchain not found');
-        }
-        return await returnSuccessResponse(reply, 'Blockchain fetched successfully', blockchain.toJSON());
-    } catch (error) {
-        console.error("Error fetching blockchain");
-        console.error("Error details: ", error);
-        return returnErrorResponse(reply, 400, 'Failed to fetch blockchain');
+  const { id } = request.params;
+  try {
+    const blockchain = await Blockchain.findById(id);
+    if (!blockchain) {
+      console.warn('Blockchain not found');
+      return await returnErrorResponse(reply, 404, 'Blockchain not found');
     }
+    return await returnSuccessResponse(
+      reply,
+      'Blockchain fetched successfully',
+      blockchain.toJSON()
+    );
+  } catch (error) {
+    console.error('Error fetching blockchain');
+    console.error('Error details: ', error);
+    return returnErrorResponse(reply, 400, 'Failed to fetch blockchain');
+  }
 };
 
 /**
@@ -80,24 +94,32 @@ export const getBlockchainById = async (
  * @returns A promise resolving to the FastifyReply object.
  */
 export const updateBlockchain = async (
-    request: FastifyRequest<{ Params: BlockchainParams; Body: BlockchainBody }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Params: BlockchainParams; Body: BlockchainBody }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    const { id } = request.params;
-    try {
-        const updatedBlockchain = await Blockchain.findByIdAndUpdate(id, request.body, {
-            new: true,
-        });
-        if (!updatedBlockchain) {
-            console.warn("Blockchain not found");
-            return await returnErrorResponse(reply, 404, 'Blockchain not found');
-        }
-        return await returnSuccessResponse(reply, 'Blockchain updated successfully', updatedBlockchain.toJSON());
-    } catch (error) {
-        console.error("Error updating blockchain");
-        console.error("Error details: ", error);
-        return returnErrorResponse(reply, 400, 'Failed to update blockchain');
+  const { id } = request.params;
+  try {
+    if (!request.body) {
+      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
+
+    const updatedBlockchain = await Blockchain.findByIdAndUpdate(id, request.body, {
+      new: true
+    });
+    if (!updatedBlockchain) {
+      console.warn('Blockchain not found');
+      return await returnErrorResponse(reply, 404, 'Blockchain not found');
+    }
+    return await returnSuccessResponse(
+      reply,
+      'Blockchain updated successfully',
+      updatedBlockchain.toJSON()
+    );
+  } catch (error) {
+    console.error('Error updating blockchain');
+    console.error('Error details: ', error);
+    return returnErrorResponse(reply, 400, 'Failed to update blockchain');
+  }
 };
 
 /**
@@ -107,20 +129,20 @@ export const updateBlockchain = async (
  * @returns A promise resolving to the FastifyReply object.
  */
 export const deleteBlockchain = async (
-    request: FastifyRequest<{ Params: BlockchainParams }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Params: BlockchainParams }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    const { id } = request.params;
-    try {
-        const deletedBlockchain = await Blockchain.findByIdAndDelete(id);
-        if (!deletedBlockchain) {
-            console.warn("Blockchain not found");
-            return await returnErrorResponse(reply, 404, 'Blockchain not found');
-        }
-        return await returnSuccessResponse(reply, 'Blockchain deleted successfully');
-    } catch (error) {
-        console.error("Error deleting blockchain");
-        console.error("Error details: ", error);
-        return returnErrorResponse(reply, 400, 'Failed to delete blockchain');
+  const { id } = request.params;
+  try {
+    const deletedBlockchain = await Blockchain.findByIdAndDelete(id);
+    if (!deletedBlockchain) {
+      console.warn('Blockchain not found');
+      return await returnErrorResponse(reply, 404, 'Blockchain not found');
     }
+    return await returnSuccessResponse(reply, 'Blockchain deleted successfully');
+  } catch (error) {
+    console.error('Error deleting blockchain');
+    console.error('Error details: ', error);
+    return returnErrorResponse(reply, 400, 'Failed to delete blockchain');
+  }
 };

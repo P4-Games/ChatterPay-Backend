@@ -5,13 +5,13 @@ import { verifyToken, TokenResponse } from '../config/token';
 
 /**
  * Middleware function to authenticate requests using a Bearer token.
- * 
+ *
  * @param {FastifyRequest} request - The Fastify request object.
  * @param {FastifyReply} reply - The Fastify reply object.
  * @returns {Promise<void>}
- * 
+ *
  * @throws {FastifyReply} Sends a 401 response if authentication fails.
- * 
+ *
  * @description
  * This middleware function performs the following steps:
  * 1. Extracts the authorization header from the request.
@@ -21,7 +21,7 @@ import { verifyToken, TokenResponse } from '../config/token';
  * 5. If any step fails, it sends a 401 response with an error message.
  */
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  // Skip authentication for the /ping endpoint, and the opensea NFT metadata 
+  // Skip authentication for the /ping endpoint, and the opensea NFT metadata
   if (isPublicRoute(request.url)) {
     return;
   }
@@ -29,7 +29,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   const authHeader: string | undefined = request.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    reply.code(401).send({ error: 'No se proporcionó token de autenticación' });
+    reply.code(401).send({ error: 'Authentication token was not provided' });
     return;
   }
 
@@ -38,7 +38,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   const tokenType: TokenResponse = await verifyToken(token);
 
   if (!tokenType) {
-    reply.code(401).send({ error: 'Token inválido' });
+    reply.code(401).send({ error: 'Invalid Token' });
     return;
   }
 

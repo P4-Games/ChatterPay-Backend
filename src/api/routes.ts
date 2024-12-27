@@ -17,14 +17,14 @@ import transactionRoutes from './transactionRoutes';
  * @returns {Promise<void>}
  */
 export async function setupRoutes(server: FastifyInstance): Promise<void> {
-    server.register(pingRoute);
-    server.register(transactionRoutes);
-    server.register(userRoutes);
-    server.register(tokenRoutes);
-    server.register(walletRouter);
-    server.register(blockchainRoutes);
-    server.register(balanceRoutes);
-    server.register(swapRoutes);
-    server.register(nftRoutes);
-    server.register(uploadRoutes);
+  server.register(pingRoute);
+  server.register(transactionRoutes);
+  server.register(userRoutes);
+  server.register(tokenRoutes);
+  server.register(walletRouter);
+  server.register(blockchainRoutes);
+  server.register(balanceRoutes);
+  server.register(swapRoutes);
+  server.register(nftRoutes);
+  server.register(uploadRoutes);
 }

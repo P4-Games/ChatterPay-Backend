@@ -10,17 +10,20 @@ import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFor
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object.
  */
 export const createUser = async (
-    request: FastifyRequest<{ Body: IUser }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Body: IUser }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    try {
-        const newUser = new User(request.body);
-        await newUser.save();
-        return await returnSuccessResponse(reply, 'User created successfully', { user: newUser });
-    } catch (error) {
-        console.error('Error creating user:', error);
-        return returnErrorResponse(reply, 400, 'Bad Request');
+  try {
+    if (!request.body) {
+      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
+    const newUser = new User(request.body);
+    await newUser.save();
+    return await returnSuccessResponse(reply, 'User created successfully', { user: newUser });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    return returnErrorResponse(reply, 400, 'Bad Request');
+  }
 };
 
 /**
@@ -30,16 +33,16 @@ export const createUser = async (
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing all users.
  */
 export const getAllUsers = async (
-    request: FastifyRequest,
-    reply: FastifyReply,
+  request: FastifyRequest,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    try {
-        const users = await User.find();
-        return await returnSuccessResponse(reply, 'Users fetched successfully', { users });
-    } catch (error) {
-        console.error('Error fetching users:', error);
-        return returnErrorResponse(reply, 400, 'Failed to fetch users');
-    }
+  try {
+    const users = await User.find();
+    return await returnSuccessResponse(reply, 'Users fetched successfully', { users });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    return returnErrorResponse(reply, 400, 'Failed to fetch users');
+  }
 };
 
 /**
@@ -49,24 +52,24 @@ export const getAllUsers = async (
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the found user or an error message.
  */
 export const getUserById = async (
-    request: FastifyRequest<{ Params: { id: string } }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    const { id } = request.params as { id: string };
+  const { id } = request.params as { id: string };
 
-    try {
-        const user = await User.findById(id);
+  try {
+    const user = await User.findById(id);
 
-        if (!user) {
-            console.warn("User not found");
-            return await returnErrorResponse(reply, 404, 'User not found');
-        }
-
-        return await returnSuccessResponse(reply, 'User fetched successfully', user.toJSON());
-    } catch (error) {
-        console.error('Error fetching user:', error);
-        return returnErrorResponse(reply, 400, 'Failed to fetch user');
+    if (!user) {
+      console.warn('User not found');
+      return await returnErrorResponse(reply, 404, 'User not found');
     }
+
+    return await returnSuccessResponse(reply, 'User fetched successfully', user.toJSON());
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    return returnErrorResponse(reply, 400, 'Failed to fetch user');
+  }
 };
 
 /**
@@ -76,24 +79,28 @@ export const getUserById = async (
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the updated user or an error message.
  */
 export const updateUser = async (
-    request: FastifyRequest<{ Params: { id: string }; Body: Partial<IUser> }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Params: { id: string }; Body: Partial<IUser> }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    const { id } = request.params as { id: string };
+  const { id } = request.params as { id: string };
 
-    try {
-        const updatedUser = await User.findByIdAndUpdate(id, request.body, { new: true });
-
-        if (!updatedUser) {
-            console.warn("User not found");
-            return await returnErrorResponse(reply, 404, 'User not found');
-        }
-
-        return await returnSuccessResponse(reply, 'User updated successfully', updatedUser.toJSON());
-    } catch (error) {
-        console.error('Error updating user:', error);
-        return returnErrorResponse(reply, 400, 'Bad Request');
+  try {
+    if (!request.body) {
+      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
+
+    const updatedUser = await User.findByIdAndUpdate(id, request.body, { new: true });
+
+    if (!updatedUser) {
+      console.warn('User not found');
+      return await returnErrorResponse(reply, 404, 'User not found');
+    }
+
+    return await returnSuccessResponse(reply, 'User updated successfully', updatedUser.toJSON());
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return returnErrorResponse(reply, 400, 'Bad Request');
+  }
 };
 
 /**
@@ -103,21 +110,21 @@ export const updateUser = async (
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing a success message or an error message.
  */
 export const deleteUser = async (
-    request: FastifyRequest<{ Params: { id: string } }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    const { id } = request.params as { id: string };
+  const { id } = request.params as { id: string };
 
-    try {
-        const deletedUser = await User.findByIdAndDelete(id);
+  try {
+    const deletedUser = await User.findByIdAndDelete(id);
 
-        if (!deletedUser) {
-            return await returnErrorResponse(reply, 404, 'User not found');
-        }
-
-        return await returnSuccessResponse(reply, 'User deleted successfully');
-    } catch (error) {
-        console.error('Error deleting user:', error);
-        return returnErrorResponse(reply, 400, 'Bad Request');
+    if (!deletedUser) {
+      return await returnErrorResponse(reply, 404, 'User not found');
     }
+
+    return await returnSuccessResponse(reply, 'User deleted successfully');
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return returnErrorResponse(reply, 400, 'Bad Request');
+  }
 };
