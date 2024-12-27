@@ -2,7 +2,7 @@
 
 ## Technical Overview
 
-* [Componentes Interactions](./technical-overview/componentes-Interactions.md)
+* [Components Interactions](./technical-overview/components-Interactions.md)
 
 ## Development
 
@@ -10,4 +10,4 @@
 
 ## Deployment
 
-* [Deploy Guidelines](./deployment/deployment-guidelines.md)
+* [Deployment Guidelines](./deployment/deployment-guidelines.md)

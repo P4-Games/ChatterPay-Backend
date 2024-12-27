@@ -9,14 +9,14 @@ import { setupGracefulShutdown } from './utils/shutdown';
  * @throws {Error} If there's an error starting the application
  */
 async function main(): Promise<void> {
-    try {
-        await connectToDatabase();
-        const server = await startServer();
-        setupGracefulShutdown(server);
-    } catch (err) {
-        console.error('Error starting application:', err);
-        process.exit(1);
-    }
+  try {
+    await connectToDatabase();
+    const server = await startServer();
+    setupGracefulShutdown(server);
+  } catch (err) {
+    console.error('Error starting application:', err);
+    process.exit(1);
+  }
 }
 
 main();

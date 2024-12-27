@@ -12,18 +12,18 @@ import { computeProxyAddressFromPhone } from '../services/predictWalletService';
  * @throws {Error} If the user is not found or if there's an error creating the signer.
  */
 export const getSigner = async (phone_number: string): Promise<ethers.Wallet> => {
-    const user = await User.findOne({ phone_number });
+  const user = await User.findOne({ phone_number });
 
-    if (!user) {
-        throw new Error(`User with phone number ${phone_number} not found`);
-    }
+  if (!user) {
+    throw new Error(`User with phone number ${phone_number} not found`);
+  }
 
-    const { privateKey } = await computeProxyAddressFromPhone(phone_number);
+  const { privateKey } = await computeProxyAddressFromPhone(phone_number);
 
-    const networkConfig = await getNetworkConfig();
-    const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
+  const networkConfig = await getNetworkConfig();
+  const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
 
-    const signer = new ethers.Wallet(privateKey, provider);
+  const signer = new ethers.Wallet(privateKey, provider);
 
-    return signer;
+  return signer;
 };

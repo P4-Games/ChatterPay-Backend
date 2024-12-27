@@ -8,6 +8,6 @@ import * as crypto from 'crypto';
  * @returns A string representing the generated private key, prefixed with '0x'.
  */
 export function generatePrivateKey(seedPrivateKey: string, fromNumber: string): string {
-    const seed = seedPrivateKey + fromNumber;
-    return `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
+  const seed = seedPrivateKey + fromNumber;
+  return `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
 }

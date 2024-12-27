@@ -9,11 +9,10 @@ import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {
-    hashedPrivateKey: string;
-    privateKey: string;
-    publicKey: string;
+  hashedPrivateKey: string;
+  privateKey: string;
+  publicKey: string;
 }
-
 
 /**
  * Generates a deterministic Ethereum address from a phone number.
@@ -23,28 +22,28 @@ export interface PhoneNumberToAddress {
  * @throws {Error} If the seed private key is not found in environment variables.
  */
 function phoneNumberToAddress(phoneNumber: string): PhoneNumberToAddress {
-    if (!PRIVATE_KEY) {
-        throw new Error('Seed private key not found in environment variables');
-    }
+  if (!PRIVATE_KEY) {
+    throw new Error('Seed private key not found in environment variables');
+  }
 
-    const seed = PRIVATE_KEY + phoneNumber;
-    const privateKey = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
-    const wallet = new ethers.Wallet(privateKey);
-    const publicKey = wallet.address;
-    const hashedPrivateKey = crypto.createHash('sha256').update(privateKey).digest('hex');
+  const seed = PRIVATE_KEY + phoneNumber;
+  const privateKey = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
+  const wallet = new ethers.Wallet(privateKey);
+  const publicKey = wallet.address;
+  const hashedPrivateKey = crypto.createHash('sha256').update(privateKey).digest('hex');
 
-    return {
-        hashedPrivateKey,
-        privateKey,
-        publicKey,
-    };
+  return {
+    hashedPrivateKey,
+    privateKey,
+    publicKey
+  };
 }
 
 export interface ComputedAddress {
-    proxyAddress: string;
-    EOAAddress: string;
-    privateKey: string;
-    privateKeyNotHashed: string;
+  proxyAddress: string;
+  EOAAddress: string;
+  privateKey: string;
+  privateKeyNotHashed: string;
 }
 
 /**
@@ -55,50 +54,50 @@ export interface ComputedAddress {
  * @throws {Error} If there's an error in the computation process.
  */
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
-    const networkConfig: IBlockchain = await getNetworkConfig();
-    const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
-        name: 'arbitrum-sepolia',
-        chainId: networkConfig.chain_id,
-    });
+  const networkConfig: IBlockchain = await getNetworkConfig();
+  const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
+    name: 'arbitrum-sepolia',
+    chainId: networkConfig.chain_id
+  });
 
-    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-    const chatterpayWalletFactoryABI = await getChatterPayWalletFactoryABI();
-    const factory = ChatterPayWalletFactory__factory.connect(
-        networkConfig.contracts.factoryAddress,
-        chatterpayWalletFactoryABI,
-        backendSigner,
-    );
+  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+  const chatterpayWalletFactoryABI = await getChatterPayWalletFactoryABI();
+  const factory = ChatterPayWalletFactory__factory.connect(
+    networkConfig.contracts.factoryAddress,
+    chatterpayWalletFactoryABI,
+    backendSigner
+  );
 
-    const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(phoneNumber);
+  const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(phoneNumber);
 
-    const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
-        gasLimit: 1000000,
-    });
-    console.log(`Computed proxy address: ${proxyAddress}`);
+  const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
+    gasLimit: 1000000
+  });
+  console.log(`Computed proxy address: ${proxyAddress}`);
 
-    const code = await provider.getCode(proxyAddress);
-    if (code === '0x') {
-        console.log(
-            `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}...`,
-        );
-        const tx = await factory.createProxy(ownerAddress.publicKey, {
-            gasLimit: await getDynamicGas(factory, 'createProxy', [ownerAddress.publicKey]),
-        });
-        await tx.wait();
-    }
-
+  const code = await provider.getCode(proxyAddress);
+  if (code === '0x') {
     console.log(
-        'Data: ',
-        JSON.stringify({
-            proxyAddress,
-            EOAAddress: ownerAddress.publicKey,
-        }),
+      `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}...`
     );
+    const tx = await factory.createProxy(ownerAddress.publicKey, {
+      gasLimit: await getDynamicGas(factory, 'createProxy', [ownerAddress.publicKey])
+    });
+    await tx.wait();
+  }
 
-    return {
-        proxyAddress,
-        EOAAddress: ownerAddress.publicKey,
-        privateKey: ownerAddress.hashedPrivateKey,
-        privateKeyNotHashed: ownerAddress.privateKey,
-    };
+  console.log(
+    'Data: ',
+    JSON.stringify({
+      proxyAddress,
+      EOAAddress: ownerAddress.publicKey
+    })
+  );
+
+  return {
+    proxyAddress,
+    EOAAddress: ownerAddress.publicKey,
+    privateKey: ownerAddress.hashedPrivateKey,
+    privateKeyNotHashed: ownerAddress.privateKey
+  };
 }

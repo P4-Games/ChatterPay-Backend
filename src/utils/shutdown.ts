@@ -9,15 +9,15 @@ import { FastifyInstance } from 'fastify';
  * @param {FastifyInstance} server - The Fastify server instance
  */
 export function setupGracefulShutdown(server: FastifyInstance): void {
-    process.on('SIGINT', async () => {
-        try {
-            await server.close();
-            await mongoose.connection.close();
-            console.log('Server and MongoDB connection closed');
-            process.exit(0);
-        } catch (err) {
-            console.error('Error during shutdown:', err);
-            process.exit(1);
-        }
-    });
+  process.on('SIGINT', async () => {
+    try {
+      await server.close();
+      await mongoose.connection.close();
+      console.log('Server and MongoDB connection closed');
+      process.exit(0);
+    } catch (err) {
+      console.error('Error during shutdown:', err);
+      process.exit(1);
+    }
+  });
 }

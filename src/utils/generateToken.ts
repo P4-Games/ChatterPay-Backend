@@ -1,8 +1,8 @@
-/** 
+/**
  * Utility functions to generate tokens locally:
- * 
+ *
  * bun run src/utils/generateTokens.ts
- * 
+ *
  */
 import crypto from 'crypto';
 
