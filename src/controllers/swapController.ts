@@ -8,6 +8,7 @@ import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
 import { returnErrorResponse } from '../utils/responseFormatter';
 import { sendSwapNotification } from '../services/notificationService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import { TokenAddresses, getTokensAddresses } from '../services/blockchainService';
 
 interface SwapBody {
   channel_user_id: string;

@@ -3,7 +3,7 @@ import { FastifyInstance } from 'fastify';
 
 import { getEntryPointABI } from './bucketService';
 import { getBlockchain } from './blockchainService';
-import { checkWalletBalance } from './walletService';
+import { verifyWalletBalance } from './walletService';
 import { generatePrivateKey } from '../utils/keyGenerator';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
@@ -39,7 +39,7 @@ export async function sendUserOperation(
     const erc20 = await setupERC20(tokenAddress, signer);
     console.log('Contracts and signers set up.', signer.address);
 
-    const checkBalanceResult = await checkWalletBalance(erc20, proxy.proxyAddress, amount);
+    const checkBalanceResult = await verifyWalletBalance(erc20, proxy.proxyAddress, amount);
 
     if (!checkBalanceResult.enoughBalance) {
       throw new Error(
