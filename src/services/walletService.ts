@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 /**
  * Helper function to check balances
  */
-export async function checkWalletBalance(
+export async function verifyWalletBalance(
   tokenContract: ethers.Contract,
   walletAddress: string,
   amountToCheck: string
