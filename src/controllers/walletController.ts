@@ -45,10 +45,6 @@ export const createWallet = async (
     console.log('Creating wallet.');
     const user: IUser = await createUserWithWallet(phone_number);
 
-    // console.log("Issuing tokens...")
-    // Issue demo tokens to the user. This will be later removed in mainnet
-    // issueTokensCore(wallet);
-
     return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
       walletAddress: user.walletEOA
     });
