@@ -15,7 +15,7 @@
 - copiar_certificado_existente => https://back.chatterpay.net/mint_existing/, POST
 - generar_certificado => https://back.chatterpay.net/nft/, POST
 
-## BOT => Sitio tmd
+## BOT => Sitio tdm
 
 - pay_qr => https://qrchatterpay.tdm.ar/api/payments_demo/execute, POST
 - generate_qr => https://qrchatterpay.tdm.ar/api/payments_demo/create, POST

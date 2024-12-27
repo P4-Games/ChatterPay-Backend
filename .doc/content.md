@@ -6,7 +6,7 @@
 
 ## Development
 
-- [Development Guidelines](./development/development-guidelines.md)
+- [Coding Guidelines](./development/coding-guidelines.md)
 
 ## Deployment
 

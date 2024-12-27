@@ -104,6 +104,22 @@ Then, open in: `http://localhost:3000`.
 -   `README.md`: This File.
 -   `.env.example`: Example Environment File.
 
-## Source Code Documentation
+## Technical Documentation
 
--   We use JSDoc (in english) to document our code.
+If you would like to explore more details about the source code, you can review this [link](.doc/content.md).
+
+
+## Contribution
+
+Thank you for considering helping out with the source code! We welcome contributions from anyone on the internet, and are grateful for even the smallest of fixes!
+
+If you'd like to contribute to ChatterPay, please fork, fix, commit and send a pull request for the maintainers to review and merge into the main code base. If you wish to submit more complex changes though, please check up with the [core devs](https://github.com/P4-Games/chatterPay-backend/graphs/contributors) first to ensure those changes are in line with the general philosophy of the project and/or get some early feedback which can make both your efforts much lighter as well as our review and merge procedures quick and simple.
+
+Please make sure your contributions adhere to our [coding guidelines](./.doc/development/coding-guidelines.md).
+
+_Contributors_: 
+
+* [P4Troy](https://github.com/mpefaur) - [dappsar](https://github.com/dappsar) - [tomasDmArg](https://github.com/TomasDmArg) - [gonzageraci](https://github.com/gonzageraci)
+
+* See more in: <https://github.com/P4-Games/chatterPay-backend/graphs/contributors>
+
