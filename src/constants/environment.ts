@@ -21,7 +21,9 @@ const {
   FRONTEND_TOKEN,
   CHATIZALO_TOKEN,
   PUSH_CHANNEL_ADDRESS: pushChannelAddress = '',
-  PUSH_CHANNEL_PRIVATE_KEY: pushChannelPrivateKey = ''
+  PUSH_CHANNEL_PRIVATE_KEY: pushChannelPrivateKey = '',
+  PUSH_NETWORK: pushNetwork = '11155111',
+  PUSH_ENVIRONMENT: pushEnvironment = ENV.DEV
 } = process.env;
 
 export {
@@ -54,11 +56,11 @@ export const GCP_ABIs = {
 export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
 export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' || true;
 
-export const PUSH_NETWORK: string = BUN_ENV.toLowerCase() === 'development' ? '11155111' : '42161';
-export const PUSH_ENVIRONMENT: ENV = BUN_ENV.toLowerCase() === 'development' ? ENV.DEV : ENV.PROD;
 export const PUSH_CHANNEL_ADDRESS = !pushChannelAddress.startsWith('0x')
   ? `0x${pushChannelAddress}`
   : pushChannelAddress;
 export const PUSH_CHANNEL_PRIVATE_KEY = !pushChannelPrivateKey.startsWith('0x')
   ? `0x${pushChannelPrivateKey}`
   : pushChannelPrivateKey;
+export const PUSH_NETWORK: string = pushNetwork;
+export const PUSH_ENVIRONMENT: ENV = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;

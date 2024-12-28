@@ -16,6 +16,10 @@ dotenv.config();
 const MONGO_URI: string = process.env.MONGO_URI || 'mongodb://localhost:27017/your_database';
 const DB_NAME: string = 'chatterpay-dev';
 const COLLECTION_NAME: string = 'users';
+const PUSH_NETWORK: string = process.env.PUSH_NETWORK || '11155111';
+const PUSH_ENVIRONMENT: ENV = (process.env.PUSH_ENVIRONMENT as ENV) || ENV.DEV;
+const PUSH_CHANNEL_ADDRESS: string =
+  process.env.PUSH_CHANNEL_ADDRESS || '0x35dad65F60c1A32c9895BE97f6bcE57D32792E83';
 
 const userSchema = new mongoose.Schema<IUser>(
   {
@@ -73,12 +77,14 @@ function getUserData(phoneNumber: string): { pk: string; sk: string } {
 async function isUserSubscribed(pk: string): Promise<boolean> {
   try {
     const subscriptions = await PushAPI.user.getSubscriptions({
-      user: `eip155:11155111:${pk}`,
-      env: ENV.DEV
+      user: `eip155:${PUSH_NETWORK}:${pk}`,
+      env: PUSH_ENVIRONMENT
     });
 
-    const channelAddress = '0x35dad65F60c1A32c9895BE97f6bcE57D32792E83';
-    return subscriptions.some((sub: { channel: string }) => sub.channel === channelAddress);
+    // sub.channel === channelAddress && sub.env === PUSH_ENVIRONMENT
+    return subscriptions.some(
+      (sub: { channel: string; env: string }) => sub.channel === PUSH_CHANNEL_ADDRESS
+    );
   } catch (error) {
     console.error('Error checking subscription status:', error);
     return false;
@@ -92,8 +98,8 @@ async function subscribeUser(pn: string, sk: string, pk: string): Promise<boolea
   const performSubscription = async (): Promise<boolean> =>
     new Promise<boolean>((resolve) => {
       PushAPI.channels.subscribe({
-        channelAddress: 'eip155:11155111:0x35dad65F60c1A32c9895BE97f6bcE57D32792E83',
-        userAddress: `eip155:11155111:${pk}`,
+        channelAddress: `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`,
+        userAddress: `eip155:${PUSH_NETWORK}:${pk}`,
         signer,
         onSuccess: () => {
           console.log(`${pn}, ${pk}, Subscription successful.`);
@@ -103,7 +109,7 @@ async function subscribeUser(pn: string, sk: string, pk: string): Promise<boolea
           console.error(`${pn}, ${pk}, Subscription error:`, error.message);
           resolve(false);
         },
-        env: ENV.DEV
+        env: PUSH_ENVIRONMENT
       });
     });
 
@@ -155,7 +161,9 @@ async function processUser(user: IUser): Promise<void> {
 
     const subscribed = await subscribeUser(phoneNumber, sk, pk);
     if (!subscribed) {
-      console.error(`${phoneNumber}, ${pk}, Subscription failed after retries.`);
+      console.error(
+        `${PUSH_NETWORK}, ${PUSH_ENVIRONMENT}, ${phoneNumber}, ${pk}, "Subscription failed after retries.`
+      );
     }
   } catch (error) {
     console.error(`Error processing user ${user._id}:`, error);
@@ -166,11 +174,16 @@ async function main(): Promise<void> {
   try {
     const users = await getUsers();
 
-    // Map users to promises without `await` in the loop
     if (users) {
-      const tasks = users.map((user: IUser) => processUser(user));
-      // Wait for all tasks to complete
-      await Promise.all(tasks);
+      // eslint-disable-next-line no-restricted-syntax
+      for (const user of users) {
+        // eslint-disable-next-line no-await-in-loop
+        await processUser(user);
+
+        console.log('Waiting 10 seconds before processing the next user...');
+        // eslint-disable-next-line no-await-in-loop
+        await delay(10000); // 10 segundos
+      }
     }
   } catch (error) {
     console.error('Error in main execution:', error);
