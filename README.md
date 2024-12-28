@@ -65,7 +65,7 @@ cd ChatterPay-Backend
 
 **3. Complete .env file**:
 
-Create a .env file in the root folder and populate it with keys and values described in [.env.example file](./.env.example).
+Create a .env file in the root folder and populate it with keys and values described in [example_env file](./example_env).
 
 **4. Install Dependencies**:
 
