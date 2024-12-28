@@ -18,7 +18,8 @@ const DB_NAME: string = 'chatterpay-dev';
 const COLLECTION_NAME: string = 'users';
 const PUSH_NETWORK: string = process.env.PUSH_NETWORK || '11155111';
 const PUSH_ENVIRONMENT: ENV = (process.env.PUSH_ENVIRONMENT as ENV) || ENV.DEV;
-const PUSH_CHANNEL_ADDRESS: string = process.env.PUSH_CHANNEL_ADDRESS || '0x35dad65F60c1A32c9895BE97f6bcE57D32792E83'
+const PUSH_CHANNEL_ADDRESS: string =
+  process.env.PUSH_CHANNEL_ADDRESS || '0x35dad65F60c1A32c9895BE97f6bcE57D32792E83';
 
 const userSchema = new mongoose.Schema<IUser>(
   {
@@ -81,8 +82,8 @@ async function isUserSubscribed(pk: string): Promise<boolean> {
     });
 
     // sub.channel === channelAddress && sub.env === PUSH_ENVIRONMENT
-    return subscriptions.some((sub: { channel: string, env: string }) => 
-      sub.channel === PUSH_CHANNEL_ADDRESS
+    return subscriptions.some(
+      (sub: { channel: string; env: string }) => sub.channel === PUSH_CHANNEL_ADDRESS
     );
   } catch (error) {
     console.error('Error checking subscription status:', error);
@@ -160,7 +161,9 @@ async function processUser(user: IUser): Promise<void> {
 
     const subscribed = await subscribeUser(phoneNumber, sk, pk);
     if (!subscribed) {
-      console.error(`${PUSH_NETWORK}, ${PUSH_ENVIRONMENT}, ${phoneNumber}, ${pk}, "Subscription failed after retries.`);
+      console.error(
+        `${PUSH_NETWORK}, ${PUSH_ENVIRONMENT}, ${phoneNumber}, ${pk}, "Subscription failed after retries.`
+      );
     }
   } catch (error) {
     console.error(`Error processing user ${user._id}:`, error);
@@ -179,7 +182,7 @@ async function main(): Promise<void> {
 
         console.log('Waiting 10 seconds before processing the next user...');
         // eslint-disable-next-line no-await-in-loop
-        await delay(10000);  // 10 segundos
+        await delay(10000); // 10 segundos
       }
     }
   } catch (error) {

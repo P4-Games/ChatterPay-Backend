@@ -6,10 +6,9 @@ import { FastifyInstance } from 'fastify';
  * @returns {Promise<void>}
  */
 export const pingRoute = async (fastify: FastifyInstance): Promise<void> => {
-    /**
-     * Route to check server status
-     * @route GET /ping
-     */
-    fastify.get('/ping', () => ({ status: 'ok', message: 'pong' }));
+  /**
+   * Route to check server status
+   * @route GET /ping
+   */
+  fastify.get('/ping', () => ({ status: 'ok', message: 'pong' }));
 };
-
