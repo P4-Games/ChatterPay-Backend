@@ -1,11 +1,11 @@
 //
 // set MONGO_URI in env, then:
 // bun run scripts/subscribe_wallets_to_push_channel.ts
+//
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 import mongoose from 'mongoose';
 import * as crypto from 'crypto';
-//
 import * as PushAPI from '@pushprotocol/restapi';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
@@ -41,7 +41,7 @@ async function getUsers(): Promise<IUser[]> {
     await mongoose.connect(MONGO_URI, { dbName: DB_NAME });
     console.log('Connected to the database');
 
-    const users = await User.find({}).lean<IUser>(); // Usamos lean y especificamos el tipo `IUser`
+    const users = await User.find({}).lean<IUser>();
 
     // @ts-expect-error 'expected error'
     return users;
