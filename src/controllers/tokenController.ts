@@ -229,7 +229,10 @@ export async function issueTokensCore(
   // Get the current nonce for the signer
   const currentNonce: number = await provider.getTransactionCount(signer.address);
   console.log(`Current Nonce: ${currentNonce}`);
-  console.log(`Minting tokens on chain ${networkConfig.chain_id} for tokens:`, tokenAddresses);
+  console.log(
+    `Minting tokens on chain ${networkConfig.chain_id} for wallet ${recipientAddress} and tokens:`,
+    tokenAddresses
+  );
 
   const mintPromises: Promise<MintResult>[] = tokenAddresses.map((tokenAddress, index) =>
     mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index)
