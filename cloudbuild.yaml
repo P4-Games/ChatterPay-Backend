@@ -7,10 +7,7 @@ steps:
       - ALCHEMY_API_KEY=${_ALCHEMY_API_KEY}
       - INFURA_API_KEY=${_INFURA_API_KEY}
       - MONGO_URI=${_MONGO_URI}
-      - THIRDWEB_CLIENT_ID=${_THIRDWEB_CLIENT_ID}
-      - THIRDWEB_CLIENT_SECRET=${_THIRDWEB_CLIENT_SECRET}
       - PINATA_JWT=${_PINATA_JWT}
-      - GATEWAY_URL=${_GATEWAY_URL}
       - ICP_CANISTER_ID=${_ICP_CANISTER_ID}
       - ICP_MNEMONIC=${_ICP_MNEMONIC}
       - BOT_API_URL=${_BOT_API_URL}
@@ -18,6 +15,8 @@ steps:
       - NFT_UPLOAD_IMAGE_ICP=${_NFT_UPLOAD_IMAGE_ICP}
       - NFT_UPLOAD_IMAGE_IPFS=${_NFT_UPLOAD_IMAGE_IPFS}
       - GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}
+      - PUSH_CHANNEL_ADDRESS=${_PUSH_CHANNEL_ADDRESS}
+      - PUSH_CHANNEL_PRIVATE_KEY=${_PUSH_CHANNEL_PRIVATE_KEY}
     secretEnv: [
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
@@ -43,17 +42,11 @@ steps:
       '--build-arg',
       'MONGO_URI=${_MONGO_URI}',
       '--build-arg',
-      'THIRDWEB_CLIENT_ID=${_THIRDWEB_CLIENT_ID}',
-      '--build-arg',
-      'THIRDWEB_CLIENT_SECRET=${_THIRDWEB_CLIENT_SECRET}',
-      '--build-arg',
       'PRIVATE_KEY=$$PRIVATE_KEY',
       '--build-arg',
       'SIGNING_KEY=$$SIGNING_KEY',
       '--build-arg',
       'PINATA_JWT=${_PINATA_JWT}',
-      '--build-arg',
-      'GATEWAY_URL=${_GATEWAY_URL}',
       '--build-arg',
       'ICP_CANISTER_ID=${_ICP_CANISTER_ID}',
       '--build-arg',
@@ -74,6 +67,10 @@ steps:
       'CHATIZALO_TOKEN=$$CHATIZALO_TOKEN',
       '--build-arg',
       'FRONTEND_TOKEN=$$FRONTEND_TOKEN',
+      '--build-arg',
+      'PUSH_CHANNEL_ADDRESS=${_PUSH_CHANNEL_ADDRESS}',
+      '--build-arg',
+      'PUSH_CHANNEL_PRIVATE_KEY=$$PUSH_CHANNEL_PRIVATE_KEY',
       '.'
     ]
     secretEnv: [

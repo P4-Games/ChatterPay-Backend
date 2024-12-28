@@ -1,7 +1,7 @@
 import { Signer } from 'ethers-5';
 import { LiFi, RouteOptions, RoutesRequest } from '@lifi/sdk';
 
-import { TYPE, SLIPPAGE } from '../constants/LiFiConfig';
+import { LIFI_TYPE, LIFI_SLIPPAGE } from '../constants/blockchain';
 
 /**
  * Performs a token swap from USDC to WETH using the LiFi SDK.
@@ -22,52 +22,54 @@ import { TYPE, SLIPPAGE } from '../constants/LiFiConfig';
  * @throws Will throw an error if there's an issue with the LiFi SDK or the blockchain transaction.
  */
 export const swapToWETH = async (signer: Signer, amount: string): Promise<string> => {
-    // Initialize LiFi SDK
-    const lifi = new LiFi({
-        integrator: 'tdm.ar',
-    });
+  // Initialize LiFi SDK
+  const lifi = new LiFi({
+    integrator: 'tdm.ar'
+  });
 
-    // Configure route options
-    const routeOptions: RouteOptions = {
-        slippage: SLIPPAGE,
-        order: TYPE,
-    };
+  // Configure route options
+  const routeOptions: RouteOptions = {
+    slippage: LIFI_SLIPPAGE,
+    order: LIFI_TYPE
+  };
 
-    // Set up the route request for USDC to WETH swap
-    const routesRequest: RoutesRequest = {
-        fromChainId: 137, // Polygon network
-        fromAmount: amount,
-        fromTokenAddress: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', // USDC on Polygon
-        toChainId: 137, // Staying on Polygon
-        toTokenAddress: '0x7ceb23fd6bc0add59e62ac25578270cff1b9f619', // WETH on Polygon
-        options: routeOptions,
-    };
+  // Set up the route request for USDC to WETH swap
+  const routesRequest: RoutesRequest = {
+    fromChainId: 137, // Polygon network
+    fromAmount: amount,
+    fromTokenAddress: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', // USDC on Polygon
+    toChainId: 137, // Staying on Polygon
+    toTokenAddress: '0x7ceb23fd6bc0add59e62ac25578270cff1b9f619', // WETH on Polygon
+    options: routeOptions
+  };
 
-    console.log('**Routes Request**');
-    console.log(routesRequest);
+  console.log('**Routes Request**');
+  console.log(routesRequest);
 
-    // Get routes from LiFi
-    const lifiResult = await lifi.getRoutes(routesRequest);
-    const chosenRoute = lifiResult.routes[0];
+  // Get routes from LiFi
+  const lifiResult = await lifi.getRoutes(routesRequest);
+  const chosenRoute = lifiResult.routes[0];
 
-    // Execute the swap
-    const makeTrade = async () =>
-        new Promise((resolve) => {
-            lifi.executeRoute(signer, chosenRoute, {
-                acceptExchangeRateUpdateHook: (exchangeRate) => {
-                    console.log('**Exchange Rate**');
-                    console.log(exchangeRate);
-                    return Promise.resolve(true);
-                },
-            }).then((lifiTx) => {
-                console.log(lifiTx);
-                // TODO: Log trade in database, logTrade((parseInt(amount) / 1e6), lifiTx.id, true)
-                resolve(true);
-            });
-        }).catch(() => false);
+  // Execute the swap
+  const makeTrade = async () =>
+    new Promise((resolve) => {
+      lifi
+        .executeRoute(signer, chosenRoute, {
+          acceptExchangeRateUpdateHook: (exchangeRate) => {
+            console.log('**Exchange Rate**');
+            console.log(exchangeRate);
+            return Promise.resolve(true);
+          }
+        })
+        .then((lifiTx) => {
+          console.log(lifiTx);
+          // TODO: Log trade in database, logTrade((parseInt(amount) / 1e6), lifiTx.id, true)
+          resolve(true);
+        });
+    }).catch(() => false);
 
-    const status = await makeTrade();
+  const status = await makeTrade();
 
-    // Return status message based on swap result
-    return status ? 'Swapped successfully to WETH' : 'Error at swap';
+  // Return status message based on swap result
+  return status ? 'Swapped successfully to WETH' : 'Error at swap';
 };

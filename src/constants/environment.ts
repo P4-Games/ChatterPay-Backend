@@ -1,49 +1,64 @@
 import dotenv from 'dotenv';
+import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
 dotenv.config();
 
 const {
-    PORT: envPort,
-    MONGO_URI: envMongoUri,
-    PRIVATE_KEY,
-    SIGNING_KEY,
-    PINATA_JWT,
-    ICP_CANISTER_ID,
-    ICP_MNEMONIC,
-    INFURA_API_KEY,
-    BOT_DATA_TOKEN,
-    BOT_API_URL,
-    NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
-    NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
-    GCP_BUCKET_BASE_URL,
-    FRONTEND_TOKEN,
-    CHATIZALO_TOKEN
+  BUN_ENV = 'development',
+  PORT: envPort,
+  MONGO_URI: envMongoUri,
+  PRIVATE_KEY,
+  SIGNING_KEY,
+  PINATA_JWT,
+  ICP_CANISTER_ID,
+  ICP_MNEMONIC,
+  INFURA_API_KEY,
+  BOT_DATA_TOKEN,
+  BOT_API_URL,
+  NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
+  NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
+  GCP_BUCKET_BASE_URL,
+  FRONTEND_TOKEN,
+  CHATIZALO_TOKEN,
+  PUSH_CHANNEL_ADDRESS: pushChannelAddress = '',
+  PUSH_CHANNEL_PRIVATE_KEY: pushChannelPrivateKey = ''
 } = process.env;
 
 export {
-    PINATA_JWT,
-    PRIVATE_KEY,
-    SIGNING_KEY,
-    BOT_API_URL,
-    ICP_MNEMONIC,
-    INFURA_API_KEY,
-    BOT_DATA_TOKEN,
-    FRONTEND_TOKEN,
-    ICP_CANISTER_ID,
-    CHATIZALO_TOKEN,
-    GCP_BUCKET_BASE_URL
+  BUN_ENV,
+  PINATA_JWT,
+  PRIVATE_KEY,
+  SIGNING_KEY,
+  BOT_API_URL,
+  ICP_MNEMONIC,
+  INFURA_API_KEY,
+  BOT_DATA_TOKEN,
+  FRONTEND_TOKEN,
+  ICP_CANISTER_ID,
+  CHATIZALO_TOKEN,
+  GCP_BUCKET_BASE_URL
 };
 
 export const PORT = Number(envPort) || 3000;
-export const MONGO_URI = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
+export const MONGO_URI: string = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
 
 export const GCP_ABIs = {
-    ChatterPayWallet: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPayWallet.json`,
-    ChatterPayWalletFactory: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPayWalletFactory.json`,
-    ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPayNFT.json`,
-    EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/EntryPoint.json`,
-    ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/ERC20.json`,
+  ChatterPay: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPay.json`,
+  ChatterPayWallet: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPayWallet.json`,
+  ChatterPayWalletFactory: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPayWalletFactory.json`,
+  ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPayNFT.json`,
+  EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/EntryPoint.json`,
+  ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/ERC20.json`
 };
 
 export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
 export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' || true;
+
+export const PUSH_NETWORK: string = BUN_ENV.toLowerCase() === 'development' ? '11155111' : '42161';
+export const PUSH_ENVIRONMENT: ENV = BUN_ENV.toLowerCase() === 'development' ? ENV.DEV : ENV.PROD;
+export const PUSH_CHANNEL_ADDRESS = !pushChannelAddress.startsWith('0x')
+  ? `0x${pushChannelAddress}`
+  : pushChannelAddress;
+export const PUSH_CHANNEL_PRIVATE_KEY = !pushChannelPrivateKey.startsWith('0x')
+  ? `0x${pushChannelPrivateKey}`
+  : pushChannelPrivateKey;

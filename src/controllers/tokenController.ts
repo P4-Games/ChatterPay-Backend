@@ -12,17 +12,29 @@ import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFor
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object
  */
 export const createToken = async (
-    request: FastifyRequest<{ Body: IToken }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Body: IToken }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    try {
-        const newToken = new Token(request.body);
-        await newToken.save();
-        return await returnSuccessResponse(reply, 'Token created successfully', newToken.toJSON());
-    } catch (error) {
-        console.error('Error creating token:', error);
-        return returnErrorResponse(reply, 400, 'Error creating token', (error as Error).message);
+  try {
+    if (!request.body) {
+      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
+
+    const newToken = new Token(request.body);
+    if (!newToken) {
+      return await returnErrorResponse(
+        reply,
+        400,
+        'Missing parameters in body. You have to send: newToken'
+      );
+    }
+
+    await newToken.save();
+    return await returnSuccessResponse(reply, 'Token created successfully', newToken.toJSON());
+  } catch (error) {
+    console.error('Error creating token:', error);
+    return returnErrorResponse(reply, 400, 'Error creating token', (error as Error).message);
+  }
 };
 
 /**
@@ -32,17 +44,17 @@ export const createToken = async (
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing all tokens
  */
 export const getAllTokens = async (
-    request: FastifyRequest,
-    reply: FastifyReply,
+  request: FastifyRequest,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    try {
-        // Use the cached tokens from fastify instance
-        const { tokens } = request.server;
-        return await returnSuccessResponse(reply, 'Tokens fetched successfully', { tokens });
-    } catch (error) {
-        console.error('Error fetching tokens:', error);
-        return returnErrorResponse(reply, 400, 'Failed to fetch tokens');
-    }
+  try {
+    // Use the cached tokens from fastify instance
+    const { tokens } = request.server;
+    return await returnSuccessResponse(reply, 'Tokens fetched successfully', { tokens });
+  } catch (error) {
+    console.error('Error fetching tokens:', error);
+    return returnErrorResponse(reply, 400, 'Failed to fetch tokens');
+  }
 };
 
 /**
@@ -52,27 +64,27 @@ export const getAllTokens = async (
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the found token or an error message
  */
 export const getTokenById = async (
-    request: FastifyRequest<{ Params: { id: string } }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    const { id } = request.params as { id: string };
+  const { id } = request.params as { id: string };
 
-    try {
-        // Use the cached tokens from fastify instance
-        const { tokens } = request.server;
-        
-        // Find the token in the cached array
-        const token = tokens.find((tokenItem: IToken) => tokenItem.id.toString() === id);
-        
-        if (!token) {
-            return await returnErrorResponse(reply, 404, 'Token not found');
-        }
+  try {
+    // Use the cached tokens from fastify instance
+    const { tokens } = request.server;
 
-        return await returnSuccessResponse(reply, 'Token fetched successfully', token.toJSON());
-    } catch (error) {
-        console.error('Error fetching token:', error);
-        return returnErrorResponse(reply, 400, 'Failed to fetch token');
+    // Find the token in the cached array
+    const token = tokens.find((tokenItem: IToken) => tokenItem.id.toString() === id);
+
+    if (!token) {
+      return await returnErrorResponse(reply, 404, 'Token not found');
     }
+
+    return await returnSuccessResponse(reply, 'Token fetched successfully', token.toJSON());
+  } catch (error) {
+    console.error('Error fetching token:', error);
+    return returnErrorResponse(reply, 400, 'Failed to fetch token');
+  }
 };
 
 /**
@@ -82,23 +94,27 @@ export const getTokenById = async (
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the updated token or an error message
  */
 export const updateToken = async (
-    request: FastifyRequest<{ Params: { id: string }; Body: Partial<IToken> }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Params: { id: string }; Body: Partial<IToken> }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    const { id } = request.params as { id: string };
+  const { id } = request.params as { id: string };
 
-    try {
-        const updatedToken = await Token.findByIdAndUpdate(id, request.body, { new: true });
-
-        if (!updatedToken) {
-            return await returnErrorResponse(reply, 404, 'Token not found');
-        }
-
-        return await returnSuccessResponse(reply, 'Token updated successfully', updatedToken.toJSON());
-    } catch (error) {
-        console.error('Error updating token:', error);
-        return returnErrorResponse(reply, 400, 'Failed to update token');
+  try {
+    if (!request.body) {
+      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
+
+    const updatedToken = await Token.findByIdAndUpdate(id, request.body, { new: true });
+
+    if (!updatedToken) {
+      return await returnErrorResponse(reply, 404, 'Token not found');
+    }
+
+    return await returnSuccessResponse(reply, 'Token updated successfully', updatedToken.toJSON());
+  } catch (error) {
+    console.error('Error updating token:', error);
+    return returnErrorResponse(reply, 400, 'Failed to update token');
+  }
 };
 
 /**
@@ -108,23 +124,23 @@ export const updateToken = async (
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing a success message or an error message
  */
 export const deleteToken = async (
-    request: FastifyRequest<{ Params: { id: string } }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    const { id } = request.params as { id: string };
+  const { id } = request.params as { id: string };
 
-    try {
-        const deletedToken = await Token.findByIdAndDelete(id);
+  try {
+    const deletedToken = await Token.findByIdAndDelete(id);
 
-        if (!deletedToken) {
-            return await returnErrorResponse(reply, 404, 'Token not found');
-        }
-
-        return await returnSuccessResponse(reply, 'Token deleted successfully');
-    } catch (error) {
-        console.error('Error deleting token:', error);
-        return returnErrorResponse(reply, 400, 'Failed to delete token');
+    if (!deletedToken) {
+      return await returnErrorResponse(reply, 404, 'Token not found');
     }
+
+    return await returnSuccessResponse(reply, 'Token deleted successfully');
+  } catch (error) {
+    console.error('Error deleting token:', error);
+    return returnErrorResponse(reply, 400, 'Failed to delete token');
+  }
 };
 
 // Tokens issuing related functions. This will be later removed in mainnet as we don't need to issue tokens anymore.
@@ -133,10 +149,10 @@ export const deleteToken = async (
  * Represents the result of a token minting operation.
  */
 interface MintResult {
-    /** The address of the token contract */
-    tokenAddress: string;
-    /** The transaction hash of the minting operation */
-    txHash: string;
+  /** The address of the token contract */
+  tokenAddress: string;
+  /** The transaction hash of the minting operation */
+  txHash: string;
 }
 
 /**
@@ -150,37 +166,37 @@ interface MintResult {
  * @returns A promise that resolves to a MintResult object
  */
 async function mintToken(
-    signer: ethers.Wallet,
-    tokenAddress: string,
-    recipientAddress: string,
-    amount: string,
-    nonce: number,
+  signer: ethers.Wallet,
+  tokenAddress: string,
+  recipientAddress: string,
+  amount: string,
+  nonce: number
 ): Promise<MintResult> {
-    const erc20: ethers.Contract = new ethers.Contract(
-        tokenAddress,
-        ['function mint(address to, uint256 amount)'],
-        signer,
-    );
+  const erc20: ethers.Contract = new ethers.Contract(
+    tokenAddress,
+    ['function mint(address to, uint256 amount)'],
+    signer
+  );
 
-    const amountBN: ethers.BigNumber = ethers.utils.parseUnits(amount, 18);
-    const gasLimit: number = 5000000; // Set a reasonable gas limit
+  const amountBN: ethers.BigNumber = ethers.utils.parseUnits(amount, 18);
+  const gasLimit: number = 5000000; // Set a reasonable gas limit
 
-    // Estimate gas price
-    const gasPrice: ethers.BigNumber = await signer.provider!.getGasPrice();
+  // Estimate gas price
+  const gasPrice: ethers.BigNumber = await signer.provider!.getGasPrice();
 
-    // Increase gas price by 20% to ensure the transaction goes through
-    const adjustedGasPrice: ethers.BigNumber = gasPrice.mul(120).div(100);
+  // Increase gas price by 20% to ensure the transaction goes through
+  const adjustedGasPrice: ethers.BigNumber = gasPrice.mul(120).div(100);
 
-    const tx: ethers.ContractTransaction = await erc20.mint(recipientAddress, amountBN, {
-        gasLimit,
-        nonce,
-        gasPrice: adjustedGasPrice,
-    });
-    
-    return {
-        tokenAddress,
-        txHash: tx.hash,
-    };
+  const tx: ethers.ContractTransaction = await erc20.mint(recipientAddress, amountBN, {
+    gasLimit,
+    nonce,
+    gasPrice: adjustedGasPrice
+  });
+
+  return {
+    tokenAddress,
+    txHash: tx.hash
+  };
 }
 
 /**
@@ -190,38 +206,41 @@ async function mintToken(
  * @returns A promise that resolves to an array of MintResult objects
  */
 export async function issueTokensCore(
-    recipientAddress: string,
-    fastify: FastifyInstance
+  recipientAddress: string,
+  fastify: FastifyInstance
 ): Promise<MintResult[]> {
-    const amount: string = '1000';
-    const { networkConfig, tokens } = fastify;
-    
-    // Create provider using network config from decorator
-    const provider: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(
-        networkConfig.rpc
-    );
-    const signer: ethers.Wallet = new ethers.Wallet(SIGNING_KEY!, provider);
+  const amount: string = '1000';
+  const { networkConfig, tokens } = fastify;
 
-    // Get tokens for the current chain from the decorator
-    const chainTokens = tokens.filter(token => token.chain_id === networkConfig.chain_id);
-    const tokenAddresses: string[] = chainTokens.map(token => token.address);
+  // Create provider using network config from decorator
+  const provider: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(
+    networkConfig.rpc
+  );
+  const signer: ethers.Wallet = new ethers.Wallet(SIGNING_KEY!, provider);
 
-    if (tokenAddresses.length === 0) {
-        throw new Error(`No tokens found for chain ${networkConfig.chain_id}`);
-    }
+  // Get tokens for the current chain from the decorator
+  const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chain_id);
+  const tokenAddresses: string[] = chainTokens.map((token) => token.address);
 
-    // Get the current nonce for the signer
-    const currentNonce: number = await provider.getTransactionCount(signer.address);
-    console.log(`Current Nonce: ${currentNonce}`);
-    console.log(`Minting tokens on chain ${networkConfig.chain_id} for tokens:`, tokenAddresses);
+  if (tokenAddresses.length === 0) {
+    throw new Error(`No tokens found for chain ${networkConfig.chain_id}`);
+  }
 
-    const mintPromises: Promise<MintResult>[] = tokenAddresses.map((tokenAddress, index) =>
-        mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index),
-    );
+  // Get the current nonce for the signer
+  const currentNonce: number = await provider.getTransactionCount(signer.address);
+  console.log(`Current Nonce: ${currentNonce}`);
+  console.log(
+    `Minting tokens on chain ${networkConfig.chain_id} for wallet ${recipientAddress} and tokens:`,
+    tokenAddresses
+  );
 
-    const mintResults = await Promise.all(mintPromises);
+  const mintPromises: Promise<MintResult>[] = tokenAddresses.map((tokenAddress, index) =>
+    mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index)
+  );
 
-    return mintResults;
+  const mintResults = await Promise.all(mintPromises);
+
+  return mintResults;
 }
 
 /**
@@ -232,23 +251,30 @@ export async function issueTokensCore(
  * @returns A promise that resolves to the Fastify reply object
  */
 export const issueTokensHandler = async (
-    request: FastifyRequest<{ Body: { address: string } }>,
-    reply: FastifyReply,
+  request: FastifyRequest<{ Body: { address: string } }>,
+  reply: FastifyReply
 ): Promise<FastifyReply> => {
-    const { address }: { address: string } = request.body;
+  if (!request.body) {
+    return returnErrorResponse(reply, 400, 'You have to send a body with this request');
+  }
 
-    try {
-        const results = await issueTokensCore(address, request.server);
+  const { address }: { address: string } = request.body;
+  if (!address) {
+    return returnErrorResponse(reply, 400, 'Missing parameters in body. You have to send: address');
+  }
 
-        return await reply.status(201).send({
-            message: 'Tokens minted successfully',
-            results,
-        });
-    } catch (error) {
-        console.error('Error minting tokens:', error);
-        if (error instanceof Error) {
-            return returnErrorResponse(reply, 400, 'Bad Request', error.message);
-        }
-        return returnErrorResponse(reply, 400, 'Bad Request');
+  try {
+    const results = await issueTokensCore(address, request.server);
+
+    return await reply.status(201).send({
+      message: 'Tokens minted successfully',
+      results
+    });
+  } catch (error) {
+    console.error('Error minting tokens:', error);
+    if (error instanceof Error) {
+      return returnErrorResponse(reply, 400, 'Bad Request', error.message);
     }
+    return returnErrorResponse(reply, 400, 'Bad Request');
+  }
 };

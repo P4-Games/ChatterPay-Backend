@@ -10,7 +10,7 @@ const NETWORK_NAME = 'ARBITRUM_SEPOLIA';
 // Configuración de Alchemy
 const settings = {
   apiKey: process.env.ALCHEMY_API_KEY,
-  network: Network.ARB_SEPOLIA,
+  network: Network.ARB_SEPOLIA
 };
 const alchemy = new Alchemy(settings);
 
@@ -38,7 +38,7 @@ async function initializeLastProcessedBlock() {
 
     const result = await LastProcessedBlock.findOneAndUpdate(
       { networkName: NETWORK_NAME },
-      { 
+      {
         blockNumber: latestBlockNumber,
         updatedAt: new Date()
       },
