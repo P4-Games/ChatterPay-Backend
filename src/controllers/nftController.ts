@@ -71,11 +71,12 @@ const mintNftOriginal = async (
       backendSigner.address
     );
 
+    const gasLimit = await getDynamicGas(nftContract, 'mintOriginal', [
+      recipientAddress,
+      bddIdToUseAsUri
+    ]);
     const tx = await nftContract.mintOriginal(recipientAddress, bddIdToUseAsUri, {
-      gasLimit: await getDynamicGas(nftContract, 'mintOriginal', [
-        recipientAddress,
-        bddIdToUseAsUri
-      ])
+      gasLimit
     });
 
     console.log('Transaction sent: ', tx.hash);
@@ -127,17 +128,16 @@ const mintNftCopy = async (
       backendSigner.address
     );
 
+    const gasLimit = await getDynamicGas(nftContract, 'mintCopy', [
+      recipientAddress,
+      parseInt(originalTOkenId, 10),
+      bddIdToUseAsUri
+    ]);
     const tx = await nftContract.mintCopy(
       recipientAddress,
       parseInt(originalTOkenId, 10),
       bddIdToUseAsUri,
-      {
-        gasLimit: await getDynamicGas(nftContract, 'mintCopy', [
-          recipientAddress,
-          parseInt(originalTOkenId, 10),
-          bddIdToUseAsUri
-        ])
-      }
+      { gasLimit }
     );
 
     console.log('Transaction sent: ', tx.hash);
