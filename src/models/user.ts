@@ -6,7 +6,7 @@ export interface IUser extends Document {
   phone_number: string;
   photo: string;
   wallet: string;
-  walletEOA?: string;
+  walletEOA: string;
   code: number;
   privateKey: string;
   settings?: {

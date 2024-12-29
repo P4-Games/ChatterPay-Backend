@@ -63,4 +63,4 @@ export const PUSH_CHANNEL_PRIVATE_KEY = !pushChannelPrivateKey.startsWith('0x')
   ? `0x${pushChannelPrivateKey}`
   : pushChannelPrivateKey;
 export const PUSH_NETWORK: string = pushNetwork;
-export const PUSH_ENVIRONMENT: ENV  = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;
+export const PUSH_ENVIRONMENT: ENV = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;
