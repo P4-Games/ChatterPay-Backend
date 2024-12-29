@@ -99,10 +99,10 @@ export async function fetchExternalDeposits() {
         { blockNumber: maxBlockProcessed },
         { upsert: true }
       );
-      return `Procesados depósitos externos hasta el bloque ${maxBlockProcessed}`;
+      return `Processed external deposits up to block ${maxBlockProcessed}`;
     }
 
-    return `No se encontraron nuevos depósitos desde el bloque ${fromBlock}`;
+    return `No new deposits found since block ${fromBlock}`;
   } catch (error) {
     return `Error fetching external deposits: ${error}`;
   }

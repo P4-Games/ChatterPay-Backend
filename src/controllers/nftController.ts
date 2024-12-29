@@ -71,11 +71,12 @@ const mintNftOriginal = async (
       backendSigner.address
     );
 
+    const gasLimit = await getDynamicGas(nftContract, 'mintOriginal', [
+      recipientAddress,
+      bddIdToUseAsUri
+    ]);
     const tx = await nftContract.mintOriginal(recipientAddress, bddIdToUseAsUri, {
-      gasLimit: await getDynamicGas(nftContract, 'mintOriginal', [
-        recipientAddress,
-        bddIdToUseAsUri
-      ])
+      gasLimit
     });
 
     console.log('Transaction sent: ', tx.hash);
@@ -127,17 +128,16 @@ const mintNftCopy = async (
       backendSigner.address
     );
 
+    const gasLimit = await getDynamicGas(nftContract, 'mintCopy', [
+      recipientAddress,
+      parseInt(originalTOkenId, 10),
+      bddIdToUseAsUri
+    ]);
     const tx = await nftContract.mintCopy(
       recipientAddress,
       parseInt(originalTOkenId, 10),
       bddIdToUseAsUri,
-      {
-        gasLimit: await getDynamicGas(nftContract, 'mintCopy', [
-          recipientAddress,
-          parseInt(originalTOkenId, 10),
-          bddIdToUseAsUri
-        ])
-      }
+      { gasLimit }
     );
 
     console.log('Transaction sent: ', tx.hash);
@@ -535,7 +535,7 @@ export const getPhoneNFTs = async (
       count: nfts.length,
       nfts: nfts.map((nft: INFT) => ({
         description: nft.metadata.description,
-        url: `https://testnets.opensea.io/assets/arbitrum_sepolia/${networkConfig.contracts.chatterNFTAddress}/${nft.id}`
+        url: `${networkConfig.marketplace_opensea_url}/${networkConfig.contracts.chatterNFTAddress}/${nft.id}`
       }))
     };
   } catch (error) {
@@ -632,7 +632,7 @@ export const getNftMetadataRequiredByOpenSea = async (
     const nfts: INFT[] = await NFTModel.find({ _id: objectId });
 
     if (nfts.length === 0) {
-      return await reply.status(400).send({ message: 'NFT not found' });
+      return await reply.status(400).send({ message: 'NFT not found.' });
     }
 
     const nft: INFT = nfts[0];
