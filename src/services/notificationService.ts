@@ -2,6 +2,7 @@ import axios from 'axios';
 import { ethers } from 'ethers';
 import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
 
+import { User, IUser } from '../models/user';
 import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
 import { isValidPhoneNumber } from '../utils/validations';
@@ -64,15 +65,23 @@ async function sendBotNotification(payload: OperatorReplyPayload): Promise<strin
 export async function sendPushNotificaton(
   title: string,
   msg: string,
-  notifyToAddress: string,
+  channelUserId: string,
   type: number = 3,
   identityType: number = 2
 ): Promise<boolean> {
   try {
-    const signer = new ethers.Wallet(PUSH_CHANNEL_PRIVATE_KEY);
-    if (!notifyToAddress.startsWith('0x')) {
-      notifyToAddress = `0x${notifyToAddress}`;
+    const user: IUser | null = await User.findOne({ phone_number: channelUserId });
+    if (!user) {
+      console.log(
+        `Push notification not sent: Invalid user in the database for phone number ${channelUserId}`
+      );
+      return false;
     }
+
+    let { walletEOA } = user;
+    walletEOA = walletEOA.startsWith('0x') ? walletEOA : `0x${walletEOA}`;
+
+    const signer = new ethers.Wallet(PUSH_CHANNEL_PRIVATE_KEY);
     const apiResponse = await PushAPIPayloads.sendNotification({
       signer,
       type,
@@ -87,20 +96,20 @@ export async function sendPushNotificaton(
         cta: 'https://chatterpay.net',
         img: 'https://chatterpay.net/assets/images/home/logo.png'
       },
-      recipients: `eip155:${PUSH_NETWORK}:${notifyToAddress}`,
+      recipients: `eip155:${PUSH_NETWORK}:${walletEOA}`,
       channel: `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`,
       env: PUSH_ENVIRONMENT
     });
 
     console.log(
-      `Push notification sent successfully to ${notifyToAddress}:`,
+      `Push notification sent successfully to ${channelUserId},  ${walletEOA}:`,
       apiResponse.status,
       apiResponse.statusText
     );
     return true;
   } catch (error) {
     console.error(
-      `Error sending Push Notification to ${notifyToAddress}:`,
+      `Error sending Push Notification to ${channelUserId}:`,
       error instanceof Error ? error.message : 'Unknown'
     );
     return false;
@@ -237,7 +246,7 @@ export async function sendWalletCreationNotification(
     );
     const formattedMessage = message.replace('[PREDICTED_WALLET_EOA_ADDRESS]', address_of_user);
 
-    sendPushNotificaton(title, formattedMessage, address_of_user); // avoid await
+    sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
   } catch (error) {
     console.error('Error in sendWalletCreationNotification:', error);
     throw error;
@@ -271,7 +280,7 @@ export async function sendTransferNotification(
     };
 
     const data = await sendBotNotification(payload);
-    sendPushNotificaton(title, formattedMessage, address_of_user); // avoid await
+    sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
     console.error('Error in sendTransferNotification:', error);
@@ -313,7 +322,7 @@ export async function sendSwapNotification(
     };
 
     const data = await sendBotNotification(payload);
-    sendPushNotificaton(title, formattedMessage, address_of_user); // avoid await
+    sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
     console.error('Error in sendSwapNotification:', error);
@@ -342,7 +351,7 @@ export async function sendMintNotification(
     };
 
     const data = await sendBotNotification(payload);
-    sendPushNotificaton(title, formattedMessage, address_of_user); // avoid await
+    sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
     console.error('Error in sendMintNotification:', (error as Error).message);
@@ -385,7 +394,7 @@ export async function sendOutgoingTransferNotification(
     };
 
     const data = await sendBotNotification(payload);
-    sendPushNotificaton(title, formattedMessage, address_of_user); // avoid await
+    sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
     console.error('Error in sendOutgoingTransferNotification:', error);

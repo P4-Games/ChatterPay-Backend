@@ -9,6 +9,7 @@ build/
 
 # Archivos de ambiente
 .env*
+__env*
 
 # Logs
 npm-debug.log*
