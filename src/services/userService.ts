@@ -36,10 +36,18 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
 };
 
 /**
+ * Gets user based on the phone number.
+ */
+export const getUser = async (phoneNumber: string): Promise<IUser | null> => {
+  const user: IUser | null = await User.findOne({ phone_number: phoneNumber });
+  return user;
+};
+
+/**
  * Gets or creates a user based on the phone number.
  */
 export const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
-  const user = await User.findOne({ phone_number: phoneNumber });
+  const user = await getUser(phoneNumber);
 
   if (user) return user;
   console.log(`Phone number ${phoneNumber} not registered in ChatterPay, registering...`);

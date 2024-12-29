@@ -7,6 +7,7 @@ export interface IBlockchain extends Document {
   logo: string;
   explorer: string;
   scan_apikey: string;
+  marketplace_opensea_url: string;
   contracts: {
     entryPoint: string;
     factoryAddress: string;
