@@ -95,11 +95,16 @@ async function subscribeUser(pn: string, sk: string, pk: string): Promise<boolea
   const signer = new ethers.Wallet(sk);
 
   // Función para realizar el intento de suscripción
+  const channelAddress = `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`
+  const userAddress = `eip155:${PUSH_NETWORK}:${pk}`
+  const env = PUSH_ENVIRONMENT
+
+  console.log(`Subscribing ${userAddress} to ${env}.${channelAddress}`)
   const performSubscription = async (): Promise<boolean> =>
     new Promise<boolean>((resolve) => {
       PushAPI.channels.subscribe({
-        channelAddress: `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`,
-        userAddress: `eip155:${PUSH_NETWORK}:${pk}`,
+        channelAddress,
+        userAddress,
         signer,
         onSuccess: () => {
           console.log(`${pn}, ${pk}, Subscription successful.`);
@@ -109,7 +114,7 @@ async function subscribeUser(pn: string, sk: string, pk: string): Promise<boolea
           console.error(`${pn}, ${pk}, Subscription error:`, error.message);
           resolve(false);
         },
-        env: PUSH_ENVIRONMENT
+        env
       });
     });
 
