@@ -535,7 +535,7 @@ export const getPhoneNFTs = async (
       count: nfts.length,
       nfts: nfts.map((nft: INFT) => ({
         description: nft.metadata.description,
-        url: `https://testnets.opensea.io/assets/arbitrum_sepolia/${networkConfig.contracts.chatterNFTAddress}/${nft.id}`
+        url: `${networkConfig.marketplace_opensea_url}/${networkConfig.contracts.chatterNFTAddress}/${nft.id}`
       }))
     };
   } catch (error) {
