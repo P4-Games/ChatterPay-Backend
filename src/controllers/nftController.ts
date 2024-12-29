@@ -632,7 +632,7 @@ export const getNftMetadataRequiredByOpenSea = async (
     const nfts: INFT[] = await NFTModel.find({ _id: objectId });
 
     if (nfts.length === 0) {
-      return await reply.status(400).send({ message: 'NFT not found' });
+      return await reply.status(400).send({ message: 'NFT not found.' });
     }
 
     const nft: INFT = nfts[0];
