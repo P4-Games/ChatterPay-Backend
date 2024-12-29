@@ -56,13 +56,12 @@ function getUserData(phoneNumber: string): { pk: string; sk: string } {
   const seed = PRIVATE_KEY_SEED + phoneNumber;
   const sk = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
   const wallet = new ethers.Wallet(sk);
-  
+
   return {
     pk: wallet.address,
     sk
   };
 }
-
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function processUser(user: IUser): Promise<void> {
@@ -74,12 +73,13 @@ async function processUser(user: IUser): Promise<void> {
 
   try {
     const { pk } = getUserData(phoneNumber);
-    
-    console.log(`User ${user.phone_number}, currentEOA ${user.walletEOA || 'empty'}, newEOA ${pk} `)
+
+    console.log(
+      `User ${user.phone_number}, currentEOA ${user.walletEOA || 'empty'}, newEOA ${pk} `
+    );
     if (!justPrint) {
       await User.updateOne({ _id: user._id }, { walletEOA: pk });
     }
-
   } catch (error) {
     console.error(`Error processing user ${user._id}:`, error);
   }
@@ -108,4 +108,3 @@ async function main(): Promise<void> {
 }
 
 main();
-
