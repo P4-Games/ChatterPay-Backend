@@ -64,3 +64,5 @@ export const PUSH_CHANNEL_PRIVATE_KEY = !pushChannelPrivateKey.startsWith('0x')
   : pushChannelPrivateKey;
 export const PUSH_NETWORK: string = pushNetwork;
 export const PUSH_ENVIRONMENT: ENV = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;
+export const CHATTERPAY_DOMAIN: string = `https://${BUN_ENV === 'development' ? 'dev.' : ''}chatterpay.net`;
+export const CHATTERPAY_NFTS_SHARE_URL: string = `${CHATTERPAY_DOMAIN}/nfts/share`;

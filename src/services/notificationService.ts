@@ -11,8 +11,10 @@ import {
   PUSH_NETWORK,
   BOT_DATA_TOKEN,
   PUSH_ENVIRONMENT,
+  CHATTERPAY_DOMAIN,
   PUSH_CHANNEL_ADDRESS,
-  PUSH_CHANNEL_PRIVATE_KEY
+  PUSH_CHANNEL_PRIVATE_KEY,
+  CHATTERPAY_NFTS_SHARE_URL
 } from '../constants/environment';
 
 interface OperatorReplyPayload {
@@ -93,8 +95,8 @@ export async function sendPushNotificaton(
       payload: {
         title,
         body: msg,
-        cta: 'https://chatterpay.net',
-        img: 'https://chatterpay.net/assets/images/home/logo.png'
+        cta: CHATTERPAY_DOMAIN,
+        img: `${CHATTERPAY_DOMAIN}/assets/images/home/logo.png`
       },
       recipients: `eip155:${PUSH_NETWORK}:${walletEOA}`,
       channel: `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`,
@@ -153,9 +155,9 @@ function getNotiicationTemplate(channelUserId: string, typeOfNotification: Notif
         pt: 'Chatterpay: NFT cunhado!'
       },
       message: {
-        en: '🎉 Your certificate has been successfully minted! 🎉\nYou can view it here: https://chatterpay.net/nfts/share/[ID]',
-        es: '🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉\nPuedes verlo aquí: https://chatterpay.net/nfts/share/[ID]',
-        pt: '🎉 Seu certificado foi cunhado com sucesso! 🎉\nVocê pode visualizá-lo aqui: https://chatterpay.net/nfts/share/[ID]'
+        en: '🎉 Your certificate has been successfully minted! 🎉\nYou can view it here: [NFTS_SHARE_URL]/[ID]',
+        es: '🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉\nPuedes verlo aquí: [NFTS_SHARE_URL]/[ID]',
+        pt: '🎉 Seu certificado foi cunhado com sucesso! 🎉\nVocê pode visualizá-lo aqui: [NFTS_SHARE_URL]/[ID]'
       }
     },
     OUTGOING_TRANSFER: {
@@ -342,7 +344,9 @@ export async function sendMintNotification(
     console.log('Sending mint notification');
 
     const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Mint);
-    const formattedMessage = message.replaceAll('[ID]', id);
+    const formattedMessage = message
+      .replaceAll('[ID]', id)
+      .replaceAll('[NFTS_SHARE_URL]', CHATTERPAY_NFTS_SHARE_URL);
 
     const payload: OperatorReplyPayload = {
       data_token: BOT_DATA_TOKEN!,
