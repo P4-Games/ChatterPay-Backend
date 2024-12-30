@@ -105,7 +105,9 @@ async function executeOperation(
   // Wait for receipt
   const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
   if (!receipt?.success) {
-    throw new Error('Transaction failed or not found');
+    throw new Error(
+      `Transaction failed or not found, receipt: ${receipt.success}, ${receipt.userOpHash}`
+    );
   }
 
   return receipt.receipt.transactionHash;
@@ -133,11 +135,9 @@ export async function executeSwap(
     const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } =
       await setupContracts(blockchain, privateKey, fromNumber);
     const erc20 = await setupERC20(tokenAddresses.tokenAddressInput, signer);
-
-    console.log('Contracts and signers set up');
+    console.log('Contracts and signers set up.', signer.address);
 
     const checkBalanceResult = await verifyWalletBalance(erc20, proxy.proxyAddress, amount);
-
     if (!checkBalanceResult.enoughBalance) {
       throw new Error(
         `Insufficient balance. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}`
