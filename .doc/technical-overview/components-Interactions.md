@@ -22,7 +22,7 @@
 
 ## Frontend => Backend
 
-- transferAll => /withdraw_funds, POST
+- transferAll => /withdraw_all, POST
 - getBalancesWithTotalsFromBackend => /balance:walletAddress, GET
 - fethCustomTokens => /balance:walletAddress, GET
 
