@@ -1,7 +1,9 @@
 import { ethers } from 'ethers';
-import { FastifyInstance } from 'fastify';
 
+import { IUser } from '../models/user';
+import Transaction from '../models/transaction';
 import { getEntryPointABI } from './bucketService';
+import { IBlockchain } from '../models/blockchain';
 import { getBlockchain } from './blockchainService';
 import { verifyWalletBalance } from './walletService';
 import { generatePrivateKey } from '../utils/keyGenerator';
@@ -9,6 +11,7 @@ import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { setupERC20, setupContracts } from './contractSetupService';
 import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
+import { sendTransferNotification, sendOutgoingTransferNotification } from './notificationService';
 import {
   signUserOperation,
   createTransferCallData,
@@ -19,7 +22,7 @@ import {
  * Sends a user operation for token transfer.
  */
 export async function sendUserOperation(
-  fastify: FastifyInstance,
+  networkConfig: IBlockchain,
   fromNumber: string,
   to: string,
   tokenAddress: string,
@@ -51,7 +54,6 @@ export async function sendUserOperation(
     await ensureSignerHasEth(signer, backendSigner, provider);
     console.log('Signer has enough ETH');
 
-    const { networkConfig } = fastify;
     const entrypointABI = await getEntryPointABI();
     const entrypointContract = new ethers.Contract(
       networkConfig.contracts.entryPoint,
@@ -140,3 +142,63 @@ export async function ensureSignerHasEth(
   }
   console.log('Signer has enough ETH');
 }
+
+/**
+ * Executes a transaction between two users and handles the notifications.
+ */
+export const executeTransaction = async (
+  networkConfig: IBlockchain,
+  from: IUser,
+  to: IUser | { wallet: string },
+  tokenAddress: string,
+  tokenSymbol: string,
+  amount: string,
+  chain_id: number
+): Promise<string> => {
+  console.log('Sending user operation.');
+
+  const result = await sendUserOperation(
+    networkConfig,
+    from.phone_number,
+    to.wallet,
+    tokenAddress,
+    amount,
+    chain_id
+  );
+
+  if (!result || !result.transactionHash) {
+    return 'The transaction failed, the funds remain in your account';
+  }
+
+  await Transaction.create({
+    trx_hash: result.transactionHash,
+    wallet_from: from.wallet,
+    wallet_to: to.wallet,
+    type: 'transfer',
+    date: new Date(),
+    status: 'completed',
+    amount: parseFloat(amount),
+    token: tokenSymbol
+  });
+
+  try {
+    console.log('Trying to notificate transfer');
+    const fromName = from.name ?? from.phone_number ?? 'Alguien';
+    const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
+
+    sendTransferNotification(to.wallet, toNumber, fromName, amount, tokenSymbol);
+    sendOutgoingTransferNotification(
+      from.wallet,
+      from.phone_number,
+      toNumber,
+      amount,
+      tokenSymbol,
+      result.transactionHash
+    );
+
+    return '';
+  } catch (error) {
+    console.error('Error sending notifications:', error);
+    return 'The transaction failed, the funds remain in your account';
+  }
+};
