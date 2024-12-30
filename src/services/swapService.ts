@@ -145,6 +145,9 @@ export async function executeSwap(
     }
     console.log('Balance check passed');
 
+    await ensureSignerHasEth(signer, backendSigner, provider);
+    console.log('Signer has enough ETH');
+
     const { networkConfig } = fastify;
     const entrypointABI = await getEntryPointABI();
     const entrypointContract = new ethers.Contract(
