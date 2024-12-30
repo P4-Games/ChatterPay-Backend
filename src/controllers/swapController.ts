@@ -5,6 +5,7 @@ import Transaction from '../models/transaction';
 import { executeSwap } from '../services/swapService';
 import { SIGNING_KEY } from '../constants/environment';
 import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
+import { setupERC20 } from '../services/contractSetupService';
 import { returnErrorResponse } from '../utils/responseFormatter';
 import { sendSwapNotification } from '../services/notificationService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
@@ -32,7 +33,7 @@ const validateInputs = async (
   }
 
   if (channel_user_id.length > 15) {
-    return 'El número de telefono no es válido';
+    return 'Invalid Phone Number';
   }
 
   if (inputCurrency === outputCurrency) {
@@ -85,13 +86,16 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     const { tokens: blockchainTokensFromFastify, networkConfig: blockchainConfigFromFastify } =
       request.server as FastifyInstance;
+
     const tokenAddresses: TokenAddresses = getTokensAddresses(
       blockchainConfigFromFastify,
       blockchainTokensFromFastify,
       inputCurrency,
       outputCurrency
     );
+
     const validationError: string = await validateInputs(request.body, tokenAddresses);
+
     if (validationError) {
       return await reply.status(400).send({ message: validationError });
     }
@@ -101,11 +105,32 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       .status(200)
       .send({ message: 'Currency exchange in progress, it may take a few minutes.' });
 
+    const { networkConfig } = request.server;
+    const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
+    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    const { proxyAddress } = await computeProxyAddressFromPhone(channel_user_id);
+
+    // Get the contracts and decimals for the tokens
+    const fromTokenContract = await setupERC20(tokenAddresses.tokenAddressInput, backendSigner);
+    const fromTokenDecimals = await fromTokenContract.decimals();
+
+    const toTokenContract = await setupERC20(tokenAddresses.tokenAddressOutput, backendSigner);
+    const toTokenDecimals = await toTokenContract.decimals();
+
+    // Get the current balances before the transaction
+    const fromTokenCurrentBalance = await fromTokenContract.balanceOf(proxyAddress);
+    const toTokenCurrentBalance = await toTokenContract.balanceOf(proxyAddress);
+
     // Determine swap direction
     const isWETHtoUSDT =
       inputCurrency.toUpperCase() === 'WETH' && outputCurrency.toUpperCase() === 'USDT';
 
-    // Execute swap
+    // Execute the swap with the SimpleSwap contract
+    // The SimpleSwap contract makes sense for performing swaps of WETH for USDT and vice versa.
+    // This type of contract works similarly to a basic Automated Market Maker (AMM), where the
+    // liquidity reserve is used to determine the exchange rate between the two tokens.
+    // In this case, when you call the swapWETHforUSDT function, the contract uses the amount of WETH
+    // you wish to swap and the current WETH and USDT reserves to calculate how many USDT you will receive.
     const tx = await executeSwap(
       request.server,
       channel_user_id,
@@ -115,51 +140,48 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       isWETHtoUSDT
     );
 
-    const { networkConfig } = request.server;
-    const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    // Get the new balances after the transaction
+    const fromTokenNewBalance = await fromTokenContract.balanceOf(proxyAddress);
+    const toTokenNewBalance = await toTokenContract.balanceOf(proxyAddress);
 
-    // Create ERC20 contract for balance check
-    const outputToken = new ethers.Contract(
-      tokenAddresses.tokenAddressOutput,
-      ['function balanceOf(address owner) view returns (uint256)'],
-      backendSigner
+    // Calculate the tokens sent and received, considering the correct decimals
+    const fromTokensSent = fromTokenCurrentBalance.sub(fromTokenNewBalance);
+    const toTokensReceived = toTokenNewBalance.sub(toTokenCurrentBalance);
+
+    // Ensure the values are in the correct units (converted to 'number' for saveTransaction)
+    const fromTokensSentInUnits = parseFloat(
+      ethers.utils.formatUnits(fromTokensSent, fromTokenDecimals)
     );
-
-    // *******************************************************************************************
-    // TO_REVIEW: Que lógica tiene esto? finalBalance no es igual a initialOutputBalance??
-    // *******************************************************************************************
-    const { proxyAddress } = await computeProxyAddressFromPhone(channel_user_id);
-    const finalBalance = await outputToken.balanceOf(proxyAddress);
-    const initialOutputBalance = await outputToken.balanceOf(proxyAddress);
-    const result = ethers.utils.formatUnits(finalBalance.sub(initialOutputBalance), 18);
-    // *******************************************************************************************
+    const toTokensReceivedInUnits = parseFloat(
+      ethers.utils.formatUnits(toTokensReceived, toTokenDecimals)
+    );
 
     // Send notifications
     await sendSwapNotification(
       user_wallet,
       channel_user_id,
       inputCurrency,
-      amount.toString(),
-      result,
+      fromTokensSentInUnits.toString(),
+      toTokensReceivedInUnits.toString(),
       outputCurrency,
       tx.swapTransactionHash
     );
 
-    // Save transactions
+    // Save transactions OUT
     await saveTransaction(
       tx.approveTransactionHash,
       proxyAddress,
       SIMPLE_SWAP_ADDRESS,
-      amount,
+      fromTokensSentInUnits,
       inputCurrency
     );
 
+    // Save transactions IN
     await saveTransaction(
       tx.swapTransactionHash,
       SIMPLE_SWAP_ADDRESS,
       proxyAddress,
-      parseFloat(result),
+      toTokensReceivedInUnits,
       outputCurrency
     );
 
