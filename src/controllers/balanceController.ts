@@ -2,8 +2,10 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { User } from '../models/user';
+import { TokenInfo } from '../types/token';
 import { getPhoneNFTs } from './nftController';
 import { SIGNING_KEY } from '../constants/environment';
+import { getTokenInfo } from '../services/walletService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
@@ -11,15 +13,6 @@ import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFor
  * Supported fiat currencies for conversion
  */
 type Currency = 'USD' | 'UYU' | 'ARS' | 'BRL';
-
-/**
- * Basic token information including price
- */
-interface TokenInfo {
-  symbol: string;
-  address: string;
-  rateUSD: number;
-}
 
 /**
  * Fiat currency quote information
@@ -54,75 +47,6 @@ const API_URLs: [Currency, string][] = [
   ['ARS', 'https://criptoya.com/api/ripio/USDT/ARS'],
   ['BRL', 'https://criptoya.com/api/ripio/USDT/BRL']
 ];
-
-/**
- * Fetches token prices from Binance API using USDT pairs
- * @param symbols - Array of token symbols to fetch prices for
- * @returns Map of token symbols to their USD prices
- */
-async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
-  try {
-    const priceMap = new Map<string, number>();
-
-    // USDT is always 1 USD
-    priceMap.set('USDT', 1);
-
-    // Filter out USDT as we already set its price
-    const symbolsToFetch = symbols.filter((s) => s !== 'USDT');
-
-    if (symbolsToFetch.length === 0) return priceMap;
-
-    // Get prices for all symbols against USDT
-    const promises = symbolsToFetch.map(async (symbol) => {
-      try {
-        symbol = symbol.replace('WETH', 'ETH');
-        const response = await fetch(
-          `https://api.binance.us/api/v3/ticker/price?symbol=${symbol}USDT`
-        );
-        const data = await response.json();
-        if (data.price) {
-          console.log(`Price for ${symbol}: ${data.price} USDT`);
-          priceMap.set(symbol.replace('ETH', 'WETH'), parseFloat(data.price));
-        } else {
-          console.warn(`No price found for ${symbol}USDT`);
-          priceMap.set(symbol.replace('ETH', 'WETH'), 0);
-        }
-      } catch (error) {
-        console.error(`Error fetching price for ${symbol}:`, error);
-        priceMap.set(symbol, 0);
-      }
-    });
-
-    await Promise.all(promises);
-    return priceMap;
-  } catch (error) {
-    console.error('Error fetching token prices from Binance:', error);
-    // Return a map with 0 prices in case of error, except USDT which is always 1
-    return new Map(symbols.map((symbol) => [symbol, symbol === 'USDT' ? 1 : 0]));
-  }
-}
-
-/**
- * Gets token information from the global state and current prices
- * @param fastify - Fastify instance containing global state
- * @returns Array of tokens with current price information
- */
-async function getTokenInfo(fastify: FastifyInstance): Promise<TokenInfo[]> {
-  const { tokens, networkConfig } = fastify;
-  const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chain_id);
-
-  // Get all unique symbols
-  const symbols = [...new Set(chainTokens.map((token) => token.symbol))];
-
-  // Fetch current prices from Binance
-  const prices = await getTokenPrices(symbols);
-
-  return chainTokens.map((token) => ({
-    symbol: token.symbol,
-    address: token.address,
-    rateUSD: prices.get(token.symbol) || 0
-  }));
-}
 
 /**
  * Fetches the balance of a specific token for a given address
@@ -183,7 +107,7 @@ async function getTokenBalances(
   address: string,
   fastify: FastifyInstance
 ): Promise<TokenBalance[]> {
-  const tokenInfo = await getTokenInfo(fastify);
+  const tokenInfo = await getTokenInfo(fastify.tokens, fastify.networkConfig.chain_id);
   return Promise.all(
     tokenInfo.map(async (token) => {
       const balance = await getContractBalance(token.address, signer, address);
