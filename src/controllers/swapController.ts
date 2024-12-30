@@ -82,7 +82,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
 
-    const { channel_user_id, user_wallet, inputCurrency, outputCurrency, amount } = request.body;
+    const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
 
     const { tokens: blockchainTokensFromFastify, networkConfig: blockchainConfigFromFastify } =
       request.server as FastifyInstance;
@@ -100,13 +100,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       return await reply.status(400).send({ message: validationError });
     }
 
-    // Send initial response to client
-    reply
-      .status(200)
-      .send({ message: 'Currency exchange in progress, it may take a few minutes.' });
-
-    const { networkConfig } = request.server;
-    const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
+    const provider = new ethers.providers.JsonRpcProvider(blockchainConfigFromFastify.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const { proxyAddress } = await computeProxyAddressFromPhone(channel_user_id);
 
@@ -120,6 +114,18 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     // Get the current balances before the transaction
     const fromTokenCurrentBalance = await fromTokenContract.balanceOf(proxyAddress);
     const toTokenCurrentBalance = await toTokenContract.balanceOf(proxyAddress);
+
+    const amountToCheck = ethers.utils.parseUnits(amount.toString(), fromTokenDecimals);
+    const enoughBalance: boolean = fromTokenCurrentBalance.gte(amountToCheck);
+
+    if (!enoughBalance) {
+      return await returnErrorResponse(reply, 400, 'Insufficient balance to make the swap');
+    }
+
+    // Send initial response to client
+    reply
+      .status(200)
+      .send({ message: 'Currency exchange in progress, it may take a few minutes.' });
 
     // Determine swap direction
     const isWETHtoUSDT =
@@ -158,7 +164,6 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     // Send notifications
     await sendSwapNotification(
-      user_wallet,
       channel_user_id,
       inputCurrency,
       fromTokensSentInUnits.toString(),
@@ -185,11 +190,10 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       outputCurrency
     );
 
-    return await reply.status(200).send({
-      message: 'Swap completed successfully',
-      approveTransactionHash: tx.approveTransactionHash,
-      swapTransactionHash: tx.swapTransactionHash
-    });
+    console.info(
+      `Swap completed successfully approveTransactionHash: ${tx.approveTransactionHash}, swapTransactionHash: ${tx.swapTransactionHash}.`
+    );
+    return true;
   } catch (error) {
     console.error('Error swapping tokens:', error);
     return reply.status(500).send({ message: 'Internal Server Error' });

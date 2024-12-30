@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { returnErrorResponse } from '../utils/responseFormatter';
-import { withdrawWalletAllFunds } from '../services/walletService';
+import { withdrawWalletAllFunds } from '../services/transferService';
 
 /**
  * Handles the withdrwal all funds
@@ -41,15 +41,20 @@ export const withdrawAllFunds = async (
       return await returnErrorResponse(reply, 400, 'Invalid Ethereum address');
     }
 
-    const witthdrawResult = await withdrawWalletAllFunds(channel_user_id, dst_address);
+    const fastify = request.server;
+    const witthdrawResult = await withdrawWalletAllFunds(
+      fastify.tokens,
+      fastify.networkConfig,
+      channel_user_id,
+      dst_address
+    );
 
     if (witthdrawResult.result) {
-      return await reply.status(200).send({ message: 'Withdrwa completed successfully' });
+      return await reply.status(200).send({ message: 'Withdraw all funds completed successfully' });
     }
 
     return await returnErrorResponse(reply, 400, witthdrawResult.message);
   } catch (error) {
-    console.error('Error creando una wallet:', error);
-    return returnErrorResponse(reply, 400, 'An error occurred while creating the wallet');
+    return returnErrorResponse(reply, 400, 'An error occurred while withdrawing all funds');
   }
 };
