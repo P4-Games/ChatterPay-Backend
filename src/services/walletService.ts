@@ -1,4 +1,11 @@
 import { ethers } from 'ethers';
+import NodeCache from 'node-cache';
+
+import { IToken } from '../models/token';
+import { TokenInfo } from '../types/token';
+
+// Initialize the cache with a 5-minute TTL (Time To Live)
+const priceCache = new NodeCache({ stdTTL: 300, checkperiod: 320 });
 
 /**
  * Helper function to verifiy balance in wallet
@@ -58,4 +65,92 @@ export async function verifyWalletBalanceInRpc(
 
   const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, provider);
   return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
+}
+
+/**
+ * Fetches token prices from Binance API using USDT pairs
+ * @param symbols - Array of token symbols to fetch prices for
+ * @returns Map of token symbols to their USD prices
+ */
+export async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
+  try {
+    const priceMap = new Map<string, number>();
+
+    // USDT is always 1 USD
+    priceMap.set('USDT', 1);
+
+    // Filter out USDT as we already set its price
+    const symbolsToFetch = symbols.filter((s) => s !== 'USDT');
+
+    if (symbolsToFetch.length === 0) return priceMap;
+
+    try {
+      // Check cache for existing prices
+      const cachedPrices = priceCache.mget(symbolsToFetch);
+      const symbolsToFetchFromApi = symbolsToFetch.filter((symbol) => !cachedPrices[symbol]);
+
+      // Set cached prices to the priceMap
+      Object.entries(cachedPrices).forEach(([symbol, price]) => {
+        priceMap.set(symbol, price as number);
+      });
+
+      if (symbolsToFetchFromApi.length === 0) {
+        console.log('getting prices from cache!');
+        return priceMap;
+      }
+    } catch (error) {
+      // Avoid throwing error
+      console.error(
+        `Error getting prices from cache: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+
+    // Get prices for all symbols against USDT
+    const promises = symbolsToFetch.map(async (symbol) => {
+      try {
+        symbol = symbol.replace('WETH', 'ETH');
+        const response = await fetch(
+          `https://api.binance.us/api/v3/ticker/price?symbol=${symbol}USDT`
+        );
+        const data = await response.json();
+        if (data.price) {
+          console.log(`Price for ${symbol}: ${data.price} USDT`);
+          const price = parseFloat(data.price);
+          priceMap.set(symbol.replace('ETH', 'WETH'), price);
+          // Cache the price for 5 minutes
+          priceCache.set(symbol.replace('ETH', 'WETH'), price);
+        } else {
+          console.warn(`No price found for ${symbol}USDT`);
+          priceMap.set(symbol.replace('ETH', 'WETH'), 0);
+        }
+      } catch (error) {
+        console.error(`Error fetching price for ${symbol}:`, error);
+        priceMap.set(symbol, 0);
+      }
+    });
+
+    await Promise.all(promises);
+    return priceMap;
+  } catch (error) {
+    console.error('Error fetching token prices from Binance:', error);
+    // Return a map with 0 prices in case of error, except USDT which is always 1
+    return new Map(symbols.map((symbol) => [symbol, symbol === 'USDT' ? 1 : 0]));
+  }
+}
+
+/**
+ * Gets token information from the global state and current prices
+ * @returns Array of tokens with current price information
+ */
+export async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo[]> {
+  const chainTokens = tokens.filter((token) => token.chain_id === chanId);
+  const symbols = [...new Set(chainTokens.map((token) => token.symbol))];
+
+  const prices = await getTokenPrices(symbols);
+
+  return chainTokens.map((token) => ({
+    symbol: token.symbol,
+    address: token.address,
+    rateUSD: prices.get(token.symbol) || 0
+  }));
 }
