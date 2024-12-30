@@ -1,7 +1,10 @@
-import axios from 'axios';
+import PQueue from 'p-queue';
+import axios, { AxiosResponse } from 'axios';
 
 import { PackedUserOperation } from '../types/userOperation';
 import { serializeUserOperation } from '../utils/userOperation';
+
+const queue = new PQueue({ interval: 10000, intervalCap: 1 }); // 1 request each 10 seg
 
 /**
  * Sends a user operation to the bundler.
@@ -27,11 +30,14 @@ export async function sendUserOperationToBundler(
       id: Date.now()
     };
 
-    const response = await axios.post(bundlerUrl, payload, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    // Wrapper function in quue to avoid erro 429 (rate-limit)
+    const response = (await queue.add(async () =>
+      axios.post(bundlerUrl, payload, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+    )) as AxiosResponse;
 
     if (response.data.error) {
       console.error('Bundler returned an error:', response.data.error);
