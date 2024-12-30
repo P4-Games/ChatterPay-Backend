@@ -82,7 +82,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
 
-    const { channel_user_id, user_wallet, inputCurrency, outputCurrency, amount } = request.body;
+    const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
 
     const { tokens: blockchainTokensFromFastify, networkConfig: blockchainConfigFromFastify } =
       request.server as FastifyInstance;
@@ -158,7 +158,6 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     // Send notifications
     await sendSwapNotification(
-      user_wallet,
       channel_user_id,
       inputCurrency,
       fromTokensSentInUnits.toString(),

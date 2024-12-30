@@ -294,7 +294,6 @@ export async function sendTransferNotification(
  * Sends a notification for a swap.
  */
 export async function sendSwapNotification(
-  address_of_user: string,
   channel_user_id: string,
   token: string,
   amount: string,
