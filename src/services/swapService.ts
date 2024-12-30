@@ -3,6 +3,7 @@ import { FastifyInstance } from 'fastify';
 
 import { getEntryPointABI } from './bucketService';
 import { verifyWalletBalance } from './walletService';
+import { ensureSignerHasEth } from './transferService';
 import { generatePrivateKey } from '../utils/keyGenerator';
 import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
 import { sendUserOperationToBundler } from './bundlerService';

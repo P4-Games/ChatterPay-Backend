@@ -1,165 +1,15 @@
-import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { User } from '../models/user';
-import { TokenInfo } from '../types/token';
 import { getPhoneNFTs } from './nftController';
-import { SIGNING_KEY } from '../constants/environment';
-import { getTokenInfo } from '../services/walletService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-
-/**
- * Supported fiat currencies for conversion
- */
-type Currency = 'USD' | 'UYU' | 'ARS' | 'BRL';
-
-/**
- * Fiat currency quote information
- */
-interface FiatQuote {
-  currency: Currency;
-  rate: number;
-}
-
-/**
- * Token information including balance
- */
-interface TokenBalance extends TokenInfo {
-  balance: string;
-}
-
-/**
- * Detailed balance information for a token including conversions
- */
-interface BalanceInfo {
-  network: string;
-  token: string;
-  balance: number;
-  balance_conv: Record<Currency, number>;
-}
-
-/**
- * API endpoints for fiat currency conversion rates
- */
-const API_URLs: [Currency, string][] = [
-  ['UYU', 'https://criptoya.com/api/ripio/USDT/UYU'],
-  ['ARS', 'https://criptoya.com/api/ripio/USDT/ARS'],
-  ['BRL', 'https://criptoya.com/api/ripio/USDT/BRL']
-];
-
-/**
- * Fetches the balance of a specific token for a given address
- * @param contractAddress - Token contract address
- * @param signer - Ethereum wallet signer
- * @param address - Address to check balance for
- * @returns Token balance as a string
- */
-async function getContractBalance(
-  contractAddress: string,
-  signer: ethers.Wallet,
-  address: string
-): Promise<string> {
-  try {
-    const erc20Contract = new ethers.Contract(
-      contractAddress,
-      ['function balanceOf(address owner) view returns (uint256)'],
-      signer
-    );
-    const balance = await erc20Contract.balanceOf(address);
-    return ethers.utils.formatUnits(balance, 18);
-  } catch (error) {
-    console.error(
-      `Error getting balance: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
-    return '0';
-  }
-}
-
-/**
- * Fetches fiat quotes from external APIs
- * @returns Array of fiat currency quotes
- */
-async function getFiatQuotes(): Promise<FiatQuote[]> {
-  return Promise.all(
-    API_URLs.map(async ([currency, url]) => {
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-        return { currency, rate: data.bid };
-      } catch (error) {
-        console.error(`Error fetching ${currency} quote:`, error);
-        return { currency, rate: 1 }; // Fallback to 1:1 rate
-      }
-    })
-  );
-}
-
-/**
- * Fetches token balances for a given address
- * @param signer - Ethereum wallet signer
- * @param address - Address to check balances for
- * @param fastify - Fastify instance containing global state
- * @returns Array of token balances
- */
-async function getTokenBalances(
-  signer: ethers.Wallet,
-  address: string,
-  fastify: FastifyInstance
-): Promise<TokenBalance[]> {
-  const tokenInfo = await getTokenInfo(fastify.tokens, fastify.networkConfig.chain_id);
-  return Promise.all(
-    tokenInfo.map(async (token) => {
-      const balance = await getContractBalance(token.address, signer, address);
-      return { ...token, balance };
-    })
-  );
-}
-
-/**
- * Calculates balance information for all tokens including fiat conversions
- * @param tokenBalances - Array of token balances
- * @param fiatQuotes - Array of fiat currency quotes
- * @param networkName - Name of the blockchain network
- * @returns Array of detailed balance information
- */
-function calculateBalances(
-  tokenBalances: TokenBalance[],
-  fiatQuotes: FiatQuote[],
-  networkName: string
-): BalanceInfo[] {
-  return tokenBalances.map(({ symbol, balance, rateUSD }) => {
-    const balanceUSD = parseFloat(balance) * rateUSD;
-    return {
-      network: networkName,
-      token: symbol,
-      balance: parseFloat(balance),
-      balance_conv: {
-        USD: balanceUSD,
-        UYU: balanceUSD * (fiatQuotes.find((q) => q.currency === 'UYU')?.rate ?? 1),
-        ARS: balanceUSD * (fiatQuotes.find((q) => q.currency === 'ARS')?.rate ?? 1),
-        BRL: balanceUSD * (fiatQuotes.find((q) => q.currency === 'BRL')?.rate ?? 1)
-      }
-    };
-  });
-}
-
-/**
- * Calculates total balances across all currencies
- * @param balances - Array of balance information
- * @returns Record of currency totals
- */
-function calculateTotals(balances: BalanceInfo[]): Record<Currency, number> {
-  return balances.reduce(
-    (acc, balance) => {
-      (Object.keys(balance.balance_conv) as Currency[]).forEach((currency) => {
-        acc[currency] = (acc[currency] || 0) + balance.balance_conv[currency];
-      });
-      return acc;
-    },
-    {} as Record<Currency, number>
-  );
-}
+import {
+  getFiatQuotes,
+  getTokenBalances,
+  calculateBalances,
+  calculateBalancesTotals
+} from '../services/walletService';
 
 /**
  * Route handler for checking external deposits
@@ -185,8 +35,6 @@ async function getAddressBalance(
   fastify: FastifyInstance
 ): Promise<FastifyReply> {
   const { networkConfig } = fastify;
-  const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-  const signer = new ethers.Wallet(SIGNING_KEY!, provider);
 
   console.log(`Fetching balance for address: ${address} on network ${networkConfig.name}`);
   const user = await User.findOne({ wallet: address });
@@ -198,12 +46,12 @@ async function getAddressBalance(
   try {
     const [fiatQuotes, tokenBalances, NFTs] = await Promise.all([
       getFiatQuotes(),
-      getTokenBalances(signer, address, fastify),
+      getTokenBalances(address, fastify.tokens, networkConfig),
       getPhoneNFTs(user.phone_number)
     ]);
 
     const balances = calculateBalances(tokenBalances, fiatQuotes, networkConfig.name);
-    const totals = calculateTotals(balances);
+    const totals = calculateBalancesTotals(balances);
 
     const response = {
       balances,
