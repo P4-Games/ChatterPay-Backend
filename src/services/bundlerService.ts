@@ -80,11 +80,15 @@ export async function estimateUserOperationGas(
       id: Date.now()
     };
 
-    const response = await axios.post(bundlerUrl, payload, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    // Wrapper function in quue to avoid erro 429 (rate-limit)
+    const response = (await queue.add(async () =>
+      axios.post(bundlerUrl, payload, {
+        headers: {
+          accept: 'application/json',
+          'Content-Type': 'application/json'
+        }
+      })
+    )) as AxiosResponse;
 
     if (response.data.error) {
       Logger.error('Gas estimation error:', response.data.error);
