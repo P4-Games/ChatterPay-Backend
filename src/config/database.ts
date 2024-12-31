@@ -9,11 +9,11 @@ import { MONGO_URI } from '../constants/environment';
  * @throws {Error} If the connection to MongoDB fails
  */
 export async function connectToDatabase(): Promise<void> {
-  Logger.debug('Connecting to database');
+  Logger.info('Connecting to database');
   const MongoURI: string = MONGO_URI ?? 'mongodb://localhost:27017/chatterpay';
   try {
     await mongoose.connect(MongoURI);
-    Logger.debug('MongoDB connected');
+    Logger.info('MongoDB connected');
   } catch (error) {
     Logger.error('Failed to connect to MongoDB:', error);
     throw error;
