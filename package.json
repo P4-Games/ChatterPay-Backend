@@ -9,7 +9,7 @@
   "type": "module",
   "scripts": {
     "start": "bun run src/index.ts",
-    "build": "bun build src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target node",
     "generate-types": "typechain --target=ethers-v5 './src/artifacts/**/*.json'",
     "dev": "bun --watch src/index.ts",
     "lint": "eslint . --ext .ts",
