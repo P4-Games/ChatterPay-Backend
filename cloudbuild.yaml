@@ -18,7 +18,7 @@ steps:
       - PUSH_NETWORK=${_PUSH_NETWORK}
       - PUSH_ENVIRONMENT=${_PUSH_ENVIRONMENT}
       - PUSH_CHANNEL_ADDRESS=${_PUSH_CHANNEL_ADDRESS}
-      - PUSH_CHANNEL_PRIVATE_KEY=${_PUSH_CHANNEL_PRIVATE_KEY}
+      - MINOR_LOG_LEVEL=${_MINOR_LOG_LEVEL}      
     secretEnv: [
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
@@ -75,6 +75,8 @@ steps:
       'PUSH_ENVIRONMENT=${_PUSH_ENVIRONMENT}',
       '--build-arg',
       'PUSH_CHANNEL_ADDRESS=${_PUSH_CHANNEL_ADDRESS}',
+      '--build-arg',
+      'MINOR_LOG_LEVEL=${_MINOR_LOG_LEVEL}',
       '--build-arg',
       'PUSH_CHANNEL_PRIVATE_KEY=$$PUSH_CHANNEL_PRIVATE_KEY',
       '.'
