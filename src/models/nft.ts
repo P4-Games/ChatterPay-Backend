@@ -72,18 +72,4 @@ const NFTSchema = new Schema<INFT>({
 // Crear el modelo basado en el esquema
 const NFTModel = model<INFT>('NFTs', NFTSchema, 'nfts');
 
-/**
- * Función para obtener el último ID (el ID más grande) en la colección 'nfts'
- * @returns {Promise<number>} El último ID
- */
-export async function getLastId(): Promise<number> {
-  try {
-    const lastNFT = await NFTModel.findOne().sort({ id: -1 }).exec();
-    return lastNFT ? lastNFT.id : 0; // Si no hay documentos, retorna 0
-  } catch (error) {
-    console.error('Error al obtener el último ID:', error);
-    throw new Error('No se pudo obtener el último ID');
-  }
-}
-
 export default NFTModel;
