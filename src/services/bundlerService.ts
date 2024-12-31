@@ -65,6 +65,10 @@ export async function sendUserOperationToBundler(
 
 /**
  * Estimates the gas that will be used in the UserOperation
+ *
+ * @param bundlerUrl
+ * @param userOperation
+ * @param entryPointAddress
  */
 export async function estimateUserOperationGas(
   bundlerUrl: string,
@@ -96,7 +100,6 @@ export async function estimateUserOperationGas(
     }
 
     Logger.log('Gas Estimation:', response.data.result);
-    // You can use these estimates to update your userOperation if needed
   } catch (error) {
     Logger.error('Error estimating gas:', error);
     throw error;
