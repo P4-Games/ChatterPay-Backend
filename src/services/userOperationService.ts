@@ -26,8 +26,8 @@ export async function createGenericUserOperation(
     verificationGasLimit: BigNumber.from(74908),
     callGasLimit: BigNumber.from(79728),
     preVerificationGas: BigNumber.from(94542),
-    maxFeePerGas: BigNumber.from(ethers.utils.parseUnits('24', 'gwei')),
-    maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits('2', 'gwei')),
+    maxFeePerGas: BigNumber.from(ethers.utils.parseUnits('30', 'gwei')),
+    maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits('5', 'gwei')),
     paymasterAndData: '0x', // Will be filled by the paymaster service
     signature: '0x' // Empty signature initially
   };
