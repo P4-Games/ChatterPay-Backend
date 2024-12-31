@@ -12,6 +12,7 @@ cd scripts
 # Ejecutar docker build con las variables de entorno como argumentos de compilación
 docker build \
   --build-arg ALCHEMY_API_KEY="$ALCHEMY_API_KEY" \
+  --build-arg MINOR_LOG_LEVEL="$MINOR_LOG_LEVEL" \
   --build-arg INFURA_API_KEY="$INFURA_API_KEY" \
   --build-arg MONGO_URI="$MONGO_URI" \
   --build-arg PRIVATE_KEY="$PRIVATE_KEY" \

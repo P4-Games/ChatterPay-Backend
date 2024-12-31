@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 
+import { Logger } from '../utils/logger';
 import { createPaymasterAndData } from '../utils/paymaster';
 import { PackedUserOperation } from '../types/userOperation';
 
@@ -17,7 +18,7 @@ export async function addPaymasterData(
     backendSigner,
     3600 // 1 hour validity
   );
-  console.log('Generated paymasterAndData:', paymasterAndData);
+  Logger.log('Generated paymasterAndData:', paymasterAndData);
 
   return {
     ...userOp,
@@ -35,36 +36,36 @@ export async function ensurePaymasterHasPrefund(
   try {
     const balance = await entrypointContract.balanceOf(paymaster);
 
-    console.log('\nChecking prefund requirements:');
-    console.log(`- Current balance: ${ethers.utils.formatEther(balance)} ETH`);
+    Logger.log('\nChecking prefund requirements:');
+    Logger.log(`- Current balance: ${ethers.utils.formatEther(balance)} ETH`);
 
     const minBalance = ethers.utils.parseEther('0.15');
     const targetBalance = ethers.utils.parseEther('0.3');
 
-    console.log(`- Minimum required balance: ${ethers.utils.formatEther(minBalance)} ETH`);
-    console.log(
+    Logger.log(`- Minimum required balance: ${ethers.utils.formatEther(minBalance)} ETH`);
+    Logger.log(
       `- Target balance if deposit needed: ${ethers.utils.formatEther(targetBalance)} ETH`
     );
 
     if (balance.lt(minBalance)) {
       const missingFunds = targetBalance.sub(balance);
-      console.log(`\nDepositing ${ethers.utils.formatEther(missingFunds)} ETH to account`);
+      Logger.log(`\nDepositing ${ethers.utils.formatEther(missingFunds)} ETH to account`);
 
       const tx = await entrypointContract.depositTo(paymaster, {
         value: missingFunds,
         gasLimit: 500000
       });
       await tx.wait();
-      console.log('Deposit transaction confirmed');
+      Logger.log('Deposit transaction confirmed');
 
       // Verify the new balance
       const newBalance = await entrypointContract.balanceOf(paymaster);
-      console.log(`New balance after deposit: ${ethers.utils.formatEther(newBalance)} ETH`);
+      Logger.log(`New balance after deposit: ${ethers.utils.formatEther(newBalance)} ETH`);
     } else {
-      console.log('Account has sufficient prefund');
+      Logger.log('Account has sufficient prefund');
     }
   } catch (error) {
-    console.error('Error ensuring paymaster has prefund:', error);
+    Logger.error('Error ensuring paymaster has prefund:', error);
     throw error;
   }
 }

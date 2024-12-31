@@ -2,6 +2,7 @@ import axios from 'axios';
 import { ethers } from 'ethers';
 import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
 
+import { Logger } from '../utils/logger';
 import { User, IUser } from '../models/user';
 import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
@@ -49,10 +50,10 @@ async function sendBotNotification(payload: OperatorReplyPayload): Promise<strin
         'Content-Type': 'application/json'
       }
     });
-    console.log('API Response:', payload.channel_user_id, payload.message, response.data);
+    Logger.log('API Response:', payload.channel_user_id, payload.message, response.data);
     return response.data;
   } catch (error) {
-    console.error('Error sending operator reply:', (error as Error).message);
+    Logger.error('Error sending operator reply:', (error as Error).message);
     throw error;
   }
 }
@@ -74,7 +75,7 @@ export async function sendPushNotificaton(
   try {
     const user: IUser | null = await User.findOne({ phone_number: channelUserId });
     if (!user) {
-      console.log(
+      Logger.log(
         `Push notification not sent: Invalid user in the database for phone number ${channelUserId}`
       );
       return false;
@@ -103,14 +104,14 @@ export async function sendPushNotificaton(
       env: PUSH_ENVIRONMENT
     });
 
-    console.log(
+    Logger.log(
       `Push notification sent successfully to ${channelUserId},  ${walletEOA}:`,
       apiResponse.status,
       apiResponse.statusText
     );
     return true;
   } catch (error) {
-    console.error(
+    Logger.error(
       `Error sending Push Notification to ${channelUserId}:`,
       error instanceof Error ? error.message : 'Unknown'
     );
@@ -212,19 +213,19 @@ export async function subscribeToPushChannel(
       channelAddress: `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`,
       userAddress: `eip155:${PUSH_NETWORK}:${user_address}`,
       onSuccess: () => {
-        console.log(`${user_address} successfully subscribed to Push Protocol Channel`);
+        Logger.log(`${user_address} successfully subscribed to Push Protocol Channel`);
       },
       onError: (error: unknown) => {
-        console.error(`Error trying to subscribe ${user_address} to Push Protocol channel:`, error);
+        Logger.error(`Error trying to subscribe ${user_address} to Push Protocol channel:`, error);
       },
       env: PUSH_ENVIRONMENT
     });
 
-    console.log(`${user_address} Push Protocol Subscription Response:`, subscriptionResponse);
+    Logger.log(`${user_address} Push Protocol Subscription Response:`, subscriptionResponse);
     return true;
   } catch (error) {
     // Avoid throwing an error if subscribing to the push channel fails
-    console.error(
+    Logger.error(
       `Error trying to subscribe ${user_address} to Push Channel:`,
       error instanceof Error ? error.message : 'Unknown'
     );
@@ -240,7 +241,7 @@ export async function sendWalletCreationNotification(
   channel_user_id: string
 ) {
   try {
-    console.log(`Sending wallet creation notification to ${address_of_user}`);
+    Logger.log(`Sending wallet creation notification to ${address_of_user}`);
 
     const { title, message } = getNotiicationTemplate(
       channel_user_id,
@@ -250,7 +251,7 @@ export async function sendWalletCreationNotification(
 
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
   } catch (error) {
-    console.error('Error in sendWalletCreationNotification:', error);
+    Logger.error('Error in sendWalletCreationNotification:', error);
     throw error;
   }
 }
@@ -266,7 +267,7 @@ export async function sendTransferNotification(
   token: string
 ): Promise<unknown> {
   try {
-    console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
+    Logger.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
     if (!isValidPhoneNumber(channel_user_id)) return '';
 
     const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Transfer);
@@ -285,7 +286,7 @@ export async function sendTransferNotification(
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    console.error('Error in sendTransferNotification:', error);
+    Logger.error('Error in sendTransferNotification:', error);
     throw error;
   }
 }
@@ -302,7 +303,7 @@ export async function sendSwapNotification(
   transactionHash: string
 ): Promise<unknown> {
   try {
-    console.log('Sending swap notification');
+    Logger.log('Sending swap notification');
     const networkConfig: IBlockchain = await getNetworkConfig();
 
     const resultString: string = `${Math.round(parseFloat(result) * 1e4) / 1e4}`;
@@ -326,7 +327,7 @@ export async function sendSwapNotification(
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    console.error('Error in sendSwapNotification:', error);
+    Logger.error('Error in sendSwapNotification:', error);
     throw error;
   }
 }
@@ -340,7 +341,7 @@ export async function sendMintNotification(
   id: string
 ): Promise<unknown> {
   try {
-    console.log('Sending mint notification');
+    Logger.log('Sending mint notification');
 
     const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Mint);
     const formattedMessage = message
@@ -357,7 +358,7 @@ export async function sendMintNotification(
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    console.error('Error in sendMintNotification:', (error as Error).message);
+    Logger.error('Error in sendMintNotification:', (error as Error).message);
     throw error;
   }
 }
@@ -374,7 +375,7 @@ export async function sendOutgoingTransferNotification(
   txHash: string
 ): Promise<unknown> {
   try {
-    console.log('Sending outgoing transfer notification');
+    Logger.log('Sending outgoing transfer notification');
     if (!isValidPhoneNumber(channel_user_id)) return '';
 
     const networkConfig: IBlockchain = await getNetworkConfig();
@@ -400,7 +401,7 @@ export async function sendOutgoingTransferNotification(
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    console.error('Error in sendOutgoingTransferNotification:', error);
+    Logger.error('Error in sendOutgoingTransferNotification:', error);
     throw error;
   }
 }

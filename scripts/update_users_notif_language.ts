@@ -5,6 +5,8 @@
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 
+import { Logger } from '../src/utils/logger';
+
 dotenv.config();
 
 // Configuración de la URI de MongoDB y otros detalles
@@ -37,7 +39,7 @@ async function addSettingsField(): Promise<void> {
   try {
     // Conectar a la base de datos usando Mongoose
     await mongoose.connect(MONGO_URI, { dbName: DB_NAME });
-    console.log('Conectado a la base de datos');
+    Logger.log('Conectado a la base de datos');
 
     // Actualizar documentos que no tienen el campo 'settings'
     const updateResult = await User.updateMany(
@@ -53,13 +55,13 @@ async function addSettingsField(): Promise<void> {
       }
     );
 
-    console.log(`Se actualizaron ${updateResult.modifiedCount} documentos.`);
+    Logger.log(`Se actualizaron ${updateResult.modifiedCount} documentos.`);
   } catch (error) {
-    console.error('Error actualizando documentos:', error);
+    Logger.error('Error actualizando documentos:', error);
   } finally {
     // Cerrar la conexión a la base de datos
     await mongoose.disconnect();
-    console.log('Conexión cerrada');
+    Logger.log('Conexión cerrada');
   }
 }
 

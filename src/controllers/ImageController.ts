@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { User } from '../models/user';
+import { Logger } from '../utils/logger';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
 
@@ -31,7 +32,7 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
       ipfs_url: ipfsUrl
     };
   } catch (error) {
-    console.error('Error processing and uploading the image:', error);
+    Logger.error('Error processing and uploading the image:', error);
     return {
       success: false,
       message: 'Error processing and uploading the image',
@@ -52,18 +53,18 @@ export const uploadImage: RouteHandlerMethod = async (
     const { phone_number, image_url } = request.body as UploadBody;
 
     if (!phone_number) {
-      console.warn('Phone number not provided');
+      Logger.warn('Phone number not provided');
       return await returnErrorResponse(reply, 400, 'Phone number not provided');
     }
 
     if (!image_url) {
-      console.warn('Image URL not provided');
+      Logger.warn('Image URL not provided');
       return await returnErrorResponse(reply, 400, 'Image URL not provided');
     }
 
     const user = await User.findOne({ phone_number });
     if (!user) {
-      console.warn('User not found:', phone_number);
+      Logger.warn('User not found:', phone_number);
       return await returnErrorResponse(reply, 404, 'User not found');
     }
 
@@ -74,17 +75,17 @@ export const uploadImage: RouteHandlerMethod = async (
       user.photo = uploadResult.ipfs_url ?? '';
       await user.save();
 
-      console.log('Image uploaded successfully:', uploadResult);
+      Logger.log('Image uploaded successfully:', uploadResult);
       return await returnSuccessResponse(reply, 'Image uploaded successfully', {
         icp_url: uploadResult.icp_url,
         ipfs_url: uploadResult.ipfs_url
       });
     }
 
-    console.error('Error uploading image:', uploadResult.error);
+    Logger.error('Error uploading image:', uploadResult.error);
     return await returnErrorResponse(reply, 500, 'Error uploading image', uploadResult.error);
   } catch (error) {
-    console.error('Error uploading image:', error);
+    Logger.error('Error uploading image:', error);
     return returnErrorResponse(reply, 500, 'Internal Server Error');
   }
 };

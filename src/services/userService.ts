@@ -1,3 +1,4 @@
+import { Logger } from '../utils/logger';
 import { User, IUser } from '../models/user';
 import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
 import { subscribeToPushChannel, sendWalletCreationNotification } from './notificationService';
@@ -28,7 +29,7 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
 
   await user.save();
 
-  console.log('Push protocol', phoneNumber, predictedWallet.EOAAddress);
+  Logger.log('Push protocol', phoneNumber, predictedWallet.EOAAddress);
   await subscribeToPushChannel(predictedWallet.privateKeyNotHashed, predictedWallet.EOAAddress);
   sendWalletCreationNotification(predictedWallet.EOAAddress, phoneNumber); // avoid await
 
@@ -50,10 +51,10 @@ export const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
   const user = await getUser(phoneNumber);
 
   if (user) return user;
-  console.log(`Phone number ${phoneNumber} not registered in ChatterPay, registering...`);
+  Logger.log(`Phone number ${phoneNumber} not registered in ChatterPay, registering...`);
 
   const newUser: IUser = await createUserWithWallet(phoneNumber);
-  console.log(`Phone number ${phoneNumber} registered with the wallet ${newUser.wallet}`);
+  Logger.log(`Phone number ${phoneNumber} registered with the wallet ${newUser.wallet}`);
 
   return newUser;
 };

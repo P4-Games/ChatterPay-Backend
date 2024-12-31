@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
+import { Logger } from '../utils/logger';
 import { getEntryPointABI } from './bucketService';
 import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
@@ -24,12 +25,12 @@ export async function executeUserOperation(
   signer: ethers.Wallet,
   senderAddress: string
 ): Promise<UserOperationReceiptData> {
-  console.log('Starting executeUserOperation.');
-  console.log('Sender address:', senderAddress);
-  console.log('Call data:', callData);
+  Logger.log('Starting executeUserOperation.');
+  Logger.log('Sender address:', senderAddress);
+  Logger.log('Call data:', callData);
 
   const { networkConfig, backendSigner, provider } = fastify;
-  console.log('Network config loaded. Entry point:', networkConfig.contracts.entryPoint);
+  Logger.log('Network config loaded. Entry point:', networkConfig.contracts.entryPoint);
 
   const entrypointABI = await getEntryPointABI();
   const entrypointContract = new ethers.Contract(
@@ -37,51 +38,51 @@ export async function executeUserOperation(
     entrypointABI,
     backendSigner
   );
-  console.log('EntryPoint contract initialized');
+  Logger.log('EntryPoint contract initialized');
 
   // Get the nonce
-  console.log('Fetching nonce for sender.', senderAddress);
+  Logger.log('Fetching nonce for sender.', senderAddress);
   const nonce = await entrypointContract.getNonce(senderAddress, 0);
-  console.log('Nonce:', nonce.toString());
+  Logger.log('Nonce:', nonce.toString());
 
   // Create, add paymaster and sign the UserOperation
-  console.log('Creating generic user operation.');
+  Logger.log('Creating generic user operation.');
   let userOperation = await createGenericUserOperation(callData, senderAddress, nonce);
-  console.log('Generic user operation created');
+  Logger.log('Generic user operation created');
 
-  console.log('Adding paymaster data.');
+  Logger.log('Adding paymaster data.');
   userOperation = await addPaymasterData(
     userOperation,
     networkConfig.contracts.paymasterAddress!,
     backendSigner
   );
-  console.log('Paymaster data added');
+  Logger.log('Paymaster data added');
 
-  console.log('Signing user operation.');
+  Logger.log('Signing user operation.');
   userOperation = await signUserOperation(
     userOperation,
     networkConfig.contracts.entryPoint,
     signer
   );
-  console.log('User operation signed');
+  Logger.log('User operation signed');
 
   // Send to bundler and wait for receipt
-  console.log('Sending user operation to bundler');
+  Logger.log('Sending user operation to bundler');
   const bundlerResponse = await sendUserOperationToBundler(
     networkConfig.rpc,
     userOperation,
     networkConfig.contracts.entryPoint
   );
-  console.log('Bundler response:', bundlerResponse);
+  Logger.log('Bundler response:', bundlerResponse);
 
-  console.log('Waiting for transaction to be mined.');
+  Logger.log('Waiting for transaction to be mined.');
   const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
-  console.log('Transaction receipt:', JSON.stringify(receipt, null, 2));
+  Logger.log('Transaction receipt:', JSON.stringify(receipt));
 
   if (!receipt?.success) {
     throw new Error('Transaction failed or not found');
   }
 
-  console.log('Transaction confirmed in block:', receipt.receipt.blockNumber);
+  Logger.log('Transaction confirmed in block:', receipt.receipt.blockNumber);
   return receipt.receipt;
 }

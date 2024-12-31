@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import { IUser } from '../models/user';
 import { getUser } from './userService';
 import { IToken } from '../models/token';
+import { Logger } from '../utils/logger';
 import { TokenBalance } from '../types/common';
 import Transaction from '../models/transaction';
 import { getEntryPointABI } from './bucketService';
@@ -43,7 +44,7 @@ export async function sendUserOperation(
     const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } =
       await setupContracts(blockchain, privateKey, fromNumber);
     const erc20 = await setupERC20(tokenAddress, signer);
-    console.log('Contracts and signers set up.', signer.address);
+    Logger.log('Contracts and signers set up.', signer.address);
 
     const checkBalanceResult = await verifyWalletBalance(erc20, proxy.proxyAddress, amount);
     if (!checkBalanceResult.enoughBalance) {
@@ -51,10 +52,10 @@ export async function sendUserOperation(
         `Insufficient balance. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}`
       );
     }
-    console.log('Balance check passed');
+    Logger.log('Balance check passed');
 
     await ensureSignerHasEth(signer, backendSigner, provider);
-    console.log('Signer has enough ETH');
+    Logger.log('Signer has enough ETH');
 
     const entrypointABI = await getEntryPointABI();
     const entrypointContract = new ethers.Contract(
@@ -65,7 +66,7 @@ export async function sendUserOperation(
 
     await ensurePaymasterHasPrefund(entrypointContract, networkConfig.contracts.paymasterAddress!);
 
-    console.log('Validating account');
+    Logger.log('Validating account');
     if (!accountExists) {
       throw new Error(
         `Account ${proxy.proxyAddress} does not exist. Cannot proceed with transfer.`
@@ -77,7 +78,7 @@ export async function sendUserOperation(
 
     // Get the nonce
     const nonce = await entrypointContract.getNonce(proxy.proxyAddress, 0);
-    console.log('Nonce:', nonce.toString());
+    Logger.log('Nonce:', nonce.toString());
 
     // Create the base user operation
     let userOperation = await createGenericUserOperation(callData, proxy.proxyAddress, nonce);
@@ -96,29 +97,29 @@ export async function sendUserOperation(
       signer
     );
 
-    console.log('Sending user operation to bundler');
+    Logger.log('Sending user operation to bundler');
     const bundlerResponse = await sendUserOperationToBundler(
       bundlerUrl,
       userOperation,
       entrypointContract.address
     );
-    console.log('Bundler response:', bundlerResponse);
+    Logger.log('Bundler response:', bundlerResponse);
 
-    console.log('Waiting for transaction to be mined.');
+    Logger.log('Waiting for transaction to be mined.');
     const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
-    console.log('Transaction receipt:', JSON.stringify(receipt, null, 2));
+    Logger.log('Transaction receipt:', JSON.stringify(receipt));
 
     if (!receipt?.success) {
       throw new Error('Transaction failed or not found');
     }
 
-    console.log('Transaction confirmed in block:', receipt.receipt.blockNumber);
-    console.log('sendUserOperation end!');
+    Logger.log('Transaction confirmed in block:', receipt.receipt.blockNumber);
+    Logger.log('sendUserOperation end!');
 
     return { transactionHash: receipt.receipt.transactionHash };
   } catch (error) {
-    console.error('Error in sendUserOperation:', error);
-    console.log('Full error object:', JSON.stringify(error, null, 2));
+    Logger.error('Error in sendUserOperation:', error);
+    Logger.log('Full error object:', JSON.stringify(error));
     throw error;
   }
 }
@@ -132,18 +133,18 @@ export async function ensureSignerHasEth(
   provider: ethers.providers.JsonRpcProvider
 ): Promise<void> {
   const EOABalance = await provider.getBalance(await signer.getAddress());
-  console.log(`Signer balance: ${ethers.utils.formatEther(EOABalance)} ETH`);
+  Logger.log(`Signer balance: ${ethers.utils.formatEther(EOABalance)} ETH`);
   if (EOABalance.lt(ethers.utils.parseEther('0.0008'))) {
-    console.log('Sending ETH to signer.');
+    Logger.log('Sending ETH to signer.');
     const tx = await backendSigner.sendTransaction({
       to: await signer.getAddress(),
       value: ethers.utils.parseEther('0.001'),
       gasLimit: 210000
     });
     await tx.wait();
-    console.log('ETH sent to signer');
+    Logger.log('ETH sent to signer');
   }
-  console.log('Signer has enough ETH');
+  Logger.log('Signer has enough ETH');
 }
 
 /**
@@ -158,7 +159,7 @@ export const executeTransaction = async (
   amount: string,
   chain_id: number
 ): Promise<string> => {
-  console.log('Sending user operation.');
+  Logger.log('Sending user operation.');
 
   let result;
   try {
@@ -171,7 +172,7 @@ export const executeTransaction = async (
       chain_id
     );
   } catch (error: unknown) {
-    console.error('Error with sendUserOperation:', (error as Error).message);
+    Logger.error('Error with sendUserOperation:', (error as Error).message);
     return 'The transaction failed, the funds remain in your account';
   }
 
@@ -191,7 +192,7 @@ export const executeTransaction = async (
       token: tokenSymbol
     });
   } catch (error: unknown) {
-    console.error(
+    Logger.error(
       `Error saving transaction ${result.transactionHash} in database:`,
       (error as Error).message
     );
@@ -199,7 +200,7 @@ export const executeTransaction = async (
   }
 
   try {
-    console.log('Trying to notificate transfer');
+    Logger.log('Trying to notificate transfer');
     const fromName = from.name ?? from.phone_number ?? 'Alguien';
     const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
 
@@ -216,7 +217,7 @@ export const executeTransaction = async (
 
     return '';
   } catch (error) {
-    console.error('Error sending notifications:', error);
+    Logger.error('Error sending notifications:', error);
     return 'The transaction failed, the funds remain in your account';
   }
 };

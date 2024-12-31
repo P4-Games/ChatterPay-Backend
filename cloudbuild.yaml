@@ -18,12 +18,13 @@ steps:
       - PUSH_NETWORK=${_PUSH_NETWORK}
       - PUSH_ENVIRONMENT=${_PUSH_ENVIRONMENT}
       - PUSH_CHANNEL_ADDRESS=${_PUSH_CHANNEL_ADDRESS}
-      - PUSH_CHANNEL_PRIVATE_KEY=${_PUSH_CHANNEL_PRIVATE_KEY}
+      - MINOR_LOG_LEVEL=${_MINOR_LOG_LEVEL}      
     secretEnv: [
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
       'PRIVATE_KEY', 
-      'SIGNING_KEY'
+      'SIGNING_KEY',
+      'PUSH_CHANNEL_PRIVATE_KEY'
     ]
 
   - name: 'gcr.io/cloud-builders/docker'
@@ -76,6 +77,8 @@ steps:
       '--build-arg',
       'PUSH_CHANNEL_ADDRESS=${_PUSH_CHANNEL_ADDRESS}',
       '--build-arg',
+      'MINOR_LOG_LEVEL=${_MINOR_LOG_LEVEL}',
+      '--build-arg',
       'PUSH_CHANNEL_PRIVATE_KEY=$$PUSH_CHANNEL_PRIVATE_KEY',
       '.'
     ]
@@ -83,7 +86,8 @@ steps:
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
       'PRIVATE_KEY', 
-      'SIGNING_KEY'
+      'SIGNING_KEY',
+      'PUSH_CHANNEL_PRIVATE_KEY'
     ]
 
   - name: 'gcr.io/cloud-builders/docker'
@@ -119,11 +123,13 @@ steps:
       echo "FRONTEND_TOKEN en cloudbuild.yaml 2: $FRONTEND_TOKEN"
       echo "PRIVATE_KEY en cloudbuild.yaml 3: $PRIVATE_KEY"
       echo "SIGNING_KEY en cloudbuild.yaml 4: $SIGNING_KEY"
+      echo "PUSH_CHANNEL_PRIVATE_KEY en cloudbuild.yaml 5: $PUSH_CHANNEL_PRIVATE_KEY"
     secretEnv: [
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
       'PRIVATE_KEY', 
-      'SIGNING_KEY'
+      'SIGNING_KEY',
+      'PUSH_CHANNEL_PRIVATE_KEY'
     ]
 
 availableSecrets:
@@ -136,6 +142,8 @@ availableSecrets:
       env: 'PRIVATE_KEY'
     - versionName: projects/$PROJECT_ID/secrets/${_SIGNING_KEY_SECRET_NAME}/versions/latest
       env: 'SIGNING_KEY'
+    - versionName: projects/$PROJECT_ID/secrets/${_PUSH_CHANNEL_PRIVATE_KEY_NAME}/versions/latest
+      env: 'PUSH_CHANNEL_PRIVATE_KEY'
 
 images:
   - $_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA

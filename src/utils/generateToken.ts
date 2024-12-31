@@ -6,6 +6,8 @@
  */
 import crypto from 'crypto';
 
+import { Logger } from './logger';
+
 function generateSecureToken(length = 32) {
   return crypto.randomBytes(length).toString('hex');
 }
@@ -13,5 +15,5 @@ function generateSecureToken(length = 32) {
 const chatizaloToken = generateSecureToken();
 const frontendToken = generateSecureToken();
 
-console.log('Chatizalo Token:', chatizaloToken);
-console.log('Frontend Token:', frontendToken);
+Logger.log('Chatizalo Token:', chatizaloToken);
+Logger.log('Frontend Token:', frontendToken);

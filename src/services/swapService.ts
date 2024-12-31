@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
+import { Logger } from '../utils/logger';
 import { getEntryPointABI } from './bucketService';
 import { verifyWalletBalance } from './walletService';
 import { ensureSignerHasEth } from './transferService';
@@ -24,14 +25,14 @@ function createApproveCallData(
 ): string {
   const amount_bn = ethers.utils.parseUnits(amount, 18);
   const approveEncode = tokenContract.interface.encodeFunctionData('approve', [spender, amount_bn]);
-  console.log('Approve Encode:', approveEncode);
+  Logger.log('Approve Encode:', approveEncode);
 
   const callData = chatterPayContract.interface.encodeFunctionData('execute', [
     tokenContract.address,
     0,
     approveEncode
   ]);
-  console.log('Approve Call Data:', callData);
+  Logger.log('Approve Call Data:', callData);
 
   return callData;
 }
@@ -50,14 +51,14 @@ function createSwapCallData(
     isWETHtoUSDT ? 'swapWETHforUSDT' : 'swapUSDTforWETH',
     [amount_bn]
   );
-  console.log('Swap Encode:', swapEncode);
+  Logger.log('Swap Encode:', swapEncode);
 
   const callData = chatterPayContract.interface.encodeFunctionData('execute', [
     swapContract.address,
     0,
     swapEncode
   ]);
-  console.log('Swap Call Data:', callData);
+  Logger.log('Swap Call Data:', callData);
 
   return callData;
 }
@@ -77,7 +78,7 @@ async function executeOperation(
 ): Promise<string> {
   // Get the nonce
   const nonce = await entrypointContract.getNonce(proxyAddress, 0);
-  console.log('Nonce:', nonce.toString());
+  Logger.log('Nonce:', nonce.toString());
 
   // Create the base user operation
   let userOperation = await createGenericUserOperation(callData, proxyAddress, nonce);
@@ -136,7 +137,7 @@ export async function executeSwap(
     const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } =
       await setupContracts(blockchain, privateKey, fromNumber);
     const erc20 = await setupERC20(tokenAddresses.tokenAddressInput, signer);
-    console.log('Contracts and signers set up.', signer.address);
+    Logger.log('Contracts and signers set up.', signer.address);
 
     const checkBalanceResult = await verifyWalletBalance(erc20, proxy.proxyAddress, amount);
     if (!checkBalanceResult.enoughBalance) {
@@ -144,10 +145,10 @@ export async function executeSwap(
         `Insufficient balance. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}`
       );
     }
-    console.log('Balance check passed');
+    Logger.log('Balance check passed');
 
     await ensureSignerHasEth(signer, backendSigner, provider);
-    console.log('Signer has enough ETH');
+    Logger.log('Signer has enough ETH');
 
     const { networkConfig } = fastify;
     const entrypointABI = await getEntryPointABI();
@@ -159,7 +160,7 @@ export async function executeSwap(
 
     await ensurePaymasterHasPrefund(entrypointContract, networkConfig.contracts.paymasterAddress!);
 
-    console.log('Validating account');
+    Logger.log('Validating account');
     if (!accountExists) {
       throw new Error(`Account ${proxy.proxyAddress} does not exist`);
     }
@@ -175,7 +176,7 @@ export async function executeSwap(
     );
 
     // 1. Execute approve operation
-    console.log('Executing approve operation.');
+    Logger.log('Executing approve operation.');
     const approveCallData = createApproveCallData(chatterPay, erc20, SIMPLE_SWAP_ADDRESS, amount);
 
     const approveHash = await executeOperation(
@@ -190,7 +191,7 @@ export async function executeSwap(
     );
 
     // 2. Execute swap operation
-    console.log('Executing swap operation.');
+    Logger.log('Executing swap operation.');
     const swapCallData = createSwapCallData(chatterPay, simpleSwapContract, isWETHtoUSDT, amount);
 
     const swapHash = await executeOperation(
@@ -209,7 +210,7 @@ export async function executeSwap(
       swapTransactionHash: swapHash
     };
   } catch (error) {
-    console.error('Error in executeSwap:', error);
+    Logger.error('Error in executeSwap:', error);
     throw error;
   }
 }

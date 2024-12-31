@@ -2,6 +2,7 @@ import PQueue from 'p-queue';
 import { ethers, BigNumber } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
 
+import { Logger } from '../utils/logger';
 import { getUserOpHash } from '../utils/userOperation';
 import { PackedUserOperation } from '../types/userOperation';
 
@@ -69,7 +70,7 @@ export async function generateDummySignature(
   const dummyWallet = ethers.Wallet.createRandom();
   const dummySignature = await dummyWallet.signMessage(ethers.utils.arrayify(userOpHash));
 
-  console.log('Generated dummy signature:', dummySignature);
+  Logger.log('Generated dummy signature:', dummySignature);
 
   return dummySignature;
 }
@@ -122,7 +123,7 @@ export async function getPaymasterAndData(
 
     return response.data.result;
   } catch (error) {
-    console.error('Error fetching paymaster data:', error);
+    Logger.error('Error fetching paymaster data:', error);
     throw error;
   }
 }

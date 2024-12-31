@@ -1,6 +1,7 @@
 import { Signer } from 'ethers-5';
 import { LiFi, RouteOptions, RoutesRequest } from '@lifi/sdk';
 
+import { Logger } from '../utils/logger';
 import { LIFI_TYPE, LIFI_SLIPPAGE } from '../constants/blockchain';
 
 /**
@@ -43,8 +44,8 @@ export const swapToWETH = async (signer: Signer, amount: string): Promise<string
     options: routeOptions
   };
 
-  console.log('**Routes Request**');
-  console.log(routesRequest);
+  Logger.log('**Routes Request**');
+  Logger.log(routesRequest);
 
   // Get routes from LiFi
   const lifiResult = await lifi.getRoutes(routesRequest);
@@ -56,13 +57,13 @@ export const swapToWETH = async (signer: Signer, amount: string): Promise<string
       lifi
         .executeRoute(signer, chosenRoute, {
           acceptExchangeRateUpdateHook: (exchangeRate) => {
-            console.log('**Exchange Rate**');
-            console.log(exchangeRate);
+            Logger.log('**Exchange Rate**');
+            Logger.log(exchangeRate);
             return Promise.resolve(true);
           }
         })
         .then((lifiTx) => {
-          console.log(lifiTx);
+          Logger.log(lifiTx);
           // TODO: Log trade in database, logTrade((parseInt(amount) / 1e6), lifiTx.id, true)
           resolve(true);
         });
