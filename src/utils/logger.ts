@@ -1,38 +1,73 @@
-import { LogLevel, LogMethod } from '../types/logger';
+import pino from 'pino';
+import pinoPretty from 'pino-pretty';
+
+import { LogLevel, validLogLevels } from '../types/logger';
+import { CURRENT_LOG_LEVEL } from '../constants/environment';
+
+const prettyStream = pinoPretty({
+  colorize: true
+});
+
+const logger = pino(
+  {
+    level: 'debug'
+  },
+  prettyStream
+);
 
 export class Logger {
-  private static logMethod: Record<LogLevel, LogMethod> = {
-    log: console.log.bind(console),
-    debug: console.debug.bind(console),
-    error: console.error.bind(console),
-    info: console.info.bind(console),
-    warn: console.warn.bind(console)
-  };
+  private static logMessage(level: LogLevel, ...args: unknown[]): void {
+    const cleanedMessage = args
+      .map((arg) => (typeof arg === 'string' ? arg.replace(/(\r\n|\n|\r)/g, ' ') : String(arg)))
+      .join(' ');
+    logger[level](cleanedMessage);
+  }
+
+  private static shouldLog(level: LogLevel): boolean {
+    const currentLevelIndex = validLogLevels.indexOf(CURRENT_LOG_LEVEL);
+    const messageLevelIndex = validLogLevels.indexOf(level);
+    return messageLevelIndex >= currentLevelIndex;
+  }
+
+  static trace(...args: unknown[]): void {
+    if (this.shouldLog('trace')) {
+      this.logMessage('trace', ...args);
+    }
+  }
 
   static log(...args: unknown[]): void {
-    Logger.logMethod.log(...args);
+    if (this.shouldLog('debug')) {
+      this.logMessage('debug', ...args);
+    }
   }
 
   static debug(...args: unknown[]): void {
-    Logger.logMethod.debug(...args);
-  }
-
-  static error(...args: unknown[]): void {
-    Logger.logMethod.error(...args);
+    if (this.shouldLog('debug')) {
+      this.logMessage('debug', ...args);
+    }
   }
 
   static info(...args: unknown[]): void {
-    Logger.logMethod.info(...args);
+    if (this.shouldLog('info')) {
+      this.logMessage('info', ...args);
+    }
   }
 
   static warn(...args: unknown[]): void {
-    Logger.logMethod.warn(...args);
+    if (this.shouldLog('warn')) {
+      this.logMessage('warn', ...args);
+    }
+  }
+
+  static error(...args: unknown[]): void {
+    if (this.shouldLog('error')) {
+      this.logMessage('error', ...args);
+    }
+  }
+
+  static fatal(...args: unknown[]): void {
+    if (this.shouldLog('fatal')) {
+      this.logMessage('fatal', ...args);
+    }
   }
 }
-
-// Usage example
-Logger.log('This is a log message:', { key: 'value' });
-Logger.debug('Debugging information:', [1, 2, 3]);
-Logger.error('An error occurred:', new Error('Sample error'));
-Logger.info('Some informational message');
-Logger.warn('This is a warning message!');
