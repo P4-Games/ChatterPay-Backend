@@ -2,11 +2,12 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify, { FastifyInstance } from 'fastify';
 
 import { setupSwagger } from './swagger';
+import { Logger } from '../utils/logger';
 import { setupRoutes } from '../api/routes';
-import { PORT } from '../constants/environment';
 import { setupMiddleware } from '../middleware/bodyParser';
 import networkConfigPlugin from '../plugins/networkConfig';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { PORT, CURRENT_LOG_LEVEL } from '../constants/environment';
 
 /**
  * Starts the Fastify server with all necessary configurations.
@@ -17,7 +18,10 @@ export async function startServer(): Promise<FastifyInstance> {
   const server: FastifyInstance = Fastify({
     ignoreDuplicateSlashes: true,
     ignoreTrailingSlash: true,
-    logger: true
+    logger: {
+      redact: ['req.headers.authorization'],
+      level: CURRENT_LOG_LEVEL
+    }
   });
 
   await server.register(rateLimit, {
@@ -32,9 +36,7 @@ export async function startServer(): Promise<FastifyInstance> {
 
   server.addHook('onRequest', authMiddleware);
 
-  // Register the network config plugin
   await server.register(networkConfigPlugin);
-
   await setupMiddleware(server);
   await setupRoutes(server);
   await setupSwagger(server);
@@ -44,7 +46,7 @@ export async function startServer(): Promise<FastifyInstance> {
   const address = server.server.address();
   const port: string | number | undefined = typeof address === 'string' ? address : address?.port;
   const host: string | undefined = typeof address === 'string' ? address : address?.address;
-  server.log.info(`Server is listening on http://${host}:${port}`);
+  Logger.info(`Server is listening on http://${host}:${port}`);
 
   return server;
 }
