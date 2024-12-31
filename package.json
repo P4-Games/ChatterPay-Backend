@@ -82,6 +82,8 @@
     "node-cache": "^5.1.2",
     "p-queue": "^8.0.1",
     "pinata-web3": "^0.4.1",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
     "sharp": "^0.33.5",
     "typechain": "^8.3.2",
     "userop": "0.3.8",
