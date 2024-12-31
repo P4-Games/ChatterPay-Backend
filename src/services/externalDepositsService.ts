@@ -1,6 +1,7 @@
 import { gql, request } from 'graphql-request';
 
 import { User } from '../models/user';
+import { Logger } from '../utils/logger';
 import Transaction from '../models/transaction';
 import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
 import { sendTransferNotification } from './notificationService';
@@ -133,6 +134,6 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
       token
     }).save();
   } else {
-    console.log(`Transfer detected, not processed: ${JSON.stringify(transfer)}`);
+    Logger.log(`Transfer detected, not processed: ${JSON.stringify(transfer)}`);
   }
 }

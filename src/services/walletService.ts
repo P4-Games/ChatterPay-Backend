@@ -1,7 +1,9 @@
 import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 
+import { User } from '../models/user';
 import { IToken } from '../models/token';
+import { Logger } from '../utils/logger';
 import { IBlockchain } from '../models/blockchain';
 import { setupERC20 } from './contractSetupService';
 import { getTokenAddress } from './blockchainService';
@@ -48,7 +50,7 @@ export async function getContractBalance(
     const balance = await erc20Contract.balanceOf(address);
     return ethers.utils.formatUnits(balance, 18);
   } catch (error) {
-    console.error(
+    Logger.error(
       `Error getting balance: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
     return '0';
@@ -67,7 +69,7 @@ export async function getFiatQuotes(): Promise<FiatQuote[]> {
         const data = await response.json();
         return { currency, rate: data.bid };
       } catch (error) {
-        console.error(`Error fetching ${currency} quote:`, error);
+        Logger.error(`Error fetching ${currency} quote:`, error);
         return { currency, rate: 1 }; // Fallback to 1:1 rate
       }
     })
@@ -196,7 +198,7 @@ export async function verifyWalletBalance(
   amountToCheck: string
 ) {
   const symbol: string = await tokenContract.symbol();
-  console.log(
+  Logger.log(
     `Checking balance for ${walletAddress} and token ${tokenContract.address}, to spend: ${amountToCheck} ${symbol}`
   );
   const walletBalance = await tokenContract.balanceOf(walletAddress);
@@ -204,7 +206,7 @@ export async function verifyWalletBalance(
   const amountToCheckFormatted = ethers.utils.parseUnits(amountToCheck, decimals);
   const walletBalanceFormatted = ethers.utils.formatEther(walletBalance);
 
-  console.log(`Balance of wallet ${walletAddress}: ${walletBalanceFormatted} ${symbol}`);
+  Logger.log(`Balance of wallet ${walletAddress}: ${walletBalanceFormatted} ${symbol}`);
 
   const result: walletBalanceInfo = {
     walletBalance: walletBalanceFormatted,
@@ -271,12 +273,12 @@ export async function getTokenPrices(symbols: string[]): Promise<Map<string, num
       });
 
       if (symbolsToFetchFromApi.length === 0) {
-        console.log('getting prices from cache!');
+        Logger.log('getting prices from cache!');
         return priceMap;
       }
     } catch (error) {
       // Avoid throwing error
-      console.error(
+      Logger.error(
         `Error getting prices from cache: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
@@ -290,17 +292,17 @@ export async function getTokenPrices(symbols: string[]): Promise<Map<string, num
         );
         const data = await response.json();
         if (data.price) {
-          console.log(`Price for ${symbol}: ${data.price} USDT`);
+          Logger.log(`Price for ${symbol}: ${data.price} USDT`);
           const price = parseFloat(data.price);
           priceMap.set(symbol.replace('ETH', 'WETH'), price);
           // Cache the price for 5 minutes
           priceCache.set(symbol.replace('ETH', 'WETH'), price);
         } else {
-          console.warn(`No price found for ${symbol}USDT`);
+          Logger.warn(`No price found for ${symbol}USDT`);
           priceMap.set(symbol.replace('ETH', 'WETH'), 0);
         }
       } catch (error) {
-        console.error(`Error fetching price for ${symbol}:`, error);
+        Logger.error(`Error fetching price for ${symbol}:`, error);
         priceMap.set(symbol, 0);
       }
     });
@@ -308,7 +310,7 @@ export async function getTokenPrices(symbols: string[]): Promise<Map<string, num
     await Promise.all(promises);
     return priceMap;
   } catch (error) {
-    console.error('Error fetching token prices from Binance:', error);
+    Logger.error('Error fetching token prices from Binance:', error);
     // Return a map with 0 prices in case of error, except USDT which is always 1
     return new Map(symbols.map((symbol) => [symbol, symbol === 'USDT' ? 1 : 0]));
   }

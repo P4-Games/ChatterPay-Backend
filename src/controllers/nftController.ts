@@ -2,6 +2,8 @@ import { ethers } from 'ethers';
 import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
+import { IUser } from '../models/user';
+import { Logger } from '../utils/logger';
 import { isValidUrl } from '../utils/paramsUtils';
 import { getDynamicGas } from '../utils/dynamicGas';
 import { SIGNING_KEY } from '../constants/environment';
@@ -63,7 +65,7 @@ const mintNftOriginal = async (
       backendSigner
     );
 
-    console.log(
+    Logger.log(
       'Minting NFT Original to/contract/rpc/signer',
       recipientAddress,
       networkConfig.contracts.chatterNFTAddress,
@@ -79,11 +81,11 @@ const mintNftOriginal = async (
       gasLimit
     });
 
-    console.log('Transaction sent: ', tx.hash);
+    Logger.log('Transaction sent: ', tx.hash);
 
     // Esperar a que la transacción se confirme
     const receipt = await tx.wait();
-    console.log('Transaction confirmed: ', receipt.transactionHash);
+    Logger.log('Transaction confirmed: ', receipt.transactionHash);
 
     // Filtrar el evento Minted para obtener el tokenId
     const event = receipt.events?.find((e: { event: string }) => e.event === 'Transfer');
@@ -93,11 +95,11 @@ const mintNftOriginal = async (
     }
 
     const tokenId = event.args?.tokenId;
-    console.log('Token ID minted: ', tokenId.toString());
+    Logger.log('Token ID minted: ', tokenId.toString());
 
     return { receipt, tokenId };
   } catch (error) {
-    console.error('Error minting Original NFT: ', error);
+    Logger.error('Error minting Original NFT: ', error);
     throw new Error('Minting NFT Original failed');
   }
 };
@@ -120,7 +122,7 @@ const mintNftCopy = async (
       backendSigner
     );
 
-    console.log(
+    Logger.log(
       'Minting NFT Copy to/contract/rpc/signer',
       recipientAddress,
       networkConfig.contracts.chatterNFTAddress,
@@ -140,11 +142,11 @@ const mintNftCopy = async (
       { gasLimit }
     );
 
-    console.log('Transaction sent: ', tx.hash);
+    Logger.log('Transaction sent: ', tx.hash);
 
     // Esperar a que la transacción se confirme
     const receipt = await tx.wait();
-    console.log('Transaction confirmed: ', receipt.transactionHash);
+    Logger.log('Transaction confirmed: ', receipt.transactionHash);
 
     // Filtrar el evento Minted para obtener el tokenId
     const event = receipt.events?.find((e: { event: string }) => e.event === 'Transfer');
@@ -154,11 +156,11 @@ const mintNftCopy = async (
     }
 
     const tokenId = event.args?.tokenId;
-    console.log('NFT Copy ID minted: ', tokenId.toString());
+    Logger.log('NFT Copy ID minted: ', tokenId.toString());
 
     return { receipt, tokenId };
   } catch (error) {
-    console.error('Error minting NFT Copy: ', error);
+    Logger.error('Error minting NFT Copy: ', error);
     throw new Error('Minting NFT Copy failed');
   }
 };
@@ -196,13 +198,13 @@ export const generateNftOriginal = async (
   }
 
   if (!isValidUrl(url)) {
-    console.warn('The provided URL is not valid.');
+    Logger.warn('The provided URL is not valid.');
     return returnErrorResponse(reply, 400, 'The provided URL is not valid.');
   }
 
   const address_of_user = await getWalletByPhoneNumber(channel_user_id);
   if (!address_of_user) {
-    console.warn('Wallet User doesnt exists.');
+    Logger.warn('Wallet User doesnt exists.');
     return returnErrorResponse(reply, 400, 'Wallet User doesnt exists.');
   }
 
@@ -210,17 +212,17 @@ export const generateNftOriginal = async (
 
   let processedImage;
   try {
-    console.info('Fetching NFT image');
+    Logger.info('Fetching NFT image');
     processedImage = await downloadAndProcessImage(url); // always jpg
   } catch (error) {
-    console.error('Error downloading the NFT image:', (error as Error).message);
+    Logger.error('Error downloading the NFT image:', (error as Error).message);
     return Promise.resolve();
   }
 
   // Save the initial NFT details in the database.
   let mongoData;
   try {
-    console.info('Saving NFT Data into MongoDB');
+    Logger.info('Saving NFT Data into MongoDB');
     mongoData = await NFTModel.create({
       channel_user_id,
       wallet: address_of_user,
@@ -247,7 +249,7 @@ export const generateNftOriginal = async (
       }
     });
   } catch (error) {
-    console.error('Error saving NFT data into DB.', (error as Error).message);
+    Logger.error('Error saving NFT data into DB.', (error as Error).message);
     return Promise.resolve(); // If the initial creation fails, it makes no sense to continue.
   }
 
@@ -255,7 +257,7 @@ export const generateNftOriginal = async (
   try {
     nftData = await mintNftOriginal(address_of_user!, (mongoData._id as ObjectId).toString());
   } catch (error) {
-    console.error('Error minting NFT', error);
+    Logger.error('Error minting NFT', error);
     return Promise.resolve();
   }
   const nftMintedId = nftData.tokenId.toString();
@@ -263,13 +265,13 @@ export const generateNftOriginal = async (
   try {
     await sendMintNotification(address_of_user, channel_user_id, nftMintedId);
   } catch (error) {
-    console.warn('Error sending NFT minting notification:', (error as Error).message);
+    Logger.warn('Error sending NFT minting notification:', (error as Error).message);
     // No error is thrown here to continue with the process
   }
 
   // Update in bdd trxId and tokenId
   try {
-    console.info('Updating tokenId and trxId in the database');
+    Logger.info('Updating tokenId and trxId in the database');
     await NFTModel.updateOne(
       { _id: mongoData._id },
       {
@@ -280,7 +282,7 @@ export const generateNftOriginal = async (
       }
     );
   } catch (error) {
-    console.error('Error updating NFT in bdd', (error as Error).message);
+    Logger.error('Error updating NFT in bdd', (error as Error).message);
   }
 
   const fileName = `${channel_user_id.toString()}_${Date.now()}.jpg`;
@@ -290,20 +292,20 @@ export const generateNftOriginal = async (
   try {
     ipfsImageUrl = await uploadToIpfs(processedImage, fileName);
   } catch (error) {
-    console.warn('Error uploading the image to IPFS:', (error as Error).message);
+    Logger.warn('Error uploading the image to IPFS:', (error as Error).message);
     // No error is thrown here to continue with the process
   }
 
   try {
     icpImageUrl = await uploadToICP(processedImage, fileName);
   } catch (error) {
-    console.warn('Error uploading the image to ICP:', (error as Error).message);
+    Logger.warn('Error uploading the image to ICP:', (error as Error).message);
     // No error is thrown here to continue with the process
   }
 
   // Update IPFS & ICP urls in bdd
   try {
-    console.info('Updating IPFS and ICP URLs in the database');
+    Logger.info('Updating IPFS and ICP URLs in the database');
     await NFTModel.updateOne(
       { _id: mongoData._id },
       {
@@ -314,9 +316,9 @@ export const generateNftOriginal = async (
       }
     );
   } catch (error) {
-    console.error('Error updating NFT in bdd', (error as Error).message);
+    Logger.error('Error updating NFT in bdd', (error as Error).message);
   }
-  console.log('NFT minting end.');
+  Logger.log('NFT minting end.');
   return Promise.resolve();
 };
 
@@ -360,14 +362,14 @@ export const generateNftCopy = async (
     // Verify that the user exists
     let address_of_user = await getWalletByPhoneNumber(channel_user_id);
     if (!address_of_user) {
-      console.log('The user wallet does not exist. Creating.');
+      Logger.log('The user wallet does not exist. Creating.');
       const user: IUser = await createUserWithWallet(channel_user_id);
       address_of_user = user.wallet;
-      console.log('Wallet created.');
+      Logger.log('Wallet created.');
     }
 
     // optimistic response
-    console.log('sending notification: el certificado se está generando');
+    Logger.log('sending notification: el certificado se está generando');
     returnSuccessResponse(reply, 'The certificate is being generated');
 
     // search by NFT original
@@ -376,7 +378,7 @@ export const generateNftCopy = async (
 
     if (!nftCopyOf.original) {
       // If it is being copied from a copy, then the original is sought.
-      console.log('Searching by nft original.');
+      Logger.log('Searching by nft original.');
       const nftOriginal: INFT | null = await NFTModel.findOne({
         id: nftCopyOf.copy_of_original
       });
@@ -385,12 +387,12 @@ export const generateNftCopy = async (
         copy_order_original = nftOriginal.total_of_this + 1;
 
         // update total_of_this in the ORIGINAL NFT
-        console.log('Updating original NFT total_of_this field.');
+        Logger.log('Updating original NFT total_of_this field.');
         await NFTModel.updateOne({ _id: nftOriginal._id }, { $inc: { total_of_this: 1 } });
       }
     }
 
-    console.log('Saving NFT copy in database');
+    Logger.log('Saving NFT copy in database');
     const mongoData = await NFTModel.create({
       id: '0', // update later nftData.tokenId,
       trxId: '0', // update later nftData.receipt.transactionHash,
@@ -407,7 +409,7 @@ export const generateNftCopy = async (
     });
 
     // update total_of_this in the copied NFT
-    console.log('Updating copied NFT total_of_this field.');
+    Logger.log('Updating copied NFT total_of_this field.');
     await NFTModel.updateOne({ _id: nftCopyOf._id }, { $inc: { total_of_this: 1 } });
 
     // mint
@@ -419,7 +421,7 @@ export const generateNftCopy = async (
         (mongoData._id as ObjectId).toString()
       );
     } catch (error) {
-      console.error('Error al mintear NFT:', error);
+      Logger.error('Error al mintear NFT:', error);
       return await Promise.resolve();
     }
 
@@ -436,9 +438,9 @@ export const generateNftCopy = async (
 
     await sendMintNotification(address_of_user, channel_user_id, nftData.tokenId.toString());
 
-    console.log('NFT copy end.');
+    Logger.log('NFT copy end.');
   } catch (error) {
-    console.error('Error in mintExistingNFT', (error as Error).message);
+    Logger.error('Error in mintExistingNFT', (error as Error).message);
   }
 
   // Retorna void explícitamente
@@ -472,7 +474,7 @@ export const getNFT = async (
     }
     return await returnErrorResponse(reply, 404, 'NFT not found');
   } catch (error) {
-    console.error('Error retrieving the NFT:', error);
+    Logger.error('Error retrieving the NFT:', error);
     return returnErrorResponse(reply, 500, 'Internal Server Error');
   }
 };
@@ -493,7 +495,7 @@ export const getLastNFT = async (
 ): Promise<void> => {
   try {
     const { channel_user_id } = request.query;
-    console.log('Searching last_nft for channel_user_id', channel_user_id);
+    Logger.log('Searching last_nft for channel_user_id', channel_user_id);
     const nft = (await NFTModel.find({ channel_user_id })).sort((a, b) => b.id - a.id)?.[0];
 
     if (!nft) {
@@ -513,7 +515,7 @@ export const getLastNFT = async (
 
     reply.redirect(returnUrl);
   } catch (error) {
-    console.error('Error getting NFT:', error);
+    Logger.error('Error getting NFT:', error);
     return returnErrorResponse(reply, 500, 'Internal Server Error');
   }
 };
@@ -539,7 +541,7 @@ export const getPhoneNFTs = async (
       }))
     };
   } catch (error) {
-    console.error('Error getting NFTs:', error);
+    Logger.error('Error getting NFTs:', error);
     throw new Error('Internal Server Error');
   }
 };
@@ -597,7 +599,7 @@ export const getNftList = async (
       copy: nft
     });
   } catch (error) {
-    console.error('Error al obtener el NFT:', error);
+    Logger.error('Error al obtener el NFT:', error);
     return returnErrorResponse(reply, 500, 'Internal Server Error');
   }
 };
@@ -699,7 +701,7 @@ export const getNftMetadataRequiredByOpenSea = async (
       ]
     });
   } catch (error) {
-    console.error('Error al obtener el NFT:', error);
+    Logger.error('Error al obtener el NFT:', error);
     return reply.status(500).send({ message: 'Internal Server Error' });
   }
 };

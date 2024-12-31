@@ -2,6 +2,7 @@ import axios from 'axios';
 import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 
+import { Logger } from '../utils/logger';
 import { GCP_ABIs } from '../constants/environment';
 
 export type ABI = ethers.ContractInterface;
@@ -15,7 +16,7 @@ export const getGcpFile = async (urlFile: string): Promise<ABI> => {
     const response = await axios.get(urlFile);
     return response.data;
   } catch (error) {
-    console.error('Error al leer el archivo desde GCP:', error);
+    Logger.error('Error al leer el archivo desde GCP:', error);
     throw new Error('Error al obtener el archivo desde GCP');
   }
 };

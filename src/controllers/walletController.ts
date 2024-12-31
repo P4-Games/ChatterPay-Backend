@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
+import { Logger } from '../utils/logger';
 import { User, IUser } from '../models/user';
 import { createUserWithWallet } from '../services/userService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
@@ -42,14 +43,14 @@ export const createWallet = async (
       );
     }
 
-    console.log('Creating wallet.');
+    Logger.log('Creating wallet.');
     const user: IUser = await createUserWithWallet(phone_number);
 
     return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
       walletAddress: user.walletEOA
     });
   } catch (error) {
-    console.error('Error creando una wallet:', error);
+    Logger.error('Error creando una wallet:', error);
     return returnErrorResponse(reply, 400, 'An error occurred while creating the wallet');
   }
 };
