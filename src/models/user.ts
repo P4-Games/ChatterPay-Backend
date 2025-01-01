@@ -1,5 +1,7 @@
 import { model, Schema, Document } from 'mongoose';
 
+import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../constants/environment';
+
 export interface IUser extends Document {
   name: string;
   email: string;
@@ -27,7 +29,7 @@ const userSchema = new Schema<IUser>({
   code: { type: Number, required: false },
   settings: {
     notifications: {
-      language: { type: String, required: true, default: 'en' }
+      language: { type: String, required: true, default: SETTINGS_NOTIFICATION_LANGUAGE_DFAULT }
     }
   }
 });

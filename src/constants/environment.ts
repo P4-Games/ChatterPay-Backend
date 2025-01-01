@@ -74,3 +74,5 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
 )
   ? (minorLogLevel.toLowerCase() as LogLevel)
   : 'error';
+
+export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'en';
