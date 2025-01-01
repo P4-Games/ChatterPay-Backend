@@ -15,7 +15,8 @@ import {
   CHATTERPAY_DOMAIN,
   PUSH_CHANNEL_ADDRESS,
   PUSH_CHANNEL_PRIVATE_KEY,
-  CHATTERPAY_NFTS_SHARE_URL
+  CHATTERPAY_NFTS_SHARE_URL,
+  SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
 } from '../constants/environment';
 
 interface OperatorReplyPayload {
@@ -119,9 +120,35 @@ export async function sendPushNotificaton(
   }
 }
 
-function getNotiicationTemplate(channelUserId: string, typeOfNotification: NotificationType) {
-  // TODO: read from bdd user language, shema "user.settings"
-  const userLanguage = 'en';
+/**
+ * Gets user language based on the phone number.
+ * @param phoneNumber
+ * @returns
+ */
+export const getUserSettingsLanguage = async (phoneNumber: string): Promise<string> => {
+  let language: string = SETTINGS_NOTIFICATION_LANGUAGE_DFAULT;
+  try {
+    const user: IUser | null = await User.findOne({ phone_number: phoneNumber });
+    if (user && user.settings) {
+      language = user.settings?.notifications.language;
+    }
+  } catch (error: unknown) {
+    // avoid throw error
+    Logger.error(
+      `Error getting user settings language for ${phoneNumber}, error: ${(error as Error).message}`
+    );
+  }
+  return language;
+};
+
+/**
+ * Get Notification Template based on channel User Id and Notification Type
+ * @param channelUserId
+ * @param typeOfNotification
+ * @returns
+ */
+async function getNotiicationTemplate(channelUserId: string, typeOfNotification: NotificationType) {
+  const userLanguage = await getUserSettingsLanguage(channelUserId);
 
   // TODO: read template from schema "templates.notifications"
   const templates: Record<NotificationType, NotificationTemplate> = {
@@ -245,7 +272,7 @@ export async function sendWalletCreationNotification(
   try {
     Logger.log(`Sending wallet creation notification to ${address_of_user}`);
 
-    const { title, message } = getNotiicationTemplate(
+    const { title, message } = await getNotiicationTemplate(
       channel_user_id,
       notificationType.WalletCreation
     );
