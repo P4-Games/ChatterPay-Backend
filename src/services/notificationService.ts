@@ -224,6 +224,12 @@ async function getNotiicationTemplate(channelUserId: string, typeOfNotification:
   };
 }
 
+/**
+ *
+ * @param user_private_key
+ * @param user_address
+ * @returns
+ */
 export async function subscribeToPushChannel(
   user_private_key: string,
   user_address: string
@@ -264,6 +270,8 @@ export async function subscribeToPushChannel(
 
 /**
  * Sends wallet creation notification.
+ * @param address_of_user
+ * @param channel_user_id
  */
 export async function sendWalletCreationNotification(
   address_of_user: string,
@@ -287,6 +295,12 @@ export async function sendWalletCreationNotification(
 
 /**
  * Sends a notification for a transfer.
+ * @param address_of_user
+ * @param channel_user_id
+ * @param from
+ * @param amount
+ * @param token
+ * @returns
  */
 export async function sendTransferNotification(
   address_of_user: string,
@@ -299,7 +313,10 @@ export async function sendTransferNotification(
     Logger.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
     if (!isValidPhoneNumber(channel_user_id)) return '';
 
-    const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Transfer);
+    const { title, message } = await getNotiicationTemplate(
+      channel_user_id,
+      notificationType.Transfer
+    );
     const formattedMessage = message
       .replaceAll('[FROM]', from || '0X')
       .replaceAll('[AMOUNT]', amount)
@@ -322,6 +339,13 @@ export async function sendTransferNotification(
 
 /**
  * Sends a notification for a swap.
+ * @param channel_user_id
+ * @param token
+ * @param amount
+ * @param result
+ * @param outputToken
+ * @param transactionHash
+ * @returns
  */
 export async function sendSwapNotification(
   channel_user_id: string,
@@ -336,7 +360,7 @@ export async function sendSwapNotification(
     const networkConfig: IBlockchain = await getNetworkConfig();
 
     const resultString: string = `${Math.round(parseFloat(result) * 1e4) / 1e4}`;
-    const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Swap);
+    const { title, message } = await getNotiicationTemplate(channel_user_id, notificationType.Swap);
 
     const formattedMessage = message
       .replaceAll('[AMOUNT]', amount)
@@ -363,6 +387,10 @@ export async function sendSwapNotification(
 
 /**
  * Sends a notification for minted certificates and on-chain memories.
+ * @param address_of_user
+ * @param channel_user_id
+ * @param id
+ * @returns
  */
 export async function sendMintNotification(
   address_of_user: string,
@@ -372,7 +400,7 @@ export async function sendMintNotification(
   try {
     Logger.log('Sending mint notification');
 
-    const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Mint);
+    const { title, message } = await getNotiicationTemplate(channel_user_id, notificationType.Mint);
     const formattedMessage = message
       .replaceAll('[ID]', id)
       .replaceAll('[NFTS_SHARE_URL]', CHATTERPAY_NFTS_SHARE_URL);
@@ -394,6 +422,13 @@ export async function sendMintNotification(
 
 /**
  * Sends a notification for an outgoing transfer.
+ * @param address_of_user
+ * @param channel_user_id
+ * @param walletTo
+ * @param amount
+ * @param token
+ * @param txHash
+ * @returns
  */
 export async function sendOutgoingTransferNotification(
   address_of_user: string,
@@ -409,7 +444,7 @@ export async function sendOutgoingTransferNotification(
 
     const networkConfig: IBlockchain = await getNetworkConfig();
 
-    const { title, message } = getNotiicationTemplate(
+    const { title, message } = await getNotiicationTemplate(
       channel_user_id,
       notificationType.OutgoingTransfer
     );
