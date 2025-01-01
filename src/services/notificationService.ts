@@ -188,7 +188,9 @@ function getNotiicationTemplate(channelUserId: string, typeOfNotification: Notif
   };
 
   const template = templates[typeOfNotification];
-  const language = ['en', 'es', 'pt'].includes(userLanguage) ? userLanguage : 'en';
+  const language = ['en', 'es', 'pt'].includes(userLanguage)
+    ? userLanguage
+    : SETTINGS_NOTIFICATION_LANGUAGE_DFAULT;
   return {
     title: template.title[language as 'en' | 'es' | 'pt'],
     message: template.message[language as 'en' | 'es' | 'pt']
