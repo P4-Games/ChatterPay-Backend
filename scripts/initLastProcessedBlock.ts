@@ -36,7 +36,7 @@ async function initializeLastProcessedBlock() {
     Logger.log('Conectado a MongoDB');
 
     const latestBlockNumber = await getLatestBlockNumber();
-    Logger.log(`Último número de bloque en Arbitrum Sepolia: ${latestBlockNumber}`);
+    Logger.log(`Last block number in network: ${latestBlockNumber}`);
 
     const result = await LastProcessedBlock.findOneAndUpdate(
       { networkName: NETWORK_NAME },
