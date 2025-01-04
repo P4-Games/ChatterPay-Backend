@@ -17,10 +17,15 @@ const logger = pino(
 
 export class Logger {
   private static logMessage(level: LogLevel, ...args: unknown[]): void {
-    const cleanedMessage = args
-      .map((arg) => (typeof arg === 'string' ? arg.replace(/(\r\n|\n|\r)/g, ' ') : String(arg)))
-      .join(' ');
-    logger[level](cleanedMessage);
+    try {
+      const cleanedMessage = args
+        .map((arg) => (typeof arg === 'string' ? arg.replace(/(\r\n|\n|\r)/g, ' ') : String(arg)))
+        .join(' ');
+      logger[level](cleanedMessage);
+    } catch (error: unknown) {
+      const messageError = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Logger: Error trying to log Message: ${messageError}`);
+    }
   }
 
   private static shouldLog(level: LogLevel): boolean {
