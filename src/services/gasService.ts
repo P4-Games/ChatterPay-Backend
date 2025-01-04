@@ -1,6 +1,8 @@
-import axios from 'axios';
+import PQueue from 'p-queue';
 import { ethers, BigNumber } from 'ethers';
+import axios, { AxiosResponse } from 'axios';
 
+import { Logger } from '../utils/logger';
 import { getUserOpHash } from '../utils/userOperation';
 import { PackedUserOperation } from '../types/userOperation';
 
@@ -68,10 +70,12 @@ export async function generateDummySignature(
   const dummyWallet = ethers.Wallet.createRandom();
   const dummySignature = await dummyWallet.signMessage(ethers.utils.arrayify(userOpHash));
 
-  console.log('Generated dummy signature:', dummySignature);
+  Logger.log('Generated dummy signature:', dummySignature);
 
   return dummySignature;
 }
+
+const queue = new PQueue({ interval: 10000, intervalCap: 1 }); // 1 request each 10 seg
 
 export async function getPaymasterAndData(
   config: GasServiceConfig,
@@ -103,12 +107,15 @@ export async function getPaymasterAndData(
   };
 
   try {
-    const response = await axios.post(process.env.ARBITRUM_SEPOLIA_RPC_URL ?? '', payload, {
-      headers: {
-        accept: 'application/json',
-        'content-type': 'application/json'
-      }
-    });
+    // Wrapper function in quue to avoid erro 429 (rate-limit)
+    const response = (await queue.add(async () =>
+      axios.post(process.env.ARBITRUM_SEPOLIA_RPC_URL ?? '', payload, {
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json'
+        }
+      })
+    )) as AxiosResponse;
 
     if (response.data.error) {
       throw new Error(`Alchemy API Error: ${response.data.error.message}`);
@@ -116,7 +123,7 @@ export async function getPaymasterAndData(
 
     return response.data.result;
   } catch (error) {
-    console.error('Error fetching paymaster data:', error);
+    Logger.error('Error fetching paymaster data:', error);
     throw error;
   }
 }

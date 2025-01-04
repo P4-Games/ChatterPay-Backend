@@ -1,5 +1,7 @@
 import { ethers } from 'ethers';
 
+import { Logger } from './logger';
+
 /**
  * Creates the paymasterAndData field with required signature and expiration
  * @param paymasterAddress - Address of the paymaster contract
@@ -103,7 +105,7 @@ export function verifyPaymasterSignature(
 
     return recoveredAddress.toLowerCase() === backendAddress.toLowerCase();
   } catch (error) {
-    console.error('Error verifying signature:', error);
+    Logger.error('Error verifying signature:', error);
     return false;
   }
 }

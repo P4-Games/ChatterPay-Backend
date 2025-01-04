@@ -2,6 +2,8 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import { Alchemy, Network } from 'alchemy-sdk';
 
+import { Logger } from '../src/utils/logger';
+
 dotenv.config();
 
 const MONGODB_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/your_database';
@@ -31,10 +33,10 @@ async function getLatestBlockNumber(): Promise<number> {
 async function initializeLastProcessedBlock() {
   try {
     await mongoose.connect(MONGODB_URI);
-    console.log('Conectado a MongoDB');
+    Logger.log('Conectado a MongoDB');
 
     const latestBlockNumber = await getLatestBlockNumber();
-    console.log(`Último número de bloque en Arbitrum Sepolia: ${latestBlockNumber}`);
+    Logger.log(`Last block number in network: ${latestBlockNumber}`);
 
     const result = await LastProcessedBlock.findOneAndUpdate(
       { networkName: NETWORK_NAME },
@@ -45,14 +47,14 @@ async function initializeLastProcessedBlock() {
       { upsert: true, new: true }
     );
 
-    console.log(`LastProcessedBlock actualizado/creado: ${JSON.stringify(result)}`);
+    Logger.log(`LastProcessedBlock actualizado/creado: ${JSON.stringify(result)}`);
   } catch (error) {
-    console.error('Error:', error);
+    Logger.error('Error:', error);
   } finally {
     await mongoose.disconnect();
-    console.log('Desconectado de MongoDB');
+    Logger.log('Desconectado de MongoDB');
   }
 }
 
 // Ejecutar el script
-initializeLastProcessedBlock().catch(console.error);
+initializeLastProcessedBlock().catch(Logger.error);

@@ -1,3 +1,4 @@
+import { Logger } from './utils/logger';
 import { startServer } from './config/server';
 import { connectToDatabase } from './config/database';
 import { setupGracefulShutdown } from './utils/shutdown';
@@ -14,7 +15,7 @@ async function main(): Promise<void> {
     const server = await startServer();
     setupGracefulShutdown(server);
   } catch (err) {
-    console.error('Error starting application:', err);
+    Logger.error('Error starting application:', err);
     process.exit(1);
   }
 }

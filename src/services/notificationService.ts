@@ -1,11 +1,20 @@
 import axios from 'axios';
 import { ethers } from 'ethers';
+import NodeCache from 'node-cache';
 import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
 
+import { Logger } from '../utils/logger';
 import { User, IUser } from '../models/user';
 import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
 import { isValidPhoneNumber } from '../utils/validations';
+import { getTemplate, templateEnum } from './templateService';
+import {
+  LanguageEnum,
+  ITemplateSchema,
+  NotificationEnum,
+  NotificationTemplatesTypes
+} from '../models/templates';
 import {
   BOT_API_URL,
   PUSH_NETWORK,
@@ -14,7 +23,8 @@ import {
   CHATTERPAY_DOMAIN,
   PUSH_CHANNEL_ADDRESS,
   PUSH_CHANNEL_PRIVATE_KEY,
-  CHATTERPAY_NFTS_SHARE_URL
+  CHATTERPAY_NFTS_SHARE_URL,
+  SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
 } from '../constants/environment';
 
 interface OperatorReplyPayload {
@@ -23,20 +33,7 @@ interface OperatorReplyPayload {
   message: string;
 }
 
-const notificationType = {
-  Transfer: 'TRANSFER',
-  Swap: 'SWAP',
-  Mint: 'MINT',
-  OutgoingTransfer: 'OUTGOING_TRANSFER',
-  WalletCreation: 'WALLET_CREATION'
-} as const;
-
-type NotificationType = (typeof notificationType)[keyof typeof notificationType];
-
-interface NotificationTemplate {
-  title: { en: string; es: string; pt: string };
-  message: { en: string; es: string; pt: string };
-}
+const notificationTemplateCache = new NodeCache({ stdTTL: 604800 }); // 1 week
 
 /**
  * Sends an operator reply to the API.
@@ -49,10 +46,10 @@ async function sendBotNotification(payload: OperatorReplyPayload): Promise<strin
         'Content-Type': 'application/json'
       }
     });
-    console.log('API Response:', payload.channel_user_id, payload.message, response.data);
+    Logger.log('API Response:', payload.channel_user_id, payload.message, response.data);
     return response.data;
   } catch (error) {
-    console.error('Error sending operator reply:', (error as Error).message);
+    Logger.error('Error sending operator reply:', (error as Error).message);
     throw error;
   }
 }
@@ -74,7 +71,7 @@ export async function sendPushNotificaton(
   try {
     const user: IUser | null = await User.findOne({ phone_number: channelUserId });
     if (!user) {
-      console.log(
+      Logger.log(
         `Push notification not sent: Invalid user in the database for phone number ${channelUserId}`
       );
       return false;
@@ -103,14 +100,14 @@ export async function sendPushNotificaton(
       env: PUSH_ENVIRONMENT
     });
 
-    console.log(
+    Logger.log(
       `Push notification sent successfully to ${channelUserId},  ${walletEOA}:`,
       apiResponse.status,
       apiResponse.statusText
     );
     return true;
   } catch (error) {
-    console.error(
+    Logger.error(
       `Error sending Push Notification to ${channelUserId}:`,
       error instanceof Error ? error.message : 'Unknown'
     );
@@ -118,82 +115,96 @@ export async function sendPushNotificaton(
   }
 }
 
-function getNotiicationTemplate(channelUserId: string, typeOfNotification: NotificationType) {
-  // TODO: read from bdd user language, shema "user.settings"
-  const userLanguage = 'en';
-
-  // TODO: read template from schema "templates.notifications"
-  const templates: Record<NotificationType, NotificationTemplate> = {
-    TRANSFER: {
-      title: {
-        en: 'Chatterpay: You received funds!',
-        es: 'Chatterpay: ¡Recibiste fondos!',
-        pt: 'Chatterpay: Você recebeu fundos!'
-      },
-      message: {
-        en: '[FROM] sent you [AMOUNT] [TOKEN] 💸. It’s now available in your ChatterPay wallet! 🥳',
-        es: '[FROM] te envió [AMOUNT] [TOKEN] 💸. ¡Ya están disponibles en tu billetera ChatterPay! 🥳',
-        pt: '[FROM] enviou-lhe [AMOUNT] [TOKEN] 💸. Já está disponível na sua carteira ChatterPay! 🥳'
-      }
-    },
-    SWAP: {
-      title: {
-        en: 'Chatterpay: Tokens swapped!',
-        es: 'Chatterpay: ¡Intercambiaste tokens!',
-        pt: 'Chatterpay: Tokens trocados!'
-      },
-      message: {
-        en: '🔄 You swapped [AMOUNT] [TOKEN] for [RESULT] [OUTPUT_TOKEN]! 🔄\nCheck the transaction here: [EXPLORER]/tx/[TRANSACTION_HASH]',
-        es: '🔄 Intercambiaste [AMOUNT] [TOKEN] por [RESULT] [OUTPUT_TOKEN]! 🔄\nPuedes ver la transacción aquí: [EXPLORER]/tx/[TRANSACTION_HASH]',
-        pt: '🔄 Você trocou [AMOUNT] [TOKEN] por [RESULT] [OUTPUT_TOKEN]! 🔄\nVerifique a transação aqui: [EXPLORER]/tx/[TRANSACTION_HASH]'
-      }
-    },
-    MINT: {
-      title: {
-        en: 'Chatterpay: NFT minted!',
-        es: 'Chatterpay: ¡NFT emitido!',
-        pt: 'Chatterpay: NFT cunhado!'
-      },
-      message: {
-        en: '🎉 Your certificate has been successfully minted! 🎉\nYou can view it here: [NFTS_SHARE_URL]/[ID]',
-        es: '🎉 ¡Tu certificado ha sido emitido exitosamente! 🎉\nPuedes verlo aquí: [NFTS_SHARE_URL]/[ID]',
-        pt: '🎉 Seu certificado foi cunhado com sucesso! 🎉\nVocê pode visualizá-lo aqui: [NFTS_SHARE_URL]/[ID]'
-      }
-    },
-    OUTGOING_TRANSFER: {
-      title: {
-        en: 'Chatterpay: You sent funds!',
-        es: 'Chatterpay: ¡Enviaste fondos!',
-        pt: 'Chatterpay: Você enviou fundos!'
-      },
-      message: {
-        en: '💸 You sent [AMOUNT] [TOKEN] to [TO]! 💸\nCheck the transaction here: [EXPLORER]/tx/[TX_HASH]',
-        es: '💸 Enviaste [AMOUNT] [TOKEN] a [TO]! 💸\nPuedes ver la transacción aquí: [EXPLORER]/tx/[TX_HASH]',
-        pt: '💸 Você enviou [AMOUNT] [TOKEN] para [TO]! 💸\nVerifique a transação aqui: [EXPLORER]/tx/[TX_HASH]'
-      }
-    },
-    WALLET_CREATION: {
-      title: {
-        en: 'Chatterpay: Wallet Created!',
-        es: 'Chatterpay: ¡Billetera creada!',
-        pt: 'Chatterpay: Carteira criada!'
-      },
-      message: {
-        en: 'Your Wallet [PREDICTED_WALLET_EOA_ADDRESS] was created.',
-        es: 'Tu billetera [PREDICTED_WALLET_EOA_ADDRESS] ha sido creada.',
-        pt: 'Sua carteira [PREDICTED_WALLET_EOA_ADDRESS] foi criada.'
+/**
+ * Gets user language based on the phone number.
+ * @param phoneNumber
+ * @returns
+ */
+export const getUserSettingsLanguage = async (phoneNumber: string): Promise<LanguageEnum> => {
+  let language: LanguageEnum = SETTINGS_NOTIFICATION_LANGUAGE_DFAULT as LanguageEnum;
+  try {
+    const user: IUser | null = await User.findOne({ phone_number: phoneNumber });
+    if (user && user.settings) {
+      const userLanguage = user.settings.notifications.language;
+      if (Object.values(LanguageEnum).includes(userLanguage as LanguageEnum)) {
+        language = userLanguage as LanguageEnum;
+      } else {
+        Logger.warn(
+          `Invalid language detected for user ${phoneNumber}, defaulting to ${SETTINGS_NOTIFICATION_LANGUAGE_DFAULT}`
+        );
       }
     }
-  };
+  } catch (error: unknown) {
+    // avoid throw error
+    Logger.error(
+      `Error getting user settings language for ${phoneNumber}, error: ${(error as Error).message}`
+    );
+  }
+  return language;
+};
 
-  const template = templates[typeOfNotification];
-  const language = ['en', 'es', 'pt'].includes(userLanguage) ? userLanguage : 'en';
-  return {
-    title: template.title[language as 'en' | 'es' | 'pt'],
-    message: template.message[language as 'en' | 'es' | 'pt']
-  };
+/**
+ * Get Notification Template based on channel User Id and Notification Type
+ * @param channelUserId
+ * @param typeOfNotification
+ * @returns
+ */
+async function getNotificationTemplate(
+  channelUserId: string,
+  typeOfNotification: NotificationEnum
+): Promise<{ title: string; message: string }> {
+  const defaultNotification = { title: 'Chatterpay Message', message: '' };
+  try {
+    const cachedTemplate = notificationTemplateCache.get(`${typeOfNotification}`);
+    if (cachedTemplate) {
+      Logger.log(`getting ${typeOfNotification} from cache`);
+      return cachedTemplate as { title: string; message: string };
+    }
+
+    const userLanguage: LanguageEnum = await getUserSettingsLanguage(channelUserId);
+
+    const notificationTemplates: NotificationTemplatesTypes | null =
+      await getTemplate<ITemplateSchema>(templateEnum.NOTIFICATIONS);
+    if (!notificationTemplates) {
+      Logger.warn('Notifications Templates not found');
+      return defaultNotification;
+    }
+
+    if (!Object.values(NotificationEnum).includes(typeOfNotification)) {
+      Logger.warn(`Invalid notification type: ${typeOfNotification}`);
+      return defaultNotification;
+    }
+
+    // @ts-expect-error 'expected type error'
+    const template = notificationTemplates[typeOfNotification];
+
+    if (!template) {
+      Logger.warn(`Notification type ${typeOfNotification} not found`);
+      return defaultNotification;
+    }
+
+    const result = {
+      title: template.title[userLanguage],
+      message: template.message[userLanguage]
+    };
+    notificationTemplateCache.set(`${typeOfNotification}`, result);
+
+    return result;
+  } catch (error: unknown) {
+    // avoid throw error
+    Logger.error(
+      `Error getting notification template ${typeOfNotification}, error: ${(error as Error).message}`
+    );
+  }
+  return defaultNotification;
 }
 
+/**
+ *
+ * @param user_private_key
+ * @param user_address
+ * @returns
+ */
 export async function subscribeToPushChannel(
   user_private_key: string,
   user_address: string
@@ -212,19 +223,19 @@ export async function subscribeToPushChannel(
       channelAddress: `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`,
       userAddress: `eip155:${PUSH_NETWORK}:${user_address}`,
       onSuccess: () => {
-        console.log(`${user_address} successfully subscribed to Push Protocol Channel`);
+        Logger.log(`${user_address} successfully subscribed to Push Protocol Channel`);
       },
       onError: (error: unknown) => {
-        console.error(`Error trying to subscribe ${user_address} to Push Protocol channel:`, error);
+        Logger.error(`Error trying to subscribe ${user_address} to Push Protocol channel:`, error);
       },
       env: PUSH_ENVIRONMENT
     });
 
-    console.log(`${user_address} Push Protocol Subscription Response:`, subscriptionResponse);
+    Logger.log(`${user_address} Push Protocol Subscription Response:`, subscriptionResponse);
     return true;
   } catch (error) {
     // Avoid throwing an error if subscribing to the push channel fails
-    console.error(
+    Logger.error(
       `Error trying to subscribe ${user_address} to Push Channel:`,
       error instanceof Error ? error.message : 'Unknown'
     );
@@ -234,29 +245,37 @@ export async function subscribeToPushChannel(
 
 /**
  * Sends wallet creation notification.
+ * @param address_of_user
+ * @param channel_user_id
  */
 export async function sendWalletCreationNotification(
   address_of_user: string,
   channel_user_id: string
 ) {
   try {
-    console.log(`Sending wallet creation notification to ${address_of_user}`);
+    Logger.log(`Sending wallet creation notification to ${address_of_user}`);
 
-    const { title, message } = getNotiicationTemplate(
+    const { title, message } = await getNotificationTemplate(
       channel_user_id,
-      notificationType.WalletCreation
+      NotificationEnum.wallet_creation
     );
     const formattedMessage = message.replace('[PREDICTED_WALLET_EOA_ADDRESS]', address_of_user);
 
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
   } catch (error) {
-    console.error('Error in sendWalletCreationNotification:', error);
+    Logger.error('Error in sendWalletCreationNotification:', error);
     throw error;
   }
 }
 
 /**
  * Sends a notification for a transfer.
+ * @param address_of_user
+ * @param channel_user_id
+ * @param from
+ * @param amount
+ * @param token
+ * @returns
  */
 export async function sendTransferNotification(
   address_of_user: string,
@@ -266,10 +285,13 @@ export async function sendTransferNotification(
   token: string
 ): Promise<unknown> {
   try {
-    console.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
+    Logger.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
     if (!isValidPhoneNumber(channel_user_id)) return '';
 
-    const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Transfer);
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.transfer
+    );
     const formattedMessage = message
       .replaceAll('[FROM]', from || '0X')
       .replaceAll('[AMOUNT]', amount)
@@ -285,16 +307,22 @@ export async function sendTransferNotification(
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    console.error('Error in sendTransferNotification:', error);
+    Logger.error('Error in sendTransferNotification:', error);
     throw error;
   }
 }
 
 /**
  * Sends a notification for a swap.
+ * @param channel_user_id
+ * @param token
+ * @param amount
+ * @param result
+ * @param outputToken
+ * @param transactionHash
+ * @returns
  */
 export async function sendSwapNotification(
-  address_of_user: string,
   channel_user_id: string,
   token: string,
   amount: string,
@@ -303,11 +331,14 @@ export async function sendSwapNotification(
   transactionHash: string
 ): Promise<unknown> {
   try {
-    console.log('Sending swap notification');
+    Logger.log('Sending swap notification');
     const networkConfig: IBlockchain = await getNetworkConfig();
 
     const resultString: string = `${Math.round(parseFloat(result) * 1e4) / 1e4}`;
-    const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Swap);
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.swap
+    );
 
     const formattedMessage = message
       .replaceAll('[AMOUNT]', amount)
@@ -327,13 +358,17 @@ export async function sendSwapNotification(
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    console.error('Error in sendSwapNotification:', error);
+    Logger.error('Error in sendSwapNotification:', error);
     throw error;
   }
 }
 
 /**
  * Sends a notification for minted certificates and on-chain memories.
+ * @param address_of_user
+ * @param channel_user_id
+ * @param id
+ * @returns
  */
 export async function sendMintNotification(
   address_of_user: string,
@@ -341,9 +376,12 @@ export async function sendMintNotification(
   id: string
 ): Promise<unknown> {
   try {
-    console.log('Sending mint notification');
+    Logger.log('Sending mint notification');
 
-    const { title, message } = getNotiicationTemplate(channel_user_id, notificationType.Mint);
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.mint
+    );
     const formattedMessage = message
       .replaceAll('[ID]', id)
       .replaceAll('[NFTS_SHARE_URL]', CHATTERPAY_NFTS_SHARE_URL);
@@ -358,36 +396,43 @@ export async function sendMintNotification(
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    console.error('Error in sendMintNotification:', (error as Error).message);
+    Logger.error('Error in sendMintNotification:', (error as Error).message);
     throw error;
   }
 }
 
 /**
  * Sends a notification for an outgoing transfer.
+ * @param address_of_user
+ * @param channel_user_id
+ * @param walletTo
+ * @param amount
+ * @param token
+ * @param txHash
+ * @returns
  */
 export async function sendOutgoingTransferNotification(
   address_of_user: string,
   channel_user_id: string,
-  to: string | null,
+  walletTo: string | null,
   amount: string,
   token: string,
   txHash: string
 ): Promise<unknown> {
   try {
-    console.log('Sending outgoing transfer notification');
+    Logger.log('Sending outgoing transfer notification');
     if (!isValidPhoneNumber(channel_user_id)) return '';
 
     const networkConfig: IBlockchain = await getNetworkConfig();
 
-    const { title, message } = getNotiicationTemplate(
+    const { title, message } = await getNotificationTemplate(
       channel_user_id,
-      notificationType.OutgoingTransfer
+      NotificationEnum.outgoing_transfer
     );
     const formattedMessage = message
       .replaceAll('[AMOUNT]', amount)
       .replaceAll('[TOKEN]', token)
-      .replaceAll('[TO]', to || '0X')
+      .replaceAll('[TO]', walletTo || '0X')
       .replaceAll('[EXPLORER]', networkConfig.explorer)
       .replaceAll('[TX_HASH]', txHash);
 
@@ -401,7 +446,7 @@ export async function sendOutgoingTransferNotification(
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    console.error('Error in sendOutgoingTransferNotification:', error);
+    Logger.error('Error in sendOutgoingTransferNotification:', error);
     throw error;
   }
 }

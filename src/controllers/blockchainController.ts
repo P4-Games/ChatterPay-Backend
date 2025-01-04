@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
+import { Logger } from '../utils/logger';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
@@ -23,15 +24,15 @@ export const createBlockchain = async (
 
     const newBlockchain = new Blockchain(request.body);
     await newBlockchain.save();
-    console.log('Blockchain Saved');
+    Logger.log('Blockchain Saved');
     return await returnSuccessResponse(
       reply,
       'Blockchain created successfully',
       newBlockchain.toJSON()
     );
   } catch (error) {
-    console.error('Error creating blockchain');
-    console.error('Error details: ', error);
+    Logger.error('Error creating blockchain');
+    Logger.error('Error details: ', error);
     return returnErrorResponse(reply, 400, 'Failed to create blockchain');
   }
 };
@@ -52,8 +53,8 @@ export const getAllBlockchains = async (
       blockchains
     });
   } catch (error) {
-    console.error('Error fetching blockchains');
-    console.error('Error details: ', error);
+    Logger.error('Error fetching blockchains');
+    Logger.error('Error details: ', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch blockchains');
   }
 };
@@ -72,7 +73,7 @@ export const getBlockchainById = async (
   try {
     const blockchain = await Blockchain.findById(id);
     if (!blockchain) {
-      console.warn('Blockchain not found');
+      Logger.warn('Blockchain not found');
       return await returnErrorResponse(reply, 404, 'Blockchain not found');
     }
     return await returnSuccessResponse(
@@ -81,8 +82,8 @@ export const getBlockchainById = async (
       blockchain.toJSON()
     );
   } catch (error) {
-    console.error('Error fetching blockchain');
-    console.error('Error details: ', error);
+    Logger.error('Error fetching blockchain');
+    Logger.error('Error details: ', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch blockchain');
   }
 };
@@ -107,7 +108,7 @@ export const updateBlockchain = async (
       new: true
     });
     if (!updatedBlockchain) {
-      console.warn('Blockchain not found');
+      Logger.warn('Blockchain not found');
       return await returnErrorResponse(reply, 404, 'Blockchain not found');
     }
     return await returnSuccessResponse(
@@ -116,8 +117,8 @@ export const updateBlockchain = async (
       updatedBlockchain.toJSON()
     );
   } catch (error) {
-    console.error('Error updating blockchain');
-    console.error('Error details: ', error);
+    Logger.error('Error updating blockchain');
+    Logger.error('Error details: ', error);
     return returnErrorResponse(reply, 400, 'Failed to update blockchain');
   }
 };
@@ -136,13 +137,13 @@ export const deleteBlockchain = async (
   try {
     const deletedBlockchain = await Blockchain.findByIdAndDelete(id);
     if (!deletedBlockchain) {
-      console.warn('Blockchain not found');
+      Logger.warn('Blockchain not found');
       return await returnErrorResponse(reply, 404, 'Blockchain not found');
     }
     return await returnSuccessResponse(reply, 'Blockchain deleted successfully');
   } catch (error) {
-    console.error('Error deleting blockchain');
-    console.error('Error details: ', error);
+    Logger.error('Error deleting blockchain');
+    Logger.error('Error details: ', error);
     return returnErrorResponse(reply, 400, 'Failed to delete blockchain');
   }
 };

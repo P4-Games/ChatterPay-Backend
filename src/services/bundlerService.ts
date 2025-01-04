@@ -1,7 +1,11 @@
-import axios from 'axios';
+import PQueue from 'p-queue';
+import axios, { AxiosResponse } from 'axios';
 
+import { Logger } from '../utils/logger';
 import { PackedUserOperation } from '../types/userOperation';
 import { serializeUserOperation } from '../utils/userOperation';
+
+const queue = new PQueue({ interval: 10000, intervalCap: 1 }); // 1 request each 10 seg
 
 /**
  * Sends a user operation to the bundler.
@@ -19,7 +23,7 @@ export async function sendUserOperationToBundler(
 ): Promise<string> {
   try {
     const serializedUserOp = serializeUserOperation(userOperation);
-    console.log('Serialized UserOperation:', JSON.stringify(serializedUserOp, null, 2));
+    Logger.log('Serialized UserOperation:', JSON.stringify(serializedUserOp));
     const payload = {
       jsonrpc: '2.0',
       method: 'eth_sendUserOperation',
@@ -27,16 +31,20 @@ export async function sendUserOperationToBundler(
       id: Date.now()
     };
 
-    const response = await axios.post(bundlerUrl, payload, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    // Wrapper function in quue to avoid erro 429 (rate-limit)
+    const response = (await queue.add(async () =>
+      axios.post(bundlerUrl, payload, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+    )) as AxiosResponse;
 
     if (response.data.error) {
-      console.error('Bundler returned an error:', response.data.error);
+      Logger.error('Bundler returned an error:', response.data.error);
+      // Logger.error('Bundler returned an error:', response.data.error);
       if (response.data.error.data) {
-        console.error('Bundler error data:', response.data.error.data);
+        Logger.error('Bundler error data:', response.data.error.data);
       }
       throw new Error(`Bundler Error: ${response.data.error.message}`);
     }
@@ -47,7 +55,7 @@ export async function sendUserOperationToBundler(
 
     return response.data.result as string;
   } catch (error: unknown) {
-    console.error(
+    Logger.error(
       'Error sending user operation to bundler:',
       error instanceof Error ? error.message : 'Unknown error'
     );
@@ -57,6 +65,10 @@ export async function sendUserOperationToBundler(
 
 /**
  * Estimates the gas that will be used in the UserOperation
+ *
+ * @param bundlerUrl
+ * @param userOperation
+ * @param entryPointAddress
  */
 export async function estimateUserOperationGas(
   bundlerUrl: string,
@@ -72,21 +84,24 @@ export async function estimateUserOperationGas(
       id: Date.now()
     };
 
-    const response = await axios.post(bundlerUrl, payload, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    // Wrapper function in quue to avoid erro 429 (rate-limit)
+    const response = (await queue.add(async () =>
+      axios.post(bundlerUrl, payload, {
+        headers: {
+          accept: 'application/json',
+          'Content-Type': 'application/json'
+        }
+      })
+    )) as AxiosResponse;
 
     if (response.data.error) {
-      console.error('Gas estimation error:', response.data.error);
+      Logger.error('Gas estimation error:', response.data.error);
       throw new Error(`Gas estimation failed: ${response.data.error.message}`);
     }
 
-    console.log('Gas Estimation:', response.data.result);
-    // You can use these estimates to update your userOperation if needed
+    Logger.log('Gas Estimation:', response.data.result);
   } catch (error) {
-    console.error('Error estimating gas:', error);
+    Logger.error('Error estimating gas:', error);
     throw error;
   }
 }

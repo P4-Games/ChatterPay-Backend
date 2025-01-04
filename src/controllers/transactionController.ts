@@ -1,17 +1,14 @@
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import web3 from '../utils/web3_config';
+import { Logger } from '../utils/logger';
 import { User, IUser } from '../models/user';
 import { getOrCreateUser } from '../services/userService';
 import { getTokenAddress } from '../services/blockchainService';
-import { sendUserOperation } from '../services/transferService';
+import { executeTransaction } from '../services/transferService';
 import Transaction, { ITransaction } from '../models/transaction';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import {
-  sendTransferNotification,
-  sendOutgoingTransferNotification
-} from '../services/notificationService';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {
@@ -65,66 +62,6 @@ const validateInputs = async (
 };
 
 /**
- * Executes a transaction between two users and handles the notifications.
- */
-const executeTransaction = async (
-  fastify: FastifyInstance,
-  from: IUser,
-  to: IUser | { wallet: string },
-  tokenAddress: string,
-  tokenSymbol: string,
-  amount: string,
-  chain_id: number
-): Promise<string> => {
-  console.log('Sending user operation.');
-
-  const result = await sendUserOperation(
-    fastify,
-    from.phone_number,
-    to.wallet,
-    tokenAddress,
-    amount,
-    chain_id
-  );
-
-  if (!result || !result.transactionHash) {
-    return 'The transaction failed, the funds remain in your account';
-  }
-
-  await Transaction.create({
-    trx_hash: result.transactionHash,
-    wallet_from: from.wallet,
-    wallet_to: to.wallet,
-    type: 'transfer',
-    date: new Date(),
-    status: 'completed',
-    amount: parseFloat(amount),
-    token: tokenSymbol
-  });
-
-  try {
-    console.log('Trying to notificate transfer');
-    const fromName = from.name ?? from.phone_number ?? 'Alguien';
-    const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
-
-    sendTransferNotification(to.wallet, toNumber, fromName, amount, tokenSymbol);
-    sendOutgoingTransferNotification(
-      from.wallet,
-      from.phone_number,
-      toNumber,
-      amount,
-      tokenSymbol,
-      result.transactionHash
-    );
-
-    return '';
-  } catch (error) {
-    console.error('Error sending notifications:', error);
-    return 'The transaction failed, the funds remain in your account';
-  }
-};
-
-/**
  * Checks the status of a transaction.
  */
 export const checkTransactionStatus = async (
@@ -149,7 +86,7 @@ export const checkTransactionStatus = async (
 
     return await returnSuccessResponse(reply, transaction.status);
   } catch (error) {
-    console.error('Error checking transaction status:', error);
+    Logger.error('Error checking transaction status:', error);
     return returnErrorResponse(reply, 400, 'Bad Request');
   }
 };
@@ -173,7 +110,7 @@ export const createTransaction = async (
       newTransaction.toJSON()
     );
   } catch (error) {
-    console.error('Error creating transaction:', error);
+    Logger.error('Error creating transaction:', error);
     return returnErrorResponse(reply, 400, 'Error creating transaction', (error as Error).message);
   }
 };
@@ -202,7 +139,7 @@ export const getAllTransactions = async (
       totalItems: total
     });
   } catch (error) {
-    console.error('Error fetching transactions:', error);
+    Logger.error('Error fetching transactions:', error);
     return returnErrorResponse(reply, 400, 'Error fetching transactions', (error as Error).message);
   }
 };
@@ -227,7 +164,7 @@ export const getTransactionById = async (
       transaction.toJSON()
     );
   } catch (error) {
-    console.error('Error fetching transaction:', error);
+    Logger.error('Error fetching transaction:', error);
     return returnErrorResponse(reply, 400, 'Error fetching transaction', (error as Error).message);
   }
 };
@@ -261,7 +198,7 @@ export const updateTransaction = async (
       updatedTransaction.toJSON()
     );
   } catch (error) {
-    console.error('Error updating transaction:', error);
+    Logger.error('Error updating transaction:', error);
     return returnErrorResponse(reply, 400, 'Error updating transaction', (error as Error).message);
   }
 };
@@ -282,7 +219,7 @@ export const deleteTransaction = async (
     }
     return await returnSuccessResponse(reply, 'Transaction deleted successfully');
   } catch (error) {
-    console.error('Error deleting transaction:', error);
+    Logger.error('Error deleting transaction:', error);
     return returnErrorResponse(reply, 400, 'Error deleting transaction', (error as Error).message);
   }
 };
@@ -344,7 +281,7 @@ export const makeTransaction = async (
     }
 
     executeTransaction(
-      request.server,
+      request.server.networkConfig,
       fromUser,
       toUser,
       tokenAddress,
@@ -358,7 +295,7 @@ export const makeTransaction = async (
       'The transfer is in progress, it may take a few minutes.'
     );
   } catch (error) {
-    console.error('Error making transaction:', error);
+    Logger.error('Error making transaction:', error);
     return returnErrorResponse(reply, 400, 'Error making transaction', (error as Error).message);
   }
 };
