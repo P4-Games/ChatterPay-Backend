@@ -1,7 +1,7 @@
 import querystring from 'querystring';
 import { FastifyError, FastifyRequest, FastifyInstance } from 'fastify';
 
-// import { Logger } from '../utils/logger';
+import { Logger } from '../utils/logger';
 
 /**
  * Parses the request body based on its format (JSON, URL-encoded, or key-value pair).
@@ -22,14 +22,14 @@ function parseBody(body: string): unknown {
       return JSON.parse(body);
     } catch (error) {
       console.error('xxxxxxxxxxxx-BODY-6', error)
-      // Logger.warn('JSON parse failed, attempting to fix malformed JSON');
+      Logger.warn('JSON parse failed, attempting to fix malformed JSON');
       const fixedBody: string = body.replace(/'/g, '"').replace(/(\w+):/g, '"$1":');
       console.error('xxxxxxxxxxxx-BODY-7', fixedBody)
       return JSON.parse(fixedBody);
     }
   } else if (body.includes('=')) {
     console.error('xxxxxxxxxxxx-BODY-8')
-    // Logger.log('Parsing URL-encoded or key-value data');
+    Logger.log('Parsing URL-encoded or key-value data');
     if (!body.includes('&')) {
       console.error('xxxxxxxxxxxx-BODY-9')
       const [key, value]: string[] = body.split('=');
@@ -62,9 +62,10 @@ export async function setupMiddleware(server: FastifyInstance): Promise<void> {
         const parsedBody = parseBody(body);
         console.info('xxxxxxxxxxxx-BODY-01', parsedBody)
         // Logger.log('Successfully parsed body:', parsedBody);
+        Logger.log('Successfully parsed body:', body);
         done(null, parsedBody);
       } catch (error: unknown) {
-        // Logger.error('Failed to parse body:', body);
+        Logger.error('Failed to parse body:', body);
         const messageError = error instanceof Error ? error.message : 'Unknown error'
         console.error('xxxxxxxxxxxx-BODY-01', messageError)
         done(new Error(`Invalid body format, error: ${messageError}`) as FastifyError, undefined);
