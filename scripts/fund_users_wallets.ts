@@ -7,6 +7,7 @@ import { config } from 'dotenv';
 import mongoose from 'mongoose';
 
 import { IUser } from '../src/models/user';
+import { Logger } from '../src/utils/logger';
 
 config();
 
@@ -44,18 +45,18 @@ const delay = (ms: number) =>
 async function getUsers(): Promise<IUser[]> {
   try {
     await mongoose.connect(MONGO_URI, { dbName: DB_NAME });
-    console.log('Connected to the database');
+    Logger.log('Connected to the database');
 
     const users = await User.find({}).lean<IUser>();
 
     // @ts-expect-error 'expected error'
     return users;
   } catch (error) {
-    console.error('Error getting users', error);
+    Logger.error('Error getting users', error);
     return [];
   } finally {
     await mongoose.disconnect();
-    console.log('Connection closed');
+    Logger.log('Connection closed');
   }
 }
 
@@ -64,7 +65,7 @@ async function processWallets() {
     const users = await getUsers();
 
     if (users.length === 0) {
-      console.log('No users found.');
+      Logger.log('No users found.');
       return;
     }
 
@@ -86,10 +87,10 @@ async function processWallets() {
             }
           )
           .then((response) => {
-            console.log(`Success for wallet ${user.wallet}:`, response.data);
+            Logger.log(`Success for wallet ${user.wallet}:`, response.data);
           })
           .catch((error) => {
-            console.error(`Error for wallet ${user.wallet}:`, error.message);
+            Logger.error(`Error for wallet ${user.wallet}:`, error.message);
           })
       );
 
@@ -97,17 +98,17 @@ async function processWallets() {
       Promise.all(requests)
         .then(() => {
           if (i + batchSize < users.length) {
-            console.log(`Batch complete, waiting for 70 seconds before the next batch...`);
+            Logger.log(`Batch complete, waiting for 70 seconds before the next batch...`);
             delay(70000);
           }
         })
         .catch((error) => {
-          console.error('Error in batch processing:', error.message);
+          Logger.error('Error in batch processing:', error.message);
         });
     }
   } catch (error) {
     // @ts-expect-error 'some error'
-    console.error('General error:', error.message);
+    Logger.error('General error:', error.message);
   }
 }
 

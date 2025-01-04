@@ -39,3 +39,6 @@ PUSH_CHANNEL_ADDRESS=
 PUSH_CHANNEL_PRIVATE_KEY=
 PUSH_NETWORK= 11155111 | 421614 | 42161
 PUSH_ENVIRONMENT= dev | staging | prod
+
+# Logging
+MINOR_LOG_LEVEL= 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'

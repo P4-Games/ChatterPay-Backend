@@ -1,6 +1,8 @@
 import { FastifyInstance } from 'fastify';
 
+import { Logger } from '../utils/logger';
 import { getEntryPointABI } from '../services/bucketService';
+import { sendTransferNotification } from '../services/notificationService';
 
 /**
  * Registers the ping route with the Fastify instance.
@@ -12,7 +14,10 @@ export const pingRoute = async (fastify: FastifyInstance): Promise<void> => {
    * Route to check server status
    * @route GET /ping
    */
-  fastify.get('/ping', () => ({ status: 'ok', message: 'pong' }));
+  fastify.get('/ping', () => {
+    Logger.log('test', 'xxx', 'zzzz');
+    return { status: 'ok', message: 'pong' };
+  });
 
   const testFunction = async (): Promise<unknown> => {
     /*
@@ -22,11 +27,12 @@ export const pingRoute = async (fastify: FastifyInstance): Promise<void> => {
         const x4 = await sendTransferNotification('0x35dad65F60c1A32c9895BE97f6bcE57D32792E83', '5491153475204', '0x2', '123', 'USDT')
         return { x1, x2, x3, x4 };
         */
+    const x4 = await sendTransferNotification('0x35dad65F60c1A32c9895BE97f6bcE57D32792E83', '5491153475204', '0x2', '123', 'USDT')
 
     const entrypointABI = await getEntryPointABI();
-    console.log('new entrepoint abi', entrypointABI);
+    Logger.log('new entrepoint abi', entrypointABI);
 
-    return { old: true, new: entrypointABI };
+    return { old: true, new: entrypointABI, x4 };
   };
 
   fastify.get('/test', async () => {

@@ -1,5 +1,7 @@
 import { Contract, BigNumber } from 'ethers';
 
+import { Logger } from './logger';
+
 /**
  * Get gas limit for a transaction w/ dynamic gas.
  *
@@ -32,10 +34,10 @@ export async function getDynamicGas(
     const gasLimit: BigNumber = estimatedGas
       .mul(BigNumber.from(100 + gasBufferPercentage))
       .div(BigNumber.from(100));
-    console.log(`Estimated gas limit for ${methodName}:`, gasLimit.toString());
+    Logger.log(`Estimated gas limit for ${methodName}:`, gasLimit.toString());
     return gasLimit;
   } catch (error) {
-    console.warn(`Gas estimation failed for ${methodName}:`, error);
+    Logger.warn(`Gas estimation failed for ${methodName}:`, error);
     // If the estimation fails, use the default gas limit
     return defaultGasLimit;
   }

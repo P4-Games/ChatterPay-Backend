@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 
+import { Logger } from '../utils/logger';
 import { IBlockchain } from '../models/blockchain';
 import { getChatterpayABI } from './bucketService';
 import { getNetworkConfig } from './networkService';
@@ -24,7 +25,7 @@ export async function setupContracts(
     throw new Error(`Unsupported chain ID: ${blockchain.chain_id}`);
   }
 
-  console.log(`Validating bundler URL: ${bundlerUrl}`);
+  Logger.log(`Validating bundler URL: ${bundlerUrl}`);
   const isValidBundler = await validateBundlerUrl(bundlerUrl);
   if (!isValidBundler) {
     throw new Error(`Invalid or unreachable bundler URL: ${bundlerUrl}`);

@@ -1,6 +1,8 @@
 import querystring from 'querystring';
 import { FastifyError, FastifyRequest, FastifyInstance } from 'fastify';
 
+import { Logger } from '../utils/logger';
+
 /**
  * Parses the request body based on its format (JSON, URL-encoded, or key-value pair).
  *
@@ -15,12 +17,12 @@ function parseBody(body: string): unknown {
     try {
       return JSON.parse(body);
     } catch (error) {
-      console.warn('JSON parse failed, attempting to fix malformed JSON');
+      Logger.warn('JSON parse failed, attempting to fix malformed JSON');
       const fixedBody: string = body.replace(/'/g, '"').replace(/(\w+):/g, '"$1":');
       return JSON.parse(fixedBody);
     }
   } else if (body.includes('=')) {
-    console.log('Parsing URL-encoded or key-value data');
+    Logger.log('Parsing URL-encoded or key-value data');
     if (!body.includes('&')) {
       const [key, value]: string[] = body.split('=');
       return { [key]: value };
@@ -47,10 +49,10 @@ export async function setupMiddleware(server: FastifyInstance): Promise<void> {
     ) => {
       try {
         const parsedBody = parseBody(body);
-        console.log('Successfully parsed body:', parsedBody);
+        Logger.log('Successfully parsed body:', parsedBody);
         done(null, parsedBody);
       } catch (err) {
-        console.error('Failed to parse body:', body);
+        Logger.error('Failed to parse body:', body);
         done(new Error('Invalid body format') as FastifyError, undefined);
       }
     }

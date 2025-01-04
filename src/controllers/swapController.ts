@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
+import { Logger } from '../utils/logger';
 import Transaction from '../models/transaction';
 import { executeSwap } from '../services/swapService';
 import { SIGNING_KEY } from '../constants/environment';
@@ -190,12 +191,12 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       outputCurrency
     );
 
-    console.info(
+    Logger.info(
       `Swap completed successfully approveTransactionHash: ${tx.approveTransactionHash}, swapTransactionHash: ${tx.swapTransactionHash}.`
     );
     return true;
   } catch (error) {
-    console.error('Error swapping tokens:', error);
+    Logger.error('Error swapping tokens:', error);
     return reply.status(500).send({ message: 'Internal Server Error' });
   }
 };

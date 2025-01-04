@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
+import { Logger } from '../utils/logger';
 import { IBlockchain } from '../models/blockchain';
 import { getDynamicGas } from '../utils/dynamicGas';
 import { getNetworkConfig } from './networkService';
@@ -73,11 +74,11 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
   const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
     gasLimit: 1000000
   });
-  console.log(`Computed proxy address: ${proxyAddress}`);
+  Logger.log(`Computed proxy address: ${proxyAddress}`);
 
   const code = await provider.getCode(proxyAddress);
   if (code === '0x') {
-    console.log(
+    Logger.log(
       `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}...`
     );
     const gasLimit = await getDynamicGas(factory, 'createProxy', [ownerAddress.publicKey]);
@@ -87,7 +88,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
     await tx.wait();
   }
 
-  console.log(
+  Logger.log(
     'Data: ',
     JSON.stringify({
       proxyAddress,

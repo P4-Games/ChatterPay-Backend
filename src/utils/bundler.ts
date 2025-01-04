@@ -1,5 +1,7 @@
 import { ethers } from 'ethers';
 
+import { Logger } from './logger';
+
 /**
  * Returns a valid public Bundler RPC URL from Stackup given a chain id
  * @param chainId The chain ID Number
@@ -32,7 +34,7 @@ export async function validateBundlerUrl(url: string): Promise<boolean> {
     await provider.getNetwork();
     return true;
   } catch (error) {
-    console.error(`Failed to validate bundler URL ${url}:`, error);
+    Logger.error(`Failed to validate bundler URL ${url}:`, error);
     return false;
   }
 }

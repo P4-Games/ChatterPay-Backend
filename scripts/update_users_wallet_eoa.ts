@@ -8,6 +8,7 @@ import mongoose from 'mongoose';
 import * as crypto from 'crypto';
 
 import { IUser } from '../src/models/user';
+import { Logger } from '../src/utils/logger';
 
 dotenv.config();
 
@@ -42,7 +43,7 @@ async function getUsers(): Promise<IUser[]> {
     // @ts-expect-error 'expected error'
     return users;
   } catch (error) {
-    console.error('Error getting users', error);
+    Logger.error('Error getting users', error);
     return [];
   }
 }
@@ -67,28 +68,26 @@ function getUserData(phoneNumber: string): { pk: string; sk: string } {
 async function processUser(user: IUser): Promise<void> {
   const phoneNumber = user.phone_number;
   if (!phoneNumber) {
-    console.warn(`Skipping user without phone number: ${user._id}`);
+    Logger.warn(`Skipping user without phone number: ${user._id}`);
     return;
   }
 
   try {
     const { pk } = getUserData(phoneNumber);
 
-    console.log(
-      `User ${user.phone_number}, currentEOA ${user.walletEOA || 'empty'}, newEOA ${pk} `
-    );
+    Logger.log(`User ${user.phone_number}, currentEOA ${user.walletEOA || 'empty'}, newEOA ${pk} `);
     if (!justPrint) {
       await User.updateOne({ _id: user._id }, { walletEOA: pk });
     }
   } catch (error) {
-    console.error(`Error processing user ${user._id}:`, error);
+    Logger.error(`Error processing user ${user._id}:`, error);
   }
 }
 
 async function main(): Promise<void> {
   try {
     await mongoose.connect(MONGO_URI, { dbName: DB_NAME });
-    console.log('Connected to the database');
+    Logger.log('Connected to the database');
 
     const users = await getUsers();
 
@@ -100,10 +99,10 @@ async function main(): Promise<void> {
       }
     }
   } catch (error) {
-    console.error('Error in main execution:', error);
+    Logger.error('Error in main execution:', error);
   } finally {
     await mongoose.disconnect();
-    console.log('Connection closed');
+    Logger.log('Connection closed');
   }
 }
 

@@ -9,6 +9,7 @@ import { AssetManager } from '@dfinity/assets';
 import { Ed25519KeyIdentity } from '@dfinity/identity';
 import { mnemonicToSeed, validateMnemonic } from 'bip39';
 
+import { Logger } from './logger';
 import {
   PINATA_JWT,
   ICP_MNEMONIC,
@@ -62,11 +63,11 @@ export const getImageDetails = async (imageUrl: string) => {
 
 export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promise<string> {
   if (!NFT_UPLOAD_IMAGE_ICP) {
-    console.info('upload NFT image to ICP disabled');
+    Logger.info('upload NFT image to ICP disabled');
     return '';
   }
 
-  console.info('Subiendo imagen a ICP');
+  Logger.info('Subiendo imagen a ICP');
   const FOLDER_UPLOAD = 'uploads';
 
   if (!ICP_CANISTER_ID) {
@@ -92,22 +93,22 @@ export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promis
 
     await batch.commit({
       onProgress: ({ current, total }) => {
-        console.log(`Progreso de carga a ICP: ${(current / total) * 100}%`);
+        Logger.log(`Progreso de carga a ICP: ${(current / total) * 100}%`);
       }
     });
-    console.log('this is my key', key);
-    console.log(`Imagen subida con éxito a ICP: ${url}`);
+    Logger.log('this is my key', key);
+    Logger.log(`Imagen subida con éxito a ICP: ${url}`);
     return url;
   } catch (error: unknown) {
     if (error instanceof Error) {
       if (error.message.includes('asset already exists')) {
-        console.log(`La imagen ya existe en ICP: ${url}`);
+        Logger.log(`La imagen ya existe en ICP: ${url}`);
         return `${url}`;
       }
-      console.error('Error al subir a ICP:', error);
+      Logger.error('Error al subir a ICP:', error);
       throw error;
     } else {
-      console.error('Error desconocido al subir a ICP:', error);
+      Logger.error('Error desconocido al subir a ICP:', error);
       throw new Error('Error desconocido');
     }
   }
@@ -115,11 +116,11 @@ export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promis
 
 export async function uploadToIpfs(imageBuffer: Buffer, fileName: string): Promise<string> {
   if (!NFT_UPLOAD_IMAGE_IPFS) {
-    console.info('upload NFT image to IPFS disabled');
+    Logger.info('upload NFT image to IPFS disabled');
     return '';
   }
 
-  console.info('Subiendo imagen a IPFS');
+  Logger.info('Subiendo imagen a IPFS');
 
   try {
     const pinata = new PinataSDK({ pinataJWTKey: PINATA_JWT });
@@ -133,10 +134,10 @@ export async function uploadToIpfs(imageBuffer: Buffer, fileName: string): Promi
     });
 
     const url = `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
-    console.log(`Imagen subida con éxito a IPFS: ${url}`);
+    Logger.log(`Imagen subida con éxito a IPFS: ${url}`);
     return url;
   } catch (error) {
-    console.error('Error al subir a IPFS:', error);
+    Logger.error('Error al subir a IPFS:', error);
     throw error;
   }
 }

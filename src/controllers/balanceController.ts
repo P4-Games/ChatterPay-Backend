@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { User } from '../models/user';
+import { Logger } from '../utils/logger';
 import { getPhoneNFTs } from './nftController';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
@@ -36,7 +37,7 @@ async function getAddressBalance(
 ): Promise<FastifyReply> {
   const { networkConfig } = fastify;
 
-  console.log(`Fetching balance for address: ${address} on network ${networkConfig.name}`);
+  Logger.log(`Fetching balance for address: ${address} on network ${networkConfig.name}`);
   const user = await User.findOne({ wallet: address });
 
   if (!user) {
@@ -62,7 +63,7 @@ async function getAddressBalance(
 
     return await returnSuccessResponse(reply, 'Wallet balance fetched successfully', response);
   } catch (error) {
-    console.error('Error fetching wallet balance:', error);
+    Logger.error('Error fetching wallet balance:', error);
     return returnErrorResponse(reply, 500, 'Internal Server Error');
   }
 }
@@ -77,7 +78,7 @@ export const walletBalance = async (
   const { wallet } = request.params;
 
   if (!wallet) {
-    console.warn('Wallet address is required');
+    Logger.warn('Wallet address is required');
     return returnErrorResponse(reply, 400, 'Wallet address is required');
   }
 
@@ -94,7 +95,7 @@ export const balanceByPhoneNumber = async (
   const { channel_user_id: phone } = request.query as { channel_user_id?: string };
 
   if (!phone) {
-    console.warn('Phone number is required');
+    Logger.warn('Phone number is required');
     return returnErrorResponse(reply, 400, 'Phone number is required');
   }
 
@@ -102,13 +103,13 @@ export const balanceByPhoneNumber = async (
     const user = await User.findOne({ phone_number: phone });
 
     if (!user) {
-      console.warn(`User not found for phone number: ${phone}`);
+      Logger.warn(`User not found for phone number: ${phone}`);
       return await returnErrorResponse(reply, 404, 'User not found');
     }
 
     return await getAddressBalance(user.wallet, reply, request.server);
   } catch (error) {
-    console.error('Error fetching user balance:', error);
+    Logger.error('Error fetching user balance:', error);
     return returnErrorResponse(reply, 500, 'Internal Server Error');
   }
 };

@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
+import { Logger } from '../utils/logger';
 import Token, { IToken } from '../models/token';
 import { SIGNING_KEY } from '../constants/environment';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
@@ -32,7 +33,7 @@ export const createToken = async (
     await newToken.save();
     return await returnSuccessResponse(reply, 'Token created successfully', newToken.toJSON());
   } catch (error) {
-    console.error('Error creating token:', error);
+    Logger.error('Error creating token:', error);
     return returnErrorResponse(reply, 400, 'Error creating token', (error as Error).message);
   }
 };
@@ -52,7 +53,7 @@ export const getAllTokens = async (
     const { tokens } = request.server;
     return await returnSuccessResponse(reply, 'Tokens fetched successfully', { tokens });
   } catch (error) {
-    console.error('Error fetching tokens:', error);
+    Logger.error('Error fetching tokens:', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch tokens');
   }
 };
@@ -82,7 +83,7 @@ export const getTokenById = async (
 
     return await returnSuccessResponse(reply, 'Token fetched successfully', token.toJSON());
   } catch (error) {
-    console.error('Error fetching token:', error);
+    Logger.error('Error fetching token:', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch token');
   }
 };
@@ -112,7 +113,7 @@ export const updateToken = async (
 
     return await returnSuccessResponse(reply, 'Token updated successfully', updatedToken.toJSON());
   } catch (error) {
-    console.error('Error updating token:', error);
+    Logger.error('Error updating token:', error);
     return returnErrorResponse(reply, 400, 'Failed to update token');
   }
 };
@@ -138,7 +139,7 @@ export const deleteToken = async (
 
     return await returnSuccessResponse(reply, 'Token deleted successfully');
   } catch (error) {
-    console.error('Error deleting token:', error);
+    Logger.error('Error deleting token:', error);
     return returnErrorResponse(reply, 400, 'Failed to delete token');
   }
 };
@@ -209,7 +210,7 @@ export async function issueTokensCore(
   recipientAddress: string,
   fastify: FastifyInstance
 ): Promise<MintResult[]> {
-  const amount: string = '1000';
+  const amount: string = '100';
   const { networkConfig, tokens } = fastify;
 
   // Create provider using network config from decorator
@@ -228,8 +229,8 @@ export async function issueTokensCore(
 
   // Get the current nonce for the signer
   const currentNonce: number = await provider.getTransactionCount(signer.address);
-  console.log(`Current Nonce: ${currentNonce}`);
-  console.log(
+  Logger.log(`Current Nonce: ${currentNonce}`);
+  Logger.log(
     `Minting tokens on chain ${networkConfig.chain_id} for wallet ${recipientAddress} and tokens:`,
     tokenAddresses
   );
@@ -271,7 +272,7 @@ export const issueTokensHandler = async (
       results
     });
   } catch (error) {
-    console.error('Error minting tokens:', error);
+    Logger.error('Error minting tokens:', error);
     if (error instanceof Error) {
       return returnErrorResponse(reply, 400, 'Bad Request', error.message);
     }

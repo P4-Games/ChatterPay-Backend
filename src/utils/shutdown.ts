@@ -3,6 +3,8 @@
 import mongoose from 'mongoose';
 import { FastifyInstance } from 'fastify';
 
+import { Logger } from './logger';
+
 /**
  * Sets up a graceful shutdown process for the server and database connection.
  *
@@ -13,10 +15,10 @@ export function setupGracefulShutdown(server: FastifyInstance): void {
     try {
       await server.close();
       await mongoose.connection.close();
-      console.log('Server and MongoDB connection closed');
+      Logger.log('Server and MongoDB connection closed');
       process.exit(0);
     } catch (err) {
-      console.error('Error during shutdown:', err);
+      Logger.error('Error during shutdown:', err);
       process.exit(1);
     }
   });
