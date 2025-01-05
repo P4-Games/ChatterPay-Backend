@@ -5,7 +5,6 @@ import { Logger } from '../utils/logger';
 import Transaction from '../models/transaction';
 import { executeSwap } from '../services/swapService';
 import { SIGNING_KEY } from '../constants/environment';
-import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
 import { setupERC20 } from '../services/contractSetupService';
 import { returnErrorResponse } from '../utils/responseFormatter';
 import { sendSwapNotification } from '../services/notificationService';
@@ -177,7 +176,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     await saveTransaction(
       tx.approveTransactionHash,
       proxyAddress,
-      SIMPLE_SWAP_ADDRESS,
+      blockchainConfigFromFastify.contracts.simpleSwapAddress,
       fromTokensSentInUnits,
       inputCurrency
     );
@@ -185,7 +184,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     // Save transactions IN
     await saveTransaction(
       tx.swapTransactionHash,
-      SIMPLE_SWAP_ADDRESS,
+      blockchainConfigFromFastify.contracts.simpleSwapAddress,
       proxyAddress,
       toTokensReceivedInUnits,
       outputCurrency
