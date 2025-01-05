@@ -255,6 +255,14 @@ export const issueTokensHandler = async (
   request: FastifyRequest<{ Body: { address: string } }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
+  if (request.server.networkConfig.environment.toUpperCase() === 'PRODUCTION') {
+    return returnErrorResponse(
+      reply,
+      200,
+      'This endpoint is disabled on the production blockchains.'
+    );
+  }
+
   if (!request.body) {
     return returnErrorResponse(reply, 400, 'You have to send a body with this request');
   }
