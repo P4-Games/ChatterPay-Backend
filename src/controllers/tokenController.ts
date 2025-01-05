@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../utils/logger';
 import Token, { IToken } from '../models/token';
-import { SIGNING_KEY } from '../constants/environment';
+import { BUN_ENV, SIGNING_KEY } from '../constants/environment';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
 /**
@@ -255,24 +255,32 @@ export const issueTokensHandler = async (
   request: FastifyRequest<{ Body: { address: string } }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
-  if (request.server.networkConfig.environment.toUpperCase() === 'PRODUCTION') {
-    return returnErrorResponse(
-      reply,
-      200,
-      'This endpoint is disabled on the production blockchains.'
-    );
-  }
-
-  if (!request.body) {
-    return returnErrorResponse(reply, 400, 'You have to send a body with this request');
-  }
-
-  const { address }: { address: string } = request.body;
-  if (!address) {
-    return returnErrorResponse(reply, 400, 'Missing parameters in body. You have to send: address');
-  }
-
   try {
+    if (!request.body) {
+      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+    }
+
+    const fastify = request.server;
+    if (
+      fastify.networkConfig.environment.toUpperCase() === 'PRODUCTION' ||
+      BUN_ENV.toUpperCase() === 'PRODUCTION'
+    ) {
+      return await returnErrorResponse(
+        reply,
+        401,
+        'This endpoint is disabled on the production blockchains.'
+      );
+    }
+
+    const { address }: { address: string } = request.body;
+    if (!address) {
+      return await returnErrorResponse(
+        reply,
+        400,
+        'Missing parameters in body. You have to send: address'
+      );
+    }
+
     const results = await issueTokensCore(address, request.server);
 
     return await reply.status(201).send({
