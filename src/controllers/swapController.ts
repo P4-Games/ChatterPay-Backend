@@ -97,7 +97,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     const validationError: string = await validateInputs(request.body, tokenAddresses);
 
     if (validationError) {
-      return await reply.status(400).send({ message: validationError });
+      return await returnErrorResponse(reply, 400, validationError);
     }
 
     const provider = new ethers.providers.JsonRpcProvider(blockchainConfigFromFastify.rpc);
