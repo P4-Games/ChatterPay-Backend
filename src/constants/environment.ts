@@ -24,6 +24,7 @@ const {
   CHATIZALO_TOKEN,
   PUSH_CHANNEL_ADDRESS: pushChannelAddress = '',
   PUSH_CHANNEL_PRIVATE_KEY: pushChannelPrivateKey = '',
+  PUSH_ENABLED: pushEnabled = 'false',
   PUSH_NETWORK: pushNetwork = '11155111',
   PUSH_ENVIRONMENT: pushEnvironment = ENV.DEV,
   MINOR_LOG_LEVEL: minorLogLevel = 'debug'
@@ -65,6 +66,7 @@ export const PUSH_CHANNEL_ADDRESS = !pushChannelAddress.startsWith('0x')
 export const PUSH_CHANNEL_PRIVATE_KEY = !pushChannelPrivateKey.startsWith('0x')
   ? `0x${pushChannelPrivateKey}`
   : pushChannelPrivateKey;
+export const PUSH_ENABLED: boolean = pushEnabled.toLowerCase() === 'true';
 export const PUSH_NETWORK: string = pushNetwork;
 export const PUSH_ENVIRONMENT: ENV = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;
 export const CHATTERPAY_DOMAIN: string = `https://${BUN_ENV === 'development' ? 'dev.' : ''}chatterpay.net`;
