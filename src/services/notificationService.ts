@@ -17,6 +17,7 @@ import {
 } from '../models/templates';
 import {
   BOT_API_URL,
+  PUSH_ENABLED,
   PUSH_NETWORK,
   BOT_DATA_TOKEN,
   PUSH_ENVIRONMENT,
@@ -69,6 +70,10 @@ export async function sendPushNotificaton(
   identityType: number = 2
 ): Promise<boolean> {
   try {
+    if (!PUSH_ENABLED) {
+      Logger.info(`Push notifications are disabled, PUSH_ENABLED env variable: ${PUSH_ENABLED}.`);
+    }
+
     const user: IUser | null = await User.findOne({ phone_number: channelUserId });
     if (!user) {
       Logger.log(
