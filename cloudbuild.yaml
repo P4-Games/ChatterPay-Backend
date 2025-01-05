@@ -6,6 +6,11 @@ steps:
       - BUN_ENV=${_BUN_ENV}
       - ALCHEMY_API_KEY=${_ALCHEMY_API_KEY}
       - INFURA_API_KEY=${_INFURA_API_KEY}
+      - MAX_FEE_PER_GAS=${_MAX_FEE_PER_GAS}
+      - MAX_PRIORITY_FEE_PER_GAS=${_MAX_PRIORITY_FEE_PER_GAS}
+      - VERIFICATION_GAS_LIMIT=${_VERIFICATION_GAS_LIMIT}
+      - CALL_GAS_LIMIT=${_CALL_GAS_LIMIT}
+      - PRE_VERIFICATION_GAS=${_PRE_VERIFICATION_GAS}
       - MONGO_URI=${_MONGO_URI}
       - PINATA_JWT=${_PINATA_JWT}
       - ICP_CANISTER_ID=${_ICP_CANISTER_ID}
@@ -43,6 +48,16 @@ steps:
       'ALCHEMY_API_KEY=${_ALCHEMY_API_KEY}',
       '--build-arg',
       'INFURA_API_KEY=${_INFURA_API_KEY}',
+      '--build-arg',
+      'MAX_FEE_PER_GAS=${_MAX_FEE_PER_GAS}',
+      '--build-arg',
+      'MAX_PRIORITY_FEE_PER_GAS=${_MAX_PRIORITY_FEE_PER_GAS}',
+      '--build-arg',
+      'VERIFICATION_GAS_LIMIT=${_VERIFICATION_GAS_LIMIT}',
+      '--build-arg',
+      'CALL_GAS_LIMIT=${_CALL_GAS_LIMIT}',
+      '--build-arg',
+      'PRE_VERIFICATION_GAS=${_PRE_VERIFICATION_GAS}',
       '--build-arg',
       'MONGO_URI=${_MONGO_URI}',
       '--build-arg',
