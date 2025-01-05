@@ -72,6 +72,7 @@ export async function sendPushNotificaton(
   try {
     if (!PUSH_ENABLED) {
       Logger.info(`Push notifications are disabled, PUSH_ENABLED env variable: ${PUSH_ENABLED}.`);
+      return true;
     }
 
     const user: IUser | null = await User.findOne({ phone_number: channelUserId });
