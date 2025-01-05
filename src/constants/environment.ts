@@ -15,6 +15,11 @@ const {
   ICP_CANISTER_ID,
   ICP_MNEMONIC,
   INFURA_API_KEY,
+  MAX_FEE_PER_GAS: maxFeeperGas = '30',
+  MAX_PRIORITY_FEE_PER_GAS: maxPriorityFeePerGas = '5',
+  VERIFICATION_GAS_LIMIT: verificationGasLimit = 74908,
+  CALL_GAS_LIMIT: callGasLimit = 79728,
+  PRE_VERIFICATION_GAS: preVerificationGas = 94542,
   BOT_DATA_TOKEN,
   BOT_API_URL,
   NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
@@ -79,3 +84,9 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
 
 export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];
 export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'en';
+
+export const MAX_FEE_PER_GAS: string = maxFeeperGas;
+export const MAX_PRIORITY_FEE_PER_GAS: string = maxPriorityFeePerGas;
+export const VERIFICATION_GAS_LIMIT: number = Number(verificationGasLimit);
+export const CALL_GAS_LIMIT: number = Number(callGasLimit);
+export const PRE_VERIFICATION_GAS: number = Number(preVerificationGas);
