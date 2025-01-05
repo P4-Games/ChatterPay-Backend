@@ -118,7 +118,11 @@ export async function sendUserOperation(
 
     return { transactionHash: receipt.receipt.transactionHash };
   } catch (error) {
-    Logger.error('Error in sendUserOperation:', error);
+    Logger.error(
+      `Error in sendUserOperation, from: ${fromNumber}, to: ${to}, ` +
+        `token address: ${tokenAddress}, amount: ${amount}, error: `,
+      error
+    );
     Logger.log('Full error object:', JSON.stringify(error));
     throw error;
   }
