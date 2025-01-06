@@ -204,7 +204,7 @@ export async function executeSwap(
     );
 
     // 1. Execute approve operation
-    Logger.log('Executing approve operation.');
+    Logger.log('Swap: Executing approve operation.');
     const approveCallData = createApproveCallData(
       chatterPay,
       erc20,
@@ -224,7 +224,7 @@ export async function executeSwap(
     );
 
     // 2. Execute swap operation
-    Logger.log('Executing swap operation.');
+    Logger.log('Swap: Executing swap operation.');
     const swapCallData = createSwapCallData(chatterPay, simpleSwapContract, isWETHtoUSDT, amount);
 
     const swapHash = await executeOperation(

@@ -19,9 +19,10 @@ const {
   MAX_PRIORITY_FEE_PER_GAS: maxPriorityFeePerGas = '5',
   VERIFICATION_GAS_LIMIT: verificationGasLimit = 74908,
   CALL_GAS_LIMIT: callGasLimit = 79728,
-  PRE_VERIFICATION_GAS: preVerificationGas = 94542,
+  PRE_VERIFICATION_GAS: preVerificationGas = 500000,
   BOT_DATA_TOKEN,
   BOT_API_URL,
+  BOT_NOTIFICATIONS_ENABLED: botNotificationsEnabled = 'true',
   NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
   NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
   GCP_BUCKET_BASE_URL,
@@ -72,6 +73,7 @@ export const PUSH_CHANNEL_PRIVATE_KEY = !pushChannelPrivateKey.startsWith('0x')
   ? `0x${pushChannelPrivateKey}`
   : pushChannelPrivateKey;
 export const PUSH_ENABLED: boolean = pushEnabled.toLowerCase() === 'true';
+export const BOT_NOTIFICATIONS_ENABLED: boolean = botNotificationsEnabled.toLowerCase() === 'true';
 export const PUSH_NETWORK: string = pushNetwork;
 export const PUSH_ENVIRONMENT: ENV = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;
 export const CHATTERPAY_DOMAIN: string = `https://${BUN_ENV === 'development' ? 'dev.' : ''}chatterpay.net`;

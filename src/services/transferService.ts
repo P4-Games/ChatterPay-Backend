@@ -230,10 +230,9 @@ export async function ensureBackendSignerHasEnoughEth(
       );
       return false;
     }
-    
+
     Logger.log('Backend Signer has enough ETH.');
     return true;
-
   } catch (error: unknown) {
     Logger.error(
       `Error checking if Backend Signer has minimal funds to make transactions. Error: ${(error as Error).message}`

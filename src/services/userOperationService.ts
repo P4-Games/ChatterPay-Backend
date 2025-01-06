@@ -23,6 +23,11 @@ export async function createGenericUserOperation(
   Logger.log('Sender Address:', sender);
   Logger.log('Call Data:', callData);
   Logger.log('Nonce:', nonce.toString());
+  Logger.log('PRE_VERIFICATION_GAS', PRE_VERIFICATION_GAS);
+  Logger.log('CALL_GAS_LIMIT', CALL_GAS_LIMIT);
+  Logger.log('VERIFICATION_GAS_LIMIT', VERIFICATION_GAS_LIMIT);
+  Logger.log('MAX_FEE_PER_GAS', MAX_FEE_PER_GAS);
+  Logger.log('MAX_PRIORITY_FEE_PER_GAS', MAX_PRIORITY_FEE_PER_GAS);
 
   // Use high fixed values for gas
   const userOp: PackedUserOperation = {
@@ -83,26 +88,26 @@ export async function signUserOperation(
   entryPointAddress: string,
   signer: ethers.Wallet
 ): Promise<PackedUserOperation> {
-  Logger.log('\nSigning UserOperation.');
+  Logger.log('signUserOperation: Signing UserOperation.');
 
   const chainId = await signer.getChainId();
-  Logger.log('Chain ID:', chainId);
+  Logger.log('signUserOperation: Chain ID:', chainId);
 
-  Logger.log('Computing userOpHash.');
+  Logger.log('signUserOperation: Computing userOpHash.');
   const userOpHash = getUserOpHash(userOperation, entryPointAddress, chainId);
-  Logger.log('UserOpHash:', userOpHash);
+  Logger.log('signUserOperation: UserOpHash:', userOpHash);
 
   const signature = await signer.signMessage(ethers.utils.arrayify(userOpHash));
-  Logger.log('Generated signature:', signature);
+  Logger.log('signUserOperation: Generated signature:', signature);
 
   const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(userOpHash), signature);
-  Logger.log('Recovered address:', recoveredAddress);
-  Logger.log('Signer address:', await signer.getAddress());
+  Logger.log('signUserOperation: Recovered address:', recoveredAddress);
+  Logger.log('signUserOperation: Signer address:', await signer.getAddress());
 
   if (recoveredAddress.toLowerCase() !== (await signer.getAddress()).toLowerCase()) {
-    throw new Error('Signature verification failed on client side');
+    throw new Error('signUserOperation: Signature verification failed on client side');
   }
 
-  Logger.log('UserOperation signed successfully');
+  Logger.log('signUserOperation: UserOperation signed successfully');
   return { ...userOperation, signature };
 }

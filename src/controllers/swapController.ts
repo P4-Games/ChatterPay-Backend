@@ -76,6 +76,7 @@ async function saveTransaction(
 /**
  * Handles the swap operation.
  */
+// eslint-disable-next-line consistent-return
 export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: FastifyReply) => {
   try {
     if (!request.body) {
@@ -193,9 +194,6 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     Logger.info(
       `Swap completed successfully approveTransactionHash: ${tx.approveTransactionHash}, swapTransactionHash: ${tx.swapTransactionHash}.`
     );
-
-    // Return undefined to satisfy ESLint's consistent-return rule
-    return undefined;
   } catch (error) {
     Logger.error('Error swapping tokens:', error);
     return reply.status(500).send({ message: 'Internal Server Error' });
