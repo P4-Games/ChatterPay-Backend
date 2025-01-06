@@ -194,9 +194,6 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     Logger.info(
       `Swap completed successfully approveTransactionHash: ${tx.approveTransactionHash}, swapTransactionHash: ${tx.swapTransactionHash}.`
     );
-
-    // Return undefined to satisfy ESLint's consistent-return rule
-    return undefined;
   } catch (error) {
     Logger.error('Error swapping tokens:', error);
     return reply.status(500).send({ message: 'Internal Server Error' });
