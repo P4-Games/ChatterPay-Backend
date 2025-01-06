@@ -21,8 +21,7 @@ export class Logger {
       const cleanedMessage = args
         .map((arg) => (typeof arg === 'string' ? arg.replace(/(\r\n|\n|\r)/g, ' ') : String(arg)))
         .join(' ');
-
-      logger[level](`${cleanedMessage}`);
+      logger[level](cleanedMessage);
     } catch (error: unknown) {
       const messageError = error instanceof Error ? error.message : 'Unknown error';
       console.error(`Logger: Error trying to log Message: ${messageError}`);

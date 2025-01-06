@@ -11,7 +11,10 @@ export enum NotificationEnum {
   swap = 'swap',
   mint = 'mint',
   outgoing_transfer = 'outgoing_transfer',
-  wallet_creation = 'wallet_creation'
+  wallet_creation = 'wallet_creation',
+  user_balance_not_enough = 'user_balance_note_enough',
+  no_valid_blockchain_conditions = 'no_valid_blockchain_conditions',
+  internal_error = 'internal_error'
 }
 
 export interface LocalizedContentType {

@@ -1,16 +1,13 @@
 import { ethers } from 'ethers';
-import { FastifyInstance } from 'fastify';
 
 import { Logger } from '../utils/logger';
-import { getEntryPointABI } from './bucketService';
-import { verifyWalletBalance } from './walletService';
-import { ensureSignerHasEth } from './transferService';
-import { generatePrivateKey } from '../utils/keyGenerator';
+import Transaction from '../models/transaction';
+import { TokenAddresses } from '../types/common';
+import { IBlockchain } from '../models/blockchain';
+import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
-import { getBlockchain, TokenAddresses } from './blockchainService';
-import { setupERC20, setupContracts } from './contractSetupService';
-import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
+import { setupERC20, setupContractReturnType } from './contractSetupService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
 
 /**
@@ -66,7 +63,7 @@ function createSwapCallData(
  * Executes a user operation with the given callData
  */
 async function executeOperation(
-  fastify: FastifyInstance,
+  networkConfig: IBlockchain,
   callData: string,
   signer: ethers.Wallet,
   backendSigner: ethers.Wallet, // Agregamos backendSigner como parámetro
@@ -85,14 +82,14 @@ async function executeOperation(
   // Add paymaster data - Usamos el backendSigner que recibimos como parámetro
   userOperation = await addPaymasterData(
     userOperation,
-    fastify.networkConfig.contracts.paymasterAddress!,
+    networkConfig.contracts.paymasterAddress!,
     backendSigner
   );
 
   // Sign the user operation
   userOperation = await signUserOperation(
     userOperation,
-    fastify.networkConfig.contracts.entryPoint,
+    networkConfig.contracts.entryPoint,
     signer
   );
 
@@ -106,6 +103,7 @@ async function executeOperation(
   // Wait for receipt
   const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
   if (!receipt?.success) {
+    Logger.error('receipt', receipt);
     throw new Error(
       `Transaction failed or not found, receipt: ${receipt.success}, ${receipt.userOpHash}`
     );
@@ -115,60 +113,30 @@ async function executeOperation(
 }
 
 /**
- * Main function to execute the swap operation
+ * Execute the swap with the SimpleSwap contract
+ *
+ * The SimpleSwap contract makes sense for performing swaps of WETH for USDT and vice versa.
+ * This type of contract works similarly to a basic Automated Market Maker (AMM), where the
+ * liquidity reserve is used to determine the exchange rate between the two tokens.
+ * In this case, when you call the swapWETHforUSDT function, the contract uses the amount of WETH
+ * you wish to swap and the current WETH and USDT reserves to calculate how many USDT you will receive.
+ *
+ * @param networkConfig
+ * @param tokenAddresses
+ * @param amount
+ * @returns
  */
 export async function executeSwap(
-  fastify: FastifyInstance,
-  fromNumber: string,
+  networkConfig: IBlockchain,
+  setupContractsResult: setupContractReturnType,
+  entryPointContract: ethers.Contract,
   tokenAddresses: TokenAddresses,
-  amount: string,
-  chain_id: number,
-  isWETHtoUSDT: boolean
-): Promise<{ approveTransactionHash: string; swapTransactionHash: string }> {
+  amount: string
+): Promise<{ success: boolean; approveTransactionHash: string; swapTransactionHash: string }> {
   try {
-    const blockchain = await getBlockchain(chain_id);
-    const seedPrivateKey = process.env.PRIVATE_KEY;
-    if (!seedPrivateKey) {
-      throw new Error('Seed private key not found in environment variables');
-    }
-
-    const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
-    const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } =
-      await setupContracts(blockchain, privateKey, fromNumber);
-    const erc20 = await setupERC20(tokenAddresses.tokenAddressInput, signer);
-    Logger.log('Contracts and signers set up.', signer.address);
-
-    const checkBalanceResult = await verifyWalletBalance(erc20, proxy.proxyAddress, amount);
-    if (!checkBalanceResult.enoughBalance) {
-      throw new Error(
-        `Insufficient balance. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}`
-      );
-    }
-    Logger.log('Balance check passed');
-
-    await ensureSignerHasEth(signer, backendSigner, provider);
-    Logger.log('Signer has enough ETH');
-
-    const { networkConfig } = fastify;
-    const entrypointABI = await getEntryPointABI();
-    const entrypointContract = new ethers.Contract(
-      networkConfig.contracts.entryPoint,
-      entrypointABI,
-      backendSigner
-    );
-
-    const ensurePaymasterPrefundResult = await ensurePaymasterHasPrefund(
-      entrypointContract,
-      networkConfig.contracts.paymasterAddress!
-    );
-    if (!ensurePaymasterPrefundResult) {
-      throw new Error(`Cannot make the transaction right now. Please try again later.`);
-    }
-
-    Logger.log('Validating account');
-    if (!accountExists) {
-      throw new Error(`Account ${proxy.proxyAddress} does not exist`);
-    }
+    const isWETHtoUSDT =
+      tokenAddresses.tokenAddressInput.toUpperCase() === 'WETH' &&
+      tokenAddresses.tokenAddressOutput.toUpperCase() === 'USDT';
 
     // Create SimpleSwap contract instance
     const simpleSwapContract = new ethers.Contract(
@@ -177,50 +145,79 @@ export async function executeSwap(
         'function swapWETHforUSDT(uint256 wethAmount) external',
         'function swapUSDTforWETH(uint256 usdtAmount) external'
       ],
-      provider
+      setupContractsResult.provider
     );
 
     // 1. Execute approve operation
-    Logger.log('Executing approve operation.');
+    Logger.log('Swap: Executing approve operation.');
+    const erc20 = await setupERC20(tokenAddresses.tokenAddressInput, setupContractsResult.signer);
     const approveCallData = createApproveCallData(
-      chatterPay,
+      setupContractsResult.chatterPay,
       erc20,
       networkConfig.contracts.simpleSwapAddress,
       amount
     );
 
     const approveHash = await executeOperation(
-      fastify,
+      networkConfig,
       approveCallData,
-      signer,
-      backendSigner,
-      entrypointContract,
-      bundlerUrl,
-      proxy.proxyAddress,
-      provider
+      setupContractsResult.signer,
+      setupContractsResult.backendSigner,
+      entryPointContract,
+      setupContractsResult.bundlerUrl,
+      setupContractsResult.proxy.proxyAddress,
+      setupContractsResult.provider
     );
 
     // 2. Execute swap operation
-    Logger.log('Executing swap operation.');
-    const swapCallData = createSwapCallData(chatterPay, simpleSwapContract, isWETHtoUSDT, amount);
+    Logger.log('Swap: Executing swap operation.');
+    const swapCallData = createSwapCallData(
+      setupContractsResult.chatterPay,
+      simpleSwapContract,
+      isWETHtoUSDT,
+      amount
+    );
 
     const swapHash = await executeOperation(
-      fastify,
+      networkConfig,
       swapCallData,
-      signer,
-      backendSigner,
-      entrypointContract,
-      bundlerUrl,
-      proxy.proxyAddress,
-      provider
+      setupContractsResult.signer,
+      setupContractsResult.backendSigner,
+      entryPointContract,
+      setupContractsResult.bundlerUrl,
+      setupContractsResult.proxy.proxyAddress,
+      setupContractsResult.provider
     );
 
     return {
+      success: true,
       approveTransactionHash: approveHash,
       swapTransactionHash: swapHash
     };
   } catch (error) {
     Logger.error('Error in executeSwap:', error);
-    throw error;
+    return { success: false, approveTransactionHash: '', swapTransactionHash: '' };
   }
+}
+
+/**
+ * Saves the transaction details to the database.
+ */
+export async function saveSwapTransaction(
+  tx: string,
+  walletFrom: string,
+  walletTo: string,
+  amount: number,
+  currency: string
+) {
+  await Transaction.create({
+    trx_hash: tx,
+    wallet_from: walletFrom,
+    wallet_to: walletTo,
+    type: 'transfer',
+    date: new Date(),
+    status: 'completed',
+    amount,
+    token: currency
+  });
 }

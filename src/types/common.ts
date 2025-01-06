@@ -1,3 +1,7 @@
+import { ethers } from 'ethers';
+
+import { setupContractReturnType } from '../services/contractSetupService';
+
 /**
  * Basic token information including price
  */
@@ -41,4 +45,15 @@ export interface walletBalanceInfo {
   walletBalance: string;
   amountToCheck: string;
   enoughBalance: boolean;
+}
+
+export interface CheckBalanceConditionsResultType {
+  success: boolean;
+  setupContractsResult: setupContractReturnType | null;
+  entryPointContract: ethers.Contract | null;
+}
+
+export interface TokenAddresses {
+  tokenAddressInput: string;
+  tokenAddressOutput: string;
 }

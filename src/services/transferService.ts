@@ -8,20 +8,23 @@ import { TokenBalance } from '../types/common';
 import Transaction from '../models/transaction';
 import { getEntryPointABI } from './bucketService';
 import { IBlockchain } from '../models/blockchain';
-import { getBlockchain } from './blockchainService';
 import { generatePrivateKey } from '../utils/keyGenerator';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { setupERC20, setupContracts } from './contractSetupService';
 import { getTokenBalances, verifyWalletBalance } from './walletService';
-import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
-import { SIGNER_MIN_BALANCE, SIGNER_BALANCE_TO_TRANSFER } from '../constants/environment';
+import { addPaymasterData, ensurePaymasterHasEnoughEth } from './paymasterService';
 import { sendTransferNotification, sendOutgoingTransferNotification } from './notificationService';
 import {
   signUserOperation,
   createTransferCallData,
   createGenericUserOperation
 } from './userOperationService';
+import {
+  getBlockchain,
+  ensureUserSignerHasEnoughEth,
+  ensureBackendSignerHasEnoughEth
+} from './blockchainService';
 
 /**
  * Sends a user operation for token transfer.
@@ -38,7 +41,7 @@ export async function sendUserOperation(
     const blockchain = await getBlockchain(chain_id);
     const seedPrivateKey = process.env.PRIVATE_KEY;
     if (!seedPrivateKey) {
-      throw new Error('Seed private key not found in environment variables');
+      throw new Error('Seed private key not found in environment variables.');
     }
 
     const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
@@ -53,18 +56,38 @@ export async function sendUserOperation(
     }
 
     const erc20 = await setupERC20(tokenAddress, signer);
-    Logger.log('Contracts and signers set up.', signer.address);
-
-    const checkBalanceResult = await verifyWalletBalance(erc20, proxy.proxyAddress, amount);
-    if (!checkBalanceResult.enoughBalance) {
+    const checkUserTokenBalanceResult = await verifyWalletBalance(
+      erc20,
+      proxy.proxyAddress,
+      amount
+    );
+    if (!checkUserTokenBalanceResult.enoughBalance) {
       throw new Error(
-        `Insufficient balance. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}`
+        `User Wallet ${proxy.proxyAddress} insufficient Token balance. Required: ${checkUserTokenBalanceResult.amountToCheck}, Available: ${checkUserTokenBalanceResult.walletBalance}`
       );
     }
-    Logger.log('Balance check passed');
 
-    await ensureSignerHasEth(signer, backendSigner, provider);
-    Logger.log('Signer has enough ETH');
+    const backendSignerWalletAddress = await backendSigner.getAddress();
+    const checkBackendSignerBalanceresult = await ensureBackendSignerHasEnoughEth(
+      backendSignerWalletAddress,
+      provider
+    );
+    if (!checkBackendSignerBalanceresult) {
+      throw new Error(
+        `Backend Signer Wallet ${backendSignerWalletAddress}, insufficient ETH balance.`
+      );
+    }
+
+    const userWalletAddress = await signer.getAddress();
+    const checkUserEthBalanceResult = await ensureUserSignerHasEnoughEth(
+      userWalletAddress,
+      backendSigner,
+      provider
+    );
+    if (!checkUserEthBalanceResult) {
+      Logger.error(`User Wallet ${proxy.proxyAddress}, does not have enough ETH.`);
+      throw new Error(`User Wallet ${proxy.proxyAddress}, insufficient ETH balance.`);
+    }
 
     const entrypointABI = await getEntryPointABI();
     const entrypointContract = new ethers.Contract(
@@ -73,7 +96,7 @@ export async function sendUserOperation(
       backendSigner
     );
 
-    const ensurePaymasterPrefundResult = await ensurePaymasterHasPrefund(
+    const ensurePaymasterPrefundResult = await ensurePaymasterHasEnoughEth(
       entrypointContract,
       networkConfig.contracts.paymasterAddress!
     );
@@ -133,50 +156,6 @@ export async function sendUserOperation(
     );
     Logger.log('Full error object:', JSON.stringify(error));
     throw error;
-  }
-}
-
-/**
- * Helper function to ensure the signer has enough ETH for gas fees.
- */
-export async function ensureSignerHasEth(
-  signer: ethers.Wallet,
-  backendSigner: ethers.Wallet,
-  provider: ethers.providers.JsonRpcProvider
-): Promise<void> {
-  Logger.log(
-    `Checking if EOA Signer has minimal funds (${SIGNER_MIN_BALANCE}) to make the transaction.`
-  );
-
-  try {
-    const signerWalletAddress = await signer.getAddress();
-
-    const EOABalance = await provider.getBalance(signerWalletAddress);
-    Logger.log(
-      `Signer EOA ${signerWalletAddress} balance: ${ethers.utils.formatEther(EOABalance)} ETH`
-    );
-
-    if (EOABalance.lt(ethers.utils.parseEther(SIGNER_MIN_BALANCE))) {
-      Logger.log(
-        `Sending ${SIGNER_BALANCE_TO_TRANSFER} ETH from backendSigner ${backendSigner.getAddress()} ` +
-          `to EOA signer ${signer.getAddress()}.`
-      );
-
-      const tx = await backendSigner.sendTransaction({
-        to: await signer.getAddress(),
-        value: ethers.utils.parseEther(SIGNER_BALANCE_TO_TRANSFER),
-        gasLimit: 210000
-      });
-
-      await tx.wait();
-      Logger.log('ETH sent to signer');
-    } else {
-      Logger.log('Signer has enough ETH');
-    }
-  } catch (error: unknown) {
-    Logger.error(
-      `Error checking if EOA Signer has minimal funds to make the transaction. Error: ${(error as Error).message}`
-    );
   }
 }
 

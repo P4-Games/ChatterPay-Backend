@@ -26,6 +26,7 @@ const blockchainSchema = new Schema<IBlockchain>({
   logo: { type: String, required: true },
   explorer: { type: String, required: true },
   scan_apikey: { type: String, required: true },
+  marketplace_opensea_url: { type: String, required: true },
   environment: { type: String, required: true },
   contracts: {
     entryPoint: { type: String, required: false },

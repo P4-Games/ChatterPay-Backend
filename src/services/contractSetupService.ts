@@ -5,7 +5,17 @@ import { IBlockchain } from '../models/blockchain';
 import { getChatterpayABI } from './bucketService';
 import { getNetworkConfig } from './networkService';
 import { getBundlerUrl, validateBundlerUrl } from '../utils/bundler';
-import { computeProxyAddressFromPhone } from './predictWalletService';
+import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
+
+export interface setupContractReturnType {
+  provider: ethers.providers.JsonRpcProvider;
+  signer: ethers.Wallet;
+  backendSigner: ethers.Wallet;
+  bundlerUrl: string;
+  chatterPay: ethers.Contract;
+  proxy: ComputedAddress;
+  accountExists: boolean;
+}
 
 /**
  * Sets up the necessary contracts and providers for blockchain interaction.
@@ -19,7 +29,7 @@ export async function setupContracts(
   blockchain: IBlockchain,
   privateKey: string,
   fromNumber: string
-) {
+): Promise<setupContractReturnType> {
   const bundlerUrl = getBundlerUrl(blockchain.chain_id);
   if (!bundlerUrl) {
     throw new Error(`Unsupported chain ID: ${blockchain.chain_id}`);
@@ -41,7 +51,7 @@ export async function setupContracts(
   const chatterpayABI = await getChatterpayABI();
   const chatterPayContract = new ethers.Contract(proxy.proxyAddress, chatterpayABI, signer);
 
-  return {
+  const result: setupContractReturnType = {
     provider,
     signer,
     backendSigner,
@@ -50,6 +60,8 @@ export async function setupContracts(
     proxy,
     accountExists
   };
+
+  return result;
 }
 
 /**
