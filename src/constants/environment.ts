@@ -19,7 +19,7 @@ const {
   MAX_PRIORITY_FEE_PER_GAS: maxPriorityFeePerGas = '5',
   VERIFICATION_GAS_LIMIT: verificationGasLimit = 74908,
   CALL_GAS_LIMIT: callGasLimit = 79728,
-  PRE_VERIFICATION_GAS: preVerificationGas = 94542,
+  PRE_VERIFICATION_GAS: preVerificationGas = 500000,
   BOT_DATA_TOKEN,
   BOT_API_URL,
   BOT_NOTIFICATIONS_ENABLED: botNotificationsEnabled = 'true',
