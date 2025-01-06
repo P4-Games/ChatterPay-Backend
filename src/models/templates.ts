@@ -1,17 +1,17 @@
 import { model, Schema, Document } from 'mongoose';
 
-export enum LanguageEnum { 
-  en = "en",
-  es =  "es", 
-  pt =  "pt" 
-};
+export enum LanguageEnum {
+  en = 'en',
+  es = 'es',
+  pt = 'pt'
+}
 
 export enum NotificationEnum {
-  transfer = "transfer",
-  swap = "swap",
-  mint = "mint",
-  outgoing_transfer = "outgoing_transfer",
-  wallet_creation = "wallet_creation"
+  transfer = 'transfer',
+  swap = 'swap',
+  mint = 'mint',
+  outgoing_transfer = 'outgoing_transfer',
+  wallet_creation = 'wallet_creation'
 }
 
 export interface LocalizedContentType {

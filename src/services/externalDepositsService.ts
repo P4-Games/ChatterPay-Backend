@@ -3,7 +3,6 @@ import { gql, request } from 'graphql-request';
 import { User } from '../models/user';
 import { Logger } from '../utils/logger';
 import Transaction from '../models/transaction';
-import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
 import { sendTransferNotification } from './notificationService';
 import { LastProcessedBlock } from '../models/lastProcessedBlock';
 
@@ -52,11 +51,14 @@ interface Transfer {
  * Fetches and processes external deposits for users in the ecosystem.
  * @async
  */
-export async function fetchExternalDeposits() {
+export async function fetchExternalDeposits(
+  networkName: string,
+  simpleSwapContractAddress: string
+) {
   try {
     // Get the last processed block number
     const lastProcessedBlock = await LastProcessedBlock.findOne({
-      networkName: 'ARBITRUM_SEPOLIA'
+      networkName
     });
     const fromBlock = lastProcessedBlock ? lastProcessedBlock.blockNumber : 0;
 
@@ -84,7 +86,7 @@ export async function fetchExternalDeposits() {
     const externalDeposits = allTransfers.filter(
       (transfer) =>
         !ecosystemAddresses.includes(transfer.from.toLowerCase()) &&
-        transfer.from.toLowerCase() !== SIMPLE_SWAP_ADDRESS.toLowerCase()
+        transfer.from.toLowerCase() !== simpleSwapContractAddress.toLowerCase()
     );
 
     // Process each external deposit

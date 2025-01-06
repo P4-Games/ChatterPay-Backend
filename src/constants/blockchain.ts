@@ -1,6 +1,5 @@
 import { GCP_BUCKET_BASE_URL } from './environment';
 
-export const SIMPLE_SWAP_ADDRESS = '0xd1D3ec40941da7d74e07D5Da240be35cd6c2574D';
 export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
 
 export const networkChainIds = {

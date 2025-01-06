@@ -15,6 +15,11 @@ const {
   ICP_CANISTER_ID,
   ICP_MNEMONIC,
   INFURA_API_KEY,
+  MAX_FEE_PER_GAS: maxFeeperGas = '30',
+  MAX_PRIORITY_FEE_PER_GAS: maxPriorityFeePerGas = '5',
+  VERIFICATION_GAS_LIMIT: verificationGasLimit = 74908,
+  CALL_GAS_LIMIT: callGasLimit = 79728,
+  PRE_VERIFICATION_GAS: preVerificationGas = 94542,
   BOT_DATA_TOKEN,
   BOT_API_URL,
   NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
@@ -24,6 +29,7 @@ const {
   CHATIZALO_TOKEN,
   PUSH_CHANNEL_ADDRESS: pushChannelAddress = '',
   PUSH_CHANNEL_PRIVATE_KEY: pushChannelPrivateKey = '',
+  PUSH_ENABLED: pushEnabled = 'false',
   PUSH_NETWORK: pushNetwork = '11155111',
   PUSH_ENVIRONMENT: pushEnvironment = ENV.DEV,
   MINOR_LOG_LEVEL: minorLogLevel = 'debug'
@@ -65,6 +71,7 @@ export const PUSH_CHANNEL_ADDRESS = !pushChannelAddress.startsWith('0x')
 export const PUSH_CHANNEL_PRIVATE_KEY = !pushChannelPrivateKey.startsWith('0x')
   ? `0x${pushChannelPrivateKey}`
   : pushChannelPrivateKey;
+export const PUSH_ENABLED: boolean = pushEnabled.toLowerCase() === 'true';
 export const PUSH_NETWORK: string = pushNetwork;
 export const PUSH_ENVIRONMENT: ENV = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;
 export const CHATTERPAY_DOMAIN: string = `https://${BUN_ENV === 'development' ? 'dev.' : ''}chatterpay.net`;
@@ -75,5 +82,16 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
   ? (minorLogLevel.toLowerCase() as LogLevel)
   : 'error';
 
-export const validLanguages: Array<"en" | "es" | "pt"> = ["en", "es", "pt"];
+export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];
 export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'en';
+
+export const MAX_FEE_PER_GAS: string = maxFeeperGas;
+export const MAX_PRIORITY_FEE_PER_GAS: string = maxPriorityFeePerGas;
+export const VERIFICATION_GAS_LIMIT: number = Number(verificationGasLimit);
+export const CALL_GAS_LIMIT: number = Number(callGasLimit);
+export const PRE_VERIFICATION_GAS: number = Number(preVerificationGas);
+
+export const PAYMASTER_MIN_BALANCE: string = '0.15';
+export const PAYMASTER_TARGET_BALANCE: string = '0.3';
+export const SIGNER_MIN_BALANCE: string = '0.0008';
+export const SIGNER_BALANCE_TO_TRANSFER: string = '0.001';

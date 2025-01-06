@@ -6,7 +6,6 @@ import { getEntryPointABI } from './bucketService';
 import { verifyWalletBalance } from './walletService';
 import { ensureSignerHasEth } from './transferService';
 import { generatePrivateKey } from '../utils/keyGenerator';
-import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { getBlockchain, TokenAddresses } from './blockchainService';
@@ -158,7 +157,13 @@ export async function executeSwap(
       backendSigner
     );
 
-    await ensurePaymasterHasPrefund(entrypointContract, networkConfig.contracts.paymasterAddress!);
+    const ensurePaymasterPrefundResult = await ensurePaymasterHasPrefund(
+      entrypointContract,
+      networkConfig.contracts.paymasterAddress!
+    );
+    if (!ensurePaymasterPrefundResult) {
+      throw new Error(`Cannot make the transaction right now. Please try again later.`);
+    }
 
     Logger.log('Validating account');
     if (!accountExists) {
@@ -167,7 +172,7 @@ export async function executeSwap(
 
     // Create SimpleSwap contract instance
     const simpleSwapContract = new ethers.Contract(
-      SIMPLE_SWAP_ADDRESS,
+      networkConfig.contracts.simpleSwapAddress,
       [
         'function swapWETHforUSDT(uint256 wethAmount) external',
         'function swapUSDTforWETH(uint256 usdtAmount) external'
@@ -177,7 +182,12 @@ export async function executeSwap(
 
     // 1. Execute approve operation
     Logger.log('Executing approve operation.');
-    const approveCallData = createApproveCallData(chatterPay, erc20, SIMPLE_SWAP_ADDRESS, amount);
+    const approveCallData = createApproveCallData(
+      chatterPay,
+      erc20,
+      networkConfig.contracts.simpleSwapAddress,
+      amount
+    );
 
     const approveHash = await executeOperation(
       fastify,

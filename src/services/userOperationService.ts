@@ -3,6 +3,13 @@ import { ethers, BigNumber } from 'ethers';
 import { Logger } from '../utils/logger';
 import { getUserOpHash } from '../utils/userOperation';
 import { PackedUserOperation } from '../types/userOperation';
+import {
+  CALL_GAS_LIMIT,
+  MAX_FEE_PER_GAS,
+  PRE_VERIFICATION_GAS,
+  VERIFICATION_GAS_LIMIT,
+  MAX_PRIORITY_FEE_PER_GAS
+} from '../constants/environment';
 
 /**
  * Creates a generic user operation for any type of transaction.
@@ -23,11 +30,11 @@ export async function createGenericUserOperation(
     nonce,
     initCode: '0x',
     callData,
-    verificationGasLimit: BigNumber.from(74908),
-    callGasLimit: BigNumber.from(79728),
-    preVerificationGas: BigNumber.from(94542),
-    maxFeePerGas: BigNumber.from(ethers.utils.parseUnits('30', 'gwei')),
-    maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits('5', 'gwei')),
+    verificationGasLimit: BigNumber.from(VERIFICATION_GAS_LIMIT),
+    callGasLimit: BigNumber.from(CALL_GAS_LIMIT),
+    preVerificationGas: BigNumber.from(PRE_VERIFICATION_GAS),
+    maxFeePerGas: BigNumber.from(ethers.utils.parseUnits(MAX_FEE_PER_GAS, 'gwei')),
+    maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits(MAX_PRIORITY_FEE_PER_GAS, 'gwei')),
     paymasterAndData: '0x', // Will be filled by the paymaster service
     signature: '0x' // Empty signature initially
   };

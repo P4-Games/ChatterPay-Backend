@@ -53,8 +53,11 @@ export async function setupMiddleware(server: FastifyInstance): Promise<void> {
         done(null, parsedBody);
       } catch (error: unknown) {
         Logger.error('BodyParser: Failed to parse body:', body);
-        const messageError = error instanceof Error ? error.message : 'Unknown error'
-        done(new Error(`BodyParser: Invalid body format, error: ${messageError}`) as FastifyError, undefined);
+        const messageError = error instanceof Error ? error.message : 'Unknown error';
+        done(
+          new Error(`BodyParser: Invalid body format, error: ${messageError}`) as FastifyError,
+          undefined
+        );
       }
     }
   );

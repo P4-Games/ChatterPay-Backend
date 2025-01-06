@@ -9,8 +9,24 @@ import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
 import { isValidPhoneNumber } from '../utils/validations';
 import { getTemplate, templateEnum } from './templateService';
-import { LanguageEnum, ITemplateSchema, NotificationEnum, NotificationTemplatesTypes } from '../models/templates';
-import { BOT_API_URL, PUSH_NETWORK, BOT_DATA_TOKEN, PUSH_ENVIRONMENT, CHATTERPAY_DOMAIN, PUSH_CHANNEL_ADDRESS, PUSH_CHANNEL_PRIVATE_KEY, CHATTERPAY_NFTS_SHARE_URL, SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../constants/environment';
+import {
+  LanguageEnum,
+  ITemplateSchema,
+  NotificationEnum,
+  NotificationTemplatesTypes
+} from '../models/templates';
+import {
+  BOT_API_URL,
+  PUSH_ENABLED,
+  PUSH_NETWORK,
+  BOT_DATA_TOKEN,
+  PUSH_ENVIRONMENT,
+  CHATTERPAY_DOMAIN,
+  PUSH_CHANNEL_ADDRESS,
+  PUSH_CHANNEL_PRIVATE_KEY,
+  CHATTERPAY_NFTS_SHARE_URL,
+  SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
+} from '../constants/environment';
 
 interface OperatorReplyPayload {
   data_token: string;
@@ -54,6 +70,11 @@ export async function sendPushNotificaton(
   identityType: number = 2
 ): Promise<boolean> {
   try {
+    if (!PUSH_ENABLED) {
+      Logger.info(`Push notifications are disabled, PUSH_ENABLED env variable: ${PUSH_ENABLED}.`);
+      return true;
+    }
+
     const user: IUser | null = await User.findOne({ phone_number: channelUserId });
     if (!user) {
       Logger.log(
@@ -106,7 +127,7 @@ export async function sendPushNotificaton(
  * @returns
  */
 export const getUserSettingsLanguage = async (phoneNumber: string): Promise<LanguageEnum> => {
-  let language: LanguageEnum = (SETTINGS_NOTIFICATION_LANGUAGE_DFAULT as LanguageEnum);
+  let language: LanguageEnum = SETTINGS_NOTIFICATION_LANGUAGE_DFAULT as LanguageEnum;
   try {
     const user: IUser | null = await User.findOne({ phone_number: phoneNumber });
     if (user && user.settings) {
@@ -114,7 +135,9 @@ export const getUserSettingsLanguage = async (phoneNumber: string): Promise<Lang
       if (Object.values(LanguageEnum).includes(userLanguage as LanguageEnum)) {
         language = userLanguage as LanguageEnum;
       } else {
-        Logger.warn(`Invalid language detected for user ${phoneNumber}, defaulting to ${SETTINGS_NOTIFICATION_LANGUAGE_DFAULT}`);
+        Logger.warn(
+          `Invalid language detected for user ${phoneNumber}, defaulting to ${SETTINGS_NOTIFICATION_LANGUAGE_DFAULT}`
+        );
       }
     }
   } catch (error: unknown) {
@@ -132,10 +155,11 @@ export const getUserSettingsLanguage = async (phoneNumber: string): Promise<Lang
  * @param typeOfNotification
  * @returns
  */
-async function getNotificationTemplate(channelUserId: string, typeOfNotification: NotificationEnum) :
-Promise<{ title: string; message: string }> {
-
-  const defaultNotification = {title: 'Chatterpay Message', message: ''}
+async function getNotificationTemplate(
+  channelUserId: string,
+  typeOfNotification: NotificationEnum
+): Promise<{ title: string; message: string }> {
+  const defaultNotification = { title: 'Chatterpay Message', message: '' };
   try {
     const cachedTemplate = notificationTemplateCache.get(`${typeOfNotification}`);
     if (cachedTemplate) {
@@ -145,12 +169,13 @@ Promise<{ title: string; message: string }> {
 
     const userLanguage: LanguageEnum = await getUserSettingsLanguage(channelUserId);
 
-    const notificationTemplates: NotificationTemplatesTypes | null = await getTemplate<ITemplateSchema>(templateEnum.NOTIFICATIONS);
-    if(!notificationTemplates) {
+    const notificationTemplates: NotificationTemplatesTypes | null =
+      await getTemplate<ITemplateSchema>(templateEnum.NOTIFICATIONS);
+    if (!notificationTemplates) {
       Logger.warn('Notifications Templates not found');
       return defaultNotification;
     }
-  
+
     if (!Object.values(NotificationEnum).includes(typeOfNotification)) {
       Logger.warn(`Invalid notification type: ${typeOfNotification}`);
       return defaultNotification;
@@ -158,20 +183,19 @@ Promise<{ title: string; message: string }> {
 
     // @ts-expect-error 'expected type error'
     const template = notificationTemplates[typeOfNotification];
-    
+
     if (!template) {
       Logger.warn(`Notification type ${typeOfNotification} not found`);
       return defaultNotification;
     }
-  
+
     const result = {
       title: template.title[userLanguage],
       message: template.message[userLanguage]
     };
     notificationTemplateCache.set(`${typeOfNotification}`, result);
 
-    return  result;
-    
+    return result;
   } catch (error: unknown) {
     // avoid throw error
     Logger.error(
@@ -317,7 +341,10 @@ export async function sendSwapNotification(
     const networkConfig: IBlockchain = await getNetworkConfig();
 
     const resultString: string = `${Math.round(parseFloat(result) * 1e4) / 1e4}`;
-    const { title, message } = await getNotificationTemplate(channel_user_id, NotificationEnum.swap);
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.swap
+    );
 
     const formattedMessage = message
       .replaceAll('[AMOUNT]', amount)
@@ -357,7 +384,10 @@ export async function sendMintNotification(
   try {
     Logger.log('Sending mint notification');
 
-    const { title, message } = await getNotificationTemplate(channel_user_id, NotificationEnum.mint);
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.mint
+    );
     const formattedMessage = message
       .replaceAll('[ID]', id)
       .replaceAll('[NFTS_SHARE_URL]', CHATTERPAY_NFTS_SHARE_URL);

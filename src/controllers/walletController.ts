@@ -47,7 +47,7 @@ export const createWallet = async (
     const user: IUser = await createUserWithWallet(phone_number);
 
     return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
-      walletAddress: user.walletEOA
+      walletAddress: user.wallet
     });
   } catch (error) {
     Logger.error('Error creando una wallet:', error);

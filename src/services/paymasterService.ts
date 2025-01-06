@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import { Logger } from '../utils/logger';
 import { createPaymasterAndData } from '../utils/paymaster';
 import { PackedUserOperation } from '../types/userOperation';
+import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../constants/environment';
 
 /**
  * Adds paymaster data to a UserOperation.
@@ -32,17 +33,17 @@ export async function addPaymasterData(
 export async function ensurePaymasterHasPrefund(
   entrypointContract: ethers.Contract,
   paymaster: string
-): Promise<void> {
+): Promise<boolean> {
   try {
     const balance = await entrypointContract.balanceOf(paymaster);
 
-    Logger.log('\nChecking prefund requirements:');
-    Logger.log(`- Current balance: ${ethers.utils.formatEther(balance)} ETH`);
+    Logger.log('Checking prefund requirements:');
+    Logger.log(`Current balance: ${ethers.utils.formatEther(balance)} ETH`);
 
-    const minBalance = ethers.utils.parseEther('0.15');
-    const targetBalance = ethers.utils.parseEther('0.3');
+    const minBalance = ethers.utils.parseEther(PAYMASTER_MIN_BALANCE);
+    const targetBalance = ethers.utils.parseEther(PAYMASTER_TARGET_BALANCE);
 
-    Logger.log(`- Minimum required balance: ${ethers.utils.formatEther(minBalance)} ETH`);
+    Logger.log(`Minimum required balance: ${ethers.utils.formatEther(minBalance)} ETH`);
     Logger.log(
       `- Target balance if deposit needed: ${ethers.utils.formatEther(targetBalance)} ETH`
     );
@@ -64,8 +65,9 @@ export async function ensurePaymasterHasPrefund(
     } else {
       Logger.log('Account has sufficient prefund');
     }
+    return true;
   } catch (error) {
     Logger.error('Error ensuring paymaster has prefund:', error);
-    throw error;
+    return false;
   }
 }

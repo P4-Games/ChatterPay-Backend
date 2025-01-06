@@ -15,6 +15,7 @@ import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { setupERC20, setupContracts } from './contractSetupService';
 import { getTokenBalances, verifyWalletBalance } from './walletService';
 import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
+import { SIGNER_MIN_BALANCE, SIGNER_BALANCE_TO_TRANSFER } from '../constants/environment';
 import { sendTransferNotification, sendOutgoingTransferNotification } from './notificationService';
 import {
   signUserOperation,
@@ -43,6 +44,14 @@ export async function sendUserOperation(
     const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
     const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } =
       await setupContracts(blockchain, privateKey, fromNumber);
+
+    Logger.log('Validating account');
+    if (!accountExists) {
+      throw new Error(
+        `Account ${proxy.proxyAddress} does not exist. Cannot proceed with user operation.`
+      );
+    }
+
     const erc20 = await setupERC20(tokenAddress, signer);
     Logger.log('Contracts and signers set up.', signer.address);
 
@@ -64,13 +73,12 @@ export async function sendUserOperation(
       backendSigner
     );
 
-    await ensurePaymasterHasPrefund(entrypointContract, networkConfig.contracts.paymasterAddress!);
-
-    Logger.log('Validating account');
-    if (!accountExists) {
-      throw new Error(
-        `Account ${proxy.proxyAddress} does not exist. Cannot proceed with transfer.`
-      );
+    const ensurePaymasterPrefundResult = await ensurePaymasterHasPrefund(
+      entrypointContract,
+      networkConfig.contracts.paymasterAddress!
+    );
+    if (!ensurePaymasterPrefundResult) {
+      throw new Error(`Cannot make the transaction right now. Please try again later.`);
     }
 
     // Create transfer-specific call data
@@ -118,7 +126,11 @@ export async function sendUserOperation(
 
     return { transactionHash: receipt.receipt.transactionHash };
   } catch (error) {
-    Logger.error('Error in sendUserOperation:', error);
+    Logger.error(
+      `Error in sendUserOperation, from: ${fromNumber}, to: ${to}, ` +
+        `token address: ${tokenAddress}, amount: ${amount}, error: `,
+      error
+    );
     Logger.log('Full error object:', JSON.stringify(error));
     throw error;
   }
@@ -132,19 +144,40 @@ export async function ensureSignerHasEth(
   backendSigner: ethers.Wallet,
   provider: ethers.providers.JsonRpcProvider
 ): Promise<void> {
-  const EOABalance = await provider.getBalance(await signer.getAddress());
-  Logger.log(`Signer balance: ${ethers.utils.formatEther(EOABalance)} ETH`);
-  if (EOABalance.lt(ethers.utils.parseEther('0.0008'))) {
-    Logger.log('Sending ETH to signer.');
-    const tx = await backendSigner.sendTransaction({
-      to: await signer.getAddress(),
-      value: ethers.utils.parseEther('0.001'),
-      gasLimit: 210000
-    });
-    await tx.wait();
-    Logger.log('ETH sent to signer');
+  Logger.log(
+    `Checking if EOA Signer has minimal funds (${SIGNER_MIN_BALANCE}) to make the transaction.`
+  );
+
+  try {
+    const signerWalletAddress = await signer.getAddress();
+
+    const EOABalance = await provider.getBalance(signerWalletAddress);
+    Logger.log(
+      `Signer EOA ${signerWalletAddress} balance: ${ethers.utils.formatEther(EOABalance)} ETH`
+    );
+
+    if (EOABalance.lt(ethers.utils.parseEther(SIGNER_MIN_BALANCE))) {
+      Logger.log(
+        `Sending ${SIGNER_BALANCE_TO_TRANSFER} ETH from backendSigner ${backendSigner.getAddress()} ` +
+          `to EOA signer ${signer.getAddress()}.`
+      );
+
+      const tx = await backendSigner.sendTransaction({
+        to: await signer.getAddress(),
+        value: ethers.utils.parseEther(SIGNER_BALANCE_TO_TRANSFER),
+        gasLimit: 210000
+      });
+
+      await tx.wait();
+      Logger.log('ETH sent to signer');
+    } else {
+      Logger.log('Signer has enough ETH');
+    }
+  } catch (error: unknown) {
+    Logger.error(
+      `Error checking if EOA Signer has minimal funds to make the transaction. Error: ${(error as Error).message}`
+    );
   }
-  Logger.log('Signer has enough ETH');
 }
 
 /**

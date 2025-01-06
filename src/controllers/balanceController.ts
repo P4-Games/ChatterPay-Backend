@@ -19,7 +19,9 @@ import {
  * @returns Promise resolving to deposits status
  */
 export const checkExternalDeposits = async (request: FastifyRequest, reply: FastifyReply) => {
-  const depositsStatus = await fetchExternalDeposits();
+  const fastify = request.server;
+  const simpleSwapContractAddress = fastify.networkConfig.contracts.simpleSwapAddress;
+  const depositsStatus = await fetchExternalDeposits('ARBITRUM_SEPOLIA', simpleSwapContractAddress);
   return reply.status(200).send({ status: depositsStatus });
 };
 
