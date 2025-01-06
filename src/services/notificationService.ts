@@ -24,6 +24,7 @@ import {
   CHATTERPAY_DOMAIN,
   PUSH_CHANNEL_ADDRESS,
   PUSH_CHANNEL_PRIVATE_KEY,
+  BOT_NOTIFICATIONS_ENABLED,
   CHATTERPAY_NFTS_SHARE_URL,
   SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
 } from '../constants/environment';
@@ -41,6 +42,11 @@ const notificationTemplateCache = new NodeCache({ stdTTL: 604800 }); // 1 week
  */
 async function sendBotNotification(payload: OperatorReplyPayload): Promise<string> {
   try {
+    if (!BOT_NOTIFICATIONS_ENABLED) {
+      Logger.info(`Bot notifications are disabled. Omitted payload: ${payload}`);
+      return '';
+    }
+
     const sendMsgEndpint = `${BOT_API_URL}/chatbot/conversations/send-message`;
     const response = await axios.post(sendMsgEndpint, payload, {
       headers: {
