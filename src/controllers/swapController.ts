@@ -76,6 +76,7 @@ async function saveTransaction(
 /**
  * Handles the swap operation.
  */
+// eslint-disable-next-line consistent-return
 export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: FastifyReply) => {
   try {
     if (!request.body) {
