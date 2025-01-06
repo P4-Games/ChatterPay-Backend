@@ -4,14 +4,14 @@ import { FastifyInstance } from 'fastify';
 import { Logger } from '../utils/logger';
 import { getEntryPointABI } from './bucketService';
 import { verifyWalletBalance } from './walletService';
-import { ensureSignerHasEth } from './transferService';
 import { generatePrivateKey } from '../utils/keyGenerator';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
 import { getBlockchain, TokenAddresses } from './blockchainService';
 import { setupERC20, setupContracts } from './contractSetupService';
-import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
+import { addPaymasterData, ensurePaymasterHasEnoughEth } from './paymasterService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
+import { ensureUserSignerHasEnoughEth, ensureBackendSignerHasEnoughEth } from './transferService';
 
 /**
  * Creates callData for token approval
@@ -129,25 +129,53 @@ export async function executeSwap(
     const blockchain = await getBlockchain(chain_id);
     const seedPrivateKey = process.env.PRIVATE_KEY;
     if (!seedPrivateKey) {
-      throw new Error('Seed private key not found in environment variables');
+      throw new Error('Seed private key not found in environment variables.');
     }
 
     const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
     const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } =
       await setupContracts(blockchain, privateKey, fromNumber);
-    const erc20 = await setupERC20(tokenAddresses.tokenAddressInput, signer);
-    Logger.log('Contracts and signers set up.', signer.address);
 
-    const checkBalanceResult = await verifyWalletBalance(erc20, proxy.proxyAddress, amount);
-    if (!checkBalanceResult.enoughBalance) {
+    Logger.log('Validating account');
+    if (!accountExists) {
       throw new Error(
-        `Insufficient balance. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}`
+        `Account ${proxy.proxyAddress} does not exist. Cannot proceed with user operation.`
       );
     }
-    Logger.log('Balance check passed');
 
-    await ensureSignerHasEth(signer, backendSigner, provider);
-    Logger.log('Signer has enough ETH');
+    const erc20 = await setupERC20(tokenAddresses.tokenAddressInput, signer);
+    const checkUserTokenBalanceResult = await verifyWalletBalance(
+      erc20,
+      proxy.proxyAddress,
+      amount
+    );
+    if (!checkUserTokenBalanceResult.enoughBalance) {
+      throw new Error(
+        `User Wallet ${proxy.proxyAddress}, insufficient Token balance. Required: ${checkUserTokenBalanceResult.amountToCheck}, Available: ${checkUserTokenBalanceResult.walletBalance}`
+      );
+    }
+
+    const backendSignerWalletAddress = await backendSigner.getAddress();
+    const checkBackendSignerBalanceresult = await ensureBackendSignerHasEnoughEth(
+      backendSignerWalletAddress,
+      provider
+    );
+    if (!checkBackendSignerBalanceresult) {
+      throw new Error(
+        `Backend Signer Wallet ${backendSignerWalletAddress}, insufficient ETH balance.`
+      );
+    }
+
+    const userWalletAddress = await signer.getAddress();
+    const checkUserEthBalanceResult = await ensureUserSignerHasEnoughEth(
+      userWalletAddress,
+      backendSigner,
+      provider
+    );
+    if (!checkUserEthBalanceResult) {
+      Logger.error(`User Wallet ${proxy.proxyAddress}, does not have enough ETH.`);
+      throw new Error(`User Wallet ${proxy.proxyAddress}, insufficient ETH balance.`);
+    }
 
     const { networkConfig } = fastify;
     const entrypointABI = await getEntryPointABI();
@@ -157,11 +185,12 @@ export async function executeSwap(
       backendSigner
     );
 
-    await ensurePaymasterHasPrefund(entrypointContract, networkConfig.contracts.paymasterAddress!);
-
-    Logger.log('Validating account');
-    if (!accountExists) {
-      throw new Error(`Account ${proxy.proxyAddress} does not exist`);
+    const ensurePaymasterPrefundResult = await ensurePaymasterHasEnoughEth(
+      entrypointContract,
+      networkConfig.contracts.paymasterAddress!
+    );
+    if (!ensurePaymasterPrefundResult) {
+      throw new Error(`Cannot make the transaction right now. Please try again later.`);
     }
 
     // Create SimpleSwap contract instance
