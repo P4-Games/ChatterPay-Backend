@@ -71,7 +71,12 @@ async function getAddressBalance(
 }
 
 /**
+ *
  * Route handler for getting wallet balance
+ *
+ * @param request
+ * @param reply
+ * @returns
  */
 export const walletBalance = async (
   request: FastifyRequest<{ Params: { wallet: string } }>,
@@ -88,7 +93,12 @@ export const walletBalance = async (
 };
 
 /**
+ *
  * Route handler for getting balance by phone number
+ *
+ * @param request
+ * @param reply
+ * @returns
  */
 export const balanceByPhoneNumber = async (
   request: FastifyRequest,

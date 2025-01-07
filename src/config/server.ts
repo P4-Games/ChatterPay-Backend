@@ -11,7 +11,6 @@ import { PORT, CURRENT_LOG_LEVEL } from '../constants/environment';
 
 /**
  * Starts the Fastify server with all necessary configurations.
- *
  * @returns {Promise<FastifyInstance>} A promise that resolves to the configured Fastify server instance
  */
 export async function startServer(): Promise<FastifyInstance> {

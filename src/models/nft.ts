@@ -1,7 +1,5 @@
 import { model, Schema, Document } from 'mongoose';
 
-// Interfaz que representa el documento en la colección 'nfts'
-
 export interface INFTMetadata {
   image_url: {
     gcp?: string;
@@ -69,7 +67,6 @@ const NFTSchema = new Schema<INFT>({
   }
 });
 
-// Crear el modelo basado en el esquema
 const NFTModel = model<INFT>('NFTs', NFTSchema, 'nfts');
 
 export default NFTModel;

@@ -13,6 +13,8 @@ export const PUBLIC_ROUTES = [
 
 /**
  * Function that checks if the current route is public or not
+ * @param route
+ * @returns
  */
 export const isPublicRoute = (route: string): boolean =>
   PUBLIC_ROUTES.some((publicRoute) => {

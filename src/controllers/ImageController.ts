@@ -18,6 +18,12 @@ interface UploadResponse {
   error?: string;
 }
 
+/**
+ *
+ * @param imageUrl
+ * @param fileName
+ * @returns
+ */
 async function processAndUploadImage(imageUrl: string, fileName: string): Promise<UploadResponse> {
   try {
     const processedImageBuffer = await downloadAndProcessImage(imageUrl);
@@ -41,6 +47,12 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
   }
 }
 
+/**
+ *
+ * @param request
+ * @param reply
+ * @returns
+ */
 export const uploadImage: RouteHandlerMethod = async (
   request: FastifyRequest,
   reply: FastifyReply
