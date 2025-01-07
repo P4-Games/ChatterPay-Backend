@@ -39,11 +39,14 @@ const notificationTemplateCache = new NodeCache({ stdTTL: 604800 }); // 1 week
 
 /**
  * Sends an operator reply to the API.
+ *
+ * @param payload
+ * @returns
  */
 async function sendBotNotification(payload: OperatorReplyPayload): Promise<string> {
   try {
     if (!BOT_NOTIFICATIONS_ENABLED) {
-      Logger.info(`Bot notifications are disabled. Omitted payload: ${payload}`);
+      Logger.info(`Bot notifications are disabled. Omitted payload: ${JSON.stringify(payload)}`);
       return '';
     }
 
@@ -62,6 +65,7 @@ async function sendBotNotification(payload: OperatorReplyPayload): Promise<strin
 }
 
 /**
+ * Send Push Notificaiton
  *
  * @param title Notification Title
  * @param msg Notification Message
@@ -77,7 +81,7 @@ export async function sendPushNotificaton(
 ): Promise<boolean> {
   try {
     if (!PUSH_ENABLED) {
-      Logger.info(`Push notifications are disabled, PUSH_ENABLED env variable: ${PUSH_ENABLED}.`);
+      Logger.info(`Push notifications are disabled.`);
       return true;
     }
 
@@ -129,6 +133,7 @@ export async function sendPushNotificaton(
 
 /**
  * Gets user language based on the phone number.
+ *
  * @param phoneNumber
  * @returns
  */
@@ -157,6 +162,7 @@ export const getUserSettingsLanguage = async (phoneNumber: string): Promise<Lang
 
 /**
  * Get Notification Template based on channel User Id and Notification Type
+ *
  * @param channelUserId
  * @param typeOfNotification
  * @returns
@@ -212,6 +218,7 @@ async function getNotificationTemplate(
 }
 
 /**
+ * Subscribe User To Push Channel
  *
  * @param user_private_key
  * @param user_address
@@ -257,6 +264,7 @@ export async function subscribeToPushChannel(
 
 /**
  * Sends wallet creation notification.
+ *
  * @param address_of_user
  * @param channel_user_id
  */
@@ -282,6 +290,7 @@ export async function sendWalletCreationNotification(
 
 /**
  * Sends a notification for a transfer.
+ *
  * @param address_of_user
  * @param channel_user_id
  * @param from
@@ -326,6 +335,7 @@ export async function sendTransferNotification(
 
 /**
  * Sends a notification for a swap.
+ *
  * @param channel_user_id
  * @param token
  * @param amount
@@ -377,6 +387,7 @@ export async function sendSwapNotification(
 
 /**
  * Sends a notification for minted certificates and on-chain memories.
+ *
  * @param address_of_user
  * @param channel_user_id
  * @param id
@@ -415,6 +426,7 @@ export async function sendMintNotification(
 
 /**
  * Sends a notification for an outgoing transfer.
+ *
  * @param address_of_user
  * @param channel_user_id
  * @param walletTo
@@ -462,6 +474,7 @@ export async function sendOutgoingTransferNotification(
     throw error;
   }
 }
+
 /**
  * Sends a notification when user balance not enough
  *
