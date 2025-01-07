@@ -494,3 +494,36 @@ export async function sendUserInsufficientBalanceNotification(
     throw error;
   }
 }
+
+/**
+ * Sends a notification when blockchain condition are invalid
+ *
+ * @param address_of_user
+ * @param channel_user_id
+ */
+export async function sendNoValidBlockchainConditionsNotification(
+  address_of_user: string,
+  channel_user_id: string
+) {
+  try {
+    Logger.log(`Sending blockchain conditions invalid notification to ${address_of_user}`);
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.no_valid_blockchain_conditions
+    );
+
+    const payload: OperatorReplyPayload = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message
+    };
+
+    const data = await sendBotNotification(payload);
+    sendPushNotificaton(title, message, channel_user_id); // avoid await
+    return data;
+  } catch (error) {
+    Logger.error('Error in sendNoValidBlockchainConditionsNotification:', error);
+    throw error;
+  }
+}
