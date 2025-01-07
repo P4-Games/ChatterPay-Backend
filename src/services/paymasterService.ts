@@ -1,8 +1,8 @@
 import { ethers } from 'ethers';
 
-import { Logger } from '../utils/logger';
-import { createPaymasterAndData } from '../utils/paymaster';
+import { Logger } from '../helpers/loggerHelper';
 import { PackedUserOperationType } from '../types/userOperation';
+import { createPaymasterAndData } from '../helpers/paymasterHelper';
 import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../constants/environment';
 
 /**

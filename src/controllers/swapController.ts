@@ -1,14 +1,14 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { Logger } from '../utils/logger';
+import { Logger } from '../helpers/loggerHelper';
 import { executeSwap } from '../services/swapService';
 import { SIGNING_KEY } from '../constants/environment';
 import { setupERC20 } from '../services/contractSetupService';
 import { saveTransaction } from '../services/transferService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
 import {
   TokenAddressesType,
   ExecuteSwapResultType,

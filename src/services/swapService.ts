@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 
-import { Logger } from '../utils/logger';
+import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
 import { setupERC20 } from './contractSetupService';
 import { addPaymasterData } from './paymasterService';

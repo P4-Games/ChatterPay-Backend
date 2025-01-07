@@ -1,9 +1,9 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { Logger } from '../utils/logger';
 import { User, IUser } from '../models/user';
+import { Logger } from '../helpers/loggerHelper';
 import { createUserWithWallet } from '../services/userService';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
 
 /**
  * Handles the creation of a new wallet.

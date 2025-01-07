@@ -1,13 +1,13 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
-import { Logger } from '../utils/logger';
+import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
 import { SIGNING_KEY } from '../constants/environment';
-import { getDynamicGas } from '../utils/dynamicGasHelper';
-import { generatePrivateKey } from '../utils/keyGenerator';
+import { getDynamicGas } from '../helpers/dynamicGasHelper';
 import { getChatterPayWalletFactoryABI } from './bucketService';
+import { generatePrivateKey } from '../helpers/keyGeneratorHelper';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {

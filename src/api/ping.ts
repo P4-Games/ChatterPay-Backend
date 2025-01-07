@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 
-import { Logger } from '../utils/logger';
+import { Logger } from '../helpers/logger';
 import { getEntryPointABI } from '../services/bucketService';
 import { sendTransferNotification } from '../services/notificationService';
 
