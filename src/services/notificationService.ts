@@ -462,3 +462,35 @@ export async function sendOutgoingTransferNotification(
     throw error;
   }
 }
+/**
+ * Sends a notification when user balance not enough
+ *
+ * @param address_of_user
+ * @param channel_user_id
+ */
+export async function sendUserInsufficientBalanceNotification(
+  address_of_user: string,
+  channel_user_id: string
+) {
+  try {
+    Logger.log(`Sending User Insufficient Balance notification to ${address_of_user}`);
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.user_balance_not_enough
+    );
+
+    const payload: OperatorReplyPayload = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message
+    };
+
+    const data = await sendBotNotification(payload);
+    sendPushNotificaton(title, message, channel_user_id); // avoid await
+    return data;
+  } catch (error) {
+    Logger.error('Error in sendUserInsufficientBalanceNotification:', error);
+    throw error;
+  }
+}
