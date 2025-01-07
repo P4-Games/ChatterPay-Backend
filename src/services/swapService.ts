@@ -1,12 +1,11 @@
 import { ethers } from 'ethers';
 
 import { Logger } from '../utils/logger';
-import Transaction from '../models/transaction';
-import { ExecuteSwapResultType, TokenAddressesType } from '../types/common';
 import { IBlockchain } from '../models/blockchain';
 import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
+import { TokenAddressesType, ExecuteSwapResultType } from '../types/common';
 import { setupERC20, setupContractReturnType } from './contractSetupService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
 
@@ -198,26 +197,4 @@ export async function executeSwap(
     Logger.error('Error in executeSwap:', error);
     return { success: false, approveTransactionHash: '', swapTransactionHash: '' };
   }
-}
-
-/**
- * Saves the transaction details to the database.
- */
-export async function saveSwapTransaction(
-  tx: string,
-  walletFrom: string,
-  walletTo: string,
-  amount: number,
-  currency: string
-) {
-  await Transaction.create({
-    trx_hash: tx,
-    wallet_from: walletFrom,
-    wallet_to: walletTo,
-    type: 'swap',
-    date: new Date(),
-    status: 'completed',
-    amount,
-    token: currency
-  });
 }
