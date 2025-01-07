@@ -1,14 +1,15 @@
+import { Web3 } from 'web3';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import web3 from '../helpers/web3Helper';
 import { User, IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
+import { INFURA_API_KEY } from '../config/constants';
 import { getOrCreateUser } from '../services/userService';
 import Transaction, { ITransaction } from '../models/transaction';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import { saveTransaction, sendUserOperation } from '../services/transferService';
 import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { ExecueTransactionResultType, CheckBalanceConditionsResultType } from '../types/common';
 import {
   sendTransferNotification,
@@ -79,6 +80,8 @@ export const checkTransactionStatus = async (
   const { trx_hash } = request.params;
 
   try {
+    const web3 = new Web3(`https://mainnet.infura.io/v3/${INFURA_API_KEY}`);
+
     const transaction = await Transaction.findOne({ trx_hash });
     if (!transaction) {
       return await returnErrorResponse(reply, 404, 'Transaction not found');

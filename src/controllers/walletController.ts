@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { User, IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
 import { createUserWithWallet } from '../services/userService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**
  * Handles the creation of a new wallet.

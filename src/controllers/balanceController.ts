@@ -4,7 +4,7 @@ import { User } from '../models/user';
 import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import {
   getFiatQuotes,
   getTokenBalances,

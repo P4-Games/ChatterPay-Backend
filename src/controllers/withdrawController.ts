@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { withdrawWalletAllFunds } from '../services/transferService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**
  * Handles the withdrwal all funds
