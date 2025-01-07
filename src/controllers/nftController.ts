@@ -3,8 +3,8 @@ import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { IUser } from '../models/user';
-import { Logger } from '../utils/logger';
-import { isValidUrl } from '../utils/paramsUtils';
+import { Logger } from '../utils/loggerHelper';
+
 import { SIGNING_KEY } from '../constants/environment';
 import { getDynamicGas } from '../utils/dynamicGasHelper';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
@@ -13,8 +13,9 @@ import { createUserWithWallet } from '../services/userService';
 import { getWalletByPhoneNumber } from '../services/walletService';
 import { sendMintNotification } from '../services/notificationService';
 import { defaultNftImage, networkChainIds } from '../constants/blockchain';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatterHelper';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
+import { isValidUrl } from '../utils/validationHelper';
 
 export interface NFTInfo {
   description: string;

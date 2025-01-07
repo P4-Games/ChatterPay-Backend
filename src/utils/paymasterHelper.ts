@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 
-import { Logger } from './logger';
+import { Logger } from './loggerHelper';
 
 /**
  * Creates the paymasterAndData field with required signature and expiration

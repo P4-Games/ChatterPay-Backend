@@ -2,8 +2,8 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify, { FastifyInstance } from 'fastify';
 
 import { setupSwagger } from './swagger';
-import { Logger } from '../utils/logger';
 import { setupRoutes } from '../api/routes';
+import { Logger } from '../utils/loggerHelper';
 import { setupMiddleware } from '../middleware/bodyParser';
 import networkConfigPlugin from '../plugins/networkConfig';
 import { authMiddleware } from '../middleware/authMiddleware';

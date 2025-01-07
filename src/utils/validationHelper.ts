@@ -22,3 +22,13 @@ export function isValidPhoneNumber(input: string): boolean {
   // Additional checks can be added here for specific country formats if needed
   return true;
 }
+
+/**
+ * VAlidate if an strin is valid url
+ * @param url
+ * @returns
+ */
+export const isValidUrl = (url: string): boolean => {
+  const urlPattern = /^(https?:\/\/)?([\w-]+\.)+[\w-]+(\/[\w- ./?%&=]*)?$/;
+  return urlPattern.test(url);
+};

@@ -7,8 +7,8 @@ import { ethers } from 'ethers';
 import mongoose from 'mongoose';
 
 import { IUser } from '../src/models/user';
-import { Logger } from '../src/utils/logger';
-import { generatePrivateKey } from '../src/utils/keyGenerator';
+import { Logger } from '../src/utils/loggerHelper';
+import { generatePrivateKey } from '../src/utils/keyGeneratorHelper';
 
 dotenv.config();
 

@@ -3,7 +3,7 @@ import NodeCache from 'node-cache';
 
 import { User } from '../models/user';
 import { IToken } from '../models/token';
-import { Logger } from '../utils/logger';
+import { Logger } from '../utils/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
 import { setupERC20 } from './contractSetupService';
 import { getTokenAddress } from './blockchainService';

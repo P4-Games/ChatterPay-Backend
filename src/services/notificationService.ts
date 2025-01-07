@@ -3,12 +3,12 @@ import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
 
-import { Logger } from '../utils/logger';
 import { User, IUser } from '../models/user';
+import { Logger } from '../utils/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
-import { isValidPhoneNumber } from '../utils/validations';
 import { getTemplate, templateEnum } from './templateService';
+import { isValidPhoneNumber } from '../utils/validationHelper';
 import {
   LanguageEnum,
   ITemplateSchema,

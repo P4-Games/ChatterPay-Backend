@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 
+
 /**
  * Registers the ping route with the Fastify instance.
  * @param {FastifyInstance} fastify - The Fastify instance

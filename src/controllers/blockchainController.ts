@@ -1,8 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { Logger } from '../utils/logger';
+import { Logger } from '../utils/loggerHelper';
 import Blockchain, { IBlockchain } from '../models/blockchain';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatterHelper';
 
 type BlockchainParams = { id: string };
 type BlockchainBody = IBlockchain | Partial<IBlockchain>;

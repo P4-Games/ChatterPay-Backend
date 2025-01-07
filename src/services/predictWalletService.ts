@@ -1,14 +1,15 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
-import { Logger } from '../utils/logger';
+import { Logger } from '../utils/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
 import { SIGNING_KEY } from '../constants/environment';
-import { getDynamicGas } from '../utils/dynamicGasHelper';
-import { generatePrivateKey } from '../utils/keyGenerator';
+
 import { getChatterPayWalletFactoryABI } from './bucketService';
-import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
+import { generatePrivateKey } from '../utils/keyGeneratorHelper';
+import { ChatterPayWalletFactory, ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
+import { getDynamicGas } from '../utils/dynamicGasHelper';
 
 export interface PhoneNumberToAddress {
   hashedPrivateKey: string;
@@ -99,3 +100,4 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
     privateKeyNotHashed: ownerAddress.privateKey
   };
 }
+

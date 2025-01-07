@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import { IUser } from '../models/user';
 import { getUser } from './userService';
 import { IToken } from '../models/token';
-import { Logger } from '../utils/logger';
+import { Logger } from '../utils/loggerHelper';
 import Transaction from '../models/transaction';
 import { IBlockchain } from '../models/blockchain';
 import { getTokenBalances } from './walletService';

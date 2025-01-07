@@ -6,7 +6,7 @@
  */
 import crypto from 'crypto';
 
-import { Logger } from '../src/utils/logger';
+import { Logger } from '../src/utils/loggerHelper';
 
 /**
  * Generate Secure Token

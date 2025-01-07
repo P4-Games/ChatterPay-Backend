@@ -9,7 +9,7 @@ import { AssetManager } from '@dfinity/assets';
 import { Ed25519KeyIdentity } from '@dfinity/identity';
 import { mnemonicToSeed, validateMnemonic } from 'bip39';
 
-import { Logger } from '../utils/logger';
+import { Logger } from '../utils/loggerHelper';
 import {
   PINATA_JWT,
   ICP_MNEMONIC,

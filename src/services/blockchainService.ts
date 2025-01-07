@@ -1,11 +1,11 @@
 import { ethers } from 'ethers';
 
 import { IToken } from '../models/token';
-import { Logger } from '../utils/logger';
+import { Logger } from '../utils/loggerHelper';
 import { getEntryPointABI } from './bucketService';
 import { setupContracts } from './contractSetupService';
-import { generatePrivateKey } from '../utils/keyGenerator';
 import Blockchain, { IBlockchain } from '../models/blockchain';
+import { generatePrivateKey } from '../utils/keyGeneratorHelper';
 import { ensurePaymasterHasEnoughEth } from './paymasterService';
 import {
   TokenAddressesType,
