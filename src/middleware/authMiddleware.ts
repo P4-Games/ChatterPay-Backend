@@ -1,6 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { isPublicRoute } from '../config/publicRoutes';
 import { returnErrorResponse } from '../helpers/responseFormatterHelper';
 import { FRONTEND_TOKEN, CHATIZALO_TOKEN } from '../constants/environment';
 
@@ -22,6 +21,41 @@ async function verifyToken(providedToken: string): Promise<TokenResponse> {
 
   return res;
 }
+
+/**
+ * Public routes constants
+ */
+const PUBLIC_ROUTES = [
+  '/ping',
+  '/nft/metadata/opensea/*',
+  '/nfts*',
+  '/nft/<id>',
+  '/last_nft*',
+  '/nft_info*',
+  '/balance/*'
+];
+
+/**
+ * Function that checks if the current route is public or not
+ * @param route
+ * @returns
+ */
+const isPublicRoute = (route: string): boolean =>
+  PUBLIC_ROUTES.some((publicRoute) => {
+    if (publicRoute.includes('*')) {
+      return route.startsWith(publicRoute.replace(/\*/g, ''));
+    }
+    if (publicRoute.includes('<id>')) {
+      // Match exactly /nft/ followed by numbers only and nothing after
+      const nftIdMatch = route.match(/^\/nft\/(\d+)$/);
+      if (!nftIdMatch) return false;
+
+      // Ensure there are no letters in the id
+      const id = nftIdMatch[1];
+      return /^\d+$/.test(id);
+    }
+    return publicRoute === route;
+  });
 
 /**
  * Middleware function to authenticate requests using a Bearer token.

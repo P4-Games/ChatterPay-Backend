@@ -1,10 +1,10 @@
 import { FastifyInstance } from 'fastify';
 
-import { pingRoutes } from './pingRoutes';
 import nftRoutes from './nftRoutes';
 import swapRoutes from './swapRoutes';
 import userRoutes from './userRoutes';
 import tokenRoutes from './tokenRoutes';
+import { pingRoutes } from './pingRoutes';
 import uploadRoutes from './uploadRoutes';
 import { walletRouter } from './walletRoutes';
 import { balanceRoutes } from './balanceRoutes';

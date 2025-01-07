@@ -1,4 +1,3 @@
-
 import { FastifyInstance } from 'fastify';
 
 /**
