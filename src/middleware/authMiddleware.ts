@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { FRONTEND_TOKEN, CHATIZALO_TOKEN } from '../config/constants';
-import { returnErrorResponse } from '../helpers/responseFormatterHelper';
+import { returnErrorResponse } from '../helpers/requestHelper';
 
 /**
  * Represents the possible token types that can be verified
