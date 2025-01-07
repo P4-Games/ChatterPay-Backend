@@ -1,5 +1,8 @@
 /**
  * Function that validates if a given input is a phone number
+ *
+ * @param input
+ * @returns
  */
 export function isValidPhoneNumber(input: string): boolean {
   // Remove any non-digit characters
@@ -17,6 +20,5 @@ export function isValidPhoneNumber(input: string): boolean {
   }
 
   // Additional checks can be added here for specific country formats if needed
-
   return true;
 }

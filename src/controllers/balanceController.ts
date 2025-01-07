@@ -22,7 +22,7 @@ export const checkExternalDeposits = async (request: FastifyRequest, reply: Fast
   const fastify = request.server;
   const simpleSwapContractAddress = fastify.networkConfig.contracts.simpleSwapAddress;
   const depositsStatus = await fetchExternalDeposits('ARBITRUM_SEPOLIA', simpleSwapContractAddress);
-  return reply.status(200).send({ status: depositsStatus });
+  return returnSuccessResponse(reply, depositsStatus);
 };
 
 /**
@@ -71,7 +71,12 @@ async function getAddressBalance(
 }
 
 /**
+ *
  * Route handler for getting wallet balance
+ *
+ * @param request
+ * @param reply
+ * @returns
  */
 export const walletBalance = async (
   request: FastifyRequest<{ Params: { wallet: string } }>,
@@ -88,7 +93,12 @@ export const walletBalance = async (
 };
 
 /**
+ *
  * Route handler for getting balance by phone number
+ *
+ * @param request
+ * @param reply
+ * @returns
  */
 export const balanceByPhoneNumber = async (
   request: FastifyRequest,

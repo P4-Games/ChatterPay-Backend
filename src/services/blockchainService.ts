@@ -3,11 +3,15 @@ import { ethers } from 'ethers';
 import { IToken } from '../models/token';
 import { Logger } from '../utils/logger';
 import { getEntryPointABI } from './bucketService';
+import { setupContracts } from './contractSetupService';
 import { generatePrivateKey } from '../utils/keyGenerator';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { ensurePaymasterHasEnoughEth } from './paymasterService';
-import { setupContracts, setupContractReturnType } from './contractSetupService';
-import { TokenAddressesType, CheckBalanceConditionsResultType } from '../types/common';
+import {
+  TokenAddressesType,
+  setupContractReturnType,
+  CheckBalanceConditionsResultType
+} from '../types/common';
 import {
   USER_SIGNER_MIN_BALANCE,
   BACKEND_SIGNER_MIN_BALANCE,

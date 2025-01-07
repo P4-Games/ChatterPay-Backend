@@ -1,8 +1,8 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { returnErrorResponse } from '../utils/responseFormatter';
 import { withdrawWalletAllFunds } from '../services/transferService';
+import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 
 /**
  * Handles the withdrwal all funds
@@ -50,7 +50,7 @@ export const withdrawAllFunds = async (
     );
 
     if (witthdrawResult.result) {
-      return await reply.status(200).send({ message: 'Withdraw all funds completed successfully' });
+      return await returnSuccessResponse(reply, 'Withdraw all funds completed successfully');
     }
 
     return await returnErrorResponse(reply, 400, witthdrawResult.message);

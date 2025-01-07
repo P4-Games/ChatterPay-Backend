@@ -2,8 +2,8 @@ import { FastifyInstance } from 'fastify';
 
 import {
   createToken,
-  updateToken,
   deleteToken,
+  updateToken,
   getAllTokens,
   getTokenById,
   issueTokensHandler

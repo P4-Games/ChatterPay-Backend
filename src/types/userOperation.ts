@@ -27,3 +27,40 @@ export interface PackedUserOperationType {
   /** The signature of the operation */
   signature: string;
 }
+
+export interface UserOperationReceiptData {
+  transactionHash: string;
+  transactionIndex: string;
+  blockHash: string;
+  blockNumber: string;
+  from: string;
+  to: string;
+  cumulativeGasUsed: string;
+  gasUsed: string;
+  contractAddress: string | null;
+  logs: Array<{
+    address: string;
+    topics: string[];
+    data: string;
+  }>;
+  logsBloom: string;
+  status: string;
+}
+
+export interface UserOperationReceipt {
+  userOpHash: string;
+  entryPoint: string;
+  sender: string;
+  nonce: string;
+  paymaster: string;
+  actualGasCost: string;
+  actualGasUsed: string;
+  success: boolean;
+  reason: string;
+  logs: Array<{
+    address: string;
+    topics: string[];
+    data: string;
+  }>;
+  receipt: UserOperationReceiptData;
+}

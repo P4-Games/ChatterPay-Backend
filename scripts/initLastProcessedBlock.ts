@@ -9,14 +9,12 @@ dotenv.config();
 const MONGODB_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/your_database';
 const NETWORK_NAME = 'ARBITRUM_SEPOLIA';
 
-// Configuración de Alchemy
 const settings = {
   apiKey: process.env.ALCHEMY_API_KEY,
   network: Network.ARB_SEPOLIA
 };
 const alchemy = new Alchemy(settings);
 
-// Modelo de MongoDB
 const LastProcessedBlockSchema = new mongoose.Schema({
   networkName: { type: String, required: true, unique: true },
   blockNumber: { type: Number, required: true },
@@ -25,11 +23,18 @@ const LastProcessedBlockSchema = new mongoose.Schema({
 
 const LastProcessedBlock = mongoose.model('LastProcessedBlock', LastProcessedBlockSchema);
 
+/**
+ * Get Lastest Block Number
+ * @returns
+ */
 async function getLatestBlockNumber(): Promise<number> {
   const latestBlock = await alchemy.core.getBlockNumber();
   return latestBlock;
 }
 
+/**
+ * Initialize Last Processed Block
+ */
 async function initializeLastProcessedBlock() {
   try {
     await mongoose.connect(MONGODB_URI);
@@ -56,5 +61,4 @@ async function initializeLastProcessedBlock() {
   }
 }
 
-// Ejecutar el script
 initializeLastProcessedBlock().catch(Logger.error);

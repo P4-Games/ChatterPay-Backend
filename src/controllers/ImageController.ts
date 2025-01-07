@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 import { User } from '../models/user';
 import { Logger } from '../utils/logger';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
+import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 
 interface UploadBody {
   phone_number: string;
@@ -18,6 +18,12 @@ interface UploadResponse {
   error?: string;
 }
 
+/**
+ *
+ * @param imageUrl
+ * @param fileName
+ * @returns
+ */
 async function processAndUploadImage(imageUrl: string, fileName: string): Promise<UploadResponse> {
   try {
     const processedImageBuffer = await downloadAndProcessImage(imageUrl);
@@ -41,6 +47,12 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
   }
 }
 
+/**
+ *
+ * @param request
+ * @param reply
+ * @returns
+ */
 export const uploadImage: RouteHandlerMethod = async (
   request: FastifyRequest,
   reply: FastifyReply

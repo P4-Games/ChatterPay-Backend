@@ -7,11 +7,11 @@ import { Logger } from '../utils/logger';
 import Transaction from '../models/transaction';
 import { IBlockchain } from '../models/blockchain';
 import { getTokenBalances } from './walletService';
+import { setupERC20 } from './contractSetupService';
 import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
 import { checkBlockchainConditions } from './blockchainService';
-import { waitForUserOperationReceipt } from '../utils/waitForTX';
-import { setupERC20, setupContractReturnType } from './contractSetupService';
+import { waitForUserOperationReceipt } from './userOpExecutorService';
 import {
   signUserOperation,
   createTransferCallData,
@@ -19,6 +19,7 @@ import {
 } from './userOperationService';
 import {
   TokenBalanceType,
+  setupContractReturnType,
   ExecueTransactionResultType,
   CheckBalanceConditionsResultType
 } from '../types/common';

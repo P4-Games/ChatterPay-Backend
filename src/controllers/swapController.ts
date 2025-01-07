@@ -103,7 +103,6 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     /* 2. swap: send initial response                        */
     /* ***************************************************** */
     await returnSuccessResponse(reply, 'Swap in progress, it may take a few minutes.');
-    // await reply.status(200).send({ message: 'Swap in progress, it may take a few minutes.' });
 
     /* ***************************************************** */
     /* 3. swap: check user balance                           */

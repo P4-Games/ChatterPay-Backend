@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { isPublicRoute } from '../config/publicRoutes';
 import { verifyToken, TokenResponse } from '../config/token';
+import { returnErrorResponse } from '../utils/responseFormatter';
 
 /**
  * Middleware function to authenticate requests using a Bearer token.
@@ -21,7 +22,7 @@ import { verifyToken, TokenResponse } from '../config/token';
  * 5. If any step fails, it sends a 401 response with an error message.
  */
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  // Skip authentication for the /ping endpoint, and the opensea NFT metadata
+  // Skip authentication for public routes (ping, opensea metadata, etc.)
   if (isPublicRoute(request.url)) {
     return;
   }
@@ -29,7 +30,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   const authHeader: string | undefined = request.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    reply.code(401).send({ error: 'Authentication token was not provided' });
+    returnErrorResponse(reply, 401, 'Authentication token was not provided');
     return;
   }
 
@@ -38,7 +39,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   const tokenType: TokenResponse = await verifyToken(token);
 
   if (!tokenType) {
-    reply.code(401).send({ error: 'Invalid Token' });
+    returnErrorResponse(reply, 401, 'Invalid Authorization Token');
     return;
   }
 

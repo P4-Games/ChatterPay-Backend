@@ -283,10 +283,7 @@ export const issueTokensHandler = async (
 
     const results = await issueTokensCore(address, request.server);
 
-    return await reply.status(201).send({
-      message: 'Tokens minted successfully',
-      results
-    });
+    return await returnSuccessResponse(reply, 'Tokens minted successfully', { results });
   } catch (error) {
     Logger.error('Error minting tokens:', error);
     if (error instanceof Error) {
