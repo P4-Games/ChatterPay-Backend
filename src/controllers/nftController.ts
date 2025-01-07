@@ -14,7 +14,7 @@ import { getWalletByPhoneNumber } from '../services/walletService';
 import { sendMintNotification } from '../services/notificationService';
 import { defaultNftImage, networkChainIds } from '../constants/blockchain';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
+import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 
 export interface NFTInfo {
   description: string;
@@ -507,10 +507,7 @@ export const getLastNFT = async (
     const returnUrl = `https://api.whatsapp.com/send/?phone=5491164629653&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`;
 
     if (isPostman) {
-      return await reply.send({
-        message: 'URL para compartir el NFT',
-        url: returnUrl
-      });
+      return await returnSuccessResponse(reply, 'URL para compartir el NFT', { url: returnUrl });
     }
 
     reply.redirect(returnUrl);
@@ -582,7 +579,7 @@ export const getNftList = async (
     const nfts = await NFTModel.find({ id: tokenId });
 
     if (nfts.length === 0) {
-      return await reply.status(400).send({ message: 'NFT not found' });
+      return await returnErrorResponse(reply, 400, 'NFT not found');
     }
 
     const nft = nfts[0];
@@ -624,6 +621,8 @@ export const getNftMetadataRequiredByOpenSea = async (
     const { id: bddId } = request.params;
 
     if (!mongoose.Types.ObjectId.isValid(bddId)) {
+      // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
+      // OpenSea which requires this format.
       return await reply.status(400).send({
         message:
           'The parameter "id" must be a valid MongoDB ObjectId format, as the NFT is minted with the _id field.'
@@ -634,11 +633,15 @@ export const getNftMetadataRequiredByOpenSea = async (
     const nfts: INFT[] = await NFTModel.find({ _id: objectId });
 
     if (nfts.length === 0) {
+      // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
+      // OpenSea which requires this format.
       return await reply.status(400).send({ message: 'NFT not found.' });
     }
 
     const nft: INFT = nfts[0];
 
+    // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
+    // OpenSea which requires this format.
     return await reply.status(200).send({
       id: nft._id,
       name: 'Chatterpay',
@@ -702,6 +705,8 @@ export const getNftMetadataRequiredByOpenSea = async (
     });
   } catch (error) {
     Logger.error('Error al obtener el NFT:', error);
+    // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
+    // OpenSea which requires this format.
     return reply.status(500).send({ message: 'Internal Server Error' });
   }
 };
