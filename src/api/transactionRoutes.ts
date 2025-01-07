@@ -3,8 +3,8 @@ import { FastifyInstance } from 'fastify';
 import {
   makeTransaction,
   createTransaction,
-  updateTransaction,
   deleteTransaction,
+  updateTransaction,
   getAllTransactions,
   getTransactionById,
   checkTransactionStatus
