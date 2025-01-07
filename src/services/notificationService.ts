@@ -527,3 +527,36 @@ export async function sendNoValidBlockchainConditionsNotification(
     throw error;
   }
 }
+
+/**
+ * Sends a notification when internal error
+ *
+ * @param address_of_user
+ * @param channel_user_id
+ */
+export async function sendInternalErrorNotification(
+  address_of_user: string,
+  channel_user_id: string
+) {
+  try {
+    Logger.log(`Sending internal error notification to ${address_of_user}`);
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.internal_error
+    );
+
+    const payload: OperatorReplyPayload = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message
+    };
+
+    const data = await sendBotNotification(payload);
+    sendPushNotificaton(title, message, channel_user_id); // avoid await
+    return data;
+  } catch (error) {
+    Logger.error('Error in sendInternalErrorNotification:', error);
+    throw error;
+  }
+}
