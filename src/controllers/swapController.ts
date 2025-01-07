@@ -7,8 +7,8 @@ import { executeSwap } from '../services/swapService';
 import { setupERC20 } from '../services/contractSetupService';
 import { saveTransaction } from '../services/transferService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
-import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
 import {
   TokenAddressesType,
   ExecuteSwapResultType,

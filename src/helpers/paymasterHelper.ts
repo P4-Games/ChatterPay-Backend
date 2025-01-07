@@ -2,12 +2,12 @@ import { ethers, Contract, BigNumber } from 'ethers';
 
 import { Logger } from './loggerHelper';
 
-
 /**
  * Decodes and validates the paymasterAndData field
  * @param paymasterAndData - The encoded paymaster data
  * @returns Decoded components and validation status
  */
+/*
 function decodePaymasterAndData(paymasterAndData: string): {
   paymasterAddress: string;
   signature: string;
@@ -36,7 +36,7 @@ function decodePaymasterAndData(paymasterAndData: string): {
     hasExpired
   };
 }
-
+  */
 
 /**
  * Creates the paymasterAndData field with required signature and expiration

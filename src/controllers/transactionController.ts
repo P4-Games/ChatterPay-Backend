@@ -8,8 +8,8 @@ import { getOrCreateUser } from '../services/userService';
 import Transaction, { ITransaction } from '../models/transaction';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import { saveTransaction, sendUserOperation } from '../services/transferService';
-import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
 import { ExecueTransactionResultType, CheckBalanceConditionsResultType } from '../types/common';
 import {
   sendTransferNotification,
