@@ -65,6 +65,7 @@ export const GCP_ABIs = {
 
 export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
 export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' || true;
+export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
 
 export const PUSH_CHANNEL_ADDRESS = !pushChannelAddress.startsWith('0x')
   ? `0x${pushChannelAddress}`

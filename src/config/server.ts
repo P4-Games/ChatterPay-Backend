@@ -4,10 +4,10 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { setupSwagger } from './swagger';
 import { setupRoutes } from '../api/routes';
 import { Logger } from '../helpers/loggerHelper';
+import { PORT, CURRENT_LOG_LEVEL } from './constants';
 import { setupMiddleware } from '../middleware/bodyParser';
 import networkConfigPlugin from '../plugins/networkConfig';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { PORT, CURRENT_LOG_LEVEL } from '../constants/environment';
 
 /**
  * Starts the Fastify server with all necessary configurations.

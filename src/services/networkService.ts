@@ -1,4 +1,4 @@
-import { DEFAULT_CHAIN_ID } from '../constants/environment';
+import { DEFAULT_CHAIN_ID } from '../config/constants';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 
 /**

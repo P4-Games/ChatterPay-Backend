@@ -11,7 +11,7 @@ import { getNetworkConfig } from '../services/networkService';
 import { createUserWithWallet } from '../services/userService';
 import { getWalletByPhoneNumber } from '../services/walletService';
 import { sendMintNotification } from '../services/notificationService';
-import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../constants/environment';
+import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
 

@@ -2,9 +2,9 @@ import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
 import { Logger } from '../helpers/loggerHelper';
+import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
-import { SIGNING_KEY } from '../constants/environment';
 import { getDynamicGas } from '../helpers/dynamicGasHelper';
 import { getChatterPayWalletFactoryABI } from './bucketService';
 import { generatePrivateKey } from '../helpers/keyGeneratorHelper';

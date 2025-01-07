@@ -1,6 +1,6 @@
 import { User, IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
-import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../constants/environment';
+import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
 import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
 import { subscribeToPushChannel, sendWalletCreationNotification } from './notificationService';
 

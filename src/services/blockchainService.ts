@@ -16,7 +16,7 @@ import {
   USER_SIGNER_MIN_BALANCE,
   BACKEND_SIGNER_MIN_BALANCE,
   USER_SIGNER_BALANCE_TO_TRANSFER
-} from '../constants/environment';
+} from '../config/constants';
 /**
  * Retrieves a blockchain by its chain ID.
  *

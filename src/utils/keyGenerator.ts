@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 
-import { PRIVATE_KEY } from '../constants/environment';
+import { PRIVATE_KEY } from '../config/constants';
 
 /**
  * Generates a private key based on a seed private key and a phone number.

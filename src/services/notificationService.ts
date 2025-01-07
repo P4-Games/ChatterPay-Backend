@@ -27,7 +27,7 @@ import {
   BOT_NOTIFICATIONS_ENABLED,
   CHATTERPAY_NFTS_SHARE_URL,
   SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
-} from '../constants/environment';
+} from '../config/constants';
 
 interface OperatorReplyPayload {
   data_token: string;
