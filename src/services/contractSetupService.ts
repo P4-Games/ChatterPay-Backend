@@ -4,7 +4,6 @@ import { Logger } from '../utils/logger';
 import { IBlockchain } from '../models/blockchain';
 import { getChatterpayABI } from './bucketService';
 import { getNetworkConfig } from './networkService';
-import { validateBundlerUrl } from '../utils/bundler';
 import { setupContractReturnType } from '../types/common';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 
@@ -32,6 +31,22 @@ function getBundlerUrl(chainId: number): string {
   };
 
   return bundlerUrls[chainId] || '';
+}
+
+/**
+ * Validate Bundle Url
+ * @param url
+ * @returns
+ */
+async function validateBundlerUrl(url: string): Promise<boolean> {
+  try {
+    const provider = new ethers.providers.JsonRpcProvider(url);
+    await provider.getNetwork();
+    return true;
+  } catch (error) {
+    Logger.error(`Failed to validate bundler URL ${url}:`, error);
+    return false;
+  }
 }
 
 /**
