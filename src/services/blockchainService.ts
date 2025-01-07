@@ -109,7 +109,7 @@ export async function checkBlockchainConditions(
       throw new Error('Seed private key not found in environment variables.');
     }
 
-    const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
+    const privateKey = generatePrivateKey(fromNumber);
     const setupContractsResult: setupContractReturnType = await setupContracts(
       blockchain,
       privateKey,
