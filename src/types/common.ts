@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 
-import { setupContractReturnType } from '../services/contractSetupService';
+import { ComputedAddress } from '../services/predictWalletService';
 
 /**
  * Basic token information including price
@@ -67,4 +67,14 @@ export interface ExecuteSwapResultType {
 export interface ExecueTransactionResultType {
   success: boolean;
   transactionHash: string;
+}
+
+export interface setupContractReturnType {
+  provider: ethers.providers.JsonRpcProvider;
+  signer: ethers.Wallet;
+  backendSigner: ethers.Wallet;
+  bundlerUrl: string;
+  chatterPay: ethers.Contract;
+  proxy: ComputedAddress;
+  accountExists: boolean;
 }

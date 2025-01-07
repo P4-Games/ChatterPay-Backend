@@ -7,15 +7,7 @@ import { getNetworkConfig } from './networkService';
 import { getBundlerUrl, validateBundlerUrl } from '../utils/bundler';
 import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
 
-export interface setupContractReturnType {
-  provider: ethers.providers.JsonRpcProvider;
-  signer: ethers.Wallet;
-  backendSigner: ethers.Wallet;
-  bundlerUrl: string;
-  chatterPay: ethers.Contract;
-  proxy: ComputedAddress;
-  accountExists: boolean;
-}
+
 
 /**
  * Sets up the necessary contracts and providers for blockchain interaction.
