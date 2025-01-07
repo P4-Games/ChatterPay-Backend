@@ -1,8 +1,8 @@
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
-import { LogLevel, validLogLevels } from '../types/logger';
 import { CURRENT_LOG_LEVEL } from '../constants/environment';
+import { LogLevelType, validLogLevels } from '../types/logger';
 
 const prettyStream = pinoPretty({
   colorize: true
@@ -16,7 +16,7 @@ const logger = pino(
 );
 
 export class Logger {
-  private static logMessage(level: LogLevel, ...args: unknown[]): void {
+  private static logMessage(level: LogLevelType, ...args: unknown[]): void {
     try {
       const cleanedMessage = args
         .map((arg) => (typeof arg === 'string' ? arg.replace(/(\r\n|\n|\r)/g, ' ') : String(arg)))
@@ -28,7 +28,7 @@ export class Logger {
     }
   }
 
-  private static shouldLog(level: LogLevel): boolean {
+  private static shouldLog(level: LogLevelType): boolean {
     const currentLevelIndex = validLogLevels.indexOf(CURRENT_LOG_LEVEL);
     const messageLevelIndex = validLogLevels.indexOf(level);
     return messageLevelIndex >= currentLevelIndex;

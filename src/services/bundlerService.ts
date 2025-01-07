@@ -2,8 +2,8 @@ import PQueue from 'p-queue';
 import axios, { AxiosResponse } from 'axios';
 
 import { Logger } from '../utils/logger';
-import { PackedUserOperation } from '../types/userOperation';
 import { serializeUserOperation } from '../utils/userOperation';
+import { PackedUserOperationType } from '../types/userOperation';
 
 const queue = new PQueue({ interval: 10000, intervalCap: 1 }); // 1 request each 10 seg
 
@@ -18,7 +18,7 @@ const queue = new PQueue({ interval: 10000, intervalCap: 1 }); // 1 request each
  */
 export async function sendUserOperationToBundler(
   bundlerUrl: string,
-  userOperation: PackedUserOperation,
+  userOperation: PackedUserOperationType,
   entryPointAddress: string
 ): Promise<string> {
   try {
@@ -72,7 +72,7 @@ export async function sendUserOperationToBundler(
  */
 export async function estimateUserOperationGas(
   bundlerUrl: string,
-  userOperation: PackedUserOperation,
+  userOperation: PackedUserOperationType,
   entryPointAddress: string
 ): Promise<void> {
   try {

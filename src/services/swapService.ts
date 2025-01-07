@@ -1,12 +1,11 @@
 import { ethers } from 'ethers';
 
 import { Logger } from '../utils/logger';
-import Transaction from '../models/transaction';
-import { TokenAddresses } from '../types/common';
 import { IBlockchain } from '../models/blockchain';
 import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from '../utils/waitForTX';
+import { TokenAddressesType, ExecuteSwapResultType } from '../types/common';
 import { setupERC20, setupContractReturnType } from './contractSetupService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
 
@@ -103,7 +102,7 @@ async function executeOperation(
   // Wait for receipt
   const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
   if (!receipt?.success) {
-    Logger.error('receipt', receipt);
+    Logger.error('receipt', JSON.stringify(receipt));
     throw new Error(
       `Transaction failed or not found, receipt: ${receipt.success}, ${receipt.userOpHash}`
     );
@@ -130,9 +129,9 @@ export async function executeSwap(
   networkConfig: IBlockchain,
   setupContractsResult: setupContractReturnType,
   entryPointContract: ethers.Contract,
-  tokenAddresses: TokenAddresses,
+  tokenAddresses: TokenAddressesType,
   amount: string
-): Promise<{ success: boolean; approveTransactionHash: string; swapTransactionHash: string }> {
+): Promise<ExecuteSwapResultType> {
   try {
     const isWETHtoUSDT =
       tokenAddresses.tokenAddressInput.toUpperCase() === 'WETH' &&
@@ -198,26 +197,4 @@ export async function executeSwap(
     Logger.error('Error in executeSwap:', error);
     return { success: false, approveTransactionHash: '', swapTransactionHash: '' };
   }
-}
-
-/**
- * Saves the transaction details to the database.
- */
-export async function saveSwapTransaction(
-  tx: string,
-  walletFrom: string,
-  walletTo: string,
-  amount: number,
-  currency: string
-) {
-  await Transaction.create({
-    trx_hash: tx,
-    wallet_from: walletFrom,
-    wallet_to: walletTo,
-    type: 'transfer',
-    date: new Date(),
-    status: 'completed',
-    amount,
-    token: currency
-  });
 }

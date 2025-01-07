@@ -2,19 +2,21 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../utils/logger';
+import { executeSwap } from '../services/swapService';
 import { SIGNING_KEY } from '../constants/environment';
 import { setupERC20 } from '../services/contractSetupService';
-import { CheckBalanceConditionsResultType } from '../types/common';
-import { executeSwap, saveSwapTransaction } from '../services/swapService';
+import { saveTransaction } from '../services/transferService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
 import {
-  TokenAddresses,
-  getTokensAddresses,
-  checkBlockchainConditions
-} from '../services/blockchainService';
+  TokenAddressesType,
+  ExecuteSwapResultType,
+  CheckBalanceConditionsResultType
+} from '../types/common';
 import {
   sendSwapNotification,
+  sendInternalErrorNotification,
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
@@ -36,7 +38,7 @@ interface SwapBody {
  */
 const validateInputs = async (
   inputs: SwapBody,
-  tokenAddresses: TokenAddresses
+  tokenAddresses: TokenAddressesType
 ): Promise<string> => {
   const { channel_user_id, inputCurrency, outputCurrency, amount } = inputs;
 
@@ -84,7 +86,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     const { tokens: blockchainTokens, networkConfig } = request.server as FastifyInstance;
 
-    const tokenAddresses: TokenAddresses = getTokensAddresses(
+    const tokenAddresses: TokenAddressesType = getTokensAddresses(
       networkConfig,
       blockchainTokens,
       inputCurrency,
@@ -126,20 +128,18 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     const enoughBalance: boolean = fromTokenCurrentBalance.gte(amountToCheck);
 
     if (!enoughBalance) {
-      sendUserInsufficientBalanceNotification(proxyAddress, channel_user_id);
+      await sendUserInsufficientBalanceNotification(proxyAddress, channel_user_id);
       return undefined;
     }
 
     /* ***************************************************** */
     /* 4. swap: check blockchain conditions                  */
     /* ***************************************************** */
-
-    // 4. swap: check blockchain conditions
     const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
       await checkBlockchainConditions(networkConfig, channel_user_id);
 
     if (!checkBlockchainConditionsResult.success) {
-      sendNoValidBlockchainConditionsNotification(proxyAddress, channel_user_id);
+      await sendNoValidBlockchainConditionsNotification(proxyAddress, channel_user_id);
       return undefined;
     }
 
@@ -153,16 +153,20 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     /* 6. swap: make operation                               */
     /* ***************************************************** */
 
-    const tx = await executeSwap(
+    const executeSwapResult: ExecuteSwapResultType = await executeSwap(
       networkConfig,
       checkBlockchainConditionsResult.setupContractsResult!,
       checkBlockchainConditionsResult.entryPointContract!,
       tokenAddresses,
       amount.toString()
     );
+    if (!executeSwapResult.success) {
+      await sendInternalErrorNotification(proxyAddress, channel_user_id);
+      return undefined;
+    }
 
     /* ***************************************************** */
-    /* 7. swap: send notificaiton to user                    */
+    /* 7. swap: swap: update bdd with result                 */
     /* ***************************************************** */
 
     // Get the new balances after the transaction
@@ -181,44 +185,46 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       ethers.utils.formatUnits(toTokensReceived, toTokenDecimals)
     );
 
-    // Send notifications
+    // Save transactions OUT
+    Logger.log('Updating swap transactions in database.');
+    await saveTransaction(
+      executeSwapResult.approveTransactionHash,
+      proxyAddress,
+      networkConfig.contracts.simpleSwapAddress,
+      fromTokensSentInUnits,
+      inputCurrency,
+      'swap',
+      'completed'
+    );
+
+    // Save transactions IN
+    await saveTransaction(
+      executeSwapResult.swapTransactionHash,
+      networkConfig.contracts.simpleSwapAddress,
+      proxyAddress,
+      toTokensReceivedInUnits,
+      outputCurrency,
+      'swap',
+      'completed'
+    );
+
+    /* ***************************************************** */
+    /* 8. swap: send notificaiton to user                    */
+    /* ***************************************************** */
+
     await sendSwapNotification(
       channel_user_id,
       inputCurrency,
       fromTokensSentInUnits.toString(),
       toTokensReceivedInUnits.toString(),
       outputCurrency,
-      tx.swapTransactionHash
-    );
-
-    /* ***************************************************** */
-    /* 8. swap: swap: update bdd with result                 */
-    /* ***************************************************** */
-
-    // Save transactions OUT
-    await saveSwapTransaction(
-      tx.approveTransactionHash,
-      proxyAddress,
-      networkConfig.contracts.simpleSwapAddress,
-      fromTokensSentInUnits,
-      inputCurrency
-    );
-
-    // Save transactions IN
-    await saveSwapTransaction(
-      tx.swapTransactionHash,
-      networkConfig.contracts.simpleSwapAddress,
-      proxyAddress,
-      toTokensReceivedInUnits,
-      outputCurrency
+      executeSwapResult.swapTransactionHash
     );
 
     Logger.info(
-      `Swap completed successfully approveTransactionHash: ${tx.approveTransactionHash}, swapTransactionHash: ${tx.swapTransactionHash}.`
+      `Swap completed successfully approveTransactionHash: ${executeSwapResult.approveTransactionHash}, swapTransactionHash: ${executeSwapResult.swapTransactionHash}.`
     );
   } catch (error) {
     Logger.error('Error swapping tokens:', error);
-    return returnErrorResponse(reply, 500, 'Internal Server Error');
-    // return reply.status(500).send({ message: 'Internal Server Error' });
   }
 };

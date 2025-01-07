@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 
-import { PackedUserOperation } from '../types/userOperation';
+import { PackedUserOperationType } from '../types/userOperation';
 
 /**
  * Packs the UserOperation fields as per the contract's pack function.
@@ -8,7 +8,7 @@ import { PackedUserOperation } from '../types/userOperation';
  * @param userOp - The UserOperation object.
  * @returns The ABI-encoded packed user operation as a hex string.
  */
-function packUserOp(userOp: PackedUserOperation): string {
+function packUserOp(userOp: PackedUserOperationType): string {
   const { sender } = userOp;
   const { nonce } = userOp;
   const hashInitCode = ethers.utils.keccak256(userOp.initCode);
@@ -57,7 +57,7 @@ function packUserOp(userOp: PackedUserOperation): string {
  * @param userOp - The UserOperation object.
  * @returns The hash of the packed user operation as a hex string.
  */
-export function hashUserOp(userOp: PackedUserOperation): string {
+export function hashUserOp(userOp: PackedUserOperationType): string {
   const packedUserOp = packUserOp(userOp);
   return ethers.utils.keccak256(packedUserOp);
 }
@@ -71,7 +71,7 @@ export function hashUserOp(userOp: PackedUserOperation): string {
  * @returns The userOpHash as a hex string.
  */
 export function getUserOpHash(
-  userOp: PackedUserOperation,
+  userOp: PackedUserOperationType,
   entryPointAddress: string,
   chainId: number
 ): string {
@@ -88,7 +88,7 @@ export function getUserOpHash(
   return finalUserOpHash;
 }
 
-export function serializeUserOperation(userOp: PackedUserOperation): Record<string, string> {
+export function serializeUserOperation(userOp: PackedUserOperationType): Record<string, string> {
   return {
     sender: userOp.sender,
     nonce: ethers.utils.hexlify(userOp.nonce),

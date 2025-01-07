@@ -7,7 +7,7 @@ import { generatePrivateKey } from '../utils/keyGenerator';
 import Blockchain, { IBlockchain } from '../models/blockchain';
 import { ensurePaymasterHasEnoughEth } from './paymasterService';
 import { setupContracts, setupContractReturnType } from './contractSetupService';
-import { TokenAddresses, CheckBalanceConditionsResultType } from '../types/common';
+import { TokenAddressesType, CheckBalanceConditionsResultType } from '../types/common';
 import {
   USER_SIGNER_MIN_BALANCE,
   BACKEND_SIGNER_MIN_BALANCE,
@@ -69,7 +69,7 @@ export function getTokensAddresses(
   blockchainTokens: IToken[],
   lookUpTokenSymbolInput: string,
   lookUpTokenSymbolOutput: string
-): TokenAddresses {
+): TokenAddressesType {
   const chainTokens = blockchainTokens.filter(
     (token) => token.chain_id === blockchainConfig.chain_id
   );

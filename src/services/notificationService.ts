@@ -46,7 +46,7 @@ const notificationTemplateCache = new NodeCache({ stdTTL: 604800 }); // 1 week
 async function sendBotNotification(payload: OperatorReplyPayload): Promise<string> {
   try {
     if (!BOT_NOTIFICATIONS_ENABLED) {
-      Logger.info(`Bot notifications are disabled. Omitted payload: ${payload}`);
+      Logger.info(`Bot notifications are disabled. Omitted payload: ${JSON.stringify(payload)}`);
       return '';
     }
 
@@ -81,7 +81,7 @@ export async function sendPushNotificaton(
 ): Promise<boolean> {
   try {
     if (!PUSH_ENABLED) {
-      Logger.info(`Push notifications are disabled, PUSH_ENABLED env variable: ${PUSH_ENABLED}.`);
+      Logger.info(`Push notifications are disabled.`);
       return true;
     }
 
@@ -291,7 +291,6 @@ export async function sendWalletCreationNotification(
 /**
  * Sends a notification for a transfer.
  *
- * @param address_of_user
  * @param channel_user_id
  * @param from
  * @param amount
@@ -299,7 +298,6 @@ export async function sendWalletCreationNotification(
  * @returns
  */
 export async function sendTransferNotification(
-  address_of_user: string,
   channel_user_id: string,
   from: string | null,
   amount: string,
@@ -493,7 +491,15 @@ export async function sendUserInsufficientBalanceNotification(
       NotificationEnum.user_balance_not_enough
     );
 
+    const payload: OperatorReplyPayload = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message
+    };
+
+    const data = await sendBotNotification(payload);
     sendPushNotificaton(title, message, channel_user_id); // avoid await
+    return data;
   } catch (error) {
     Logger.error('Error in sendUserInsufficientBalanceNotification:', error);
     throw error;
@@ -518,7 +524,15 @@ export async function sendNoValidBlockchainConditionsNotification(
       NotificationEnum.no_valid_blockchain_conditions
     );
 
+    const payload: OperatorReplyPayload = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message
+    };
+
+    const data = await sendBotNotification(payload);
     sendPushNotificaton(title, message, channel_user_id); // avoid await
+    return data;
   } catch (error) {
     Logger.error('Error in sendNoValidBlockchainConditionsNotification:', error);
     throw error;
@@ -543,7 +557,15 @@ export async function sendInternalErrorNotification(
       NotificationEnum.internal_error
     );
 
+    const payload: OperatorReplyPayload = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message
+    };
+
+    const data = await sendBotNotification(payload);
     sendPushNotificaton(title, message, channel_user_id); // avoid await
+    return data;
   } catch (error) {
     Logger.error('Error in sendInternalErrorNotification:', error);
     throw error;
