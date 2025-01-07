@@ -3,12 +3,12 @@ import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
 
-import { Logger } from '../utils/logger';
 import { User, IUser } from '../models/user';
+import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
-import { isValidPhoneNumber } from '../utils/validations';
 import { getTemplate, templateEnum } from './templateService';
+import { isValidPhoneNumber } from '../helpers/validationHelper';
 import {
   LanguageEnum,
   ITemplateSchema,
@@ -27,7 +27,7 @@ import {
   BOT_NOTIFICATIONS_ENABLED,
   CHATTERPAY_NFTS_SHARE_URL,
   SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
-} from '../constants/environment';
+} from '../config/constants';
 
 interface OperatorReplyPayload {
   data_token: string;

@@ -1,10 +1,10 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { Logger } from '../utils/logger';
 import Token, { IToken } from '../models/token';
-import { BUN_ENV, SIGNING_KEY } from '../constants/environment';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { Logger } from '../helpers/loggerHelper';
+import { BUN_ENV, SIGNING_KEY } from '../config/constants';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**
  * Creates a new token
@@ -283,10 +283,7 @@ export const issueTokensHandler = async (
 
     const results = await issueTokensCore(address, request.server);
 
-    return await reply.status(201).send({
-      message: 'Tokens minted successfully',
-      results
-    });
+    return await returnSuccessResponse(reply, 'Tokens minted successfully', { results });
   } catch (error) {
     Logger.error('Error minting tokens:', error);
     if (error instanceof Error) {

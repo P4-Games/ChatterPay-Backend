@@ -1,6 +1,6 @@
 import { model, Schema, Document } from 'mongoose';
 
-import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../constants/environment';
+import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
 
 export interface IUser extends Document {
   name: string;

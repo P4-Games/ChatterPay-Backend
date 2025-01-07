@@ -1,12 +1,13 @@
 import { ethers } from 'ethers';
 import * as crypto from 'crypto';
 
-import { Logger } from '../utils/logger';
+import { Logger } from '../helpers/loggerHelper';
+import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchain';
-import { getDynamicGas } from '../utils/dynamicGas';
 import { getNetworkConfig } from './networkService';
+import { getDynamicGas } from '../helpers/paymasterHelper';
+import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { getChatterPayWalletFactoryABI } from './bucketService';
-import { PRIVATE_KEY, SIGNING_KEY } from '../constants/environment';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {
@@ -23,12 +24,7 @@ export interface PhoneNumberToAddress {
  * @throws {Error} If the seed private key is not found in environment variables.
  */
 function phoneNumberToAddress(phoneNumber: string): PhoneNumberToAddress {
-  if (!PRIVATE_KEY) {
-    throw new Error('Seed private key not found in environment variables');
-  }
-
-  const seed = PRIVATE_KEY + phoneNumber;
-  const privateKey = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
+  const privateKey = generatePrivateKey(phoneNumber);
   const wallet = new ethers.Wallet(privateKey);
   const publicKey = wallet.address;
   const hashedPrivateKey = crypto.createHash('sha256').update(privateKey).digest('hex');

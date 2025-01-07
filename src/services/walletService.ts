@@ -3,11 +3,11 @@ import NodeCache from 'node-cache';
 
 import { User } from '../models/user';
 import { IToken } from '../models/token';
-import { Logger } from '../utils/logger';
+import { Logger } from '../helpers/loggerHelper';
+import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchain';
 import { setupERC20 } from './contractSetupService';
 import { getTokenAddress } from './blockchainService';
-import { SIGNING_KEY } from '../constants/environment';
 import {
   CurrencyType,
   FiatQuoteType,

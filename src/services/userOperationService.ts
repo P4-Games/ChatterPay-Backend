@@ -1,7 +1,7 @@
 import { ethers, BigNumber } from 'ethers';
 
-import { Logger } from '../utils/logger';
-import { getUserOpHash } from '../utils/userOperation';
+import { Logger } from '../helpers/loggerHelper';
+import { getUserOpHash } from '../helpers/userOperationHekper';
 import { PackedUserOperationType } from '../types/userOperation';
 import {
   CALL_GAS_LIMIT,
@@ -9,7 +9,7 @@ import {
   PRE_VERIFICATION_GAS,
   VERIFICATION_GAS_LIMIT,
   MAX_PRIORITY_FEE_PER_GAS
-} from '../constants/environment';
+} from '../config/constants';
 
 /**
  * Creates a generic user operation for any type of transaction.

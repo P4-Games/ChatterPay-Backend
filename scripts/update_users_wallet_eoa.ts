@@ -5,10 +5,10 @@
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 import mongoose from 'mongoose';
-import * as crypto from 'crypto';
 
 import { IUser } from '../src/models/user';
-import { Logger } from '../src/utils/logger';
+import { Logger } from '../src/helpers/loggerHelper';
+import { generatePrivateKey } from '../src/helpers/SecurityHelper';
 
 dotenv.config();
 
@@ -49,13 +49,7 @@ async function getUsers(): Promise<IUser[]> {
 }
 
 function getUserData(phoneNumber: string): { pk: string; sk: string } {
-  const PRIVATE_KEY_SEED = process.env.PRIVATE_KEY || '';
-  if (!PRIVATE_KEY_SEED) {
-    throw new Error('PRIVATE_KEY is not set in the environment variables');
-  }
-
-  const seed = PRIVATE_KEY_SEED + phoneNumber;
-  const sk = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
+  const sk = generatePrivateKey(phoneNumber);
   const wallet = new ethers.Wallet(sk);
 
   return {

@@ -1,19 +1,22 @@
 import { ethers } from 'ethers';
 
 import { IToken } from '../models/token';
-import { Logger } from '../utils/logger';
+import { Logger } from '../helpers/loggerHelper';
 import { getEntryPointABI } from './bucketService';
-import { generatePrivateKey } from '../utils/keyGenerator';
+import { setupContracts } from './contractSetupService';
 import Blockchain, { IBlockchain } from '../models/blockchain';
+import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { ensurePaymasterHasEnoughEth } from './paymasterService';
-import { setupContracts, setupContractReturnType } from './contractSetupService';
-import { TokenAddressesType, CheckBalanceConditionsResultType } from '../types/common';
+import {
+  TokenAddressesType,
+  setupContractReturnType,
+  CheckBalanceConditionsResultType
+} from '../types/common';
 import {
   USER_SIGNER_MIN_BALANCE,
   BACKEND_SIGNER_MIN_BALANCE,
   USER_SIGNER_BALANCE_TO_TRANSFER
-} from '../constants/environment';
-
+} from '../config/constants';
 /**
  * Retrieves a blockchain by its chain ID.
  *
@@ -105,7 +108,7 @@ export async function checkBlockchainConditions(
       throw new Error('Seed private key not found in environment variables.');
     }
 
-    const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
+    const privateKey = generatePrivateKey(fromNumber);
     const setupContractsResult: setupContractReturnType = await setupContracts(
       blockchain,
       privateKey,

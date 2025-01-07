@@ -1,13 +1,17 @@
 import { ethers } from 'ethers';
 
-import { Logger } from '../utils/logger';
+import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
+import { setupERC20 } from './contractSetupService';
 import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
-import { waitForUserOperationReceipt } from '../utils/waitForTX';
-import { TokenAddressesType, ExecuteSwapResultType } from '../types/common';
-import { setupERC20, setupContractReturnType } from './contractSetupService';
+import { waitForUserOperationReceipt } from './userOpExecutorService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
+import {
+  TokenAddressesType,
+  ExecuteSwapResultType,
+  setupContractReturnType
+} from '../types/common';
 
 /**
  * Creates callData for token approval

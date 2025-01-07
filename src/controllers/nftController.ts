@@ -3,18 +3,17 @@ import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { IUser } from '../models/user';
-import { Logger } from '../utils/logger';
-import { isValidUrl } from '../utils/paramsUtils';
-import { getDynamicGas } from '../utils/dynamicGas';
-import { SIGNING_KEY } from '../constants/environment';
+import { Logger } from '../helpers/loggerHelper';
+import { isValidUrl } from '../helpers/validationHelper';
+import { getDynamicGas } from '../helpers/paymasterHelper';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
 import { createUserWithWallet } from '../services/userService';
 import { getWalletByPhoneNumber } from '../services/walletService';
 import { sendMintNotification } from '../services/notificationService';
-import { defaultNftImage, networkChainIds } from '../constants/blockchain';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
+import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 
 export interface NFTInfo {
   description: string;
@@ -53,7 +52,7 @@ const mintNftOriginal = async (
   bddIdToUseAsUri: string
 ): Promise<NFTData> => {
   try {
-    const networkConfig = await getNetworkConfig(networkChainIds.arbitrumSepolia);
+    const networkConfig = await getNetworkConfig(DEFAULT_CHAIN_ID);
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const nftContract = new ethers.Contract(
@@ -110,7 +109,7 @@ const mintNftCopy = async (
   bddIdToUseAsUri: string
 ): Promise<NFTData> => {
   try {
-    const networkConfig = await getNetworkConfig(networkChainIds.arbitrumSepolia);
+    const networkConfig = await getNetworkConfig(DEFAULT_CHAIN_ID);
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const nftContract = new ethers.Contract(
@@ -507,10 +506,7 @@ export const getLastNFT = async (
     const returnUrl = `https://api.whatsapp.com/send/?phone=5491164629653&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`;
 
     if (isPostman) {
-      return await reply.send({
-        message: 'URL para compartir el NFT',
-        url: returnUrl
-      });
+      return await returnSuccessResponse(reply, 'URL para compartir el NFT', { url: returnUrl });
     }
 
     reply.redirect(returnUrl);
@@ -530,7 +526,7 @@ export const getPhoneNFTs = async (
   phone_number: string
 ): Promise<{ count: number; nfts: NFTInfo[] }> => {
   try {
-    const networkConfig = await getNetworkConfig(networkChainIds.arbitrumSepolia);
+    const networkConfig = await getNetworkConfig(DEFAULT_CHAIN_ID);
     const nfts = await NFTModel.find({ channel_user_id: phone_number });
 
     return {
@@ -582,7 +578,7 @@ export const getNftList = async (
     const nfts = await NFTModel.find({ id: tokenId });
 
     if (nfts.length === 0) {
-      return await reply.status(400).send({ message: 'NFT not found' });
+      return await returnErrorResponse(reply, 400, 'NFT not found');
     }
 
     const nft = nfts[0];
@@ -624,6 +620,8 @@ export const getNftMetadataRequiredByOpenSea = async (
     const { id: bddId } = request.params;
 
     if (!mongoose.Types.ObjectId.isValid(bddId)) {
+      // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
+      // OpenSea which requires this format.
       return await reply.status(400).send({
         message:
           'The parameter "id" must be a valid MongoDB ObjectId format, as the NFT is minted with the _id field.'
@@ -634,11 +632,15 @@ export const getNftMetadataRequiredByOpenSea = async (
     const nfts: INFT[] = await NFTModel.find({ _id: objectId });
 
     if (nfts.length === 0) {
+      // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
+      // OpenSea which requires this format.
       return await reply.status(400).send({ message: 'NFT not found.' });
     }
 
     const nft: INFT = nfts[0];
 
+    // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
+    // OpenSea which requires this format.
     return await reply.status(200).send({
       id: nft._id,
       name: 'Chatterpay',
@@ -702,6 +704,8 @@ export const getNftMetadataRequiredByOpenSea = async (
     });
   } catch (error) {
     Logger.error('Error al obtener el NFT:', error);
+    // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
+    // OpenSea which requires this format.
     return reply.status(500).send({ message: 'Internal Server Error' });
   }
 };

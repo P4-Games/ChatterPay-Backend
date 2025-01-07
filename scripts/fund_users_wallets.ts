@@ -7,7 +7,7 @@ import { config } from 'dotenv';
 import mongoose from 'mongoose';
 
 import { IUser } from '../src/models/user';
-import { Logger } from '../src/utils/logger';
+import { Logger } from '../src/helpers/loggerHelper';
 
 config();
 

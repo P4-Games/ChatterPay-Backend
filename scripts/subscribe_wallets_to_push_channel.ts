@@ -5,12 +5,12 @@
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 import mongoose from 'mongoose';
-import * as crypto from 'crypto';
 import * as PushAPI from '@pushprotocol/restapi';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
 import { IUser } from '../src/models/user';
-import { Logger } from '../src/utils/logger';
+import { Logger } from '../src/helpers/loggerHelper';
+import { generatePrivateKey } from '../src/helpers/SecurityHelper';
 
 dotenv.config();
 
@@ -41,6 +41,10 @@ const userSchema = new mongoose.Schema<IUser>(
 
 const User = mongoose.model<IUser>('User', userSchema);
 
+/**
+ *
+ * @returns
+ */
 async function getUsers(): Promise<IUser[]> {
   try {
     await mongoose.connect(MONGO_URI, { dbName: DB_NAME });
@@ -59,14 +63,13 @@ async function getUsers(): Promise<IUser[]> {
   }
 }
 
+/**
+ * Get User Data
+ * @param phoneNumber
+ * @returns
+ */
 function getUserData(phoneNumber: string): { pk: string; sk: string } {
-  const PRIVATE_KEY_SEED = process.env.PRIVATE_KEY || '';
-  if (!PRIVATE_KEY_SEED) {
-    throw new Error('PRIVATE_KEY is not set in the environment variables');
-  }
-
-  const seed = PRIVATE_KEY_SEED + phoneNumber;
-  const sk = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
+  const sk = generatePrivateKey(phoneNumber);
   const wallet = new ethers.Wallet(sk);
 
   return {
@@ -75,6 +78,11 @@ function getUserData(phoneNumber: string): { pk: string; sk: string } {
   };
 }
 
+/**
+ *
+ * @param pk
+ * @returns
+ */
 async function isUserSubscribed(pk: string): Promise<boolean> {
   try {
     const subscriptions = await PushAPI.user.getSubscriptions({

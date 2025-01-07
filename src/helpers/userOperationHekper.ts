@@ -57,7 +57,7 @@ function packUserOp(userOp: PackedUserOperationType): string {
  * @param userOp - The UserOperation object.
  * @returns The hash of the packed user operation as a hex string.
  */
-export function hashUserOp(userOp: PackedUserOperationType): string {
+function hashUserOp(userOp: PackedUserOperationType): string {
   const packedUserOp = packUserOp(userOp);
   return ethers.utils.keccak256(packedUserOp);
 }
@@ -86,20 +86,4 @@ export function getUserOpHash(
   // Compute the keccak256 hash
   const finalUserOpHash = ethers.utils.keccak256(encoded);
   return finalUserOpHash;
-}
-
-export function serializeUserOperation(userOp: PackedUserOperationType): Record<string, string> {
-  return {
-    sender: userOp.sender,
-    nonce: ethers.utils.hexlify(userOp.nonce),
-    initCode: userOp.initCode,
-    callData: userOp.callData,
-    callGasLimit: ethers.utils.hexlify(userOp.callGasLimit),
-    verificationGasLimit: ethers.utils.hexlify(userOp.verificationGasLimit),
-    preVerificationGas: ethers.utils.hexlify(userOp.preVerificationGas),
-    maxFeePerGas: ethers.utils.hexlify(userOp.maxFeePerGas),
-    maxPriorityFeePerGas: ethers.utils.hexlify(userOp.maxPriorityFeePerGas),
-    paymasterAndData: userOp.paymasterAndData,
-    signature: userOp.signature
-  };
 }

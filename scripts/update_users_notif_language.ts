@@ -5,7 +5,7 @@
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 
-import { Logger } from '../src/utils/logger';
+import { Logger } from '../src/helpers/loggerHelper';
 
 dotenv.config();
 

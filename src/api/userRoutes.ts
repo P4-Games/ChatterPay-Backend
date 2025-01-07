@@ -2,8 +2,8 @@ import { FastifyInstance } from 'fastify';
 
 import {
   createUser,
-  updateUser,
   deleteUser,
+  updateUser,
   getAllUsers,
   getUserById
 } from '../controllers/userController';

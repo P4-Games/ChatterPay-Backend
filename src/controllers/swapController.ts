@@ -1,13 +1,13 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { Logger } from '../utils/logger';
+import { Logger } from '../helpers/loggerHelper';
+import { SIGNING_KEY } from '../config/constants';
 import { executeSwap } from '../services/swapService';
-import { SIGNING_KEY } from '../constants/environment';
 import { setupERC20 } from '../services/contractSetupService';
 import { saveTransaction } from '../services/transferService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
 import {
   TokenAddressesType,
@@ -103,7 +103,6 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     /* 2. swap: send initial response                        */
     /* ***************************************************** */
     await returnSuccessResponse(reply, 'Swap in progress, it may take a few minutes.');
-    // await reply.status(200).send({ message: 'Swap in progress, it may take a few minutes.' });
 
     /* ***************************************************** */
     /* 3. swap: check user balance                           */
