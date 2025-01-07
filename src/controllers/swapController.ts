@@ -2,22 +2,23 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../utils/logger';
+import { executeSwap } from '../services/swapService';
 import { SIGNING_KEY } from '../constants/environment';
 import { setupERC20 } from '../services/contractSetupService';
-import {
-  CheckBalanceConditionsResultType,
-  ExecuteSwapResultType,
-  TokenAddressesType
-} from '../types/common';
-import { executeSwap, saveSwapTransaction } from '../services/swapService';
+import { saveTransaction } from '../services/transferService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
 import {
+  TokenAddressesType,
+  ExecuteSwapResultType,
+  CheckBalanceConditionsResultType
+} from '../types/common';
+import {
   sendSwapNotification,
+  sendInternalErrorNotification,
   sendUserInsufficientBalanceNotification,
-  sendNoValidBlockchainConditionsNotification,
-  sendInternalErrorNotification
+  sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
 
 interface SwapBody {

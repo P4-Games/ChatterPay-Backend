@@ -2,8 +2,8 @@ import PQueue from 'p-queue';
 import axios, { AxiosResponse } from 'axios';
 
 import { Logger } from '../utils/logger';
-import { PackedUserOperationType } from '../types/userOperation';
 import { serializeUserOperation } from '../utils/userOperation';
+import { PackedUserOperationType } from '../types/userOperation';
 
 const queue = new PQueue({ interval: 10000, intervalCap: 1 }); // 1 request each 10 seg
 
