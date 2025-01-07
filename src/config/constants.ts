@@ -101,3 +101,6 @@ export const USER_SIGNER_MIN_BALANCE: string = '0.0008';
 export const USER_SIGNER_BALANCE_TO_TRANSFER: string = '0.001';
 
 export const DEFAULT_CHAIN_ID = 421614; // Arbitrum Sepolia
+export const LIFI_SLIPPAGE = 30 / 1000;
+export const LIFI_TYPE = 'SAFEST';
+
