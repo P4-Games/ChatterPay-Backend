@@ -5,8 +5,8 @@ import { Logger } from '../helpers/loggerHelper';
 import { getEntryPointABI } from './bucketService';
 import { setupContracts } from './contractSetupService';
 import Blockchain, { IBlockchain } from '../models/blockchain';
+import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { ensurePaymasterHasEnoughEth } from './paymasterService';
-import { generatePrivateKey } from '../helpers/keyGeneratorHelper';
 import {
   TokenAddressesType,
   setupContractReturnType,

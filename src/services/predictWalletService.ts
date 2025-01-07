@@ -6,8 +6,8 @@ import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
 import { getDynamicGas } from '../helpers/paymasterHelper';
+import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { getChatterPayWalletFactoryABI } from './bucketService';
-import { generatePrivateKey } from '../helpers/keyGeneratorHelper';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {
