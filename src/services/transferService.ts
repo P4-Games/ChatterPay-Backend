@@ -4,7 +4,7 @@ import { IUser } from '../models/user';
 import { getUser } from './userService';
 import { IToken } from '../models/token';
 import { Logger } from '../utils/logger';
-import { TokenBalance } from '../types/common';
+import { TokenBalanceType } from '../types/common';
 import Transaction from '../models/transaction';
 import { getEntryPointABI } from './bucketService';
 import { IBlockchain } from '../models/blockchain';
@@ -334,7 +334,7 @@ export async function withdrawWalletAllFunds(
   try {
     const to_wallet_formatted: string = !to_wallet.startsWith('0x') ? `0x${to_wallet}` : to_wallet;
 
-    const walletTokensBalance: TokenBalance[] = await getTokenBalances(
+    const walletTokensBalance: TokenBalanceType[] = await getTokenBalances(
       bddUser.wallet,
       tokens,
       networkConfig

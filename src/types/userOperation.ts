@@ -3,7 +3,7 @@ import { BigNumber } from 'ethers';
 /**
  * Represents a packed user operation for Ethereum transactions.
  */
-export interface PackedUserOperation {
+export interface PackedUserOperationType {
   /** The address of the sender */
   sender: string;
   /** The nonce of the operation */

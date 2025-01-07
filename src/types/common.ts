@@ -1,7 +1,7 @@
 /**
  * Basic token information including price
  */
-export interface TokenInfo {
+export interface TokenInfoType {
   symbol: string;
   address: string;
   rateUSD: number;
@@ -10,34 +10,34 @@ export interface TokenInfo {
 /**
  * Supported fiat currencies for conversion
  */
-export type Currency = 'USD' | 'UYU' | 'ARS' | 'BRL';
+export type CurrencyType = 'USD' | 'UYU' | 'ARS' | 'BRL';
 
 /**
  * Fiat currency quote information
  */
-export interface FiatQuote {
-  currency: Currency;
+export interface FiatQuoteType {
+  currency: CurrencyType;
   rate: number;
 }
 
 /**
  * Token information including balance
  */
-export interface TokenBalance extends TokenInfo {
+export interface TokenBalanceType extends TokenInfoType {
   balance: string;
 }
 
 /**
  * Detailed balance information for a token including conversions
  */
-export interface BalanceInfo {
+export interface BalanceInfoType {
   network: string;
   token: string;
   balance: number;
-  balance_conv: Record<Currency, number>;
+  balance_conv: Record<CurrencyType, number>;
 }
 
-export interface walletBalanceInfo {
+export interface walletBalanceInfoType {
   walletBalance: string;
   amountToCheck: string;
   enoughBalance: boolean;
