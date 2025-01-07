@@ -127,7 +127,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     const enoughBalance: boolean = fromTokenCurrentBalance.gte(amountToCheck);
 
     if (!enoughBalance) {
-      sendUserInsufficientBalanceNotification(proxyAddress, channel_user_id);
+      await sendUserInsufficientBalanceNotification(proxyAddress, channel_user_id);
       return undefined;
     }
 
@@ -140,7 +140,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       await checkBlockchainConditions(networkConfig, channel_user_id);
 
     if (!checkBlockchainConditionsResult.success) {
-      sendNoValidBlockchainConditionsNotification(proxyAddress, channel_user_id);
+      await sendNoValidBlockchainConditionsNotification(proxyAddress, channel_user_id);
       return undefined;
     }
 
@@ -162,7 +162,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       amount.toString()
     );
     if (!executeSwapResult.success) {
-      sendInternalErrorNotification(proxyAddress, channel_user_id);
+      await sendInternalErrorNotification(proxyAddress, channel_user_id);
       return undefined;
     }
 
