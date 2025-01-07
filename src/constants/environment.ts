@@ -98,3 +98,5 @@ export const PAYMASTER_TARGET_BALANCE: string = '0.3';
 export const BACKEND_SIGNER_MIN_BALANCE: string = '0.5'; // must have at least: PAYMASTER_TARGET_BALANCE + 0.005
 export const USER_SIGNER_MIN_BALANCE: string = '0.0008';
 export const USER_SIGNER_BALANCE_TO_TRANSFER: string = '0.001';
+
+export const DEFAULT_CHAIN_ID = 421614; // Arbitrum Sepolia

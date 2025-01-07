@@ -4,7 +4,6 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
-import { SIGNING_KEY } from '../constants/environment';
 import { isValidUrl } from '../helpers/validationHelper';
 import { getDynamicGas } from '../helpers/dynamicGasHelper';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
@@ -12,7 +11,7 @@ import { getNetworkConfig } from '../services/networkService';
 import { createUserWithWallet } from '../services/userService';
 import { getWalletByPhoneNumber } from '../services/walletService';
 import { sendMintNotification } from '../services/notificationService';
-import { defaultNftImage, networkChainIds } from '../constants/blockchain';
+import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../constants/environment';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
 
@@ -53,7 +52,7 @@ const mintNftOriginal = async (
   bddIdToUseAsUri: string
 ): Promise<NFTData> => {
   try {
-    const networkConfig = await getNetworkConfig(networkChainIds.arbitrumSepolia);
+    const networkConfig = await getNetworkConfig(DEFAULT_CHAIN_ID);
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const nftContract = new ethers.Contract(
@@ -110,7 +109,7 @@ const mintNftCopy = async (
   bddIdToUseAsUri: string
 ): Promise<NFTData> => {
   try {
-    const networkConfig = await getNetworkConfig(networkChainIds.arbitrumSepolia);
+    const networkConfig = await getNetworkConfig(DEFAULT_CHAIN_ID);
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const nftContract = new ethers.Contract(
@@ -527,7 +526,7 @@ export const getPhoneNFTs = async (
   phone_number: string
 ): Promise<{ count: number; nfts: NFTInfo[] }> => {
   try {
-    const networkConfig = await getNetworkConfig(networkChainIds.arbitrumSepolia);
+    const networkConfig = await getNetworkConfig(DEFAULT_CHAIN_ID);
     const nfts = await NFTModel.find({ channel_user_id: phone_number });
 
     return {
