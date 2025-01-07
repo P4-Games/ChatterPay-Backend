@@ -39,11 +39,14 @@ const notificationTemplateCache = new NodeCache({ stdTTL: 604800 }); // 1 week
 
 /**
  * Sends an operator reply to the API.
+ *
+ * @param payload
+ * @returns
  */
 async function sendBotNotification(payload: OperatorReplyPayload): Promise<string> {
   try {
     if (!BOT_NOTIFICATIONS_ENABLED) {
-      Logger.info(`Bot notifications are disabled. Omitted payload: ${payload}`);
+      Logger.info(`Bot notifications are disabled. Omitted payload: ${JSON.stringify(payload)}`);
       return '';
     }
 
@@ -62,6 +65,7 @@ async function sendBotNotification(payload: OperatorReplyPayload): Promise<strin
 }
 
 /**
+ * Send Push Notificaiton
  *
  * @param title Notification Title
  * @param msg Notification Message
@@ -77,7 +81,7 @@ export async function sendPushNotificaton(
 ): Promise<boolean> {
   try {
     if (!PUSH_ENABLED) {
-      Logger.info(`Push notifications are disabled, PUSH_ENABLED env variable: ${PUSH_ENABLED}.`);
+      Logger.info(`Push notifications are disabled.`);
       return true;
     }
 
@@ -129,6 +133,7 @@ export async function sendPushNotificaton(
 
 /**
  * Gets user language based on the phone number.
+ *
  * @param phoneNumber
  * @returns
  */
@@ -157,6 +162,7 @@ export const getUserSettingsLanguage = async (phoneNumber: string): Promise<Lang
 
 /**
  * Get Notification Template based on channel User Id and Notification Type
+ *
  * @param channelUserId
  * @param typeOfNotification
  * @returns
@@ -212,6 +218,7 @@ async function getNotificationTemplate(
 }
 
 /**
+ * Subscribe User To Push Channel
  *
  * @param user_private_key
  * @param user_address
@@ -257,6 +264,7 @@ export async function subscribeToPushChannel(
 
 /**
  * Sends wallet creation notification.
+ *
  * @param address_of_user
  * @param channel_user_id
  */
@@ -282,6 +290,7 @@ export async function sendWalletCreationNotification(
 
 /**
  * Sends a notification for a transfer.
+ *
  * @param address_of_user
  * @param channel_user_id
  * @param from
@@ -326,6 +335,7 @@ export async function sendTransferNotification(
 
 /**
  * Sends a notification for a swap.
+ *
  * @param channel_user_id
  * @param token
  * @param amount
@@ -377,6 +387,7 @@ export async function sendSwapNotification(
 
 /**
  * Sends a notification for minted certificates and on-chain memories.
+ *
  * @param address_of_user
  * @param channel_user_id
  * @param id
@@ -415,6 +426,7 @@ export async function sendMintNotification(
 
 /**
  * Sends a notification for an outgoing transfer.
+ *
  * @param address_of_user
  * @param channel_user_id
  * @param walletTo
@@ -459,6 +471,105 @@ export async function sendOutgoingTransferNotification(
     return data;
   } catch (error) {
     Logger.error('Error in sendOutgoingTransferNotification:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sends a notification when user balance not enough
+ *
+ * @param address_of_user
+ * @param channel_user_id
+ */
+export async function sendUserInsufficientBalanceNotification(
+  address_of_user: string,
+  channel_user_id: string
+) {
+  try {
+    Logger.log(`Sending User Insufficient Balance notification to ${address_of_user}`);
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.user_balance_not_enough
+    );
+
+    const payload: OperatorReplyPayload = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message
+    };
+
+    const data = await sendBotNotification(payload);
+    sendPushNotificaton(title, message, channel_user_id); // avoid await
+    return data;
+  } catch (error) {
+    Logger.error('Error in sendUserInsufficientBalanceNotification:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sends a notification when blockchain condition are invalid
+ *
+ * @param address_of_user
+ * @param channel_user_id
+ */
+export async function sendNoValidBlockchainConditionsNotification(
+  address_of_user: string,
+  channel_user_id: string
+) {
+  try {
+    Logger.log(`Sending blockchain conditions invalid notification to ${address_of_user}`);
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.no_valid_blockchain_conditions
+    );
+
+    const payload: OperatorReplyPayload = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message
+    };
+
+    const data = await sendBotNotification(payload);
+    sendPushNotificaton(title, message, channel_user_id); // avoid await
+    return data;
+  } catch (error) {
+    Logger.error('Error in sendNoValidBlockchainConditionsNotification:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sends a notification when internal error
+ *
+ * @param address_of_user
+ * @param channel_user_id
+ */
+export async function sendInternalErrorNotification(
+  address_of_user: string,
+  channel_user_id: string
+) {
+  try {
+    Logger.log(`Sending internal error notification to ${address_of_user}`);
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.internal_error
+    );
+
+    const payload: OperatorReplyPayload = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message
+    };
+
+    const data = await sendBotNotification(payload);
+    sendPushNotificaton(title, message, channel_user_id); // avoid await
+    return data;
+  } catch (error) {
+    Logger.error('Error in sendInternalErrorNotification:', error);
     throw error;
   }
 }

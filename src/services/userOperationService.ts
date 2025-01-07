@@ -2,7 +2,7 @@ import { ethers, BigNumber } from 'ethers';
 
 import { Logger } from '../utils/logger';
 import { getUserOpHash } from '../utils/userOperation';
-import { PackedUserOperation } from '../types/userOperation';
+import { PackedUserOperationType } from '../types/userOperation';
 import {
   CALL_GAS_LIMIT,
   MAX_FEE_PER_GAS,
@@ -18,7 +18,7 @@ export async function createGenericUserOperation(
   callData: string,
   sender: string,
   nonce: BigNumber
-): Promise<PackedUserOperation> {
+): Promise<PackedUserOperationType> {
   Logger.log('Creating Generic UserOperation.');
   Logger.log('Sender Address:', sender);
   Logger.log('Call Data:', callData);
@@ -30,7 +30,7 @@ export async function createGenericUserOperation(
   Logger.log('MAX_PRIORITY_FEE_PER_GAS', MAX_PRIORITY_FEE_PER_GAS);
 
   // Use high fixed values for gas
-  const userOp: PackedUserOperation = {
+  const userOp: PackedUserOperationType = {
     sender,
     nonce,
     initCode: '0x',
@@ -84,10 +84,10 @@ export function createTransferCallData(
  * Signs the UserOperation.
  */
 export async function signUserOperation(
-  userOperation: PackedUserOperation,
+  userOperation: PackedUserOperationType,
   entryPointAddress: string,
   signer: ethers.Wallet
-): Promise<PackedUserOperation> {
+): Promise<PackedUserOperationType> {
   Logger.log('signUserOperation: Signing UserOperation.');
 
   const chainId = await signer.getChainId();
