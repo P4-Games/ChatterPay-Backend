@@ -31,6 +31,11 @@ export async function getBlockchain(chain_id: number): Promise<IBlockchain> {
 
 /**
  * Gets token address based on Token symbols
+ *
+ * @param blockchainConfig
+ * @param blockchainTokens
+ * @param lookUpTokenSymbol
+ * @returns
  */
 export function getTokenAddress(
   blockchainConfig: IBlockchain,
@@ -52,13 +57,19 @@ export function getTokenAddress(
 
 /**
  * Gets tokens addresses based on Tokens symbols
+ *
+ * @param blockchainConfig
+ * @param blockchainTokens
+ * @param lookUpTokenSymbolInput
+ * @param lookUpTokenSymbolOutput
+ * @returns
  */
 export function getTokensAddresses(
   blockchainConfig: IBlockchain,
   blockchainTokens: IToken[],
   lookUpTokenSymbolInput: string,
   lookUpTokenSymbolOutput: string
-): TokenAddresses {
+): TokenAddressesType {
   const chainTokens = blockchainTokens.filter(
     (token) => token.chain_id === blockchainConfig.chain_id
   );
