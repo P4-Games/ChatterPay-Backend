@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 import { User } from '../models/user';
 import { Logger } from '../utils/logger';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
+import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 
 interface UploadBody {
   phone_number: string;

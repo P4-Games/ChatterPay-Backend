@@ -1,13 +1,18 @@
 /**
  * Utility functions to generate tokens locally:
  *
- * bun run src/utils/generateTokens.ts
+ * bun run scripts/generateTokens.ts
  *
  */
 import crypto from 'crypto';
 
-import { Logger } from './logger';
+import { Logger } from '../src/utils/logger';
 
+/**
+ * Generate Secure Token
+ * @param length
+ * @returns
+ */
 function generateSecureToken(length = 32) {
   return crypto.randomBytes(length).toString('hex');
 }
@@ -15,5 +20,5 @@ function generateSecureToken(length = 32) {
 const chatizaloToken = generateSecureToken();
 const frontendToken = generateSecureToken();
 
-Logger.log('Chatizalo Token:', chatizaloToken);
-Logger.log('Frontend Token:', frontendToken);
+Logger.log(chatizaloToken);
+Logger.log(frontendToken);
