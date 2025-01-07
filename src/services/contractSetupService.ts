@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 
-import { Logger } from '../utils/loggerHelper';
+import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
 import { getChatterpayABI } from './bucketService';
 import { getNetworkConfig } from './networkService';

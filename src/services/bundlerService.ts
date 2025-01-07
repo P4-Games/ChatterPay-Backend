@@ -2,7 +2,7 @@ import PQueue from 'p-queue';
 import { ethers } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
 
-import { Logger } from '../utils/loggerHelper';
+import { Logger } from '../helpers/loggerHelper';
 import { PackedUserOperationType } from '../types/userOperation';
 
 const queue = new PQueue({ interval: 10000, intervalCap: 1 }); // 1 request each 10 seg

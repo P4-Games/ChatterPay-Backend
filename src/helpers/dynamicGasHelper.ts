@@ -1,5 +1,6 @@
-import { BigNumber, Contract } from "ethers";
-import { Logger } from "./loggerHelper";
+import { Contract, BigNumber } from 'ethers';
+
+import { Logger } from './loggerHelper';
 
 /**
  * Get gas limit for a transaction w/ dynamic gas.

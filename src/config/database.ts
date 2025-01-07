@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-import { Logger } from '../utils/loggerHelper';
+import { Logger } from '../helpers/loggerHelper';
 import { MONGO_URI } from '../constants/environment';
 
 /**

@@ -4,11 +4,11 @@ import NodeCache from 'node-cache';
 import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
 
 import { User, IUser } from '../models/user';
-import { Logger } from '../utils/loggerHelper';
+import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
 import { getTemplate, templateEnum } from './templateService';
-import { isValidPhoneNumber } from '../utils/validationHelper';
+import { isValidPhoneNumber } from '../helpers/validationHelper';
 import {
   LanguageEnum,
   ITemplateSchema,

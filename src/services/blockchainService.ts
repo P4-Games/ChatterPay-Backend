@@ -1,12 +1,12 @@
 import { ethers } from 'ethers';
 
 import { IToken } from '../models/token';
-import { Logger } from '../utils/loggerHelper';
+import { Logger } from '../helpers/loggerHelper';
 import { getEntryPointABI } from './bucketService';
 import { setupContracts } from './contractSetupService';
 import Blockchain, { IBlockchain } from '../models/blockchain';
-import { generatePrivateKey } from '../utils/keyGeneratorHelper';
 import { ensurePaymasterHasEnoughEth } from './paymasterService';
+import { generatePrivateKey } from '../helpers/keyGeneratorHelper';
 import {
   TokenAddressesType,
   setupContractReturnType,
@@ -17,7 +17,6 @@ import {
   BACKEND_SIGNER_MIN_BALANCE,
   USER_SIGNER_BALANCE_TO_TRANSFER
 } from '../constants/environment';
-
 /**
  * Retrieves a blockchain by its chain ID.
  *

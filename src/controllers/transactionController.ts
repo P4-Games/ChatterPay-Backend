@@ -1,14 +1,14 @@
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import web3 from '../utils/web3Helper';
+import web3 from '../helpers/web3Helper';
 import { User, IUser } from '../models/user';
-import { Logger } from '../utils/loggerHelper';
+import { Logger } from '../helpers/loggerHelper';
 import { getOrCreateUser } from '../services/userService';
 import Transaction, { ITransaction } from '../models/transaction';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import { saveTransaction, sendUserOperation } from '../services/transferService';
 import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatterHelper';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
 import { ExecueTransactionResultType, CheckBalanceConditionsResultType } from '../types/common';
 import {
   sendTransferNotification,

@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 import { FastifyInstance } from 'fastify/types/instance';
 
-import { Logger } from './utils/loggerHelper';
 import { startServer } from './config/server';
+import { Logger } from './helpers/loggerHelper';
 import { connectToDatabase } from './config/database';
 
 /**

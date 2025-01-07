@@ -1,10 +1,10 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { Logger } from '../utils/loggerHelper';
 import Token, { IToken } from '../models/token';
+import { Logger } from '../helpers/loggerHelper';
 import { BUN_ENV, SIGNING_KEY } from '../constants/environment';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatterHelper';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
 
 /**
  * Creates a new token

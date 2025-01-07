@@ -1,8 +1,8 @@
 import { gql, request } from 'graphql-request';
 
 import { User } from '../models/user';
-import { Logger } from '../utils/loggerHelper';
 import Transaction from '../models/transaction';
+import { Logger } from '../helpers/loggerHelper';
 import { sendTransferNotification } from './notificationService';
 import { LastProcessedBlock } from '../models/lastProcessedBlock';
 

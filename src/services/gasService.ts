@@ -2,8 +2,8 @@ import PQueue from 'p-queue';
 import { ethers, BigNumber } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
 
-import { Logger } from '../utils/loggerHelper';
-import { getUserOpHash } from '../utils/userOperationHekper';
+import { Logger } from '../helpers/loggerHelper';
+import { getUserOpHash } from '../helpers/userOperationHekper';
 import { PackedUserOperationType } from '../types/userOperation';
 
 interface AlchemyGasResponse {

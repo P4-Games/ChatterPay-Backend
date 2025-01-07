@@ -1,7 +1,7 @@
 import querystring from 'querystring';
 import { FastifyError, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { Logger } from '../utils/loggerHelper';
+import { Logger } from '../helpers/loggerHelper';
 
 /**
  * Parses the request body based on its format (JSON, URL-encoded, or key-value pair).

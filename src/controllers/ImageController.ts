@@ -1,9 +1,9 @@
 import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { User } from '../models/user';
-import { Logger } from '../utils/loggerHelper';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatterHelper';
+import { Logger } from '../helpers/loggerHelper';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
 
 interface UploadBody {
   phone_number: string;

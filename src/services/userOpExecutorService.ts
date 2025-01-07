@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
-import { Logger } from '../utils/loggerHelper';
+import { Logger } from '../helpers/loggerHelper';
 import { getEntryPointABI } from './bucketService';
 import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';

@@ -1,10 +1,10 @@
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { User } from '../models/user';
-import { Logger } from '../utils/loggerHelper';
 import { getPhoneNFTs } from './nftController';
+import { Logger } from '../helpers/loggerHelper';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatterHelper';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
 import {
   getFiatQuotes,
   getTokenBalances,

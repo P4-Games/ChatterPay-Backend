@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import { Alchemy, Network } from 'alchemy-sdk';
 
-import { Logger } from '../src/utils/loggerHelper';
+import { Logger } from '../src/helpers/loggerHelper';
 
 dotenv.config();
 

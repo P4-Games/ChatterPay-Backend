@@ -3,7 +3,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 
 import { setupSwagger } from './swagger';
 import { setupRoutes } from '../api/routes';
-import { Logger } from '../utils/loggerHelper';
+import { Logger } from '../helpers/loggerHelper';
 import { setupMiddleware } from '../middleware/bodyParser';
 import networkConfigPlugin from '../plugins/networkConfig';
 import { authMiddleware } from '../middleware/authMiddleware';

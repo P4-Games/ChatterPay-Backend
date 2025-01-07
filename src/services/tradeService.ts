@@ -1,7 +1,7 @@
 import { Signer } from 'ethers-5';
 import { LiFi, RouteOptions, RoutesRequest } from '@lifi/sdk';
 
-import { Logger } from '../utils/loggerHelper';
+import { Logger } from '../helpers/loggerHelper';
 import { LIFI_TYPE, LIFI_SLIPPAGE } from '../constants/blockchain';
 
 /**

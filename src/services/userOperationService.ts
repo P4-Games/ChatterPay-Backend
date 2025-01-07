@@ -1,7 +1,7 @@
 import { ethers, BigNumber } from 'ethers';
 
-import { Logger } from '../utils/loggerHelper';
-import { getUserOpHash } from '../utils/userOperationHekper';
+import { Logger } from '../helpers/loggerHelper';
+import { getUserOpHash } from '../helpers/userOperationHekper';
 import { PackedUserOperationType } from '../types/userOperation';
 import {
   CALL_GAS_LIMIT,
