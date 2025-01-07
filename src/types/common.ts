@@ -63,3 +63,8 @@ export interface ExecuteSwapResultType {
   approveTransactionHash: string;
   swapTransactionHash: string;
 }
+
+export interface ExecueTransactionResultType {
+  success: boolean;
+  transactionHash: string;
+}

@@ -4,11 +4,19 @@ import web3 from '../utils/web3_config';
 import { Logger } from '../utils/logger';
 import { User, IUser } from '../models/user';
 import { getOrCreateUser } from '../services/userService';
-import { getTokenAddress } from '../services/blockchainService';
-import { executeTransaction } from '../services/transferService';
 import Transaction, { ITransaction } from '../models/transaction';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
+import { saveTransaction, sendUserOperation } from '../services/transferService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
+import { ExecueTransactionResultType, CheckBalanceConditionsResultType } from '../types/common';
+import {
+  sendTransferNotification,
+  sendInternalErrorNotification,
+  sendOutgoingTransferNotification,
+  sendUserInsufficientBalanceNotification,
+  sendNoValidBlockchainConditionsNotification
+} from '../services/notificationService';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {
@@ -226,17 +234,25 @@ export const deleteTransaction = async (
 
 /**
  * Handles the make transaction request.
+ *
+ * @param request
+ * @param reply
+ * @returns
  */
 export const makeTransaction = async (
   request: FastifyRequest<{ Body: MakeTransactionInputs }>,
   reply: FastifyReply
+  // eslint-disable-next-line consistent-return
 ) => {
   try {
+    /* ***************************************************** */
+    /* 1. makeTransaction: input params                      */
+    /* ***************************************************** */
     if (!request.body) {
       return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
 
-    const { channel_user_id, to, token: tokenSymbol, amount, chain_id } = request.body;
+    const { channel_user_id, to, token: tokenSymbol, amount } = request.body;
     const { networkConfig, tokens: tokensConfig } = request.server as FastifyInstance;
 
     const tokenAddress: string = getTokenAddress(
@@ -261,6 +277,14 @@ export const makeTransaction = async (
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
+    /* ***************************************************** */
+    /* 2. makeTransaction: send initial response             */
+    /* ***************************************************** */
+    await returnSuccessResponse(reply, 'The transfer is in progress, it may take a few minutes.');
+
+    /* ***************************************************** */
+    /* 3. makeTransaction: check user balance                */
+    /* ***************************************************** */
     const checkBalanceResult = await verifyWalletBalanceInRpc(
       networkConfig.rpc,
       tokenAddress,
@@ -270,9 +294,25 @@ export const makeTransaction = async (
 
     if (!checkBalanceResult.enoughBalance) {
       validationError = `Insufficient balance in wwallet ${fromUser.wallet}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
-      return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
+      Logger.log(`makeTransaction: ${validationError}`);
+      await sendUserInsufficientBalanceNotification(fromUser.wallet, channel_user_id);
+      return undefined;
     }
 
+    /* ***************************************************** */
+    /* 4. makeTransaction: check blockchain conditions       */
+    /* ***************************************************** */
+    const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
+      await checkBlockchainConditions(networkConfig, channel_user_id);
+
+    if (!checkBlockchainConditionsResult.success) {
+      await sendNoValidBlockchainConditionsNotification(fromUser.wallet, channel_user_id);
+      return undefined;
+    }
+
+    /* ***************************************************** */
+    /* 5. makeTransaction: get or create user 'to'           */
+    /* ***************************************************** */
     let toUser: IUser | { wallet: string };
     if (to.startsWith('0x')) {
       toUser = { wallet: to };
@@ -280,22 +320,63 @@ export const makeTransaction = async (
       toUser = await getOrCreateUser(to);
     }
 
-    executeTransaction(
-      request.server.networkConfig,
-      fromUser,
-      toUser,
+    /* ***************************************************** */
+    /* 6. makeTransaction: save trx with pending status      */
+    /* ***************************************************** */
+
+    // TODO: makeTransaction: save transaction with pending status
+
+    /* ***************************************************** */
+    /* 7. makeTransaction: executeTransaction                */
+    /* ***************************************************** */
+    const executeTransactionResult: ExecueTransactionResultType = await sendUserOperation(
+      networkConfig,
+      checkBlockchainConditionsResult.setupContractsResult!,
+      checkBlockchainConditionsResult.entryPointContract!,
+      fromUser.wallet,
+      toUser.wallet,
       tokenAddress,
-      tokenSymbol,
-      amount,
-      chain_id ? parseInt(chain_id, 10) : networkConfig.chain_id
+      amount
     );
 
-    return await returnSuccessResponse(
-      reply,
-      'The transfer is in progress, it may take a few minutes.'
+    if (!executeTransactionResult.success) {
+      await sendInternalErrorNotification(fromUser.wallet, channel_user_id);
+      return undefined;
+    }
+
+    /* ***************************************************** */
+    /* 8. makeTransaction: update transaction in bdd         */
+    /* ***************************************************** */
+    Logger.log('Updating transaction in database.');
+    await saveTransaction(
+      executeTransactionResult.transactionHash,
+      fromUser.wallet,
+      toUser.wallet,
+      parseFloat(amount),
+      tokenSymbol,
+      'transfer',
+      'completed'
     );
+
+    /* ***************************************************** */
+    /* 9. makeTransaction: sen user notification             */
+    /* ***************************************************** */
+    const fromName = fromUser.name ?? fromUser.phone_number ?? 'Alguien';
+    const toNumber = 'phone_number' in toUser ? toUser.phone_number : toUser.wallet;
+
+    await sendTransferNotification(toNumber, fromName, amount, tokenSymbol);
+
+    await sendOutgoingTransferNotification(
+      fromUser.wallet,
+      fromUser.phone_number,
+      toNumber,
+      amount,
+      tokenSymbol,
+      executeTransactionResult.transactionHash
+    );
+
+    Logger.info(`Maketransaction completed successfully.`);
   } catch (error) {
     Logger.error('Error making transaction:', error);
-    return returnErrorResponse(reply, 400, 'Error making transaction', (error as Error).message);
   }
 };

@@ -291,7 +291,6 @@ export async function sendWalletCreationNotification(
 /**
  * Sends a notification for a transfer.
  *
- * @param address_of_user
  * @param channel_user_id
  * @param from
  * @param amount
@@ -299,7 +298,6 @@ export async function sendWalletCreationNotification(
  * @returns
  */
 export async function sendTransferNotification(
-  address_of_user: string,
   channel_user_id: string,
   from: string | null,
   amount: string,

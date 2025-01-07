@@ -2,22 +2,23 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../utils/logger';
+import { executeSwap } from '../services/swapService';
 import { SIGNING_KEY } from '../constants/environment';
 import { setupERC20 } from '../services/contractSetupService';
-import {
-  CheckBalanceConditionsResultType,
-  ExecuteSwapResultType,
-  TokenAddressesType
-} from '../types/common';
-import { executeSwap, saveSwapTransaction } from '../services/swapService';
+import { saveTransaction } from '../services/transferService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
 import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
 import {
+  TokenAddressesType,
+  ExecuteSwapResultType,
+  CheckBalanceConditionsResultType
+} from '../types/common';
+import {
   sendSwapNotification,
+  sendInternalErrorNotification,
   sendUserInsufficientBalanceNotification,
-  sendNoValidBlockchainConditionsNotification,
-  sendInternalErrorNotification
+  sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
 
 interface SwapBody {
@@ -127,20 +128,18 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     const enoughBalance: boolean = fromTokenCurrentBalance.gte(amountToCheck);
 
     if (!enoughBalance) {
-      sendUserInsufficientBalanceNotification(proxyAddress, channel_user_id);
+      await sendUserInsufficientBalanceNotification(proxyAddress, channel_user_id);
       return undefined;
     }
 
     /* ***************************************************** */
     /* 4. swap: check blockchain conditions                  */
     /* ***************************************************** */
-
-    // 4. swap: check blockchain conditions
     const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
       await checkBlockchainConditions(networkConfig, channel_user_id);
 
     if (!checkBlockchainConditionsResult.success) {
-      sendNoValidBlockchainConditionsNotification(proxyAddress, channel_user_id);
+      await sendNoValidBlockchainConditionsNotification(proxyAddress, channel_user_id);
       return undefined;
     }
 
@@ -162,12 +161,12 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       amount.toString()
     );
     if (!executeSwapResult.success) {
-      sendInternalErrorNotification(proxyAddress, channel_user_id);
+      await sendInternalErrorNotification(proxyAddress, channel_user_id);
       return undefined;
     }
 
     /* ***************************************************** */
-    /* 7. swap: send notificaiton to user                    */
+    /* 7. swap: swap: update bdd with result                 */
     /* ***************************************************** */
 
     // Get the new balances after the transaction
@@ -186,7 +185,33 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       ethers.utils.formatUnits(toTokensReceived, toTokenDecimals)
     );
 
-    // Send notifications
+    // Save transactions OUT
+    Logger.log('Updating swap transactions in database.');
+    await saveTransaction(
+      executeSwapResult.approveTransactionHash,
+      proxyAddress,
+      networkConfig.contracts.simpleSwapAddress,
+      fromTokensSentInUnits,
+      inputCurrency,
+      'swap',
+      'completed'
+    );
+
+    // Save transactions IN
+    await saveTransaction(
+      executeSwapResult.swapTransactionHash,
+      networkConfig.contracts.simpleSwapAddress,
+      proxyAddress,
+      toTokensReceivedInUnits,
+      outputCurrency,
+      'swap',
+      'completed'
+    );
+
+    /* ***************************************************** */
+    /* 8. swap: send notificaiton to user                    */
+    /* ***************************************************** */
+
     await sendSwapNotification(
       channel_user_id,
       inputCurrency,
@@ -196,35 +221,10 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       executeSwapResult.swapTransactionHash
     );
 
-    /* ***************************************************** */
-    /* 8. swap: swap: update bdd with result                 */
-    /* ***************************************************** */
-
-    // Save transactions OUT
-    Logger.log('Updating swap transactions in database.');
-    await saveSwapTransaction(
-      executeSwapResult.approveTransactionHash,
-      proxyAddress,
-      networkConfig.contracts.simpleSwapAddress,
-      fromTokensSentInUnits,
-      inputCurrency
-    );
-
-    // Save transactions IN
-    await saveSwapTransaction(
-      executeSwapResult.swapTransactionHash,
-      networkConfig.contracts.simpleSwapAddress,
-      proxyAddress,
-      toTokensReceivedInUnits,
-      outputCurrency
-    );
-
     Logger.info(
       `Swap completed successfully approveTransactionHash: ${executeSwapResult.approveTransactionHash}, swapTransactionHash: ${executeSwapResult.swapTransactionHash}.`
     );
   } catch (error) {
     Logger.error('Error swapping tokens:', error);
-    return returnErrorResponse(reply, 500, 'Internal Server Error');
-    // return reply.status(500).send({ message: 'Internal Server Error' });
   }
 };
