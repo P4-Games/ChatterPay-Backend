@@ -240,16 +240,16 @@ export async function withdrawWalletAllFunds(
   channel_user_id: string,
   to_wallet: string
 ): Promise<{ result: boolean; message: string }> {
-  const bddUser: IUser | null = await getUser(channel_user_id);
-  if (!bddUser) {
-    return { result: false, message: 'There are not user with that phone number' };
-  }
-
-  if (bddUser.walletEOA === to_wallet || bddUser.wallet === to_wallet) {
-    return { result: false, message: 'You are trying to send funds to your own wallet' };
-  }
-
   try {
+    const bddUser: IUser | null = await getUser(channel_user_id);
+    if (!bddUser) {
+      return { result: false, message: 'There are not user with that phone number' };
+    }
+
+    if (bddUser.walletEOA === to_wallet || bddUser.wallet === to_wallet) {
+      return { result: false, message: 'You are trying to send funds to your own wallet' };
+    }
+
     const to_wallet_formatted: string = !to_wallet.startsWith('0x') ? `0x${to_wallet}` : to_wallet;
 
     const walletTokensBalance: TokenBalanceType[] = await getTokenBalances(
@@ -258,7 +258,15 @@ export async function withdrawWalletAllFunds(
       networkConfig
     );
 
-    // Usar forEach para iterar sobre el array y ejecutar la transacción si el balance es mayor a 0
+    // Check Blockchain Conditions
+    const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
+      await checkBlockchainConditions(networkConfig, channel_user_id);
+
+    if (!checkBlockchainConditionsResult.success) {
+      return { result: false, message: 'Invalid Blockchain Conditions to make transaction' };
+    }
+
+    // Use forEach to iterate over the array and execute the transaction if the balance is greater than 0
     const delay = (ms: number) =>
       new Promise((resolve) => {
         setTimeout(resolve, ms);
@@ -266,7 +274,7 @@ export async function withdrawWalletAllFunds(
 
     for (let index = 0; index < walletTokensBalance.length; index += 1) {
       const tokenBalance = walletTokensBalance[index];
-      const { symbol, balance, address } = tokenBalance;
+      const { balance, address } = tokenBalance;
       const amount = parseFloat(balance);
 
       if (amount > 0) {
@@ -275,14 +283,14 @@ export async function withdrawWalletAllFunds(
         // but it resulted in the failure of the user operation calls.
         //
         // eslint-disable-next-line no-await-in-loop
-        await executeTransaction(
+        await sendUserOperation(
           networkConfig,
-          bddUser,
-          { wallet: to_wallet_formatted },
+          checkBlockchainConditionsResult.setupContractsResult!,
+          checkBlockchainConditionsResult.entryPointContract!,
+          bddUser.wallet,
+          to_wallet_formatted,
           address,
-          symbol,
-          balance,
-          networkConfig.chain_id
+          balance
         );
 
         // Only if it's not the last one
