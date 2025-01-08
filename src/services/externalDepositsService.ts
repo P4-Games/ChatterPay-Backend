@@ -124,7 +124,7 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
     const value = (Number(transfer.value) / 1e18).toFixed(4);
 
     // Send incoming transfer notification message, and record tx data
-    sendTransferNotification(transfer.to, user.phone_number, null, value, token);
+    sendTransferNotification(transfer.to, user.phone_number, value, token);
     new Transaction({
       trx_hash: transfer.id,
       wallet_from: transfer.from,

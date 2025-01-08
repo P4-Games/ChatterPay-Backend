@@ -3,6 +3,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import { User } from '../models/user';
 import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
+import { getUser } from '../services/userService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
@@ -89,7 +90,6 @@ export const walletBalance = async (
     return returnErrorResponse(reply, 400, 'Wallet address is required');
   }
 
-
   if (!isValidEthereumWallet(wallet)) {
     return returnErrorResponse(reply, 400, 'Wallet must be a valid ethereum wallet address');
   }
@@ -123,7 +123,7 @@ export const balanceByPhoneNumber = async (
   }
 
   try {
-    const user = await User.findOne({ phone_number: phone });
+    const user = await getUser(phone);
 
     if (!user) {
       Logger.warn(`User not found for phone number: ${phone}`);
