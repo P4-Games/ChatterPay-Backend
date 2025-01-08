@@ -1,5 +1,6 @@
 import { User, IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
+import { ConcurrentOperationsEnum } from '../types/common';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
 import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
@@ -28,6 +29,13 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
       notifications: {
         language: SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
       }
+    },
+    operations_in_progress: {
+      transfer: 0,
+      swap: 0,
+      mint_nft: 0,
+      mint_nft_copy: 0,
+      withdraw_all: 0
     }
   });
 
