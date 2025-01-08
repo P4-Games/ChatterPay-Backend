@@ -1,5 +1,6 @@
 import { User, IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
+import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
 import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
 import { subscribeToPushChannel, sendWalletCreationNotification } from './notificationService';
@@ -11,9 +12,10 @@ import { subscribeToPushChannel, sendWalletCreationNotification } from './notifi
  */
 export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> => {
   const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(phoneNumber);
+  const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
 
   const user = new User({
-    phone_number: phoneNumber,
+    phone_number: formattedPhoneNumber,
     wallet: predictedWallet.proxyAddress,
     walletEOA: predictedWallet.EOAAddress,
     privateKey: predictedWallet.privateKey,
@@ -42,7 +44,9 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
  * Gets user based on the phone number.
  */
 export const getUser = async (phoneNumber: string): Promise<IUser | null> => {
-  const user: IUser | null = await User.findOne({ phone_number: phoneNumber });
+  const user: IUser | null = await User.findOne({
+    phone_number: getPhoneNumberFormatted(phoneNumber)
+  });
   return user;
 };
 
