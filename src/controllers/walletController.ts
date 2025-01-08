@@ -3,6 +3,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { User, IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
 import { createUserWithWallet } from '../services/userService';
+import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**
@@ -29,13 +30,16 @@ export const createWallet = async (
       return await returnErrorResponse(reply, 400, 'Missing channel_user_id in body');
     }
 
-    const phone_number = channel_user_id;
-    if (!phone_number || phone_number.length > 15) {
-      return await returnErrorResponse(reply, 400, 'Phone number is invalid');
+    if (!isValidPhoneNumber(channel_user_id)) {
+      return await returnErrorResponse(
+        reply,
+        400,
+        `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`
+      );
     }
 
     // Check if user already exists
-    const existingUser = await User.findOne({ phone_number });
+    const existingUser = await User.findOne({ channel_user_id });
     if (existingUser) {
       return await returnSuccessResponse(
         reply,
@@ -44,7 +48,7 @@ export const createWallet = async (
     }
 
     Logger.log('Creating wallet.');
-    const user: IUser = await createUserWithWallet(phone_number);
+    const user: IUser = await createUserWithWallet(channel_user_id);
 
     return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
       walletAddress: user.wallet

@@ -4,13 +4,13 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
-import { isValidUrl } from '../helpers/validationHelper';
 import { getDynamicGas } from '../helpers/paymasterHelper';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
 import { createUserWithWallet } from '../services/userService';
 import { getWalletByPhoneNumber } from '../services/walletService';
 import { sendMintNotification } from '../services/notificationService';
+import { isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
 import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
@@ -196,6 +196,14 @@ export const generateNftOriginal = async (
     );
   }
 
+  if (!isValidPhoneNumber(channel_user_id)) {
+    return returnErrorResponse(
+      reply,
+      400,
+      `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`
+    );
+  }
+
   if (!isValidUrl(url)) {
     Logger.warn('The provided URL is not valid.');
     return returnErrorResponse(reply, 400, 'The provided URL is not valid.');
@@ -351,6 +359,14 @@ export const generateNftCopy = async (
       );
     }
 
+    if (!isValidPhoneNumber(channel_user_id)) {
+      return await returnErrorResponse(
+        reply,
+        400,
+        `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`
+      );
+    }
+
     // Verify that the NFT to copy exists
     const nfts: INFT[] = await NFTModel.find({ id });
     if (!nfts || nfts.length === 0) {
@@ -451,7 +467,7 @@ export const generateNftCopy = async (
  * @param {FastifyRequest} request - The Fastify request object.
  * @param {FastifyReply} reply - The Fastify reply object.
  */
-export const getNFT = async (
+export const getNftById = async (
   request: FastifyRequest<{
     Params: {
       id: number;
@@ -494,14 +510,32 @@ export const getLastNFT = async (
 ): Promise<void> => {
   try {
     const { channel_user_id } = request.query;
+
     Logger.log('Searching last_nft for channel_user_id', channel_user_id);
+
+    if (!channel_user_id) {
+      return await returnErrorResponse(
+        reply,
+        400,
+        'Missing parameters in body. You have to send: channel_user_id'
+      );
+    }
+
+    if (!isValidPhoneNumber(channel_user_id)) {
+      return await returnErrorResponse(
+        reply,
+        400,
+        `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`
+      );
+    }
+
     const nft = (await NFTModel.find({ channel_user_id })).sort((a, b) => b.id - a.id)?.[0];
 
     if (!nft) {
       return await returnErrorResponse(reply, 404, 'NFT not found');
     }
 
-    // Verificar si la solicitud proviene de Postman
+    // Check postman requests
     const isPostman = request.headers['user-agent']?.includes('Postman');
     const returnUrl = `https://api.whatsapp.com/send/?phone=5491164629653&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`;
 
@@ -553,6 +587,14 @@ export const getAllNFTs = async (
   reply: FastifyReply
 ): Promise<{ count: number; nfts: NFTInfo[] }> => {
   const { channel_user_id: phone_number } = request.query;
+
+  if (!isValidPhoneNumber(phone_number)) {
+    return returnErrorResponse(
+      reply,
+      400,
+      `'${phone_number}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`
+    );
+  }
 
   const result = await getPhoneNFTs(phone_number);
 

@@ -56,6 +56,7 @@ const templateSchema = new Schema<ITemplateSchema>({
     swap: { type: notificationSchema, required: true },
     mint: { type: notificationSchema, required: true },
     outgoing_transfer: { type: notificationSchema, required: true },
+    wallet_creation: { type: notificationSchema, required: true },
     user_balance_not_enough: { type: notificationSchema, required: true },
     no_valid_blockchain_conditions: { type: notificationSchema, required: true },
     internal_error: { type: notificationSchema, required: true }
