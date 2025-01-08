@@ -29,7 +29,6 @@ import {
   CHATTERPAY_NFTS_SHARE_URL,
   SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
 } from '../config/constants';
-import { ConcurrencyOperationsEnum } from '../types/common';
 
 interface OperatorReplyPayload {
   data_token: string;
@@ -585,17 +584,14 @@ export async function sendInternalErrorNotification(
 }
 
 /**
- * Sends a notification when User has operation concurrency
+ * Sends a notification when the user has concurrent operations.
  *
  * @param address_of_user
  * @param channel_user_id
  */
-export async function SendConcurrecyOperationNotification(
-  address_of_user: string,
-  channel_user_id: string
-) {
+export async function SendConcurrecyOperationNotification(channel_user_id: string) {
   try {
-    Logger.log(`Sending concurrency operation notification to ${address_of_user}`);
+    Logger.log(`Sending concurrent operation notification to ${channel_user_id}`);
 
     const { title, message } = await getNotificationTemplate(
       channel_user_id,

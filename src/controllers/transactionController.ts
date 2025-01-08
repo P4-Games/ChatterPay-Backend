@@ -5,30 +5,30 @@ import { IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
 import { INFURA_API_KEY } from '../config/constants';
 import Transaction, { ITransaction } from '../models/transaction';
-import {
-  getUser,
-  getOrCreateUser,
-  hasUserOperationInProgress,
-  openOperation,
-  closeOperation
-} from '../services/userService';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import { saveTransaction, sendUserOperation } from '../services/transferService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
 import {
+  ConcurrentOperationsEnum,
   ExecueTransactionResultType,
-  CheckBalanceConditionsResultType,
-  ConcurrencyOperationsEnum
+  CheckBalanceConditionsResultType
 } from '../types/common';
+import {
+  getUser,
+  openOperation,
+  closeOperation,
+  getOrCreateUser,
+  hasUserOperationInProgress
+} from '../services/userService';
 import {
   sendTransferNotification,
   sendInternalErrorNotification,
   sendOutgoingTransferNotification,
+  SendConcurrecyOperationNotification,
   sendUserInsufficientBalanceNotification,
-  sendNoValidBlockchainConditionsNotification,
-  SendConcurrecyOperationNotification
+  sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
 
 type PaginationQuery = { page?: string; limit?: string };
@@ -294,15 +294,15 @@ export const makeTransaction = async (
     }
 
     /* ***************************************************** */
-    /* 2. makeTransaction: open concurrency operation      */
+    /* 2. makeTransaction: open concurrent operation      */
     /* ***************************************************** */
-    if (hasUserOperationInProgress(fromUser, ConcurrencyOperationsEnum.Transfer)) {
-      validationError = `Concurrency operation for wallet ${fromUser.wallet}, phone: ${fromUser.phone_number}.`;
+    if (hasUserOperationInProgress(fromUser, ConcurrentOperationsEnum.Transfer)) {
+      validationError = `Concurrent transfer operation for wallet ${fromUser.wallet}, phone: ${fromUser.phone_number}.`;
       Logger.log(`makeTransaction: ${validationError}`);
-      await SendConcurrecyOperationNotification(fromUser.wallet, channel_user_id);
-      return undefined;
+      await SendConcurrecyOperationNotification(channel_user_id);
+      return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
-    await openOperation(fromUser.phone_number, ConcurrencyOperationsEnum.Transfer);
+    await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
 
     /* ***************************************************** */
     /* 3. makeTransaction: send initial response             */
@@ -322,7 +322,7 @@ export const makeTransaction = async (
     if (!checkBalanceResult.enoughBalance) {
       validationError = `Insufficient balance, phone: ${fromUser.phone_number}, wallet: ${fromUser.wallet}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
       Logger.log(`makeTransaction: ${validationError}`);
-      await closeOperation(fromUser.phone_number, ConcurrencyOperationsEnum.Transfer);
+      await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       await sendUserInsufficientBalanceNotification(fromUser.wallet, channel_user_id);
       return undefined;
     }
@@ -335,7 +335,7 @@ export const makeTransaction = async (
 
     if (!checkBlockchainConditionsResult.success) {
       await sendNoValidBlockchainConditionsNotification(fromUser.wallet, channel_user_id);
-      await closeOperation(fromUser.phone_number, ConcurrencyOperationsEnum.Transfer);
+      await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       return undefined;
     }
 
@@ -370,7 +370,7 @@ export const makeTransaction = async (
 
     if (!executeTransactionResult.success) {
       await sendInternalErrorNotification(fromUser.wallet, channel_user_id);
-      await closeOperation(fromUser.phone_number, ConcurrencyOperationsEnum.Transfer);
+      await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       return undefined;
     }
 
@@ -405,7 +405,7 @@ export const makeTransaction = async (
       executeTransactionResult.transactionHash
     );
 
-    await closeOperation(fromUser.phone_number, ConcurrencyOperationsEnum.Transfer);
+    await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
     Logger.info(`Maketransaction completed successfully.`);
   } catch (error) {
     Logger.error('Error making transaction:', error);

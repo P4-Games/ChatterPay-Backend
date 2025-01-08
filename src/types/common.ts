@@ -79,7 +79,7 @@ export interface setupContractReturnType {
   accountExists: boolean;
 }
 
-export enum ConcurrencyOperationsEnum {
+export enum ConcurrentOperationsEnum {
   Transfer = 'transfer',
   Swap = 'swap',
   MintNft = 'mint_nft',

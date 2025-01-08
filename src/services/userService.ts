@@ -1,10 +1,10 @@
 import { User, IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
+import { ConcurrentOperationsEnum } from '../types/common';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
 import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
 import { subscribeToPushChannel, sendWalletCreationNotification } from './notificationService';
-import { ConcurrencyOperationsEnum } from '../types/common';
 
 /**
  * Creates a new wallet and user for the given phone number.
@@ -75,7 +75,7 @@ export const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
 
 export const hasPhoneOperationInProgress = async (
   phoneNumber: string,
-  operation: ConcurrencyOperationsEnum
+  operation: ConcurrentOperationsEnum
 ): Promise<number> => {
   const user = await User.findOne({ phone_number: getPhoneNumberFormatted(phoneNumber) });
   return user?.operations_in_progress?.[operation] || 0;
@@ -83,22 +83,22 @@ export const hasPhoneOperationInProgress = async (
 
 export const hasUserOperationInProgress = (
   user: IUser,
-  operation: ConcurrencyOperationsEnum
+  operation: ConcurrentOperationsEnum
 ): boolean => (user.operations_in_progress?.[operation] || 0) > 0;
 
 export const openOperation = (
   phoneNumber: string,
-  operation: ConcurrencyOperationsEnum
+  operation: ConcurrentOperationsEnum
 ): Promise<void> => updateOperationCount(phoneNumber, operation, 1);
 
 export const closeOperation = (
   phoneNumber: string,
-  operation: ConcurrencyOperationsEnum
+  operation: ConcurrentOperationsEnum
 ): Promise<void> => updateOperationCount(phoneNumber, operation, -1);
 
 const updateOperationCount = async (
   phoneNumber: string,
-  operation: ConcurrencyOperationsEnum,
+  operation: ConcurrentOperationsEnum,
   increment: number
 ): Promise<void> => {
   const user: IUser | null = await User.findOne({
