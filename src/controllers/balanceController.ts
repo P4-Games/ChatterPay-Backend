@@ -5,6 +5,7 @@ import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import {
   getFiatQuotes,
   getTokenBalances,
@@ -85,8 +86,12 @@ export const walletBalance = async (
   const { wallet } = request.params;
 
   if (!wallet) {
-    Logger.warn('Wallet address is required');
     return returnErrorResponse(reply, 400, 'Wallet address is required');
+  }
+
+
+  if (!isValidEthereumWallet(wallet)) {
+    return returnErrorResponse(reply, 400, 'Wallet must be a valid ethereum wallet address');
   }
 
   return getAddressBalance(wallet, reply, request.server);
@@ -109,6 +114,12 @@ export const balanceByPhoneNumber = async (
   if (!phone) {
     Logger.warn('Phone number is required');
     return returnErrorResponse(reply, 400, 'Phone number is required');
+  }
+
+  if (!isValidPhoneNumber(phone)) {
+    Logger.warn(`Phone number ${phone} is invalid`);
+    const msgError = `'${phone}' is invalid. 'phone' parameter must be a phone number (without spaces or symbols)`;
+    return returnErrorResponse(reply, 400, msgError);
   }
 
   try {
