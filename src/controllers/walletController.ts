@@ -1,9 +1,9 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { User, IUser } from '../models/user';
+import { IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
-import { createUserWithWallet } from '../services/userService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { getUser, createUserWithWallet } from '../services/userService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**
@@ -39,7 +39,7 @@ export const createWallet = async (
     }
 
     // Check if user already exists
-    const existingUser = await User.findOne({ channel_user_id });
+    const existingUser = await getUser(channel_user_id);
     if (existingUser) {
       return await returnSuccessResponse(
         reply,
