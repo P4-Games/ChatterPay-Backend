@@ -89,7 +89,6 @@ export const walletBalance = async (
     return returnErrorResponse(reply, 400, 'Wallet address is required');
   }
 
-
   if (!isValidEthereumWallet(wallet)) {
     return returnErrorResponse(reply, 400, 'Wallet must be a valid ethereum wallet address');
   }

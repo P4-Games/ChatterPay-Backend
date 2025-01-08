@@ -47,7 +47,7 @@ export const createWallet = async (
       );
     }
 
-    Logger.log('Creating wallet.');
+    Logger.log(`Creating wallet for phone number ${channel_user_id}`);
     const user: IUser = await createUserWithWallet(channel_user_id);
 
     return await returnSuccessResponse(reply, 'The wallet was created successfully!', {

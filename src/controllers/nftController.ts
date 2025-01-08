@@ -384,7 +384,7 @@ export const generateNftCopy = async (
     }
 
     // optimistic response
-    Logger.log('sending notification: el certificado se está generando');
+    Logger.log('sending notification: the certificate is being generated');
     returnSuccessResponse(reply, 'The certificate is being generated');
 
     // search by NFT original
