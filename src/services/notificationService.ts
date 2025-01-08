@@ -29,6 +29,7 @@ import {
   CHATTERPAY_NFTS_SHARE_URL,
   SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
 } from '../config/constants';
+import { ConcurrencyOperationsEnum } from '../types/common';
 
 interface OperatorReplyPayload {
   data_token: string;
@@ -579,6 +580,39 @@ export async function sendInternalErrorNotification(
     return data;
   } catch (error) {
     Logger.error('Error in sendInternalErrorNotification:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sends a notification when User has operation concurrency
+ *
+ * @param address_of_user
+ * @param channel_user_id
+ */
+export async function SendConcurrecyOperationNotification(
+  address_of_user: string,
+  channel_user_id: string
+) {
+  try {
+    Logger.log(`Sending concurrency operation notification to ${address_of_user}`);
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.concurrent_operation
+    );
+
+    const payload: OperatorReplyPayload = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message
+    };
+
+    const data = await sendBotNotification(payload);
+    sendPushNotificaton(title, message, channel_user_id); // avoid await
+    return data;
+  } catch (error) {
+    Logger.error('Error in SendConcurrecyOperation:', error);
     throw error;
   }
 }

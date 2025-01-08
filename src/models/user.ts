@@ -17,6 +17,13 @@ export interface IUser extends Document {
       language: string;
     };
   };
+  operations_in_progress?: {
+    transfer: number;
+    swap: number;
+    mint_nft: number;
+    mint_nft_copy: number;
+    withdraw_all: number;
+  };
 }
 
 const userSchema = new Schema<IUser>({
@@ -33,6 +40,13 @@ const userSchema = new Schema<IUser>({
     notifications: {
       language: { type: String, required: true, default: SETTINGS_NOTIFICATION_LANGUAGE_DFAULT }
     }
+  },
+  operations_in_progress: {
+    transfer: { type: Number, required: false, default: 0 },
+    swap: { type: Number, required: false, default: 0 },
+    mint_nft: { type: Number, required: false, default: 0 },
+    mint_nft_copy: { type: Number, required: false, default: 0 },
+    withdraw_all: { type: Number, required: false, default: 0 }
   }
 });
 

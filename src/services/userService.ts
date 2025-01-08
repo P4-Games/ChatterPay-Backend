@@ -4,6 +4,7 @@ import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
 import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
 import { subscribeToPushChannel, sendWalletCreationNotification } from './notificationService';
+import { ConcurrencyOperationsEnum } from '../types/common';
 
 /**
  * Creates a new wallet and user for the given phone number.
@@ -28,6 +29,13 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
       notifications: {
         language: SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
       }
+    },
+    operations_in_progress: {
+      transfer: 0,
+      swap: 0,
+      mint_nft: 0,
+      mint_nft_copy: 0,
+      withdraw_all: 0
     }
   });
 
@@ -63,4 +71,43 @@ export const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
   Logger.log(`Phone number ${phoneNumber} registered with the wallet ${newUser.wallet}`);
 
   return newUser;
+};
+
+export const hasPhoneOperationInProgress = async (
+  phoneNumber: string,
+  operation: ConcurrencyOperationsEnum
+): Promise<number> => {
+  const user = await User.findOne({ phone_number: getPhoneNumberFormatted(phoneNumber) });
+  return user?.operations_in_progress?.[operation] || 0;
+};
+
+export const hasUserOperationInProgress = (
+  user: IUser,
+  operation: ConcurrencyOperationsEnum
+): boolean => (user.operations_in_progress?.[operation] || 0) > 0;
+
+export const openOperation = (
+  phoneNumber: string,
+  operation: ConcurrencyOperationsEnum
+): Promise<void> => updateOperationCount(phoneNumber, operation, 1);
+
+export const closeOperation = (
+  phoneNumber: string,
+  operation: ConcurrencyOperationsEnum
+): Promise<void> => updateOperationCount(phoneNumber, operation, -1);
+
+const updateOperationCount = async (
+  phoneNumber: string,
+  operation: ConcurrencyOperationsEnum,
+  increment: number
+): Promise<void> => {
+  const user: IUser | null = await User.findOne({
+    phone_number: getPhoneNumberFormatted(phoneNumber)
+  });
+
+  if (user && user.operations_in_progress) {
+    const currentCount = user.operations_in_progress[operation] || 0;
+    user.operations_in_progress[operation] = Math.max(currentCount + increment, 0);
+    await user.save();
+  }
 };

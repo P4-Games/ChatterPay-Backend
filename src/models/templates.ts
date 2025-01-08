@@ -14,7 +14,8 @@ export enum NotificationEnum {
   wallet_creation = 'wallet_creation',
   user_balance_not_enough = 'user_balance_not_enough',
   no_valid_blockchain_conditions = 'no_valid_blockchain_conditions',
-  internal_error = 'internal_error'
+  internal_error = 'internal_error',
+  concurrent_operation = 'concurrent_operation'
 }
 
 export interface LocalizedContentType {
@@ -59,6 +60,7 @@ const templateSchema = new Schema<ITemplateSchema>({
     wallet_creation: { type: notificationSchema, required: true },
     user_balance_not_enough: { type: notificationSchema, required: true },
     no_valid_blockchain_conditions: { type: notificationSchema, required: true },
+    concurrent_operation: { type: notificationSchema, required: true },
     internal_error: { type: notificationSchema, required: true }
   }
 });
