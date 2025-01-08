@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 
 import {
-  getNFT,
+  getNftById,
   getAllNFTs,
   getLastNFT,
   getNftList,
@@ -38,7 +38,7 @@ const nftRoutes = async (fastify: FastifyInstance): Promise<void> => {
    * Route to get a specific NFT by its ID.
    * @route GET /nft/:id
    */
-  fastify.get('/nft/:id', getNFT);
+  fastify.get('/nft/:id', getNftById);
 
   /**
    * Route to get a NFT metadata specific to smart contract.

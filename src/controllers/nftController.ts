@@ -451,7 +451,7 @@ export const generateNftCopy = async (
  * @param {FastifyRequest} request - The Fastify request object.
  * @param {FastifyReply} reply - The Fastify reply object.
  */
-export const getNFT = async (
+export const getNftById = async (
   request: FastifyRequest<{
     Params: {
       id: number;
