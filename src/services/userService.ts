@@ -17,6 +17,7 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
     wallet: predictedWallet.proxyAddress,
     walletEOA: predictedWallet.EOAAddress,
     privateKey: predictedWallet.privateKey,
+    creationDate: new Date(),
     code: null,
     photo: '/assets/images/avatars/generic_user.jpg',
     email: null,
