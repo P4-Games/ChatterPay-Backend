@@ -8,6 +8,7 @@ import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchain';
 import { setupERC20 } from './contractSetupService';
 import { getTokenAddress } from './blockchainService';
+import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import {
   CurrencyType,
   FiatQuoteType,
@@ -340,7 +341,9 @@ export async function getTokenInfo(tokens: IToken[], chanId: number): Promise<To
  */
 export async function getWalletByPhoneNumber(phoneNumber: string): Promise<string | null> {
   try {
-    const user = await User.findOne({ phone_number: phoneNumber }).select('wallet').exec();
+    const user = await User.findOne({ phone_number: getPhoneNumberFormatted(phoneNumber) })
+      .select('wallet')
+      .exec();
     return user ? user.wallet : null;
   } catch (error) {
     Logger.error('Error al obtener la wallet:', error);
