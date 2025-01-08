@@ -5,17 +5,28 @@ import { IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
 import { INFURA_API_KEY } from '../config/constants';
 import Transaction, { ITransaction } from '../models/transaction';
-import { getUser, getOrCreateUser } from '../services/userService';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import { saveTransaction, sendUserOperation } from '../services/transferService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
-import { ExecueTransactionResultType, CheckBalanceConditionsResultType } from '../types/common';
+import {
+  ConcurrentOperationsEnum,
+  ExecueTransactionResultType,
+  CheckBalanceConditionsResultType
+} from '../types/common';
+import {
+  getUser,
+  openOperation,
+  closeOperation,
+  getOrCreateUser,
+  hasUserOperationInProgress
+} from '../services/userService';
 import {
   sendTransferNotification,
   sendInternalErrorNotification,
   sendOutgoingTransferNotification,
+  SendConcurrecyOperationNotification,
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
@@ -283,12 +294,23 @@ export const makeTransaction = async (
     }
 
     /* ***************************************************** */
-    /* 2. makeTransaction: send initial response             */
+    /* 2. makeTransaction: open concurrent operation      */
+    /* ***************************************************** */
+    if (hasUserOperationInProgress(fromUser, ConcurrentOperationsEnum.Transfer)) {
+      validationError = `Concurrent operation for wallet ${fromUser.wallet}, phone: ${fromUser.phone_number}.`;
+      Logger.log(`makeTransaction: ${validationError}`);
+      await SendConcurrecyOperationNotification(fromUser.wallet, channel_user_id);
+      return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
+    }
+    await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+
+    /* ***************************************************** */
+    /* 3. makeTransaction: send initial response             */
     /* ***************************************************** */
     await returnSuccessResponse(reply, 'The transfer is in progress, it may take a few minutes.');
 
     /* ***************************************************** */
-    /* 3. makeTransaction: check user balance                */
+    /* 4. makeTransaction: check user balance                */
     /* ***************************************************** */
     const checkBalanceResult = await verifyWalletBalanceInRpc(
       networkConfig.rpc,
@@ -298,25 +320,27 @@ export const makeTransaction = async (
     );
 
     if (!checkBalanceResult.enoughBalance) {
-      validationError = `Insufficient balance in wwallet ${fromUser.wallet}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
+      validationError = `Insufficient balance, phone: ${fromUser.phone_number}, wallet: ${fromUser.wallet}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
       Logger.log(`makeTransaction: ${validationError}`);
+      await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       await sendUserInsufficientBalanceNotification(fromUser.wallet, channel_user_id);
       return undefined;
     }
 
     /* ***************************************************** */
-    /* 4. makeTransaction: check blockchain conditions       */
+    /* 5. makeTransaction: check blockchain conditions       */
     /* ***************************************************** */
     const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
       await checkBlockchainConditions(networkConfig, channel_user_id);
 
     if (!checkBlockchainConditionsResult.success) {
       await sendNoValidBlockchainConditionsNotification(fromUser.wallet, channel_user_id);
+      await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       return undefined;
     }
 
     /* ***************************************************** */
-    /* 5. makeTransaction: get or create user 'to'           */
+    /* 6. makeTransaction: get or create user 'to'           */
     /* ***************************************************** */
     let toUser: IUser | { wallet: string };
     if (to.startsWith('0x')) {
@@ -326,13 +350,13 @@ export const makeTransaction = async (
     }
 
     /* ***************************************************** */
-    /* 6. makeTransaction: save trx with pending status      */
+    /* 7. makeTransaction: save trx with pending status      */
     /* ***************************************************** */
 
     // TODO: makeTransaction: save transaction with pending status
 
     /* ***************************************************** */
-    /* 7. makeTransaction: executeTransaction                */
+    /* 8. makeTransaction: executeTransaction                */
     /* ***************************************************** */
     const executeTransactionResult: ExecueTransactionResultType = await sendUserOperation(
       networkConfig,
@@ -346,11 +370,12 @@ export const makeTransaction = async (
 
     if (!executeTransactionResult.success) {
       await sendInternalErrorNotification(fromUser.wallet, channel_user_id);
+      await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       return undefined;
     }
 
     /* ***************************************************** */
-    /* 8. makeTransaction: update transaction in bdd         */
+    /* 9. makeTransaction: update transaction in bdd         */
     /* ***************************************************** */
     Logger.log('Updating transaction in database.');
     await saveTransaction(
@@ -364,7 +389,7 @@ export const makeTransaction = async (
     );
 
     /* ***************************************************** */
-    /* 9. makeTransaction: sen user notification             */
+    /* 10. makeTransaction: sen user notification             */
     /* ***************************************************** */
     const fromName = fromUser.name ?? fromUser.phone_number ?? 'Alguien';
     const toNumber = 'phone_number' in toUser ? toUser.phone_number : toUser.wallet;
@@ -380,6 +405,7 @@ export const makeTransaction = async (
       executeTransactionResult.transactionHash
     );
 
+    await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
     Logger.info(`Maketransaction completed successfully.`);
   } catch (error) {
     Logger.error('Error making transaction:', error);

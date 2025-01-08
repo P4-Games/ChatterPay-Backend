@@ -34,7 +34,7 @@ const userSchema = new Schema<IUser>({
   wallet: { type: String, required: true },
   walletEOA: { type: String, required: false },
   privateKey: { type: String, required: true },
-  creationDate: { type: Date, required: true },
+  creationDate: { type: Date, required: false },
   code: { type: Number, required: false },
   settings: {
     notifications: {
