@@ -21,7 +21,8 @@ import {
   openOperation,
   closeOperation,
   createUserWithWallet,
-  hasPhoneOperationInProgress
+  hasPhoneOperationInProgress,
+  getOrCreateUser
 } from '../services/userService';
 
 export interface NFTInfo {
@@ -428,7 +429,7 @@ export const generateNftCopy = async (
     }
 
     Logger.log('Saving NFT copy in database');
-    const user: IUser = await createUserWithWallet(channel_user_id);
+    const user: IUser = await getOrCreateUser(channel_user_id);
     const mongoData = await NFTModel.create({
       id: '0', // update later nftData.tokenId,
       trxId: '0', // update later nftData.receipt.transactionHash,
