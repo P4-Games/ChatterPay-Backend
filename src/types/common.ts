@@ -78,3 +78,11 @@ export interface setupContractReturnType {
   proxy: ComputedAddress;
   accountExists: boolean;
 }
+
+export enum ConcurrentOperationsEnum {
+  Transfer = 'transfer',
+  Swap = 'swap',
+  MintNft = 'mint_nft',
+  MintNftCopy = 'mint_nft_copy',
+  WithdrawAll = 'withdraw_all'
+}

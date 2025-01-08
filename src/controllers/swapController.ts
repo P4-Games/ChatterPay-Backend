@@ -11,13 +11,20 @@ import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
 import {
+  openOperation,
+  closeOperation,
+  hasPhoneOperationInProgress
+} from '../services/userService';
+import {
   TokenAddressesType,
   ExecuteSwapResultType,
+  ConcurrentOperationsEnum,
   CheckBalanceConditionsResultType
 } from '../types/common';
 import {
   sendSwapNotification,
   sendInternalErrorNotification,
+  SendConcurrecyOperationNotification,
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
@@ -94,11 +101,27 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       outputCurrency
     );
 
-    const validationError: string = await validateInputs(request.body, tokenAddresses);
+    let validationError: string = await validateInputs(request.body, tokenAddresses);
 
     if (validationError) {
       return await returnErrorResponse(reply, 400, validationError);
     }
+
+    /* ***************************************************** */
+    /* 2. makeTransaction: open concurrent operation      */
+    /* ***************************************************** */
+    if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.Swap)) {
+      validationError = `Concurrent swap operation for phone: ${channel_user_id}.`;
+      Logger.log(`swap: ${validationError}`);
+      await SendConcurrecyOperationNotification(channel_user_id);
+      return await returnErrorResponse(
+        reply,
+        400,
+        'Error making swap transaction',
+        validationError
+      );
+    }
+    await openOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
 
     /* ***************************************************** */
     /* 2. swap: send initial response                        */
@@ -129,6 +152,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     if (!enoughBalance) {
       await sendUserInsufficientBalanceNotification(proxyAddress, channel_user_id);
+      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;
     }
 
@@ -140,6 +164,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     if (!checkBlockchainConditionsResult.success) {
       await sendNoValidBlockchainConditionsNotification(proxyAddress, channel_user_id);
+      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;
     }
 
@@ -162,6 +187,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     );
     if (!executeSwapResult.success) {
       await sendInternalErrorNotification(proxyAddress, channel_user_id);
+      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;
     }
 
@@ -221,6 +247,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       executeSwapResult.swapTransactionHash
     );
 
+    await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
     Logger.info(
       `Swap completed successfully approveTransactionHash: ${executeSwapResult.approveTransactionHash}, swapTransactionHash: ${executeSwapResult.swapTransactionHash}.`
     );
