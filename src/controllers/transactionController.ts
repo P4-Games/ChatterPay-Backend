@@ -9,6 +9,7 @@ import Transaction, { ITransaction } from '../models/transaction';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import { saveTransaction, sendUserOperation } from '../services/transferService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
 import { ExecueTransactionResultType, CheckBalanceConditionsResultType } from '../types/common';
 import {
@@ -44,14 +45,14 @@ const validateInputs = async (
   if (Number.isNaN(parseFloat(amount))) {
     return 'The entered amount is invalid';
   }
-  if (channel_user_id === to) {
+  if (channel_user_id.trim() === to.trim()) {
     return 'You cannot send money to yourself';
   }
-  if (
-    channel_user_id.length > 15 ||
-    (to.startsWith('0x') && !Number.isNaN(parseInt(to, 10)) && to.length <= 15)
-  ) {
-    return 'The phone number is invalid';
+  if (!isValidEthereumWallet(channel_user_id) && !isValidPhoneNumber(channel_user_id)) {
+    return `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a Wallet or phone number (without spaces or symbols)`;
+  }
+  if (!isValidEthereumWallet(to) && !isValidPhoneNumber(to)) {
+    return `'${to}' is invalid. 'to' parameter must be a Wallet or phone number (without spaces or symbols)`;
   }
   if (token.length > 5) {
     return 'The token symbol is invalid';
