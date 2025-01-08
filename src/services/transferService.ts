@@ -1,7 +1,6 @@
 import { ethers } from 'ethers';
 
 import { IUser } from '../models/user';
-import { getUser } from './userService';
 import { IToken } from '../models/token';
 import Transaction from '../models/transaction';
 import { Logger } from '../helpers/loggerHelper';
@@ -12,6 +11,7 @@ import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
 import { checkBlockchainConditions } from './blockchainService';
 import { waitForUserOperationReceipt } from './userOpExecutorService';
+import { getUser, openOperation, closeOperation, hasUserOperationInProgress } from './userService';
 import {
   signUserOperation,
   createTransferCallData,
@@ -20,6 +20,7 @@ import {
 import {
   TokenBalanceType,
   setupContractReturnType,
+  ConcurrentOperationsEnum,
   ExecueTransactionResultType,
   CheckBalanceConditionsResultType
 } from '../types/common';
@@ -155,6 +156,13 @@ export async function withdrawWalletAllFunds(
       return { result: false, message: 'You are trying to send funds to your own wallet' };
     }
 
+    if (hasUserOperationInProgress(bddUser, ConcurrentOperationsEnum.WithdrawAll)) {
+      return {
+        result: false,
+        message: `Concurrent withdraw-all operation for wallet ${bddUser.wallet}, phone: ${bddUser.phone_number}.`
+      };
+    }
+
     const to_wallet_formatted: string = !to_wallet.startsWith('0x') ? `0x${to_wallet}` : to_wallet;
 
     const walletTokensBalance: TokenBalanceType[] = await getTokenBalances(
@@ -170,6 +178,8 @@ export async function withdrawWalletAllFunds(
     if (!checkBlockchainConditionsResult.success) {
       return { result: false, message: 'Invalid Blockchain Conditions to make transaction' };
     }
+
+    await openOperation(bddUser.phone_number, ConcurrentOperationsEnum.WithdrawAll);
 
     // Use forEach to iterate over the array and execute the transaction if the balance is greater than 0
     const delay = (ms: number) =>
@@ -208,5 +218,6 @@ export async function withdrawWalletAllFunds(
     return { result: false, message: (error as Error).message };
   }
 
+  await closeOperation(channel_user_id, ConcurrentOperationsEnum.WithdrawAll);
   return { result: true, message: '' };
 }
