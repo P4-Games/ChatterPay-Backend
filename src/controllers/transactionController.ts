@@ -1,11 +1,11 @@
 import { Web3 } from 'web3';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { User, IUser } from '../models/user';
+import { IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
 import { INFURA_API_KEY } from '../config/constants';
-import { getOrCreateUser } from '../services/userService';
 import Transaction, { ITransaction } from '../models/transaction';
+import { getUser, getOrCreateUser } from '../services/userService';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import { saveTransaction, sendUserOperation } from '../services/transferService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
@@ -275,7 +275,8 @@ export const makeTransaction = async (
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
-    const fromUser: IUser | null = await User.findOne({ phone_number: channel_user_id });
+    const fromUser: IUser | null = await getUser(channel_user_id);
+
     if (!fromUser) {
       validationError = 'User not found. You must have an account to make a transaction';
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
