@@ -374,15 +374,6 @@ export const generateNftCopy = async (
     }
     const nftCopyOf = nfts[0];
 
-    // Verify that the user exists
-    let address_of_user = await getWalletByPhoneNumber(channel_user_id);
-    if (!address_of_user) {
-      Logger.log('The user wallet does not exist. Creating.');
-      const user: IUser = await createUserWithWallet(channel_user_id);
-      address_of_user = user.wallet;
-      Logger.log('Wallet created.');
-    }
-
     // optimistic response
     Logger.log('sending notification: the certificate is being generated');
     returnSuccessResponse(reply, 'The certificate is being generated');
@@ -408,6 +399,7 @@ export const generateNftCopy = async (
     }
 
     Logger.log('Saving NFT copy in database');
+    const user: IUser = await createUserWithWallet(channel_user_id);
     const mongoData = await NFTModel.create({
       id: '0', // update later nftData.tokenId,
       trxId: '0', // update later nftData.receipt.transactionHash,
@@ -419,7 +411,7 @@ export const generateNftCopy = async (
       copy_order: nftCopyOf.total_of_this + 1,
       copy_of_original,
       copy_order_original,
-      wallet: address_of_user,
+      wallet: user.wallet,
       metadata: nftCopyOf.metadata ? nftCopyOf.metadata : defaultMetadata
     });
 
@@ -431,7 +423,7 @@ export const generateNftCopy = async (
     let nftData: NFTData;
     try {
       nftData = await mintNftCopy(
-        address_of_user,
+        user.wallet,
         nftCopyOf.id,
         (mongoData._id as ObjectId).toString()
       );
@@ -451,7 +443,7 @@ export const generateNftCopy = async (
       }
     );
 
-    await sendMintNotification(address_of_user, channel_user_id, nftData.tokenId.toString());
+    await sendMintNotification(user.wallet, channel_user_id, nftData.tokenId.toString());
 
     Logger.log('NFT copy end.');
   } catch (error) {
