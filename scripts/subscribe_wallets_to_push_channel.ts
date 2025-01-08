@@ -10,7 +10,7 @@ import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
 import { IUser } from '../src/models/user';
 import { Logger } from '../src/helpers/loggerHelper';
-import { generatePrivateKey } from '../src/helpers/keyGeneratorHelper';
+import { generatePrivateKey } from '../src/helpers/SecurityHelper';
 
 dotenv.config();
 

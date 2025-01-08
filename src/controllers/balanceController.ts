@@ -3,8 +3,10 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import { User } from '../models/user';
 import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
+import { getUser } from '../services/userService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import {
   getFiatQuotes,
   getTokenBalances,
@@ -85,8 +87,11 @@ export const walletBalance = async (
   const { wallet } = request.params;
 
   if (!wallet) {
-    Logger.warn('Wallet address is required');
     return returnErrorResponse(reply, 400, 'Wallet address is required');
+  }
+
+  if (!isValidEthereumWallet(wallet)) {
+    return returnErrorResponse(reply, 400, 'Wallet must be a valid ethereum wallet address');
   }
 
   return getAddressBalance(wallet, reply, request.server);
@@ -111,8 +116,14 @@ export const balanceByPhoneNumber = async (
     return returnErrorResponse(reply, 400, 'Phone number is required');
   }
 
+  if (!isValidPhoneNumber(phone)) {
+    Logger.warn(`Phone number ${phone} is invalid`);
+    const msgError = `'${phone}' is invalid. 'phone' parameter must be a phone number (without spaces or symbols)`;
+    return returnErrorResponse(reply, 400, msgError);
+  }
+
   try {
-    const user = await User.findOne({ phone_number: phone });
+    const user = await getUser(phone);
 
     if (!user) {
       Logger.warn(`User not found for phone number: ${phone}`);

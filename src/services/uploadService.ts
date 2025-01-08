@@ -16,7 +16,7 @@ import {
   ICP_CANISTER_ID,
   NFT_UPLOAD_IMAGE_ICP,
   NFT_UPLOAD_IMAGE_IPFS
-} from '../constants/environment';
+} from '../config/constants';
 
 dotenv.config();
 

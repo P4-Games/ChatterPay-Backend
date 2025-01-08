@@ -2,13 +2,14 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
+import { SIGNING_KEY } from '../config/constants';
 import { executeSwap } from '../services/swapService';
-import { SIGNING_KEY } from '../constants/environment';
 import { setupERC20 } from '../services/contractSetupService';
 import { saveTransaction } from '../services/transferService';
+import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
 import {
   TokenAddressesType,
   ExecuteSwapResultType,
@@ -46,8 +47,8 @@ const validateInputs = async (
     return 'Missing required fields: address, inputCurrency, or outputCurrency';
   }
 
-  if (channel_user_id.length > 15) {
-    return 'Invalid Phone Number';
+  if (!isValidPhoneNumber(channel_user_id)) {
+    return `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`;
   }
 
   if (inputCurrency === outputCurrency) {

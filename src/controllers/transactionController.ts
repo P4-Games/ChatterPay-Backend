@@ -1,14 +1,16 @@
+import { Web3 } from 'web3';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import web3 from '../helpers/web3Helper';
-import { User, IUser } from '../models/user';
+import { IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
-import { getOrCreateUser } from '../services/userService';
+import { INFURA_API_KEY } from '../config/constants';
 import Transaction, { ITransaction } from '../models/transaction';
+import { getUser, getOrCreateUser } from '../services/userService';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import { saveTransaction, sendUserOperation } from '../services/transferService';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
 import { ExecueTransactionResultType, CheckBalanceConditionsResultType } from '../types/common';
 import {
   sendTransferNotification,
@@ -43,14 +45,14 @@ const validateInputs = async (
   if (Number.isNaN(parseFloat(amount))) {
     return 'The entered amount is invalid';
   }
-  if (channel_user_id === to) {
+  if (channel_user_id.trim() === to.trim()) {
     return 'You cannot send money to yourself';
   }
-  if (
-    channel_user_id.length > 15 ||
-    (to.startsWith('0x') && !Number.isNaN(parseInt(to, 10)) && to.length <= 15)
-  ) {
-    return 'The phone number is invalid';
+  if (!isValidEthereumWallet(channel_user_id) && !isValidPhoneNumber(channel_user_id)) {
+    return `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a Wallet or phone number (without spaces or symbols)`;
+  }
+  if (!isValidEthereumWallet(to) && !isValidPhoneNumber(to)) {
+    return `'${to}' is invalid. 'to' parameter must be a Wallet or phone number (without spaces or symbols)`;
   }
   if (token.length > 5) {
     return 'The token symbol is invalid';
@@ -79,6 +81,8 @@ export const checkTransactionStatus = async (
   const { trx_hash } = request.params;
 
   try {
+    const web3 = new Web3(`https://mainnet.infura.io/v3/${INFURA_API_KEY}`);
+
     const transaction = await Transaction.findOne({ trx_hash });
     if (!transaction) {
       return await returnErrorResponse(reply, 404, 'Transaction not found');
@@ -271,7 +275,8 @@ export const makeTransaction = async (
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
-    const fromUser: IUser | null = await User.findOne({ phone_number: channel_user_id });
+    const fromUser: IUser | null = await getUser(channel_user_id);
+
     if (!fromUser) {
       validationError = 'User not found. You must have an account to make a transaction';
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);

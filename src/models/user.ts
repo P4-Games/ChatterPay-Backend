@@ -1,6 +1,6 @@
 import { model, Schema, Document } from 'mongoose';
 
-import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../constants/environment';
+import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
 
 export interface IUser extends Document {
   name: string;
@@ -11,6 +11,7 @@ export interface IUser extends Document {
   walletEOA: string;
   code: number;
   privateKey: string;
+  creationDate?: Date;
   settings?: {
     notifications: {
       language: string;
@@ -26,6 +27,7 @@ const userSchema = new Schema<IUser>({
   wallet: { type: String, required: true },
   walletEOA: { type: String, required: false },
   privateKey: { type: String, required: true },
+  creationDate: { type: Date, required: true },
   code: { type: Number, required: false },
   settings: {
     notifications: {

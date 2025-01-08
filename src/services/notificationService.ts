@@ -9,6 +9,7 @@ import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
 import { getTemplate, templateEnum } from './templateService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import {
   LanguageEnum,
   ITemplateSchema,
@@ -27,7 +28,7 @@ import {
   BOT_NOTIFICATIONS_ENABLED,
   CHATTERPAY_NFTS_SHARE_URL,
   SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
-} from '../constants/environment';
+} from '../config/constants';
 
 interface OperatorReplyPayload {
   data_token: string;
@@ -36,6 +37,16 @@ interface OperatorReplyPayload {
 }
 
 const notificationTemplateCache = new NodeCache({ stdTTL: 604800 }); // 1 week
+
+/**
+ * Gets user based on the phone number.
+ */
+const getUser = async (phoneNumber: string): Promise<IUser | null> => {
+  const user: IUser | null = await User.findOne({
+    phone_number: getPhoneNumberFormatted(phoneNumber)
+  });
+  return user;
+};
 
 /**
  * Sends an operator reply to the API.
@@ -85,7 +96,7 @@ export async function sendPushNotificaton(
       return true;
     }
 
-    const user: IUser | null = await User.findOne({ phone_number: channelUserId });
+    const user: IUser | null = await getUser(channelUserId);
     if (!user) {
       Logger.log(
         `Push notification not sent: Invalid user in the database for phone number ${channelUserId}`
@@ -140,7 +151,7 @@ export async function sendPushNotificaton(
 export const getUserSettingsLanguage = async (phoneNumber: string): Promise<LanguageEnum> => {
   let language: LanguageEnum = SETTINGS_NOTIFICATION_LANGUAGE_DFAULT as LanguageEnum;
   try {
-    const user: IUser | null = await User.findOne({ phone_number: phoneNumber });
+    const user: IUser | null = await getUser(phoneNumber);
     if (user && user.settings) {
       const userLanguage = user.settings.notifications.language;
       if (Object.values(LanguageEnum).includes(userLanguage as LanguageEnum)) {

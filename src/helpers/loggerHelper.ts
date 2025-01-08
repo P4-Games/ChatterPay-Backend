@@ -1,7 +1,7 @@
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
-import { CURRENT_LOG_LEVEL } from '../constants/environment';
+import { CURRENT_LOG_LEVEL } from '../config/constants';
 import { LogLevelType, validLogLevels } from '../types/logger';
 
 const prettyStream = pinoPretty({

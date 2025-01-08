@@ -1,6 +1,42 @@
-import { ethers } from 'ethers';
+import { ethers, Contract, BigNumber } from 'ethers';
 
 import { Logger } from './loggerHelper';
+
+/**
+ * Decodes and validates the paymasterAndData field
+ * @param paymasterAndData - The encoded paymaster data
+ * @returns Decoded components and validation status
+ */
+/*
+function decodePaymasterAndData(paymasterAndData: string): {
+  paymasterAddress: string;
+  signature: string;
+  expirationTimestamp: number;
+  hasExpired: boolean;
+} {
+  // Remove '0x' prefix if present
+  const data = paymasterAndData.startsWith('0x') ? paymasterAndData.slice(2) : paymasterAndData;
+
+  // Extract components
+  const paymasterAddress = `0x${data.slice(0, 40)}`; // 20 bytes
+  const signature = `0x${data.slice(40, 40 + 130)}`; // 65 bytes
+  const expirationBytes = `0x${data.slice(40 + 130, 40 + 130 + 16)}`; // 8 bytes
+
+  // Convert expiration bytes to number
+  const expirationTimestamp = Number(ethers.BigNumber.from(expirationBytes));
+
+  // Check if expired
+  const currentTimestamp = Math.floor(Date.now() / 1000);
+  const hasExpired = currentTimestamp > expirationTimestamp;
+
+  return {
+    paymasterAddress,
+    signature,
+    expirationTimestamp,
+    hasExpired
+  };
+}
+  */
 
 /**
  * Creates the paymasterAndData field with required signature and expiration
@@ -40,46 +76,13 @@ export async function createPaymasterAndData(
 }
 
 /**
- * Decodes and validates the paymasterAndData field
- * @param paymasterAndData - The encoded paymaster data
- * @returns Decoded components and validation status
- */
-export function decodePaymasterAndData(paymasterAndData: string): {
-  paymasterAddress: string;
-  signature: string;
-  expirationTimestamp: number;
-  hasExpired: boolean;
-} {
-  // Remove '0x' prefix if present
-  const data = paymasterAndData.startsWith('0x') ? paymasterAndData.slice(2) : paymasterAndData;
-
-  // Extract components
-  const paymasterAddress = `0x${data.slice(0, 40)}`; // 20 bytes
-  const signature = `0x${data.slice(40, 40 + 130)}`; // 65 bytes
-  const expirationBytes = `0x${data.slice(40 + 130, 40 + 130 + 16)}`; // 8 bytes
-
-  // Convert expiration bytes to number
-  const expirationTimestamp = Number(ethers.BigNumber.from(expirationBytes));
-
-  // Check if expired
-  const currentTimestamp = Math.floor(Date.now() / 1000);
-  const hasExpired = currentTimestamp > expirationTimestamp;
-
-  return {
-    paymasterAddress,
-    signature,
-    expirationTimestamp,
-    hasExpired
-  };
-}
-
-/**
  * Verifies if the signature in paymasterAndData is valid
  * @param paymasterAndData - The encoded paymaster data
  * @param proxyAddress - The sender's proxy address
  * @param backendAddress - The expected signer's address
  * @returns Whether the signature is valid
  */
+/*
 export function verifyPaymasterSignature(
   paymasterAndData: string,
   proxyAddress: string,
@@ -107,5 +110,47 @@ export function verifyPaymasterSignature(
   } catch (error) {
     Logger.error('Error verifying signature:', error);
     return false;
+  }
+}
+*/
+
+/**
+ * Get gas limit for a transaction w/ dynamic gas.
+ *
+ * @param contract - Instance of the contract to call.
+ * @param methodName - Name of the method to call.
+ * @param args - Array of arguments for the method.
+ * @param gasBufferPercentage - Percentage of gas to add to the estimated gas.
+ * @param defaultGasLimit - default gas limit: 7000000 (the maximum permitted by arb).
+ * @returns Gas limit for the transaction.
+ * @throws Error if the method does not exist in the contract.
+ * @throws Error if the gas estimation fails.
+ */
+export async function getDynamicGas(
+  contract: Contract,
+  methodName: string,
+  args: unknown[],
+  gasBufferPercentage: number = 10,
+  defaultGasLimit: BigNumber = BigNumber.from('7000000')
+): Promise<BigNumber> {
+  try {
+    // Check if the method exists in the contract
+    if (typeof contract[methodName] !== 'function') {
+      throw new Error(`The method ${methodName} doesn't exist in contract.`);
+    }
+
+    // Try to estimate the gas required for the transaction
+    const estimatedGas: BigNumber = await contract.estimateGas[methodName](...args);
+
+    // Apply the buffer to the estimated gas
+    const gasLimit: BigNumber = estimatedGas
+      .mul(BigNumber.from(100 + gasBufferPercentage))
+      .div(BigNumber.from(100));
+    Logger.log(`Estimated gas limit for ${methodName}:`, gasLimit.toString());
+    return gasLimit;
+  } catch (error) {
+    Logger.warn(`Gas estimation failed for ${methodName}:`, error);
+    // If the estimation fails, use the default gas limit
+    return defaultGasLimit;
   }
 }

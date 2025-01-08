@@ -3,8 +3,8 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import Token, { IToken } from '../models/token';
 import { Logger } from '../helpers/loggerHelper';
-import { BUN_ENV, SIGNING_KEY } from '../constants/environment';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/responseFormatterHelper';
+import { BUN_ENV, SIGNING_KEY } from '../config/constants';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**
  * Creates a new token
