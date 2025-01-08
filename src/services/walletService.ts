@@ -334,14 +334,14 @@ export async function getTokenInfo(tokens: IToken[], chanId: number): Promise<To
 }
 
 /**
- * Función para obtener el wallet basado en el número de teléfono
- * @param {string} phoneNumber - El número de teléfono a buscar
- * @returns {Promise<string | null>} La dirección del wallet o null si no se encuentra
+ * Function to get the wallet based on the phone number.
+ * @param {string} phoneNumber
+ * @returns {Promise<string | null>}
  */
 export async function getWalletByPhoneNumber(phoneNumber: string): Promise<string | null> {
   try {
     const user = await User.findOne({ phone_number: phoneNumber }).select('wallet').exec();
-    return user ? user.wallet : null; // Retorna la wallet si se encuentra, de lo contrario null
+    return user ? user.wallet : null;
   } catch (error) {
     Logger.error('Error al obtener la wallet:', error);
     throw new Error('No se pudo obtener la wallet');
