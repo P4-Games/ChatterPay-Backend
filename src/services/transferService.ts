@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 
-import { IUser } from '../models/user';
+import { IUser, IUserWallet } from '../models/user';
 import { IToken } from '../models/token';
 import Transaction from '../models/transaction';
 import { Logger } from '../helpers/loggerHelper';
@@ -11,7 +11,13 @@ import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
 import { checkBlockchainConditions } from './blockchainService';
 import { waitForUserOperationReceipt } from './userOpExecutorService';
-import { getUser, openOperation, closeOperation, hasUserOperationInProgress } from './userService';
+import {
+  getUser,
+  openOperation,
+  closeOperation,
+  hasUserOperationInProgress,
+  getUserWalletByChainId
+} from './userService';
 import {
   signUserOperation,
   createTransferCallData,
@@ -152,21 +158,33 @@ export async function withdrawWalletAllFunds(
       return { result: false, message: 'There are not user with that phone number' };
     }
 
-    if (bddUser.walletEOA === to_wallet || bddUser.wallet === to_wallet) {
+    const userWallet: IUserWallet | null = getUserWalletByChainId(
+      bddUser.wallets,
+      networkConfig.chain_id
+    );
+    if (!userWallet) {
+      return { result: false, message: `No wallet found for chain ${networkConfig.chain_id}` };
+    }
+
+    if (
+      !userWallet ||
+      userWallet.wallet_proxy === to_wallet ||
+      userWallet.wallet_eoa === to_wallet
+    ) {
       return { result: false, message: 'You are trying to send funds to your own wallet' };
     }
 
     if (hasUserOperationInProgress(bddUser, ConcurrentOperationsEnum.WithdrawAll)) {
       return {
         result: false,
-        message: `Concurrent withdraw-all operation for wallet ${bddUser.wallet}, phone: ${bddUser.phone_number}.`
+        message: `Concurrent withdraw-all operation for wallet ${userWallet.wallet_proxy}, phone: ${bddUser.phone_number}.`
       };
     }
 
     const to_wallet_formatted: string = !to_wallet.startsWith('0x') ? `0x${to_wallet}` : to_wallet;
 
     const walletTokensBalance: TokenBalanceType[] = await getTokenBalances(
-      bddUser.wallet,
+      userWallet.wallet_proxy,
       tokens,
       networkConfig
     );
@@ -202,7 +220,7 @@ export async function withdrawWalletAllFunds(
           networkConfig,
           checkBlockchainConditionsResult.setupContractsResult!,
           checkBlockchainConditionsResult.entryPointContract!,
-          bddUser.wallet,
+          userWallet.wallet_proxy,
           to_wallet_formatted,
           address,
           balance

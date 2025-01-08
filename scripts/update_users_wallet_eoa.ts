@@ -6,9 +6,11 @@ import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 import mongoose from 'mongoose';
 
-import { IUser } from '../src/models/user';
+import { IUser, IUserWallet } from '../src/models/user';
 import { Logger } from '../src/helpers/loggerHelper';
 import { generatePrivateKey } from '../src/helpers/SecurityHelper';
+import { getUserWalletByChainId } from '../src/services/userService';
+import { DEFAULT_CHAIN_ID } from '../src/config/constants';
 
 dotenv.config();
 
@@ -23,13 +25,24 @@ const userSchema = new mongoose.Schema<IUser>(
     email: String,
     phone_number: String,
     photo: String,
-    wallet: String,
-    walletEOA: String,
     code: { type: Number, default: null },
     settings: {
       notifications: {
         language: { type: String, default: 'en' }
       }
+    },
+    wallets: {
+      type: [
+        {
+          wallet_proxy: String,
+          wallet_eoa: String,
+          sk_hashed: String,
+          chatterpay_implementation_address: String,
+          chain_id: Number,
+          status: String
+        }
+      ],
+      default: []
     }
   },
   { collection: COLLECTION_NAME }
@@ -67,11 +80,22 @@ async function processUser(user: IUser): Promise<void> {
   }
 
   try {
-    const { pk } = getUserData(phoneNumber);
+    const userWallet: IUserWallet | null = await getUserWalletByChainId(
+      user.wallets,
+      DEFAULT_CHAIN_ID
+    );
+    const { pk } = await getUserData(user.phone_number);
 
-    Logger.log(`User ${user.phone_number}, currentEOA ${user.walletEOA || 'empty'}, newEOA ${pk} `);
+    if (!userWallet) {
+      Logger.log(`User ${user.phone_number}, no wallet found for chain_id ${DEFAULT_CHAIN_ID} `);
+      return;
+    }
+
+    Logger.log(
+      `User ${user.phone_number}, currentEOA ${userWallet.wallet_eoa || 'empty'}, newEOA ${pk} `
+    );
     if (!justPrint) {
-      await User.updateOne({ _id: user._id }, { walletEOA: pk });
+      await User.updateOne({ _id: user._id }, { 'wallets.$.wallet_eoa': pk });
     }
   } catch (error) {
     Logger.error(`Error processing user ${user._id}:`, error);

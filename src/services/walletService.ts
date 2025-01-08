@@ -333,20 +333,3 @@ export async function getTokenInfo(tokens: IToken[], chanId: number): Promise<To
     rateUSD: prices.get(token.symbol) || 0
   }));
 }
-
-/**
- * Function to get the wallet based on the phone number.
- * @param {string} phoneNumber
- * @returns {Promise<string | null>}
- */
-export async function getWalletByPhoneNumber(phoneNumber: string): Promise<string | null> {
-  try {
-    const user = await User.findOne({ phone_number: getPhoneNumberFormatted(phoneNumber) })
-      .select('wallet')
-      .exec();
-    return user ? user.wallet : null;
-  } catch (error) {
-    Logger.error('Error al obtener la wallet:', error);
-    throw new Error('No se pudo obtener la wallet');
-  }
-}

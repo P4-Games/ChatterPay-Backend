@@ -1,15 +1,15 @@
-import { User, IUser } from '../models/user';
+import { User, IUser, IUserWallet } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
 import { ConcurrentOperationsEnum } from '../types/common';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
-import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
+import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
 import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
 import { subscribeToPushChannel, sendWalletCreationNotification } from './notificationService';
 
 /**
- * Creates a new wallet and user for the given phone number.
+ * Creates a new user and wallet for the given phone number.
  * @param {string} phoneNumber - The phone number to create the wallet for.
- * @returns {Promise<string>} The proxy address of the created wallet.
+ * @returns {Promise<IUser>} The user with the newly created wallet.
  */
 export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> => {
   const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(phoneNumber);
@@ -17,9 +17,16 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
 
   const user = new User({
     phone_number: formattedPhoneNumber,
-    wallet: predictedWallet.proxyAddress,
-    walletEOA: predictedWallet.EOAAddress,
-    privateKey: predictedWallet.privateKey,
+    wallets: [
+      {
+        wallet_proxy: predictedWallet.proxyAddress,
+        wallet_eoa: predictedWallet.EOAAddress,
+        sk_hashed: predictedWallet.privateKey,
+        chatterpay_implementation_address: '',
+        chain_id: DEFAULT_CHAIN_ID,
+        status: 'active'
+      }
+    ],
     creationDate: new Date(),
     code: null,
     photo: '/assets/images/avatars/generic_user.jpg',
@@ -49,6 +56,45 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
 };
 
 /**
+ * Filters wallets by chain_id and returns the first match.
+ *
+ * @param wallets - The array of wallet objects to filter.
+ * @param chainId - The chain_id to filter the wallets by.
+ * @returns The first wallet that matches the given chain_id, or null if not found.
+ */
+export const getUserWalletByChainId = (
+  wallets: IUserWallet[],
+  chainId: number
+): IUserWallet | null => {
+  const wallet = wallets.find((w) => w.chain_id === chainId);
+  return wallet || null;
+};
+
+/**
+ * Get a wallet from a user based on their phone number and chain_id.
+ *
+ * @param phoneNumber - The phone number of the user.
+ * @param chainId - The chain_id of the wallet to be retrieved.
+ * @returns A wallet object if found, or null if not found.
+ */
+export const getUserWallet = async (
+  phoneNumber: string,
+  chainId: number
+): Promise<IUserWallet | null> => {
+  const user: IUser | null = await User.findOne({
+    phone_number: getPhoneNumberFormatted(phoneNumber)
+  });
+
+  if (!user) {
+    return null;
+  }
+
+  const wallet = user.wallets.find((w) => w.chain_id === chainId);
+
+  return wallet || null;
+};
+
+/**
  * Gets user based on the phone number.
  */
 export const getUser = async (phoneNumber: string): Promise<IUser | null> => {
@@ -68,7 +114,9 @@ export const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
   Logger.log(`Phone number ${phoneNumber} not registered in ChatterPay, registering...`);
 
   const newUser: IUser = await createUserWithWallet(phoneNumber);
-  Logger.log(`Phone number ${phoneNumber} registered with the wallet ${newUser.wallet}`);
+  Logger.log(
+    `Phone number ${phoneNumber} registered with the wallet ${newUser.wallets[0].wallet_proxy}`
+  );
 
   return newUser;
 };

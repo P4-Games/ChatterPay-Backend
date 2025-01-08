@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
 
-import { User, IUser } from '../models/user';
+import { User, IUser, IUserWallet } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
@@ -27,8 +27,10 @@ import {
   PUSH_CHANNEL_PRIVATE_KEY,
   BOT_NOTIFICATIONS_ENABLED,
   CHATTERPAY_NFTS_SHARE_URL,
-  SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
+  SETTINGS_NOTIFICATION_LANGUAGE_DFAULT,
+  DEFAULT_CHAIN_ID
 } from '../config/constants';
+import { getUserWallet, getUserWalletByChainId } from './userService';
 
 interface OperatorReplyPayload {
   data_token: string;
@@ -104,8 +106,16 @@ export async function sendPushNotificaton(
       return false;
     }
 
-    let { walletEOA } = user;
-    walletEOA = walletEOA.startsWith('0x') ? walletEOA : `0x${walletEOA}`;
+    const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, DEFAULT_CHAIN_ID);
+    if (!userWallet) {
+      Logger.log(
+        `Push notification not sent: Invalid EOA Walletin the database for phone number ${channelUserId}`
+      );
+      return false;
+    }
+
+    let { wallet_eoa } = userWallet;
+    wallet_eoa = wallet_eoa.startsWith('0x') ? wallet_eoa : `0x${wallet_eoa}`;
 
     const signer = new ethers.Wallet(PUSH_CHANNEL_PRIVATE_KEY);
     const apiResponse = await PushAPIPayloads.sendNotification({
@@ -122,13 +132,13 @@ export async function sendPushNotificaton(
         cta: CHATTERPAY_DOMAIN,
         img: `${CHATTERPAY_DOMAIN}/assets/images/home/logo.png`
       },
-      recipients: `eip155:${PUSH_NETWORK}:${walletEOA}`,
+      recipients: `eip155:${PUSH_NETWORK}:${wallet_eoa}`,
       channel: `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`,
       env: PUSH_ENVIRONMENT
     });
 
     Logger.log(
-      `Push notification sent successfully to ${channelUserId},  ${walletEOA}:`,
+      `Push notification sent successfully to ${channelUserId},  ${wallet_eoa}:`,
       apiResponse.status,
       apiResponse.statusText
     );
