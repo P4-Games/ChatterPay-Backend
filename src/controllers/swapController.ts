@@ -121,7 +121,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
         validationError
       );
     }
-    await openOperation(channel_user_id, ConcurrentOperationsEnum.Transfer);
+    await openOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
 
     /* ***************************************************** */
     /* 2. swap: send initial response                        */
@@ -152,7 +152,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     if (!enoughBalance) {
       await sendUserInsufficientBalanceNotification(proxyAddress, channel_user_id);
-      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Transfer);
+      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;
     }
 
@@ -164,7 +164,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     if (!checkBlockchainConditionsResult.success) {
       await sendNoValidBlockchainConditionsNotification(proxyAddress, channel_user_id);
-      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Transfer);
+      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;
     }
 
@@ -187,7 +187,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     );
     if (!executeSwapResult.success) {
       await sendInternalErrorNotification(proxyAddress, channel_user_id);
-      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Transfer);
+      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;
     }
 
@@ -247,7 +247,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       executeSwapResult.swapTransactionHash
     );
 
-    await closeOperation(channel_user_id, ConcurrentOperationsEnum.Transfer);
+    await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
     Logger.info(
       `Swap completed successfully approveTransactionHash: ${executeSwapResult.approveTransactionHash}, swapTransactionHash: ${executeSwapResult.swapTransactionHash}.`
     );
