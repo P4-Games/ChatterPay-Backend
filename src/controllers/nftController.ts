@@ -5,15 +5,24 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
 import { getDynamicGas } from '../helpers/paymasterHelper';
+import { ConcurrentOperationsEnum } from '../types/common';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
-import { createUserWithWallet } from '../services/userService';
 import { getWalletByPhoneNumber } from '../services/walletService';
-import { sendMintNotification } from '../services/notificationService';
 import { isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
 import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
+import {
+  sendMintNotification,
+  SendConcurrecyOperationNotification
+} from '../services/notificationService';
+import {
+  openOperation,
+  closeOperation,
+  createUserWithWallet,
+  hasPhoneOperationInProgress
+} from '../services/userService';
 
 export interface NFTInfo {
   description: string;
@@ -215,6 +224,14 @@ export const generateNftOriginal = async (
     return returnErrorResponse(reply, 400, 'Wallet User doesnt exists.');
   }
 
+  if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.MintNft)) {
+    const validationError = `Concurrent mint original NFT for wallet ${address_of_user}, phone: ${channel_user_id}.`;
+    Logger.log(`generateNftOriginal: ${validationError}`);
+    await SendConcurrecyOperationNotification(channel_user_id);
+    return returnErrorResponse(reply, 400, validationError);
+  }
+  await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
+
   returnSuccessResponse(reply, 'The certificate is being generated');
 
   let processedImage;
@@ -222,6 +239,7 @@ export const generateNftOriginal = async (
     Logger.info('Fetching NFT image');
     processedImage = await downloadAndProcessImage(url); // always jpg
   } catch (error) {
+    await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
     Logger.error('Error downloading the NFT image:', (error as Error).message);
     return Promise.resolve();
   }
@@ -256,6 +274,7 @@ export const generateNftOriginal = async (
       }
     });
   } catch (error) {
+    await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
     Logger.error('Error saving NFT data into DB.', (error as Error).message);
     return Promise.resolve(); // If the initial creation fails, it makes no sense to continue.
   }
@@ -264,6 +283,7 @@ export const generateNftOriginal = async (
   try {
     nftData = await mintNftOriginal(address_of_user!, (mongoData._id as ObjectId).toString());
   } catch (error) {
+    await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
     Logger.error('Error minting NFT', error);
     return Promise.resolve();
   }
@@ -325,6 +345,7 @@ export const generateNftOriginal = async (
   } catch (error) {
     Logger.error('Error updating NFT in bdd', (error as Error).message);
   }
+  await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
   Logger.log('NFT minting end.');
   return Promise.resolve();
 };
@@ -373,6 +394,14 @@ export const generateNftCopy = async (
       return await returnErrorResponse(reply, 400, "The NFT doesn't exist.");
     }
     const nftCopyOf = nfts[0];
+
+    if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.MintNftCopy)) {
+      const validationError = `Concurrent mint copy NFT for phone: ${channel_user_id}.`;
+      Logger.log(`generateNftCopy: ${validationError}`);
+      await SendConcurrecyOperationNotification(channel_user_id);
+      return await returnErrorResponse(reply, 400, validationError);
+    }
+    await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
 
     // optimistic response
     Logger.log('sending notification: the certificate is being generated');
@@ -428,6 +457,7 @@ export const generateNftCopy = async (
         (mongoData._id as ObjectId).toString()
       );
     } catch (error) {
+      await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
       Logger.error('Error al mintear NFT:', error);
       return await Promise.resolve();
     }
@@ -443,6 +473,7 @@ export const generateNftCopy = async (
       }
     );
 
+    await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
     await sendMintNotification(user.wallet, channel_user_id, nftData.tokenId.toString());
 
     Logger.log('NFT copy end.');
