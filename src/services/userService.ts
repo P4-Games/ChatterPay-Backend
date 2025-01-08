@@ -72,3 +72,42 @@ export const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
 
   return newUser;
 };
+
+export const hasPhoneOperationInProgress = async (
+  phoneNumber: string,
+  operation: ConcurrentOperationsEnum
+): Promise<number> => {
+  const user = await User.findOne({ phone_number: getPhoneNumberFormatted(phoneNumber) });
+  return user?.operations_in_progress?.[operation] || 0;
+};
+
+export const hasUserOperationInProgress = (
+  user: IUser,
+  operation: ConcurrentOperationsEnum
+): boolean => (user.operations_in_progress?.[operation] || 0) > 0;
+
+export const openOperation = (
+  phoneNumber: string,
+  operation: ConcurrentOperationsEnum
+): Promise<void> => updateOperationCount(phoneNumber, operation, 1);
+
+export const closeOperation = (
+  phoneNumber: string,
+  operation: ConcurrentOperationsEnum
+): Promise<void> => updateOperationCount(phoneNumber, operation, -1);
+
+const updateOperationCount = async (
+  phoneNumber: string,
+  operation: ConcurrentOperationsEnum,
+  increment: number
+): Promise<void> => {
+  const user: IUser | null = await User.findOne({
+    phone_number: getPhoneNumberFormatted(phoneNumber)
+  });
+
+  if (user && user.operations_in_progress) {
+    const currentCount = user.operations_in_progress[operation] || 0;
+    user.operations_in_progress[operation] = Math.max(currentCount + increment, 0);
+    await user.save();
+  }
+};
