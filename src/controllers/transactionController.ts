@@ -299,7 +299,7 @@ export const makeTransaction = async (
     if (hasUserOperationInProgress(fromUser, ConcurrentOperationsEnum.Transfer)) {
       validationError = `Concurrent operation for wallet ${fromUser.wallet}, phone: ${fromUser.phone_number}.`;
       Logger.log(`makeTransaction: ${validationError}`);
-      await SendConcurrecyOperationNotification(fromUser.wallet, channel_user_id);
+      await SendConcurrecyOperationNotification(channel_user_id);
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
     await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);

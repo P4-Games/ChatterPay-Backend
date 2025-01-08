@@ -589,12 +589,9 @@ export async function sendInternalErrorNotification(
  * @param address_of_user
  * @param channel_user_id
  */
-export async function SendConcurrecyOperationNotification(
-  address_of_user: string,
-  channel_user_id: string
-) {
+export async function SendConcurrecyOperationNotification(channel_user_id: string) {
   try {
-    Logger.log(`Sending concurrent operation notification to ${address_of_user}`);
+    Logger.log(`Sending concurrent operation notification to ${channel_user_id}`);
 
     const { title, message } = await getNotificationTemplate(
       channel_user_id,
