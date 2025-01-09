@@ -24,7 +24,6 @@ import {
 import {
   sendSwapNotification,
   sendInternalErrorNotification,
-  SendConcurrecyOperationNotification,
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
@@ -113,7 +112,6 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.Swap)) {
       validationError = `Concurrent swap operation for phone: ${channel_user_id}.`;
       Logger.log(`swap: ${validationError}`);
-      await SendConcurrecyOperationNotification(channel_user_id);
       return await returnErrorResponse(
         reply,
         400,
