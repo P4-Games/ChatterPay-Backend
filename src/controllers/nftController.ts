@@ -432,7 +432,9 @@ export const generateNftCopy = async (
     }
 
     Logger.log('Saving NFT copy in database');
-    const user: IUser = await getOrCreateUser(channel_user_id);
+    const fastify = request.server;
+    const chatterpayImplementation: string = fastify.networkConfig.contracts.chatterPayAddress;
+    const user: IUser = await getOrCreateUser(channel_user_id, chatterpayImplementation);
     const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, DEFAULT_CHAIN_ID);
     if (!userWallet) {
       Logger.warn('Wallet User doesnt exists.');
