@@ -44,18 +44,18 @@ export const createWallet = async (
     }
 
     // Check if user already exists
+    const fastify = request.server;
     const existingUser = await getUser(channel_user_id);
     let userWallet: IUserWallet | null;
 
     if (existingUser) {
-      const fastify = request.server;
       const { chain_id } = fastify.networkConfig;
       userWallet = getUserWalletByChainId(existingUser.wallets, chain_id);
 
       if (userWallet) {
         return await returnSuccessResponse(
           reply,
-          `The user already exists, your wallet is ${userWallet}.`
+          `The user already exists, your wallet is ${userWallet.wallet_proxy}.`
         );
       }
       Logger.log(`Creating wallet for phone number ${channel_user_id} and chain_id ${chain_id}`);
@@ -81,7 +81,8 @@ export const createWallet = async (
     }
 
     Logger.log(`Creating wallet for phone number ${channel_user_id}`);
-    const user: IUser = await createUserWithWallet(channel_user_id);
+    const chatterpayImplementation = fastify.networkConfig.contracts.chatterPayAddress;
+    const user: IUser = await createUserWithWallet(channel_user_id, chatterpayImplementation);
 
     return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
       walletAddress: user.wallets[0].wallet_proxy

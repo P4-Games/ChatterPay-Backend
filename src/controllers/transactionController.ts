@@ -28,7 +28,6 @@ import {
   sendTransferNotification,
   sendInternalErrorNotification,
   sendOutgoingTransferNotification,
-  SendConcurrecyOperationNotification,
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
@@ -309,7 +308,6 @@ export const makeTransaction = async (
     if (hasUserOperationInProgress(fromUser, ConcurrentOperationsEnum.Transfer)) {
       validationError = `Concurrent transfer operation for wallet ${userWallet.wallet_proxy}, phone: ${fromUser.phone_number}.`;
       Logger.log(`makeTransaction: ${validationError}`);
-      await SendConcurrecyOperationNotification(channel_user_id);
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
     await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
@@ -368,7 +366,8 @@ export const makeTransaction = async (
       toAddress =
         getUserWalletByChainId(toUser.wallets, networkConfig.chain_id)?.wallet_proxy || '';
     } else {
-      toUser = await getOrCreateUser(to);
+      const chatterpayImplementation: string = networkConfig.contracts.chatterPayAddress;
+      toUser = await getOrCreateUser(to, chatterpayImplementation);
       toAddress = toUser.wallets[0].wallet_proxy;
     }
 
