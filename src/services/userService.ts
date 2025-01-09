@@ -16,8 +16,8 @@ export const createUserWithWallet = async (
   phoneNumber: string,
   chatterpayImplementation: string
 ): Promise<IUser> => {
-  const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(phoneNumber);
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
+  const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(formattedPhoneNumber);
 
   const user = new User({
     phone_number: formattedPhoneNumber,
@@ -72,8 +72,8 @@ export const addWalletToUser = async (
   chatterpayImplementationAddress: string
 ): Promise<{ user: IUser; newWallet: IUserWallet } | null> => {
   // Generate wallet details based on phone number
-  const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(phoneNumber);
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
+  const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(formattedPhoneNumber);
 
   // Find the user by phone number
   const user = await User.findOne({ phone_number: formattedPhoneNumber });
