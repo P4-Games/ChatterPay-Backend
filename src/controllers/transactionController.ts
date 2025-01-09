@@ -1,8 +1,8 @@
 import { Web3 } from 'web3';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
+import { IUser, IUserWallet } from '../models/user';
 import { INFURA_API_KEY } from '../config/constants';
 import Transaction, { ITransaction } from '../models/transaction';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
@@ -20,6 +20,8 @@ import {
   openOperation,
   closeOperation,
   getOrCreateUser,
+  getUserWalletByChainId,
+  getUserByWalletAndChainid,
   hasUserOperationInProgress
 } from '../services/userService';
 import {
@@ -287,9 +289,17 @@ export const makeTransaction = async (
     }
 
     const fromUser: IUser | null = await getUser(channel_user_id);
-
     if (!fromUser) {
       validationError = 'User not found. You must have an account to make a transaction';
+      return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
+    }
+
+    const userWallet: IUserWallet | null = getUserWalletByChainId(
+      fromUser?.wallets,
+      networkConfig.chain_id
+    );
+    if (!userWallet) {
+      validationError = `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chain_id}`;
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
@@ -297,7 +307,7 @@ export const makeTransaction = async (
     /* 2. makeTransaction: open concurrent operation      */
     /* ***************************************************** */
     if (hasUserOperationInProgress(fromUser, ConcurrentOperationsEnum.Transfer)) {
-      validationError = `Concurrent transfer operation for wallet ${fromUser.wallet}, phone: ${fromUser.phone_number}.`;
+      validationError = `Concurrent transfer operation for wallet ${userWallet.wallet_proxy}, phone: ${fromUser.phone_number}.`;
       Logger.log(`makeTransaction: ${validationError}`);
       await SendConcurrecyOperationNotification(channel_user_id);
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
@@ -315,15 +325,15 @@ export const makeTransaction = async (
     const checkBalanceResult = await verifyWalletBalanceInRpc(
       networkConfig.rpc,
       tokenAddress,
-      fromUser.wallet,
+      userWallet.wallet_proxy,
       amount
     );
 
     if (!checkBalanceResult.enoughBalance) {
-      validationError = `Insufficient balance, phone: ${fromUser.phone_number}, wallet: ${fromUser.wallet}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
+      validationError = `Insufficient balance, phone: ${fromUser.phone_number}, wallet: ${userWallet.wallet_proxy}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
       Logger.log(`makeTransaction: ${validationError}`);
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
-      await sendUserInsufficientBalanceNotification(fromUser.wallet, channel_user_id);
+      await sendUserInsufficientBalanceNotification(userWallet.wallet_proxy, channel_user_id);
       return undefined;
     }
 
@@ -334,7 +344,7 @@ export const makeTransaction = async (
       await checkBlockchainConditions(networkConfig, channel_user_id);
 
     if (!checkBlockchainConditionsResult.success) {
-      await sendNoValidBlockchainConditionsNotification(fromUser.wallet, channel_user_id);
+      await sendNoValidBlockchainConditionsNotification(userWallet.wallet_proxy, channel_user_id);
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       return undefined;
     }
@@ -342,11 +352,24 @@ export const makeTransaction = async (
     /* ***************************************************** */
     /* 6. makeTransaction: get or create user 'to'           */
     /* ***************************************************** */
-    let toUser: IUser | { wallet: string };
+    let toUser: IUser | null;
+    let toAddress: string;
+
     if (to.startsWith('0x')) {
-      toUser = { wallet: to };
+      toUser = await getUserByWalletAndChainid(to, networkConfig.chain_id);
+      if (!toUser) {
+        Logger.error(`Invalid wallet-to ${to} for chainId ${networkConfig.chain_id}`);
+        await sendNoValidBlockchainConditionsNotification(userWallet.wallet_proxy, channel_user_id);
+        await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+        return undefined;
+      }
+
+      // we already validate that exists wallet for this chain_id with find in getUserByWalletAndChainid
+      toAddress =
+        getUserWalletByChainId(toUser.wallets, networkConfig.chain_id)?.wallet_proxy || '';
     } else {
       toUser = await getOrCreateUser(to);
+      toAddress = toUser.wallets[0].wallet_proxy;
     }
 
     /* ***************************************************** */
@@ -362,14 +385,14 @@ export const makeTransaction = async (
       networkConfig,
       checkBlockchainConditionsResult.setupContractsResult!,
       checkBlockchainConditionsResult.entryPointContract!,
-      fromUser.wallet,
-      toUser.wallet,
+      userWallet.wallet_proxy,
+      toAddress,
       tokenAddress,
       amount
     );
 
     if (!executeTransactionResult.success) {
-      await sendInternalErrorNotification(fromUser.wallet, channel_user_id);
+      await sendInternalErrorNotification(userWallet.wallet_proxy, channel_user_id);
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       return undefined;
     }
@@ -380,8 +403,8 @@ export const makeTransaction = async (
     Logger.log('Updating transaction in database.');
     await saveTransaction(
       executeTransactionResult.transactionHash,
-      fromUser.wallet,
-      toUser.wallet,
+      userWallet.wallet_proxy,
+      toAddress,
       parseFloat(amount),
       tokenSymbol,
       'transfer',
@@ -392,14 +415,13 @@ export const makeTransaction = async (
     /* 10. makeTransaction: sen user notification             */
     /* ***************************************************** */
     const fromName = fromUser.name ?? fromUser.phone_number ?? 'Alguien';
-    const toNumber = 'phone_number' in toUser ? toUser.phone_number : toUser.wallet;
 
-    await sendTransferNotification(toNumber, fromName, amount, tokenSymbol);
+    await sendTransferNotification(toUser.phone_number, fromName, amount, tokenSymbol);
 
     await sendOutgoingTransferNotification(
-      fromUser.wallet,
+      userWallet.wallet_proxy,
       fromUser.phone_number,
-      toNumber,
+      toAddress,
       amount,
       tokenSymbol,
       executeTransactionResult.transactionHash

@@ -20,12 +20,18 @@ import {
 
 dotenv.config();
 
-// Funciones auxiliares
+// Helper functions
 
+/**
+ * Generates an Ed25519KeyIdentity from a mnemonic seed phrase
+ * @param mnemonic The seed phrase used to generate the identity
+ * @returns The generated identity
+ * @throws Error if the mnemonic is invalid
+ */
 async function generateIdentityFromMnemonic(mnemonic: string): Promise<Ed25519KeyIdentity> {
   const isValidMnemonic = validateMnemonic(mnemonic);
   if (!isValidMnemonic) {
-    throw new Error('La frase semilla es inválida');
+    throw new Error('The seed phrase is invalid');
   }
   const seed = await mnemonicToSeed(mnemonic);
   const privateKey = createHash('sha512').update(seed).digest().slice(0, 32);
@@ -33,6 +39,11 @@ async function generateIdentityFromMnemonic(mnemonic: string): Promise<Ed25519Ke
   return Ed25519KeyIdentity.fromSecretKey(privateKey);
 }
 
+/**
+ * Creates an HTTP agent using the provided identity
+ * @param identity The identity used to create the agent
+ * @returns The created HttpAgent instance
+ */
 async function createAgent(identity: Ed25519KeyIdentity): Promise<HttpAgent> {
   const agent = new HttpAgent({
     host: 'https://ic0.app',
@@ -42,6 +53,12 @@ async function createAgent(identity: Ed25519KeyIdentity): Promise<HttpAgent> {
   return agent;
 }
 
+/**
+ * Fetches the details of an image from a given URL
+ * @param imageUrl The URL of the image to fetch
+ * @returns The image details including the file name, width, height, and image buffer
+ * @throws Error if the image could not be downloaded
+ */
 export const getImageDetails = async (imageUrl: string) => {
   try {
     const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
@@ -52,22 +69,29 @@ export const getImageDetails = async (imageUrl: string) => {
     return { fileName, width, height, imageBuffer };
   } catch (error) {
     if (error instanceof Error) {
-      throw new Error(`Error al descargar la imagen: ${error.message}`);
+      throw new Error(`Error downloading the image: ${error.message}`);
     } else {
-      throw new Error('Error desconocido al descargar la imagen');
+      throw new Error('Unknown error downloading the image');
     }
   }
 };
 
-// Funciones de carga
+// Upload functions
 
+/**
+ * Uploads an image to ICP (Internet Computer Protocol)
+ * @param imageBuffer The image buffer to upload
+ * @param fileName The name of the file to upload
+ * @returns The URL of the uploaded image
+ * @throws Error if the upload fails
+ */
 export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promise<string> {
   if (!NFT_UPLOAD_IMAGE_ICP) {
-    Logger.info('upload NFT image to ICP disabled');
+    Logger.info('Upload NFT image to ICP disabled');
     return '';
   }
 
-  Logger.info('Subiendo imagen a ICP');
+  Logger.info('Uploading image to ICP');
   const FOLDER_UPLOAD = 'uploads';
 
   if (!ICP_CANISTER_ID) {
@@ -93,34 +117,41 @@ export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promis
 
     await batch.commit({
       onProgress: ({ current, total }) => {
-        Logger.log(`Progreso de carga a ICP: ${(current / total) * 100}%`);
+        Logger.log(`Upload progress to ICP: ${(current / total) * 100}%`);
       }
     });
     Logger.log('this is my key', key);
-    Logger.log(`Imagen subida con éxito a ICP: ${url}`);
+    Logger.log(`Image successfully uploaded to ICP: ${url}`);
     return url;
   } catch (error: unknown) {
     if (error instanceof Error) {
       if (error.message.includes('asset already exists')) {
-        Logger.log(`La imagen ya existe en ICP: ${url}`);
+        Logger.log(`The image already exists on ICP: ${url}`);
         return `${url}`;
       }
-      Logger.error('Error al subir a ICP:', error);
+      Logger.error('Error uploading to ICP:', error);
       throw error;
     } else {
-      Logger.error('Error desconocido al subir a ICP:', error);
-      throw new Error('Error desconocido');
+      Logger.error('Unknown error uploading to ICP:', error);
+      throw new Error('Unknown error');
     }
   }
 }
 
+/**
+ * Uploads an image to IPFS (InterPlanetary File System)
+ * @param imageBuffer The image buffer to upload
+ * @param fileName The name of the file to upload
+ * @returns The URL of the uploaded image
+ * @throws Error if the upload fails
+ */
 export async function uploadToIpfs(imageBuffer: Buffer, fileName: string): Promise<string> {
   if (!NFT_UPLOAD_IMAGE_IPFS) {
-    Logger.info('upload NFT image to IPFS disabled');
+    Logger.info('Upload NFT image to IPFS disabled');
     return '';
   }
 
-  Logger.info('Subiendo imagen a IPFS');
+  Logger.info('Uploading image to IPFS');
 
   try {
     const pinata = new PinataSDK({ pinataJWTKey: PINATA_JWT });
@@ -134,14 +165,20 @@ export async function uploadToIpfs(imageBuffer: Buffer, fileName: string): Promi
     });
 
     const url = `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
-    Logger.log(`Imagen subida con éxito a IPFS: ${url}`);
+    Logger.log(`Image successfully uploaded to IPFS: ${url}`);
     return url;
   } catch (error) {
-    Logger.error('Error al subir a IPFS:', error);
+    Logger.error('Error uploading to IPFS:', error);
     throw error;
   }
 }
 
+/**
+ * Downloads and processes an image by resizing it and converting it to JPEG format
+ * @param imageUrl The URL of the image to download and process
+ * @returns The processed image buffer
+ * @throws Error if the image processing fails
+ */
 export async function downloadAndProcessImage(imageUrl: string): Promise<Buffer> {
   const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
   const buffer = Buffer.from(response.data, 'binary');
