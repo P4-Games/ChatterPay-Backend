@@ -1,226 +1,150 @@
 import { ethers } from 'ethers';
 
-import { IUser } from '../models/user';
-import { getUser } from './userService';
 import { IToken } from '../models/token';
-import { Logger } from '../utils/logger';
-import { TokenBalance } from '../types/common';
 import Transaction from '../models/transaction';
-import { getEntryPointABI } from './bucketService';
+import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
-import { getBlockchain } from './blockchainService';
-import { generatePrivateKey } from '../utils/keyGenerator';
+import { getTokenBalances } from './walletService';
+import { IUser, IUserWallet } from '../models/user';
+import { setupERC20 } from './contractSetupService';
+import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
-import { waitForUserOperationReceipt } from '../utils/waitForTX';
-import { setupERC20, setupContracts } from './contractSetupService';
-import { getTokenBalances, verifyWalletBalance } from './walletService';
-import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
-import { sendTransferNotification, sendOutgoingTransferNotification } from './notificationService';
+import { checkBlockchainConditions } from './blockchainService';
+import { waitForUserOperationReceipt } from './userOpExecutorService';
 import {
   signUserOperation,
   createTransferCallData,
   createGenericUserOperation
 } from './userOperationService';
+import {
+  getUser,
+  openOperation,
+  closeOperation,
+  getUserWalletByChainId,
+  hasUserOperationInProgress
+} from './userService';
+import {
+  TokenBalanceType,
+  setupContractReturnType,
+  ConcurrentOperationsEnum,
+  ExecueTransactionResultType,
+  CheckBalanceConditionsResultType
+} from '../types/common';
 
 /**
  * Sends a user operation for token transfer.
+ *
+ * @param networkConfig
+ * @param setupContractsResult
+ * @param entryPointContract
+ * @param fromNumber
+ * @param to
+ * @param tokenAddress
+ * @param amount
+ * @returns
  */
 export async function sendUserOperation(
   networkConfig: IBlockchain,
+  setupContractsResult: setupContractReturnType,
+  entryPointContract: ethers.Contract,
   fromNumber: string,
   to: string,
   tokenAddress: string,
-  amount: string,
-  chain_id: number
-): Promise<{ transactionHash: string }> {
+  amount: string
+): Promise<ExecueTransactionResultType> {
   try {
-    const blockchain = await getBlockchain(chain_id);
-    const seedPrivateKey = process.env.PRIVATE_KEY;
-    if (!seedPrivateKey) {
-      throw new Error('Seed private key not found in environment variables');
-    }
-
-    const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
-    const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } =
-      await setupContracts(blockchain, privateKey, fromNumber);
-    const erc20 = await setupERC20(tokenAddress, signer);
-    Logger.log('Contracts and signers set up.', signer.address);
-
-    const checkBalanceResult = await verifyWalletBalance(erc20, proxy.proxyAddress, amount);
-    if (!checkBalanceResult.enoughBalance) {
-      throw new Error(
-        `Insufficient balance. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}`
-      );
-    }
-    Logger.log('Balance check passed');
-
-    await ensureSignerHasEth(signer, backendSigner, provider);
-    Logger.log('Signer has enough ETH');
-
-    const entrypointABI = await getEntryPointABI();
-    const entrypointContract = new ethers.Contract(
-      networkConfig.contracts.entryPoint,
-      entrypointABI,
-      backendSigner
-    );
-
-    await ensurePaymasterHasPrefund(entrypointContract, networkConfig.contracts.paymasterAddress!);
-
-    Logger.log('Validating account');
-    if (!accountExists) {
-      throw new Error(
-        `Account ${proxy.proxyAddress} does not exist. Cannot proceed with transfer.`
-      );
-    }
-
     // Create transfer-specific call data
-    const callData = createTransferCallData(chatterPay, erc20, to, amount);
+    const erc20 = await setupERC20(tokenAddress, setupContractsResult.signer);
+    const callData = createTransferCallData(setupContractsResult.chatterPay, erc20, to, amount);
 
     // Get the nonce
-    const nonce = await entrypointContract.getNonce(proxy.proxyAddress, 0);
-    Logger.log('Nonce:', nonce.toString());
+    const nonce = await entryPointContract.getNonce(setupContractsResult.proxy.proxyAddress, 0);
 
     // Create the base user operation
-    let userOperation = await createGenericUserOperation(callData, proxy.proxyAddress, nonce);
+    let userOperation = await createGenericUserOperation(
+      callData,
+      setupContractsResult.proxy.proxyAddress,
+      nonce
+    );
 
     // Add paymaster data
     userOperation = await addPaymasterData(
       userOperation,
       networkConfig.contracts.paymasterAddress!,
-      backendSigner
+      setupContractsResult.backendSigner
     );
 
     // Sign the user operation
     userOperation = await signUserOperation(
       userOperation,
       networkConfig.contracts.entryPoint,
-      signer
+      setupContractsResult.signer
     );
 
     Logger.log('Sending user operation to bundler');
     const bundlerResponse = await sendUserOperationToBundler(
-      bundlerUrl,
+      setupContractsResult.bundlerUrl,
       userOperation,
-      entrypointContract.address
+      entryPointContract.address
     );
-    Logger.log('Bundler response:', bundlerResponse);
+    Logger.log('sendUserOperation: Bundler response:', bundlerResponse);
 
-    Logger.log('Waiting for transaction to be mined.');
-    const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
-    Logger.log('Transaction receipt:', JSON.stringify(receipt));
+    Logger.log('sendUserOperation: Waiting for transaction to be mined.');
+    const receipt = await waitForUserOperationReceipt(
+      setupContractsResult.provider,
+      bundlerResponse
+    );
+    Logger.log('sendUserOperation: Transaction receipt:', JSON.stringify(receipt));
 
     if (!receipt?.success) {
-      throw new Error('Transaction failed or not found');
+      throw new Error('sendUserOperation: Transaction failed or not found');
     }
 
-    Logger.log('Transaction confirmed in block:', receipt.receipt.blockNumber);
-    Logger.log('sendUserOperation end!');
+    Logger.log('sendUserOperation: Transaction confirmed in block:', receipt.receipt.blockNumber);
+    Logger.log('sendUserOperation: end!');
 
-    return { transactionHash: receipt.receipt.transactionHash };
+    return { success: true, transactionHash: receipt.receipt.transactionHash };
   } catch (error) {
-    Logger.error('Error in sendUserOperation:', error);
-    Logger.log('Full error object:', JSON.stringify(error));
-    throw error;
-  }
-}
-
-/**
- * Helper function to ensure the signer has enough ETH for gas fees.
- */
-export async function ensureSignerHasEth(
-  signer: ethers.Wallet,
-  backendSigner: ethers.Wallet,
-  provider: ethers.providers.JsonRpcProvider
-): Promise<void> {
-  const EOABalance = await provider.getBalance(await signer.getAddress());
-  Logger.log(`Signer balance: ${ethers.utils.formatEther(EOABalance)} ETH`);
-  if (EOABalance.lt(ethers.utils.parseEther('0.0008'))) {
-    Logger.log('Sending ETH to signer.');
-    const tx = await backendSigner.sendTransaction({
-      to: await signer.getAddress(),
-      value: ethers.utils.parseEther('0.001'),
-      gasLimit: 210000
-    });
-    await tx.wait();
-    Logger.log('ETH sent to signer');
-  }
-  Logger.log('Signer has enough ETH');
-}
-
-/**
- * Executes a transaction between two users and handles the notifications.
- */
-export const executeTransaction = async (
-  networkConfig: IBlockchain,
-  from: IUser,
-  to: IUser | { wallet: string },
-  tokenAddress: string,
-  tokenSymbol: string,
-  amount: string,
-  chain_id: number
-): Promise<string> => {
-  Logger.log('Sending user operation.');
-
-  let result;
-  try {
-    result = await sendUserOperation(
-      networkConfig,
-      from.phone_number,
-      to.wallet,
-      tokenAddress,
-      amount,
-      chain_id
+    Logger.error(
+      `sendUserOperation: Error, from: ${fromNumber}, to: ${to}, ` +
+        `token address: ${tokenAddress}, amount: ${amount}, error: `,
+      JSON.stringify(error)
     );
-  } catch (error: unknown) {
-    Logger.error('Error with sendUserOperation:', (error as Error).message);
-    return 'The transaction failed, the funds remain in your account';
+    return { success: false, transactionHash: '' };
   }
+}
 
-  if (!result || !result.transactionHash) {
-    return 'The transaction failed, the funds remain in your account';
-  }
-
+/**
+ * Saves the transaction details to the database.
+ */
+export async function saveTransaction(
+  tx: string,
+  walletFrom: string,
+  walletTo: string,
+  amount: number,
+  token: string,
+  type: string,
+  status: string
+) {
   try {
     await Transaction.create({
-      trx_hash: result.transactionHash,
-      wallet_from: from.wallet,
-      wallet_to: to.wallet,
-      type: 'transfer',
+      trx_hash: tx,
+      wallet_from: walletFrom,
+      wallet_to: walletTo,
+      type,
       date: new Date(),
-      status: 'completed',
-      amount: parseFloat(amount),
-      token: tokenSymbol
+      status,
+      amount,
+      token
     });
   } catch (error: unknown) {
+    // avoid throw error
     Logger.error(
-      `Error saving transaction ${result.transactionHash} in database:`,
+      `Error saving transaction ${tx} in database from: ${walletFrom}, to: ${walletTo}, amount: ${amount.toString()}, token: ${token}}:`,
       (error as Error).message
     );
-    // no throw error
   }
-
-  try {
-    Logger.log('Trying to notificate transfer');
-    const fromName = from.name ?? from.phone_number ?? 'Alguien';
-    const toNumber = 'phone_number' in to ? to.phone_number : to.wallet;
-
-    sendTransferNotification(to.wallet, toNumber, fromName, amount, tokenSymbol);
-
-    sendOutgoingTransferNotification(
-      from.wallet,
-      from.phone_number,
-      toNumber,
-      amount,
-      tokenSymbol,
-      result.transactionHash
-    );
-
-    return '';
-  } catch (error) {
-    Logger.error('Error sending notifications:', error);
-    return 'The transaction failed, the funds remain in your account';
-  }
-};
+}
 
 export async function withdrawWalletAllFunds(
   tokens: IToken[],
@@ -228,25 +152,54 @@ export async function withdrawWalletAllFunds(
   channel_user_id: string,
   to_wallet: string
 ): Promise<{ result: boolean; message: string }> {
-  const bddUser: IUser | null = await getUser(channel_user_id);
-  if (!bddUser) {
-    return { result: false, message: 'There are not user with that phone number' };
-  }
-
-  if (bddUser.walletEOA === to_wallet || bddUser.wallet === to_wallet) {
-    return { result: false, message: 'You are trying to send funds to your own wallet' };
-  }
-
   try {
+    const bddUser: IUser | null = await getUser(channel_user_id);
+    if (!bddUser) {
+      return { result: false, message: 'There are not user with that phone number' };
+    }
+
+    const userWallet: IUserWallet | null = getUserWalletByChainId(
+      bddUser.wallets,
+      networkConfig.chain_id
+    );
+    if (!userWallet) {
+      return { result: false, message: `No wallet found for chain ${networkConfig.chain_id}` };
+    }
+
+    if (
+      !userWallet ||
+      userWallet.wallet_proxy === to_wallet ||
+      userWallet.wallet_eoa === to_wallet
+    ) {
+      return { result: false, message: 'You are trying to send funds to your own wallet' };
+    }
+
+    if (hasUserOperationInProgress(bddUser, ConcurrentOperationsEnum.WithdrawAll)) {
+      return {
+        result: false,
+        message: `Concurrent withdraw-all operation for wallet ${userWallet.wallet_proxy}, phone: ${bddUser.phone_number}.`
+      };
+    }
+
     const to_wallet_formatted: string = !to_wallet.startsWith('0x') ? `0x${to_wallet}` : to_wallet;
 
-    const walletTokensBalance: TokenBalance[] = await getTokenBalances(
-      bddUser.wallet,
+    const walletTokensBalance: TokenBalanceType[] = await getTokenBalances(
+      userWallet.wallet_proxy,
       tokens,
       networkConfig
     );
 
-    // Usar forEach para iterar sobre el array y ejecutar la transacción si el balance es mayor a 0
+    // Check Blockchain Conditions
+    const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
+      await checkBlockchainConditions(networkConfig, channel_user_id);
+
+    if (!checkBlockchainConditionsResult.success) {
+      return { result: false, message: 'Invalid Blockchain Conditions to make transaction' };
+    }
+
+    await openOperation(bddUser.phone_number, ConcurrentOperationsEnum.WithdrawAll);
+
+    // Use forEach to iterate over the array and execute the transaction if the balance is greater than 0
     const delay = (ms: number) =>
       new Promise((resolve) => {
         setTimeout(resolve, ms);
@@ -254,7 +207,7 @@ export async function withdrawWalletAllFunds(
 
     for (let index = 0; index < walletTokensBalance.length; index += 1) {
       const tokenBalance = walletTokensBalance[index];
-      const { symbol, balance, address } = tokenBalance;
+      const { balance, address } = tokenBalance;
       const amount = parseFloat(balance);
 
       if (amount > 0) {
@@ -263,14 +216,14 @@ export async function withdrawWalletAllFunds(
         // but it resulted in the failure of the user operation calls.
         //
         // eslint-disable-next-line no-await-in-loop
-        await executeTransaction(
+        await sendUserOperation(
           networkConfig,
-          bddUser,
-          { wallet: to_wallet_formatted },
+          checkBlockchainConditionsResult.setupContractsResult!,
+          checkBlockchainConditionsResult.entryPointContract!,
+          userWallet.wallet_proxy,
+          to_wallet_formatted,
           address,
-          symbol,
-          balance,
-          networkConfig.chain_id
+          balance
         );
 
         // Only if it's not the last one
@@ -283,5 +236,6 @@ export async function withdrawWalletAllFunds(
     return { result: false, message: (error as Error).message };
   }
 
+  await closeOperation(channel_user_id, ConcurrentOperationsEnum.WithdrawAll);
   return { result: true, message: '' };
 }

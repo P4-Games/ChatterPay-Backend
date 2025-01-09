@@ -6,6 +6,11 @@ steps:
       - BUN_ENV=${_BUN_ENV}
       - ALCHEMY_API_KEY=${_ALCHEMY_API_KEY}
       - INFURA_API_KEY=${_INFURA_API_KEY}
+      - MAX_FEE_PER_GAS=${_MAX_FEE_PER_GAS}
+      - MAX_PRIORITY_FEE_PER_GAS=${_MAX_PRIORITY_FEE_PER_GAS}
+      - VERIFICATION_GAS_LIMIT=${_VERIFICATION_GAS_LIMIT}
+      - CALL_GAS_LIMIT=${_CALL_GAS_LIMIT}
+      - PRE_VERIFICATION_GAS=${_PRE_VERIFICATION_GAS}
       - MONGO_URI=${_MONGO_URI}
       - PINATA_JWT=${_PINATA_JWT}
       - ICP_CANISTER_ID=${_ICP_CANISTER_ID}
@@ -15,6 +20,7 @@ steps:
       - NFT_UPLOAD_IMAGE_ICP=${_NFT_UPLOAD_IMAGE_ICP}
       - NFT_UPLOAD_IMAGE_IPFS=${_NFT_UPLOAD_IMAGE_IPFS}
       - GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}
+      - PUSH_ENABLED=${_PUSH_ENABLED}
       - PUSH_NETWORK=${_PUSH_NETWORK}
       - PUSH_ENVIRONMENT=${_PUSH_ENVIRONMENT}
       - PUSH_CHANNEL_ADDRESS=${_PUSH_CHANNEL_ADDRESS}
@@ -43,6 +49,16 @@ steps:
       '--build-arg',
       'INFURA_API_KEY=${_INFURA_API_KEY}',
       '--build-arg',
+      'MAX_FEE_PER_GAS=${_MAX_FEE_PER_GAS}',
+      '--build-arg',
+      'MAX_PRIORITY_FEE_PER_GAS=${_MAX_PRIORITY_FEE_PER_GAS}',
+      '--build-arg',
+      'VERIFICATION_GAS_LIMIT=${_VERIFICATION_GAS_LIMIT}',
+      '--build-arg',
+      'CALL_GAS_LIMIT=${_CALL_GAS_LIMIT}',
+      '--build-arg',
+      'PRE_VERIFICATION_GAS=${_PRE_VERIFICATION_GAS}',
+      '--build-arg',
       'MONGO_URI=${_MONGO_URI}',
       '--build-arg',
       'PRIVATE_KEY=$$PRIVATE_KEY',
@@ -70,6 +86,8 @@ steps:
       'CHATIZALO_TOKEN=$$CHATIZALO_TOKEN',
       '--build-arg',
       'FRONTEND_TOKEN=$$FRONTEND_TOKEN',
+      '--build-arg',
+      'PUSH_ENABLED=${_PUSH_ENABLED}',
       '--build-arg',
       'PUSH_NETWORK=${_PUSH_NETWORK}',
       '--build-arg',

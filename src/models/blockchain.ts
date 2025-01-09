@@ -8,6 +8,7 @@ export interface IBlockchain extends Document {
   explorer: string;
   scan_apikey: string;
   marketplace_opensea_url: string;
+  environment: string;
   contracts: {
     entryPoint: string;
     factoryAddress: string;
@@ -25,6 +26,8 @@ const blockchainSchema = new Schema<IBlockchain>({
   logo: { type: String, required: true },
   explorer: { type: String, required: true },
   scan_apikey: { type: String, required: true },
+  marketplace_opensea_url: { type: String, required: true },
+  environment: { type: String, required: true },
   contracts: {
     entryPoint: { type: String, required: false },
     factoryAddress: { type: String, required: false },

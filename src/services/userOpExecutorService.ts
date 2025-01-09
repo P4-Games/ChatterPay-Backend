@@ -1,12 +1,12 @@
 import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
-import { Logger } from '../utils/logger';
+import { Logger } from '../helpers/loggerHelper';
 import { getEntryPointABI } from './bucketService';
 import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
-import { UserOperationReceiptData, waitForUserOperationReceipt } from '../utils/waitForTX';
+import { UserOperationReceipt, UserOperationReceiptData } from '../types/userOperation';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -16,8 +16,15 @@ declare module 'fastify' {
 }
 
 /**
+ *
  * Creates, signs, sends and waits for a UserOperation in one go.
  * Uses the global Fastify context for network configuration and backend services.
+ *
+ * @param fastify
+ * @param callData
+ * @param signer
+ * @param senderAddress
+ * @returns
  */
 export async function executeUserOperation(
   fastify: FastifyInstance,
@@ -85,4 +92,45 @@ export async function executeUserOperation(
 
   Logger.log('Transaction confirmed in block:', receipt.receipt.blockNumber);
   return receipt.receipt;
+}
+
+/**
+ *
+ * @param provider
+ * @param userOpHash
+ * @param timeout
+ * @param interval
+ * @returns
+ */
+export async function waitForUserOperationReceipt(
+  provider: ethers.providers.JsonRpcProvider,
+  userOpHash: string,
+  timeout = 60000,
+  interval = 5000
+): Promise<UserOperationReceipt> {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    const checkReceipt = () => {
+      provider
+        .send('eth_getUserOperationReceipt', [userOpHash])
+        .then((receipt: UserOperationReceipt | null) => {
+          if (receipt) {
+            resolve(receipt);
+          } else if (Date.now() - startTime < timeout) {
+            setTimeout(checkReceipt, interval);
+          } else {
+            reject(new Error('Timeout waiting for user operation receipt'));
+          }
+        })
+        .catch((error) => {
+          if (Date.now() - startTime < timeout) {
+            setTimeout(checkReceipt, interval);
+          } else {
+            reject(error);
+          }
+        });
+    };
+
+    checkReceipt();
+  });
 }

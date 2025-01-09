@@ -1,7 +1,28 @@
-import { Logger } from './utils/logger';
+import mongoose from 'mongoose';
+import { FastifyInstance } from 'fastify/types/instance';
+
 import { startServer } from './config/server';
+import { Logger } from './helpers/loggerHelper';
 import { connectToDatabase } from './config/database';
-import { setupGracefulShutdown } from './utils/shutdown';
+
+/**
+ * Sets up a graceful shutdown process for the server and database connection.
+ *
+ * @param {FastifyInstance} server - The Fastify server instance
+ */
+function setupGracefulShutdown(server: FastifyInstance): void {
+  process.on('SIGINT', async () => {
+    try {
+      await server.close();
+      await mongoose.connection.close();
+      Logger.log('Server and MongoDB connection closed');
+      process.exit(0);
+    } catch (err) {
+      Logger.error('Error during shutdown:', err);
+      process.exit(1);
+    }
+  });
+}
 
 /**
  * The main function that initializes the application.

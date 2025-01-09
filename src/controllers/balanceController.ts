@@ -1,10 +1,12 @@
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { User } from '../models/user';
-import { Logger } from '../utils/logger';
 import { getPhoneNFTs } from './nftController';
+import { Logger } from '../helpers/loggerHelper';
+import { IUser, IUserWallet } from '../models/user';
+import { getUser, getUserWalletByChainId } from '../services/userService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import {
   getFiatQuotes,
   getTokenBalances,
@@ -19,8 +21,10 @@ import {
  * @returns Promise resolving to deposits status
  */
 export const checkExternalDeposits = async (request: FastifyRequest, reply: FastifyReply) => {
-  const depositsStatus = await fetchExternalDeposits();
-  return reply.status(200).send({ status: depositsStatus });
+  const fastify = request.server;
+  const simpleSwapContractAddress = fastify.networkConfig.contracts.simpleSwapAddress;
+  const depositsStatus = await fetchExternalDeposits('ARBITRUM_SEPOLIA', simpleSwapContractAddress);
+  return returnSuccessResponse(reply, depositsStatus);
 };
 
 /**
@@ -30,7 +34,8 @@ export const checkExternalDeposits = async (request: FastifyRequest, reply: Fast
  * @param fastify - Fastify instance containing global state
  * @returns Fastify reply with balance information
  */
-async function getAddressBalance(
+async function getAddressBalanceWithNfts(
+  phoneNumber: string | null,
   address: string,
   reply: FastifyReply,
   fastify: FastifyInstance
@@ -38,17 +43,12 @@ async function getAddressBalance(
   const { networkConfig } = fastify;
 
   Logger.log(`Fetching balance for address: ${address} on network ${networkConfig.name}`);
-  const user = await User.findOne({ wallet: address });
-
-  if (!user) {
-    return returnErrorResponse(reply, 404, 'User not found');
-  }
 
   try {
     const [fiatQuotes, tokenBalances, NFTs] = await Promise.all([
       getFiatQuotes(),
       getTokenBalances(address, fastify.tokens, networkConfig),
-      getPhoneNFTs(user.phone_number)
+      phoneNumber ? getPhoneNFTs(phoneNumber) : { nfts: [] }
     ]);
 
     const balances = calculateBalances(tokenBalances, fiatQuotes, networkConfig.name);
@@ -69,7 +69,12 @@ async function getAddressBalance(
 }
 
 /**
+ *
  * Route handler for getting wallet balance
+ *
+ * @param request
+ * @param reply
+ * @returns
  */
 export const walletBalance = async (
   request: FastifyRequest<{ Params: { wallet: string } }>,
@@ -78,15 +83,23 @@ export const walletBalance = async (
   const { wallet } = request.params;
 
   if (!wallet) {
-    Logger.warn('Wallet address is required');
     return returnErrorResponse(reply, 400, 'Wallet address is required');
   }
 
-  return getAddressBalance(wallet, reply, request.server);
+  if (!isValidEthereumWallet(wallet)) {
+    return returnErrorResponse(reply, 400, 'Wallet must be a valid ethereum wallet address');
+  }
+
+  return getAddressBalanceWithNfts('', wallet, reply, request.server);
 };
 
 /**
+ *
  * Route handler for getting balance by phone number
+ *
+ * @param request
+ * @param reply
+ * @returns
  */
 export const balanceByPhoneNumber = async (
   request: FastifyRequest,
@@ -99,15 +112,34 @@ export const balanceByPhoneNumber = async (
     return returnErrorResponse(reply, 400, 'Phone number is required');
   }
 
-  try {
-    const user = await User.findOne({ phone_number: phone });
+  if (!isValidPhoneNumber(phone)) {
+    Logger.warn(`Phone number ${phone} is invalid`);
+    const msgError = `'${phone}' is invalid. 'phone' parameter must be a phone number (without spaces or symbols)`;
+    return returnErrorResponse(reply, 400, msgError);
+  }
 
+  try {
+    const user: IUser | null = await getUser(phone);
     if (!user) {
       Logger.warn(`User not found for phone number: ${phone}`);
-      return await returnErrorResponse(reply, 404, 'User not found');
+      return await returnErrorResponse(reply, 404, `User not found for phone number: ${phone}`);
     }
 
-    return await getAddressBalance(user.wallet, reply, request.server);
+    const fastify = request.server;
+    const { chain_id } = fastify.networkConfig;
+    const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, chain_id);
+
+    if (!userWallet) {
+      Logger.warn(`Wallet not found for phone number: ${phone} and chainId ${chain_id}`);
+      return await returnErrorResponse(reply, 404, 'Wallet not found');
+    }
+
+    return await getAddressBalanceWithNfts(
+      user.phone_number,
+      userWallet.wallet_proxy,
+      reply,
+      request.server
+    );
   } catch (error) {
     Logger.error('Error fetching user balance:', error);
     return returnErrorResponse(reply, 500, 'Internal Server Error');

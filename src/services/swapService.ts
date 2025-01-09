@@ -1,18 +1,17 @@
 import { ethers } from 'ethers';
-import { FastifyInstance } from 'fastify';
 
-import { Logger } from '../utils/logger';
-import { getEntryPointABI } from './bucketService';
-import { verifyWalletBalance } from './walletService';
-import { ensureSignerHasEth } from './transferService';
-import { generatePrivateKey } from '../utils/keyGenerator';
-import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
+import { Logger } from '../helpers/loggerHelper';
+import { IBlockchain } from '../models/blockchain';
+import { setupERC20 } from './contractSetupService';
+import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
-import { waitForUserOperationReceipt } from '../utils/waitForTX';
-import { getBlockchain, TokenAddresses } from './blockchainService';
-import { setupERC20, setupContracts } from './contractSetupService';
-import { addPaymasterData, ensurePaymasterHasPrefund } from './paymasterService';
+import { waitForUserOperationReceipt } from './userOpExecutorService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
+import {
+  TokenAddressesType,
+  ExecuteSwapResultType,
+  setupContractReturnType
+} from '../types/common';
 
 /**
  * Creates callData for token approval
@@ -67,7 +66,7 @@ function createSwapCallData(
  * Executes a user operation with the given callData
  */
 async function executeOperation(
-  fastify: FastifyInstance,
+  networkConfig: IBlockchain,
   callData: string,
   signer: ethers.Wallet,
   backendSigner: ethers.Wallet, // Agregamos backendSigner como parámetro
@@ -86,14 +85,14 @@ async function executeOperation(
   // Add paymaster data - Usamos el backendSigner que recibimos como parámetro
   userOperation = await addPaymasterData(
     userOperation,
-    fastify.networkConfig.contracts.paymasterAddress!,
+    networkConfig.contracts.paymasterAddress!,
     backendSigner
   );
 
   // Sign the user operation
   userOperation = await signUserOperation(
     userOperation,
-    fastify.networkConfig.contracts.entryPoint,
+    networkConfig.contracts.entryPoint,
     signer
   );
 
@@ -107,6 +106,7 @@ async function executeOperation(
   // Wait for receipt
   const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
   if (!receipt?.success) {
+    Logger.error('receipt', JSON.stringify(receipt));
     throw new Error(
       `Transaction failed or not found, receipt: ${receipt.success}, ${receipt.userOpHash}`
     );
@@ -116,101 +116,89 @@ async function executeOperation(
 }
 
 /**
- * Main function to execute the swap operation
+ * Execute the swap with the SimpleSwap contract
+ *
+ * The SimpleSwap contract makes sense for performing swaps of WETH for USDT and vice versa.
+ * This type of contract works similarly to a basic Automated Market Maker (AMM), where the
+ * liquidity reserve is used to determine the exchange rate between the two tokens.
+ * In this case, when you call the swapWETHforUSDT function, the contract uses the amount of WETH
+ * you wish to swap and the current WETH and USDT reserves to calculate how many USDT you will receive.
+ *
+ * @param networkConfig
+ * @param tokenAddresses
+ * @param amount
+ * @returns
  */
 export async function executeSwap(
-  fastify: FastifyInstance,
-  fromNumber: string,
-  tokenAddresses: TokenAddresses,
-  amount: string,
-  chain_id: number,
-  isWETHtoUSDT: boolean
-): Promise<{ approveTransactionHash: string; swapTransactionHash: string }> {
+  networkConfig: IBlockchain,
+  setupContractsResult: setupContractReturnType,
+  entryPointContract: ethers.Contract,
+  tokenAddresses: TokenAddressesType,
+  amount: string
+): Promise<ExecuteSwapResultType> {
   try {
-    const blockchain = await getBlockchain(chain_id);
-    const seedPrivateKey = process.env.PRIVATE_KEY;
-    if (!seedPrivateKey) {
-      throw new Error('Seed private key not found in environment variables');
-    }
-
-    const privateKey = generatePrivateKey(seedPrivateKey, fromNumber);
-    const { provider, signer, backendSigner, bundlerUrl, chatterPay, proxy, accountExists } =
-      await setupContracts(blockchain, privateKey, fromNumber);
-    const erc20 = await setupERC20(tokenAddresses.tokenAddressInput, signer);
-    Logger.log('Contracts and signers set up.', signer.address);
-
-    const checkBalanceResult = await verifyWalletBalance(erc20, proxy.proxyAddress, amount);
-    if (!checkBalanceResult.enoughBalance) {
-      throw new Error(
-        `Insufficient balance. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}`
-      );
-    }
-    Logger.log('Balance check passed');
-
-    await ensureSignerHasEth(signer, backendSigner, provider);
-    Logger.log('Signer has enough ETH');
-
-    const { networkConfig } = fastify;
-    const entrypointABI = await getEntryPointABI();
-    const entrypointContract = new ethers.Contract(
-      networkConfig.contracts.entryPoint,
-      entrypointABI,
-      backendSigner
-    );
-
-    await ensurePaymasterHasPrefund(entrypointContract, networkConfig.contracts.paymasterAddress!);
-
-    Logger.log('Validating account');
-    if (!accountExists) {
-      throw new Error(`Account ${proxy.proxyAddress} does not exist`);
-    }
+    const isWETHtoUSDT =
+      tokenAddresses.tokenAddressInput.toUpperCase() === 'WETH' &&
+      tokenAddresses.tokenAddressOutput.toUpperCase() === 'USDT';
 
     // Create SimpleSwap contract instance
     const simpleSwapContract = new ethers.Contract(
-      SIMPLE_SWAP_ADDRESS,
+      networkConfig.contracts.simpleSwapAddress,
       [
         'function swapWETHforUSDT(uint256 wethAmount) external',
         'function swapUSDTforWETH(uint256 usdtAmount) external'
       ],
-      provider
+      setupContractsResult.provider
     );
 
     // 1. Execute approve operation
-    Logger.log('Executing approve operation.');
-    const approveCallData = createApproveCallData(chatterPay, erc20, SIMPLE_SWAP_ADDRESS, amount);
+    Logger.log('Swap: Executing approve operation.');
+    const erc20 = await setupERC20(tokenAddresses.tokenAddressInput, setupContractsResult.signer);
+    const approveCallData = createApproveCallData(
+      setupContractsResult.chatterPay,
+      erc20,
+      networkConfig.contracts.simpleSwapAddress,
+      amount
+    );
 
     const approveHash = await executeOperation(
-      fastify,
+      networkConfig,
       approveCallData,
-      signer,
-      backendSigner,
-      entrypointContract,
-      bundlerUrl,
-      proxy.proxyAddress,
-      provider
+      setupContractsResult.signer,
+      setupContractsResult.backendSigner,
+      entryPointContract,
+      setupContractsResult.bundlerUrl,
+      setupContractsResult.proxy.proxyAddress,
+      setupContractsResult.provider
     );
 
     // 2. Execute swap operation
-    Logger.log('Executing swap operation.');
-    const swapCallData = createSwapCallData(chatterPay, simpleSwapContract, isWETHtoUSDT, amount);
+    Logger.log('Swap: Executing swap operation.');
+    const swapCallData = createSwapCallData(
+      setupContractsResult.chatterPay,
+      simpleSwapContract,
+      isWETHtoUSDT,
+      amount
+    );
 
     const swapHash = await executeOperation(
-      fastify,
+      networkConfig,
       swapCallData,
-      signer,
-      backendSigner,
-      entrypointContract,
-      bundlerUrl,
-      proxy.proxyAddress,
-      provider
+      setupContractsResult.signer,
+      setupContractsResult.backendSigner,
+      entryPointContract,
+      setupContractsResult.bundlerUrl,
+      setupContractsResult.proxy.proxyAddress,
+      setupContractsResult.provider
     );
 
     return {
+      success: true,
       approveTransactionHash: approveHash,
       swapTransactionHash: swapHash
     };
   } catch (error) {
     Logger.error('Error in executeSwap:', error);
-    throw error;
+    return { success: false, approveTransactionHash: '', swapTransactionHash: '' };
   }
 }

@@ -1,8 +1,8 @@
-import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { returnErrorResponse } from '../utils/responseFormatter';
 import { withdrawWalletAllFunds } from '../services/transferService';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 
 /**
  * Handles the withdrwal all funds
@@ -33,11 +33,15 @@ export const withdrawAllFunds = async (
       return await returnErrorResponse(reply, 400, 'Missing dst_address in body');
     }
 
-    if (!channel_user_id || channel_user_id.length > 15) {
-      return await returnErrorResponse(reply, 400, 'Phone number is invalid');
+    if (!isValidPhoneNumber(channel_user_id)) {
+      return await returnErrorResponse(
+        reply,
+        400,
+        `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`
+      );
     }
 
-    if (!ethers.utils.isAddress(dst_address)) {
+    if (!isValidEthereumWallet(dst_address)) {
       return await returnErrorResponse(reply, 400, 'Invalid Ethereum address');
     }
 
@@ -50,7 +54,7 @@ export const withdrawAllFunds = async (
     );
 
     if (witthdrawResult.result) {
-      return await reply.status(200).send({ message: 'Withdraw all funds completed successfully' });
+      return await returnSuccessResponse(reply, 'Withdraw all funds completed successfully');
     }
 
     return await returnErrorResponse(reply, 400, witthdrawResult.message);

@@ -2,8 +2,8 @@ import axios from 'axios';
 import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 
-import { Logger } from '../utils/logger';
-import { GCP_ABIs } from '../constants/environment';
+import { GCP_ABIs } from '../config/constants';
+import { Logger } from '../helpers/loggerHelper';
 
 export type ABI = ethers.ContractInterface;
 

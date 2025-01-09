@@ -1,13 +1,9 @@
-//
-// set MONGO_URI in env, then:
-// bun run scripts/fund_users_wallets.ts
-//
 import axios from 'axios';
 import { config } from 'dotenv';
 import mongoose from 'mongoose';
 
 import { IUser } from '../src/models/user';
-import { Logger } from '../src/utils/logger';
+import { Logger } from '../src/helpers/loggerHelper';
 
 config();
 
@@ -23,7 +19,16 @@ const userSchema = new mongoose.Schema<IUser>(
     email: String,
     phone_number: String,
     photo: String,
-    wallet: String,
+    wallets: [
+      {
+        wallet_proxy: String,
+        wallet_eoa: String,
+        sk_hashed: String,
+        chatterpay_implementation_address: String,
+        chain_id: Number,
+        status: { type: String, default: 'active' }
+      }
+    ],
     code: { type: Number, default: null },
     settings: {
       notifications: {
@@ -69,33 +74,36 @@ async function processWallets() {
       return;
     }
 
-    // Process users in batches of 30
+    // Process users in batches of 40
     const batchSize = 40;
     for (let i = 0; i < users.length; i += batchSize) {
       const batch = users.slice(i, i + batchSize);
 
       // Collect all requests for the current batch
       const requests = batch.map((user) =>
-        axios
-          .post(
-            apiEndpoint,
-            { address: user.wallet },
-            {
-              headers: {
-                Authorization: `Bearer ${BEARER_TOKEN}`
+        // Process each user's wallets and send a request for each active wallet
+        user.wallets.map((wallet) =>
+          axios
+            .post(
+              apiEndpoint,
+              { address: wallet.wallet_eoa }, // Use wallet_eoa for the request
+              {
+                headers: {
+                  Authorization: `Bearer ${BEARER_TOKEN}`
+                }
               }
-            }
-          )
-          .then((response) => {
-            Logger.log(`Success for wallet ${user.wallet}:`, response.data);
-          })
-          .catch((error) => {
-            Logger.error(`Error for wallet ${user.wallet}:`, error.message);
-          })
+            )
+            .then((response) => {
+              Logger.log(`Success for wallet ${wallet.wallet_eoa}:`, response.data);
+            })
+            .catch((error) => {
+              Logger.error(`Error for wallet ${wallet.wallet_eoa}:`, error.message);
+            })
+        )
       );
 
-      // Process all requests in the batch concurrently
-      Promise.all(requests)
+      // Flatten the array of wallet requests and process them concurrently
+      Promise.all(requests.flat())
         .then(() => {
           if (i + batchSize < users.length) {
             Logger.log(`Batch complete, waiting for 70 seconds before the next batch...`);

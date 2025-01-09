@@ -14,6 +14,11 @@ docker build \
   --build-arg ALCHEMY_API_KEY="$ALCHEMY_API_KEY" \
   --build-arg MINOR_LOG_LEVEL="$MINOR_LOG_LEVEL" \
   --build-arg INFURA_API_KEY="$INFURA_API_KEY" \
+  --build-arg MAX_FEE_PER_GAS="$MAX_FEE_PER_GAS" \
+  --build-arg MAX_PRIORITY_FEE_PER_GAS="$MAX_PRIORITY_FEE_PER_GAS" \
+  --build-arg VERIFICATION_GAS_LIMIT="$VERIFICATION_GAS_LIMIT" \
+  --build-arg CALL_GAS_LIMIT="$CALL_GAS_LIMIT" \
+  --build-arg PRE_VERIFICATION_GAS="$PRE_VERIFICATION_GAS" \
   --build-arg MONGO_URI="$MONGO_URI" \
   --build-arg PRIVATE_KEY="$PRIVATE_KEY" \
   --build-arg SIGNING_KEY="$SIGNING_KEY" \
@@ -28,6 +33,7 @@ docker build \
   --build-arg GCP_BUCKET_BASE_URL="$GCP_BUCKET_BASE_URL" \
   --build-arg CHATIZALO_TOKEN="$CHATIZALO_TOKEN" \
   --build-arg FRONTEND_TOKEN="$FRONTEND_TOKEN" \
+  --build-arg PUSH_ENABLED="$PUSH_ENABLED" \
   --build-arg PUSH_NETWORK="$PUSH_NETWORK" \
   --build-arg PUSH_ENVIRONMENT="$PUSH_ENVIRONMENT" \
   --build-arg PUSH_CHANNEL_ADDRESS="$PUSH_CHANNEL_ADDRESS" \

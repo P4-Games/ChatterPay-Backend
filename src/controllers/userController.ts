@@ -1,8 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { Logger } from '../utils/logger';
 import { User, IUser } from '../models/user';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
+import { Logger } from '../helpers/loggerHelper';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**
  * Creates a new user in the database.

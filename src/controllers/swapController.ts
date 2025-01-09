@@ -1,16 +1,33 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { Logger } from '../utils/logger';
-import Transaction from '../models/transaction';
+import { Logger } from '../helpers/loggerHelper';
+import { SIGNING_KEY } from '../config/constants';
 import { executeSwap } from '../services/swapService';
-import { SIGNING_KEY } from '../constants/environment';
-import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
 import { setupERC20 } from '../services/contractSetupService';
-import { returnErrorResponse } from '../utils/responseFormatter';
-import { sendSwapNotification } from '../services/notificationService';
+import { saveTransaction } from '../services/transferService';
+import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
-import { TokenAddresses, getTokensAddresses } from '../services/blockchainService';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
+import {
+  openOperation,
+  closeOperation,
+  hasPhoneOperationInProgress
+} from '../services/userService';
+import {
+  TokenAddressesType,
+  ExecuteSwapResultType,
+  ConcurrentOperationsEnum,
+  CheckBalanceConditionsResultType
+} from '../types/common';
+import {
+  sendSwapNotification,
+  sendInternalErrorNotification,
+  SendConcurrecyOperationNotification,
+  sendUserInsufficientBalanceNotification,
+  sendNoValidBlockchainConditionsNotification
+} from '../services/notificationService';
 
 interface SwapBody {
   channel_user_id: string;
@@ -22,10 +39,14 @@ interface SwapBody {
 
 /**
  * Validates the input for the swap operation.
+ *
+ * @param inputs
+ * @param tokenAddresses
+ * @returns
  */
 const validateInputs = async (
   inputs: SwapBody,
-  tokenAddresses: TokenAddresses
+  tokenAddresses: TokenAddressesType
 ): Promise<string> => {
   const { channel_user_id, inputCurrency, outputCurrency, amount } = inputs;
 
@@ -33,8 +54,8 @@ const validateInputs = async (
     return 'Missing required fields: address, inputCurrency, or outputCurrency';
   }
 
-  if (channel_user_id.length > 15) {
-    return 'Invalid Phone Number';
+  if (!isValidPhoneNumber(channel_user_id)) {
+    return `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`;
   }
 
   if (inputCurrency === outputCurrency) {
@@ -53,55 +74,65 @@ const validateInputs = async (
 };
 
 /**
- * Saves the transaction details to the database.
- */
-async function saveTransaction(
-  tx: string,
-  walletFrom: string,
-  walletTo: string,
-  amount: number,
-  currency: string
-) {
-  await Transaction.create({
-    trx_hash: tx,
-    wallet_from: walletFrom,
-    wallet_to: walletTo,
-    type: 'transfer',
-    date: new Date(),
-    status: 'completed',
-    amount,
-    token: currency
-  });
-}
-
-/**
  * Handles the swap operation.
+ *
+ * @param request
+ * @param reply
+ * @returns
  */
+// eslint-disable-next-line consistent-return
 export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: FastifyReply) => {
   try {
+    /* ***************************************************** */
+    /* 1. swap: input params                                 */
+    /* ***************************************************** */
     if (!request.body) {
       return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
 
     const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
 
-    const { tokens: blockchainTokensFromFastify, networkConfig: blockchainConfigFromFastify } =
-      request.server as FastifyInstance;
+    const { tokens: blockchainTokens, networkConfig } = request.server as FastifyInstance;
 
-    const tokenAddresses: TokenAddresses = getTokensAddresses(
-      blockchainConfigFromFastify,
-      blockchainTokensFromFastify,
+    const tokenAddresses: TokenAddressesType = getTokensAddresses(
+      networkConfig,
+      blockchainTokens,
       inputCurrency,
       outputCurrency
     );
 
-    const validationError: string = await validateInputs(request.body, tokenAddresses);
+    let validationError: string = await validateInputs(request.body, tokenAddresses);
 
     if (validationError) {
-      return await reply.status(400).send({ message: validationError });
+      return await returnErrorResponse(reply, 400, validationError);
     }
 
-    const provider = new ethers.providers.JsonRpcProvider(blockchainConfigFromFastify.rpc);
+    /* ***************************************************** */
+    /* 2. makeTransaction: open concurrent operation      */
+    /* ***************************************************** */
+    if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.Swap)) {
+      validationError = `Concurrent swap operation for phone: ${channel_user_id}.`;
+      Logger.log(`swap: ${validationError}`);
+      await SendConcurrecyOperationNotification(channel_user_id);
+      return await returnErrorResponse(
+        reply,
+        400,
+        'Error making swap transaction',
+        validationError
+      );
+    }
+    await openOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
+
+    /* ***************************************************** */
+    /* 2. swap: send initial response                        */
+    /* ***************************************************** */
+    await returnSuccessResponse(reply, 'Swap in progress, it may take a few minutes.');
+
+    /* ***************************************************** */
+    /* 3. swap: check user balance                           */
+    /* ***************************************************** */
+
+    const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const { proxyAddress } = await computeProxyAddressFromPhone(channel_user_id);
 
@@ -120,32 +151,49 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     const enoughBalance: boolean = fromTokenCurrentBalance.gte(amountToCheck);
 
     if (!enoughBalance) {
-      return await returnErrorResponse(reply, 400, 'Insufficient balance to make the swap');
+      await sendUserInsufficientBalanceNotification(proxyAddress, channel_user_id);
+      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
+      return undefined;
     }
 
-    // Send initial response to client
-    reply
-      .status(200)
-      .send({ message: 'Currency exchange in progress, it may take a few minutes.' });
+    /* ***************************************************** */
+    /* 4. swap: check blockchain conditions                  */
+    /* ***************************************************** */
+    const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
+      await checkBlockchainConditions(networkConfig, channel_user_id);
 
-    // Determine swap direction
-    const isWETHtoUSDT =
-      inputCurrency.toUpperCase() === 'WETH' && outputCurrency.toUpperCase() === 'USDT';
+    if (!checkBlockchainConditionsResult.success) {
+      await sendNoValidBlockchainConditionsNotification(proxyAddress, channel_user_id);
+      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
+      return undefined;
+    }
 
-    // Execute the swap with the SimpleSwap contract
-    // The SimpleSwap contract makes sense for performing swaps of WETH for USDT and vice versa.
-    // This type of contract works similarly to a basic Automated Market Maker (AMM), where the
-    // liquidity reserve is used to determine the exchange rate between the two tokens.
-    // In this case, when you call the swapWETHforUSDT function, the contract uses the amount of WETH
-    // you wish to swap and the current WETH and USDT reserves to calculate how many USDT you will receive.
-    const tx = await executeSwap(
-      request.server,
-      channel_user_id,
+    /* ***************************************************** */
+    /* 5. swap: save transaciton with pending status         */
+    /* ***************************************************** */
+
+    // TODO: swap: save transaciton with pending status
+
+    /* ***************************************************** */
+    /* 6. swap: make operation                               */
+    /* ***************************************************** */
+
+    const executeSwapResult: ExecuteSwapResultType = await executeSwap(
+      networkConfig,
+      checkBlockchainConditionsResult.setupContractsResult!,
+      checkBlockchainConditionsResult.entryPointContract!,
       tokenAddresses,
-      amount.toString(),
-      request.server.networkConfig.chain_id,
-      isWETHtoUSDT
+      amount.toString()
     );
+    if (!executeSwapResult.success) {
+      await sendInternalErrorNotification(proxyAddress, channel_user_id);
+      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
+      return undefined;
+    }
+
+    /* ***************************************************** */
+    /* 7. swap: swap: update bdd with result                 */
+    /* ***************************************************** */
 
     // Get the new balances after the transaction
     const fromTokenNewBalance = await fromTokenContract.balanceOf(proxyAddress);
@@ -163,40 +211,47 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       ethers.utils.formatUnits(toTokensReceived, toTokenDecimals)
     );
 
-    // Send notifications
+    // Save transactions OUT
+    Logger.log('Updating swap transactions in database.');
+    await saveTransaction(
+      executeSwapResult.approveTransactionHash,
+      proxyAddress,
+      networkConfig.contracts.simpleSwapAddress,
+      fromTokensSentInUnits,
+      inputCurrency,
+      'swap',
+      'completed'
+    );
+
+    // Save transactions IN
+    await saveTransaction(
+      executeSwapResult.swapTransactionHash,
+      networkConfig.contracts.simpleSwapAddress,
+      proxyAddress,
+      toTokensReceivedInUnits,
+      outputCurrency,
+      'swap',
+      'completed'
+    );
+
+    /* ***************************************************** */
+    /* 8. swap: send notificaiton to user                    */
+    /* ***************************************************** */
+
     await sendSwapNotification(
       channel_user_id,
       inputCurrency,
       fromTokensSentInUnits.toString(),
       toTokensReceivedInUnits.toString(),
       outputCurrency,
-      tx.swapTransactionHash
+      executeSwapResult.swapTransactionHash
     );
 
-    // Save transactions OUT
-    await saveTransaction(
-      tx.approveTransactionHash,
-      proxyAddress,
-      SIMPLE_SWAP_ADDRESS,
-      fromTokensSentInUnits,
-      inputCurrency
-    );
-
-    // Save transactions IN
-    await saveTransaction(
-      tx.swapTransactionHash,
-      SIMPLE_SWAP_ADDRESS,
-      proxyAddress,
-      toTokensReceivedInUnits,
-      outputCurrency
-    );
-
+    await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
     Logger.info(
-      `Swap completed successfully approveTransactionHash: ${tx.approveTransactionHash}, swapTransactionHash: ${tx.swapTransactionHash}.`
+      `Swap completed successfully approveTransactionHash: ${executeSwapResult.approveTransactionHash}, swapTransactionHash: ${executeSwapResult.swapTransactionHash}.`
     );
-    return true;
   } catch (error) {
     Logger.error('Error swapping tokens:', error);
-    return reply.status(500).send({ message: 'Internal Server Error' });
   }
 };

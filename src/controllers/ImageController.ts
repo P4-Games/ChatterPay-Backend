@@ -1,9 +1,9 @@
 import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
-import { User } from '../models/user';
-import { Logger } from '../utils/logger';
-import { returnErrorResponse, returnSuccessResponse } from '../utils/responseFormatter';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../utils/uploadServices';
+import { Logger } from '../helpers/loggerHelper';
+import { getUser } from '../services/userService';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 
 interface UploadBody {
   phone_number: string;
@@ -18,6 +18,12 @@ interface UploadResponse {
   error?: string;
 }
 
+/**
+ *
+ * @param imageUrl
+ * @param fileName
+ * @returns
+ */
 async function processAndUploadImage(imageUrl: string, fileName: string): Promise<UploadResponse> {
   try {
     const processedImageBuffer = await downloadAndProcessImage(imageUrl);
@@ -41,6 +47,12 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
   }
 }
 
+/**
+ *
+ * @param request
+ * @param reply
+ * @returns
+ */
 export const uploadImage: RouteHandlerMethod = async (
   request: FastifyRequest,
   reply: FastifyReply
@@ -62,7 +74,7 @@ export const uploadImage: RouteHandlerMethod = async (
       return await returnErrorResponse(reply, 400, 'Image URL not provided');
     }
 
-    const user = await User.findOne({ phone_number });
+    const user = await getUser(phone_number);
     if (!user) {
       Logger.warn('User not found:', phone_number);
       return await returnErrorResponse(reply, 404, 'User not found');

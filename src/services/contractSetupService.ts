@@ -1,11 +1,53 @@
 import { ethers } from 'ethers';
 
-import { Logger } from '../utils/logger';
+import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
 import { getChatterpayABI } from './bucketService';
 import { getNetworkConfig } from './networkService';
-import { getBundlerUrl, validateBundlerUrl } from '../utils/bundler';
+import { setupContractReturnType } from '../types/common';
 import { computeProxyAddressFromPhone } from './predictWalletService';
+
+/**
+ * Returns a valid public Bundler RPC URL from Stackup given a chain id
+ * @param chainId The chain ID Number
+ * @returns {string} (The url)
+ */
+function getBundlerUrl(chainId: number): string {
+  const bundlerUrls: { [key: number]: string | undefined } = {
+    1: 'https://public.stackup.sh/api/v1/node/ethereum-mainnet',
+    11155111: 'https://public.stackup.sh/api/v1/node/ethereum-sepolia',
+    137: 'https://public.stackup.sh/api/v1/node/polygon-mainnet',
+    80001: 'https://public.stackup.sh/api/v1/node/polygon-mumbai',
+    43114: 'https://public.stackup.sh/api/v1/node/avalanche-mainnet',
+    43113: 'https://public.stackup.sh/api/v1/node/avalanche-fuji',
+    10: 'https://public.stackup.sh/api/v1/node/optimism-mainnet',
+    11155420: 'https://public.stackup.sh/api/v1/node/optimism-sepolia',
+    56: 'https://public.stackup.sh/api/v1/node/bsc-mainnet',
+    97: 'https://public.stackup.sh/api/v1/node/bsc-testnet',
+    42161: 'https://public.stackup.sh/api/v1/node/arbitrum-one',
+    421614: process.env.ARBITRUM_SEPOLIA_RPC_URL,
+    8453: 'https://public.stackup.sh/api/v1/node/base-mainnet',
+    84532: 'https://public.stackup.sh/api/v1/node/base-sepolia'
+  };
+
+  return bundlerUrls[chainId] || '';
+}
+
+/**
+ * Validate Bundle Url
+ * @param url
+ * @returns
+ */
+async function validateBundlerUrl(url: string): Promise<boolean> {
+  try {
+    const provider = new ethers.providers.JsonRpcProvider(url);
+    await provider.getNetwork();
+    return true;
+  } catch (error) {
+    Logger.error(`Failed to validate bundler URL ${url}:`, error);
+    return false;
+  }
+}
 
 /**
  * Sets up the necessary contracts and providers for blockchain interaction.
@@ -19,7 +61,7 @@ export async function setupContracts(
   blockchain: IBlockchain,
   privateKey: string,
   fromNumber: string
-) {
+): Promise<setupContractReturnType> {
   const bundlerUrl = getBundlerUrl(blockchain.chain_id);
   if (!bundlerUrl) {
     throw new Error(`Unsupported chain ID: ${blockchain.chain_id}`);
@@ -41,7 +83,7 @@ export async function setupContracts(
   const chatterpayABI = await getChatterpayABI();
   const chatterPayContract = new ethers.Contract(proxy.proxyAddress, chatterpayABI, signer);
 
-  return {
+  const result: setupContractReturnType = {
     provider,
     signer,
     backendSigner,
@@ -50,6 +92,8 @@ export async function setupContracts(
     proxy,
     accountExists
   };
+
+  return result;
 }
 
 /**

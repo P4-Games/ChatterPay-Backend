@@ -1,9 +1,9 @@
 import PQueue from 'p-queue';
+import { ethers } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
 
-import { Logger } from '../utils/logger';
-import { PackedUserOperation } from '../types/userOperation';
-import { serializeUserOperation } from '../utils/userOperation';
+import { Logger } from '../helpers/loggerHelper';
+import { PackedUserOperationType } from '../types/userOperation';
 
 const queue = new PQueue({ interval: 10000, intervalCap: 1 }); // 1 request each 10 seg
 
@@ -18,7 +18,7 @@ const queue = new PQueue({ interval: 10000, intervalCap: 1 }); // 1 request each
  */
 export async function sendUserOperationToBundler(
   bundlerUrl: string,
-  userOperation: PackedUserOperation,
+  userOperation: PackedUserOperationType,
   entryPointAddress: string
 ): Promise<string> {
   try {
@@ -72,7 +72,7 @@ export async function sendUserOperationToBundler(
  */
 export async function estimateUserOperationGas(
   bundlerUrl: string,
-  userOperation: PackedUserOperation,
+  userOperation: PackedUserOperationType,
   entryPointAddress: string
 ): Promise<void> {
   try {
@@ -104,4 +104,25 @@ export async function estimateUserOperationGas(
     Logger.error('Error estimating gas:', error);
     throw error;
   }
+}
+
+/**
+ * Serialize User Operation
+ * @param userOp
+ * @returns
+ */
+function serializeUserOperation(userOp: PackedUserOperationType): Record<string, string> {
+  return {
+    sender: userOp.sender,
+    nonce: ethers.utils.hexlify(userOp.nonce),
+    initCode: userOp.initCode,
+    callData: userOp.callData,
+    callGasLimit: ethers.utils.hexlify(userOp.callGasLimit),
+    verificationGasLimit: ethers.utils.hexlify(userOp.verificationGasLimit),
+    preVerificationGas: ethers.utils.hexlify(userOp.preVerificationGas),
+    maxFeePerGas: ethers.utils.hexlify(userOp.maxFeePerGas),
+    maxPriorityFeePerGas: ethers.utils.hexlify(userOp.maxPriorityFeePerGas),
+    paymasterAndData: userOp.paymasterAndData,
+    signature: userOp.signature
+  };
 }

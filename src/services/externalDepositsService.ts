@@ -1,9 +1,9 @@
 import { gql, request } from 'graphql-request';
 
 import { User } from '../models/user';
-import { Logger } from '../utils/logger';
 import Transaction from '../models/transaction';
-import { SIMPLE_SWAP_ADDRESS } from '../constants/blockchain';
+import { Logger } from '../helpers/loggerHelper';
+import { DEFAULT_CHAIN_ID } from '../config/constants';
 import { sendTransferNotification } from './notificationService';
 import { LastProcessedBlock } from '../models/lastProcessedBlock';
 
@@ -52,17 +52,29 @@ interface Transfer {
  * Fetches and processes external deposits for users in the ecosystem.
  * @async
  */
-export async function fetchExternalDeposits() {
+export async function fetchExternalDeposits(
+  networkName: string,
+  simpleSwapContractAddress: string
+) {
   try {
     // Get the last processed block number
     const lastProcessedBlock = await LastProcessedBlock.findOne({
-      networkName: 'ARBITRUM_SEPOLIA'
+      networkName
     });
     const fromBlock = lastProcessedBlock ? lastProcessedBlock.blockNumber : 0;
 
     // Fetch all user wallet addresses
-    const users = await User.find({}, 'wallet');
-    const ecosystemAddresses = users.map((user) => user.wallet.toLowerCase());
+    const users = await User.find(
+      {
+        'wallets.chain_id': DEFAULT_CHAIN_ID
+      },
+      'wallets.wallet_proxy'
+    );
+    const ecosystemAddresses = users.flatMap((user) =>
+      user.wallets
+        .filter((wallet) => wallet.chain_id === DEFAULT_CHAIN_ID)
+        .map((wallet) => wallet.wallet_proxy.toLowerCase())
+    );
 
     // Prepare variables for the GraphQL query
     const variables = {
@@ -84,7 +96,7 @@ export async function fetchExternalDeposits() {
     const externalDeposits = allTransfers.filter(
       (transfer) =>
         !ecosystemAddresses.includes(transfer.from.toLowerCase()) &&
-        transfer.from.toLowerCase() !== SIMPLE_SWAP_ADDRESS.toLowerCase()
+        transfer.from.toLowerCase() !== simpleSwapContractAddress.toLowerCase()
     );
 
     // Process each external deposit
@@ -122,7 +134,7 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
     const value = (Number(transfer.value) / 1e18).toFixed(4);
 
     // Send incoming transfer notification message, and record tx data
-    sendTransferNotification(transfer.to, user.phone_number, null, value, token);
+    sendTransferNotification(transfer.to, user.phone_number, value, token);
     new Transaction({
       trx_hash: transfer.id,
       wallet_from: transfer.from,

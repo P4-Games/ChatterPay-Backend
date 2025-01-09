@@ -1,8 +1,15 @@
 import { ethers, BigNumber } from 'ethers';
 
-import { Logger } from '../utils/logger';
-import { getUserOpHash } from '../utils/userOperation';
-import { PackedUserOperation } from '../types/userOperation';
+import { Logger } from '../helpers/loggerHelper';
+import { getUserOpHash } from '../helpers/userOperationHekper';
+import { PackedUserOperationType } from '../types/userOperation';
+import {
+  CALL_GAS_LIMIT,
+  MAX_FEE_PER_GAS,
+  PRE_VERIFICATION_GAS,
+  VERIFICATION_GAS_LIMIT,
+  MAX_PRIORITY_FEE_PER_GAS
+} from '../config/constants';
 
 /**
  * Creates a generic user operation for any type of transaction.
@@ -11,23 +18,28 @@ export async function createGenericUserOperation(
   callData: string,
   sender: string,
   nonce: BigNumber
-): Promise<PackedUserOperation> {
+): Promise<PackedUserOperationType> {
   Logger.log('Creating Generic UserOperation.');
   Logger.log('Sender Address:', sender);
   Logger.log('Call Data:', callData);
   Logger.log('Nonce:', nonce.toString());
+  Logger.log('PRE_VERIFICATION_GAS', PRE_VERIFICATION_GAS);
+  Logger.log('CALL_GAS_LIMIT', CALL_GAS_LIMIT);
+  Logger.log('VERIFICATION_GAS_LIMIT', VERIFICATION_GAS_LIMIT);
+  Logger.log('MAX_FEE_PER_GAS', MAX_FEE_PER_GAS);
+  Logger.log('MAX_PRIORITY_FEE_PER_GAS', MAX_PRIORITY_FEE_PER_GAS);
 
   // Use high fixed values for gas
-  const userOp: PackedUserOperation = {
+  const userOp: PackedUserOperationType = {
     sender,
     nonce,
     initCode: '0x',
     callData,
-    verificationGasLimit: BigNumber.from(74908),
-    callGasLimit: BigNumber.from(79728),
-    preVerificationGas: BigNumber.from(94542),
-    maxFeePerGas: BigNumber.from(ethers.utils.parseUnits('30', 'gwei')),
-    maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits('5', 'gwei')),
+    verificationGasLimit: BigNumber.from(VERIFICATION_GAS_LIMIT),
+    callGasLimit: BigNumber.from(CALL_GAS_LIMIT),
+    preVerificationGas: BigNumber.from(PRE_VERIFICATION_GAS),
+    maxFeePerGas: BigNumber.from(ethers.utils.parseUnits(MAX_FEE_PER_GAS, 'gwei')),
+    maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits(MAX_PRIORITY_FEE_PER_GAS, 'gwei')),
     paymasterAndData: '0x', // Will be filled by the paymaster service
     signature: '0x' // Empty signature initially
   };
@@ -72,30 +84,30 @@ export function createTransferCallData(
  * Signs the UserOperation.
  */
 export async function signUserOperation(
-  userOperation: PackedUserOperation,
+  userOperation: PackedUserOperationType,
   entryPointAddress: string,
   signer: ethers.Wallet
-): Promise<PackedUserOperation> {
-  Logger.log('\nSigning UserOperation.');
+): Promise<PackedUserOperationType> {
+  Logger.log('signUserOperation: Signing UserOperation.');
 
   const chainId = await signer.getChainId();
-  Logger.log('Chain ID:', chainId);
+  Logger.log('signUserOperation: Chain ID:', chainId);
 
-  Logger.log('Computing userOpHash.');
+  Logger.log('signUserOperation: Computing userOpHash.');
   const userOpHash = getUserOpHash(userOperation, entryPointAddress, chainId);
-  Logger.log('UserOpHash:', userOpHash);
+  Logger.log('signUserOperation: UserOpHash:', userOpHash);
 
   const signature = await signer.signMessage(ethers.utils.arrayify(userOpHash));
-  Logger.log('Generated signature:', signature);
+  Logger.log('signUserOperation: Generated signature:', signature);
 
   const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(userOpHash), signature);
-  Logger.log('Recovered address:', recoveredAddress);
-  Logger.log('Signer address:', await signer.getAddress());
+  Logger.log('signUserOperation: Recovered address:', recoveredAddress);
+  Logger.log('signUserOperation: Signer address:', await signer.getAddress());
 
   if (recoveredAddress.toLowerCase() !== (await signer.getAddress()).toLowerCase()) {
-    throw new Error('Signature verification failed on client side');
+    throw new Error('signUserOperation: Signature verification failed on client side');
   }
 
-  Logger.log('UserOperation signed successfully');
+  Logger.log('signUserOperation: UserOperation signed successfully');
   return { ...userOperation, signature };
 }

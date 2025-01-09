@@ -1,16 +1,13 @@
-//
-// set MONGO_URI in env, then:
-// bun run scripts/subscribe_wallets_to_push_channel.ts
-//
+/* eslint-disable no-restricted-syntax */
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 import mongoose from 'mongoose';
-import * as crypto from 'crypto';
 import * as PushAPI from '@pushprotocol/restapi';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
 import { IUser } from '../src/models/user';
-import { Logger } from '../src/utils/logger';
+import { Logger } from '../src/helpers/loggerHelper';
+import { generatePrivateKey } from '../src/helpers/SecurityHelper';
 
 dotenv.config();
 
@@ -28,7 +25,16 @@ const userSchema = new mongoose.Schema<IUser>(
     email: String,
     phone_number: String,
     photo: String,
-    wallet: String,
+    wallets: [
+      {
+        wallet_proxy: String,
+        wallet_eoa: String,
+        sk_hashed: String,
+        chatterpay_implementation_address: String,
+        chain_id: Number,
+        status: { type: String, default: 'active' }
+      }
+    ],
     code: { type: Number, default: null },
     settings: {
       notifications: {
@@ -41,6 +47,10 @@ const userSchema = new mongoose.Schema<IUser>(
 
 const User = mongoose.model<IUser>('User', userSchema);
 
+/**
+ * Get all users from the database
+ * @returns Array of users
+ */
 async function getUsers(): Promise<IUser[]> {
   try {
     await mongoose.connect(MONGO_URI, { dbName: DB_NAME });
@@ -59,14 +69,13 @@ async function getUsers(): Promise<IUser[]> {
   }
 }
 
+/**
+ * Get user data based on phone number
+ * @param phoneNumber
+ * @returns Object containing pk and sk
+ */
 function getUserData(phoneNumber: string): { pk: string; sk: string } {
-  const PRIVATE_KEY_SEED = process.env.PRIVATE_KEY || '';
-  if (!PRIVATE_KEY_SEED) {
-    throw new Error('PRIVATE_KEY is not set in the environment variables');
-  }
-
-  const seed = PRIVATE_KEY_SEED + phoneNumber;
-  const sk = `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
+  const sk = generatePrivateKey(phoneNumber);
   const wallet = new ethers.Wallet(sk);
 
   return {
@@ -75,6 +84,11 @@ function getUserData(phoneNumber: string): { pk: string; sk: string } {
   };
 }
 
+/**
+ * Check if the user is already subscribed to the Push protocol
+ * @param pk - The public key of the user
+ * @returns Boolean indicating whether the user is subscribed
+ */
 async function isUserSubscribed(pk: string): Promise<boolean> {
   try {
     const subscriptions = await PushAPI.user.getSubscriptions({
@@ -82,7 +96,6 @@ async function isUserSubscribed(pk: string): Promise<boolean> {
       env: PUSH_ENVIRONMENT
     });
 
-    // sub.channel === channelAddress && sub.env === PUSH_ENVIRONMENT
     return subscriptions.some(
       (sub: { channel: string; env: string }) => sub.channel === PUSH_CHANNEL_ADDRESS
     );
@@ -92,15 +105,22 @@ async function isUserSubscribed(pk: string): Promise<boolean> {
   }
 }
 
+/**
+ * Subscribe the user to the Push protocol
+ * @param pn - The phone number of the user
+ * @param sk - The private key of the user
+ * @param pk - The public key of the user
+ * @returns Boolean indicating whether the subscription was successful
+ */
 async function subscribeUser(pn: string, sk: string, pk: string): Promise<boolean> {
   const signer = new ethers.Wallet(sk);
 
-  // Función para realizar el intento de suscripción
   const channelAddress = `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`;
   const userAddress = `eip155:${PUSH_NETWORK}:${pk}`;
   const env = PUSH_ENVIRONMENT;
 
   Logger.log(`Subscribing ${userAddress} to ${env}.${channelAddress}`);
+
   const performSubscription = async (): Promise<boolean> =>
     new Promise<boolean>((resolve) => {
       PushAPI.channels.subscribe({
@@ -119,7 +139,6 @@ async function subscribeUser(pn: string, sk: string, pk: string): Promise<boolea
       });
     });
 
-  // Función recursiva para manejar reintentos
   const retrySubscription = async (attemptCount: number): Promise<boolean> => {
     if (attemptCount >= 2) {
       Logger.error(`${pn}, ${pk}, Subscription failed after maximum retries.`);
@@ -132,12 +151,11 @@ async function subscribeUser(pn: string, sk: string, pk: string): Promise<boolea
     }
 
     Logger.warn(`${pn}, ${pk}, Retrying subscription after delay (${attemptCount + 1}/5)...`);
-    await delay(60000); // Esperar 1 minuto antes de reintentar
+    await delay(60000);
 
-    return retrySubscription(attemptCount + 1); // Reintentar con un contador incrementado
+    return retrySubscription(attemptCount + 1);
   };
 
-  // Iniciar reintentos desde el primer intento
   return retrySubscription(0);
 }
 
@@ -147,7 +165,10 @@ function delay(ms: number): Promise<void> {
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+/**
+ * Process each user, check their subscription status, and subscribe if necessary
+ * @param user - The user object
+ */
 async function processUser(user: IUser): Promise<void> {
   const phoneNumber = user.phone_number;
   if (!phoneNumber) {
@@ -158,7 +179,6 @@ async function processUser(user: IUser): Promise<void> {
   try {
     const { pk, sk } = getUserData(phoneNumber);
 
-    // Check if user is already subscribed
     const alreadySubscribed = await isUserSubscribed(pk);
     if (alreadySubscribed) {
       Logger.log(`${phoneNumber}, ${pk}, Already subscribed.`);
@@ -168,7 +188,7 @@ async function processUser(user: IUser): Promise<void> {
     const subscribed = await subscribeUser(phoneNumber, sk, pk);
     if (!subscribed) {
       Logger.error(
-        `${PUSH_NETWORK}, ${PUSH_ENVIRONMENT}, ${phoneNumber}, ${pk}, "Subscription failed after retries.`
+        `${PUSH_NETWORK}, ${PUSH_ENVIRONMENT}, ${phoneNumber}, ${pk}, "Subscription failed after retries."`
       );
     }
   } catch (error) {
@@ -176,19 +196,20 @@ async function processUser(user: IUser): Promise<void> {
   }
 }
 
+/**
+ * Main function to execute the script
+ */
 async function main(): Promise<void> {
   try {
     const users = await getUsers();
 
     if (users) {
-      // eslint-disable-next-line no-restricted-syntax
       for (const user of users) {
         // eslint-disable-next-line no-await-in-loop
         await processUser(user);
-
         Logger.log('Waiting 10 seconds before processing the next user...');
         // eslint-disable-next-line no-await-in-loop
-        await delay(10000); // 10 segundos
+        await delay(10000);
       }
     }
   } catch (error) {

@@ -1,20 +1,19 @@
 import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 
-import { User } from '../models/user';
 import { IToken } from '../models/token';
-import { Logger } from '../utils/logger';
+import { Logger } from '../helpers/loggerHelper';
+import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchain';
 import { setupERC20 } from './contractSetupService';
 import { getTokenAddress } from './blockchainService';
-import { SIGNING_KEY } from '../constants/environment';
 import {
-  Currency,
-  FiatQuote,
-  TokenInfo,
-  BalanceInfo,
-  TokenBalance,
-  walletBalanceInfo
+  CurrencyType,
+  FiatQuoteType,
+  TokenInfoType,
+  BalanceInfoType,
+  TokenBalanceType,
+  walletBalanceInfoType
 } from '../types/common';
 
 // Initialize the cache with a 5-minute TTL (Time To Live)
@@ -23,7 +22,7 @@ const priceCache = new NodeCache({ stdTTL: 300, checkperiod: 320 });
 /**
  * API endpoints for fiat currency conversion rates
  */
-const API_URLs: [Currency, string][] = [
+const API_URLs: [CurrencyType, string][] = [
   ['UYU', 'https://criptoya.com/api/ripio/USDT/UYU'],
   ['ARS', 'https://criptoya.com/api/ripio/USDT/ARS'],
   ['BRL', 'https://criptoya.com/api/ripio/USDT/BRL']
@@ -61,7 +60,7 @@ export async function getContractBalance(
  * Fetches fiat quotes from external APIs
  * @returns Array of fiat currency quotes
  */
-export async function getFiatQuotes(): Promise<FiatQuote[]> {
+export async function getFiatQuotes(): Promise<FiatQuoteType[]> {
   return Promise.all(
     API_URLs.map(async ([currency, url]) => {
       try {
@@ -87,7 +86,7 @@ export async function getTokenBalances(
   address: string,
   tokens: IToken[],
   networkConfig: IBlockchain
-): Promise<TokenBalance[]> {
+): Promise<TokenBalanceType[]> {
   const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
   const signer = new ethers.Wallet(SIGNING_KEY!, provider);
   const tokenInfo = await getTokenInfo(tokens, networkConfig.chain_id);
@@ -108,10 +107,10 @@ export async function getTokenBalances(
  * @returns Array of detailed balance information
  */
 export function calculateBalances(
-  tokenBalances: TokenBalance[],
-  fiatQuotes: FiatQuote[],
+  tokenBalances: TokenBalanceType[],
+  fiatQuotes: FiatQuoteType[],
   networkName: string
-): BalanceInfo[] {
+): BalanceInfoType[] {
   return tokenBalances.map(({ symbol, balance, rateUSD }) => {
     const balanceUSD = parseFloat(balance) * rateUSD;
     return {
@@ -133,15 +132,15 @@ export function calculateBalances(
  * @param balances - Array of balance information
  * @returns Record of currency totals
  */
-export function calculateBalancesTotals(balances: BalanceInfo[]): Record<Currency, number> {
+export function calculateBalancesTotals(balances: BalanceInfoType[]): Record<CurrencyType, number> {
   return balances.reduce(
     (acc, balance) => {
-      (Object.keys(balance.balance_conv) as Currency[]).forEach((currency) => {
+      (Object.keys(balance.balance_conv) as CurrencyType[]).forEach((currency) => {
         acc[currency] = (acc[currency] || 0) + balance.balance_conv[currency];
       });
       return acc;
     },
-    {} as Record<Currency, number>
+    {} as Record<CurrencyType, number>
   );
 }
 
@@ -208,7 +207,7 @@ export async function verifyWalletBalance(
 
   Logger.log(`Balance of wallet ${walletAddress}: ${walletBalanceFormatted} ${symbol}`);
 
-  const result: walletBalanceInfo = {
+  const result: walletBalanceInfoType = {
     walletBalance: walletBalanceFormatted,
     amountToCheck,
     enoughBalance: walletBalance.gte(amountToCheckFormatted)
@@ -320,7 +319,7 @@ export async function getTokenPrices(symbols: string[]): Promise<Map<string, num
  * Gets token information from the global state and current prices
  * @returns Array of tokens with current price information
  */
-export async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo[]> {
+export async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfoType[]> {
   const chainTokens = tokens.filter((token) => token.chain_id === chanId);
   const symbols = [...new Set(chainTokens.map((token) => token.symbol))];
 
@@ -331,19 +330,4 @@ export async function getTokenInfo(tokens: IToken[], chanId: number): Promise<To
     address: token.address,
     rateUSD: prices.get(token.symbol) || 0
   }));
-}
-
-/**
- * Función para obtener el wallet basado en el número de teléfono
- * @param {string} phoneNumber - El número de teléfono a buscar
- * @returns {Promise<string | null>} La dirección del wallet o null si no se encuentra
- */
-export async function getWalletByPhoneNumber(phoneNumber: string): Promise<string | null> {
-  try {
-    const user = await User.findOne({ phone_number: phoneNumber }).select('wallet').exec();
-    return user ? user.wallet : null; // Retorna la wallet si se encuentra, de lo contrario null
-  } catch (error) {
-    Logger.error('Error al obtener la wallet:', error);
-    throw new Error('No se pudo obtener la wallet');
-  }
 }
