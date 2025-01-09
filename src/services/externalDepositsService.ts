@@ -3,6 +3,7 @@ import { gql, request } from 'graphql-request';
 import { User } from '../models/user';
 import Transaction from '../models/transaction';
 import { Logger } from '../helpers/loggerHelper';
+import { DEFAULT_CHAIN_ID } from '../config/constants';
 import { sendTransferNotification } from './notificationService';
 import { LastProcessedBlock } from '../models/lastProcessedBlock';
 
@@ -63,8 +64,17 @@ export async function fetchExternalDeposits(
     const fromBlock = lastProcessedBlock ? lastProcessedBlock.blockNumber : 0;
 
     // Fetch all user wallet addresses
-    const users = await User.find({}, 'wallet');
-    const ecosystemAddresses = users.map((user) => user.wallet.toLowerCase());
+    const users = await User.find(
+      {
+        'wallets.chain_id': DEFAULT_CHAIN_ID
+      },
+      'wallets.wallet_proxy'
+    );
+    const ecosystemAddresses = users.flatMap((user) =>
+      user.wallets
+        .filter((wallet) => wallet.chain_id === DEFAULT_CHAIN_ID)
+        .map((wallet) => wallet.wallet_proxy.toLowerCase())
+    );
 
     // Prepare variables for the GraphQL query
     const variables = {
