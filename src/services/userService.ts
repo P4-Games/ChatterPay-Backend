@@ -1,9 +1,9 @@
-import { User, IUser, IUserWallet } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
+import { User, IUser, IUserWallet } from '../models/user';
 import { ConcurrentOperationsEnum } from '../types/common';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
-import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
 import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
+import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
 import { subscribeToPushChannel, sendWalletCreationNotification } from './notificationService';
 
 /**
@@ -56,6 +56,58 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
 };
 
 /**
+ * Adds a new wallet to an existing user for a given chain_id.
+ * @param {string} phoneNumber - The phone number of the user to add the wallet to.
+ * @param {number} chainId - The chain_id to associate with the new wallet.
+ * @param {string} chatterpayImplementationAddress - The address of the chatterpay implementation Contract.
+ * @returns {Promise<{ user: IUser, newWallet: any } | null>} The updated user with the new wallet and the newly created wallet object.
+ */
+export const addWalletToUser = async (
+  phoneNumber: string,
+  chainId: number,
+  chatterpayImplementationAddress: string
+): Promise<{ user: IUser; newWallet: IUserWallet } | null> => {
+  // Generate wallet details based on phone number
+  const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(phoneNumber);
+  const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
+
+  // Find the user by phone number
+  const user = await User.findOne({ phone_number: formattedPhoneNumber });
+
+  if (!user) {
+    Logger.error(`User not found for phone number: ${phoneNumber}`);
+    return null;
+  }
+
+  // Check if the wallet for the given chain_id already exists
+  const existingWallet = user.wallets.find((wallet) => wallet.chain_id === chainId);
+  if (existingWallet) {
+    Logger.log(`Wallet already exists for chain_id ${chainId} for user ${phoneNumber}`);
+    return { user, newWallet: existingWallet };
+  }
+
+  // Create a new wallet object
+  const newWallet = {
+    wallet_proxy: predictedWallet.proxyAddress,
+    wallet_eoa: predictedWallet.EOAAddress,
+    sk_hashed: predictedWallet.privateKey,
+    chatterpay_implementation_address: chatterpayImplementationAddress,
+    chain_id: chainId,
+    status: 'active'
+  };
+
+  // Add the new wallet to the user's wallet array
+  user.wallets.push(newWallet);
+
+  // Save the updated user
+  await user.save();
+
+  Logger.log(`New wallet added for user ${phoneNumber} with chain_id ${chainId}`);
+
+  return { user, newWallet };
+};
+
+/**
  * Filters wallets by chain_id and returns the first match.
  *
  * @param wallets - The array of wallet objects to filter.
@@ -68,6 +120,24 @@ export const getUserWalletByChainId = (
 ): IUserWallet | null => {
   const wallet = wallets.find((w) => w.chain_id === chainId);
   return wallet || null;
+};
+
+/**
+ * Retrieves the first user that has the specified wallet address for the given chain_id.
+ * @param {string} wallet - The wallet address to search for.
+ * @param {number} chainId - The chain_id to filter the wallet.
+ * @returns {Promise<IUser | null>} The user who owns the wallet on the specified chain, or null if no user is found.
+ */
+export const getUserByWalletAndChainid = async (
+  wallet: string,
+  chainId: number
+): Promise<IUser | null> => {
+  // Find a user who has the provided wallet and chain_id
+  const user: IUser | null = await User.findOne({
+    'wallets.wallet_proxy': wallet.toLowerCase(), // Ensure the wallet search is case-insensitive
+    'wallets.chain_id': chainId // Filter by chain_id to find the correct user
+  });
+  return user;
 };
 
 /**

@@ -1,28 +1,28 @@
 import { ethers } from 'ethers';
 
-import { IUser, IUserWallet } from '../models/user';
 import { IToken } from '../models/token';
 import Transaction from '../models/transaction';
 import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
 import { getTokenBalances } from './walletService';
+import { IUser, IUserWallet } from '../models/user';
 import { setupERC20 } from './contractSetupService';
 import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
 import { checkBlockchainConditions } from './blockchainService';
 import { waitForUserOperationReceipt } from './userOpExecutorService';
 import {
-  getUser,
-  openOperation,
-  closeOperation,
-  hasUserOperationInProgress,
-  getUserWalletByChainId
-} from './userService';
-import {
   signUserOperation,
   createTransferCallData,
   createGenericUserOperation
 } from './userOperationService';
+import {
+  getUser,
+  openOperation,
+  closeOperation,
+  getUserWalletByChainId,
+  hasUserOperationInProgress
+} from './userService';
 import {
   TokenBalanceType,
   setupContractReturnType,

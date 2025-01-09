@@ -1,9 +1,9 @@
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { User } from '../models/user';
 import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
-import { getUser } from '../services/userService';
+import { User, IUserWallet } from '../models/user';
+import { getUser, getUserWalletByChainId } from '../services/userService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
@@ -124,13 +124,21 @@ export const balanceByPhoneNumber = async (
 
   try {
     const user = await getUser(phone);
-
     if (!user) {
       Logger.warn(`User not found for phone number: ${phone}`);
       return await returnErrorResponse(reply, 404, 'User not found');
     }
 
-    return await getAddressBalance(user.wallet, reply, request.server);
+    const fastify = request.server;
+    const { chain_id } = fastify.networkConfig;
+    const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, chain_id);
+
+    if (!userWallet) {
+      Logger.warn(`Wallet not found for phone number: ${phone} and chainId ${chain_id}`);
+      return await returnErrorResponse(reply, 404, 'Wallet not found');
+    }
+
+    return await getAddressBalance(userWallet.wallet_proxy, reply, request.server);
   } catch (error) {
     Logger.error('Error fetching user balance:', error);
     return returnErrorResponse(reply, 500, 'Internal Server Error');

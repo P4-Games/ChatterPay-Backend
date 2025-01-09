@@ -6,11 +6,11 @@ import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 import mongoose from 'mongoose';
 
-import { IUser, IUserWallet } from '../src/models/user';
 import { Logger } from '../src/helpers/loggerHelper';
+import { IUser, IUserWallet } from '../src/models/user';
+import { DEFAULT_CHAIN_ID } from '../src/config/constants';
 import { generatePrivateKey } from '../src/helpers/SecurityHelper';
 import { getUserWalletByChainId } from '../src/services/userService';
-import { DEFAULT_CHAIN_ID } from '../src/config/constants';
 
 dotenv.config();
 

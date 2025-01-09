@@ -3,10 +3,10 @@ import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
 
-import { User, IUser, IUserWallet } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
+import { User, IUser, IUserWallet } from '../models/user';
 import { getTemplate, templateEnum } from './templateService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
@@ -22,15 +22,14 @@ import {
   PUSH_NETWORK,
   BOT_DATA_TOKEN,
   PUSH_ENVIRONMENT,
+  DEFAULT_CHAIN_ID,
   CHATTERPAY_DOMAIN,
   PUSH_CHANNEL_ADDRESS,
   PUSH_CHANNEL_PRIVATE_KEY,
   BOT_NOTIFICATIONS_ENABLED,
   CHATTERPAY_NFTS_SHARE_URL,
-  SETTINGS_NOTIFICATION_LANGUAGE_DFAULT,
-  DEFAULT_CHAIN_ID
+  SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
 } from '../config/constants';
-import { getUserWallet, getUserWalletByChainId } from './userService';
 
 interface OperatorReplyPayload {
   data_token: string;
@@ -41,13 +40,31 @@ interface OperatorReplyPayload {
 const notificationTemplateCache = new NodeCache({ stdTTL: 604800 }); // 1 week
 
 /**
- * Gets user based on the phone number.
+ * Retrieves a user based on the phone number.
+ * This function is internal to avoid circular imports between userService and notificationService.
+ * @param {string} phoneNumber - The phone number of the user to search for.
+ * @returns {Promise<IUser | null>} The user corresponding to the provided phone number, or null if no user is found.
  */
-const getUser = async (phoneNumber: string): Promise<IUser | null> => {
+const getUserInternal = async (phoneNumber: string): Promise<IUser | null> => {
   const user: IUser | null = await User.findOne({
     phone_number: getPhoneNumberFormatted(phoneNumber)
   });
   return user;
+};
+
+/**
+ * Retrieves the wallet for a specific chain_id from a user's wallet array.
+ * This function is internal to avoid circular imports between userService and notificationService.
+ * @param {IUserWallet[]} wallets - The array of wallets to search through.
+ * @param {number} chainId - The chain_id to filter the wallet.
+ * @returns {IUserWallet | null} The wallet corresponding to the provided chain_id, or null if no matching wallet is found.
+ */
+export const getUserWalletByChainIdInternal = (
+  wallets: IUserWallet[],
+  chainId: number
+): IUserWallet | null => {
+  const wallet = wallets.find((w) => w.chain_id === chainId);
+  return wallet || null;
 };
 
 /**
@@ -98,7 +115,7 @@ export async function sendPushNotificaton(
       return true;
     }
 
-    const user: IUser | null = await getUser(channelUserId);
+    const user: IUser | null = await getUserInternal(channelUserId);
     if (!user) {
       Logger.log(
         `Push notification not sent: Invalid user in the database for phone number ${channelUserId}`
@@ -106,7 +123,10 @@ export async function sendPushNotificaton(
       return false;
     }
 
-    const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, DEFAULT_CHAIN_ID);
+    const userWallet: IUserWallet | null = getUserWalletByChainIdInternal(
+      user.wallets,
+      DEFAULT_CHAIN_ID
+    );
     if (!userWallet) {
       Logger.log(
         `Push notification not sent: Invalid EOA Walletin the database for phone number ${channelUserId}`
@@ -161,7 +181,7 @@ export async function sendPushNotificaton(
 export const getUserSettingsLanguage = async (phoneNumber: string): Promise<LanguageEnum> => {
   let language: LanguageEnum = SETTINGS_NOTIFICATION_LANGUAGE_DFAULT as LanguageEnum;
   try {
-    const user: IUser | null = await getUser(phoneNumber);
+    const user: IUser | null = await getUserInternal(phoneNumber);
     if (user && user.settings) {
       const userLanguage = user.settings.notifications.language;
       if (Object.values(LanguageEnum).includes(userLanguage as LanguageEnum)) {

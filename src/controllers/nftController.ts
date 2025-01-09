@@ -2,13 +2,12 @@ import { ethers } from 'ethers';
 import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { IUser, IUserWallet } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
+import { IUser, IUserWallet } from '../models/user';
 import { getDynamicGas } from '../helpers/paymasterHelper';
 import { ConcurrentOperationsEnum } from '../types/common';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
-
 import { isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
 import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
@@ -19,11 +18,11 @@ import {
 } from '../services/notificationService';
 import {
   openOperation,
+  getUserWallet,
   closeOperation,
   getOrCreateUser,
-  hasPhoneOperationInProgress,
-  getUserWallet,
-  getUserWalletByChainId
+  getUserWalletByChainId,
+  hasPhoneOperationInProgress
 } from '../services/userService';
 
 export interface NFTInfo {
