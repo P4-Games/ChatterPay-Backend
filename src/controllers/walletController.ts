@@ -55,7 +55,7 @@ export const createWallet = async (
       if (userWallet) {
         return await returnSuccessResponse(
           reply,
-          `The user already exists, your wallet is ${userWallet}.`
+          `The user already exists, your wallet is ${userWallet.wallet_proxy}.`
         );
       }
       Logger.log(`Creating wallet for phone number ${channel_user_id} and chain_id ${chain_id}`);
