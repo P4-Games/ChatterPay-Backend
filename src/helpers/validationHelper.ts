@@ -7,7 +7,11 @@ import { ethers } from 'ethers';
  * @returns
  */
 export function isValidPhoneNumber(number: string): boolean {
-  return /^\d{8,15}$/.test(number);
+  // Keep only numeric characters
+  const cleanedNumber = number.replace(/\D/g, '');
+
+  // Validate the cleaned number
+  return /^\d{8,15}$/.test(cleanedNumber);
 }
 
 /**
