@@ -8,6 +8,7 @@ import { getNetworkConfig } from './networkService';
 import { getDynamicGas } from '../helpers/paymasterHelper';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { getChatterPayWalletFactoryABI } from './bucketService';
+import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {
@@ -24,7 +25,7 @@ export interface PhoneNumberToAddress {
  * @throws {Error} If the seed private key is not found in environment variables.
  */
 function phoneNumberToAddress(phoneNumber: string): PhoneNumberToAddress {
-  const privateKey = generatePrivateKey(phoneNumber);
+  const privateKey = generatePrivateKey(getPhoneNumberFormatted(phoneNumber));
   const wallet = new ethers.Wallet(privateKey);
   const publicKey = wallet.address;
   const hashedPrivateKey = crypto.createHash('sha256').update(privateKey).digest('hex');
