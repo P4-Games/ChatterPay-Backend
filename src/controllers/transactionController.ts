@@ -368,7 +368,8 @@ export const makeTransaction = async (
       toAddress =
         getUserWalletByChainId(toUser.wallets, networkConfig.chain_id)?.wallet_proxy || '';
     } else {
-      toUser = await getOrCreateUser(to);
+      const chatterpayImplementation: string = networkConfig.contracts.chatterPayAddress;
+      toUser = await getOrCreateUser(to, chatterpayImplementation);
       toAddress = toUser.wallets[0].wallet_proxy;
     }
 

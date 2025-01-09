@@ -9,9 +9,13 @@ import { subscribeToPushChannel, sendWalletCreationNotification } from './notifi
 /**
  * Creates a new user and wallet for the given phone number.
  * @param {string} phoneNumber - The phone number to create the wallet for.
+ * @param {string} chatterpayImplementation - The chatterpay Smart Contract Address.
  * @returns {Promise<IUser>} The user with the newly created wallet.
  */
-export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> => {
+export const createUserWithWallet = async (
+  phoneNumber: string,
+  chatterpayImplementation: string
+): Promise<IUser> => {
   const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(phoneNumber);
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
 
@@ -22,7 +26,7 @@ export const createUserWithWallet = async (phoneNumber: string): Promise<IUser> 
         wallet_proxy: predictedWallet.proxyAddress,
         wallet_eoa: predictedWallet.EOAAddress,
         sk_hashed: predictedWallet.privateKey,
-        chatterpay_implementation_address: '',
+        chatterpay_implementation_address: chatterpayImplementation,
         chain_id: DEFAULT_CHAIN_ID,
         status: 'active'
       }
@@ -177,13 +181,16 @@ export const getUser = async (phoneNumber: string): Promise<IUser | null> => {
 /**
  * Gets or creates a user based on the phone number.
  */
-export const getOrCreateUser = async (phoneNumber: string): Promise<IUser> => {
+export const getOrCreateUser = async (
+  phoneNumber: string,
+  chatterpayImplementation: string
+): Promise<IUser> => {
   const user = await getUser(phoneNumber);
 
   if (user) return user;
   Logger.log(`Phone number ${phoneNumber} not registered in ChatterPay, registering...`);
 
-  const newUser: IUser = await createUserWithWallet(phoneNumber);
+  const newUser: IUser = await createUserWithWallet(phoneNumber, chatterpayImplementation);
   Logger.log(
     `Phone number ${phoneNumber} registered with the wallet ${newUser.wallets[0].wallet_proxy}`
   );
