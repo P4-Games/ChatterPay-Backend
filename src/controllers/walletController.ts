@@ -87,7 +87,7 @@ export const createWallet = async (
       walletAddress: user.wallets[0].wallet_proxy
     });
   } catch (error) {
-    Logger.error('Error creando una wallet:', error);
+    Logger.error('Error creating wallet:', error);
     return returnErrorResponse(reply, 400, 'An error occurred while creating the wallet');
   }
 };

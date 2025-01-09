@@ -39,7 +39,7 @@ const walletSchema = new Schema<IUserWallet>({
   sk_hashed: { type: String, required: true, default: '' },
   chatterpay_implementation_address: {
     type: String,
-    required: true,
+    required: false,
     default: ''
   },
   chain_id: { type: Number, required: true, default: DEFAULT_CHAIN_ID },

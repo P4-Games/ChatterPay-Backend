@@ -132,9 +132,9 @@ export const getUserByWalletAndChainid = async (
   wallet: string,
   chainId: number
 ): Promise<IUser | null> => {
-  // Find a user who has the provided wallet and chain_id
+  // Find a user who has the provided wallet and chain_id inside the 'wallets' array
   const user: IUser | null = await User.findOne({
-    'wallets.wallet_proxy': wallet.toLowerCase(), // Ensure the wallet search is case-insensitive
+    'wallets.wallet_proxy': wallet, // Ensure the wallet search is case-insensitive
     'wallets.chain_id': chainId // Filter by chain_id to find the correct user
   });
   return user;

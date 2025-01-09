@@ -291,7 +291,10 @@ export async function subscribeToPushChannel(
       env: PUSH_ENVIRONMENT
     });
 
-    Logger.log(`${user_address} Push Protocol Subscription Response:`, subscriptionResponse);
+    Logger.log(
+      `${user_address} Push Protocol Subscription Response:`,
+      JSON.stringify(subscriptionResponse)
+    );
     return true;
   } catch (error) {
     // Avoid throwing an error if subscribing to the push channel fails

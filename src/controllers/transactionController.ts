@@ -357,7 +357,6 @@ export const makeTransaction = async (
 
     if (to.startsWith('0x')) {
       toUser = await getUserByWalletAndChainid(to, networkConfig.chain_id);
-
       if (!toUser) {
         Logger.error(`Invalid wallet-to ${to} for chainId ${networkConfig.chain_id}`);
         await sendNoValidBlockchainConditionsNotification(userWallet.wallet_proxy, channel_user_id);
