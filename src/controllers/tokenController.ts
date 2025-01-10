@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import Token, { IToken } from '../models/token';
 import { Logger } from '../helpers/loggerHelper';
-import { BUN_ENV, IS_DEVELOPMENT, SIGNING_KEY } from '../config/constants';
+import { SIGNING_KEY, IS_DEVELOPMENT } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**

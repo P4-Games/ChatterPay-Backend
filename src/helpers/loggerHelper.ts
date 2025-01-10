@@ -1,8 +1,8 @@
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
-import { CURRENT_LOG_LEVEL, IS_DEVELOPMENT, MINOR_LOG_LEVEL } from '../config/constants';
 import { LogLevelType, validLogLevels } from '../types/logger';
+import { IS_DEVELOPMENT, CURRENT_LOG_LEVEL } from '../config/constants';
 
 // Create a pretty stream for local console output with colorized logs
 const prettyStream = pinoPretty({

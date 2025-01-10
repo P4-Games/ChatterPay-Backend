@@ -1,5 +1,5 @@
-import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 import dotenv from 'dotenv';
+import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
 import { LogLevelType, validLogLevels } from '../types/logger';
 
