@@ -20,17 +20,19 @@ const cloudStream = pino.destination({
   // Avoid errors caused by ANSI characters when using pinoPretty for coloring
   colorize: false,
   // Logs are written to 'stdout' for Google Cloud consumption
-  dest: 'stdout',
+  // dest: 'stdout',
   // Logs are written synchronously to ensure immediate delivery
-  sync: true,
+  // sync: true,
   prettyPrint: true,
+  /*
   redact: {
     paths: ['email', 'password', 'token']
   },
+  */
   timestamp: pino.stdTimeFunctions.isoTime
 });
 
-const selectedStream = IS_DEVELOPMENT ? cloudStream : cloudStream;
+const selectedStream = IS_DEVELOPMENT ? prettyStream : cloudStream;
 // Create a logger instance using pino with multiple streams
 const logger = pino(
   {
