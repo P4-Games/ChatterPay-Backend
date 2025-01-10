@@ -70,3 +70,17 @@
 {"level":30,"time":1736537708118,"pid":15356,"hostname":"mento","msg":"Bot notifications are disabled. Omitted payload: {\"data_token\":\"ddbe7f0e3d93447486efa9ef77954ae7\",\"channel_user_id\":\"5491124062885\",\"message\":\"💸 Enviaste 1 WETH a 0x11E8364742Bde8B0cE2aEBE9bc4d883E33745A8a! 💸\\nPuedes ver la transacción aquí: https://sepolia.arbiscan.io/tx/0xe7b7918ed862554163673b6dad94e0115930c5ceb53d4a320c1d2b5e7dc6c76f\"}"}
 {"level":30,"time":1736537708122,"pid":15356,"hostname":"mento","msg":"Push notifications are disabled."}
 {"level":30,"time":1736537708236,"pid":15356,"hostname":"mento","msg":"Maketransaction completed successfully."}
+{"level":"info","time":1736540603769,"pid":22980,"hostname":"mento","msg":"Connecting to database"}
+{"level":"info","time":1736540604654,"pid":22980,"hostname":"mento","msg":"MongoDB connected"}
+{"level":"info","time":1736540605357,"pid":22980,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":"debug","time":1736540608046,"pid":22980,"hostname":"mento","msg":"Fetching balance for address: 0x11E8364742Bde8B0cE2aEBE9bc4d883E33745A8a on network Arbitrum Sepolia"}
+{"level":"debug","time":1736540608638,"pid":22980,"hostname":"mento","msg":"Price for ETH: 3281.92000000 USDT"}
+{"level":"info","time":1736540712272,"pid":12884,"hostname":"mento","msg":"Connecting to database"}
+{"level":"info","time":1736540713137,"pid":12884,"hostname":"mento","msg":"MongoDB connected"}
+{"level":"info","time":1736540713759,"pid":12884,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":"info","time":1736540721971,"pid":19540,"hostname":"mento","msg":"Connecting to database"}
+{"level":"info","time":1736540722662,"pid":19540,"hostname":"mento","msg":"MongoDB connected"}
+{"level":"info","time":1736540723666,"pid":19540,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":"info","time":1736540728504,"pid":24808,"hostname":"mento","msg":"Connecting to database"}
+{"level":"info","time":1736540729216,"pid":24808,"hostname":"mento","msg":"MongoDB connected"}
+{"level":"info","time":1736540730217,"pid":24808,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}

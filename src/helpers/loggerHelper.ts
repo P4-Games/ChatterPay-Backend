@@ -8,7 +8,9 @@ import { IS_DEVELOPMENT, CURRENT_LOG_LEVEL } from '../config/constants';
 const prettyStream = pinoPretty({
   colorize: true, // Enables color output for logs in the console,
   // Logs are written synchronously to ensure immediate delivery
-  sync: true
+  sync: true,
+  translateTime: 'SYS:standard',
+  ignore: 'hostname,pid'
 });
 
 // Create a stream for Google Cloud Logging, writing to 'stdout' (standard
@@ -20,15 +22,24 @@ const cloudStream = pino.destination({
   // Logs are written to 'stdout' for Google Cloud consumption
   dest: 'stdout',
   // Logs are written synchronously to ensure immediate delivery
-  sync: true
+  sync: true,
+  prettyPrint: true,
+  redact: {
+    paths: ['email', 'password', 'token']
+  },
+  timestamp: pino.stdTimeFunctions.isoTime
 });
 
-const selectedStream = IS_DEVELOPMENT ? prettyStream : cloudStream;
+const selectedStream = IS_DEVELOPMENT ? cloudStream : cloudStream;
 // Create a logger instance using pino with multiple streams
 const logger = pino(
   {
-    // Sets the minimum log level to 'debug'
-    level: CURRENT_LOG_LEVEL
+    level: CURRENT_LOG_LEVEL, // Sets the minimum log level
+    formatters: {
+      level(label) {
+        return { level: label }; // Keep the level as part of the log in the JSON format
+      }
+    }
   },
   selectedStream
 );
@@ -36,10 +47,13 @@ const logger = pino(
 export class Logger {
   private static logMessage(level: LogLevelType, ...args: unknown[]): void {
     try {
+      // Join arguments into a single string
       const cleanedMessage = args
         .map((arg) => (typeof arg === 'string' ? arg.replace(/(\r\n|\n|\r)/g, ' ') : String(arg)))
         .join(' ');
-      logger[level](cleanedMessage);
+
+      // Log the cleaned message in JSON format
+      logger[level]({ msg: cleanedMessage });
     } catch (error: unknown) {
       const messageError = error instanceof Error ? error.message : 'Unknown error';
       console.error(`Logger: Error trying to log Message: ${messageError}`);
