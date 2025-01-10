@@ -1,0 +1,72 @@
+{"level":30,"time":1736537332593,"pid":25720,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537333653,"pid":25720,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537334409,"pid":25720,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537338404,"pid":23696,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537339105,"pid":23696,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537341818,"pid":7636,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537342505,"pid":7636,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537344790,"pid":18988,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537345496,"pid":18988,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537346550,"pid":18988,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537350900,"pid":8684,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537351585,"pid":8684,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537352247,"pid":8684,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537365472,"pid":15852,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537368242,"pid":22032,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537368934,"pid":22032,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537369863,"pid":22032,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537389153,"pid":30160,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537389865,"pid":30160,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537391166,"pid":30160,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537443469,"pid":30160,"hostname":"mento","msg":"Bot notifications are disabled. Omitted payload: {\"data_token\":\"ddbe7f0e3d93447486efa9ef77954ae7\",\"channel_user_id\":\"5491153475204\",\"message\":\"dappsar te envió 1 WETH 💸. ¡Ya están disponibles en tu billetera ChatterPay! 🥳\"}"}
+{"level":30,"time":1736537443469,"pid":30160,"hostname":"mento","msg":"Push notifications are disabled."}
+{"level":30,"time":1736537443658,"pid":30160,"hostname":"mento","msg":"Bot notifications are disabled. Omitted payload: {\"data_token\":\"ddbe7f0e3d93447486efa9ef77954ae7\",\"channel_user_id\":\"5491124062885\",\"message\":\"💸 Enviaste 1 WETH a 0x11E8364742Bde8B0cE2aEBE9bc4d883E33745A8a! 💸\\nPuedes ver la transacción aquí: https://sepolia.arbiscan.io/tx/0x94644fad7b0230943e04ec03612f96d48dff932c3500fbd86210610a3d1c1a23\"}"}
+{"level":30,"time":1736537443658,"pid":30160,"hostname":"mento","msg":"Push notifications are disabled."}
+{"level":30,"time":1736537443774,"pid":30160,"hostname":"mento","msg":"Maketransaction completed successfully."}
+{"level":30,"time":1736537487823,"pid":30160,"hostname":"mento","msg":"Bot notifications are disabled. Omitted payload: {\"data_token\":\"ddbe7f0e3d93447486efa9ef77954ae7\",\"channel_user_id\":\"5491153475204\",\"message\":\"🔄 Intercambiaste 100 USDT por 0.0503 WETH! 🔄\\nPuedes ver la transacción aquí: https://sepolia.arbiscan.io/tx/0x07d4261ba8ed902e97fd7e6991beb53451336b4dfafce27714efeb2e49406ca2\"}"}
+{"level":30,"time":1736537487823,"pid":30160,"hostname":"mento","msg":"Push notifications are disabled."}
+{"level":30,"time":1736537487953,"pid":30160,"hostname":"mento","msg":"Swap completed successfully approveTransactionHash: 0x7a540a19018772b1ab4f163df1634375717403b01c9ce4b9761f52d9e8db953e, swapTransactionHash: 0x07d4261ba8ed902e97fd7e6991beb53451336b4dfafce27714efeb2e49406ca2."}
+{"level":30,"time":1736537497868,"pid":30160,"hostname":"mento","msg":"Bot notifications are disabled. Omitted payload: {\"data_token\":\"ddbe7f0e3d93447486efa9ef77954ae7\",\"channel_user_id\":\"5491153475204\",\"message\":\"dappsar te envió 1 WETH 💸. ¡Ya están disponibles en tu billetera ChatterPay! 🥳\"}"}
+{"level":30,"time":1736537497868,"pid":30160,"hostname":"mento","msg":"Push notifications are disabled."}
+{"level":30,"time":1736537497921,"pid":30160,"hostname":"mento","msg":"Bot notifications are disabled. Omitted payload: {\"data_token\":\"ddbe7f0e3d93447486efa9ef77954ae7\",\"channel_user_id\":\"5491124062885\",\"message\":\"💸 Enviaste 1 WETH a 0x11E8364742Bde8B0cE2aEBE9bc4d883E33745A8a! 💸\\nPuedes ver la transacción aquí: https://sepolia.arbiscan.io/tx/0x574523ad6632e34c9f421aaa058ad2200117085fe333e3a1c4f026a7ee486745\"}"}
+{"level":30,"time":1736537497921,"pid":30160,"hostname":"mento","msg":"Push notifications are disabled."}
+{"level":30,"time":1736537498035,"pid":30160,"hostname":"mento","msg":"Maketransaction completed successfully."}
+{"level":30,"time":1736537514368,"pid":21404,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537515032,"pid":21404,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537515658,"pid":21404,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537529239,"pid":19568,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537529931,"pid":19568,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537530949,"pid":19568,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537534044,"pid":12052,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537534738,"pid":12052,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537535691,"pid":12052,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537541850,"pid":13704,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537542560,"pid":13704,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537543216,"pid":13704,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537549137,"pid":12992,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537549810,"pid":12992,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537550783,"pid":12992,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537584082,"pid":27868,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537585358,"pid":27868,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537589317,"pid":31624,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537590041,"pid":31624,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537591038,"pid":31624,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537598916,"pid":13524,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537599617,"pid":13524,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537602668,"pid":25304,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537603352,"pid":25304,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537604010,"pid":25304,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537665729,"pid":11596,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537666665,"pid":11596,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537667378,"pid":11596,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537677668,"pid":21224,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537678369,"pid":21224,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537679358,"pid":21224,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537689983,"pid":15356,"hostname":"mento","msg":"Connecting to database"}
+{"level":30,"time":1736537690664,"pid":15356,"hostname":"mento","msg":"MongoDB connected"}
+{"level":30,"time":1736537691662,"pid":15356,"hostname":"mento","msg":"Server is listening on http://0.0.0.0:3000"}
+{"level":30,"time":1736537707955,"pid":15356,"hostname":"mento","msg":"Bot notifications are disabled. Omitted payload: {\"data_token\":\"ddbe7f0e3d93447486efa9ef77954ae7\",\"channel_user_id\":\"5491153475204\",\"message\":\"dappsar te envió 1 WETH 💸. ¡Ya están disponibles en tu billetera ChatterPay! 🥳\"}"}
+{"level":30,"time":1736537707959,"pid":15356,"hostname":"mento","msg":"Push notifications are disabled."}
+{"level":30,"time":1736537708118,"pid":15356,"hostname":"mento","msg":"Bot notifications are disabled. Omitted payload: {\"data_token\":\"ddbe7f0e3d93447486efa9ef77954ae7\",\"channel_user_id\":\"5491124062885\",\"message\":\"💸 Enviaste 1 WETH a 0x11E8364742Bde8B0cE2aEBE9bc4d883E33745A8a! 💸\\nPuedes ver la transacción aquí: https://sepolia.arbiscan.io/tx/0xe7b7918ed862554163673b6dad94e0115930c5ceb53d4a320c1d2b5e7dc6c76f\"}"}
+{"level":30,"time":1736537708122,"pid":15356,"hostname":"mento","msg":"Push notifications are disabled."}
+{"level":30,"time":1736537708236,"pid":15356,"hostname":"mento","msg":"Maketransaction completed successfully."}

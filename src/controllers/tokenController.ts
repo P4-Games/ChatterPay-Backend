@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import Token, { IToken } from '../models/token';
 import { Logger } from '../helpers/loggerHelper';
-import { BUN_ENV, SIGNING_KEY } from '../config/constants';
+import { BUN_ENV, IS_DEVELOPMENT, SIGNING_KEY } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**
@@ -261,10 +261,7 @@ export const issueTokensHandler = async (
     }
 
     const fastify = request.server;
-    if (
-      fastify.networkConfig.environment.toUpperCase() === 'PRODUCTION' ||
-      BUN_ENV.toUpperCase() === 'PRODUCTION'
-    ) {
+    if (fastify.networkConfig.environment.toUpperCase() === 'PRODUCTION' || !IS_DEVELOPMENT) {
       return await returnErrorResponse(
         reply,
         401,

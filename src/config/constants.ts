@@ -1,12 +1,12 @@
-import dotenv from 'dotenv';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
+import dotenv from 'dotenv';
 
 import { LogLevelType, validLogLevels } from '../types/logger';
 
 dotenv.config();
 
 const {
-  BUN_ENV = 'development',
+  BUN_ENV = 'localhost',
   PORT: envPort,
   MONGO_URI: envMongoUri,
   PRIVATE_KEY,
@@ -51,6 +51,7 @@ export {
   GCP_BUCKET_BASE_URL
 };
 
+export const IS_DEVELOPMENT = BUN_ENV.toLowerCase() === 'development';
 export const PORT = Number(envPort) || 3000;
 export const MONGO_URI: string = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
 
@@ -77,7 +78,7 @@ export const PUSH_ENABLED: boolean = pushEnabled.toLowerCase() === 'true';
 export const BOT_NOTIFICATIONS_ENABLED: boolean = botNotificationsEnabled.toLowerCase() === 'true';
 export const PUSH_NETWORK: string = pushNetwork;
 export const PUSH_ENVIRONMENT: ENV = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;
-export const CHATTERPAY_DOMAIN: string = `https://${BUN_ENV === 'development' ? 'dev.' : ''}chatterpay.net`;
+export const CHATTERPAY_DOMAIN: string = `https://${IS_DEVELOPMENT ? 'dev.' : ''}chatterpay.net`;
 export const CHATTERPAY_NFTS_SHARE_URL: string = `${CHATTERPAY_DOMAIN}/nfts/share`;
 export const CURRENT_LOG_LEVEL: LogLevelType = validLogLevels.includes(
   minorLogLevel.toLowerCase() as LogLevelType

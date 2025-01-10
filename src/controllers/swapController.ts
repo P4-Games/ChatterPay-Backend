@@ -112,11 +112,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.Swap)) {
       validationError = `Concurrent swap operation for phone: ${channel_user_id}.`;
       Logger.log(`swap: ${validationError}`);
-      return await returnErrorResponse(
-        reply,
-        400,
-        validationError
-      );
+      return await returnErrorResponse(reply, 400, validationError);
     }
     await openOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
 
