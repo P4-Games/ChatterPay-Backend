@@ -28,7 +28,6 @@ export interface INFT extends Document {
   metadata: INFTMetadata;
 }
 
-// Definir el esquema de Mongoose
 const NFTSchema = new Schema<INFT>({
   channel_user_id: { type: String, required: true },
   id: { type: String, required: true },

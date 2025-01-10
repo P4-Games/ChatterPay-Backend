@@ -19,6 +19,13 @@ export interface ErrorResponse {
   timestamp: string;
 }
 
+/**
+ * Returns a successful response.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @param {string} message - The success message.
+ * @param {object} [additionalData] - Optional additional data to include in the response.
+ * @returns {Promise<FastifyReply>} The Fastify reply object with the success response.
+ */
 export function returnSuccessResponse(
   reply: FastifyReply,
   message: string,
@@ -35,6 +42,14 @@ export function returnSuccessResponse(
   return reply.status(200).send(response);
 }
 
+/**
+ * Returns an error response.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @param {number} code - The HTTP status code.
+ * @param {string} message - The error message.
+ * @param {string} [details] - Optional additional details for the error response.
+ * @returns {Promise<FastifyReply>} The Fastify reply object with the error response.
+ */
 export function returnErrorResponse(
   reply: FastifyReply,
   code: number,
