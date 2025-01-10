@@ -8,9 +8,7 @@ import { getDynamicGas } from '../helpers/paymasterHelper';
 import { ConcurrentOperationsEnum } from '../types/common';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
-import {
-  sendMintNotification
-} from '../services/notificationService';
+import { sendMintNotification } from '../services/notificationService';
 import { isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
 import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';

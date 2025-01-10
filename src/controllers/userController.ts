@@ -16,7 +16,7 @@ export const createUser = async (
 ): Promise<FastifyReply> => {
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(reply, 400, 'Request body is required');
     }
     const newUser = new User(request.body);
     await newUser.save();
@@ -87,7 +87,7 @@ export const updateUser = async (
 
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(reply, 400, 'Request body is required');
     }
 
     const updatedUser = await User.findByIdAndUpdate(id, request.body, { new: true });

@@ -69,9 +69,7 @@ async function getAddressBalanceWithNfts(
 }
 
 /**
- *
  * Route handler for getting wallet balance
- *
  * @param request
  * @param reply
  * @returns
@@ -94,9 +92,7 @@ export const walletBalance = async (
 };
 
 /**
- *
  * Route handler for getting balance by phone number
- *
  * @param request
  * @param reply
  * @returns
