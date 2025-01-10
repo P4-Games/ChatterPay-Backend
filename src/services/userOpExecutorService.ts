@@ -16,15 +16,14 @@ declare module 'fastify' {
 }
 
 /**
+ * Executes a user operation by creating, signing, sending, and waiting for the transaction receipt.
+ * It uses the global Fastify context to access network configuration and backend services.
  *
- * Creates, signs, sends and waits for a UserOperation in one go.
- * Uses the global Fastify context for network configuration and backend services.
- *
- * @param fastify
- * @param callData
- * @param signer
- * @param senderAddress
- * @returns
+ * @param {FastifyInstance} fastify - The Fastify instance providing the network and backend services.
+ * @param {string} callData - The data for the transaction call.
+ * @param {ethers.Wallet} signer - The signer used to sign the user operation.
+ * @param {string} senderAddress - The address of the sender initiating the user operation.
+ * @returns {Promise<UserOperationReceiptData>} The receipt data of the user operation once the transaction is mined.
  */
 export async function executeUserOperation(
   fastify: FastifyInstance,
@@ -47,12 +46,12 @@ export async function executeUserOperation(
   );
   Logger.log('EntryPoint contract initialized');
 
-  // Get the nonce
+  // Get the nonce for the sender
   Logger.log('Fetching nonce for sender.', senderAddress);
   const nonce = await entrypointContract.getNonce(senderAddress, 0);
   Logger.log('Nonce:', nonce.toString());
 
-  // Create, add paymaster and sign the UserOperation
+  // Create, add paymaster data, and sign the UserOperation
   Logger.log('Creating generic user operation.');
   let userOperation = await createGenericUserOperation(callData, senderAddress, nonce);
   Logger.log('Generic user operation created');
@@ -73,7 +72,7 @@ export async function executeUserOperation(
   );
   Logger.log('User operation signed');
 
-  // Send to bundler and wait for receipt
+  // Send the user operation to the bundler and wait for the receipt
   Logger.log('Sending user operation to bundler');
   const bundlerResponse = await sendUserOperationToBundler(
     networkConfig.rpc,
@@ -86,6 +85,7 @@ export async function executeUserOperation(
   const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
   Logger.log('Transaction receipt:', JSON.stringify(receipt));
 
+  // Check if the receipt indicates a successful transaction
   if (!receipt?.success) {
     throw new Error('Transaction failed or not found');
   }
@@ -95,12 +95,14 @@ export async function executeUserOperation(
 }
 
 /**
+ * Waits for a user operation receipt to be available by polling the provider for the receipt hash.
+ * It retries periodically until the receipt is found or a timeout occurs.
  *
- * @param provider
- * @param userOpHash
- * @param timeout
- * @param interval
- * @returns
+ * @param {ethers.providers.JsonRpcProvider} provider - The JSON RPC provider to communicate with the Ethereum network.
+ * @param {string} userOpHash - The hash of the user operation to wait for.
+ * @param {number} timeout - The maximum time to wait for the receipt, in milliseconds. Default is 60000ms.
+ * @param {number} interval - The interval between retries, in milliseconds. Default is 5000ms.
+ * @returns {Promise<UserOperationReceipt>} The user operation receipt when available.
  */
 export async function waitForUserOperationReceipt(
   provider: ethers.providers.JsonRpcProvider,
