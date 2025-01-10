@@ -12,10 +12,10 @@ import {
 } from '../services/userService';
 
 /**
- * Handles the creation of a new wallet.
+ * Handles the creation of a new wallet for the user.
  * @param {FastifyRequest<{ Body: { channel_user_id: string } }>} request - The Fastify request object.
- * @param {FastifyReply} reply - The Fastify reply object.
- * @returns {Promise<FastifyReply>} The Fastify reply object.
+ * @param {FastifyReply} reply - The Fastify reply object used to send the response.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the result.
  */
 export const createWallet = async (
   request: FastifyRequest<{
@@ -26,15 +26,19 @@ export const createWallet = async (
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   try {
+    // Check if the request body is present
     if (!request.body) {
       return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
 
     const { channel_user_id } = request.body;
+
+    // Check if channel_user_id is provided
     if (!channel_user_id) {
       return await returnErrorResponse(reply, 400, 'Missing channel_user_id in body');
     }
 
+    // Validate phone number format
     if (!isValidPhoneNumber(channel_user_id)) {
       return await returnErrorResponse(
         reply,
@@ -49,15 +53,19 @@ export const createWallet = async (
     let userWallet: IUserWallet | null;
 
     if (existingUser) {
+      // Check for existing wallet for the user in the given blockchain
       const { chain_id } = fastify.networkConfig;
       userWallet = getUserWalletByChainId(existingUser.wallets, chain_id);
 
       if (userWallet) {
+        // Return the existing wallet address if found
         return await returnSuccessResponse(
           reply,
           `The user already exists, your wallet is ${userWallet.wallet_proxy}.`
         );
       }
+
+      // Create a new wallet if not found
       Logger.log(`Creating wallet for phone number ${channel_user_id} and chain_id ${chain_id}`);
       const chatterpayImplementationContract: string =
         fastify.networkConfig.contracts.chatterPayAddress;
@@ -68,11 +76,14 @@ export const createWallet = async (
       );
 
       if (result) {
+        // Return the new wallet address
         userWallet = result.newWallet;
         return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
           walletAddress: userWallet.wallet_proxy
         });
       }
+
+      // Return an error if wallet creation fails
       return await returnErrorResponse(
         reply,
         400,
@@ -80,14 +91,17 @@ export const createWallet = async (
       );
     }
 
+    // Create a new user and wallet if the user does not exist
     Logger.log(`Creating wallet for phone number ${channel_user_id}`);
     const chatterpayImplementation = fastify.networkConfig.contracts.chatterPayAddress;
     const user: IUser = await createUserWithWallet(channel_user_id, chatterpayImplementation);
 
+    // Return the wallet address of the newly created user
     return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
       walletAddress: user.wallets[0].wallet_proxy
     });
   } catch (error) {
+    // Log and handle errors
     Logger.error('Error creating wallet:', error);
     return returnErrorResponse(reply, 400, 'An error occurred while creating the wallet');
   }
