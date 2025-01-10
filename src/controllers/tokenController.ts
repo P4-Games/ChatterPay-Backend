@@ -7,10 +7,10 @@ import { BUN_ENV, SIGNING_KEY } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**
- * Creates a new token
- * @param {FastifyRequest<{ Body: IToken }>} request - The Fastify request object containing the token data in the body
- * @param {FastifyReply} reply - The Fastify reply object
- * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object
+ * Creates a new token.
+ * @param {FastifyRequest<{ Body: IToken }>} request - The Fastify request object containing the token data in the body.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object.
  */
 export const createToken = async (
   request: FastifyRequest<{ Body: IToken }>,
@@ -18,7 +18,7 @@ export const createToken = async (
 ): Promise<FastifyReply> => {
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(reply, 400, 'You must send a body with this request.');
     }
 
     const newToken = new Token(request.body);
@@ -26,7 +26,7 @@ export const createToken = async (
       return await returnErrorResponse(
         reply,
         400,
-        'Missing parameters in body. You have to send: newToken'
+        'Missing parameters in body. You must send: newToken.'
       );
     }
 
@@ -39,17 +39,17 @@ export const createToken = async (
 };
 
 /**
- * Retrieves all tokens
- * @param {FastifyRequest} request - The Fastify request object
- * @param {FastifyReply} reply - The Fastify reply object
- * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing all tokens
+ * Retrieves all tokens.
+ * @param {FastifyRequest} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing all tokens.
  */
 export const getAllTokens = async (
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   try {
-    // Use the cached tokens from fastify instance
+    // Use the cached tokens from the Fastify instance.
     const { tokens } = request.server;
     return await returnSuccessResponse(reply, 'Tokens fetched successfully', { tokens });
   } catch (error) {
@@ -59,10 +59,10 @@ export const getAllTokens = async (
 };
 
 /**
- * Retrieves a token by its ID
- * @param {FastifyRequest<{ Params: { id: string } }>} request - The Fastify request object containing the token ID in the params
- * @param {FastifyReply} reply - The Fastify reply object
- * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the found token or an error message
+ * Retrieves a token by its ID.
+ * @param {FastifyRequest<{ Params: { id: string } }>} request - The Fastify request object containing the token ID in the params.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the found token or an error message.
  */
 export const getTokenById = async (
   request: FastifyRequest<{ Params: { id: string } }>,
@@ -71,10 +71,10 @@ export const getTokenById = async (
   const { id } = request.params as { id: string };
 
   try {
-    // Use the cached tokens from fastify instance
+    // Use the cached tokens from the Fastify instance.
     const { tokens } = request.server;
 
-    // Find the token in the cached array
+    // Find the token in the cached array.
     const token = tokens.find((tokenItem: IToken) => tokenItem.id.toString() === id);
 
     if (!token) {
@@ -89,10 +89,10 @@ export const getTokenById = async (
 };
 
 /**
- * Updates a token by its ID
- * @param {FastifyRequest<{ Params: { id: string }, Body: Partial<IToken> }>} request - The Fastify request object containing the token ID in the params and update data in the body
- * @param {FastifyReply} reply - The Fastify reply object
- * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the updated token or an error message
+ * Updates a token by its ID.
+ * @param {FastifyRequest<{ Params: { id: string }, Body: Partial<IToken> }>} request - The Fastify request object containing the token ID in the params and update data in the body.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the updated token or an error message.
  */
 export const updateToken = async (
   request: FastifyRequest<{ Params: { id: string }; Body: Partial<IToken> }>,
@@ -102,7 +102,7 @@ export const updateToken = async (
 
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(reply, 400, 'You must send a body with this request.');
     }
 
     const updatedToken = await Token.findByIdAndUpdate(id, request.body, { new: true });
@@ -119,10 +119,10 @@ export const updateToken = async (
 };
 
 /**
- * Deletes a token by its ID
- * @param {FastifyRequest<{ Params: { id: string } }>} request - The Fastify request object containing the token ID in the params
- * @param {FastifyReply} reply - The Fastify reply object
- * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing a success message or an error message
+ * Deletes a token by its ID.
+ * @param {FastifyRequest<{ Params: { id: string } }>} request - The Fastify request object containing the token ID in the params.
+ * @param {FastifyReply} reply - The Fastify reply object.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing a success message or an error message.
  */
 export const deleteToken = async (
   request: FastifyRequest<{ Params: { id: string } }>,
@@ -144,27 +144,27 @@ export const deleteToken = async (
   }
 };
 
-// Tokens issuing related functions. This will be later removed in mainnet as we don't need to issue tokens anymore.
+// Tokens issuing related functions (to be removed in mainnet).
 
 /**
  * Represents the result of a token minting operation.
  */
 interface MintResult {
-  /** The address of the token contract */
+  /** The address of the token contract. */
   tokenAddress: string;
-  /** The transaction hash of the minting operation */
+  /** The transaction hash of the minting operation. */
   txHash: string;
 }
 
 /**
  * Mints a specified amount of tokens for a given address.
  *
- * @param signer - The ethers.Wallet instance used to sign the transaction
- * @param tokenAddress - The address of the token contract
- * @param recipientAddress - The address to receive the minted tokens
- * @param amount - The amount of tokens to mint (as a string)
- * @param nonce - The nonce to use for the transaction
- * @returns A promise that resolves to a MintResult object
+ * @param signer - The ethers.Wallet instance used to sign the transaction.
+ * @param tokenAddress - The address of the token contract.
+ * @param recipientAddress - The address to receive the minted tokens.
+ * @param amount - The amount of tokens to mint (as a string).
+ * @param nonce - The nonce to use for the transaction.
+ * @returns A promise that resolves to a MintResult object.
  */
 async function mintToken(
   signer: ethers.Wallet,
@@ -180,12 +180,12 @@ async function mintToken(
   );
 
   const amountBN: ethers.BigNumber = ethers.utils.parseUnits(amount, 18);
-  const gasLimit: number = 5000000; // Set a reasonable gas limit
+  const gasLimit: number = 5000000; // Set a reasonable gas limit.
 
-  // Estimate gas price
+  // Estimate gas price.
   const gasPrice: ethers.BigNumber = await signer.provider!.getGasPrice();
 
-  // Increase gas price by 20% to ensure the transaction goes through
+  // Increase gas price by 20% to ensure the transaction goes through.
   const adjustedGasPrice: ethers.BigNumber = gasPrice.mul(120).div(100);
 
   const tx: ethers.ContractTransaction = await erc20.mint(recipientAddress, amountBN, {
@@ -203,8 +203,8 @@ async function mintToken(
 /**
  * Issues a specified amount of tokens to a given address.
  *
- * @param recipientAddress - The address to receive the minted tokens
- * @returns A promise that resolves to an array of MintResult objects
+ * @param recipientAddress - The address to receive the minted tokens.
+ * @returns A promise that resolves to an array of MintResult objects.
  */
 export async function issueTokensCore(
   recipientAddress: string,
@@ -213,13 +213,13 @@ export async function issueTokensCore(
   const amount: string = '100';
   const { networkConfig, tokens } = fastify;
 
-  // Create provider using network config from decorator
+  // Create provider using network config from decorator.
   const provider: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(
     networkConfig.rpc
   );
   const signer: ethers.Wallet = new ethers.Wallet(SIGNING_KEY!, provider);
 
-  // Get tokens for the current chain from the decorator
+  // Get tokens for the current chain from the decorator.
   const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chain_id);
   const tokenAddresses: string[] = chainTokens.map((token) => token.address);
 
@@ -227,7 +227,7 @@ export async function issueTokensCore(
     throw new Error(`No tokens found for chain ${networkConfig.chain_id}`);
   }
 
-  // Get the current nonce for the signer
+  // Get the current nonce for the signer.
   const currentNonce: number = await provider.getTransactionCount(signer.address);
   Logger.log(`Current Nonce: ${currentNonce}`);
   Logger.log(
@@ -247,9 +247,9 @@ export async function issueTokensCore(
 /**
  * Fastify route handler for issuing tokens.
  *
- * @param request - The Fastify request object containing the recipient's address
- * @param reply - The Fastify reply object
- * @returns A promise that resolves to the Fastify reply object
+ * @param request - The Fastify request object containing the recipient's address.
+ * @param reply - The Fastify reply object.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object.
  */
 export const issueTokensHandler = async (
   request: FastifyRequest<{ Body: { address: string } }>,
@@ -257,7 +257,7 @@ export const issueTokensHandler = async (
 ): Promise<FastifyReply> => {
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(reply, 400, 'You must send a body with this request.');
     }
 
     const fastify = request.server;
@@ -277,7 +277,7 @@ export const issueTokensHandler = async (
       return await returnErrorResponse(
         reply,
         400,
-        'Missing parameters in body. You have to send: address'
+        'Missing parameters in body. You must send: address.'
       );
     }
 

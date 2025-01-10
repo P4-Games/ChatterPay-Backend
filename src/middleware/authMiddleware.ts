@@ -4,14 +4,21 @@ import { returnErrorResponse } from '../helpers/requestHelper';
 import { FRONTEND_TOKEN, CHATIZALO_TOKEN } from '../config/constants';
 
 /**
- * Represents the possible token types that can be verified
+ * Represents the possible token types that can be verified.
+ *
+ * This type is used to indicate the type of token that is verified:
+ * either 'frontend', 'chatizalo', or null (if the token is invalid).
  */
 type TokenResponse = 'frontend' | 'chatizalo' | null;
 
 /**
- * Verifies the provided token against known tokens
- * @param {string} providedToken - The token to verify
- * @returns {Promise<TokenResponse>} The type of token if verified, or null if not
+ * Verifies the provided token against known tokens.
+ *
+ * This function compares the provided token with predefined tokens (e.g., FRONTEND_TOKEN, CHATIZALO_TOKEN),
+ * and returns the type of token if it matches or null if not.
+ *
+ * @param {string} providedToken - The token to verify.
+ * @returns {Promise<TokenResponse>} The type of token if verified, or null if not.
  */
 async function verifyToken(providedToken: string): Promise<TokenResponse> {
   let res: TokenResponse = null;
@@ -23,7 +30,9 @@ async function verifyToken(providedToken: string): Promise<TokenResponse> {
 }
 
 /**
- * Public routes constants
+ * Public routes constants.
+ *
+ * This constant array defines the list of routes that are publicly accessible without authentication.
  */
 const PUBLIC_ROUTES = [
   '/ping',
@@ -36,9 +45,13 @@ const PUBLIC_ROUTES = [
 ];
 
 /**
- * Function that checks if the current route is public or not
- * @param route
- * @returns
+ * Function that checks if the current route is public or not.
+ *
+ * This function checks if the requested route is listed as a public route. If a route contains wildcards,
+ * it will match all routes that follow the pattern.
+ *
+ * @param route - The route to check.
+ * @returns `true` if the route is public, `false` otherwise.
  */
 const isPublicRoute = (route: string): boolean =>
   PUBLIC_ROUTES.some((publicRoute) => {
@@ -59,6 +72,9 @@ const isPublicRoute = (route: string): boolean =>
 
 /**
  * Middleware function to authenticate requests using a Bearer token.
+ *
+ * This function checks if the request includes a valid Authorization token in the `Authorization` header.
+ * If the token is valid, it adds the token type to the request headers. If not, it sends a 401 Unauthorized response.
  *
  * @param {FastifyRequest} request - The Fastify request object.
  * @param {FastifyReply} reply - The Fastify reply object.

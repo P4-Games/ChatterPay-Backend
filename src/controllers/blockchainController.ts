@@ -9,9 +9,9 @@ type BlockchainBody = IBlockchain | Partial<IBlockchain>;
 
 /**
  * Creates a new blockchain entry in the database.
- * @param request - The FastifyRequest object containing the blockchain data.
- * @param reply - The FastifyReply object.
- * @returns A promise resolving to the FastifyReply object.
+ * @param {FastifyRequest} request - The FastifyRequest object containing the blockchain data.
+ * @param {FastifyReply} reply - The FastifyReply object used to send the response.
+ * @returns {Promise<FastifyReply>} A promise resolving to the FastifyReply object with the creation status.
  */
 export const createBlockchain = async (
   request: FastifyRequest<{ Body: IBlockchain }>,
@@ -39,9 +39,9 @@ export const createBlockchain = async (
 
 /**
  * Retrieves all blockchain entries from the database.
- * @param request - The FastifyRequest object.
- * @param reply - The FastifyReply object.
- * @returns A promise resolving to the FastifyReply object.
+ * @param {FastifyRequest} request - The FastifyRequest object.
+ * @param {FastifyReply} reply - The FastifyReply object used to send the response.
+ * @returns {Promise<FastifyReply>} A promise resolving to the FastifyReply object with all blockchains.
  */
 export const getAllBlockchains = async (
   request: FastifyRequest,
@@ -61,9 +61,9 @@ export const getAllBlockchains = async (
 
 /**
  * Retrieves a specific blockchain entry by its ID.
- * @param request - The FastifyRequest object containing the blockchain ID.
- * @param reply - The FastifyReply object.
- * @returns A promise resolving to the FastifyReply object.
+ * @param {FastifyRequest} request - The FastifyRequest object containing the blockchain ID.
+ * @param {FastifyReply} reply - The FastifyReply object used to send the response.
+ * @returns {Promise<FastifyReply>} A promise resolving to the FastifyReply object with the blockchain data.
  */
 export const getBlockchainById = async (
   request: FastifyRequest<{ Params: BlockchainParams }>,
@@ -90,9 +90,9 @@ export const getBlockchainById = async (
 
 /**
  * Updates a specific blockchain entry by its ID.
- * @param request - The FastifyRequest object containing the blockchain ID and update data.
- * @param reply - The FastifyReply object.
- * @returns A promise resolving to the FastifyReply object.
+ * @param {FastifyRequest} request - The FastifyRequest object containing the blockchain ID and update data.
+ * @param {FastifyReply} reply - The FastifyReply object used to send the response.
+ * @returns {Promise<FastifyReply>} A promise resolving to the FastifyReply object with the updated blockchain.
  */
 export const updateBlockchain = async (
   request: FastifyRequest<{ Params: BlockchainParams; Body: BlockchainBody }>,
@@ -125,9 +125,9 @@ export const updateBlockchain = async (
 
 /**
  * Deletes a specific blockchain entry by its ID.
- * @param request - The FastifyRequest object containing the blockchain ID.
- * @param reply - The FastifyReply object.
- * @returns A promise resolving to the FastifyReply object.
+ * @param {FastifyRequest} request - The FastifyRequest object containing the blockchain ID.
+ * @param {FastifyReply} reply - The FastifyReply object used to send the response.
+ * @returns {Promise<FastifyReply>} A promise resolving to the FastifyReply object confirming the deletion.
  */
 export const deleteBlockchain = async (
   request: FastifyRequest<{ Params: BlockchainParams }>,

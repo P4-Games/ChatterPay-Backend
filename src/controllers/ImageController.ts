@@ -19,10 +19,10 @@ interface UploadResponse {
 }
 
 /**
- *
- * @param imageUrl
- * @param fileName
- * @returns
+ * Processes and uploads an image to ICP and IPFS.
+ * @param {string} imageUrl - The URL of the image to download and process.
+ * @param {string} fileName - The file name to be used for the image upload.
+ * @returns {Promise<UploadResponse>} The result of the upload operation.
  */
 async function processAndUploadImage(imageUrl: string, fileName: string): Promise<UploadResponse> {
   try {
@@ -48,10 +48,10 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
 }
 
 /**
- *
- * @param request
- * @param reply
- * @returns
+ * Handles the image upload process for a user.
+ * @param {FastifyRequest} request - The Fastify request object containing the phone number and image URL.
+ * @param {FastifyReply} reply - The Fastify reply object used to send the response.
+ * @returns {Promise<FastifyReply>} The Fastify reply object with the result of the upload operation.
  */
 export const uploadImage: RouteHandlerMethod = async (
   request: FastifyRequest,

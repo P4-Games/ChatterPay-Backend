@@ -14,7 +14,7 @@ import transactionRoutes from './transactionRoutes';
 /**
  * Sets up all routes for the Fastify server.
  * @param {FastifyInstance} server - Fastify server instance
- * @returns {Promise<void>}
+ * @returns {Promise<void>} Resolves once all routes are registered
  */
 export async function setupRoutes(server: FastifyInstance): Promise<void> {
   server.register(pingRoutes);
