@@ -114,7 +114,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       Logger.log(`swap: ${validationError}`);
       return await returnErrorResponse(
         reply,
-        200,
+        400,
         validationError
       );
     }

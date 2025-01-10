@@ -225,7 +225,7 @@ export const generateNftOriginal = async (
   if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.MintNft)) {
     const validationError = `Concurrent mint original NFT for wallet ${userWallet.wallet_proxy}, phone: ${channel_user_id}.`;
     Logger.log(`generateNftOriginal: ${validationError}`);
-    return returnErrorResponse(reply, 200, validationError);
+    return returnErrorResponse(reply, 400, validationError);
   }
   await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
 
@@ -398,7 +398,7 @@ export const generateNftCopy = async (
     if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.MintNftCopy)) {
       const validationError = `Concurrent mint copy NFT for phone: ${channel_user_id}.`;
       Logger.log(`generateNftCopy: ${validationError}`);
-      return await returnErrorResponse(reply, 200, validationError);
+      return await returnErrorResponse(reply, 400, validationError);
     }
     await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
 

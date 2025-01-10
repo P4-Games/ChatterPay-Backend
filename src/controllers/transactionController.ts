@@ -308,10 +308,14 @@ export const makeTransaction = async (
     if (hasUserOperationInProgress(fromUser, ConcurrentOperationsEnum.Transfer)) {
       validationError = `Concurrent transfer operation for wallet ${userWallet.wallet_proxy}, phone: ${fromUser.phone_number}.`;
       Logger.log(`makeTransaction: ${validationError}`);
-      return await returnErrorResponse(reply, 200, validationError);
+      return await returnErrorResponse(reply, 400, validationError);
     }
     await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
 
+    /* ***************************************************** */
+    /* 3. makeTransaction: send initial response             */
+    /* ***************************************************** */
+    await returnSuccessResponse(reply, 'The transfer is in progress, it may take a few minutes.');
 
     /* ***************************************************** */
     /* 4. makeTransaction: check user balance                */
