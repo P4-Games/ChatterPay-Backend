@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema(
     code: { type: String, default: null },
     settings: {
       notifications: {
-        language: { type: String, default: 'en' }
+        language: { type: String, default: 'es' }
       }
     }
   },
@@ -48,7 +48,7 @@ async function addSettingsField(): Promise<void> {
         $set: {
           settings: {
             notifications: {
-              language: 'en'
+              language: 'es'
             }
           }
         }

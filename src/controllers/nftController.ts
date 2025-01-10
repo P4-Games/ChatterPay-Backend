@@ -8,14 +8,13 @@ import { getDynamicGas } from '../helpers/paymasterHelper';
 import { ConcurrentOperationsEnum } from '../types/common';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
+import {
+  sendMintNotification
+} from '../services/notificationService';
 import { isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
 import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
-import {
-  sendMintNotification,
-  SendConcurrecyOperationNotification
-} from '../services/notificationService';
 import {
   openOperation,
   getUserWallet,
@@ -228,7 +227,6 @@ export const generateNftOriginal = async (
   if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.MintNft)) {
     const validationError = `Concurrent mint original NFT for wallet ${userWallet.wallet_proxy}, phone: ${channel_user_id}.`;
     Logger.log(`generateNftOriginal: ${validationError}`);
-    await SendConcurrecyOperationNotification(channel_user_id);
     return returnErrorResponse(reply, 400, validationError);
   }
   await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
@@ -402,7 +400,6 @@ export const generateNftCopy = async (
     if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.MintNftCopy)) {
       const validationError = `Concurrent mint copy NFT for phone: ${channel_user_id}.`;
       Logger.log(`generateNftCopy: ${validationError}`);
-      await SendConcurrecyOperationNotification(channel_user_id);
       return await returnErrorResponse(reply, 400, validationError);
     }
     await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
