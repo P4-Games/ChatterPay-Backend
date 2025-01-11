@@ -39,13 +39,84 @@ export const uploadRampUserDocuments = async (request: FastifyRequest, reply: Fa
  * @returns Response with status 200
  */
 export const getUserRampValidationStatus = async (request: FastifyRequest, reply: FastifyReply) => {
-  const { userId } = request.params as { userId: string }; // Explicitly cast the params type
+  const { userId } = request.params as { userId: string };
   Logger.log('getUserValidationStatus', `Getting validation status for user ID: ${userId}`);
 
   // Mocking the validation status response
   const isValidated = true;
 
   return returnSuccessResponse(reply, `${isValidated}`);
+};
+
+/**
+ * Controller to get the document status of a specific user.
+ * @param request - Fastify request object containing the userId in params.
+ * @param reply - Fastify reply object.
+ * @returns A list of documents with their status for the user.
+ */
+export const getUserRampDocumentsStatus = async (request: FastifyRequest, reply: FastifyReply) => {
+  const { userId } = request.params as { userId: string };
+  Logger.log('getUserDocumentStatus', `Fetching document status for user ID: ${userId}`);
+
+  // Mocked response for a user's document status
+  const documentStatus = [
+    {
+      date: '2022-12-27T17:56:39.423Z',
+      type: 'DNI_FRONT',
+      status: 'VALIDATED',
+      comment: ''
+    },
+    {
+      date: '2022-12-27T17:56:39.423Z',
+      type: 'DNI_BACK',
+      status: 'VALIDATED',
+      comment: ''
+    },
+    {
+      date: '2023-12-22T15:32:24.404Z',
+      type: 'FUNDS',
+      status: 'PENDING'
+    }
+  ];
+
+  return returnSuccessResponse(reply, 'documents status', { documents: documentStatus });
+};
+
+/**
+ * Controller to get the document status of multiple users.
+ * Mocked response returning the document status for 10 users.
+ * @param request - Fastify request object.
+ * @param reply - Fastify reply object.
+ * @returns A list of document statuses for multiple users.
+ */
+export const checkUsersRampStatus = async (request: FastifyRequest, reply: FastifyReply) => {
+  Logger.log('getMultipleUserDocumentStatuses', `Fetching document statuses for multiple users`);
+
+  // Mocked response for multiple users
+  const documentStatuses = Array.from({ length: 10 }, (_, index) => ({
+    userId: `user-${index + 1}`,
+    documents: [
+      {
+        date: '2022-12-27T17:56:39.423Z',
+        type: 'DNI_FRONT',
+        status: index % 2 === 0 ? 'VALIDATED' : 'PENDING',
+        comment: ''
+      },
+      {
+        date: '2022-12-27T17:56:39.423Z',
+        type: 'DNI_BACK',
+        status: index % 2 === 0 ? 'VALIDATED' : 'PENDING',
+        comment: ''
+      },
+      {
+        date: '2023-12-22T15:32:24.404Z',
+        type: 'FUNDS',
+        status: index % 3 === 0 ? 'VALIDATED' : 'PENDING'
+      }
+    ]
+  }));
+
+  return returnSuccessResponse(reply, 'users documents status', { users: documentStatuses });
 };
 
 /**

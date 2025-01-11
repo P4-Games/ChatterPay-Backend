@@ -1,6 +1,15 @@
 import { FastifyInstance } from 'fastify';
 
-import { createRampUser, getCryptoPairPrices, getUserRampBalance, getUserRampLimits, getUserRampValidationStatus, rampOff, rampOn, uploadRampUserDocuments } from '../controllers/rampController';
+import {
+  createRampUser,
+  getCryptoPairPrices,
+  getUserRampBalance,
+  getUserRampLimits,
+  getUserRampValidationStatus,
+  rampOff,
+  rampOn,
+  uploadRampUserDocuments
+} from '../controllers/rampController';
 
 /**
  * Registers the ramp routes with the Fastify instance.
