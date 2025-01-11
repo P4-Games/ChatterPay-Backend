@@ -118,20 +118,20 @@ export async function getTokenPrices(symbols: string[]): Promise<Map<string, num
     // Get prices for all symbols against USDT
     const promises = symbolsToFetch.map(async (symbol) => {
       try {
-        symbol = symbol.replace('WETH', 'ETH');
+        const symbolReplaced = symbol.replace('WETH', 'ETH');
         const response = await fetch(
-          `https://api.binance.us/api/v3/ticker/price?symbol=${symbol}USDT`
+          `https://api.binance.us/api/v3/ticker/price?symbol=${symbolReplaced}USDT`
         );
         const data = await response.json();
         if (data.price) {
-          Logger.log('getContractBalance', `Price for ${symbol}: ${data.price} USDT`);
+          Logger.log('getContractBalance', `Price for ${symbolReplaced}: ${data.price} USDT`);
           const price = parseFloat(data.price);
-          priceMap.set(symbol.replace('ETH', 'WETH'), price);
+          priceMap.set(symbolReplaced.replace('ETH', 'WETH'), price);
           // Cache the price for 5 minutes
-          priceCache.set(symbol.replace('ETH', 'WETH'), price);
+          priceCache.set(symbolReplaced.replace('ETH', 'WETH'), price);
         } else {
-          Logger.warn('getContractBalance', `No price found for ${symbol}USDT`);
-          priceMap.set(symbol.replace('ETH', 'WETH'), 0);
+          Logger.warn('getContractBalance', `No price found for ${symbolReplaced}USDT`);
+          priceMap.set(symbolReplaced.replace('ETH', 'WETH'), 0);
         }
       } catch (error) {
         Logger.error('getContractBalance', `Error fetching price for ${symbol}:`, error);

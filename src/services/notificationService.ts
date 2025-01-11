@@ -286,28 +286,31 @@ export async function subscribeToPushChannel(
   user_address: string
 ): Promise<boolean> {
   try {
+    let userPrivateKeyFormatted = user_private_key;
+    let userAddressFormatted = user_address;
+
     if (!user_private_key.startsWith('0x')) {
-      user_private_key = `0x${user_private_key}`;
+      userPrivateKeyFormatted = `0x${user_private_key}`;
     }
     if (!user_address.startsWith('0x')) {
-      user_address = `0x${user_address}`;
+      userAddressFormatted = `0x${user_address}`;
     }
 
-    const signer = new ethers.Wallet(user_private_key);
+    const signer = new ethers.Wallet(userPrivateKeyFormatted);
     const subscriptionResponse = await PushAPIChannels.subscribe({
       signer,
       channelAddress: `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`,
-      userAddress: `eip155:${PUSH_NETWORK}:${user_address}`,
+      userAddress: `eip155:${PUSH_NETWORK}:${userAddressFormatted}`,
       onSuccess: () => {
         Logger.log(
           'subscribeToPushChannel',
-          `${user_address} successfully subscribed to Push Protocol Channel`
+          `${userAddressFormatted} successfully subscribed to Push Protocol Channel`
         );
       },
       onError: (error: unknown) => {
         Logger.error(
           'subscribeToPushChannel',
-          `Error trying to subscribe ${user_address} to Push Protocol channel:`,
+          `Error trying to subscribe ${userAddressFormatted} to Push Protocol channel:`,
           error
         );
       },
@@ -316,7 +319,7 @@ export async function subscribeToPushChannel(
 
     Logger.log(
       'subscribeToPushChannel',
-      `${user_address} Push Protocol Subscription Response:`,
+      `${userAddressFormatted} Push Protocol Subscription Response:`,
       JSON.stringify(subscriptionResponse)
     );
     return true;
