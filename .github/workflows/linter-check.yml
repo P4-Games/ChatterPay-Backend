@@ -4,8 +4,12 @@ name: 'lint-check'
 on:
   push:
     branches:
-      - '*' # Esto asegura que el workflow se ejecute en todas las ramas
-      
+      - '*'
+  pull_request:
+    branches:
+      - develop
+      - main
+
 jobs:
   lint:
     runs-on: ubuntu-latest
