@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { User, IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
+import { IUser, UserModel } from '../models/userModel';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**
@@ -18,7 +18,7 @@ export const createUser = async (
     if (!request.body) {
       return await returnErrorResponse(reply, 400, 'Request body is required');
     }
-    const newUser = new User(request.body);
+    const newUser = new UserModel(request.body);
     await newUser.save();
     return await returnSuccessResponse(reply, 'User created successfully', { user: newUser });
   } catch (error) {
@@ -38,7 +38,7 @@ export const getAllUsers = async (
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   try {
-    const users = await User.find();
+    const users = await UserModel.find();
     return await returnSuccessResponse(reply, 'Users fetched successfully', { users });
   } catch (error) {
     Logger.error('getAllUsers', 'Error fetching users:', error);
@@ -59,7 +59,7 @@ export const getUserById = async (
   const { id } = request.params as { id: string };
 
   try {
-    const user = await User.findById(id);
+    const user = await UserModel.findById(id);
 
     if (!user) {
       Logger.warn('getUserById', 'User not found');
@@ -90,7 +90,7 @@ export const updateUser = async (
       return await returnErrorResponse(reply, 400, 'Request body is required');
     }
 
-    const updatedUser = await User.findByIdAndUpdate(id, request.body, { new: true });
+    const updatedUser = await UserModel.findByIdAndUpdate(id, request.body, { new: true });
 
     if (!updatedUser) {
       Logger.warn('updateUser', 'User not found');
@@ -117,7 +117,7 @@ export const deleteUser = async (
   const { id } = request.params as { id: string };
 
   try {
-    const deletedUser = await User.findByIdAndDelete(id);
+    const deletedUser = await UserModel.findByIdAndDelete(id);
 
     if (!deletedUser) {
       return await returnErrorResponse(reply, 404, 'User not found');

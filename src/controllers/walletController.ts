@@ -1,11 +1,11 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { IUser, IUserWallet } from '../models/user';
+import { getUser } from '../services/mongoService';
+import { IUser, IUserWallet } from '../models/userModel';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import {
-  getUser,
   addWalletToUser,
   createUserWithWallet,
   getUserWalletByChainId

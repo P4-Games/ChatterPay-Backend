@@ -1,9 +1,9 @@
 import { ethers } from 'ethers';
 
 import { Logger } from '../helpers/loggerHelper';
-import { IBlockchain } from '../models/blockchain';
 import { getChatterpayABI } from './bucketService';
 import { getNetworkConfig } from './networkService';
+import { IBlockchain } from '../models/blockchainModel';
 import { setupContractReturnType } from '../types/common';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 

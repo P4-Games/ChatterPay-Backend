@@ -33,7 +33,9 @@ const {
   PUSH_ENABLED: pushEnabled = 'false',
   PUSH_NETWORK: pushNetwork = '11155111',
   PUSH_ENVIRONMENT: pushEnvironment = ENV.DEV,
-  MINOR_LOG_LEVEL: minorLogLevel = 'debug'
+  MINOR_LOG_LEVEL: minorLogLevel = 'debug',
+  MANTECA_BASE_URL = 'https://api.manteca.dev/crypto/v1',
+  MANTECA_API_KEY
 } = process.env;
 
 export {
@@ -48,6 +50,8 @@ export {
   FRONTEND_TOKEN,
   ICP_CANISTER_ID,
   CHATIZALO_TOKEN,
+  MANTECA_API_KEY,
+  MANTECA_BASE_URL,
   GCP_BUCKET_BASE_URL
 };
 
@@ -104,3 +108,5 @@ export const USER_SIGNER_BALANCE_TO_TRANSFER: string = '0.001';
 export const DEFAULT_CHAIN_ID = 421614; // Arbitrum Sepolia
 export const LIFI_SLIPPAGE = 30 / 1000;
 export const LIFI_TYPE = 'SAFEST';
+
+export const NOTIFICATION_TEMPLATE_CACHE_TTL = 60800; // 1 week

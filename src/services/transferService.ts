@@ -1,13 +1,14 @@
 import { ethers } from 'ethers';
 
-import { IToken } from '../models/token';
-import Transaction from '../models/transaction';
+import { getUser } from './mongoService';
+import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
-import { IBlockchain } from '../models/blockchain';
 import { getTokenBalances } from './walletService';
-import { IUser, IUserWallet } from '../models/user';
 import { setupERC20 } from './contractSetupService';
+import Transaction from '../models/transactionModel';
 import { addPaymasterData } from './paymasterService';
+import { IBlockchain } from '../models/blockchainModel';
+import { IUser, IUserWallet } from '../models/userModel';
 import { sendUserOperationToBundler } from './bundlerService';
 import { checkBlockchainConditions } from './blockchainService';
 import { waitForUserOperationReceipt } from './userOpExecutorService';
@@ -17,7 +18,6 @@ import {
   createGenericUserOperation
 } from './userOperationService';
 import {
-  getUser,
   openOperation,
   closeOperation,
   getUserWalletByChainId,

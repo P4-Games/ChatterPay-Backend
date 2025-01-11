@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { getUser } from '../services/userService';
+import { getUser } from '../services/mongoService';
 import { isShortUrl } from '../helpers/validationHelper';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 import {

@@ -2,7 +2,7 @@ import axios from 'axios';
 import { config } from 'dotenv';
 import mongoose from 'mongoose';
 
-import { IUser } from '../src/models/user';
+import { IUser } from '../src/models/userModel';
 import { Logger } from '../src/helpers/loggerHelper';
 
 config();

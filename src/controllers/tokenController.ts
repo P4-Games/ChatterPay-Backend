@@ -1,8 +1,8 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import Token, { IToken } from '../models/token';
 import { Logger } from '../helpers/loggerHelper';
+import Token, { IToken } from '../models/tokenModel';
 import { SIGNING_KEY, IS_DEVELOPMENT } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 

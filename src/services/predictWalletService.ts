@@ -3,8 +3,8 @@ import * as crypto from 'crypto';
 
 import { Logger } from '../helpers/loggerHelper';
 import { SIGNING_KEY } from '../config/constants';
-import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
+import { IBlockchain } from '../models/blockchainModel';
 import { getDynamicGas } from '../helpers/paymasterHelper';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { getChatterPayWalletFactoryABI } from './bucketService';

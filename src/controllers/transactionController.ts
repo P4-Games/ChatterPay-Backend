@@ -2,10 +2,11 @@ import { Web3 } from 'web3';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { IUser, IUserWallet } from '../models/user';
+import { getUser } from '../services/mongoService';
 import { INFURA_API_KEY } from '../config/constants';
-import Transaction, { ITransaction } from '../models/transaction';
+import { IUser, IUserWallet } from '../models/userModel';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
+import Transaction, { ITransaction } from '../models/transactionModel';
 import { saveTransaction, sendUserOperation } from '../services/transferService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
@@ -16,7 +17,6 @@ import {
   CheckBalanceConditionsResultType
 } from '../types/common';
 import {
-  getUser,
   openOperation,
   closeOperation,
   getOrCreateUser,
