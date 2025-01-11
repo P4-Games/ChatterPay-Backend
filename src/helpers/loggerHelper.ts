@@ -17,14 +17,14 @@ const prettyStream = pinoPretty({
 // Create a stream for Google Cloud Logging, writing to 'stdout' (standard
 // output). Here, you can configure it further to work with Google Cloud
 // Logging specifically.
-const cloudStream2 = pino.destination({
+const cloudStream = pino.destination({
   // Avoid errors caused by ANSI characters when using pinoPretty for coloring
   colorize: false,
   // Ensures logs are written immediately
   sync: true
 });
 
-const selectedStream = !IS_DEVELOPMENT ? prettyStream : cloudStream2;
+const selectedStream = IS_DEVELOPMENT ? prettyStream : cloudStream;
 // Create a logger instance using pino with multiple streams
 const logger = pino(
   {
@@ -43,14 +43,16 @@ const logger = pino(
 export class Logger {
   private static logMessage(level: LogLevelType, method: string, ...args: unknown[]): void {
     try {
-      // Construye el mensaje como un string unificado
       const message = args
         .map((arg) =>
           typeof arg === 'string' ? arg.replace(/(\r\n|\n|\r)/g, ' ') : JSON.stringify(arg)
         )
         .join(';');
 
-      logger[level]({ method, msg: message });
+      const finalMessage = IS_DEVELOPMENT
+        ? { msg: `[${method}], ${message}` }
+        : { method, msg: message };
+      logger[level](finalMessage);
     } catch (error: unknown) {
       const messageError = error instanceof Error ? error.message : 'Unknown error';
       console.error(`Logger: Error trying to log Message: ${messageError}`);
