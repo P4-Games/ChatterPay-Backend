@@ -76,7 +76,10 @@ export const getUserWalletByChainIdInternal = (
 async function sendBotNotification(payload: OperatorReplyPayload): Promise<string> {
   try {
     if (!BOT_NOTIFICATIONS_ENABLED) {
-      Logger.info(`Bot notifications are disabled. Omitted payload: ${JSON.stringify(payload)}`);
+      Logger.info(
+        'sendBotNotification',
+        `Bot notifications are disabled. Omitted payload: ${JSON.stringify(payload)}`
+      );
       return '';
     }
 
@@ -86,10 +89,16 @@ async function sendBotNotification(payload: OperatorReplyPayload): Promise<strin
         'Content-Type': 'application/json'
       }
     });
-    Logger.log('API Response:', payload.channel_user_id, payload.message, response.data);
+    Logger.log(
+      'sendBotNotification',
+      'API Response:',
+      payload.channel_user_id,
+      payload.message,
+      response.data
+    );
     return response.data;
   } catch (error) {
-    Logger.error('Error sending operator reply:', (error as Error).message);
+    Logger.error('sendBotNotification', (error as Error).message);
     throw error;
   }
 }
@@ -111,13 +120,14 @@ export async function sendPushNotificaton(
 ): Promise<boolean> {
   try {
     if (!PUSH_ENABLED) {
-      Logger.info(`Push notifications are disabled.`);
+      Logger.info('sendPushNotificaton', `Push notifications are disabled.`);
       return true;
     }
 
     const user: IUser | null = await getUserInternal(channelUserId);
     if (!user) {
       Logger.log(
+        'sendPushNotificaton',
         `Push notification not sent: Invalid user in the database for phone number ${channelUserId}`
       );
       return false;
@@ -129,7 +139,8 @@ export async function sendPushNotificaton(
     );
     if (!userWallet) {
       Logger.log(
-        `Push notification not sent: Invalid EOA Walletin the database for phone number ${channelUserId}`
+        'sendPushNotificaton',
+        `Push notification not sent: Invalid EOA Wallet in the database for phone number ${channelUserId}`
       );
       return false;
     }
@@ -158,6 +169,7 @@ export async function sendPushNotificaton(
     });
 
     Logger.log(
+      'sendPushNotificaton',
       `Push notification sent successfully to ${channelUserId},  ${wallet_eoa}:`,
       apiResponse.status,
       apiResponse.statusText
@@ -165,6 +177,7 @@ export async function sendPushNotificaton(
     return true;
   } catch (error) {
     Logger.error(
+      'sendPushNotificaton',
       `Error sending Push Notification to ${channelUserId}:`,
       error instanceof Error ? error.message : 'Unknown'
     );
@@ -188,6 +201,7 @@ export const getUserSettingsLanguage = async (phoneNumber: string): Promise<Lang
         language = userLanguage as LanguageEnum;
       } else {
         Logger.warn(
+          'getUserSettingsLanguage',
           `Invalid language detected for user ${phoneNumber}, defaulting to ${SETTINGS_NOTIFICATION_LANGUAGE_DFAULT}`
         );
       }
@@ -195,6 +209,7 @@ export const getUserSettingsLanguage = async (phoneNumber: string): Promise<Lang
   } catch (error: unknown) {
     // avoid throw error
     Logger.error(
+      'getUserSettingsLanguage',
       `Error getting user settings language for ${phoneNumber}, error: ${(error as Error).message}`
     );
   }
@@ -216,7 +231,7 @@ async function getNotificationTemplate(
   try {
     const cachedTemplate = notificationTemplateCache.get(`${typeOfNotification}`);
     if (cachedTemplate) {
-      Logger.log(`getting ${typeOfNotification} from cache`);
+      Logger.log('getNotificationTemplate', `getting ${typeOfNotification} from cache`);
       return cachedTemplate as { title: string; message: string };
     }
 
@@ -225,12 +240,12 @@ async function getNotificationTemplate(
     const notificationTemplates: NotificationTemplatesTypes | null =
       await getTemplate<ITemplateSchema>(templateEnum.NOTIFICATIONS);
     if (!notificationTemplates) {
-      Logger.warn('Notifications Templates not found');
+      Logger.warn('getNotificationTemplate', 'Notifications Templates not found');
       return defaultNotification;
     }
 
     if (!Object.values(NotificationEnum).includes(typeOfNotification)) {
-      Logger.warn(`Invalid notification type: ${typeOfNotification}`);
+      Logger.warn('getNotificationTemplate', `Invalid notification type: ${typeOfNotification}`);
       return defaultNotification;
     }
 
@@ -238,7 +253,7 @@ async function getNotificationTemplate(
     const template = notificationTemplates[typeOfNotification];
 
     if (!template) {
-      Logger.warn(`Notification type ${typeOfNotification} not found`);
+      Logger.warn('getNotificationTemplate', `Notification type ${typeOfNotification} not found`);
       return defaultNotification;
     }
 
@@ -252,6 +267,7 @@ async function getNotificationTemplate(
   } catch (error: unknown) {
     // avoid throw error
     Logger.error(
+      'getNotificationTemplate',
       `Error getting notification template ${typeOfNotification}, error: ${(error as Error).message}`
     );
   }
@@ -270,35 +286,47 @@ export async function subscribeToPushChannel(
   user_address: string
 ): Promise<boolean> {
   try {
+    let userPrivateKeyFormatted = user_private_key;
+    let userAddressFormatted = user_address;
+
     if (!user_private_key.startsWith('0x')) {
-      user_private_key = `0x${user_private_key}`;
+      userPrivateKeyFormatted = `0x${user_private_key}`;
     }
     if (!user_address.startsWith('0x')) {
-      user_address = `0x${user_address}`;
+      userAddressFormatted = `0x${user_address}`;
     }
 
-    const signer = new ethers.Wallet(user_private_key);
+    const signer = new ethers.Wallet(userPrivateKeyFormatted);
     const subscriptionResponse = await PushAPIChannels.subscribe({
       signer,
       channelAddress: `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`,
-      userAddress: `eip155:${PUSH_NETWORK}:${user_address}`,
+      userAddress: `eip155:${PUSH_NETWORK}:${userAddressFormatted}`,
       onSuccess: () => {
-        Logger.log(`${user_address} successfully subscribed to Push Protocol Channel`);
+        Logger.log(
+          'subscribeToPushChannel',
+          `${userAddressFormatted} successfully subscribed to Push Protocol Channel`
+        );
       },
       onError: (error: unknown) => {
-        Logger.error(`Error trying to subscribe ${user_address} to Push Protocol channel:`, error);
+        Logger.error(
+          'subscribeToPushChannel',
+          `Error trying to subscribe ${userAddressFormatted} to Push Protocol channel:`,
+          error
+        );
       },
       env: PUSH_ENVIRONMENT
     });
 
     Logger.log(
-      `${user_address} Push Protocol Subscription Response:`,
+      'subscribeToPushChannel',
+      `${userAddressFormatted} Push Protocol Subscription Response:`,
       JSON.stringify(subscriptionResponse)
     );
     return true;
   } catch (error) {
     // Avoid throwing an error if subscribing to the push channel fails
     Logger.error(
+      'subscribeToPushChannel',
       `Error trying to subscribe ${user_address} to Push Channel:`,
       error instanceof Error ? error.message : 'Unknown'
     );
@@ -317,7 +345,10 @@ export async function sendWalletCreationNotification(
   channel_user_id: string
 ) {
   try {
-    Logger.log(`Sending wallet creation notification to ${address_of_user}`);
+    Logger.log(
+      'sendWalletCreationNotification',
+      `Sending wallet creation notification to ${address_of_user}`
+    );
 
     const { title, message } = await getNotificationTemplate(
       channel_user_id,
@@ -327,7 +358,7 @@ export async function sendWalletCreationNotification(
 
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
   } catch (error) {
-    Logger.error('Error in sendWalletCreationNotification:', error);
+    Logger.error('sendWalletCreationNotification', error);
     throw error;
   }
 }
@@ -348,7 +379,10 @@ export async function sendTransferNotification(
   token: string
 ): Promise<unknown> {
   try {
-    Logger.log(`Sending transfer notification from ${from} to ${channel_user_id}`);
+    Logger.log(
+      'sendTransferNotification',
+      `Sending transfer notification from ${from} to ${channel_user_id}`
+    );
     if (!isValidPhoneNumber(channel_user_id)) return '';
 
     const { title, message } = await getNotificationTemplate(
@@ -370,7 +404,7 @@ export async function sendTransferNotification(
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    Logger.error('Error in sendTransferNotification:', error);
+    Logger.error('sendTransferNotification', error);
     throw error;
   }
 }
@@ -395,7 +429,7 @@ export async function sendSwapNotification(
   transactionHash: string
 ): Promise<unknown> {
   try {
-    Logger.log('Sending swap notification');
+    Logger.log('sendSwapNotification', 'Sending swap notification');
     const networkConfig: IBlockchain = await getNetworkConfig();
 
     const resultString: string = `${Math.round(parseFloat(result) * 1e4) / 1e4}`;
@@ -422,7 +456,7 @@ export async function sendSwapNotification(
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    Logger.error('Error in sendSwapNotification:', error);
+    Logger.error('sendSwapNotification', error);
     throw error;
   }
 }
@@ -441,7 +475,7 @@ export async function sendMintNotification(
   id: string
 ): Promise<unknown> {
   try {
-    Logger.log('Sending mint notification');
+    Logger.log('sendMintNotification', 'Sending mint notification');
 
     const { title, message } = await getNotificationTemplate(
       channel_user_id,
@@ -461,7 +495,7 @@ export async function sendMintNotification(
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    Logger.error('Error in sendMintNotification:', (error as Error).message);
+    Logger.error('sendMintNotification', (error as Error).message);
     throw error;
   }
 }
@@ -486,7 +520,7 @@ export async function sendOutgoingTransferNotification(
   txHash: string
 ): Promise<unknown> {
   try {
-    Logger.log('Sending outgoing transfer notification');
+    Logger.log('sendOutgoingTransferNotification', 'Sending outgoing transfer notification');
     if (!isValidPhoneNumber(channel_user_id)) return '';
 
     const networkConfig: IBlockchain = await getNetworkConfig();
@@ -512,7 +546,7 @@ export async function sendOutgoingTransferNotification(
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    Logger.error('Error in sendOutgoingTransferNotification:', error);
+    Logger.error('sendOutgoingTransferNotification', error);
     throw error;
   }
 }
@@ -528,7 +562,10 @@ export async function sendUserInsufficientBalanceNotification(
   channel_user_id: string
 ) {
   try {
-    Logger.log(`Sending User Insufficient Balance notification to ${address_of_user}`);
+    Logger.log(
+      'sendUserInsufficientBalanceNotification',
+      `Sending User Insufficient Balance notification to ${address_of_user}`
+    );
 
     const { title, message } = await getNotificationTemplate(
       channel_user_id,
@@ -545,7 +582,7 @@ export async function sendUserInsufficientBalanceNotification(
     sendPushNotificaton(title, message, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    Logger.error('Error in sendUserInsufficientBalanceNotification:', error);
+    Logger.error('sendUserInsufficientBalanceNotification', error);
     throw error;
   }
 }
@@ -561,7 +598,10 @@ export async function sendNoValidBlockchainConditionsNotification(
   channel_user_id: string
 ) {
   try {
-    Logger.log(`Sending blockchain conditions invalid notification to ${address_of_user}`);
+    Logger.log(
+      'sendNoValidBlockchainConditionsNotification',
+      `Sending blockchain conditions invalid notification to ${address_of_user}`
+    );
 
     const { title, message } = await getNotificationTemplate(
       channel_user_id,
@@ -578,7 +618,7 @@ export async function sendNoValidBlockchainConditionsNotification(
     sendPushNotificaton(title, message, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    Logger.error('Error in sendNoValidBlockchainConditionsNotification:', error);
+    Logger.error('sendNoValidBlockchainConditionsNotification', error);
     throw error;
   }
 }
@@ -594,7 +634,10 @@ export async function sendInternalErrorNotification(
   channel_user_id: string
 ) {
   try {
-    Logger.log(`Sending internal error notification to ${address_of_user}`);
+    Logger.log(
+      'sendInternalErrorNotification',
+      `Sending internal error notification to ${address_of_user}`
+    );
 
     const { title, message } = await getNotificationTemplate(
       channel_user_id,
@@ -611,7 +654,7 @@ export async function sendInternalErrorNotification(
     sendPushNotificaton(title, message, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    Logger.error('Error in sendInternalErrorNotification:', error);
+    Logger.error('sendInternalErrorNotification', error);
     throw error;
   }
 }
@@ -624,7 +667,10 @@ export async function sendInternalErrorNotification(
  */
 export async function SendConcurrecyOperationNotification(channel_user_id: string) {
   try {
-    Logger.log(`Sending concurrent operation notification to ${channel_user_id}`);
+    Logger.log(
+      'SendConcurrecyOperationNotification',
+      `Sending concurrent operation notification to ${channel_user_id}`
+    );
 
     const { title, message } = await getNotificationTemplate(
       channel_user_id,
@@ -641,7 +687,7 @@ export async function SendConcurrecyOperationNotification(channel_user_id: strin
     sendPushNotificaton(title, message, channel_user_id); // avoid await
     return data;
   } catch (error) {
-    Logger.error('Error in SendConcurrecyOperation:', error);
+    Logger.error('SendConcurrecyOperationNotification', error);
     throw error;
   }
 }

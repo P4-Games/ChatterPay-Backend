@@ -7,6 +7,26 @@ import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../conf
 import { subscribeToPushChannel, sendWalletCreationNotification } from './notificationService';
 
 /**
+ * Updates the operation count for the user by the specified increment.
+ * This function modifies the count of operations in progress.
+ */
+const updateOperationCount = async (
+  phoneNumber: string,
+  operation: ConcurrentOperationsEnum,
+  increment: number
+): Promise<void> => {
+  const user: IUser | null = await User.findOne({
+    phone_number: getPhoneNumberFormatted(phoneNumber)
+  });
+
+  if (user && user.operations_in_progress) {
+    const currentCount = user.operations_in_progress[operation] || 0;
+    user.operations_in_progress[operation] = Math.max(currentCount + increment, 0); // Ensure count doesn't go below 0
+    await user.save(); // Save the updated user
+  }
+};
+
+/**
  * Creates a new user with a wallet for the given phone number.
  * This function handles user creation, wallet generation, and push notifications.
  *
@@ -56,7 +76,7 @@ export const createUserWithWallet = async (
   // Save the user to the database
   await user.save();
 
-  Logger.log('Push protocol', phoneNumber, predictedWallet.EOAAddress);
+  Logger.log('createUserWithWallet', 'Push protocol', phoneNumber, predictedWallet.EOAAddress);
   await subscribeToPushChannel(predictedWallet.privateKeyNotHashed, predictedWallet.EOAAddress); // Subscribe to push notifications
   sendWalletCreationNotification(predictedWallet.EOAAddress, phoneNumber); // Send notification about wallet creation (no need to await)
 
@@ -84,14 +104,17 @@ export const addWalletToUser = async (
   const user = await User.findOne({ phone_number: formattedPhoneNumber });
 
   if (!user) {
-    Logger.error(`User not found for phone number: ${phoneNumber}`);
+    Logger.error('addWalletToUser', `User not found for phone number: ${phoneNumber}`);
     return null; // Return null if the user does not exist
   }
 
   // Check if the user already has a wallet for the given chain_id
   const existingWallet = user.wallets.find((wallet) => wallet.chain_id === chainId);
   if (existingWallet) {
-    Logger.log(`Wallet already exists for chain_id ${chainId} for user ${phoneNumber}`);
+    Logger.log(
+      'addWalletToUser',
+      `Wallet already exists for chain_id ${chainId} for user ${phoneNumber}`
+    );
     return { user, newWallet: existingWallet }; // Return the existing wallet if it exists
   }
 
@@ -111,7 +134,10 @@ export const addWalletToUser = async (
   // Save the updated user
   await user.save();
 
-  Logger.log(`New wallet added for user ${phoneNumber} with chain_id ${chainId}`);
+  Logger.log(
+    'addWalletToUser',
+    `New wallet added for user ${phoneNumber} with chain_id ${chainId}`
+  );
 
   return { user, newWallet }; // Return the updated user and new wallet
 };
@@ -200,10 +226,14 @@ export const getOrCreateUser = async (
   if (user) return user; // Return the existing user if found
 
   // If the user doesn't exist, create a new one
-  Logger.log(`Phone number ${phoneNumber} not registered in ChatterPay, registering...`);
+  Logger.log(
+    'addWalletToUser',
+    `Phone number ${phoneNumber} not registered in ChatterPay, registering...`
+  );
   const newUser: IUser = await createUserWithWallet(phoneNumber, chatterpayImplementation);
 
   Logger.log(
+    'addWalletToUser',
     `Phone number ${phoneNumber} registered with the wallet ${newUser.wallets[0].wallet_proxy}`
   );
 
@@ -246,23 +276,3 @@ export const closeOperation = (
   phoneNumber: string,
   operation: ConcurrentOperationsEnum
 ): Promise<void> => updateOperationCount(phoneNumber, operation, -1);
-
-/**
- * Updates the operation count for the user by the specified increment.
- * This function modifies the count of operations in progress.
- */
-const updateOperationCount = async (
-  phoneNumber: string,
-  operation: ConcurrentOperationsEnum,
-  increment: number
-): Promise<void> => {
-  const user: IUser | null = await User.findOne({
-    phone_number: getPhoneNumberFormatted(phoneNumber)
-  });
-
-  if (user && user.operations_in_progress) {
-    const currentCount = user.operations_in_progress[operation] || 0;
-    user.operations_in_progress[operation] = Math.max(currentCount + increment, 0); // Ensure count doesn't go below 0
-    await user.save(); // Save the updated user
-  }
-};

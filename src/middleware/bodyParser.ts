@@ -6,28 +6,28 @@ import { Logger } from '../helpers/loggerHelper';
 /**
  * Parses the request body based on its format (JSON, URL-encoded, or key-value pair).
  *
- * @param {string} body - The raw body of the request
+ * @param {string} bodyFormatted - The raw body of the request
  * @returns {any} The parsed body
  * @throws {Error} If the body format is unrecognized
  */
 function parseBody(body: string): unknown {
-  body = body.trim();
+  const bodyFormatted = body.trim();
 
-  if (body.startsWith('{') || body.startsWith('[')) {
+  if (bodyFormatted.startsWith('{') || bodyFormatted.startsWith('[')) {
     try {
-      return JSON.parse(body);
+      return JSON.parse(bodyFormatted);
     } catch (error) {
-      Logger.warn('BodyParser: JSON parse failed, attempting to fix malformed JSON');
-      const fixedBody: string = body.replace(/'/g, '"').replace(/(\w+):/g, '"$1":');
+      Logger.warn('parseBody', 'JSON parse failed, attempting to fix malformed JSON');
+      const fixedBody: string = bodyFormatted.replace(/'/g, '"').replace(/(\w+):/g, '"$1":');
       return JSON.parse(fixedBody);
     }
-  } else if (body.includes('=')) {
-    Logger.log('BodyParser: Parsing URL-encoded or key-value data');
-    if (!body.includes('&')) {
-      const [key, value]: string[] = body.split('=');
+  } else if (bodyFormatted.includes('=')) {
+    Logger.log('parseBody', 'Parsing URL-encoded or key-value data');
+    if (!bodyFormatted.includes('&')) {
+      const [key, value]: string[] = bodyFormatted.split('=');
       return { [key]: value };
     }
-    return querystring.parse(body);
+    return querystring.parse(bodyFormatted);
   }
 
   throw new Error('Unrecognized data format');
@@ -49,13 +49,13 @@ export async function setupMiddleware(server: FastifyInstance): Promise<void> {
     ) => {
       try {
         const parsedBody = parseBody(body);
-        Logger.log('BodyParser: Successfully parsed body:', body);
+        Logger.log('parseBody', 'Successfully parsed body:', body);
         done(null, parsedBody);
       } catch (error: unknown) {
-        Logger.error('BodyParser: Failed to parse body:', body);
+        Logger.error('parseBody', 'Failed to parse body:', body);
         const messageError = error instanceof Error ? error.message : 'Unknown error';
         done(
-          new Error(`BodyParser: Invalid body format, error: ${messageError}`) as FastifyError,
+          new Error(`parseBody: Invalid body format, error: ${messageError}`) as FastifyError,
           undefined
         );
       }

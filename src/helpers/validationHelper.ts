@@ -1,5 +1,7 @@
 import { ethers } from 'ethers';
 
+import { short_urls_domains } from '../config/shortUrlsDomains.json';
+
 /**
  * Function that validates if a given input is a valid phone number.
  *
@@ -31,6 +33,18 @@ export const isValidUrl = (url: string): boolean => {
   const urlPattern = /^(https?:\/\/)?([\w-]+\.)+[\w-]+(\/[\w- ./?%&=]*)?$/;
   return urlPattern.test(url);
 };
+
+/**
+ * Checks if a given URL is a short URL by comparing it with a predefined list.
+ *
+ * This function takes a URL string as input and checks whether it exists in the
+ * `SHORT_URLS` array. If the URL is found in the array, it is considered a short URL.
+ *
+ * @param url - The URL string to be checked.
+ * @returns `true` if the URL is a short URL, `false` otherwise.
+ */
+export const isShortUrl = (url: string): boolean =>
+  short_urls_domains.some((domain) => new URL(url).hostname.includes(domain));
 
 /**
  * Validates if a given string is a valid Ethereum wallet address.

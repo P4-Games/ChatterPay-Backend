@@ -66,7 +66,10 @@ export const createWallet = async (
       }
 
       // Create a new wallet if not found
-      Logger.log(`Creating wallet for phone number ${channel_user_id} and chain_id ${chain_id}`);
+      Logger.log(
+        'createWallet',
+        `Creating wallet for phone number ${channel_user_id} and chain_id ${chain_id}`
+      );
       const chatterpayImplementationContract: string =
         fastify.networkConfig.contracts.chatterPayAddress;
       const result: { user: IUser; newWallet: IUserWallet } | null = await addWalletToUser(
@@ -92,7 +95,7 @@ export const createWallet = async (
     }
 
     // Create a new user and wallet if the user does not exist
-    Logger.log(`Creating wallet for phone number ${channel_user_id}`);
+    Logger.log('createWallet', `Creating wallet for phone number ${channel_user_id}`);
     const chatterpayImplementation = fastify.networkConfig.contracts.chatterPayAddress;
     const user: IUser = await createUserWithWallet(channel_user_id, chatterpayImplementation);
 
@@ -102,7 +105,7 @@ export const createWallet = async (
     });
   } catch (error) {
     // Log and handle errors
-    Logger.error('Error creating wallet:', error);
+    Logger.error('createWallet', error);
     return returnErrorResponse(reply, 400, 'An error occurred while creating the wallet');
   }
 };

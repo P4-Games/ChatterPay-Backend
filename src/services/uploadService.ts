@@ -87,11 +87,11 @@ export const getImageDetails = async (imageUrl: string) => {
  */
 export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promise<string> {
   if (!NFT_UPLOAD_IMAGE_ICP) {
-    Logger.info('Upload NFT image to ICP disabled');
+    Logger.info('uploadToICP', 'Upload NFT image to ICP disabled');
     return '';
   }
 
-  Logger.info('Uploading image to ICP');
+  Logger.info('uploadToICP', 'Uploading image to ICP');
   const FOLDER_UPLOAD = 'uploads';
 
   if (!ICP_CANISTER_ID) {
@@ -117,22 +117,22 @@ export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promis
 
     await batch.commit({
       onProgress: ({ current, total }) => {
-        Logger.log(`Upload progress to ICP: ${(current / total) * 100}%`);
+        Logger.log('uploadToICP', `Upload progress to ICP: ${(current / total) * 100}%`);
       }
     });
-    Logger.log('this is my key', key);
-    Logger.log(`Image successfully uploaded to ICP: ${url}`);
+    Logger.log('uploadToICP', 'this is my key', key);
+    Logger.log('uploadToICP', `Image successfully uploaded to ICP: ${url}`);
     return url;
   } catch (error: unknown) {
     if (error instanceof Error) {
       if (error.message.includes('asset already exists')) {
-        Logger.log(`The image already exists on ICP: ${url}`);
+        Logger.log('uploadToICP', `The image already exists on ICP: ${url}`);
         return `${url}`;
       }
-      Logger.error('Error uploading to ICP:', error);
+      Logger.error('uploadToICP', error);
       throw error;
     } else {
-      Logger.error('Unknown error uploading to ICP:', error);
+      Logger.error('uploadToICP', error);
       throw new Error('Unknown error');
     }
   }
@@ -147,11 +147,11 @@ export async function uploadToICP(imageBuffer: Buffer, fileName: string): Promis
  */
 export async function uploadToIpfs(imageBuffer: Buffer, fileName: string): Promise<string> {
   if (!NFT_UPLOAD_IMAGE_IPFS) {
-    Logger.info('Upload NFT image to IPFS disabled');
+    Logger.info('uploadToIpfs', 'Upload NFT image to IPFS disabled');
     return '';
   }
 
-  Logger.info('Uploading image to IPFS');
+  Logger.info('uploadToIpfs', 'Uploading image to IPFS');
 
   try {
     const pinata = new PinataSDK({ pinataJWTKey: PINATA_JWT });
@@ -165,10 +165,10 @@ export async function uploadToIpfs(imageBuffer: Buffer, fileName: string): Promi
     });
 
     const url = `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
-    Logger.log(`Image successfully uploaded to IPFS: ${url}`);
+    Logger.log('uploadToIpfs', `Image successfully uploaded to IPFS: ${url}`);
     return url;
   } catch (error) {
-    Logger.error('Error uploading to IPFS:', error);
+    Logger.error('uploadToIpfs', error);
     throw error;
   }
 }
@@ -180,11 +180,33 @@ export async function uploadToIpfs(imageBuffer: Buffer, fileName: string): Promi
  * @throws Error if the image processing fails
  */
 export async function downloadAndProcessImage(imageUrl: string): Promise<Buffer> {
-  const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-  const buffer = Buffer.from(response.data, 'binary');
+  try {
+    // Fetch the image from the provided URL as an arraybuffer
+    const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
 
-  return sharp(buffer)
-    .resize(800, 600, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 80 })
-    .toBuffer();
+    // Create a buffer from the response data
+    const buffer = Buffer.from(response.data, 'binary');
+
+    // Optionally check the image format and metadata before processing
+    const metadata = await sharp(buffer).metadata();
+
+    // If the format is not supported, throw an error
+    if (
+      !metadata.format ||
+      !['jpg', 'jpeg', 'png', 'gif'].includes(metadata.format.toLowerCase())
+    ) {
+      throw new Error('Unsupported image format');
+    }
+
+    // Resize the image to 800x600, keeping the aspect ratio without enlarging
+    // Convert the image to JPEG with a quality of 80, and return the processed image buffer
+    return await sharp(buffer)
+      .resize(800, 600, { fit: 'inside', withoutEnlargement: true }) // Resize the image
+      .jpeg({ quality: 80 }) // Convert to JPEG with quality 80
+      .toBuffer(); // Output the processed image as a buffer
+  } catch (error) {
+    // Log and throw any errors encountered during the image fetching or processing
+    Logger.error('downloadAndProcessImage', error);
+    throw error;
+  }
 }

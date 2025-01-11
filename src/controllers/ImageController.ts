@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { getUser } from '../services/userService';
+import { isShortUrl } from '../helpers/validationHelper';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 import {
   returnErrorResponse,
@@ -76,6 +77,11 @@ export const uploadImage: RouteHandlerMethod = async (
     if (!image_url) {
       Logger.warn('uploadImage', 'Image URL not provided');
       return await returnErrorResponse(reply, 400, 'Image URL not provided');
+    }
+
+    if (isShortUrl(image_url)) {
+      Logger.warn('generateNftOriginal', 'Short Url not allowed');
+      return await returnErrorResponse(reply, 400, 'Short Url not allowed');
     }
 
     const user = await getUser(phone_number);

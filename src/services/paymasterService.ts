@@ -27,7 +27,7 @@ export async function addPaymasterData(
     backendSigner,
     3600 // 1 hour validity
   );
-  Logger.log('Generated paymasterAndData:', paymasterAndData);
+  Logger.log('addPaymasterData', 'Generated paymasterAndData:', paymasterAndData);
 
   // Return the user operation with the added paymaster data
   return {
@@ -56,18 +56,31 @@ export async function ensurePaymasterHasEnoughEth(
     const minBalance = ethers.utils.parseEther(PAYMASTER_MIN_BALANCE);
     const targetBalance = ethers.utils.parseEther(PAYMASTER_TARGET_BALANCE);
 
-    Logger.log(`Checking prefund requirements in paymaster ${paymasterContractAddress}.`);
-    Logger.log(`Paymaster: current balance: ${ethers.utils.formatEther(paymasterBalance)} ETH.`);
-    Logger.log(`Paymaster: minimum required balance: ${ethers.utils.formatEther(minBalance)} ETH.`);
     Logger.log(
+      'ensurePaymasterHasEnoughEth',
+      `Checking prefund requirements in paymaster ${paymasterContractAddress}.`
+    );
+    Logger.log(
+      'ensurePaymasterHasEnoughEth',
+      `Paymaster: current balance: ${ethers.utils.formatEther(paymasterBalance)} ETH.`
+    );
+    Logger.log(
+      'ensurePaymasterHasEnoughEth',
+      `Paymaster: minimum required balance: ${ethers.utils.formatEther(minBalance)} ETH.`
+    );
+    Logger.log(
+      'ensurePaymasterHasEnoughEth',
       `Paymaster: Target balance if deposit needed: ${ethers.utils.formatEther(targetBalance)} ETH.`
     );
 
     // If the paymaster balance is less than the minimum, perform a deposit
     if (paymasterBalance.lt(minBalance)) {
-      Logger.log('Paymaster does not have sufficient prefund.');
+      Logger.log('ensurePaymasterHasEnoughEth', 'Paymaster does not have sufficient prefund.');
       const missingFunds = targetBalance.sub(paymasterBalance);
-      Logger.log(`Depositing ${ethers.utils.formatEther(missingFunds)} ETH to account.`);
+      Logger.log(
+        'ensurePaymasterHasEnoughEth',
+        `Depositing ${ethers.utils.formatEther(missingFunds)} ETH to account.`
+      );
 
       // Deposit funds into the paymaster
       const tx = await entrypointContract.depositTo(paymasterContractAddress, {
@@ -75,17 +88,20 @@ export async function ensurePaymasterHasEnoughEth(
         gasLimit: 500000
       });
       await tx.wait();
-      Logger.log('Deposit transaction confirmed.');
+      Logger.log('ensurePaymasterHasEnoughEth', 'Deposit transaction confirmed.');
 
       // Verify the new balance after deposit
       const newBalance = await entrypointContract.balanceOf(paymasterContractAddress);
-      Logger.log(`New balance after deposit: ${ethers.utils.formatEther(newBalance)} ETH`);
+      Logger.log(
+        'ensurePaymasterHasEnoughEth',
+        `New balance after deposit: ${ethers.utils.formatEther(newBalance)} ETH`
+      );
     } else {
-      Logger.log('Paymaster has sufficient prefund.');
+      Logger.log('ensurePaymasterHasEnoughEth', 'Paymaster has sufficient prefund.');
     }
     return true;
   } catch (error) {
-    Logger.error('Error ensuring paymaster has prefund:', error);
+    Logger.error('ensurePaymasterHasEnoughEth', error);
     return false;
   }
 }

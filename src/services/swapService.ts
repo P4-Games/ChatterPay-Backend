@@ -24,14 +24,14 @@ function createApproveCallData(
 ): string {
   const amount_bn = ethers.utils.parseUnits(amount, 18);
   const approveEncode = tokenContract.interface.encodeFunctionData('approve', [spender, amount_bn]);
-  Logger.log('Approve Encode:', approveEncode);
+  Logger.log('createApproveCallData', 'Approve Encode:', approveEncode);
 
   const callData = chatterPayContract.interface.encodeFunctionData('execute', [
     tokenContract.address,
     0,
     approveEncode
   ]);
-  Logger.log('Approve Call Data:', callData);
+  Logger.log('createApproveCallData', 'Approve Call Data:', callData);
 
   return callData;
 }
@@ -50,14 +50,14 @@ function createSwapCallData(
     isWETHtoUSDT ? 'swapWETHforUSDT' : 'swapUSDTforWETH',
     [amount_bn]
   );
-  Logger.log('Swap Encode:', swapEncode);
+  Logger.log('createSwapCallData', 'Swap Encode:', swapEncode);
 
   const callData = chatterPayContract.interface.encodeFunctionData('execute', [
     swapContract.address,
     0,
     swapEncode
   ]);
-  Logger.log('Swap Call Data:', callData);
+  Logger.log('createSwapCallData', 'Swap Call Data:', callData);
 
   return callData;
 }
@@ -77,7 +77,7 @@ async function executeOperation(
 ): Promise<string> {
   // Get the nonce
   const nonce = await entrypointContract.getNonce(proxyAddress, 0);
-  Logger.log('Nonce:', nonce.toString());
+  Logger.log('executeOperation', 'Nonce:', nonce.toString());
 
   // Create the base user operation
   let userOperation = await createGenericUserOperation(callData, proxyAddress, nonce);
@@ -106,7 +106,7 @@ async function executeOperation(
   // Wait for receipt
   const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
   if (!receipt?.success) {
-    Logger.error('receipt', JSON.stringify(receipt));
+    Logger.error('executeOperation', 'receipt', JSON.stringify(receipt));
     throw new Error(
       `Transaction failed or not found, receipt: ${receipt.success}, ${receipt.userOpHash}`
     );
@@ -152,7 +152,7 @@ export async function executeSwap(
     );
 
     // 1. Execute approve operation
-    Logger.log('Swap: Executing approve operation.');
+    Logger.log('executeSwap', 'Swap: Executing approve operation.');
     const erc20 = await setupERC20(tokenAddresses.tokenAddressInput, setupContractsResult.signer);
     const approveCallData = createApproveCallData(
       setupContractsResult.chatterPay,
@@ -173,7 +173,7 @@ export async function executeSwap(
     );
 
     // 2. Execute swap operation
-    Logger.log('Swap: Executing swap operation.');
+    Logger.log('executeSwap', 'Swap: Executing swap operation.');
     const swapCallData = createSwapCallData(
       setupContractsResult.chatterPay,
       simpleSwapContract,
@@ -198,7 +198,7 @@ export async function executeSwap(
       swapTransactionHash: swapHash
     };
   } catch (error) {
-    Logger.error('Error in executeSwap:', error);
+    Logger.error('executeSwap', error);
     return { success: false, approveTransactionHash: '', swapTransactionHash: '' };
   }
 }

@@ -44,8 +44,7 @@ export const swapToWETH = async (signer: Signer, amount: string): Promise<string
     options: routeOptions
   };
 
-  Logger.log('**Routes Request**');
-  Logger.log(routesRequest);
+  Logger.log('swapToWETH', routesRequest);
 
   // Get routes from LiFi
   const lifiResult = await lifi.getRoutes(routesRequest);
@@ -57,13 +56,12 @@ export const swapToWETH = async (signer: Signer, amount: string): Promise<string
       lifi
         .executeRoute(signer, chosenRoute, {
           acceptExchangeRateUpdateHook: (exchangeRate) => {
-            Logger.log('**Exchange Rate**');
-            Logger.log(exchangeRate);
+            Logger.log('swapToWETH', exchangeRate);
             return Promise.resolve(true);
           }
         })
         .then((lifiTx) => {
-          Logger.log(lifiTx);
+          Logger.log('swapToWETH', lifiTx);
           // TODO: Log trade in database, logTrade((parseInt(amount) / 1e6), lifiTx.id, true)
           resolve(true);
         });

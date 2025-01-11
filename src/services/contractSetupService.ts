@@ -44,7 +44,7 @@ async function validateBundlerUrl(url: string): Promise<boolean> {
     await provider.getNetwork();
     return true;
   } catch (error) {
-    Logger.error(`Failed to validate bundler URL ${url}:`, error);
+    Logger.error('validateBundlerUrl', `Failed to validate bundler URL ${url}:`, error);
     return false;
   }
 }
@@ -67,7 +67,7 @@ export async function setupContracts(
     throw new Error(`Unsupported chain ID: ${blockchain.chain_id}`);
   }
 
-  Logger.log(`Validating bundler URL: ${bundlerUrl}`);
+  Logger.log('setupContracts', `Validating bundler URL: ${bundlerUrl}`);
   const isValidBundler = await validateBundlerUrl(bundlerUrl);
   if (!isValidBundler) {
     throw new Error(`Invalid or unreachable bundler URL: ${bundlerUrl}`);
