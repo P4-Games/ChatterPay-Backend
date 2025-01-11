@@ -45,7 +45,7 @@ export async function startServer(): Promise<FastifyInstance> {
   const address = server.server.address();
   const port: string | number | undefined = typeof address === 'string' ? address : address?.port;
   const host: string | undefined = typeof address === 'string' ? address : address?.address;
-  Logger.info(`Server is listening on http://${host}:${port}`);
+  Logger.info('startServer', `Server is listening on http://${host}:${port}`);
 
   return server;
 }
