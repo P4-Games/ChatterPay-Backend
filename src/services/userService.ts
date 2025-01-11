@@ -7,6 +7,26 @@ import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../conf
 import { subscribeToPushChannel, sendWalletCreationNotification } from './notificationService';
 
 /**
+ * Updates the operation count for the user by the specified increment.
+ * This function modifies the count of operations in progress.
+ */
+const updateOperationCount = async (
+  phoneNumber: string,
+  operation: ConcurrentOperationsEnum,
+  increment: number
+): Promise<void> => {
+  const user: IUser | null = await User.findOne({
+    phone_number: getPhoneNumberFormatted(phoneNumber)
+  });
+
+  if (user && user.operations_in_progress) {
+    const currentCount = user.operations_in_progress[operation] || 0;
+    user.operations_in_progress[operation] = Math.max(currentCount + increment, 0); // Ensure count doesn't go below 0
+    await user.save(); // Save the updated user
+  }
+};
+
+/**
  * Creates a new user with a wallet for the given phone number.
  * This function handles user creation, wallet generation, and push notifications.
  *
@@ -256,23 +276,3 @@ export const closeOperation = (
   phoneNumber: string,
   operation: ConcurrentOperationsEnum
 ): Promise<void> => updateOperationCount(phoneNumber, operation, -1);
-
-/**
- * Updates the operation count for the user by the specified increment.
- * This function modifies the count of operations in progress.
- */
-const updateOperationCount = async (
-  phoneNumber: string,
-  operation: ConcurrentOperationsEnum,
-  increment: number
-): Promise<void> => {
-  const user: IUser | null = await User.findOne({
-    phone_number: getPhoneNumberFormatted(phoneNumber)
-  });
-
-  if (user && user.operations_in_progress) {
-    const currentCount = user.operations_in_progress[operation] || 0;
-    user.operations_in_progress[operation] = Math.max(currentCount + increment, 0); // Ensure count doesn't go below 0
-    await user.save(); // Save the updated user
-  }
-};

@@ -77,179 +77,6 @@ export async function getFiatQuotes(): Promise<FiatQuoteType[]> {
 }
 
 /**
- * Fetches token balances for a given address
- * @param signer - Ethereum wallet signer
- * @param address - Address to check balances for
- * @param fastify - Fastify instance containing global state
- * @returns Array of token balances
- */
-export async function getTokenBalances(
-  address: string,
-  tokens: IToken[],
-  networkConfig: IBlockchain
-): Promise<TokenBalanceType[]> {
-  const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-  const signer = new ethers.Wallet(SIGNING_KEY!, provider);
-  const tokenInfo = await getTokenInfo(tokens, networkConfig.chain_id);
-
-  return Promise.all(
-    tokenInfo.map(async (token) => {
-      const balance = await getContractBalance(token.address, signer, address);
-      return { ...token, balance };
-    })
-  );
-}
-
-/**
- * Calculates balance information for all tokens including fiat conversions
- * @param tokenBalances - Array of token balances
- * @param fiatQuotes - Array of fiat currency quotes
- * @param networkName - Name of the blockchain network
- * @returns Array of detailed balance information
- */
-export function calculateBalances(
-  tokenBalances: TokenBalanceType[],
-  fiatQuotes: FiatQuoteType[],
-  networkName: string
-): BalanceInfoType[] {
-  return tokenBalances.map(({ symbol, balance, rateUSD }) => {
-    const balanceUSD = parseFloat(balance) * rateUSD;
-    return {
-      network: networkName,
-      token: symbol,
-      balance: parseFloat(balance),
-      balance_conv: {
-        USD: balanceUSD,
-        UYU: balanceUSD * (fiatQuotes.find((q) => q.currency === 'UYU')?.rate ?? 1),
-        ARS: balanceUSD * (fiatQuotes.find((q) => q.currency === 'ARS')?.rate ?? 1),
-        BRL: balanceUSD * (fiatQuotes.find((q) => q.currency === 'BRL')?.rate ?? 1)
-      }
-    };
-  });
-}
-
-/**
- * Calculates total balances across all currencies
- * @param balances - Array of balance information
- * @returns Record of currency totals
- */
-export function calculateBalancesTotals(balances: BalanceInfoType[]): Record<CurrencyType, number> {
-  return balances.reduce(
-    (acc, balance) => {
-      (Object.keys(balance.balance_conv) as CurrencyType[]).forEach((currency) => {
-        acc[currency] = (acc[currency] || 0) + balance.balance_conv[currency];
-      });
-      return acc;
-    },
-    {} as Record<CurrencyType, number>
-  );
-}
-
-/**
- * Helper function to verifiy balance in wallet by token Address
- * @param tokenContract
- * @param walletAddress
- * @param amountToCheck
- * @returns
- */
-export async function verifyWaetBllalanceByTokenAddress(
-  blockchainConfig: IBlockchain,
-  tokenContractAddress: string,
-  walletAddress: string,
-  amountToCheck: string
-) {
-  const provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpc);
-  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-  const tokenContract: ethers.Contract = await setupERC20(tokenContractAddress, backendSigner);
-  return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
-}
-
-/**
- * Helper function to verifiy balance in wallet by token symbol
- * @param tokenContract
- * @param walletAddress
- * @param amountToCheck
- * @returns
- */
-export async function verifyWaetBllalanceBytokenSymbol(
-  blockchainConfig: IBlockchain,
-  blockchainTokens: IToken[],
-  tokenSymbol: string,
-  walletAddress: string,
-  amountToCheck: string
-) {
-  const provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpc);
-  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-  const tokenContractAddress = getTokenAddress(blockchainConfig, blockchainTokens, tokenSymbol);
-  const tokenContract: ethers.Contract = await setupERC20(tokenContractAddress, backendSigner);
-  return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
-}
-
-/**
- * Helper function to verifiy balance in wallet
- * @param tokenContract
- * @param walletAddress
- * @param amountToCheck
- * @returns
- */
-export async function verifyWalletBalance(
-  tokenContract: ethers.Contract,
-  walletAddress: string,
-  amountToCheck: string
-) {
-  const symbol: string = await tokenContract.symbol();
-  Logger.log(
-    'getContractBalance',
-    `Checking balance for ${walletAddress} and token ${tokenContract.address}, to spend: ${amountToCheck} ${symbol}`
-  );
-  const walletBalance = await tokenContract.balanceOf(walletAddress);
-  const decimals = await tokenContract.decimals();
-  const amountToCheckFormatted = ethers.utils.parseUnits(amountToCheck, decimals);
-  const walletBalanceFormatted = ethers.utils.formatEther(walletBalance);
-
-  Logger.log(
-    'getContractBalance',
-    `Balance of wallet ${walletAddress}: ${walletBalanceFormatted} ${symbol}`
-  );
-
-  const result: walletBalanceInfoType = {
-    walletBalance: walletBalanceFormatted,
-    amountToCheck,
-    enoughBalance: walletBalance.gte(amountToCheckFormatted)
-  };
-
-  return result;
-}
-
-/**
- * Helper to check token wallet balance in specific rpc
- * @param rpcUrl
- * @param tokenAddress
- * @param walletAddress
- * @param amountToCheck
- * @returns
- */
-export async function verifyWalletBalanceInRpc(
-  rpcUrl: string,
-  tokenAddress: string,
-  walletAddress: string,
-  amountToCheck: string
-) {
-  const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-  const erc20Abi = [
-    'function transfer(address to, uint256 amount) returns (bool)',
-    'function balanceOf(address owner) view returns (uint256)',
-    'function approve(address spender, uint256 amount) returns (bool)',
-    'function allowance(address owner, address spender) view returns (uint256)',
-    'function decimals() view returns (uint8)',
-    'function symbol() view returns (string)'
-  ];
-
-  const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, provider);
-  return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
-}
-
-/**
  * Fetches token prices from Binance API using USDT pairs
  * @param symbols - Array of token symbols to fetch prices for
  * @returns Map of token symbols to their USD prices
@@ -336,4 +163,177 @@ export async function getTokenInfo(tokens: IToken[], chanId: number): Promise<To
     address: token.address,
     rateUSD: prices.get(token.symbol) || 0
   }));
+}
+
+/**
+ * Fetches token balances for a given address
+ * @param signer - Ethereum wallet signer
+ * @param address - Address to check balances for
+ * @param fastify - Fastify instance containing global state
+ * @returns Array of token balances
+ */
+export async function getTokenBalances(
+  address: string,
+  tokens: IToken[],
+  networkConfig: IBlockchain
+): Promise<TokenBalanceType[]> {
+  const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
+  const signer = new ethers.Wallet(SIGNING_KEY!, provider);
+  const tokenInfo = await getTokenInfo(tokens, networkConfig.chain_id);
+
+  return Promise.all(
+    tokenInfo.map(async (token) => {
+      const balance = await getContractBalance(token.address, signer, address);
+      return { ...token, balance };
+    })
+  );
+}
+
+/**
+ * Calculates balance information for all tokens including fiat conversions
+ * @param tokenBalances - Array of token balances
+ * @param fiatQuotes - Array of fiat currency quotes
+ * @param networkName - Name of the blockchain network
+ * @returns Array of detailed balance information
+ */
+export function calculateBalances(
+  tokenBalances: TokenBalanceType[],
+  fiatQuotes: FiatQuoteType[],
+  networkName: string
+): BalanceInfoType[] {
+  return tokenBalances.map(({ symbol, balance, rateUSD }) => {
+    const balanceUSD = parseFloat(balance) * rateUSD;
+    return {
+      network: networkName,
+      token: symbol,
+      balance: parseFloat(balance),
+      balance_conv: {
+        USD: balanceUSD,
+        UYU: balanceUSD * (fiatQuotes.find((q) => q.currency === 'UYU')?.rate ?? 1),
+        ARS: balanceUSD * (fiatQuotes.find((q) => q.currency === 'ARS')?.rate ?? 1),
+        BRL: balanceUSD * (fiatQuotes.find((q) => q.currency === 'BRL')?.rate ?? 1)
+      }
+    };
+  });
+}
+
+/**
+ * Calculates total balances across all currencies
+ * @param balances - Array of balance information
+ * @returns Record of currency totals
+ */
+export function calculateBalancesTotals(balances: BalanceInfoType[]): Record<CurrencyType, number> {
+  return balances.reduce(
+    (acc, balance) => {
+      (Object.keys(balance.balance_conv) as CurrencyType[]).forEach((currency) => {
+        acc[currency] = (acc[currency] || 0) + balance.balance_conv[currency];
+      });
+      return acc;
+    },
+    {} as Record<CurrencyType, number>
+  );
+}
+
+/**
+ * Helper function to verifiy balance in wallet
+ * @param tokenContract
+ * @param walletAddress
+ * @param amountToCheck
+ * @returns
+ */
+export async function verifyWalletBalance(
+  tokenContract: ethers.Contract,
+  walletAddress: string,
+  amountToCheck: string
+) {
+  const symbol: string = await tokenContract.symbol();
+  Logger.log(
+    'getContractBalance',
+    `Checking balance for ${walletAddress} and token ${tokenContract.address}, to spend: ${amountToCheck} ${symbol}`
+  );
+  const walletBalance = await tokenContract.balanceOf(walletAddress);
+  const decimals = await tokenContract.decimals();
+  const amountToCheckFormatted = ethers.utils.parseUnits(amountToCheck, decimals);
+  const walletBalanceFormatted = ethers.utils.formatEther(walletBalance);
+
+  Logger.log(
+    'getContractBalance',
+    `Balance of wallet ${walletAddress}: ${walletBalanceFormatted} ${symbol}`
+  );
+
+  const result: walletBalanceInfoType = {
+    walletBalance: walletBalanceFormatted,
+    amountToCheck,
+    enoughBalance: walletBalance.gte(amountToCheckFormatted)
+  };
+
+  return result;
+}
+
+/**
+ * Helper function to verifiy balance in wallet by token Address
+ * @param tokenContract
+ * @param walletAddress
+ * @param amountToCheck
+ * @returns
+ */
+export async function verifyWaetBllalanceByTokenAddress(
+  blockchainConfig: IBlockchain,
+  tokenContractAddress: string,
+  walletAddress: string,
+  amountToCheck: string
+) {
+  const provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpc);
+  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+  const tokenContract: ethers.Contract = await setupERC20(tokenContractAddress, backendSigner);
+  return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
+}
+
+/**
+ * Helper function to verifiy balance in wallet by token symbol
+ * @param tokenContract
+ * @param walletAddress
+ * @param amountToCheck
+ * @returns
+ */
+export async function verifyWaetBllalanceBytokenSymbol(
+  blockchainConfig: IBlockchain,
+  blockchainTokens: IToken[],
+  tokenSymbol: string,
+  walletAddress: string,
+  amountToCheck: string
+) {
+  const provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpc);
+  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+  const tokenContractAddress = getTokenAddress(blockchainConfig, blockchainTokens, tokenSymbol);
+  const tokenContract: ethers.Contract = await setupERC20(tokenContractAddress, backendSigner);
+  return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
+}
+
+/**
+ * Helper to check token wallet balance in specific rpc
+ * @param rpcUrl
+ * @param tokenAddress
+ * @param walletAddress
+ * @param amountToCheck
+ * @returns
+ */
+export async function verifyWalletBalanceInRpc(
+  rpcUrl: string,
+  tokenAddress: string,
+  walletAddress: string,
+  amountToCheck: string
+) {
+  const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+  const erc20Abi = [
+    'function transfer(address to, uint256 amount) returns (bool)',
+    'function balanceOf(address owner) view returns (uint256)',
+    'function approve(address spender, uint256 amount) returns (bool)',
+    'function allowance(address owner, address spender) view returns (uint256)',
+    'function decimals() view returns (uint8)',
+    'function symbol() view returns (string)'
+  ];
+
+  const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, provider);
+  return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
 }
