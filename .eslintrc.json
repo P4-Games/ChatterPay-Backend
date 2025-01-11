@@ -96,5 +96,13 @@
         "internal-pattern": ["src/**"]
       }
     ]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["vitest.config.ts"],
+      "rules": {
+        "import/no-extraneous-dependencies": ["error", { "devDependencies": true }]
+      }
+    }
+  ]
 }
