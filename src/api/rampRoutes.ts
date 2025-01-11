@@ -8,11 +8,11 @@ import {
   getUserRampBalance,
   getCryptoPairPrices,
   checkUsersRampStatus,
-  uploadRampUserDocuments,
-  getUserRampDocumentsStatus,
-  getUserRampValidationStatus,
   addRampUserBankAccount,
-  removeRampUserBankAccount
+  uploadRampUserDocuments,
+  removeRampUserBankAccount,
+  getUserRampDocumentsStatus,
+  getUserRampValidationStatus
 } from '../controllers/rampController';
 
 /**
