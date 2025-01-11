@@ -3,8 +3,8 @@ import { ethers } from 'ethers';
 import { IToken } from '../models/token';
 import { Logger } from '../helpers/loggerHelper';
 import { getEntryPointABI } from './bucketService';
+import { IBlockchain } from '../models/blockchain';
 import { setupContracts } from './contractSetupService';
-import Blockchain, { IBlockchain } from '../models/blockchain';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { ensurePaymasterHasEnoughEth } from './paymasterService';
 import {
@@ -17,21 +17,6 @@ import {
   BACKEND_SIGNER_MIN_BALANCE,
   USER_SIGNER_BALANCE_TO_TRANSFER
 } from '../config/constants';
-
-/**
- * Retrieves a blockchain by its chain ID.
- *
- * @param chain_id - The unique identifier of the blockchain.
- * @returns A promise that resolves to the blockchain information.
- * @throws Error if the blockchain with the specified chain ID is not found.
- */
-export async function getBlockchain(chain_id: number): Promise<IBlockchain> {
-  const blockchain: IBlockchain | null = await Blockchain.findOne({ chain_id });
-  if (!blockchain) {
-    throw new Error(`Blockchain with chain_id ${chain_id} not found`);
-  }
-  return blockchain;
-}
 
 /**
  * Gets token address based on Token symbols
@@ -201,7 +186,12 @@ export async function checkBlockchainConditions(
   fromNumber: string
 ): Promise<CheckBalanceConditionsResultType> {
   try {
-    const blockchain = await getBlockchain(networkConfig.chain_id);
+    const blockchain: IBlockchain | null = await getBlockchain(networkConfig.chain_id);
+
+    if (!blockchain) {
+      throw new Error(`Blockchain with chain_id ${networkConfig.chain_id} not found`);
+    }
+
     const seedPrivateKey = process.env.PRIVATE_KEY;
     if (!seedPrivateKey) {
       throw new Error('Seed private key not found in environment variables.');
