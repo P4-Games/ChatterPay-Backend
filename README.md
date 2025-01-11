@@ -81,6 +81,13 @@ bun run dev
 
 Then, open in: `http://localhost:3000`.
 
+**6. Testing**:
+
+```bash
+bun test
+```
+
+
 # Additional Info
 
 ## Project Structure
