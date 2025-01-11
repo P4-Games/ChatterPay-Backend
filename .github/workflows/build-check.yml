@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: bun install
       - name: Run tests
-        run: bun test --reporter verbose
+        run: bun test
 
   docker-build:
     name: Build Docker Image
