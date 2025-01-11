@@ -2,8 +2,12 @@ import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { getUser } from '../services/userService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
+import {
+  returnErrorResponse,
+  returnSuccessResponse,
+  returnErrorResponse500
+} from '../helpers/requestHelper';
 
 interface UploadBody {
   phone_number: string;
@@ -38,7 +42,7 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
       ipfs_url: ipfsUrl
     };
   } catch (error) {
-    Logger.error('Error processing and uploading the image:', error);
+    Logger.error('processAndUploadImage', error);
     return {
       success: false,
       message: 'Error processing and uploading the image',
@@ -65,18 +69,18 @@ export const uploadImage: RouteHandlerMethod = async (
     const { phone_number, image_url } = request.body as UploadBody;
 
     if (!phone_number) {
-      Logger.warn('Phone number not provided');
+      Logger.warn('uploadImage', 'Phone number not provided');
       return await returnErrorResponse(reply, 400, 'Phone number not provided');
     }
 
     if (!image_url) {
-      Logger.warn('Image URL not provided');
+      Logger.warn('uploadImage', 'Image URL not provided');
       return await returnErrorResponse(reply, 400, 'Image URL not provided');
     }
 
     const user = await getUser(phone_number);
     if (!user) {
-      Logger.warn('User not found:', phone_number);
+      Logger.warn('uploadImage', `User not found: ${phone_number}`);
       return await returnErrorResponse(reply, 404, 'User not found');
     }
 
@@ -87,17 +91,17 @@ export const uploadImage: RouteHandlerMethod = async (
       user.photo = uploadResult.ipfs_url ?? '';
       await user.save();
 
-      Logger.log('Image uploaded successfully:', uploadResult);
+      Logger.log('uploadImage', uploadResult);
       return await returnSuccessResponse(reply, 'Image uploaded successfully', {
         icp_url: uploadResult.icp_url,
         ipfs_url: uploadResult.ipfs_url
       });
     }
 
-    Logger.error('Error uploading image:', uploadResult.error);
+    Logger.error('uploadImage', uploadResult.error);
     return await returnErrorResponse(reply, 500, 'Error uploading image', uploadResult.error);
   } catch (error) {
-    Logger.error('Error uploading image:', error);
-    return returnErrorResponse(reply, 500, 'Internal Server Error');
+    Logger.error('uploadImage', error);
+    return returnErrorResponse500(reply);
   }
 };
