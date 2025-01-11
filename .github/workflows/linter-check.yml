@@ -1,0 +1,28 @@
+# This name 'lint-check' is used with GitHub branch rules. Please do not change it!
+name: 'lint-check'
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20' # Ajusta según la versión que uses
+
+      - name: Install dependencies
+        run: |
+          npm install
+
+      - name: Run ESLint
+        run: |
+          npx eslint . --max-warnings=0
