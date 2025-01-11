@@ -9,8 +9,8 @@ import { ConcurrentOperationsEnum } from '../types/common';
 import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
 import { sendMintNotification } from '../services/notificationService';
-import { isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
 import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
+import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 import {
   returnErrorResponse,
@@ -18,8 +18,8 @@ import {
   returnErrorResponse500
 } from '../helpers/requestHelper';
 import {
-  openOperation,
   getUserWallet,
+  openOperation,
   closeOperation,
   getOrCreateUser,
   getUserWalletByChainId,
@@ -220,6 +220,11 @@ export const generateNftOriginal = async (
     return returnErrorResponse(reply, 400, 'The provided URL is not valid.');
   }
 
+  if (isShortUrl(url)) {
+    Logger.warn('generateNftOriginal', 'Short Url not allowed');
+    return returnErrorResponse(reply, 400, 'Short Url not allowed');
+  }
+
   const userWallet: IUserWallet | null = await getUserWallet(channel_user_id, DEFAULT_CHAIN_ID);
   if (!userWallet) {
     Logger.warn('generateNftOriginal', 'Wallet User doesnt exists.');
@@ -238,7 +243,7 @@ export const generateNftOriginal = async (
   let processedImage;
   try {
     Logger.info('generateNftOriginal', 'Fetching NFT image');
-    processedImage = await downloadAndProcessImage(url); // always jpg
+    processedImage = await downloadAndProcessImage(url);
   } catch (error) {
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
     Logger.error(
