@@ -39,6 +39,7 @@ export default fp(
       try {
         // Fetch updated tokens from the database
         const updatedTokens = await Token.find();
+        // eslint-disable-next-line no-param-reassign
         fastify.tokens = updatedTokens; // Update the tokens in Fastify
         fastify.log.info('Tokens refreshed successfully');
       } catch (error) {
@@ -56,6 +57,7 @@ export default fp(
         async () => {
           try {
             const updatedConfig = await getNetworkConfig();
+            // eslint-disable-next-line no-param-reassign
             fastify.networkConfig = updatedConfig; // Update the network config in Fastify
             fastify.log.info('Network config refreshed successfully');
           } catch (error) {

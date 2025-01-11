@@ -49,6 +49,38 @@ interface Transfer {
 }
 
 /**
+ * Processes a single external deposit.
+ * @async
+ * @param {Transfer & { token: string }} transfer - The transfer object to process.
+ * @param {string} token - The token type (USDT or WETH).
+ */
+async function processExternalDeposit(transfer: Transfer & { token: string }, token: string) {
+  const user = await User.findOne({ wallet: { $regex: new RegExp(`^${transfer.to}$`, 'i') } });
+
+  if (user) {
+    const value = (Number(transfer.value) / 1e18).toFixed(4);
+
+    // Send incoming transfer notification message, and record tx data
+    sendTransferNotification(transfer.to, user.phone_number, value, token);
+    new Transaction({
+      trx_hash: transfer.id,
+      wallet_from: transfer.from,
+      wallet_to: transfer.to,
+      type: 'deposit',
+      date: new Date(),
+      status: 'completed',
+      amount: value,
+      token
+    }).save();
+  } else {
+    Logger.log(
+      'processExternalDeposit',
+      `Transfer detected, not processed: ${JSON.stringify(transfer)}`
+    );
+  }
+}
+
+/**
  * Fetches and processes external deposits for users in the ecosystem.
  * @async
  */
@@ -118,37 +150,5 @@ export async function fetchExternalDeposits(
     return `No new deposits found since block ${fromBlock}`;
   } catch (error) {
     return `Error fetching external deposits: ${error}`;
-  }
-}
-
-/**
- * Processes a single external deposit.
- * @async
- * @param {Transfer & { token: string }} transfer - The transfer object to process.
- * @param {string} token - The token type (USDT or WETH).
- */
-async function processExternalDeposit(transfer: Transfer & { token: string }, token: string) {
-  const user = await User.findOne({ wallet: { $regex: new RegExp(`^${transfer.to}$`, 'i') } });
-
-  if (user) {
-    const value = (Number(transfer.value) / 1e18).toFixed(4);
-
-    // Send incoming transfer notification message, and record tx data
-    sendTransferNotification(transfer.to, user.phone_number, value, token);
-    new Transaction({
-      trx_hash: transfer.id,
-      wallet_from: transfer.from,
-      wallet_to: transfer.to,
-      type: 'deposit',
-      date: new Date(),
-      status: 'completed',
-      amount: value,
-      token
-    }).save();
-  } else {
-    Logger.log(
-      'processExternalDeposit',
-      `Transfer detected, not processed: ${JSON.stringify(transfer)}`
-    );
   }
 }
