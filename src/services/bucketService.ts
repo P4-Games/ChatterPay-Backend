@@ -16,7 +16,7 @@ export const getGcpFile = async (urlFile: string): Promise<ABI> => {
     const response = await axios.get(urlFile);
     return response.data;
   } catch (error) {
-    Logger.error('Error al leer el archivo desde GCP:', error);
+    Logger.error('getGcpFile', error);
     throw new Error('Error al obtener el archivo desde GCP');
   }
 };

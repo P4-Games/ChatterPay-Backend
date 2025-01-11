@@ -50,6 +50,7 @@ export async function getContractBalance(
     return ethers.utils.formatUnits(balance, 18);
   } catch (error) {
     Logger.error(
+      'getContractBalance',
       `Error getting balance: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
     return '0';
@@ -68,7 +69,7 @@ export async function getFiatQuotes(): Promise<FiatQuoteType[]> {
         const data = await response.json();
         return { currency, rate: data.bid };
       } catch (error) {
-        Logger.error(`Error fetching ${currency} quote:`, error);
+        Logger.error('getContractBalance', `Error fetching ${currency} quote:`, error);
         return { currency, rate: 1 }; // Fallback to 1:1 rate
       }
     })
@@ -198,6 +199,7 @@ export async function verifyWalletBalance(
 ) {
   const symbol: string = await tokenContract.symbol();
   Logger.log(
+    'getContractBalance',
     `Checking balance for ${walletAddress} and token ${tokenContract.address}, to spend: ${amountToCheck} ${symbol}`
   );
   const walletBalance = await tokenContract.balanceOf(walletAddress);
@@ -205,7 +207,10 @@ export async function verifyWalletBalance(
   const amountToCheckFormatted = ethers.utils.parseUnits(amountToCheck, decimals);
   const walletBalanceFormatted = ethers.utils.formatEther(walletBalance);
 
-  Logger.log(`Balance of wallet ${walletAddress}: ${walletBalanceFormatted} ${symbol}`);
+  Logger.log(
+    'getContractBalance',
+    `Balance of wallet ${walletAddress}: ${walletBalanceFormatted} ${symbol}`
+  );
 
   const result: walletBalanceInfoType = {
     walletBalance: walletBalanceFormatted,
@@ -272,12 +277,13 @@ export async function getTokenPrices(symbols: string[]): Promise<Map<string, num
       });
 
       if (symbolsToFetchFromApi.length === 0) {
-        Logger.log('getting prices from cache!');
+        Logger.log('getContractBalance', 'getting prices from cache!');
         return priceMap;
       }
     } catch (error) {
       // Avoid throwing error
       Logger.error(
+        'getContractBalance',
         `Error getting prices from cache: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
@@ -291,17 +297,17 @@ export async function getTokenPrices(symbols: string[]): Promise<Map<string, num
         );
         const data = await response.json();
         if (data.price) {
-          Logger.log(`Price for ${symbol}: ${data.price} USDT`);
+          Logger.log('getContractBalance', `Price for ${symbol}: ${data.price} USDT`);
           const price = parseFloat(data.price);
           priceMap.set(symbol.replace('ETH', 'WETH'), price);
           // Cache the price for 5 minutes
           priceCache.set(symbol.replace('ETH', 'WETH'), price);
         } else {
-          Logger.warn(`No price found for ${symbol}USDT`);
+          Logger.warn('getContractBalance', `No price found for ${symbol}USDT`);
           priceMap.set(symbol.replace('ETH', 'WETH'), 0);
         }
       } catch (error) {
-        Logger.error(`Error fetching price for ${symbol}:`, error);
+        Logger.error('getContractBalance', `Error fetching price for ${symbol}:`, error);
         priceMap.set(symbol, 0);
       }
     });
@@ -309,7 +315,7 @@ export async function getTokenPrices(symbols: string[]): Promise<Map<string, num
     await Promise.all(promises);
     return priceMap;
   } catch (error) {
-    Logger.error('Error fetching token prices from Binance:', error);
+    Logger.error('getContractBalance', 'Error fetching token prices from Binance:', error);
     // Return a map with 0 prices in case of error, except USDT which is always 1
     return new Map(symbols.map((symbol) => [symbol, symbol === 'USDT' ? 1 : 0]));
   }

@@ -25,15 +25,15 @@ export async function createGenericUserOperation(
   sender: string,
   nonce: BigNumber
 ): Promise<PackedUserOperationType> {
-  Logger.log('Creating Generic UserOperation.');
-  Logger.log('Sender Address:', sender);
-  Logger.log('Call Data:', callData);
-  Logger.log('Nonce:', nonce.toString());
-  Logger.log('PRE_VERIFICATION_GAS', PRE_VERIFICATION_GAS);
-  Logger.log('CALL_GAS_LIMIT', CALL_GAS_LIMIT);
-  Logger.log('VERIFICATION_GAS_LIMIT', VERIFICATION_GAS_LIMIT);
-  Logger.log('MAX_FEE_PER_GAS', MAX_FEE_PER_GAS);
-  Logger.log('MAX_PRIORITY_FEE_PER_GAS', MAX_PRIORITY_FEE_PER_GAS);
+  Logger.log('createGenericUserOperation', 'Creating Generic UserOperation.');
+  Logger.log('createGenericUserOperation', 'Sender Address:', sender);
+  Logger.log('createGenericUserOperation', 'Call Data:', callData);
+  Logger.log('createGenericUserOperation', 'Nonce:', nonce.toString());
+  Logger.log('createGenericUserOperation', 'PRE_VERIFICATION_GAS', PRE_VERIFICATION_GAS);
+  Logger.log('createGenericUserOperation', 'CALL_GAS_LIMIT', CALL_GAS_LIMIT);
+  Logger.log('createGenericUserOperation', 'VERIFICATION_GAS_LIMIT', VERIFICATION_GAS_LIMIT);
+  Logger.log('createGenericUserOperation', 'MAX_FEE_PER_GAS', MAX_FEE_PER_GAS);
+  Logger.log('createGenericUserOperation', 'MAX_PRIORITY_FEE_PER_GAS', MAX_PRIORITY_FEE_PER_GAS);
 
   // Use high fixed values for gas
   const userOp: PackedUserOperationType = {
@@ -83,14 +83,14 @@ export function createTransferCallData(
   }
 
   const transferEncode = erc20Contract.interface.encodeFunctionData('transfer', [to, amount_bn]);
-  Logger.log('Transfer Encode:', transferEncode);
+  Logger.log('createTransferCallData', 'Transfer Encode:', transferEncode);
 
   const callData = chatterPayContract.interface.encodeFunctionData('execute', [
     erc20Contract.address,
     0,
     transferEncode
   ]);
-  Logger.log('Transfer Call Data:', callData);
+  Logger.log('createTransferCallData', 'Transfer Call Data:', callData);
 
   return callData;
 }
@@ -110,26 +110,26 @@ export async function signUserOperation(
   entryPointAddress: string,
   signer: ethers.Wallet
 ): Promise<PackedUserOperationType> {
-  Logger.log('signUserOperation: Signing UserOperation.');
+  Logger.log('signUserOperation', 'Signing UserOperation.');
 
   const chainId = await signer.getChainId();
-  Logger.log('signUserOperation: Chain ID:', chainId);
+  Logger.log('signUserOperation', 'Chain ID:', chainId);
 
-  Logger.log('signUserOperation: Computing userOpHash.');
+  Logger.log('signUserOperation', 'Computing userOpHash.');
   const userOpHash = getUserOpHash(userOperation, entryPointAddress, chainId);
-  Logger.log('signUserOperation: UserOpHash:', userOpHash);
+  Logger.log('signUserOperation', 'UserOpHash:', userOpHash);
 
   const signature = await signer.signMessage(ethers.utils.arrayify(userOpHash));
-  Logger.log('signUserOperation: Generated signature:', signature);
+  Logger.log('signUserOperation', 'Generated signature:', signature);
 
   const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(userOpHash), signature);
-  Logger.log('signUserOperation: Recovered address:', recoveredAddress);
-  Logger.log('signUserOperation: Signer address:', await signer.getAddress());
+  Logger.log('signUserOperation', 'Recovered address:', recoveredAddress);
+  Logger.log('signUserOperation', 'Signer address:', await signer.getAddress());
 
   if (recoveredAddress.toLowerCase() !== (await signer.getAddress()).toLowerCase()) {
     throw new Error('signUserOperation: Signature verification failed on client side');
   }
 
-  Logger.log('signUserOperation: UserOperation signed successfully');
+  Logger.log('signUserOperation', 'UserOperation signed successfully');
   return { ...userOperation, signature };
 }

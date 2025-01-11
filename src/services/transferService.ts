@@ -81,32 +81,33 @@ export async function sendUserOperation(
       setupContractsResult.signer
     );
 
-    Logger.log('Sending user operation to bundler');
+    Logger.log('sendUserOperation', 'Sending user operation to bundler');
     const bundlerResponse = await sendUserOperationToBundler(
       setupContractsResult.bundlerUrl,
       userOperation,
       entryPointContract.address
     );
-    Logger.log('sendUserOperation: Bundler response:', bundlerResponse);
+    Logger.log('sendUserOperation', 'Bundler response:', bundlerResponse);
 
-    Logger.log('sendUserOperation: Waiting for transaction to be mined.');
+    Logger.log('sendUserOperation', 'Waiting for transaction to be mined.');
     const receipt = await waitForUserOperationReceipt(
       setupContractsResult.provider,
       bundlerResponse
     );
-    Logger.log('sendUserOperation: Transaction receipt:', JSON.stringify(receipt));
+    Logger.log('sendUserOperation', 'Transaction receipt:', JSON.stringify(receipt));
 
     if (!receipt?.success) {
       throw new Error('sendUserOperation: Transaction failed or not found');
     }
 
-    Logger.log('sendUserOperation: Transaction confirmed in block:', receipt.receipt.blockNumber);
-    Logger.log('sendUserOperation: end!');
+    Logger.log('sendUserOperation', 'Transaction confirmed in block:', receipt.receipt.blockNumber);
+    Logger.log('sendUserOperation', 'end!');
 
     return { success: true, transactionHash: receipt.receipt.transactionHash };
   } catch (error) {
     Logger.error(
-      `sendUserOperation: Error, from: ${fromNumber}, to: ${to}, ` +
+      'sendUserOperation',
+      `Error, from: ${fromNumber}, to: ${to}, ` +
         `token address: ${tokenAddress}, amount: ${amount}, error: `,
       JSON.stringify(error)
     );
@@ -140,6 +141,7 @@ export async function saveTransaction(
   } catch (error: unknown) {
     // avoid throw error
     Logger.error(
+      'saveTransaction',
       `Error saving transaction ${tx} in database from: ${walletFrom}, to: ${walletTo}, amount: ${amount.toString()}, token: ${token}}:`,
       (error as Error).message
     );

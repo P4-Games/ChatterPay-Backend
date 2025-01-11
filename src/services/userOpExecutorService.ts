@@ -31,12 +31,16 @@ export async function executeUserOperation(
   signer: ethers.Wallet,
   senderAddress: string
 ): Promise<UserOperationReceiptData> {
-  Logger.log('Starting executeUserOperation.');
-  Logger.log('Sender address:', senderAddress);
-  Logger.log('Call data:', callData);
+  Logger.log('executeUserOperation', 'Starting executeUserOperation.');
+  Logger.log('executeUserOperation', 'Sender address:', senderAddress);
+  Logger.log('executeUserOperation', 'Call data:', callData);
 
   const { networkConfig, backendSigner, provider } = fastify;
-  Logger.log('Network config loaded. Entry point:', networkConfig.contracts.entryPoint);
+  Logger.log(
+    'executeUserOperation',
+    'Network config loaded. Entry point:',
+    networkConfig.contracts.entryPoint
+  );
 
   const entrypointABI = await getEntryPointABI();
   const entrypointContract = new ethers.Contract(
@@ -44,53 +48,57 @@ export async function executeUserOperation(
     entrypointABI,
     backendSigner
   );
-  Logger.log('EntryPoint contract initialized');
+  Logger.log('executeUserOperation', 'EntryPoint contract initialized');
 
   // Get the nonce for the sender
-  Logger.log('Fetching nonce for sender.', senderAddress);
+  Logger.log('executeUserOperation', 'Fetching nonce for sender.', senderAddress);
   const nonce = await entrypointContract.getNonce(senderAddress, 0);
-  Logger.log('Nonce:', nonce.toString());
+  Logger.log('executeUserOperation', 'Nonce:', nonce.toString());
 
   // Create, add paymaster data, and sign the UserOperation
-  Logger.log('Creating generic user operation.');
+  Logger.log('executeUserOperation', 'Creating generic user operation.');
   let userOperation = await createGenericUserOperation(callData, senderAddress, nonce);
-  Logger.log('Generic user operation created');
+  Logger.log('executeUserOperation', 'Generic user operation created');
 
-  Logger.log('Adding paymaster data.');
+  Logger.log('executeUserOperation', 'Adding paymaster data.');
   userOperation = await addPaymasterData(
     userOperation,
     networkConfig.contracts.paymasterAddress!,
     backendSigner
   );
-  Logger.log('Paymaster data added');
+  Logger.log('executeUserOperation', 'Paymaster data added');
 
-  Logger.log('Signing user operation.');
+  Logger.log('executeUserOperation', 'Signing user operation.');
   userOperation = await signUserOperation(
     userOperation,
     networkConfig.contracts.entryPoint,
     signer
   );
-  Logger.log('User operation signed');
+  Logger.log('executeUserOperation', 'User operation signed');
 
   // Send the user operation to the bundler and wait for the receipt
-  Logger.log('Sending user operation to bundler');
+  Logger.log('executeUserOperation', 'Sending user operation to bundler');
   const bundlerResponse = await sendUserOperationToBundler(
     networkConfig.rpc,
     userOperation,
     networkConfig.contracts.entryPoint
   );
-  Logger.log('Bundler response:', bundlerResponse);
+  Logger.log('executeUserOperation', 'Bundler response:', bundlerResponse);
 
-  Logger.log('Waiting for transaction to be mined.');
+  Logger.log('executeUserOperation', 'Waiting for transaction to be mined.');
   const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
-  Logger.log('Transaction receipt:', JSON.stringify(receipt));
+  Logger.log('executeUserOperation', 'Transaction receipt:', JSON.stringify(receipt));
 
   // Check if the receipt indicates a successful transaction
   if (!receipt?.success) {
-    throw new Error('Transaction failed or not found');
+    throw new Error('executeUserOperation: Transaction failed or not found');
   }
 
-  Logger.log('Transaction confirmed in block:', receipt.receipt.blockNumber);
+  Logger.log(
+    'executeUserOperation',
+    'Transaction confirmed in block:',
+    receipt.receipt.blockNumber
+  );
   return receipt.receipt;
 }
 
@@ -121,7 +129,9 @@ export async function waitForUserOperationReceipt(
           } else if (Date.now() - startTime < timeout) {
             setTimeout(checkReceipt, interval);
           } else {
-            reject(new Error('Timeout waiting for user operation receipt'));
+            reject(
+              new Error('waitForUserOperationReceipt: Timeout waiting for user operation receipt')
+            );
           }
         })
         .catch((error) => {

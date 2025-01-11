@@ -81,7 +81,7 @@ export async function generateDummySignature(
   const dummyWallet = ethers.Wallet.createRandom();
   const dummySignature = await dummyWallet.signMessage(ethers.utils.arrayify(userOpHash));
 
-  Logger.log('Generated dummy signature:', dummySignature);
+  Logger.log('generateDummySignature', dummySignature);
 
   return dummySignature;
 }
@@ -146,7 +146,7 @@ export async function getPaymasterAndData(
 
     return response.data.result;
   } catch (error) {
-    Logger.error('Error fetching paymaster data:', error);
+    Logger.error('getPaymasterAndData', error);
     throw error;
   }
 }
