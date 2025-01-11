@@ -1,3 +1,4 @@
+import { getUser } from './mongoService';
 import { Logger } from '../helpers/loggerHelper';
 import { User, IUser, IUserWallet } from '../models/user';
 import { ConcurrentOperationsEnum } from '../types/common';

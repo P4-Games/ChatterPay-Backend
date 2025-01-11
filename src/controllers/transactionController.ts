@@ -2,6 +2,7 @@ import { Web3 } from 'web3';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
+import { getUser } from '../services/mongoService';
 import { IUser, IUserWallet } from '../models/user';
 import { INFURA_API_KEY } from '../config/constants';
 import Transaction, { ITransaction } from '../models/transaction';
@@ -16,7 +17,6 @@ import {
   CheckBalanceConditionsResultType
 } from '../types/common';
 import {
-  getUser,
   openOperation,
   closeOperation,
   getOrCreateUser,

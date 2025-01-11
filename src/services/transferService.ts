@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 
 import { IToken } from '../models/token';
+import { getUser } from './mongoService';
 import Transaction from '../models/transaction';
 import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchain';
@@ -17,7 +18,6 @@ import {
   createGenericUserOperation
 } from './userOperationService';
 import {
-  getUser,
   openOperation,
   closeOperation,
   getUserWalletByChainId,
