@@ -28,6 +28,7 @@ import {
   PUSH_CHANNEL_PRIVATE_KEY,
   BOT_NOTIFICATIONS_ENABLED,
   CHATTERPAY_NFTS_SHARE_URL,
+  NOTIFICATION_TEMPLATE_CACHE_TTL,
   SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
 } from '../config/constants';
 
@@ -37,8 +38,7 @@ interface OperatorReplyPayload {
   message: string;
 }
 
-const notificationTemplateCache = new NodeCache({ stdTTL: 604800 }); // 1 week
-
+const notificationTemplateCache = new NodeCache({ stdTTL: NOTIFICATION_TEMPLATE_CACHE_TTL });
 /**
  * Retrieves a user based on the phone number.
  * This function is internal to avoid circular imports between userService and notificationService.
