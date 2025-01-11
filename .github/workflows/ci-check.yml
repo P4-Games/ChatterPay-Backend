@@ -1,5 +1,4 @@
-# This name 'build-check' is used with GitHub branch rules. Please do not change it!
-name: 'build-check'
+name: 'ci-check'
 
 on:
   pull_request:
@@ -8,9 +7,33 @@ on:
       - main
 
 jobs:
-  lint:
-    name: Lint Application
+  prettier:
+    name: Check Code Formatting
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install dependencies for Prettier
+        run: yarn install
+
+      - name: Run Prettier
+        run: yarn format
+
+      - name: Check for uncommitted changes
+        run: |
+          git diff --exit-code
+        shell: bash
+
+  lint:
+    name: Check with Lint
+    runs-on: ubuntu-latest
+    needs: prettier
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,7 +53,7 @@ jobs:
           yarn lint --max-warnings=0 # Ejecutar ESLint con el comando configurado
 
   tests:
-    name: Build and Test Application
+    name: Test Application
     runs-on: ubuntu-latest
     needs: lint
     steps:
