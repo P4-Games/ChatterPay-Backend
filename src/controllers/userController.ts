@@ -22,7 +22,7 @@ export const createUser = async (
     await newUser.save();
     return await returnSuccessResponse(reply, 'User created successfully', { user: newUser });
   } catch (error) {
-    Logger.error('Error creating user:', error);
+    Logger.error('createUser', 'Error creating user:', error);
     return returnErrorResponse(reply, 400, 'Bad Request');
   }
 };
@@ -41,7 +41,7 @@ export const getAllUsers = async (
     const users = await User.find();
     return await returnSuccessResponse(reply, 'Users fetched successfully', { users });
   } catch (error) {
-    Logger.error('Error fetching users:', error);
+    Logger.error('getAllUsers', 'Error fetching users:', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch users');
   }
 };
@@ -62,13 +62,13 @@ export const getUserById = async (
     const user = await User.findById(id);
 
     if (!user) {
-      Logger.warn('User not found');
+      Logger.warn('getUserById', 'User not found');
       return await returnErrorResponse(reply, 404, 'User not found');
     }
 
     return await returnSuccessResponse(reply, 'User fetched successfully', user.toJSON());
   } catch (error) {
-    Logger.error('Error fetching user:', error);
+    Logger.error('getUserById', 'Error fetching user:', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch user');
   }
 };
@@ -93,13 +93,13 @@ export const updateUser = async (
     const updatedUser = await User.findByIdAndUpdate(id, request.body, { new: true });
 
     if (!updatedUser) {
-      Logger.warn('User not found');
+      Logger.warn('updateUser', 'User not found');
       return await returnErrorResponse(reply, 404, 'User not found');
     }
 
     return await returnSuccessResponse(reply, 'User updated successfully', updatedUser.toJSON());
   } catch (error) {
-    Logger.error('Error updating user:', error);
+    Logger.error('updateUser', 'Error updating user:', error);
     return returnErrorResponse(reply, 400, 'Bad Request');
   }
 };
@@ -125,7 +125,7 @@ export const deleteUser = async (
 
     return await returnSuccessResponse(reply, 'User deleted successfully');
   } catch (error) {
-    Logger.error('Error deleting user:', error);
+    Logger.error('deleteUser', 'Error deleting user:', error);
     return returnErrorResponse(reply, 400, 'Bad Request');
   }
 };
