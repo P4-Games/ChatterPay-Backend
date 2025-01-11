@@ -1,8 +1,8 @@
 import { getUser } from './mongoService';
 import { Logger } from '../helpers/loggerHelper';
-import { User, IUser, IUserWallet } from '../models/user';
 import { ConcurrentOperationsEnum } from '../types/common';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
+import { IUser, UserModel, IUserWallet } from '../models/userModel';
 import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
 import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
 import { subscribeToPushChannel, sendWalletCreationNotification } from './notificationService';
@@ -21,7 +21,7 @@ const updateOperationCount = async (
   operation: ConcurrentOperationsEnum,
   increment: number
 ): Promise<void> => {
-  const user: IUser | null = await User.findOne({
+  const user: IUser | null = await UserModel.findOne({
     phone_number: getPhoneNumberFormatted(phoneNumber)
   });
 
@@ -47,7 +47,7 @@ export const createUserWithWallet = async (
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
   const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(formattedPhoneNumber);
 
-  const user = new User({
+  const user = new UserModel({
     phone_number: formattedPhoneNumber,
     wallets: [
       {
@@ -104,7 +104,7 @@ export const addWalletToUser = async (
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
   const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(formattedPhoneNumber);
 
-  const user = await User.findOne({ phone_number: formattedPhoneNumber });
+  const user = await UserModel.findOne({ phone_number: formattedPhoneNumber });
 
   if (!user) {
     Logger.error('addWalletToUser', `User not found for phone number: ${phoneNumber}`);
@@ -167,7 +167,7 @@ export const getUserByWalletAndChainid = async (
   wallet: string,
   chainId: number
 ): Promise<IUser | null> => {
-  const user: IUser | null = await User.findOne({
+  const user: IUser | null = await UserModel.findOne({
     'wallets.wallet_proxy': wallet,
     'wallets.chain_id': chainId
   });
@@ -186,7 +186,7 @@ export const getUserWallet = async (
   phoneNumber: string,
   chainId: number
 ): Promise<IUserWallet | null> => {
-  const user: IUser | null = await User.findOne({
+  const user: IUser | null = await UserModel.findOne({
     phone_number: getPhoneNumberFormatted(phoneNumber)
   });
 
@@ -240,7 +240,7 @@ export const hasPhoneOperationInProgress = async (
   phoneNumber: string,
   operation: ConcurrentOperationsEnum
 ): Promise<number> => {
-  const user = await User.findOne({ phone_number: getPhoneNumberFormatted(phoneNumber) });
+  const user = await UserModel.findOne({ phone_number: getPhoneNumberFormatted(phoneNumber) });
   return user?.operations_in_progress?.[operation] || 0;
 };
 

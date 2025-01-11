@@ -5,9 +5,9 @@ import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushp
 
 import { getUser } from './mongoService';
 import { Logger } from '../helpers/loggerHelper';
-import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
-import { IUser, IUserWallet } from '../models/user';
+import { IBlockchain } from '../models/blockchainModel';
+import { IUser, IUserWallet } from '../models/userModel';
 import { getTemplate, templateEnum } from './templateService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import {
@@ -15,7 +15,7 @@ import {
   ITemplateSchema,
   NotificationEnum,
   NotificationTemplatesTypes
-} from '../models/templates';
+} from '../models/templateModel';
 import {
   BOT_API_URL,
   PUSH_ENABLED,

@@ -1,8 +1,8 @@
 import fp from 'fastify-plugin';
 import { FastifyInstance } from 'fastify';
 
-import Token, { IToken } from '../models/token';
-import { IBlockchain } from '../models/blockchain';
+import Token, { IToken } from '../models/tokenModel';
+import { IBlockchain } from '../models/blockchainModel';
 import { getNetworkConfig } from '../services/networkService';
 
 // Extend the FastifyInstance interface to include our custom decorations

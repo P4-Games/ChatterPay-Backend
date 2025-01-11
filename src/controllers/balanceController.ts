@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
 import { getUser } from '../services/mongoService';
-import { IUser, IUserWallet } from '../models/user';
+import { IUser, IUserWallet } from '../models/userModel';
 import { getUserWalletByChainId } from '../services/userService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';

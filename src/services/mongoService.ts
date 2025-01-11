@@ -1,6 +1,6 @@
-import { User, IUser } from '../models/user';
-import Blockchain, { IBlockchain } from '../models/blockchain';
+import { IUser, UserModel } from '../models/userModel';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
+import Blockchain, { IBlockchain } from '../models/blockchainModel';
 
 /**
  * Retrieves a user based on the phone number.
@@ -10,7 +10,7 @@ import { getPhoneNumberFormatted } from '../helpers/formatHelper';
  * @returns {Promise<IUser | null>} The user object if found, or null if not found.
  */
 export const getUser = async (phoneNumber: string): Promise<IUser | null> => {
-  const user: IUser | null = await User.findOne({
+  const user: IUser | null = await UserModel.findOne({
     phone_number: getPhoneNumberFormatted(phoneNumber)
   });
   return user;

@@ -1,9 +1,10 @@
 import { ethers } from 'ethers';
 
-import { IToken } from '../models/token';
+import { IToken } from '../models/tokenModel';
+import { getBlockchain } from './mongoService';
 import { Logger } from '../helpers/loggerHelper';
 import { getEntryPointABI } from './bucketService';
-import { IBlockchain } from '../models/blockchain';
+import { IBlockchain } from '../models/blockchainModel';
 import { setupContracts } from './contractSetupService';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { ensurePaymasterHasEnoughEth } from './paymasterService';

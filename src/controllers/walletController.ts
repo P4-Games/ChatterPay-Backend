@@ -2,7 +2,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { getUser } from '../services/mongoService';
-import { IUser, IUserWallet } from '../models/user';
+import { IUser, IUserWallet } from '../models/userModel';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import {

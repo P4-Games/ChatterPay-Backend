@@ -1,9 +1,9 @@
 import { ethers } from 'ethers';
 
 import { Logger } from '../helpers/loggerHelper';
-import { IBlockchain } from '../models/blockchain';
 import { setupERC20 } from './contractSetupService';
 import { addPaymasterData } from './paymasterService';
+import { IBlockchain } from '../models/blockchainModel';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from './userOpExecutorService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';

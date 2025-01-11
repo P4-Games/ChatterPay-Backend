@@ -1,12 +1,12 @@
 import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 
-import { IToken } from '../models/token';
+import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
 import { SIGNING_KEY } from '../config/constants';
-import { IBlockchain } from '../models/blockchain';
 import { setupERC20 } from './contractSetupService';
 import { getTokenAddress } from './blockchainService';
+import { IBlockchain } from '../models/blockchainModel';
 import {
   CurrencyType,
   FiatQuoteType,

@@ -3,11 +3,11 @@ import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { IUser, IUserWallet } from '../models/user';
+import { IUser, IUserWallet } from '../models/userModel';
 import { getDynamicGas } from '../helpers/paymasterHelper';
 import { ConcurrentOperationsEnum } from '../types/common';
-import NFTModel, { INFT, INFTMetadata } from '../models/nft';
 import { getNetworkConfig } from '../services/networkService';
+import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
 import { sendMintNotification } from '../services/notificationService';
 import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
 import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';

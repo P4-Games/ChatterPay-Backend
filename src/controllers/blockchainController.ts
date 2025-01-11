@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import Blockchain, { IBlockchain } from '../models/blockchain';
+import Blockchain, { IBlockchain } from '../models/blockchainModel';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 type BlockchainParams = { id: string };

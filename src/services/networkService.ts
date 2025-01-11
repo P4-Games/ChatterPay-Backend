@@ -1,5 +1,5 @@
 import { DEFAULT_CHAIN_ID } from '../config/constants';
-import Blockchain, { IBlockchain } from '../models/blockchain';
+import Blockchain, { IBlockchain } from '../models/blockchainModel';
 
 /**
  * Retrieves the network configuration for a given chain ID.

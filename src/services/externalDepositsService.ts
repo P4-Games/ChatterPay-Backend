@@ -1,11 +1,11 @@
 import { gql, request } from 'graphql-request';
 
-import { User } from '../models/user';
-import Transaction from '../models/transaction';
+import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
+import Transaction from '../models/transactionModel';
 import { DEFAULT_CHAIN_ID } from '../config/constants';
 import { sendTransferNotification } from './notificationService';
-import { LastProcessedBlock } from '../models/lastProcessedBlock';
+import { LastProcessedBlock } from '../models/lastProcessedBlockModel';
 
 /**
  * The GraphQL API URLs for querying external deposits.
@@ -55,7 +55,7 @@ interface Transfer {
  * @param {string} token - The token type (USDT or WETH).
  */
 async function processExternalDeposit(transfer: Transfer & { token: string }, token: string) {
-  const user = await User.findOne({ wallet: { $regex: new RegExp(`^${transfer.to}$`, 'i') } });
+  const user = await UserModel.findOne({ wallet: { $regex: new RegExp(`^${transfer.to}$`, 'i') } });
 
   if (user) {
     const value = (Number(transfer.value) / 1e18).toFixed(4);
@@ -96,7 +96,7 @@ export async function fetchExternalDeposits(
     const fromBlock = lastProcessedBlock ? lastProcessedBlock.blockNumber : 0;
 
     // Fetch all user wallet addresses
-    const users = await User.find(
+    const users = await UserModel.find(
       {
         'wallets.chain_id': DEFAULT_CHAIN_ID
       },

@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 import * as PushAPI from '@pushprotocol/restapi';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
-import { IUser } from '../src/models/user';
+import { IUser } from '../src/models/userModel';
 import { Logger } from '../src/helpers/loggerHelper';
 import { generatePrivateKey } from '../src/helpers/SecurityHelper';
 

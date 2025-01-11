@@ -1,4 +1,4 @@
-import { TemplateType } from '../models/templates';
+import { TemplateType } from '../models/templateModel';
 
 export enum templateEnum {
   NOTIFICATIONS = 'notifications' // Enum value for notifications template type

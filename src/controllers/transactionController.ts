@@ -3,10 +3,10 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { getUser } from '../services/mongoService';
-import { IUser, IUserWallet } from '../models/user';
 import { INFURA_API_KEY } from '../config/constants';
-import Transaction, { ITransaction } from '../models/transaction';
+import { IUser, IUserWallet } from '../models/userModel';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
+import Transaction, { ITransaction } from '../models/transactionModel';
 import { saveTransaction, sendUserOperation } from '../services/transferService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
