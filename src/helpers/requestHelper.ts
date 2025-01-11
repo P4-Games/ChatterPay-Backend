@@ -67,3 +67,7 @@ export function returnErrorResponse(
   };
   return reply.status(code).send(response);
 }
+
+export function returnErrorResponse500(reply: FastifyReply) {
+  return returnErrorResponse(reply, 500, 'Internal Server Error');
+}
