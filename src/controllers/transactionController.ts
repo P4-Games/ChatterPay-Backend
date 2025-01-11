@@ -110,7 +110,7 @@ export const checkTransactionStatus = async (
 
     return await returnSuccessResponse(reply, transaction.status);
   } catch (error) {
-    Logger.error('Error checking transaction status:', error);
+    Logger.error('checkTransactionStatus', error);
     return returnErrorResponse(reply, 400, 'Bad Request');
   }
 };
@@ -134,7 +134,7 @@ export const createTransaction = async (
       newTransaction.toJSON()
     );
   } catch (error) {
-    Logger.error('Error creating transaction:', error);
+    Logger.error('createTransaction', error);
     return returnErrorResponse(reply, 400, 'Error creating transaction', (error as Error).message);
   }
 };
@@ -163,7 +163,7 @@ export const getAllTransactions = async (
       totalItems: total
     });
   } catch (error) {
-    Logger.error('Error fetching transactions:', error);
+    Logger.error('getAllTransactions', error);
     return returnErrorResponse(reply, 400, 'Error fetching transactions', (error as Error).message);
   }
 };
@@ -188,7 +188,7 @@ export const getTransactionById = async (
       transaction.toJSON()
     );
   } catch (error) {
-    Logger.error('Error fetching transaction:', error);
+    Logger.error('getTransactionById', error);
     return returnErrorResponse(reply, 400, 'Error fetching transaction', (error as Error).message);
   }
 };
@@ -222,7 +222,7 @@ export const updateTransaction = async (
       updatedTransaction.toJSON()
     );
   } catch (error) {
-    Logger.error('Error updating transaction:', error);
+    Logger.error('updateTransaction', error);
     return returnErrorResponse(reply, 400, 'Error updating transaction', (error as Error).message);
   }
 };
@@ -243,7 +243,7 @@ export const deleteTransaction = async (
     }
     return await returnSuccessResponse(reply, 'Transaction deleted successfully');
   } catch (error) {
-    Logger.error('Error deleting transaction:', error);
+    Logger.error('deleteTransaction', error);
     return returnErrorResponse(reply, 400, 'Error deleting transaction', (error as Error).message);
   }
 };
@@ -307,7 +307,7 @@ export const makeTransaction = async (
     /* ***************************************************** */
     if (hasUserOperationInProgress(fromUser, ConcurrentOperationsEnum.Transfer)) {
       validationError = `Concurrent transfer operation for wallet ${userWallet.wallet_proxy}, phone: ${fromUser.phone_number}.`;
-      Logger.log(`makeTransaction: ${validationError}`);
+      Logger.log('makeTransaction', validationError);
       return await returnErrorResponse(reply, 400, validationError);
     }
     await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
@@ -329,7 +329,7 @@ export const makeTransaction = async (
 
     if (!checkBalanceResult.enoughBalance) {
       validationError = `Insufficient balance, phone: ${fromUser.phone_number}, wallet: ${userWallet.wallet_proxy}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
-      Logger.log(`makeTransaction: ${validationError}`);
+      Logger.log('makeTransaction', validationError);
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       await sendUserInsufficientBalanceNotification(userWallet.wallet_proxy, channel_user_id);
       return undefined;
@@ -356,7 +356,10 @@ export const makeTransaction = async (
     if (to.startsWith('0x')) {
       toUser = await getUserByWalletAndChainid(to, networkConfig.chain_id);
       if (!toUser) {
-        Logger.error(`Invalid wallet-to ${to} for chainId ${networkConfig.chain_id}`);
+        Logger.error(
+          'makeTransaction',
+          `Invalid wallet-to ${to} for chainId ${networkConfig.chain_id}`
+        );
         await sendNoValidBlockchainConditionsNotification(userWallet.wallet_proxy, channel_user_id);
         await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
         return undefined;
@@ -399,7 +402,7 @@ export const makeTransaction = async (
     /* ***************************************************** */
     /* 9. makeTransaction: update transaction in bdd         */
     /* ***************************************************** */
-    Logger.log('Updating transaction in database.');
+    Logger.log('makeTransaction', 'Updating transaction in database.');
     await saveTransaction(
       executeTransactionResult.transactionHash,
       userWallet.wallet_proxy,
@@ -411,7 +414,7 @@ export const makeTransaction = async (
     );
 
     /* ***************************************************** */
-    /* 10. makeTransaction: sen user notification             */
+    /* 10. makeTransaction: send user notification            */
     /* ***************************************************** */
     const fromName = fromUser.name ?? fromUser.phone_number ?? 'Alguien';
 
@@ -427,8 +430,8 @@ export const makeTransaction = async (
     );
 
     await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
-    Logger.info(`Maketransaction completed successfully.`);
+    Logger.info('makeTransaction', `Maketransaction completed successfully.`);
   } catch (error) {
-    Logger.error('Error making transaction:', error);
+    Logger.error('makeTransaction', error);
   }
 };

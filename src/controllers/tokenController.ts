@@ -33,7 +33,7 @@ export const createToken = async (
     await newToken.save();
     return await returnSuccessResponse(reply, 'Token created successfully', newToken.toJSON());
   } catch (error) {
-    Logger.error('Error creating token:', error);
+    Logger.error('createToken', error);
     return returnErrorResponse(reply, 400, 'Error creating token', (error as Error).message);
   }
 };
@@ -53,7 +53,7 @@ export const getAllTokens = async (
     const { tokens } = request.server;
     return await returnSuccessResponse(reply, 'Tokens fetched successfully', { tokens });
   } catch (error) {
-    Logger.error('Error fetching tokens:', error);
+    Logger.error('getAllTokens', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch tokens');
   }
 };
@@ -83,7 +83,7 @@ export const getTokenById = async (
 
     return await returnSuccessResponse(reply, 'Token fetched successfully', token.toJSON());
   } catch (error) {
-    Logger.error('Error fetching token:', error);
+    Logger.error('getTokenById', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch token');
   }
 };
@@ -113,7 +113,7 @@ export const updateToken = async (
 
     return await returnSuccessResponse(reply, 'Token updated successfully', updatedToken.toJSON());
   } catch (error) {
-    Logger.error('Error updating token:', error);
+    Logger.error('updateToken', error);
     return returnErrorResponse(reply, 400, 'Failed to update token');
   }
 };
@@ -139,7 +139,7 @@ export const deleteToken = async (
 
     return await returnSuccessResponse(reply, 'Token deleted successfully');
   } catch (error) {
-    Logger.error('Error deleting token:', error);
+    Logger.error('deleteToken', error);
     return returnErrorResponse(reply, 400, 'Failed to delete token');
   }
 };
@@ -229,8 +229,9 @@ export async function issueTokensCore(
 
   // Get the current nonce for the signer.
   const currentNonce: number = await provider.getTransactionCount(signer.address);
-  Logger.log(`Current Nonce: ${currentNonce}`);
+  Logger.log('issueTokensCore', `Current Nonce: ${currentNonce}`);
   Logger.log(
+    'issueTokensCore',
     `Minting tokens on chain ${networkConfig.chain_id} for wallet ${recipientAddress} and tokens:`,
     tokenAddresses
   );
@@ -282,7 +283,7 @@ export const issueTokensHandler = async (
 
     return await returnSuccessResponse(reply, 'Tokens minted successfully', { results });
   } catch (error) {
-    Logger.error('Error minting tokens:', error);
+    Logger.error('issueTokensHandler', error);
     if (error instanceof Error) {
       return returnErrorResponse(reply, 400, 'Bad Request', error.message);
     }
