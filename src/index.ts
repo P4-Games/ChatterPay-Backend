@@ -15,10 +15,10 @@ function setupGracefulShutdown(server: FastifyInstance): void {
     try {
       await server.close();
       await mongoose.connection.close();
-      Logger.log('Server and MongoDB connection closed');
+      Logger.log('setupGracefulShutdown', 'Server and MongoDB connection closed');
       process.exit(0);
     } catch (err) {
-      Logger.error('Error during shutdown:', err);
+      Logger.error('setupGracefulShutdown', err);
       process.exit(1);
     }
   });
@@ -36,7 +36,7 @@ async function main(): Promise<void> {
     const server = await startServer();
     setupGracefulShutdown(server);
   } catch (err) {
-    Logger.error('Error starting application:', err);
+    Logger.error('main', 'Error starting application:', err);
     process.exit(1);
   }
 }

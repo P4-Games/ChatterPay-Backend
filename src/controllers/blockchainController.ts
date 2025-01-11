@@ -24,15 +24,15 @@ export const createBlockchain = async (
 
     const newBlockchain = new Blockchain(request.body);
     await newBlockchain.save();
-    Logger.log('Blockchain Saved');
+    Logger.log('createBlockchain', 'Blockchain Saved');
     return await returnSuccessResponse(
       reply,
       'Blockchain created successfully',
       newBlockchain.toJSON()
     );
   } catch (error) {
-    Logger.error('Error creating blockchain');
-    Logger.error('Error details: ', error);
+    Logger.error('createBlockchain', 'Error creating blockchain');
+    Logger.error('createBlockchain', 'Error details: ', error);
     return returnErrorResponse(reply, 400, 'Failed to create blockchain');
   }
 };
@@ -53,8 +53,8 @@ export const getAllBlockchains = async (
       blockchains
     });
   } catch (error) {
-    Logger.error('Error fetching blockchains');
-    Logger.error('Error details: ', error);
+    Logger.error('getAllBlockchains', 'Error fetching blockchains');
+    Logger.error('getAllBlockchains', 'Error details: ', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch blockchains');
   }
 };
@@ -73,7 +73,7 @@ export const getBlockchainById = async (
   try {
     const blockchain = await Blockchain.findById(id);
     if (!blockchain) {
-      Logger.warn('Blockchain not found');
+      Logger.warn('getBlockchainById', 'Blockchain not found');
       return await returnErrorResponse(reply, 404, 'Blockchain not found');
     }
     return await returnSuccessResponse(
@@ -82,8 +82,8 @@ export const getBlockchainById = async (
       blockchain.toJSON()
     );
   } catch (error) {
-    Logger.error('Error fetching blockchain');
-    Logger.error('Error details: ', error);
+    Logger.error('getBlockchainById', 'Error fetching blockchain');
+    Logger.error('getBlockchainById', 'Error details: ', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch blockchain');
   }
 };
@@ -108,7 +108,7 @@ export const updateBlockchain = async (
       new: true
     });
     if (!updatedBlockchain) {
-      Logger.warn('Blockchain not found');
+      Logger.warn('updateBlockchain', 'Blockchain not found');
       return await returnErrorResponse(reply, 404, 'Blockchain not found');
     }
     return await returnSuccessResponse(
@@ -117,8 +117,8 @@ export const updateBlockchain = async (
       updatedBlockchain.toJSON()
     );
   } catch (error) {
-    Logger.error('Error updating blockchain');
-    Logger.error('Error details: ', error);
+    Logger.error('updateBlockchain', 'Error updating blockchain');
+    Logger.error('updateBlockchain', 'Error details: ', error);
     return returnErrorResponse(reply, 400, 'Failed to update blockchain');
   }
 };
@@ -137,13 +137,13 @@ export const deleteBlockchain = async (
   try {
     const deletedBlockchain = await Blockchain.findByIdAndDelete(id);
     if (!deletedBlockchain) {
-      Logger.warn('Blockchain not found');
+      Logger.warn('deleteBlockchain', 'Blockchain not found');
       return await returnErrorResponse(reply, 404, 'Blockchain not found');
     }
     return await returnSuccessResponse(reply, 'Blockchain deleted successfully');
   } catch (error) {
-    Logger.error('Error deleting blockchain');
-    Logger.error('Error details: ', error);
+    Logger.error('deleteBlockchain', 'Error deleting blockchain');
+    Logger.error('deleteBlockchain', 'Error details: ', error);
     return returnErrorResponse(reply, 400, 'Failed to delete blockchain');
   }
 };

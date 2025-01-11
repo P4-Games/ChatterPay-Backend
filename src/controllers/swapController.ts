@@ -111,7 +111,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     /* ***************************************************** */
     if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.Swap)) {
       validationError = `Concurrent swap operation for phone: ${channel_user_id}.`;
-      Logger.log(`swap: ${validationError}`);
+      Logger.log(`swap, ${validationError}`);
       return await returnErrorResponse(reply, 400, validationError);
     }
     await openOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
@@ -199,7 +199,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     );
 
     // Save transactions OUT
-    Logger.log('Updating swap transactions in database.');
+    Logger.log('swap', 'Updating swap transactions in database.');
     await saveTransaction(
       executeSwapResult.approveTransactionHash,
       proxyAddress,
@@ -236,9 +236,10 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
     Logger.info(
+      'swap',
       `Swap completed successfully approveTransactionHash: ${executeSwapResult.approveTransactionHash}, swapTransactionHash: ${executeSwapResult.swapTransactionHash}.`
     );
   } catch (error) {
-    Logger.error('Error swapping tokens:', error);
+    Logger.error('swap', error);
   }
 };

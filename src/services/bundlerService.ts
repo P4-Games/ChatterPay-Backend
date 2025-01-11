@@ -23,7 +23,7 @@ export async function sendUserOperationToBundler(
 ): Promise<string> {
   try {
     const serializedUserOp = serializeUserOperation(userOperation);
-    Logger.log('Serialized UserOperation:', JSON.stringify(serializedUserOp));
+    Logger.log('sendUserOperationToBundler', JSON.stringify(serializedUserOp));
     const payload = {
       jsonrpc: '2.0',
       method: 'eth_sendUserOperation',
@@ -41,10 +41,9 @@ export async function sendUserOperationToBundler(
     )) as AxiosResponse;
 
     if (response.data.error) {
-      Logger.error('Bundler returned an error:', response.data.error);
-      // Logger.error('Bundler returned an error:', response.data.error);
+      Logger.error('sendUserOperationToBundler', response.data.error);
       if (response.data.error.data) {
-        Logger.error('Bundler error data:', response.data.error.data);
+        Logger.error('sendUserOperationToBundler', response.data.error.data);
       }
       throw new Error(`Bundler Error: ${response.data.error.message}`);
     }
@@ -56,7 +55,7 @@ export async function sendUserOperationToBundler(
     return response.data.result as string;
   } catch (error: unknown) {
     Logger.error(
-      'Error sending user operation to bundler:',
+      'sendUserOperationToBundler',
       error instanceof Error ? error.message : 'Unknown error'
     );
     throw error;
@@ -95,13 +94,13 @@ export async function estimateUserOperationGas(
     )) as AxiosResponse;
 
     if (response.data.error) {
-      Logger.error('Gas estimation error:', response.data.error);
+      Logger.error('estimateUserOperationGas', response.data.error);
       throw new Error(`Gas estimation failed: ${response.data.error.message}`);
     }
 
-    Logger.log('Gas Estimation:', response.data.result);
+    Logger.log('estimateUserOperationGas', response.data.result);
   } catch (error) {
-    Logger.error('Error estimating gas:', error);
+    Logger.error('estimateUserOperationGas', error);
     throw error;
   }
 }

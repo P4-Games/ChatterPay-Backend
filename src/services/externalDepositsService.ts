@@ -146,6 +146,9 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
       token
     }).save();
   } else {
-    Logger.log(`Transfer detected, not processed: ${JSON.stringify(transfer)}`);
+    Logger.log(
+      'processExternalDeposit',
+      `Transfer detected, not processed: ${JSON.stringify(transfer)}`
+    );
   }
 }
