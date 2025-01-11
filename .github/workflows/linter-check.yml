@@ -24,7 +24,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          yarn install # No usamos --frozen-lockfile ya que no hay yarn.lock
+          yarn install
+          yarn add -D typescript
 
       - name: Run ESLint
         run: |
