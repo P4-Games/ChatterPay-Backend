@@ -50,18 +50,18 @@ const delay = (ms: number) =>
 async function getUsers(): Promise<IUser[]> {
   try {
     await mongoose.connect(MONGO_URI, { dbName: DB_NAME });
-    Logger.log('Connected to the database');
+    Logger.log('getUsers', 'Connected to the database');
 
     const users = await User.find({}).lean<IUser>();
 
     // @ts-expect-error 'expected error'
     return users;
   } catch (error) {
-    Logger.error('Error getting users', error);
+    Logger.error('getUsers', error);
     return [];
   } finally {
     await mongoose.disconnect();
-    Logger.log('Connection closed');
+    Logger.log('getUsers', 'Connection closed');
   }
 }
 
@@ -70,7 +70,7 @@ async function processWallets() {
     const users = await getUsers();
 
     if (users.length === 0) {
-      Logger.log('No users found.');
+      Logger.log('processWallets', 'No users found.');
       return;
     }
 
@@ -94,10 +94,18 @@ async function processWallets() {
               }
             )
             .then((response) => {
-              Logger.log(`Success for wallet ${wallet.wallet_eoa}:`, response.data);
+              Logger.log(
+                'processWallets',
+                `Success for wallet ${wallet.wallet_eoa}:`,
+                response.data
+              );
             })
             .catch((error) => {
-              Logger.error(`Error for wallet ${wallet.wallet_eoa}:`, error.message);
+              Logger.error(
+                'processWallets',
+                `Error for wallet ${wallet.wallet_eoa}:`,
+                error.message
+              );
             })
         )
       );
@@ -106,17 +114,19 @@ async function processWallets() {
       Promise.all(requests.flat())
         .then(() => {
           if (i + batchSize < users.length) {
-            Logger.log(`Batch complete, waiting for 70 seconds before the next batch...`);
+            Logger.log(
+              'processWallets',
+              `Batch complete, waiting for 70 seconds before the next batch...`
+            );
             delay(70000);
           }
         })
         .catch((error) => {
-          Logger.error('Error in batch processing:', error.message);
+          Logger.error('processWallets', 'Error in batch processing:', error.message);
         });
     }
-  } catch (error) {
-    // @ts-expect-error 'some error'
-    Logger.error('General error:', error.message);
+  } catch (error: unknown) {
+    Logger.error('processWallets', 'General error:', (error as Error).message);
   }
 }
 

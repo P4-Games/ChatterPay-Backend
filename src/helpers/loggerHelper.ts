@@ -6,7 +6,8 @@ import { IS_DEVELOPMENT, CURRENT_LOG_LEVEL } from '../config/constants';
 
 // Create a pretty stream for local console output with colorized logs
 const prettyStream = pinoPretty({
-  colorize: true, // Enables color output for logs in the console,
+  // Enables color output for logs in the console,
+  colorize: true,
   // Logs are written synchronously to ensure immediate delivery
   sync: true,
   translateTime: 'SYS:standard',
@@ -16,30 +17,23 @@ const prettyStream = pinoPretty({
 // Create a stream for Google Cloud Logging, writing to 'stdout' (standard
 // output). Here, you can configure it further to work with Google Cloud
 // Logging specifically.
-const cloudStream = pino.destination({
+const cloudStream2 = pino.destination({
   // Avoid errors caused by ANSI characters when using pinoPretty for coloring
   colorize: false,
-  // Logs are written to 'stdout' for Google Cloud consumption
-  // dest: 'stdout',
-  // Logs are written synchronously to ensure immediate delivery
-  // sync: true,
-  prettyPrint: true,
-  /*
-  redact: {
-    paths: ['email', 'password', 'token']
-  },
-  */
-  timestamp: pino.stdTimeFunctions.isoTime
+  // Ensures logs are written immediately
+  sync: true
 });
 
-const selectedStream = IS_DEVELOPMENT ? prettyStream : cloudStream;
+const selectedStream = !IS_DEVELOPMENT ? prettyStream : cloudStream2;
 // Create a logger instance using pino with multiple streams
 const logger = pino(
   {
-    level: CURRENT_LOG_LEVEL, // Sets the minimum log level
+    // Sets the minimum log level
+    level: CURRENT_LOG_LEVEL,
     formatters: {
       level(label) {
-        return { level: label }; // Keep the level as part of the log in the JSON format
+        // Keep the level as part of the log in the JSON format
+        return { level: label };
       }
     }
   },
@@ -47,15 +41,22 @@ const logger = pino(
 );
 
 export class Logger {
-  private static logMessage(level: LogLevelType, ...args: unknown[]): void {
+  private static logMessage(level: LogLevelType, method: string, ...args: unknown[]): void {
     try {
-      // Join arguments into a single string
+      // Construye el mensaje como un string unificado
+      const message = args
+        .map((arg) =>
+          typeof arg === 'string' ? arg.replace(/(\r\n|\n|\r)/g, ' ') : JSON.stringify(arg)
+        )
+        .join(';');
+
+      /*
       const cleanedMessage = args
         .map((arg) => (typeof arg === 'string' ? arg.replace(/(\r\n|\n|\r)/g, ' ') : String(arg)))
         .join(' ');
+      */
 
-      // Log the cleaned message in JSON format
-      logger[level]({ msg: cleanedMessage });
+      logger[level]({ method, msg: message });
     } catch (error: unknown) {
       const messageError = error instanceof Error ? error.message : 'Unknown error';
       console.error(`Logger: Error trying to log Message: ${messageError}`);
@@ -68,45 +69,45 @@ export class Logger {
     return messageLevelIndex >= currentLevelIndex;
   }
 
-  static trace(...args: unknown[]): void {
+  static trace(method: string = 'trace', ...args: unknown[]): void {
     if (this.shouldLog('trace')) {
-      this.logMessage('trace', ...args);
+      this.logMessage('trace', method, ...args);
     }
   }
 
-  static log(...args: unknown[]): void {
+  static log(method: string = 'debug', ...args: unknown[]): void {
     if (this.shouldLog('debug')) {
-      this.logMessage('debug', ...args);
+      this.logMessage('debug', method, ...args);
     }
   }
 
-  static debug(...args: unknown[]): void {
+  static debug(method: string = 'debug', ...args: unknown[]): void {
     if (this.shouldLog('debug')) {
-      this.logMessage('debug', ...args);
+      this.logMessage('debug', method, ...args);
     }
   }
 
-  static info(...args: unknown[]): void {
+  static info(method: string = 'info', ...args: unknown[]): void {
     if (this.shouldLog('info')) {
-      this.logMessage('info', ...args);
+      this.logMessage('info', method, ...args);
     }
   }
 
-  static warn(...args: unknown[]): void {
+  static warn(method: string = 'warn', ...args: unknown[]): void {
     if (this.shouldLog('warn')) {
-      this.logMessage('warn', ...args);
+      this.logMessage('warn', method, ...args);
     }
   }
 
-  static error(...args: unknown[]): void {
+  static error(method: string = 'error', ...args: unknown[]): void {
     if (this.shouldLog('error')) {
-      this.logMessage('error', ...args);
+      this.logMessage('error', method, ...args);
     }
   }
 
-  static fatal(...args: unknown[]): void {
+  static fatal(method: string = 'unknown', ...args: unknown[]): void {
     if (this.shouldLog('fatal')) {
-      this.logMessage('fatal', ...args);
+      this.logMessage('fatal', method, ...args);
     }
   }
 }
