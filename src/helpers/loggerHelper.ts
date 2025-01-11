@@ -47,7 +47,7 @@ export class Logger {
         .map((arg) =>
           typeof arg === 'string' ? arg.replace(/(\r\n|\n|\r)/g, ' ') : JSON.stringify(arg)
         )
-        .join(';');
+        .join(' ');
 
       const finalMessage = IS_DEVELOPMENT
         ? { msg: `[${method}], ${message}` }
