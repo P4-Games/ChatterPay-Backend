@@ -88,7 +88,6 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
 
   Logger.log(
     'computeProxyAddressFromPhone',
-    'Data: ',
     JSON.stringify({
       proxyAddress,
       EOAAddress: ownerAddress.publicKey
