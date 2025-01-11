@@ -71,10 +71,10 @@ export async function getDynamicGas(
     const gasLimit: BigNumber = estimatedGas
       .mul(BigNumber.from(100 + gasBufferPercentage))
       .div(BigNumber.from(100));
-    Logger.log(`Estimated gas limit for ${methodName}:`, gasLimit.toString());
+    Logger.log('getDynamicGas', `Estimated gas limit for ${methodName}:`, gasLimit.toString());
     return gasLimit;
   } catch (error) {
-    Logger.warn(`Gas estimation failed for ${methodName}:`, error);
+    Logger.warn('getDynamicGas', `Gas estimation failed for ${methodName}:`, error);
     // If the estimation fails, use the default gas limit
     return defaultGasLimit;
   }
