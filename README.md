@@ -84,9 +84,16 @@ Then, open in: `http://localhost:3000`.
 **6. Testing**:
 
 ```bash
+# Run tests
 bun test
+yarn test
+npx vitest
 ```
 
+```bash
+yarn test:coverage
+npx vitest --coverage
+``
 
 # Additional Info
 

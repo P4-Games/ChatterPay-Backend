@@ -1,13 +1,13 @@
-# Dependencias
+# Dependencies
 node_modules/
 .pnp
 .pnp.js
 
-# Archivos de compilación
+# Build files
 dist/
 build/
 
-# Archivos de ambiente
+# Environment files
 .env*
 __env*
 
@@ -17,37 +17,37 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
-# Directorios y archivos del sistema operativo
+# OS-specific directories and files
 .DS_Store
 Thumbs.db
 
-# Directorios y archivos del IDE/Editor
+# IDE/Editor directories and files
 .idea/
 *.swp
 *.swo
 
-# Archivos de configuración de TypeScript
+# TypeScript configuration files
 tsconfig.tsbuildinfo
 
-# Archivos de prueba y cobertura
+# Test and coverage files
 coverage/
 
-# Archivos temporales
+# Temporary files
 *.tmp
 *.temp
 
-# Archivos de respaldo
+# Backup files
 *.bak
 
-# locks
+# Locks
 package-lock.json
 yarn.lock
 
-# Archivos de caché
+# Cache files
 .cache/
 
-# internal
+# Internal files
 .todo
 
-# Otros archivos y directorios que podrían ser específicos de tu proyecto
-# Agrega aquí cualquier otro archivo o directorio que quieras ignorar
+# Test coverage
+coverage
