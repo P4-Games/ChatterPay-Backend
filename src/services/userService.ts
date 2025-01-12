@@ -233,33 +233,29 @@ export const getOrCreateUser = async (
 };
 
 /**
- * Checks if a user has a specific operation in progress.
- * This function returns the number of operations of the specified type in progress for the given phone number.
+ * Checks if a user has any operation in progress.
+ * Verifies if any field in the `operations_in_progress` object has a value greater than 0.
  *
- * @param {string} phoneNumber - The phone number of the user.
- * @param {ConcurrentOperationsEnum} operation - The operation type to check.
- * @returns {Promise<number>} The number of operations in progress, or 0 if none.
+ * @param {IUser} user - The user object to check.
+ * @returns {boolean} True if the user has at least one operation in progress, false otherwise.
  */
-export const hasPhoneOperationInProgress = async (
-  phoneNumber: string,
-  operation: ConcurrentOperationsEnum
-): Promise<number> => {
-  const user = await UserModel.findOne({ phone_number: getPhoneNumberFormatted(phoneNumber) });
-  return user?.operations_in_progress?.[operation] || 0;
-};
+export const hasUserAnyOperationInProgress = (user: IUser): boolean =>
+  Object.values(user.operations_in_progress || {}).some((operation) => operation > 0);
 
 /**
- * Checks if a specific operation is in progress for a user.
- * This function checks the operations_in_progress field for the given operation type.
+ * Checks if a user has any operation in progress by phone number.
+ * This function returns true if any operation in the `operations_in_progress` field has a value greater than 0.
  *
- * @param {IUser} user - The user object.
- * @param {ConcurrentOperationsEnum} operation - The operation type to check.
- * @returns {boolean} True if the operation is in progress, otherwise false.
+ * @param {string} phoneNumber - The phone number of the user to check.
+ * @returns {Promise<boolean>} True if the user has any operation in progress, false otherwise.
  */
-export const hasUserOperationInProgress = (
-  user: IUser,
-  operation: ConcurrentOperationsEnum
-): boolean => (user.operations_in_progress?.[operation] || 0) > 0;
+export const hasPhoneAnyOperationInProgress = async (phoneNumber: string): Promise<boolean> => {
+  const user: IUser | null = await UserModel.findOne({
+    phone_number: getPhoneNumberFormatted(phoneNumber)
+  });
+  if (!user) return false;
+  return hasUserAnyOperationInProgress(user);
+};
 
 /**
  * Opens an operation for the user (increments operation count).

@@ -23,7 +23,7 @@ import {
   closeOperation,
   getOrCreateUser,
   getUserWalletByChainId,
-  hasPhoneOperationInProgress
+  hasPhoneAnyOperationInProgress
 } from '../services/userService';
 
 export interface NFTInfo {
@@ -231,7 +231,7 @@ export const generateNftOriginal = async (
     return returnErrorResponse(reply, 400, 'Wallet User doesnt exists.');
   }
 
-  if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.MintNft)) {
+  if (await hasPhoneAnyOperationInProgress(channel_user_id)) {
     const validationError = `Concurrent mint original NFT for wallet ${userWallet.wallet_proxy}, phone: ${channel_user_id}.`;
     Logger.log('generateNftOriginal', `generateNftOriginal: ${validationError}`);
     return returnErrorResponse(reply, 400, validationError);
@@ -420,7 +420,7 @@ export const generateNftCopy = async (
     }
     const nftCopyOf = nfts[0];
 
-    if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.MintNftCopy)) {
+    if (await hasPhoneAnyOperationInProgress(channel_user_id)) {
       const validationError = `Concurrent mint copy NFT for phone: ${channel_user_id}.`;
       Logger.log('generateNftCopy', `${validationError}`);
       return await returnErrorResponse(reply, 400, validationError);
