@@ -1,6 +1,7 @@
 import { IUser, UserModel } from '../../models/userModel';
 import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
 import Blockchain, { IBlockchain } from '../../models/blockchainModel';
+import { RESET_USER_OPERATION_THRESHOLD_MINUTES } from '../../config/constants';
 
 /**
  * Retrieves a user based on the phone number.
@@ -89,6 +90,46 @@ export const resetUserOperationsCounter = async (): Promise<number> => {
         { 'operations_in_progress.mint_nft': { $ne: 0 } },
         { 'operations_in_progress.mint_nft_copy': { $ne: 0 } },
         { 'operations_in_progress.withdraw_all': { $ne: 0 } }
+      ]
+    },
+    {
+      $set: {
+        'operations_in_progress.transfer': 0,
+        'operations_in_progress.swap': 0,
+        'operations_in_progress.mint_nft': 0,
+        'operations_in_progress.mint_nft_copy': 0,
+        'operations_in_progress.withdraw_all': 0
+      }
+    }
+  );
+
+  return result.modifiedCount;
+};
+
+/**
+ * Resets operations in progress for users with active operations if their last operation date
+ * is older than N minutes.
+ *
+ * @returns {Promise<number>} The number of users whose operations were reset.
+ */
+export const resetUserOperationsCounterWithTimeCondition = async (): Promise<number> => {
+  const thirtyMinutesAgo = new Date(
+    Date.now() - RESET_USER_OPERATION_THRESHOLD_MINUTES * 60 * 1000
+  );
+
+  const result = await UserModel.updateMany(
+    {
+      $and: [
+        {
+          $or: [
+            { 'operations_in_progress.transfer': { $ne: 0 } },
+            { 'operations_in_progress.swap': { $ne: 0 } },
+            { 'operations_in_progress.mint_nft': { $ne: 0 } },
+            { 'operations_in_progress.mint_nft_copy': { $ne: 0 } },
+            { 'operations_in_progress.withdraw_all': { $ne: 0 } }
+          ]
+        },
+        { last_operation_date: { $lte: thirtyMinutesAgo } }
       ]
     },
     {
