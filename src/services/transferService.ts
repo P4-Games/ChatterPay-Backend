@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 
-import { getUser } from './mongoService';
 import { IToken } from '../models/tokenModel';
+import { getUser } from './mongo/mongoService';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenBalances } from './walletService';
 import { setupERC20 } from './contractSetupService';

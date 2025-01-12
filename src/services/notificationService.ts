@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
 
-import { getUser } from './mongoService';
+import { getUser } from './mongo/mongoService';
 import { Logger } from '../helpers/loggerHelper';
 import { getNetworkConfig } from './networkService';
 import { IBlockchain } from '../models/blockchainModel';

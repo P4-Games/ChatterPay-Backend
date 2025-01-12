@@ -1,4 +1,4 @@
-import { getUser } from './mongoService';
+import { getUser } from './mongo/mongoService';
 import { Logger } from '../helpers/loggerHelper';
 import { ConcurrentOperationsEnum } from '../types/common';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';

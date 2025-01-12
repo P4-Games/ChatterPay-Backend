@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { getUser } from '../services/mongoService';
+import { getUser } from '../services/mongo/mongoService';
 import { IUser, IUserWallet } from '../models/userModel';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';

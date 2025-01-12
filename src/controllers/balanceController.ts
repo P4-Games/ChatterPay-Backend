@@ -2,7 +2,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
-import { getUser } from '../services/mongoService';
+import { getUser } from '../services/mongo/mongoService';
 import { IUser, IUserWallet } from '../models/userModel';
 import { getUserWalletByChainId } from '../services/userService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
