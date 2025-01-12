@@ -204,11 +204,38 @@ export const getUserRampLimits = async (request: FastifyRequest, reply: FastifyR
  * @param reply - Fastify reply object
  * @returns Response with status 200
  */
-export const getUserRampBalance = async (request: FastifyRequest, reply: FastifyReply) => {
-  const { userId } = request.params as { userId: string }; // Explicitly cast the params type
+export const getRampUserBalance = async (request: FastifyRequest, reply: FastifyReply) => {
+  const { userId } = request.params as { userId: string };
   Logger.log('getUserBalance', `Getting balance for user ID: ${userId}`);
 
+  /*
+  let balance = {
+    fiat: {
+      ARS: { amount: '0' }
+    },
+    crypto: {
+      WLD: { amount: '0', weiAmount: '0' },
+      USDC: { amount: '0', weiAmount: '0' }
+    },
+    locked: {
+      fiat: {
+        ARS: { amount: '0' }
+      },
+      crypto: {}
+    }
+  };
+*/
+
+  try {
+    await mantecaUserService.getUserById(userId);
+  } catch (error: unknown) {
+    return returnErrorResponse(reply, 404, 'user not found');
+  }
+
+  const balance: MantecaUserBalance = await mantecaBalanceService.getUserBalance(userId);
+
   // Mocking the user's balance response
+  /*
   const balance = {
     fiat: {
       ARS: { amount: '973800.00' }
@@ -224,7 +251,8 @@ export const getUserRampBalance = async (request: FastifyRequest, reply: Fastify
       crypto: {}
     }
   };
-  return returnSuccessResponse(reply, 'user balance', balance);
+  */
+  return returnSuccessResponse(reply, 'user balance', { balance });
 };
 
 /**
