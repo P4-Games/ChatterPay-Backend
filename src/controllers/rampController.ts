@@ -211,6 +211,62 @@ export const getCryptoPairPrices = async (request: FastifyRequest, reply: Fastif
 };
 
 /**
+ * Controller to add a bank account to the user's profile.
+ * This function simulates adding a bank account by returning a mock response.
+ * The "cbu" parameter can accept a CBU, CVU, or alias for Argentina, while in other countries it accepts only the bank account number.
+ * The bank account must be in the user's name and cannot belong to third parties.
+ *
+ * @param request - Fastify request object
+ * @param reply - Fastify reply object
+ * @returns Response with status 200 and the details of the added bank account
+ */
+export const addRampUserBankAccount = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> => {
+  const { numberId, coin } = request.params as { numberId: string; coin: string };
+  const { cbu } = request.body as { cbu: string; description: string };
+
+  Logger.log(
+    'addRampUserBankAccount',
+    `Adding bank account for user ID: ${numberId}, Coin: ${coin}, CBU: ${cbu}`
+  );
+
+  const mockResponse = {
+    bankCode: '-',
+    bankName: '-',
+    description: 'Santander Rio',
+    cbu: '999999999999999',
+    cvu: false,
+    actualCbu: '999999999999999'
+  };
+
+  return returnSuccessResponse(reply, 'Bank account added', mockResponse);
+};
+
+/**
+ * Controller to delete a bank account from the user's profile.
+ * This function simulates deleting a bank account by returning an empty mock response.
+ *
+ * @param request - Fastify request object
+ * @param reply - Fastify reply object
+ * @returns Response with status 200 and an empty body
+ */
+export const removeRampUserBankAccount = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> => {
+  const { numberId, coin, cbu } = request.params as { numberId: string; coin: string; cbu: string };
+
+  Logger.log(
+    'removeRampUserBankAccount',
+    `Removing bank account for user ID: ${numberId}, Coin: ${coin}, CBU: ${cbu}`
+  );
+
+  return returnSuccessResponse(reply, 'Bank account removed', {});
+};
+
+/**
  * Controller for Ramp-On synthetic operation
  * Simulates a synthetic "Ramp-On" process for asset exchange.
  * @param request - Fastify request object

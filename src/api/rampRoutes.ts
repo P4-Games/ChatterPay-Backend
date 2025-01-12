@@ -8,7 +8,9 @@ import {
   getUserRampBalance,
   getCryptoPairPrices,
   checkUsersRampStatus,
+  addRampUserBankAccount,
   uploadRampUserDocuments,
+  removeRampUserBankAccount,
   getUserRampDocumentsStatus,
   getUserRampValidationStatus
 } from '../controllers/rampController';
@@ -21,6 +23,8 @@ import {
 export const rampRoutes = async (fastify: FastifyInstance): Promise<void> => {
   fastify.post('/ramp/user', createRampUser);
   fastify.post('/ramp/user/:userId/compliance/documents', uploadRampUserDocuments);
+  fastify.post('/ramp/user/:userId/bankaccount/ars', addRampUserBankAccount);
+  fastify.delete('/ramp/user/:userId/bankaccount/ars/:accountId', removeRampUserBankAccount);
   fastify.get('/ramp/user/:userId/compliance/documents/status', getUserRampDocumentsStatus);
   fastify.get('/ramp/user/:userId/compliance/status', getUserRampValidationStatus);
   fastify.get('/ramp/user/:userId/limits', getUserRampLimits);
