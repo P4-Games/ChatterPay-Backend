@@ -104,4 +104,4 @@
 
 ## GCP Cloud Scheduler => Backend
 
-- checking_depositos => /check_deposits, CRON: _/10 _ \* \* \*
+`- checking_depositos => /check_deposits, CRON: _/10 _ \* \* \*`
