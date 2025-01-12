@@ -4,7 +4,8 @@ import { Logger } from '../helpers/loggerHelper';
 import { returnSuccessResponse, returnErrorResponse500 } from '../helpers/requestHelper';
 import {
   resetUserOperationsCounter,
-  getUsersWithOperationsInProgress
+  getUsersWithOperationsInProgress,
+  resetUserOperationsCounterWithTimeCondition
 } from '../services/mongo/mongoService';
 
 /**
@@ -48,6 +49,31 @@ export const resetUsersOperations = async (
     });
   } catch (error) {
     Logger.error('resetUsersOperations', error);
+    return returnErrorResponse500(reply);
+  }
+};
+
+/**
+ * Handler to reset operations in progress for users with outdated operations.
+ * Calls the service method to reset operations in progress to `0` for users whose
+ * `last_operation_date` is older than the defined threshold (e.g., 30 minutes).
+ *
+ * @param {FastifyRequest} request - The incoming Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object for sending the response.
+ * @returns {Promise<FastifyReply>} A response containing the number of users updated.
+ */
+export const resetUsersOperationsWithTimeCondition = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  try {
+    const updatedCount = await resetUserOperationsCounterWithTimeCondition();
+    return await returnSuccessResponse(
+      reply,
+      `${updatedCount} users' operations have been reset to 0 based on the time condition.`
+    );
+  } catch (error) {
+    Logger.error('resetUsersOperationsWithTimeCondition', error);
     return returnErrorResponse500(reply);
   }
 };

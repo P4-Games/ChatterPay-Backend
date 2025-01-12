@@ -2,7 +2,8 @@ import { FastifyInstance } from 'fastify';
 
 import {
   resetUsersOperations,
-  checkUsersWithOpenOperations
+  checkUsersWithOpenOperations,
+  resetUsersOperationsWithTimeCondition
 } from '../controllers/supportController';
 
 /**
@@ -52,6 +53,25 @@ const supportRoutes = async (fastify: FastifyInstance): Promise<void> => {
    * }
    */
   fastify.put('/support/reset_users_operations_counter', resetUsersOperations);
+
+  /**
+   * Route to reset users' operations counters with a time condition.
+   * Resets operations in progress for users only if their `last_operation_date`
+   * is older than the defined threshold (e.g., 30 minutes).
+   *
+   * @route PUT /support/reset_users_operations_with_time_condition
+   * @returns {Object} Number of users whose operations were reset.
+   * @example
+   * // Example response:
+   * {
+   *   "success": true,
+   *   "message": "30 users' operations have been reset to 0 based on the time condition."
+   * }
+   */
+  fastify.put(
+    '/support/reset_users_operations_time_condition',
+    resetUsersOperationsWithTimeCondition
+  );
 };
 
 export default supportRoutes;
