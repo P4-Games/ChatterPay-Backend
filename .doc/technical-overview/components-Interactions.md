@@ -14,6 +14,17 @@
 - intercambiar_tokens => https://back.chatterpay.net/swap/, POST
 - copiar_certificado_existente => https://back.chatterpay.net/mint_existing/, POST
 - generar_certificado => https://back.chatterpay.net/nft/, POST
+- ramp_user_onboarding => https://back.chatterpay.net/ramp/onboarding, POST
+- ramp_create_user => https://back.chatterpay.net/ramp/user, POST
+- ramp_user_compliance_documents_upload => https://back.chatterpay.net/ramp/user/:userId/compliance/documents, POST
+- ramp_user_compliance_documents_status => https://back.chatterpay.net/ramp/user/:userId/compliance/documents/status, GET
+- ramp_user_compliance_status => https://back.chatterpay.net/ramp/user/:userId/compliance/status, GET
+- ramp_user_limits => https://back.chatterpay.net/ramp/user/:userId/limits, GET
+- ramp_user_add_bank_account => https://back.chatterpay.net/ramp/user/:userId/bankaccount/ARS, POST
+- ramp_user_remove_bank_account => https://back.chatterpay.net/ramp/user/:userId/bankaccount/ARS/:accountId, DELETE
+- ramp_market_price => https://back.chatterpay.net/ramp/market/price, GET
+- ramp_on => https://back.chatterpay.net/ramp/on, POST
+- ramp_off => https://back.chatterpay.net/ramp/off, POST
 
 ## BOT => Sitio tdm
 
