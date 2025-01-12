@@ -65,7 +65,58 @@ export const onBoarding = async (request: FastifyRequest, reply: FastifyReply) =
  */
 export const createRampUser = async (request: FastifyRequest, reply: FastifyReply) => {
   Logger.log('createUser', 'Creating a new user in Manteca');
-  return returnSuccessResponse(reply, 'User created successfully');
+  /*
+  const mockCreateUser: MantecaUserCreate = {
+    name: 'John Smith',
+    email: 'john@smith.com',
+    legalId: '23123456789',
+    phoneNumber: '5491135354489',
+    country: 'Argentina',
+    civilState: 'SOLTERO',
+    externalId: 'identificador-externo-1',
+    address: 'Los Tres Patitios 123',
+    isPep: false,
+    isFatca: false,
+    isUif: false
+  };
+  */
+
+  // TO-REVIEW: Falla el create User en el sandbox, porque no tiene el campo address y no está en la documentación como se completa.
+  // https://docs.manteca.dev/api-runner/mantecadev/cripto/gestion-de-usuarios/usuarios-1/crear-usuario
+  const userCreated =
+    // await mantecaUserService.createUser(mockCreateUser);
+    {
+      numberId: '100001086',
+      userId: '100001086',
+      email: 'john@smsith.com',
+      cuit: '23123456789',
+      country: 'Argentina',
+      phoneNumber: '5491135354489',
+      civilState: 'soltero',
+      name: 'John Smith',
+      creationTime: '2023-12-05T18:16:57.467Z',
+      externalId: 'identificador-externo-1',
+      bankAccounts: {
+        ARS: [],
+        USD: []
+      },
+      balance: {
+        fiat: {
+          ARS: {
+            amount: '0'
+          },
+          USD: {
+            amount: '0'
+          }
+        },
+        crypto: {}
+      },
+      addresses: {
+        evm: '',
+        terra: ''
+      }
+    };
+  return returnSuccessResponse(reply, 'User created successfully', { user: userCreated });
 };
 
 /**
