@@ -101,3 +101,7 @@
 
 - ramp-On
 - ramp-Off
+
+## GCP Cloud Scheduler => Backend
+
+`- checking_depositos => /check_deposits, CRON: _/10 _ \* \* \*`
