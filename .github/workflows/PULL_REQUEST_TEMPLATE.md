@@ -1,9 +1,11 @@
 ## Pull Request Title
+
 merge {source_branch} into {target_branch}
 
 ---
 
 ## Description
+
 This pull request includes the following changes:
 
 > Replace the example below with the actual list of commits included in this PR.
@@ -18,6 +20,7 @@ This pull request includes the following changes:
 ---
 
 ## Checklist
+
 - [ ] **Code Formatting**: Ran `yarn format` to ensure code follows the project's style guide.
 - [ ] **Linting**: Fixed linting issues locally using `yarn lint:fix`.
 - [ ] **Tests**: Executed all tests and ensured they pass locally using `yarn test`.

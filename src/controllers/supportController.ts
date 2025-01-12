@@ -43,10 +43,10 @@ export const resetUsersOperations = async (
 ): Promise<FastifyReply> => {
   try {
     const updatedCount = await resetUserOperationsCounter();
-    return await reply.status(200).send({
-      success: true,
-      message: `${updatedCount} users' operations has been reset to 0.`
-    });
+    return await returnSuccessResponse(
+      reply,
+      `${updatedCount} users' operations has been reset to 0.`
+    );
   } catch (error) {
     Logger.error('resetUsersOperations', error);
     return returnErrorResponse500(reply);
