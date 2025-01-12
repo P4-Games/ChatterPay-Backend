@@ -18,7 +18,6 @@ const tokenSchema = new Schema<IToken>({
   symbol: { type: String, required: true }
 });
 
-tokenSchema.index({ address: 1 }, { unique: true });
 const Token = model<IToken>('Token', tokenSchema, 'tokens');
 
 export default Token;
