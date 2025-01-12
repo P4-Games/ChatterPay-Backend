@@ -3,9 +3,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { it, expect, describe, afterEach, beforeEach } from 'vitest';
 
 import { IUser, UserModel, IUserWallet } from '../../src/models/userModel';
-import {
-  SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
-} from '../../src/config/constants';
+import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../../src/config/constants';
 
 describe('User Model', () => {
   let mongoServer: MongoMemoryServer;
