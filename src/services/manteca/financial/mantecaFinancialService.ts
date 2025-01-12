@@ -1,22 +1,21 @@
 import axios from 'axios';
 
-import { Logger } from '../../helpers/loggerHelper';
-import { MANTECA_BASE_URL } from '../../config/constants';
-import { getMantecaAxiosConfig } from './mantecaCommonService';
+import { Logger } from '../../../helpers/loggerHelper';
+import { MANTECA_BASE_URL } from '../../../config/constants';
+import { getMantecaAxiosConfig } from '../mantecaCommonService';
 import {
-  MantecaBalanceResponse,
-  MantecaCompanyDebtResponse,
-  MantecaUserBalanceResponse,
-  MantecaCompanyCreditResponse
-} from '../../types/manteca';
+  MantecaBalance,
+  MantecaCompanyDebt,
+  MantecaUserBalance,
+  MantecaCompanyCredit
+} from '../../../types/manteca';
 
-// Finance Methods
-export const financeService = {
+export const mantecaFinancialService = {
   /**
-   * Get company's balance.
-   * Example call: GET /company/accounting/balance
+   * Fetches the company's balance.
    *
-   * Response example:
+   * @returns {Promise<MantecaBalance>} Company's balance object.
+   * @example
    * {
    *   "crypto": {
    *     "USDT": { "wei": "1099009618000000000000001000", "human": "1099009618.000000000000001000" },
@@ -30,10 +29,8 @@ export const financeService = {
    *     "USD": { "human": "9990.000000000000000000" }
    *   }
    * }
-   *
-   * @returns Company's balance object
    */
-  getCompanyBalance: async (): Promise<MantecaBalanceResponse> => {
+  async getCompanyBalance(): Promise<MantecaBalance> {
     try {
       const response = await axios.get(
         `${MANTECA_BASE_URL}/company/accounting/balance`,
@@ -47,10 +44,10 @@ export const financeService = {
   },
 
   /**
-   * Get company's debt.
-   * Example call: GET /company/accounting/debt
+   * Fetches the company's debt.
    *
-   * Response example:
+   * @returns {Promise<MantecaCompanyDebt>} Company's debt object.
+   * @example
    * {
    *   "crypto": {
    *     "USDT": { "wei": "20000000000000000000", "human": "20.000000000000000000" },
@@ -60,10 +57,8 @@ export const financeService = {
    *     "ARS": { "human": "604692.960000000000000000" }
    *   }
    * }
-   *
-   * @returns Company's debt object
    */
-  getCompanyDebt: async (): Promise<MantecaCompanyDebtResponse> => {
+  async getCompanyDebt(): Promise<MantecaCompanyDebt> {
     try {
       const response = await axios.get(
         `${MANTECA_BASE_URL}/company/accounting/debt`,
@@ -77,10 +72,10 @@ export const financeService = {
   },
 
   /**
-   * Get company's credit.
-   * Example call: GET /company/accounting/credit
+   * Fetches the company's credit.
    *
-   * Response example:
+   * @returns {Promise<MantecaCompanyCredit>} Company's credit object.
+   * @example
    * {
    *   "crypto": {
    *     "USDT": { "wei": "1099009664951005000000001000", "human": "1099009664.951005000000001000" },
@@ -94,10 +89,8 @@ export const financeService = {
    *     "USD": { "human": "9990.000000000000000000" }
    *   }
    * }
-   *
-   * @returns Company's credit object
    */
-  getCompanyCredit: async (): Promise<MantecaCompanyCreditResponse> => {
+  async getCompanyCredit(): Promise<MantecaCompanyCredit> {
     try {
       const response = await axios.get(
         `${MANTECA_BASE_URL}/company/accounting/credit`,
@@ -111,10 +104,10 @@ export const financeService = {
   },
 
   /**
-   * Get the accumulated balance of all users in the company.
-   * Example call: GET /company/passive
+   * Fetches the accumulated balance of all users in the company.
    *
-   * Response example:
+   * @returns {Promise<MantecaUserBalance>} Accumulated user balances object.
+   * @example
    * {
    *   "fiat": {
    *     "GTQ": { "amount": 100000 },
@@ -126,10 +119,8 @@ export const financeService = {
    *     "USDC": { "amount": 2.5129774 }
    *   }
    * }
-   *
-   * @returns Accumulated user balances object
    */
-  getUserBalances: async (): Promise<MantecaUserBalanceResponse> => {
+  async getUserBalances(): Promise<MantecaUserBalance> {
     try {
       const response = await axios.get(
         `${MANTECA_BASE_URL}/company/passive`,

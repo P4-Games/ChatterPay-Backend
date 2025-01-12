@@ -22,7 +22,6 @@ const transactionSchema = new Schema<ITransaction>({
   token: { type: String, required: true }
 });
 
-transactionSchema.index({ trx_hash: 1 }, { unique: true });
 const Transaction = model<ITransaction>('Transaction', transactionSchema, 'transactions');
 
 export default Transaction;

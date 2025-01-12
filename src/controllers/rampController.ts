@@ -1,7 +1,61 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { returnSuccessResponse } from '../helpers/requestHelper';
+import { MantecaUserBalance } from '../types/manteca';
+import { mantecaUserService } from '../services/manteca/user/mantecaUserService';
+import { mantecaPriceService } from '../services/manteca/market/mantecaPriceService';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { mantecaBalanceService } from '../services/manteca/user/mantecaBalanceService';
+
+/**
+ * Handles the full onboarding process for a new user.
+ * This function performs the following steps:
+ * 1. Creates a new user in the system.
+ * 2. Uploads the user's compliance documents.
+ * 3. Adds a bank account for the user.
+ *
+ * @param request - Fastify request object
+ * @param reply - Fastify reply object
+ * @returns Response with status 200
+ */
+export const onBoarding = async (request: FastifyRequest, reply: FastifyReply) => {
+  Logger.log('onBoarding', 'Full onBoarding user: create + compliance + bank Account');
+
+  const userCreated =
+    // await mantecaUserService.createUser(mockCreateUser);
+    {
+      numberId: '100001086',
+      userId: '100001086',
+      email: 'john@smsith.com',
+      cuit: '23123456789',
+      country: 'Argentina',
+      phoneNumber: '5491135354489',
+      civilState: 'soltero',
+      name: 'John Smith',
+      creationTime: '2023-12-05T18:16:57.467Z',
+      externalId: 'identificador-externo-1',
+      bankAccounts: {
+        ARS: [],
+        USD: []
+      },
+      balance: {
+        fiat: {
+          ARS: {
+            amount: '0'
+          },
+          USD: {
+            amount: '0'
+          }
+        },
+        crypto: {}
+      },
+      addresses: {
+        evm: '',
+        terra: ''
+      }
+    };
+  return returnSuccessResponse(reply, 'User created successfully', { user: userCreated });
+};
 
 /**
  * Controller for creating a new user.
@@ -11,7 +65,58 @@ import { returnSuccessResponse } from '../helpers/requestHelper';
  */
 export const createRampUser = async (request: FastifyRequest, reply: FastifyReply) => {
   Logger.log('createUser', 'Creating a new user in Manteca');
-  return returnSuccessResponse(reply, 'User created successfully');
+  /*
+  const mockCreateUser: MantecaUserCreate = {
+    name: 'John Smith',
+    email: 'john@smith.com',
+    legalId: '23123456789',
+    phoneNumber: '5491135354489',
+    country: 'Argentina',
+    civilState: 'SOLTERO',
+    externalId: 'identificador-externo-1',
+    address: 'Los Tres Patitios 123',
+    isPep: false,
+    isFatca: false,
+    isUif: false
+  };
+  */
+
+  // TO-REVIEW: Falla el create User en el sandbox, porque no tiene el campo address y no está en la documentación como se completa.
+  // https://docs.manteca.dev/api-runner/mantecadev/cripto/gestion-de-usuarios/usuarios-1/crear-usuario
+  const userCreated =
+    // await mantecaUserService.createUser(mockCreateUser);
+    {
+      numberId: '100001086',
+      userId: '100001086',
+      email: 'john@smsith.com',
+      cuit: '23123456789',
+      country: 'Argentina',
+      phoneNumber: '5491135354489',
+      civilState: 'soltero',
+      name: 'John Smith',
+      creationTime: '2023-12-05T18:16:57.467Z',
+      externalId: 'identificador-externo-1',
+      bankAccounts: {
+        ARS: [],
+        USD: []
+      },
+      balance: {
+        fiat: {
+          ARS: {
+            amount: '0'
+          },
+          USD: {
+            amount: '0'
+          }
+        },
+        crypto: {}
+      },
+      addresses: {
+        evm: '',
+        terra: ''
+      }
+    };
+  return returnSuccessResponse(reply, 'User created successfully', { user: userCreated });
 };
 
 /**
@@ -38,7 +143,7 @@ export const uploadRampUserDocuments = async (request: FastifyRequest, reply: Fa
  * @param reply - Fastify reply object
  * @returns Response with status 200
  */
-export const getUserRampValidationStatus = async (request: FastifyRequest, reply: FastifyReply) => {
+export const getRampUserValidationStatus = async (request: FastifyRequest, reply: FastifyReply) => {
   const { userId } = request.params as { userId: string };
   Logger.log('getUserValidationStatus', `Getting validation status for user ID: ${userId}`);
 
@@ -54,7 +159,7 @@ export const getUserRampValidationStatus = async (request: FastifyRequest, reply
  * @param reply - Fastify reply object.
  * @returns A list of documents with their status for the user.
  */
-export const getUserRampDocumentsStatus = async (request: FastifyRequest, reply: FastifyReply) => {
+export const getRampUserDocumentsStatus = async (request: FastifyRequest, reply: FastifyReply) => {
   const { userId } = request.params as { userId: string };
   Logger.log('getUserDocumentStatus', `Fetching document status for user ID: ${userId}`);
 
@@ -89,7 +194,7 @@ export const getUserRampDocumentsStatus = async (request: FastifyRequest, reply:
  * @param reply - Fastify reply object.
  * @returns A list of document statuses for multiple users.
  */
-export const checkUsersRampStatus = async (request: FastifyRequest, reply: FastifyReply) => {
+export const checkRampUsersStatus = async (request: FastifyRequest, reply: FastifyReply) => {
   Logger.log('getMultipleUserDocumentStatuses', `Fetching document statuses for multiple users`);
 
   // Mocked response for multiple users
@@ -126,7 +231,7 @@ export const checkUsersRampStatus = async (request: FastifyRequest, reply: Fasti
  * @param reply - Fastify reply object
  * @returns Response with status 200
  */
-export const getUserRampLimits = async (request: FastifyRequest, reply: FastifyReply) => {
+export const getRampUserLimits = async (request: FastifyRequest, reply: FastifyReply) => {
   const { userId } = request.params as { userId: string }; // Explicitly cast the params type
   Logger.log('getUserLimits', `Getting limits for user ID: ${userId}`);
 
@@ -150,11 +255,38 @@ export const getUserRampLimits = async (request: FastifyRequest, reply: FastifyR
  * @param reply - Fastify reply object
  * @returns Response with status 200
  */
-export const getUserRampBalance = async (request: FastifyRequest, reply: FastifyReply) => {
-  const { userId } = request.params as { userId: string }; // Explicitly cast the params type
+export const getRampUserBalance = async (request: FastifyRequest, reply: FastifyReply) => {
+  const { userId } = request.params as { userId: string };
   Logger.log('getUserBalance', `Getting balance for user ID: ${userId}`);
 
+  /*
+  let balance = {
+    fiat: {
+      ARS: { amount: '0' }
+    },
+    crypto: {
+      WLD: { amount: '0', weiAmount: '0' },
+      USDC: { amount: '0', weiAmount: '0' }
+    },
+    locked: {
+      fiat: {
+        ARS: { amount: '0' }
+      },
+      crypto: {}
+    }
+  };
+*/
+
+  try {
+    await mantecaUserService.getUserById(userId);
+  } catch (error: unknown) {
+    return returnErrorResponse(reply, 404, 'user not found');
+  }
+
+  const balance: MantecaUserBalance = await mantecaBalanceService.getUserBalance(userId);
+
   // Mocking the user's balance response
+  /*
   const balance = {
     fiat: {
       ARS: { amount: '973800.00' }
@@ -170,7 +302,8 @@ export const getUserRampBalance = async (request: FastifyRequest, reply: Fastify
       crypto: {}
     }
   };
-  return returnSuccessResponse(reply, 'user balance', balance);
+  */
+  return returnSuccessResponse(reply, 'user balance', { balance });
 };
 
 /**
@@ -180,33 +313,9 @@ export const getUserRampBalance = async (request: FastifyRequest, reply: Fastify
  * @param reply - Fastify reply object
  * @returns Response with status 200
  */
-export const getCryptoPairPrices = async (request: FastifyRequest, reply: FastifyReply) => {
-  Logger.log('getCryptoPairPrices', 'Fetching prices for currency pairs');
-
-  // Mocking the response for crypto pair prices
-  const prices = {
-    BTC_ARS: {
-      coin: 'BTC_ARS',
-      timestamp: '1701873973358',
-      buy: '40214902',
-      sell: '38447214',
-      variation: {
-        realtime: '0.000',
-        daily: '4.663'
-      }
-    },
-    BTC_USD: {
-      coin: 'BTC_USD',
-      timestamp: '1701873973358',
-      buy: '47285.65',
-      sell: '40656.824',
-      variation: {
-        realtime: '0.000',
-        daily: '4.663'
-      }
-    }
-  };
-
+export const getRampCryptoPairPrices = async (request: FastifyRequest, reply: FastifyReply) => {
+  Logger.log('getRampCryptoPairPrices', 'Fetching prices for currency pairs');
+  const prices = await mantecaPriceService.getAllPrices();
   return returnSuccessResponse(reply, 'prices', prices);
 };
 
