@@ -1,4 +1,4 @@
-import { getUser } from './mongoService';
+import { getUser } from './mongo/mongoService';
 import { Logger } from '../helpers/loggerHelper';
 import { ConcurrentOperationsEnum } from '../types/common';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
@@ -28,6 +28,9 @@ const updateOperationCount = async (
   if (user && user.operations_in_progress) {
     const currentCount = user.operations_in_progress[operation] || 0;
     user.operations_in_progress[operation] = Math.max(currentCount + increment, 0); // Ensure count doesn't go below 0
+    if (increment > 0) {
+      user.lastOperationDate = new Date();
+    }
     await user.save(); // Save the updated user
   }
 };
@@ -69,6 +72,7 @@ export const createUserWithWallet = async (
         language: SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
       }
     },
+    lastOperationDate: null,
     operations_in_progress: {
       transfer: 0,
       swap: 0,

@@ -2,8 +2,8 @@ import { Web3 } from 'web3';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { getUser } from '../services/mongoService';
 import { INFURA_API_KEY } from '../config/constants';
+import { getUser } from '../services/mongo/mongoService';
 import { IUser, IUserWallet } from '../models/userModel';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import Transaction, { ITransaction } from '../models/transactionModel';
