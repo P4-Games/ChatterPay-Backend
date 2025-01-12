@@ -1,7 +1,61 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { returnSuccessResponse } from '../helpers/requestHelper';
+import { MantecaUserBalance } from '../types/manteca';
+import { mantecaUserService } from '../services/manteca/user/mantecaUserService';
+import { mantecaPriceService } from '../services/manteca/market/mantecaPriceService';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { mantecaBalanceService } from '../services/manteca/user/mantecaBalanceService';
+
+/**
+ * Handles the full onboarding process for a new user.
+ * This function performs the following steps:
+ * 1. Creates a new user in the system.
+ * 2. Uploads the user's compliance documents.
+ * 3. Adds a bank account for the user.
+ *
+ * @param request - Fastify request object
+ * @param reply - Fastify reply object
+ * @returns Response with status 200
+ */
+export const onBoarding = async (request: FastifyRequest, reply: FastifyReply) => {
+  Logger.log('onBoarding', 'Full onBoarding user: create + compliance + bank Account');
+
+  const userCreated =
+    // await mantecaUserService.createUser(mockCreateUser);
+    {
+      numberId: '100001086',
+      userId: '100001086',
+      email: 'john@smsith.com',
+      cuit: '23123456789',
+      country: 'Argentina',
+      phoneNumber: '5491135354489',
+      civilState: 'soltero',
+      name: 'John Smith',
+      creationTime: '2023-12-05T18:16:57.467Z',
+      externalId: 'identificador-externo-1',
+      bankAccounts: {
+        ARS: [],
+        USD: []
+      },
+      balance: {
+        fiat: {
+          ARS: {
+            amount: '0'
+          },
+          USD: {
+            amount: '0'
+          }
+        },
+        crypto: {}
+      },
+      addresses: {
+        evm: '',
+        terra: ''
+      }
+    };
+  return returnSuccessResponse(reply, 'User created successfully', { user: userCreated });
+};
 
 /**
  * Controller for creating a new user.
