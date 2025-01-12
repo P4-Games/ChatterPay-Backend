@@ -1,8 +1,4 @@
-export interface MantecaAuthRequest {
-  apiKey: string;
-}
-
-export interface MantecaBankAccount {
+export interface IMantecaBankAccount {
   description: string;
   cbu: string;
   bankCode: string;
@@ -10,12 +6,25 @@ export interface MantecaBankAccount {
   accountType: string;
 }
 
-export interface MantecaUserBalanceResponse {
+export interface MantecaUserBalance {
   fiat: {
     ARS: { amount: string };
-    USD: { amount: string };
+    [key: string]: { amount: string };
   };
-  crypto: Record<string, { amount: string }>;
+  crypto: {
+    WLD: { amount: string; weiAmount: string };
+    USDC: { amount: string; weiAmount: string };
+    [key: string]: { amount: string; weiAmount?: string };
+  };
+  locked: {
+    fiat: {
+      ARS: { amount: string };
+      [key: string]: { amount: string };
+    };
+    crypto: {
+      [key: string]: unknown;
+    };
+  };
 }
 
 export interface MantecaUser {
@@ -27,13 +36,27 @@ export interface MantecaUser {
   civilState: string;
   name: string;
   creationTime: string;
-  bankAccounts: Record<string, MantecaBankAccount[]>;
-  balance: MantecaUserBalanceResponse;
+  bankAccounts: Record<string, IMantecaBankAccount[]>;
+  balance: MantecaUserBalance;
   addresses: Record<string, string>;
   exchangeCountry: string;
   sessionId: string;
   status: string;
   externalId: string;
+}
+
+export interface MantecaUserCreate {
+  name: string;
+  email: string;
+  legalId: string;
+  phoneNumber: string;
+  country: string;
+  civilState: string;
+  externalId: string;
+  address: string;
+  isPep: boolean;
+  isFatca: boolean;
+  isUif: false;
 }
 
 export interface MantecaFinanceBalance {
@@ -54,17 +77,17 @@ export interface MantecaFiatBalance {
   };
 }
 
-export interface MantecaBalanceResponse {
+export interface MantecaBalance {
   crypto: MantecaCryptoBalance;
   fiat: MantecaFiatBalance;
 }
 
-export interface MantecaCompanyDebtResponse {
+export interface MantecaCompanyDebt {
   crypto: MantecaCryptoBalance;
   fiat: MantecaFiatBalance;
 }
 
-export interface MantecaCompanyCreditResponse {
+export interface MantecaCompanyCredit {
   crypto: MantecaCryptoBalance;
   fiat: MantecaFiatBalance;
 }
@@ -104,7 +127,7 @@ export interface MantecaOrder {
   fee: number | null;
 }
 
-export interface MantecaLockResponse {
+export interface MantecaLock {
   code: string;
   price: string;
   expires: string;
@@ -116,7 +139,7 @@ export interface MantecaPair {
   minSize: string;
 }
 
-export interface MantecaRampOnResponse {
+export interface MantecaRampOn {
   id: string;
   externalId: string;
   numberId: string;
@@ -152,7 +175,7 @@ export interface MantecaRampOnResponse {
   updatedAt: string;
 }
 
-export interface MantecaRampOffResponse {
+export interface MantecaRampOff {
   id: string;
   numberId: string;
   externalId: string;
@@ -201,7 +224,7 @@ export interface MantecaTransaction {
   };
 }
 
-export interface MantecaTransactionLockResponse {
+export interface MantecaTransactionLock {
   gasUsed: string;
   feeInUSD: string;
   feeInNative: string;
@@ -212,7 +235,7 @@ export interface MantecaTransactionLockResponse {
   expires: string;
 }
 
-export interface MantecaTransactionWithdrawResponse {
+export interface MantecaTransactionWithdraw {
   from: string;
   to: string;
   amount: string;
