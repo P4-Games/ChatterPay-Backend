@@ -92,7 +92,7 @@ export const uploadRampUserDocuments = async (request: FastifyRequest, reply: Fa
  * @param reply - Fastify reply object
  * @returns Response with status 200
  */
-export const getUserRampValidationStatus = async (request: FastifyRequest, reply: FastifyReply) => {
+export const getRampUserValidationStatus = async (request: FastifyRequest, reply: FastifyReply) => {
   const { userId } = request.params as { userId: string };
   Logger.log('getUserValidationStatus', `Getting validation status for user ID: ${userId}`);
 
@@ -108,7 +108,7 @@ export const getUserRampValidationStatus = async (request: FastifyRequest, reply
  * @param reply - Fastify reply object.
  * @returns A list of documents with their status for the user.
  */
-export const getUserRampDocumentsStatus = async (request: FastifyRequest, reply: FastifyReply) => {
+export const getRampUserDocumentsStatus = async (request: FastifyRequest, reply: FastifyReply) => {
   const { userId } = request.params as { userId: string };
   Logger.log('getUserDocumentStatus', `Fetching document status for user ID: ${userId}`);
 
@@ -143,7 +143,7 @@ export const getUserRampDocumentsStatus = async (request: FastifyRequest, reply:
  * @param reply - Fastify reply object.
  * @returns A list of document statuses for multiple users.
  */
-export const checkUsersRampStatus = async (request: FastifyRequest, reply: FastifyReply) => {
+export const checkRampUsersStatus = async (request: FastifyRequest, reply: FastifyReply) => {
   Logger.log('getMultipleUserDocumentStatuses', `Fetching document statuses for multiple users`);
 
   // Mocked response for multiple users
@@ -180,7 +180,7 @@ export const checkUsersRampStatus = async (request: FastifyRequest, reply: Fasti
  * @param reply - Fastify reply object
  * @returns Response with status 200
  */
-export const getUserRampLimits = async (request: FastifyRequest, reply: FastifyReply) => {
+export const getRampUserLimits = async (request: FastifyRequest, reply: FastifyReply) => {
   const { userId } = request.params as { userId: string }; // Explicitly cast the params type
   Logger.log('getUserLimits', `Getting limits for user ID: ${userId}`);
 
@@ -262,33 +262,9 @@ export const getRampUserBalance = async (request: FastifyRequest, reply: Fastify
  * @param reply - Fastify reply object
  * @returns Response with status 200
  */
-export const getCryptoPairPrices = async (request: FastifyRequest, reply: FastifyReply) => {
-  Logger.log('getCryptoPairPrices', 'Fetching prices for currency pairs');
-
-  // Mocking the response for crypto pair prices
-  const prices = {
-    BTC_ARS: {
-      coin: 'BTC_ARS',
-      timestamp: '1701873973358',
-      buy: '40214902',
-      sell: '38447214',
-      variation: {
-        realtime: '0.000',
-        daily: '4.663'
-      }
-    },
-    BTC_USD: {
-      coin: 'BTC_USD',
-      timestamp: '1701873973358',
-      buy: '47285.65',
-      sell: '40656.824',
-      variation: {
-        realtime: '0.000',
-        daily: '4.663'
-      }
-    }
-  };
-
+export const getRampCryptoPairPrices = async (request: FastifyRequest, reply: FastifyReply) => {
+  Logger.log('getRampCryptoPairPrices', 'Fetching prices for currency pairs');
+  const prices = await mantecaPriceService.getAllPrices();
   return returnSuccessResponse(reply, 'prices', prices);
 };
 
