@@ -47,10 +47,15 @@
 
 ## Backend => BOT
 
+- sendWalletCreationNotification => chatbot/conversations/send-message
 - sendSwapNotification => chatbot/conversations/send-message
 - sendMintNotification => chatbot/conversations/send-message
 - sendTransferNotification => chatbot/conversations/send-message
 - sendOutgoingTransferNotification => chatbot/conversations/send-message
+- sendUserInsufficientBalanceNotification => chatbot/conversations/send-message
+- sendNoValidBlockchainConditionsNotification => chatbot/conversations/send-message
+- sendInternalErrorNotification => chatbot/conversations/send-message
+- SendConcurrecyOperationNotification => chatbot/conversations/send-message
 
 ## Backend => The Graph
 
@@ -63,6 +68,10 @@
 - sendMintNotification => Push to Chatterpay Channel
 - sendTransferNotification => Push to Chatterpay Channel
 - sendOutgoingTransferNotification => Push to Chatterpay Channel
+- sendUserInsufficientBalanceNotification => Push to Chatterpay Channel
+- sendNoValidBlockchainConditionsNotification => Push to Chatterpay Channel
+- sendInternalErrorNotification => Push to Chatterpay Channel
+- SendConcurrecyOperationNotification => Push to Chatterpay Channel
 
 ## Backend => Smart Contracts
 
