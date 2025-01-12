@@ -109,7 +109,7 @@ steps:
       'FRONTEND_TOKEN', 
       'PRIVATE_KEY', 
       'SIGNING_KEY',
-      'PUSH_CHANNEL_PRIVATE_KEY'.
+      'PUSH_CHANNEL_PRIVATE_KEY',
       'MANTECA_API_KEY'
     ]
 
