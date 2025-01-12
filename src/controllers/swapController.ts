@@ -13,7 +13,7 @@ import { getTokensAddresses, checkBlockchainConditions } from '../services/block
 import {
   openOperation,
   closeOperation,
-  hasPhoneOperationInProgress
+  hasPhoneAnyOperationInProgress
 } from '../services/userService';
 import {
   TokenAddressesType,
@@ -109,7 +109,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     /* ***************************************************** */
     /* 2. makeTransaction: open concurrent operation         */
     /* ***************************************************** */
-    if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.Swap)) {
+    if (await hasPhoneAnyOperationInProgress(channel_user_id)) {
       validationError = `Concurrent swap operation for phone: ${channel_user_id}.`;
       Logger.log(`swap, ${validationError}`);
       return await returnErrorResponse(reply, 400, validationError);

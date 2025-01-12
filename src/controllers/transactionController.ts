@@ -22,7 +22,7 @@ import {
   getOrCreateUser,
   getUserWalletByChainId,
   getUserByWalletAndChainid,
-  hasUserOperationInProgress
+  hasUserAnyOperationInProgress
 } from '../services/userService';
 import {
   sendTransferNotification,
@@ -305,7 +305,7 @@ export const makeTransaction = async (
     /* ***************************************************** */
     /* 2. makeTransaction: open concurrent operation      */
     /* ***************************************************** */
-    if (hasUserOperationInProgress(fromUser, ConcurrentOperationsEnum.Transfer)) {
+    if (hasUserAnyOperationInProgress(fromUser)) {
       validationError = `Concurrent transfer operation for wallet ${userWallet.wallet_proxy}, phone: ${fromUser.phone_number}.`;
       Logger.log('makeTransaction', validationError);
       return await returnErrorResponse(reply, 400, validationError);

@@ -21,7 +21,7 @@ import {
   openOperation,
   closeOperation,
   getUserWalletByChainId,
-  hasUserOperationInProgress
+  hasUserAnyOperationInProgress
 } from './userService';
 import {
   TokenBalanceType,
@@ -176,7 +176,7 @@ export async function withdrawWalletAllFunds(
       return { result: false, message: 'You are trying to send funds to your own wallet' };
     }
 
-    if (hasUserOperationInProgress(bddUser, ConcurrentOperationsEnum.WithdrawAll)) {
+    if (hasUserAnyOperationInProgress(bddUser)) {
       return {
         result: false,
         message: `Concurrent withdraw-all operation for wallet ${userWallet.wallet_proxy}, phone: ${bddUser.phone_number}.`
