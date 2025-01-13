@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import NodeCache from 'node-cache';
 import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -48,6 +49,8 @@ const defaultMetadata: INFTMetadata = {
     longitud: ''
   }
 };
+
+const cache = new NodeCache();
 
 /**
  * Mints an NFT on the Ethereum network.
@@ -716,18 +719,82 @@ export const getNftMetadataRequiredByOpenSea = async (
   }>,
   reply: FastifyReply
 ): Promise<void> => {
-  try {
-    // Here, it should search by the _id, as the NFT is minted with that data!
-    // mintNftOriginal(address_of_user!, (mongoData._id as ObjectId).toString())
-    const { id: bddId } = request.params;
+  // Here, it should search by the _id, as the NFT is minted with that data!
+  // mintNftOriginal(address_of_user!, (mongoData._id as ObjectId).toString())
+  const { id: bddId } = request.params;
 
+  const cachedData = cache.get(`metadata-opensea-${bddId}`);
+  if (cachedData) {
+    return reply.status(200).send(cachedData);
+  }
+
+  const emptyResponse = {
+    id: bddId,
+    name: 'Chatterpay',
+    description: '',
+    image: defaultNftImage,
+    attributes: [
+      {
+        trait_type: 'opensea TokenId',
+        value: bddId
+      },
+      {
+        trait_type: 'First Owner',
+        value: ''
+      },
+      {
+        trait_type: 'Original',
+        value: ''
+      },
+      {
+        trait_type: 'Copy of ID',
+        value: ''
+      },
+      {
+        trait_type: 'Order from Copy',
+        value: ''
+      },
+      {
+        trait_type: 'Copy of Original ID',
+        value: ''
+      },
+      {
+        trait_type: 'Order from Original',
+        value: ''
+      },
+      {
+        display_type: 'date',
+        trait_type: 'Creation Date',
+        value: ''
+      },
+      {
+        trait_type: 'Latitude',
+        value: ''
+      },
+      {
+        trait_type: 'Longitude',
+        value: ''
+      },
+      {
+        trait_type: 'GCP Image',
+        value: ''
+      },
+      {
+        trait_type: 'IFPS Image',
+        value: ''
+      },
+      {
+        trait_type: 'ICP Image',
+        value: ''
+      }
+    ]
+  };
+
+  try {
     if (!mongoose.Types.ObjectId.isValid(bddId)) {
       // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
       // OpenSea which requires this format.
-      return await reply.status(400).send({
-        message:
-          'The parameter "id" must be a valid MongoDB ObjectId format, as the NFT is minted with the _id field.'
-      });
+      return await reply.status(200).send(emptyResponse);
     }
 
     const objectId = new mongoose.Types.ObjectId(bddId);
@@ -736,14 +803,12 @@ export const getNftMetadataRequiredByOpenSea = async (
     if (nfts.length === 0) {
       // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
       // OpenSea which requires this format.
-      return await reply.status(400).send({ message: 'NFT not found.' });
+      return await reply.status(200).send(emptyResponse);
     }
 
     const nft: INFT = nfts[0];
 
-    // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
-    // OpenSea which requires this format.
-    return await reply.status(200).send({
+    const response = {
       id: nft._id,
       name: 'Chatterpay',
       description: nft.metadata.description,
@@ -803,11 +868,18 @@ export const getNftMetadataRequiredByOpenSea = async (
           value: nft.metadata.image_url.icp || ''
         }
       ]
-    });
+    };
+
+    cache.set(`metadata-opensea-${bddId}`, response);
+
+    // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
+    // OpenSea which requires this format.
+    return await reply.status(200).send(response);
   } catch (error) {
     Logger.error('getNftMetadataRequiredByOpenSea', error);
     // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
     // OpenSea which requires this format.
-    return reply.status(500).send({ message: 'Internal Server Error' });
+    // avoid opensea receive error!
+    return reply.status(200).send(emptyResponse);
   }
 };
