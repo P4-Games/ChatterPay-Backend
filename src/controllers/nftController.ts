@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import NodeCache from 'node-cache';
 import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -48,6 +49,8 @@ const defaultMetadata: INFTMetadata = {
     longitud: ''
   }
 };
+
+const cache = new NodeCache();
 
 /**
  * Mints an NFT on the Ethereum network.
@@ -720,6 +723,11 @@ export const getNftMetadataRequiredByOpenSea = async (
   // mintNftOriginal(address_of_user!, (mongoData._id as ObjectId).toString())
   const { id: bddId } = request.params;
 
+  const cachedData = cache.get(`metadata-opensea-${bddId}`);
+  if (cachedData) {
+    return reply.status(200).send(cachedData);
+  }
+
   const emptyResponse = {
     id: bddId,
     name: 'Chatterpay',
@@ -800,9 +808,7 @@ export const getNftMetadataRequiredByOpenSea = async (
 
     const nft: INFT = nfts[0];
 
-    // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
-    // OpenSea which requires this format.
-    return await reply.status(200).send({
+    const response = {
       id: nft._id,
       name: 'Chatterpay',
       description: nft.metadata.description,
@@ -862,7 +868,13 @@ export const getNftMetadataRequiredByOpenSea = async (
           value: nft.metadata.image_url.icp || ''
         }
       ]
-    });
+    };
+
+    cache.set(`metadata-opensea-${bddId}`, response);
+
+    // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
+    // OpenSea which requires this format.
+    return await reply.status(200).send(response);
   } catch (error) {
     Logger.error('getNftMetadataRequiredByOpenSea', error);
     // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
