@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build files
+dist/
+build/
+
+# Environment files
+.env*
+__env*
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS-specific directories and files
+.DS_Store
+Thumbs.db
+
+# IDE/Editor directories and files
+.idea/
+*.swp
+*.swo
+
+# TypeScript configuration files
+tsconfig.tsbuildinfo
+
+# Test and coverage files
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Backup files
+*.bak
+
+# Locks
+package-lock.json
+yarn.lock
+
+# Cache files
+.cache/
+
+# Internal files
+.todo
+
+# Test coverage
+coverage
