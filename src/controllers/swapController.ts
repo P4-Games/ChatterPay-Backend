@@ -107,12 +107,17 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     }
 
     /* ***************************************************** */
-    /* 2. makeTransaction: open concurrent operation         */
+    /* 2. swap: open concurrent operation         */
     /* ***************************************************** */
-    if (await hasPhoneAnyOperationInProgress(channel_user_id)) {
+    const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
+    if (userOperations) {
       validationError = `Concurrent swap operation for phone: ${channel_user_id}.`;
       Logger.log(`swap, ${validationError}`);
-      return await returnErrorResponse(reply, 400, validationError);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(
+        reply,
+        'You have another operation in progress. Please wait until it is finished.'
+      );
     }
     await openOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
 
