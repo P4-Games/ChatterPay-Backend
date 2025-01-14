@@ -97,10 +97,25 @@
   - SimpleSwap.swapWETHforUSDT
   - SimpleSwap.swapUSDTforWETH
 
-## Backen => Manteca
+## Backend => Manteca
 
 - ramp-On
 - ramp-Off
+
+## Backend => GCP
+
+- NFT: Mint Original => upload image to Bucket
+- NFT: Mint Copy => upload image to Bucket
+
+## Backend => ICP
+
+- NFT: Mint Original => upload image to Bucket
+- NFT: Mint Copy => upload image to Bucket
+
+## Backend => IFPS
+
+- NFT: Mint Original => upload image to Bucket
+- NFT: Mint Copy => upload image to Bucket
 
 ## GCP Cloud Scheduler => Backend
 
