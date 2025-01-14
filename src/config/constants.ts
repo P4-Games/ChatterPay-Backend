@@ -31,6 +31,7 @@ const {
   PUSH_CHANNEL_ADDRESS: pushChannelAddress = '',
   PUSH_CHANNEL_PRIVATE_KEY: pushChannelPrivateKey = '',
   PUSH_ENABLED: pushEnabled = 'false',
+  GCP_CLOUD_TRACE_ENABLED: gcpCloudTraceEnabled = 'false',
   PUSH_NETWORK: pushNetwork = '11155111',
   PUSH_ENVIRONMENT: pushEnvironment = ENV.DEV,
   MINOR_LOG_LEVEL: minorLogLevel = 'debug',
@@ -111,3 +112,4 @@ export const LIFI_TYPE = 'SAFEST';
 
 export const NOTIFICATION_TEMPLATE_CACHE_TTL = 60800; // 1 week
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
+export const GCP_CLOUD_TRACE_ENABLED: boolean = gcpCloudTraceEnabled.toLowerCase() === 'true';

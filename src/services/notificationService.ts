@@ -25,6 +25,7 @@ import {
   DEFAULT_CHAIN_ID,
   CHATTERPAY_DOMAIN,
   PUSH_CHANNEL_ADDRESS,
+  GCP_CLOUD_TRACE_ENABLED,
   PUSH_CHANNEL_PRIVATE_KEY,
   BOT_NOTIFICATIONS_ENABLED,
   CHATTERPAY_NFTS_SHARE_URL,
@@ -61,7 +62,10 @@ export const getUserWalletByChainIdInternal = (
  * @param payload
  * @returns
  */
-async function sendBotNotification(payload: OperatorReplyPayload): Promise<string> {
+async function sendBotNotification(
+  payload: OperatorReplyPayload,
+  traceHeader?: string
+): Promise<string> {
   try {
     if (!BOT_NOTIFICATIONS_ENABLED) {
       Logger.info(
@@ -71,11 +75,17 @@ async function sendBotNotification(payload: OperatorReplyPayload): Promise<strin
       return '';
     }
 
+    const headers: { [key: string]: string } = {
+      'Content-Type': 'application/json'
+    };
+
+    if (GCP_CLOUD_TRACE_ENABLED && traceHeader) {
+      headers['X-Cloud-Trace-Context'] = traceHeader;
+    }
+
     const sendMsgEndpint = `${BOT_API_URL}/chatbot/conversations/send-message`;
     const response = await axios.post(sendMsgEndpint, payload, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      headers
     });
     Logger.log(
       'sendBotNotification',
@@ -364,7 +374,8 @@ export async function sendTransferNotification(
   channel_user_id: string,
   from: string | null,
   amount: string,
-  token: string
+  token: string,
+  traceHeader?: string
 ): Promise<unknown> {
   try {
     Logger.log(
@@ -388,7 +399,7 @@ export async function sendTransferNotification(
       message: formattedMessage
     };
 
-    const data = await sendBotNotification(payload);
+    const data = await sendBotNotification(payload, traceHeader);
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
@@ -414,7 +425,8 @@ export async function sendSwapNotification(
   amount: string,
   result: string,
   outputToken: string,
-  transactionHash: string
+  transactionHash: string,
+  traceHeader?: string
 ): Promise<unknown> {
   try {
     Logger.log('sendSwapNotification', 'Sending swap notification');
@@ -440,7 +452,7 @@ export async function sendSwapNotification(
       message: formattedMessage
     };
 
-    const data = await sendBotNotification(payload);
+    const data = await sendBotNotification(payload, traceHeader);
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
@@ -460,7 +472,8 @@ export async function sendSwapNotification(
 export async function sendMintNotification(
   address_of_user: string,
   channel_user_id: string,
-  id: string
+  id: string,
+  traceHeader?: string
 ): Promise<unknown> {
   try {
     Logger.log('sendMintNotification', 'Sending mint notification');
@@ -479,7 +492,7 @@ export async function sendMintNotification(
       message: formattedMessage
     };
 
-    const data = await sendBotNotification(payload);
+    const data = await sendBotNotification(payload, traceHeader);
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
@@ -505,7 +518,8 @@ export async function sendOutgoingTransferNotification(
   walletTo: string | null,
   amount: string,
   token: string,
-  txHash: string
+  txHash: string,
+  traceHeader?: string
 ): Promise<unknown> {
   try {
     Logger.log('sendOutgoingTransferNotification', 'Sending outgoing transfer notification');
@@ -530,7 +544,7 @@ export async function sendOutgoingTransferNotification(
       message: formattedMessage
     };
 
-    const data = await sendBotNotification(payload);
+    const data = await sendBotNotification(payload, traceHeader);
     sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
     return data;
   } catch (error) {
@@ -547,7 +561,8 @@ export async function sendOutgoingTransferNotification(
  */
 export async function sendUserInsufficientBalanceNotification(
   address_of_user: string,
-  channel_user_id: string
+  channel_user_id: string,
+  traceHeader?: string
 ) {
   try {
     Logger.log(
@@ -566,7 +581,7 @@ export async function sendUserInsufficientBalanceNotification(
       message
     };
 
-    const data = await sendBotNotification(payload);
+    const data = await sendBotNotification(payload, traceHeader);
     sendPushNotificaton(title, message, channel_user_id); // avoid await
     return data;
   } catch (error) {
@@ -583,7 +598,8 @@ export async function sendUserInsufficientBalanceNotification(
  */
 export async function sendNoValidBlockchainConditionsNotification(
   address_of_user: string,
-  channel_user_id: string
+  channel_user_id: string,
+  traceHeader?: string
 ) {
   try {
     Logger.log(
@@ -602,7 +618,7 @@ export async function sendNoValidBlockchainConditionsNotification(
       message
     };
 
-    const data = await sendBotNotification(payload);
+    const data = await sendBotNotification(payload, traceHeader);
     sendPushNotificaton(title, message, channel_user_id); // avoid await
     return data;
   } catch (error) {
@@ -619,7 +635,8 @@ export async function sendNoValidBlockchainConditionsNotification(
  */
 export async function sendInternalErrorNotification(
   address_of_user: string,
-  channel_user_id: string
+  channel_user_id: string,
+  traceHeader?: string
 ) {
   try {
     Logger.log(
@@ -638,7 +655,7 @@ export async function sendInternalErrorNotification(
       message
     };
 
-    const data = await sendBotNotification(payload);
+    const data = await sendBotNotification(payload, traceHeader);
     sendPushNotificaton(title, message, channel_user_id); // avoid await
     return data;
   } catch (error) {
@@ -653,7 +670,10 @@ export async function sendInternalErrorNotification(
  * @param address_of_user
  * @param channel_user_id
  */
-export async function SendConcurrecyOperationNotification(channel_user_id: string) {
+export async function SendConcurrecyOperationNotification(
+  channel_user_id: string,
+  traceHeader?: string
+) {
   try {
     Logger.log(
       'SendConcurrecyOperationNotification',
@@ -671,7 +691,7 @@ export async function SendConcurrecyOperationNotification(channel_user_id: strin
       message
     };
 
-    const data = await sendBotNotification(payload);
+    const data = await sendBotNotification(payload, traceHeader);
     sendPushNotificaton(title, message, channel_user_id); // avoid await
     return data;
   } catch (error) {

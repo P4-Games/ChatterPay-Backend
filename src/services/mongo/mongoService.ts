@@ -38,20 +38,24 @@ export const getUser = async (phoneNumber: string): Promise<IUser | null> => {
  *   }
  * ]
  */
-export const getUsersWithOperationsInProgress = async (): Promise<IUser[]> => {
-  const users: IUser[] = await UserModel.find({
-    $or: [
-      { 'operations_in_progress.transfer': 1 },
-      { 'operations_in_progress.swap': 1 },
-      { 'operations_in_progress.mint_nft': 1 },
-      { 'operations_in_progress.mint_nft_copy': 1 },
-      { 'operations_in_progress.withdraw_all': 1 }
-    ]
-  });
+export const getUsersWithOperationsInProgress = async (): Promise<
+  Partial<Pick<IUser, 'phone_number' | 'operations_in_progress' | 'lastOperationDate'>>[]
+> => {
+  const users = await UserModel.find(
+    {
+      $or: [
+        { 'operations_in_progress.transfer': 1 },
+        { 'operations_in_progress.swap': 1 },
+        { 'operations_in_progress.mint_nft': 1 },
+        { 'operations_in_progress.mint_nft_copy': 1 },
+        { 'operations_in_progress.withdraw_all': 1 }
+      ]
+    },
+    'phone_number lastOperationDate operations_in_progress'
+  ).lean();
 
   return users;
 };
-
 /**
  * Updates all users to reset operations in progress.
  * This function sets all fields in `operations_in_progress` to `0` for every user in the database.

@@ -1,10 +1,12 @@
 import { Web3 } from 'web3';
+import { get } from '@google-cloud/trace-agent';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
+import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 
 import { Logger } from '../helpers/loggerHelper';
 import { INFURA_API_KEY } from '../config/constants';
-import { getUser } from '../services/mongo/mongoService';
 import { IUser, IUserWallet } from '../models/userModel';
+import { getUser } from '../services/mongo/mongoService';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import Transaction, { ITransaction } from '../models/transactionModel';
 import { saveTransaction, sendUserOperation } from '../services/transferService';
@@ -260,11 +262,22 @@ export const makeTransaction = async (
   reply: FastifyReply
   // eslint-disable-next-line consistent-return
 ) => {
+  const isTracingEnabled = process.env.GCP_CLOUD_TRACE_ENABLED === 'true';
+  const tracer: Tracer | undefined = isTracingEnabled ? get() : undefined;
+  const rootSpan: Span | undefined = isTracingEnabled
+    ? tracer?.createChildSpan({ name: 'makeTransaction' })
+    : undefined;
+
   try {
+    const traceHeader = isTracingEnabled
+      ? (request.headers['x-cloud-trace-context'] as string | undefined)
+      : undefined;
+
     /* ***************************************************** */
     /* 1. makeTransaction: input params                      */
     /* ***************************************************** */
     if (!request.body) {
+      rootSpan?.endSpan();
       return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
 
@@ -284,12 +297,14 @@ export const makeTransaction = async (
     );
 
     if (validationError) {
+      rootSpan?.endSpan();
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
     const fromUser: IUser | null = await getUser(channel_user_id);
     if (!fromUser) {
       validationError = 'User not found. You must have an account to make a transaction';
+      rootSpan?.endSpan();
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
@@ -299,18 +314,32 @@ export const makeTransaction = async (
     );
     if (!userWallet) {
       validationError = `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chain_id}`;
+      rootSpan?.endSpan();
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
     /* ***************************************************** */
     /* 2. makeTransaction: open concurrent operation      */
     /* ***************************************************** */
-    if (hasUserAnyOperationInProgress(fromUser)) {
+    const concurrentOperationSpan = isTracingEnabled
+      ? tracer?.createChildSpan({ name: 'checkConcurrentOperation' })
+      : undefined;
+
+    const userOperations = hasUserAnyOperationInProgress(fromUser);
+    if (userOperations) {
       validationError = `Concurrent transfer operation for wallet ${userWallet.wallet_proxy}, phone: ${fromUser.phone_number}.`;
       Logger.log('makeTransaction', validationError);
-      return await returnErrorResponse(reply, 400, validationError);
+      concurrentOperationSpan?.endSpan();
+      rootSpan?.endSpan();
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(
+        reply,
+        'You have another operation in progress. Please wait until it is finished.'
+      );
     }
+
     await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+    concurrentOperationSpan?.endSpan();
 
     /* ***************************************************** */
     /* 3. makeTransaction: send initial response             */
@@ -320,6 +349,10 @@ export const makeTransaction = async (
     /* ***************************************************** */
     /* 4. makeTransaction: check user balance                */
     /* ***************************************************** */
+    const balanceCheckSpan = isTracingEnabled
+      ? tracer?.createChildSpan({ name: 'checkUserBalance' })
+      : undefined;
+
     const checkBalanceResult = await verifyWalletBalanceInRpc(
       networkConfig.rpc,
       tokenAddress,
@@ -331,25 +364,48 @@ export const makeTransaction = async (
       validationError = `Insufficient balance, phone: ${fromUser.phone_number}, wallet: ${userWallet.wallet_proxy}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
       Logger.log('makeTransaction', validationError);
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
-      await sendUserInsufficientBalanceNotification(userWallet.wallet_proxy, channel_user_id);
+      await sendUserInsufficientBalanceNotification(
+        userWallet.wallet_proxy,
+        channel_user_id,
+        traceHeader
+      );
+      balanceCheckSpan?.endSpan();
+      rootSpan?.endSpan();
       return undefined;
     }
+    balanceCheckSpan?.endSpan();
 
     /* ***************************************************** */
     /* 5. makeTransaction: check blockchain conditions       */
     /* ***************************************************** */
+    const blockchainCheckSpan = isTracingEnabled
+      ? tracer?.createChildSpan({ name: 'checkBlockchainConditions' })
+      : undefined;
+
     const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
       await checkBlockchainConditions(networkConfig, channel_user_id);
 
     if (!checkBlockchainConditionsResult.success) {
-      await sendNoValidBlockchainConditionsNotification(userWallet.wallet_proxy, channel_user_id);
+      await sendNoValidBlockchainConditionsNotification(
+        userWallet.wallet_proxy,
+        channel_user_id,
+        traceHeader
+      );
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+      blockchainCheckSpan?.endSpan();
+      rootSpan?.endSpan();
       return undefined;
     }
+
+    blockchainCheckSpan?.endSpan();
 
     /* ***************************************************** */
     /* 6. makeTransaction: get or create user 'to'           */
     /* ***************************************************** */
+    const userCreationSpan = isTracingEnabled
+      ? tracer?.createChildSpan({ name: 'getOrCreateUser' })
+      : undefined;
+
     let toUser: IUser | null;
     let toAddress: string;
 
@@ -360,8 +416,14 @@ export const makeTransaction = async (
           'makeTransaction',
           `Invalid wallet-to ${to} for chainId ${networkConfig.chain_id}`
         );
-        await sendNoValidBlockchainConditionsNotification(userWallet.wallet_proxy, channel_user_id);
+        await sendNoValidBlockchainConditionsNotification(
+          userWallet.wallet_proxy,
+          channel_user_id,
+          traceHeader
+        );
         await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+        userCreationSpan?.endSpan();
+        rootSpan?.endSpan();
         return undefined;
       }
 
@@ -373,6 +435,7 @@ export const makeTransaction = async (
       toUser = await getOrCreateUser(to, chatterpayImplementation);
       toAddress = toUser.wallets[0].wallet_proxy;
     }
+    userCreationSpan?.endSpan();
 
     /* ***************************************************** */
     /* 7. makeTransaction: save trx with pending status      */
@@ -383,6 +446,10 @@ export const makeTransaction = async (
     /* ***************************************************** */
     /* 8. makeTransaction: executeTransaction                */
     /* ***************************************************** */
+    const transactionExecutionSpan = isTracingEnabled
+      ? tracer?.createChildSpan({ name: 'executeTransaction' })
+      : undefined;
+
     const executeTransactionResult: ExecueTransactionResultType = await sendUserOperation(
       networkConfig,
       checkBlockchainConditionsResult.setupContractsResult!,
@@ -394,14 +461,22 @@ export const makeTransaction = async (
     );
 
     if (!executeTransactionResult.success) {
-      await sendInternalErrorNotification(userWallet.wallet_proxy, channel_user_id);
+      await sendInternalErrorNotification(userWallet.wallet_proxy, channel_user_id, traceHeader);
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+      transactionExecutionSpan?.endSpan();
+      rootSpan?.endSpan();
       return undefined;
     }
+
+    transactionExecutionSpan?.endSpan();
 
     /* ***************************************************** */
     /* 9. makeTransaction: update transaction in bdd         */
     /* ***************************************************** */
+    const saveTransactionSpan = isTracingEnabled
+      ? tracer?.createChildSpan({ name: 'saveTransactionPending' })
+      : undefined;
+
     Logger.log('makeTransaction', 'Updating transaction in database.');
     await saveTransaction(
       executeTransactionResult.transactionHash,
@@ -412,13 +487,18 @@ export const makeTransaction = async (
       'transfer',
       'completed'
     );
+    saveTransactionSpan?.endSpan();
 
     /* ***************************************************** */
-    /* 10. makeTransaction: send user notification            */
+    /* 10. makeTransaction: send user notification           */
     /* ***************************************************** */
+    const notificationSpan = isTracingEnabled
+      ? tracer?.createChildSpan({ name: 'sendUserNotifications' })
+      : undefined;
+
     const fromName = fromUser.name ?? fromUser.phone_number ?? 'Alguien';
 
-    await sendTransferNotification(toUser.phone_number, fromName, amount, tokenSymbol);
+    await sendTransferNotification(toUser.phone_number, fromName, amount, tokenSymbol, traceHeader);
 
     await sendOutgoingTransferNotification(
       userWallet.wallet_proxy,
@@ -426,12 +506,18 @@ export const makeTransaction = async (
       toAddress,
       amount,
       tokenSymbol,
-      executeTransactionResult.transactionHash
+      executeTransactionResult.transactionHash,
+      traceHeader
     );
 
     await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+
+    notificationSpan?.endSpan();
+    rootSpan?.endSpan();
     Logger.info('makeTransaction', `Maketransaction completed successfully.`);
   } catch (error) {
+    rootSpan?.addLabel('error', (error as Error).message);
+    rootSpan?.endSpan();
     Logger.error('makeTransaction', error);
   }
 };
