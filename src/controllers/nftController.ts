@@ -234,10 +234,15 @@ export const generateNftOriginal = async (
     return returnErrorResponse(reply, 400, 'Wallet User doesnt exists.');
   }
 
-  if (await hasPhoneAnyOperationInProgress(channel_user_id)) {
+  const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
+  if (userOperations) {
     const validationError = `Concurrent mint original NFT for wallet ${userWallet.wallet_proxy}, phone: ${channel_user_id}.`;
     Logger.log('generateNftOriginal', `generateNftOriginal: ${validationError}`);
-    return returnErrorResponse(reply, 400, validationError);
+    // must return 200, so the bot displays the message instead of an error!
+    return returnSuccessResponse(
+      reply,
+      'You have another operation in progress. Please wait until it is finished.'
+    );
   }
   await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
 
@@ -423,10 +428,15 @@ export const generateNftCopy = async (
     }
     const nftCopyOf = nfts[0];
 
-    if (await hasPhoneAnyOperationInProgress(channel_user_id)) {
+    const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
+    if (userOperations) {
       const validationError = `Concurrent mint copy NFT for phone: ${channel_user_id}.`;
       Logger.log('generateNftCopy', `${validationError}`);
-      return await returnErrorResponse(reply, 400, validationError);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(
+        reply,
+        'You have another operation in progress. Please wait until it is finished.'
+      );
     }
     await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
 
