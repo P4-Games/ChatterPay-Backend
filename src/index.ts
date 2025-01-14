@@ -34,7 +34,7 @@ function initializeCloudTrace(): void {
   if (GCP_CLOUD_TRACE_ENABLED) {
     try {
       start({
-        logLevel: 4,
+        // logLevel: 4,
         samplingRate: 20, // capture up to 20 requests per second for tracing.
         serviceContext: {
           service: `chatterpay-service-${BUN_ENV}`,
