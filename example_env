@@ -44,7 +44,7 @@ CHATIZALO_TOKEN=
 # Push Protocol Notifications
 PUSH_CHANNEL_ADDRESS=
 PUSH_CHANNEL_PRIVATE_KEY=
-PUSH_ENABLED = true | false
+PUSH_ENABLED= true | false
 PUSH_NETWORK= 11155111 | 421614 | 42161
 PUSH_ENVIRONMENT= dev | staging | prod
 
@@ -54,3 +54,6 @@ MINOR_LOG_LEVEL= 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
 # Ramp (Manteca)
 MANTECA_BASE_URL='https://api.manteca.dev/crypto/v1'
 MANTECA_API_KEY= ''
+
+# Dev Stuffs
+GCP_CLOUD_TRACE_ENABLED= true | false

@@ -25,6 +25,7 @@ steps:
       - PUSH_CHANNEL_ADDRESS=${_PUSH_CHANNEL_ADDRESS}
       - MINOR_LOG_LEVEL=${_MINOR_LOG_LEVEL}
       - MANTECA_BASE_URL=${_MANTECA_BASE_URL}
+      - GCP_CLOUD_TRACE_ENABLED=${_GCP_CLOUD_TRACE_ENABLED}
 
     secretEnv: [
       'CHATIZALO_TOKEN', 
@@ -102,6 +103,8 @@ steps:
       'MANTECA_API_KEY=$$MANTECA_API_KEY',
       '--build-arg',
       'MANTECA_BASE_URL=${_MANTECA_BASE_URL}',
+      '--build-arg',
+      'GCP_CLOUD_TRACE_ENABLED=${_GCP_CLOUD_TRACE_ENABLED}',
       '.'
     ]
     secretEnv: [
