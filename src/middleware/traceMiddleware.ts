@@ -1,9 +1,10 @@
+import { randomUUID } from 'crypto';
 import { get, Span, Tracer } from '@google-cloud/trace-agent';
 import { FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
 
 /**
  * Middleware for tracing incoming requests with Google Cloud Trace.
- * - Captures the X-Cloud-Trace-Context header from the request.
+ * - Ensures a valid X-Cloud-Trace-Context header is present.
  * - Creates a root span to trace the lifecycle of the request.
  * - Adds HTTP method, URL, and status code as labels to the span.
  * - Ends the span when the response is finished.
@@ -20,7 +21,13 @@ export function traceMiddleware(
   const tracer: Tracer = get();
 
   if (tracer) {
-    const traceHeader = req.headers['x-cloud-trace-context'] as string;
+    // Ensure a valid X-Cloud-Trace-Context header
+    let traceHeader = req.headers['x-cloud-trace-context'] as string | undefined;
+    if (!traceHeader || !/^[a-f0-9]{32}\/\d+;o=\d+$/.test(traceHeader)) {
+      const traceId = randomUUID().replace(/-/g, '').substring(0, 32);
+      traceHeader = `${traceId}/0;o=1`;
+      req.headers['x-cloud-trace-context'] = traceHeader; // Add to request headers
+    }
 
     tracer.runInRootSpan(
       {
