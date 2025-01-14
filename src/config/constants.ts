@@ -113,3 +113,6 @@ export const LIFI_TYPE = 'SAFEST';
 export const NOTIFICATION_TEMPLATE_CACHE_TTL = 60800; // 1 week
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
 export const GCP_CLOUD_TRACE_ENABLED: boolean = gcpCloudTraceEnabled.toLowerCase() === 'true';
+
+export const QUEUE_BUNDLER_INTERVAL = 10000; // 10 Seg
+export const QUEUE_GAS_INTERVAL = 10000; // 10 Seg

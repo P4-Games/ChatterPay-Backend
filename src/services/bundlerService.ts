@@ -3,9 +3,10 @@ import { ethers } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
 
 import { Logger } from '../helpers/loggerHelper';
+import { QUEUE_BUNDLER_INTERVAL } from '../config/constants';
 import { PackedUserOperationType } from '../types/userOperation';
 
-const queue = new PQueue({ interval: 10000, intervalCap: 1 }); // 1 request each 10 seg
+const queue = new PQueue({ interval: QUEUE_BUNDLER_INTERVAL, intervalCap: 1 }); // 1 request each 10 seg
 
 /**
  * Serialize User Operation

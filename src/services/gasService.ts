@@ -3,6 +3,7 @@ import { ethers, BigNumber } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
 
 import { Logger } from '../helpers/loggerHelper';
+import { QUEUE_GAS_INTERVAL } from '../config/constants';
 import { getUserOpHash } from '../helpers/userOperationHekper';
 import { PackedUserOperationType } from '../types/userOperation';
 
@@ -85,8 +86,8 @@ export async function generateDummySignature(
 
   return dummySignature;
 }
-
-const queue = new PQueue({ interval: 10000, intervalCap: 1 }); // 1 request every 10 seconds
+// 1 request every 10 seconds
+const queue = new PQueue({ interval: QUEUE_GAS_INTERVAL, intervalCap: 1 });
 
 /**
  * Retrieves the paymaster data for a UserOperation from the gas service.
