@@ -2,7 +2,6 @@ import { randomUUID } from 'crypto';
 import { get, Span, Tracer } from '@google-cloud/trace-agent';
 import { FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
 
-
 /**
  * Middleware for tracing incoming requests with Google Cloud Trace.
  * - Ensures a valid X-Cloud-Trace-Context header is present.
