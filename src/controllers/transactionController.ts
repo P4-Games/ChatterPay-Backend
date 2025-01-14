@@ -308,7 +308,11 @@ export const makeTransaction = async (
     if (hasUserAnyOperationInProgress(fromUser)) {
       validationError = `Concurrent transfer operation for wallet ${userWallet.wallet_proxy}, phone: ${fromUser.phone_number}.`;
       Logger.log('makeTransaction', validationError);
-      return await returnErrorResponse(reply, 400, validationError);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(
+        reply,
+        'You have another operation in progress. Please wait until it is finished.'
+      );
     }
     await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
 
