@@ -4,10 +4,11 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { setupSwagger } from './swagger';
 import { setupRoutes } from '../api/routes';
 import { Logger } from '../helpers/loggerHelper';
-import { PORT, CURRENT_LOG_LEVEL } from './constants';
 import { setupMiddleware } from '../middleware/bodyParser';
 import networkConfigPlugin from '../plugins/networkConfig';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { traceMiddleware } from '../middleware/traceMiddleware';
+import { PORT, CURRENT_LOG_LEVEL, GCP_CLOUD_TRACE_ENABLED } from './constants';
 
 /**
  * Starts the Fastify server with all necessary configurations.
@@ -33,7 +34,13 @@ export async function startServer(): Promise<FastifyInstance> {
     })
   });
 
+  // Middleware para autenticación
   server.addHook('onRequest', authMiddleware);
+
+  // Middleware para trazas de Cloud Trace
+  if (GCP_CLOUD_TRACE_ENABLED) {
+    server.addHook('onRequest', traceMiddleware);
+  }
 
   await server.register(networkConfigPlugin);
   await setupMiddleware(server);
