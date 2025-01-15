@@ -38,7 +38,9 @@ const {
   MANTECA_BASE_URL = 'https://api.manteca.dev/crypto/v1',
   MANTECA_API_KEY,
   CORS_ORIGINS = '*',
-  BLACKLIST_IPS = ''
+  BLACKLIST_IPS = '',
+  FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: fastifyRefreshNetworksIntervalMs = 86400000,
+  FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000
 } = process.env;
 
 export {
@@ -120,3 +122,6 @@ export const GCP_CLOUD_TRACE_ENABLED: boolean = gcpCloudTraceEnabled.toLowerCase
 
 export const QUEUE_BUNDLER_INTERVAL = 10000; // 10 Seg
 export const QUEUE_GAS_INTERVAL = 10000; // 10 Seg
+
+export const FASTIFY_REFRESH_TOKENS_INTERVAL_MS: number = Number(fastifyRefreshNetworksIntervalMs);
+export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(fastifyRefreshTokensIntervalMs);
