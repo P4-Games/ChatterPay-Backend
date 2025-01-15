@@ -10,6 +10,7 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { traceMiddleware } from '../middleware/traceMiddleware';
 import { setupRateLimit } from './plugins/rateLimitPlugin';
 import { setupSwagger } from './plugins/swaggerPlugin';
+import { ipBlacklistMiddleware } from './middlewares/ipsBlackListMiddleware';
 import { PORT, CURRENT_LOG_LEVEL, GCP_CLOUD_TRACE_ENABLED } from './constants';
 
 /**
@@ -27,8 +28,7 @@ export async function startServer(): Promise<FastifyInstance> {
   });
 
   server.addHook('onRequest', authMiddleware);
-
-  // Middleware para trazas de Cloud Trace
+  server.addHook('onRequest', ipBlacklistMiddleware);
   if (GCP_CLOUD_TRACE_ENABLED) {
     server.addHook('onRequest', traceMiddleware);
   }
