@@ -36,6 +36,8 @@ async function verifyToken(providedToken: string): Promise<TokenResponse> {
  */
 const PUBLIC_ROUTES = [
   '/ping',
+  '/docs',
+  '/docs/*',
   '/nft/metadata/opensea/*',
   '/nfts*',
   '/nft/<id>',
