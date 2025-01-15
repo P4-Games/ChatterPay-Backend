@@ -9,6 +9,7 @@ import networkConfigPlugin from '../plugins/networkConfig';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { traceMiddleware } from '../middleware/traceMiddleware';
 import { setupRateLimit } from './plugins/rateLimitPlugin';
+import { setupSwagger } from './plugins/swaggerPlugin';
 import { PORT, CURRENT_LOG_LEVEL, GCP_CLOUD_TRACE_ENABLED } from './constants';
 
 /**
