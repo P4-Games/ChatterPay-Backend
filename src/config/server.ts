@@ -33,6 +33,7 @@ export async function startServer(): Promise<FastifyInstance> {
     server.addHook('onRequest', traceMiddleware);
   }
 
+  await setupCorsMiddleware(server);
   await setupRateLimit(server);
   await server.register(networkConfigPlugin);
   await setupBodyParserMiddleware(server);
