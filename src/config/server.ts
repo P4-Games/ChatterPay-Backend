@@ -34,7 +34,7 @@ export async function startServer(): Promise<FastifyInstance> {
 
   await setupRateLimit(server);
   await server.register(networkConfigPlugin);
-  await setupMiddleware(server);
+  await setupBodyParserMiddleware(server);
   await setupRoutes(server);
   await setupSwagger(server);
 
