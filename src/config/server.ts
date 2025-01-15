@@ -1,17 +1,16 @@
-import rateLimit from '@fastify/rate-limit';
 import Fastify, { FastifyInstance } from 'fastify';
 
-import { setupSwagger } from './swagger';
 import { setupRoutes } from '../api/routes';
 import { Logger } from '../helpers/loggerHelper';
-import { setupMiddleware } from '../middleware/bodyParser';
-import networkConfigPlugin from '../plugins/networkConfig';
-import { authMiddleware } from '../middleware/authMiddleware';
-import { traceMiddleware } from '../middleware/traceMiddleware';
-import { setupRateLimit } from './plugins/rateLimitPlugin';
 import { setupSwagger } from './plugins/swaggerPlugin';
+import { setupRateLimit } from './plugins/rateLimitPlugin';
+import { authMiddleware } from './middlewares/authMiddleware';
+import { traceMiddleware } from './middlewares/traceMiddleware';
+import { setupCorsMiddleware } from './middlewares/corsMiddleware';
+import { setupNetworkConfigPlugin } from './plugins/networkConfigPlugin';
 import { ipBlacklistMiddleware } from './middlewares/ipsBlackListMiddleware';
 import { PORT, CURRENT_LOG_LEVEL, GCP_CLOUD_TRACE_ENABLED } from './constants';
+import { setupBodyParserMiddleware } from './middlewares/bodyParserMiddleware';
 
 /**
  * Starts the Fastify server with all necessary configurations.
@@ -35,7 +34,7 @@ export async function startServer(): Promise<FastifyInstance> {
 
   await setupCorsMiddleware(server);
   await setupRateLimit(server);
-  await server.register(networkConfigPlugin);
+  await setupNetworkConfigPlugin(server);
   await setupBodyParserMiddleware(server);
   await setupRoutes(server);
   await setupSwagger(server);
