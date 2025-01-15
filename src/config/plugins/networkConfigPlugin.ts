@@ -25,8 +25,10 @@ export async function setupNetworkConfigPlugin(server: FastifyInstance): Promise
   const networkConfig = await getNetworkConfig();
 
   // Decorate Fastify instance with network configuration and tokens
-  server.decorate('networkConfig', networkConfig);
-  server.decorate('tokens', initialTokens);
+  // eslint-disable-next-line no-param-reassign
+  server.networkConfig = networkConfig;
+  // eslint-disable-next-line no-param-reassign
+  server.tokens = initialTokens;
 
   /**
    * Refreshes the tokens stored in the Fastify instance.
@@ -36,7 +38,8 @@ export async function setupNetworkConfigPlugin(server: FastifyInstance): Promise
     try {
       const updatedTokens = await Token.find();
       // Update the tokens in Fastify
-      server.decorate('tokens', updatedTokens);
+      // eslint-disable-next-line no-param-reassign
+      server.tokens = updatedTokens;
       server.log.info('Tokens refreshed successfully');
     } catch (error) {
       server.log.error('Failed to refresh tokens:', error);
@@ -53,8 +56,8 @@ export async function setupNetworkConfigPlugin(server: FastifyInstance): Promise
       async () => {
         try {
           const updatedConfig = await getNetworkConfig();
-          // Update the network config in Fastify
-          server.decorate('networkConfig', updatedConfig);
+      // eslint-disable-next-line no-param-reassign
+      server.networkConfig = updatedConfig;
           server.log.info('Network config refreshed successfully');
         } catch (error) {
           server.log.error('Failed to refresh network config:', error);
