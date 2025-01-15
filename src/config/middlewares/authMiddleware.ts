@@ -35,6 +35,7 @@ async function verifyToken(providedToken: string): Promise<TokenResponse> {
  * This constant array defines the list of routes that are publicly accessible without authentication.
  */
 const PUBLIC_ROUTES = [
+  '/favicon.ico',
   '/ping',
   '/docs',
   '/docs/*',
