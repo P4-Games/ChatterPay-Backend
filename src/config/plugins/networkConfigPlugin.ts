@@ -3,6 +3,10 @@ import { FastifyInstance } from 'fastify';
 import Token, { IToken } from '../../models/tokenModel';
 import { IBlockchain } from '../../models/blockchainModel';
 import { getNetworkConfig } from '../../services/networkService';
+import {
+  FASTIFY_REFRESH_TOKENS_INTERVAL_MS,
+  FASTIFY_REFRESH_NETWORKS_INTERVAL_MS
+} from '../constants';
 
 // Extend the FastifyInstance interface to include our custom decorations
 declare module 'fastify' {
@@ -64,7 +68,7 @@ export async function setupNetworkConfigPlugin(server: FastifyInstance): Promise
         }
       },
       // 1 hour in milliseconds
-      60 * 60 * 1000
+      FASTIFY_REFRESH_NETWORKS_INTERVAL_MS
     );
 
     // Refresh the tokens every 5 minutes
@@ -73,7 +77,7 @@ export async function setupNetworkConfigPlugin(server: FastifyInstance): Promise
         await server.refreshTokens();
       },
       // 5 minutes in milliseconds
-      5 * 60 * 1000
+      FASTIFY_REFRESH_TOKENS_INTERVAL_MS
     );
   });
 
