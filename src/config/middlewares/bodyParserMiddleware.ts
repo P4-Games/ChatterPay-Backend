@@ -1,7 +1,7 @@
 import querystring from 'querystring';
 import { FastifyError, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { Logger } from '../helpers/loggerHelper';
+import { Logger } from '../../helpers/loggerHelper';
 
 /**
  * Parses the request body based on its format (JSON, URL-encoded, or key-value pair).
@@ -38,7 +38,7 @@ function parseBody(body: string): unknown {
  *
  * @param {FastifyInstance} server - The Fastify server instance
  */
-export async function setupMiddleware(server: FastifyInstance): Promise<void> {
+export async function setupBodyParserMiddleware(server: FastifyInstance): Promise<void> {
   server.addContentTypeParser(
     ['application/json', 'application/x-www-form-urlencoded', 'text/plain'],
     { parseAs: 'string' },

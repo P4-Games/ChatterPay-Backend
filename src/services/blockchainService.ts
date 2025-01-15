@@ -193,11 +193,6 @@ export async function checkBlockchainConditions(
       throw new Error(`Blockchain with chain_id ${networkConfig.chain_id} not found`);
     }
 
-    const seedPrivateKey = process.env.PRIVATE_KEY;
-    if (!seedPrivateKey) {
-      throw new Error('Seed private key not found in environment variables.');
-    }
-
     const privateKey = generatePrivateKey(fromNumber);
     const setupContractsResult: setupContractReturnType = await setupContracts(
       blockchain,

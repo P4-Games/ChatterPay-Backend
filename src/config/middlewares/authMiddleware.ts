@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { returnErrorResponse } from '../helpers/requestHelper';
-import { FRONTEND_TOKEN, CHATIZALO_TOKEN } from '../config/constants';
+import { FRONTEND_TOKEN, CHATIZALO_TOKEN } from '../constants';
+import { returnErrorResponse } from '../../helpers/requestHelper';
 
 /**
  * Represents the possible token types that can be verified.
@@ -35,7 +35,10 @@ async function verifyToken(providedToken: string): Promise<TokenResponse> {
  * This constant array defines the list of routes that are publicly accessible without authentication.
  */
 const PUBLIC_ROUTES = [
+  '/favicon.ico',
   '/ping',
+  '/docs',
+  '/docs/*',
   '/nft/metadata/opensea/*',
   '/nfts*',
   '/nft/<id>',
