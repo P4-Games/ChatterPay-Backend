@@ -1,8 +1,13 @@
 import { FastifyInstance } from 'fastify';
 
+import { Logger } from '../../helpers/loggerHelper';
 import Token, { IToken } from '../../models/tokenModel';
 import { IBlockchain } from '../../models/blockchainModel';
 import { getNetworkConfig } from '../../services/networkService';
+import {
+  FASTIFY_REFRESH_TOKENS_INTERVAL_MS,
+  FASTIFY_REFRESH_NETWORKS_INTERVAL_MS
+} from '../constants';
 
 // Extend the FastifyInstance interface to include our custom decorations
 declare module 'fastify' {
@@ -10,6 +15,7 @@ declare module 'fastify' {
     networkConfig: IBlockchain;
     tokens: IToken[];
     refreshTokens(): Promise<void>;
+    refreshBlockchains(): Promise<void>;
   }
 }
 
@@ -25,8 +31,10 @@ export async function setupNetworkConfigPlugin(server: FastifyInstance): Promise
   const networkConfig = await getNetworkConfig();
 
   // Decorate Fastify instance with network configuration and tokens
-  server.decorate('networkConfig', networkConfig);
-  server.decorate('tokens', initialTokens);
+  // eslint-disable-next-line no-param-reassign
+  server.networkConfig = networkConfig;
+  // eslint-disable-next-line no-param-reassign
+  server.tokens = initialTokens;
 
   /**
    * Refreshes the tokens stored in the Fastify instance.
@@ -36,42 +44,42 @@ export async function setupNetworkConfigPlugin(server: FastifyInstance): Promise
     try {
       const updatedTokens = await Token.find();
       // Update the tokens in Fastify
-      server.decorate('tokens', updatedTokens);
-      server.log.info('Tokens refreshed successfully');
+      // eslint-disable-next-line no-param-reassign
+      server.tokens = updatedTokens;
+      Logger.info('refreshTokens', 'Tokens refreshed successfully');
     } catch (error) {
-      server.log.error('Failed to refresh tokens:', error);
+      Logger.error('refreshTokens', 'Failed to refresh tokens:', error);
+    }
+  });
+
+  /**
+   * Refreshes the network configuration stored in the Fastify instance.
+   * This function updates the configuration by fetching the latest data from the service.
+   */
+  server.decorate('refreshBlockchains', async () => {
+    try {
+      const updatedConfig = await getNetworkConfig();
+      // eslint-disable-next-line no-param-reassign
+      server.networkConfig = updatedConfig;
+      Logger.info('refreshBlockchains', 'Network config refreshed successfully');
+    } catch (error) {
+      Logger.error('refreshBlockchains', 'Failed to refresh network config:', error);
     }
   });
 
   /**
    * Adds hooks to refresh network configuration and tokens periodically.
-   * The network configuration is refreshed every hour, and the tokens are refreshed every 5 minutes.
    */
   server.addHook('onReady', async () => {
     // Refresh the network configuration every hour
-    setInterval(
-      async () => {
-        try {
-          const updatedConfig = await getNetworkConfig();
-          // Update the network config in Fastify
-          server.decorate('networkConfig', updatedConfig);
-          server.log.info('Network config refreshed successfully');
-        } catch (error) {
-          server.log.error('Failed to refresh network config:', error);
-        }
-      },
-      // 1 hour in milliseconds
-      60 * 60 * 1000
-    );
+    setInterval(async () => {
+      await server.refreshBlockchains();
+    }, FASTIFY_REFRESH_NETWORKS_INTERVAL_MS);
 
     // Refresh the tokens every 5 minutes
-    setInterval(
-      async () => {
-        await server.refreshTokens();
-      },
-      // 5 minutes in milliseconds
-      5 * 60 * 1000
-    );
+    setInterval(async () => {
+      await server.refreshTokens();
+    }, FASTIFY_REFRESH_TOKENS_INTERVAL_MS);
   });
 
   /**
@@ -80,9 +88,16 @@ export async function setupNetworkConfigPlugin(server: FastifyInstance): Promise
    */
   server.addHook('onResponse', async (request) => {
     // Check if the request was related to token modifications
+    Logger.log('onResponse', request.url);
     if (request.url.startsWith('/tokens') && ['POST', 'PUT', 'DELETE'].includes(request.method)) {
-      // Refresh tokens if modified
+      Logger.log('onResponse', 'Refresh tokens if modified');
       await server.refreshTokens();
+    } else if (
+      request.url.startsWith('/blockchains') &&
+      ['POST', 'PUT', 'DELETE'].includes(request.method)
+    ) {
+      Logger.log('onResponse', 'Refresh blockchains if modified');
+      await server.refreshBlockchains();
     }
   });
 }

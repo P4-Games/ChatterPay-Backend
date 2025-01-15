@@ -102,6 +102,7 @@ export async function fetchExternalDeposits(
       },
       'wallets.wallet_proxy'
     );
+    Logger.debug('fetchExternalDeposits', `users founds: ${users.length}`);
     const ecosystemAddresses = users.flatMap((user) =>
       user.wallets
         .filter((wallet) => wallet.chain_id === DEFAULT_CHAIN_ID)
