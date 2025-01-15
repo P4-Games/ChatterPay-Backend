@@ -1,3 +1,5 @@
+import path from 'path';
+import fastifyStatic from '@fastify/static';
 import Fastify, { FastifyInstance } from 'fastify';
 
 import { setupRoutes } from '../api/routes';
@@ -11,7 +13,6 @@ import { setupNetworkConfigPlugin } from './plugins/networkConfigPlugin';
 import { ipBlacklistMiddleware } from './middlewares/ipsBlackListMiddleware';
 import { PORT, CURRENT_LOG_LEVEL, GCP_CLOUD_TRACE_ENABLED } from './constants';
 import { setupBodyParserMiddleware } from './middlewares/bodyParserMiddleware';
-
 /**
  * Starts the Fastify server with all necessary configurations.
  * @returns {Promise<FastifyInstance>} A promise that resolves to the configured Fastify server instance
@@ -38,6 +39,11 @@ export async function startServer(): Promise<FastifyInstance> {
   await setupBodyParserMiddleware(server);
   await setupRoutes(server);
   await setupSwagger(server);
+
+  await server.register(fastifyStatic, {
+    root: path.join(__dirname, '../../public'),
+    prefix: '/'
+  });
 
   await server.listen({ port: PORT, host: '0.0.0.0' });
 
