@@ -513,7 +513,6 @@ export async function sendMintNotification(
  * @returns
  */
 export async function sendOutgoingTransferNotification(
-  address_of_user: string,
   channel_user_id: string,
   walletTo: string | null,
   amount: string,
@@ -534,7 +533,7 @@ export async function sendOutgoingTransferNotification(
     const formattedMessage = message
       .replaceAll('[AMOUNT]', amount)
       .replaceAll('[TOKEN]', token)
-      .replaceAll('[TO]', walletTo || '0X')
+      .replaceAll('[TO]', channel_user_id || walletTo || '0x')
       .replaceAll('[EXPLORER]', networkConfig.explorer)
       .replaceAll('[TX_HASH]', txHash);
 

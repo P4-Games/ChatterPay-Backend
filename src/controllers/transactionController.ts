@@ -4,11 +4,11 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 
 import { Logger } from '../helpers/loggerHelper';
-import { INFURA_API_KEY } from '../config/constants';
 import { IUser, IUserWallet } from '../models/userModel';
 import { getUser } from '../services/mongo/mongoService';
 import { verifyWalletBalanceInRpc } from '../services/walletService';
 import Transaction, { ITransaction } from '../models/transactionModel';
+import { INFURA_API_KEY, GCP_CLOUD_TRACE_ENABLED } from '../config/constants';
 import { saveTransaction, sendUserOperation } from '../services/transferService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
@@ -262,7 +262,7 @@ export const makeTransaction = async (
   reply: FastifyReply
   // eslint-disable-next-line consistent-return
 ) => {
-  const isTracingEnabled = process.env.GCP_CLOUD_TRACE_ENABLED === 'true';
+  const isTracingEnabled = GCP_CLOUD_TRACE_ENABLED;
   const tracer: Tracer | undefined = isTracingEnabled ? get() : undefined;
   const rootSpan: Span | undefined = isTracingEnabled
     ? tracer?.createChildSpan({ name: 'makeTransaction' })
@@ -501,7 +501,6 @@ export const makeTransaction = async (
     await sendTransferNotification(toUser.phone_number, fromName, amount, tokenSymbol, traceHeader);
 
     await sendOutgoingTransferNotification(
-      userWallet.wallet_proxy,
       fromUser.phone_number,
       toAddress,
       amount,
