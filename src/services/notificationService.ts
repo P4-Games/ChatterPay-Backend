@@ -513,7 +513,6 @@ export async function sendMintNotification(
  * @returns
  */
 export async function sendOutgoingTransferNotification(
-  address_of_user: string,
   channel_user_id: string,
   walletTo: string | null,
   amount: string,
