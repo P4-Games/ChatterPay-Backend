@@ -534,7 +534,7 @@ export async function sendOutgoingTransferNotification(
     const formattedMessage = message
       .replaceAll('[AMOUNT]', amount)
       .replaceAll('[TOKEN]', token)
-      .replaceAll('[TO]', walletTo || '0X')
+      .replaceAll('[TO]', channel_user_id || walletTo || '0x')
       .replaceAll('[EXPLORER]', networkConfig.explorer)
       .replaceAll('[TX_HASH]', txHash);
 
