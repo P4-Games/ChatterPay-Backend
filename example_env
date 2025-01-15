@@ -57,3 +57,7 @@ MANTECA_API_KEY= ''
 
 # Dev Stuffs
 GCP_CLOUD_TRACE_ENABLED= true | false
+
+# Security
+CORS_ORIGINS='*'
+BLACKLIST_IPS=''

@@ -36,7 +36,9 @@ const {
   PUSH_ENVIRONMENT: pushEnvironment = ENV.DEV,
   MINOR_LOG_LEVEL: minorLogLevel = 'debug',
   MANTECA_BASE_URL = 'https://api.manteca.dev/crypto/v1',
-  MANTECA_API_KEY
+  MANTECA_API_KEY,
+  CORS_ORIGINS = '*',
+  BLACKLIST_IPS = ''
 } = process.env;
 
 export {
@@ -46,6 +48,8 @@ export {
   SIGNING_KEY,
   BOT_API_URL,
   ICP_MNEMONIC,
+  CORS_ORIGINS,
+  BLACKLIST_IPS,
   INFURA_API_KEY,
   BOT_DATA_TOKEN,
   FRONTEND_TOKEN,

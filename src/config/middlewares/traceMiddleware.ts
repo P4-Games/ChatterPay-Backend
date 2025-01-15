@@ -2,8 +2,6 @@ import { randomUUID } from 'crypto';
 import { get, Span, Tracer } from '@google-cloud/trace-agent';
 import { FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
 
-import { Logger } from '../helpers/loggerHelper';
-
 /**
  * Middleware for tracing incoming requests with Google Cloud Trace.
  * - Ensures a valid X-Cloud-Trace-Context header is present.
@@ -21,7 +19,6 @@ export function traceMiddleware(
   done: HookHandlerDoneFunction
 ): void {
   const tracer: Tracer = get();
-  Logger.log('traceMiddleware');
 
   if (tracer) {
     // Ensure a valid X-Cloud-Trace-Context header
