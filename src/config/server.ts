@@ -8,6 +8,7 @@ import { setupMiddleware } from '../middleware/bodyParser';
 import networkConfigPlugin from '../plugins/networkConfig';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { traceMiddleware } from '../middleware/traceMiddleware';
+import { setupRateLimit } from './plugins/rateLimitPlugin';
 import { PORT, CURRENT_LOG_LEVEL, GCP_CLOUD_TRACE_ENABLED } from './constants';
 
 /**
@@ -24,17 +25,6 @@ export async function startServer(): Promise<FastifyInstance> {
     }
   });
 
-  await server.register(rateLimit, {
-    max: 50,
-    timeWindow: '1 minute',
-    errorResponseBuilder: () => ({
-      code: 429,
-      error: 'Too Many Requests',
-      message: 'Too many requests, please try again later.'
-    })
-  });
-
-  // Middleware para autenticación
   server.addHook('onRequest', authMiddleware);
 
   // Middleware para trazas de Cloud Trace
@@ -42,6 +32,7 @@ export async function startServer(): Promise<FastifyInstance> {
     server.addHook('onRequest', traceMiddleware);
   }
 
+  await setupRateLimit(server);
   await server.register(networkConfigPlugin);
   await setupMiddleware(server);
   await setupRoutes(server);
