@@ -1,6 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { BLACKLIST_IPS } from '../constants';
+import { Logger } from '../../helpers/loggerHelper';
+import { returnErrorResponse } from '../../helpers/requestHelper';
 
 const blacklistedIps = (BLACKLIST_IPS || '').split(',').map((ip) => ip.trim());
 
@@ -15,10 +17,13 @@ export function ipBlacklistMiddleware(
   reply: FastifyReply,
   done: (err?: Error) => void
 ): void {
-  const clientIp = request.ip;
+  // Extract client IP, considering potential proxies
+  const clientIp =
+    request.headers['x-forwarded-for']?.toString().split(',')[0].trim() || request.ip;
+  Logger.log('ipBlacklistMiddleware', `url: ${request.url}, }Detected IP: ${clientIp}`);
 
   if (blacklistedIps.includes(clientIp)) {
-    reply.status(403).send({ error: 'Access forbidden: your IP is blacklisted' });
+    returnErrorResponse(reply, 403, `Access forbidden: your IP ${clientIp} is blacklisted`);
     return;
   }
 
