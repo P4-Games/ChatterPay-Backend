@@ -39,8 +39,8 @@ const {
   MANTECA_API_KEY,
   CORS_ORIGINS = '*',
   BLACKLIST_IPS = '',
-  FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: fastifyRefreshNetworksIntervalMs = 60000,
-  FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 120000
+  FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: fastifyRefreshNetworksIntervalMs = 86400000,
+  FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000
 } = process.env;
 
 export {

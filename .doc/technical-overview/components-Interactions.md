@@ -97,6 +97,10 @@
   - SimpleSwap.swapWETHforUSDT
   - SimpleSwap.swapUSDTforWETH
 
+## Backend => Criptoya
+
+- Get FIAT Prices
+
 ## Backend => Manteca
 
 - ramp-On

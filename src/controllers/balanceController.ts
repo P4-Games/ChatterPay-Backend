@@ -2,22 +2,22 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
-import { getUser } from '../services/mongo/mongoService';
 import { IUser, IUserWallet } from '../models/userModel';
 import { getUserWalletByChainId } from '../services/userService';
+import { getFiatQuotes } from '../services/criptoya/criptoYaService';
+import { mongoUserService } from '../services/mongo/mongoUserService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
+import {
+  getTokenBalances,
+  calculateBalances,
+  calculateBalancesTotals
+} from '../services/balanceService';
 import {
   returnErrorResponse,
   returnSuccessResponse,
   returnErrorResponse500
 } from '../helpers/requestHelper';
-import {
-  getFiatQuotes,
-  getTokenBalances,
-  calculateBalances,
-  calculateBalancesTotals
-} from '../services/walletService';
 
 /**
  * Route handler for checking external deposits
@@ -123,7 +123,7 @@ export const balanceByPhoneNumber = async (
   }
 
   try {
-    const user: IUser | null = await getUser(phone);
+    const user: IUser | null = await mongoUserService.getUser(phone);
     if (!user) {
       Logger.warn('balanceByPhoneNumber', `User not found for phone number: ${phone}`);
       return await returnErrorResponse(reply, 404, `User not found for phone number: ${phone}`);

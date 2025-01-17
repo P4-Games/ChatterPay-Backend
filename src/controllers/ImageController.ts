@@ -1,9 +1,10 @@
 import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { getUser } from '../services/mongo/mongoService';
+import { icpService } from '../services/icp/icpService';
 import { isShortUrl } from '../helpers/validationHelper';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
+import { mongoUserService } from '../services/mongo/mongoUserService';
+import { uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 import {
   returnErrorResponse,
   returnSuccessResponse,
@@ -33,7 +34,7 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
   try {
     const processedImageBuffer = await downloadAndProcessImage(imageUrl);
 
-    const icpUrl = await uploadToICP(processedImageBuffer, fileName);
+    const icpUrl = await icpService.uploadToICP(processedImageBuffer, fileName);
     const ipfsUrl = await uploadToIpfs(processedImageBuffer, fileName);
 
     return {
@@ -84,7 +85,7 @@ export const uploadImage: RouteHandlerMethod = async (
       return await returnErrorResponse(reply, 400, 'Short Url not allowed');
     }
 
-    const user = await getUser(phone_number);
+    const user = await mongoUserService.getUser(phone_number);
     if (!user) {
       Logger.warn('uploadImage', `User not found: ${phone_number}`);
       return await returnErrorResponse(reply, 404, 'User not found');

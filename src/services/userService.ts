@@ -1,6 +1,6 @@
-import { getUser } from './mongo/mongoService';
 import { Logger } from '../helpers/loggerHelper';
 import { ConcurrentOperationsEnum } from '../types/common';
+import { mongoUserService } from './mongo/mongoUserService';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { IUser, UserModel, IUserWallet } from '../models/userModel';
 import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
@@ -214,7 +214,7 @@ export const getOrCreateUser = async (
   phoneNumber: string,
   chatterpayImplementation: string
 ): Promise<IUser> => {
-  const user = await getUser(phoneNumber);
+  const user = await mongoUserService.getUser(phoneNumber);
 
   if (user) return user;
 

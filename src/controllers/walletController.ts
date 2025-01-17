@@ -1,9 +1,9 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { getUser } from '../services/mongo/mongoService';
 import { IUser, IUserWallet } from '../models/userModel';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { mongoUserService } from '../services/mongo/mongoUserService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import {
   addWalletToUser,
@@ -49,7 +49,7 @@ export const createWallet = async (
 
     // Check if user already exists
     const fastify = request.server;
-    const existingUser = await getUser(channel_user_id);
+    const existingUser = await mongoUserService.getUser(channel_user_id);
     let userWallet: IUserWallet | null;
 
     if (existingUser) {

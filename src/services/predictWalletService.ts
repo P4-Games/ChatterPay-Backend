@@ -3,12 +3,12 @@ import * as crypto from 'crypto';
 
 import { Logger } from '../helpers/loggerHelper';
 import { SIGNING_KEY } from '../config/constants';
-import { getNetworkConfig } from './networkService';
 import { IBlockchain } from '../models/blockchainModel';
 import { getDynamicGas } from '../helpers/paymasterHelper';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
-import { getChatterPayWalletFactoryABI } from './bucketService';
+import { getChatterPayWalletFactoryABI } from './gcp/gcpService';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
+import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {
@@ -52,7 +52,7 @@ export interface ComputedAddress {
  * @throws {Error} If there's an error in the computation process.
  */
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
-  const networkConfig: IBlockchain = await getNetworkConfig();
+  const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
   const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
     name: 'arbitrum-sepolia',
     chainId: networkConfig.chain_id

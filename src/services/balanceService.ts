@@ -4,9 +4,9 @@ import NodeCache from 'node-cache';
 import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
 import { SIGNING_KEY } from '../config/constants';
-import { setupERC20 } from './contractSetupService';
 import { getTokenAddress } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
+import { setupERC20 } from './web3/contractSetupService';
 import {
   CurrencyType,
   FiatQuoteType,
@@ -20,22 +20,13 @@ import {
 const priceCache = new NodeCache({ stdTTL: 300, checkperiod: 320 });
 
 /**
- * API endpoints for fiat currency conversion rates
- */
-const API_URLs: [CurrencyType, string][] = [
-  ['UYU', 'https://criptoya.com/api/ripio/USDT/UYU'],
-  ['ARS', 'https://criptoya.com/api/ripio/USDT/ARS'],
-  ['BRL', 'https://criptoya.com/api/ripio/USDT/BRL']
-];
-
-/**
  * Fetches the balance of a specific token for a given address
  * @param {string} contractAddress - Token contract address
  * @param {ethers.Wallet} signer - Ethereum wallet signer
  * @param {string} address - Address to check balance for
  * @returns {Promise<string>} Token balance as a string
  */
-export async function getContractBalance(
+async function getContractBalance(
   contractAddress: string,
   signer: ethers.Wallet,
   address: string
@@ -58,30 +49,11 @@ export async function getContractBalance(
 }
 
 /**
- * Fetches fiat quotes from external APIs
- * @returns {Promise<FiatQuoteType[]>} Array of fiat currency quotes
- */
-export async function getFiatQuotes(): Promise<FiatQuoteType[]> {
-  return Promise.all(
-    API_URLs.map(async ([currency, url]) => {
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-        return { currency, rate: data.bid };
-      } catch (error) {
-        Logger.error('getFiatQuotes', `Error fetching ${currency} quote:`, error);
-        return { currency, rate: 1 }; // Fallback to 1:1 rate
-      }
-    })
-  );
-}
-
-/**
  * Fetches token prices from Binance API using USDT pairs
  * @param {string[]} symbols - Array of token symbols to fetch prices for
  * @returns {Promise<Map<string, number>>} Map of token symbols to their USD prices
  */
-export async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
+async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
   try {
     const priceMap = new Map<string, number>();
 
@@ -154,7 +126,7 @@ export async function getTokenPrices(symbols: string[]): Promise<Map<string, num
  * @param {number} chanId - Chain ID to filter tokens
  * @returns {Promise<TokenInfoType[]>} Array of tokens with current price information
  */
-export async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfoType[]> {
+async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfoType[]> {
   const chainTokens = tokens.filter((token) => token.chain_id === chanId);
   const symbols = [...new Set(chainTokens.map((token) => token.symbol))];
 

@@ -3,10 +3,10 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { SIGNING_KEY } from '../config/constants';
-import { executeSwap } from '../services/swapService';
-import { setupERC20 } from '../services/contractSetupService';
-import { saveTransaction } from '../services/transferService';
+import { executeSwap } from '../services/web3/simpleSwapService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { setupERC20 } from '../services/web3/contractSetupService';
+import { saveTransaction } from '../services/mongo/mongoTransactionService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';

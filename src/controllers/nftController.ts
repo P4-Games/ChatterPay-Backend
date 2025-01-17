@@ -4,15 +4,16 @@ import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
+import { icpService } from '../services/icp/icpService';
 import { IUser, IUserWallet } from '../models/userModel';
 import { getDynamicGas } from '../helpers/paymasterHelper';
 import { ConcurrentOperationsEnum } from '../types/common';
-import { getNetworkConfig } from '../services/networkService';
 import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
 import { sendMintNotification } from '../services/notificationService';
+import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
+import { uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
 import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 import {
   returnErrorResponse,
   returnSuccessResponse,
@@ -66,7 +67,7 @@ const mintNftOriginal = async (
   bddIdToUseAsUri: string
 ): Promise<NFTData> => {
   try {
-    const networkConfig = await getNetworkConfig(DEFAULT_CHAIN_ID);
+    const networkConfig = await mongoBlockchainService.getNetworkConfig(DEFAULT_CHAIN_ID);
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const nftContract = new ethers.Contract(
@@ -123,7 +124,7 @@ const mintNftCopy = async (
   bddIdToUseAsUri: string
 ): Promise<NFTData> => {
   try {
-    const networkConfig = await getNetworkConfig(DEFAULT_CHAIN_ID);
+    const networkConfig = await mongoBlockchainService.getNetworkConfig(DEFAULT_CHAIN_ID);
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const nftContract = new ethers.Contract(
@@ -353,7 +354,7 @@ export const generateNftOriginal = async (
   }
 
   try {
-    icpImageUrl = await uploadToICP(processedImage, fileName);
+    icpImageUrl = await icpService.uploadToICP(processedImage, fileName);
   } catch (error) {
     Logger.warn(
       'generateNftOriginal',
@@ -633,7 +634,7 @@ export const getPhoneNFTs = async (
   phone_number: string
 ): Promise<{ count: number; nfts: NFTInfo[] }> => {
   try {
-    const networkConfig = await getNetworkConfig(DEFAULT_CHAIN_ID);
+    const networkConfig = await mongoBlockchainService.getNetworkConfig(DEFAULT_CHAIN_ID);
     const nfts = await NFTModel.find({ channel_user_id: phone_number });
 
     return {
