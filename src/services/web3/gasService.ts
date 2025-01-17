@@ -6,7 +6,7 @@ import { Logger } from '../../helpers/loggerHelper';
 import { IBlockchain } from '../../models/blockchainModel';
 import { QUEUE_GAS_INTERVAL } from '../../config/constants';
 import { getUserOpHash } from '../../helpers/userOperationHekper';
-import { PackedUserOperationType } from '../../types/userOperation';
+import { PackedUserOperationType } from '../../types/userOperationType';
 
 interface AlchemyGasResponse {
   paymasterAndData: string;

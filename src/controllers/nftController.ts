@@ -7,11 +7,12 @@ import { Logger } from '../helpers/loggerHelper';
 import { icpService } from '../services/icp/icpService';
 import { IUser, IUserWallet } from '../models/userModel';
 import { getDynamicGas } from '../helpers/paymasterHelper';
-import { ConcurrentOperationsEnum } from '../types/common';
+import { ipfsService } from '../services/ipfs/ipfsService';
+import { ConcurrentOperationsEnum } from '../types/commonType';
 import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
+import { downloadAndProcessImage } from '../services/imageService';
 import { sendMintNotification } from '../services/notificationService';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
-import { uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
 import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
 import {
@@ -343,7 +344,7 @@ export const generateNftOriginal = async (
   let icpImageUrl = '';
 
   try {
-    ipfsImageUrl = await uploadToIpfs(processedImage, fileName);
+    ipfsImageUrl = await ipfsService.uploadToIpfs(processedImage, fileName);
   } catch (error) {
     Logger.warn(
       'generateNftOriginal',

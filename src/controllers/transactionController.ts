@@ -18,7 +18,7 @@ import {
   ConcurrentOperationsEnum,
   ExecueTransactionResultType,
   CheckBalanceConditionsResultType
-} from '../types/common';
+} from '../types/commonType';
 import {
   openOperation,
   closeOperation,

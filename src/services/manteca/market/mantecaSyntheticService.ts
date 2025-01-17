@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Logger } from '../../../helpers/loggerHelper';
 import { MANTECA_BASE_URL } from '../../../config/constants';
 import { getMantecaAxiosConfig } from '../mantecaCommonService';
-import { MantecaRampOn, MantecaRampOff } from '../../../types/manteca';
+import { MantecaRampOn, MantecaRampOff } from '../../../types/mantecaType';
 
 export const mantecaSyntheticsService = {
   /**

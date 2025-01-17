@@ -14,7 +14,7 @@ import {
   BalanceInfoType,
   TokenBalanceType,
   walletBalanceInfoType
-} from '../types/common';
+} from '../types/commonType';
 
 // Initialize the cache with a 5-minute TTL (Time To Live)
 const priceCache = new NodeCache({ stdTTL: 300, checkperiod: 320 });

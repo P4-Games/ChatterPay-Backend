@@ -28,7 +28,7 @@ export interface PackedUserOperationType {
   signature: string;
 }
 
-export interface UserOperationReceiptData {
+export interface UserOperationReceiptDataType {
   transactionHash: string;
   transactionIndex: string;
   blockHash: string;
@@ -47,7 +47,7 @@ export interface UserOperationReceiptData {
   status: string;
 }
 
-export interface UserOperationReceipt {
+export interface UserOperationReceiptType {
   userOpHash: string;
   entryPoint: string;
   sender: string;
@@ -62,5 +62,5 @@ export interface UserOperationReceipt {
     topics: string[];
     data: string;
   }>;
-  receipt: UserOperationReceiptData;
+  receipt: UserOperationReceiptDataType;
 }

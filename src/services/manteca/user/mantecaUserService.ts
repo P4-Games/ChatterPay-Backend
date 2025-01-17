@@ -8,7 +8,7 @@ import {
   MantecaOrder,
   MantecaUserCreate,
   IMantecaBankAccount
-} from '../../../types/manteca';
+} from '../../../types/mantecaType';
 
 export const mantecaUserService = {
   /**

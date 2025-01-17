@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 import { Logger } from '../../../helpers/loggerHelper';
-import { MantecaUserBalance } from '../../../types/manteca';
 import { MANTECA_BASE_URL } from '../../../config/constants';
+import { MantecaUserBalance } from '../../../types/mantecaType';
 import { getMantecaAxiosConfig } from '../mantecaCommonService';
 
 export const mantecaBalanceService = {

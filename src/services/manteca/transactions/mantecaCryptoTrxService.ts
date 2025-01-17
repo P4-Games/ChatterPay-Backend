@@ -8,7 +8,7 @@ import {
   MantecaSupportedAssets,
   MantecaTransactionLock,
   MantecaTransactionWithdraw
-} from '../../../types/manteca';
+} from '../../../types/mantecaType';
 
 export const mantecaCryptoTrxsService = {
   /**

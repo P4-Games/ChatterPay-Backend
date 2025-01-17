@@ -1,5 +1,5 @@
 import { Logger } from '../../helpers/loggerHelper';
-import { CurrencyType, FiatQuoteType } from '../../types/common';
+import { CurrencyType, FiatQuoteType } from '../../types/commonType';
 
 /**
  * API endpoints for fiat currency conversion rates

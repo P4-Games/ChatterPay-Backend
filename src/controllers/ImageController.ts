@@ -3,8 +3,9 @@ import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 import { Logger } from '../helpers/loggerHelper';
 import { icpService } from '../services/icp/icpService';
 import { isShortUrl } from '../helpers/validationHelper';
+import { ipfsService } from '../services/ipfs/ipfsService';
+import { downloadAndProcessImage } from '../services/imageService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
-import { uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 import {
   returnErrorResponse,
   returnSuccessResponse,
@@ -35,7 +36,7 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
     const processedImageBuffer = await downloadAndProcessImage(imageUrl);
 
     const icpUrl = await icpService.uploadToICP(processedImageBuffer, fileName);
-    const ipfsUrl = await uploadToIpfs(processedImageBuffer, fileName);
+    const ipfsUrl = await ipfsService.uploadToIpfs(processedImageBuffer, fileName);
 
     return {
       success: true,

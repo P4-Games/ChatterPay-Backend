@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 
-import { PackedUserOperationType } from '../types/userOperation';
+import { PackedUserOperationType } from '../types/userOperationType';
 
 /**
  * Packs the UserOperation fields as per the contract's pack function.

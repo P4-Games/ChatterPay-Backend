@@ -11,7 +11,7 @@ import {
   TokenAddressesType,
   ExecuteSwapResultType,
   setupContractReturnType
-} from '../../types/common';
+} from '../../types/commonType';
 
 /**
  * Creates callData for token approval

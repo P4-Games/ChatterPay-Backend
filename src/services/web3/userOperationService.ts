@@ -2,7 +2,7 @@ import { ethers, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { getUserOpHash } from '../../helpers/userOperationHekper';
-import { PackedUserOperationType } from '../../types/userOperation';
+import { PackedUserOperationType } from '../../types/userOperationType';
 import {
   CALL_GAS_LIMIT,
   MAX_FEE_PER_GAS,

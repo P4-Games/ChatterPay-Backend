@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { MantecaUserBalance } from '../types/manteca';
+import { MantecaUserBalance } from '../types/mantecaType';
 import { mantecaUserService } from '../services/manteca/user/mantecaUserService';
 import { mantecaPriceService } from '../services/manteca/market/mantecaPriceService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';

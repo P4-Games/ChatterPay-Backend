@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { chatizaloOperatorReplyPayload } from '../../types/chatizalo';
+import { chatizaloOperatorReplyType } from '../../types/chatizaloType';
 import {
   BOT_API_URL,
   GCP_CLOUD_TRACE_ENABLED,
@@ -16,7 +16,7 @@ export const chatizaloService = {
    * @returns
    */
   sendBotNotification: async (
-    payload: chatizaloOperatorReplyPayload,
+    payload: chatizaloOperatorReplyType,
     traceHeader?: string
   ): Promise<string> => {
     try {

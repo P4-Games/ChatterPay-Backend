@@ -28,7 +28,7 @@ import {
   ConcurrentOperationsEnum,
   ExecueTransactionResultType,
   CheckBalanceConditionsResultType
-} from '../types/common';
+} from '../types/commonType';
 
 /**
  * Sends a user operation for token transfer.

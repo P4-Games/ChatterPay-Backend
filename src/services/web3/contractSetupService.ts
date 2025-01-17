@@ -4,7 +4,7 @@ import { Logger } from '../../helpers/loggerHelper';
 import { SIGNING_KEY } from '../../config/constants';
 import { getChatterpayABI } from '../gcp/gcpService';
 import { IBlockchain } from '../../models/blockchainModel';
-import { setupContractReturnType } from '../../types/common';
+import { setupContractReturnType } from '../../types/commonType';
 import { computeProxyAddressFromPhone } from '../predictWalletService';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
 

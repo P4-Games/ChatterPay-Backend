@@ -12,7 +12,7 @@ import {
   TokenAddressesType,
   setupContractReturnType,
   CheckBalanceConditionsResultType
-} from '../types/common';
+} from '../types/commonType';
 import {
   USER_SIGNER_MIN_BALANCE,
   BACKEND_SIGNER_MIN_BALANCE,

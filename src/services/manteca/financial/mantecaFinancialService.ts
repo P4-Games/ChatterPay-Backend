@@ -8,7 +8,7 @@ import {
   MantecaCompanyDebt,
   MantecaUserBalance,
   MantecaCompanyCredit
-} from '../../../types/manteca';
+} from '../../../types/mantecaType';
 
 export const mantecaFinancialService = {
   /**

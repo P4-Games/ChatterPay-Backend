@@ -20,7 +20,7 @@ import {
   ExecuteSwapResultType,
   ConcurrentOperationsEnum,
   CheckBalanceConditionsResultType
-} from '../types/common';
+} from '../types/commonType';
 import {
   sendSwapNotification,
   sendInternalErrorNotification,
