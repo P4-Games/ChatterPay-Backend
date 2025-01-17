@@ -7,8 +7,8 @@ import { ethers } from 'ethers';
 import mongoose from 'mongoose';
 
 import { Logger } from '../src/helpers/loggerHelper';
-import { IUser, IUserWallet } from '../src/models/user';
 import { DEFAULT_CHAIN_ID } from '../src/config/constants';
+import { IUser, IUserWallet } from '../src/models/userModel';
 import { generatePrivateKey } from '../src/helpers/SecurityHelper';
 import { getUserWalletByChainId } from '../src/services/userService';
 

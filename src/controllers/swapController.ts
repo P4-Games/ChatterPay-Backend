@@ -13,7 +13,7 @@ import { getTokensAddresses, checkBlockchainConditions } from '../services/block
 import {
   openOperation,
   closeOperation,
-  hasPhoneOperationInProgress
+  hasPhoneAnyOperationInProgress
 } from '../services/userService';
 import {
   TokenAddressesType,
@@ -24,7 +24,6 @@ import {
 import {
   sendSwapNotification,
   sendInternalErrorNotification,
-  SendConcurrecyOperationNotification,
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
@@ -40,9 +39,9 @@ interface SwapBody {
 /**
  * Validates the input for the swap operation.
  *
- * @param inputs
- * @param tokenAddresses
- * @returns
+ * @param inputs - The input data for the swap.
+ * @param tokenAddresses - The token addresses for the input and output currencies.
+ * @returns A string indicating the validation error, or an empty string if validation passes.
  */
 const validateInputs = async (
   inputs: SwapBody,
@@ -76,9 +75,9 @@ const validateInputs = async (
 /**
  * Handles the swap operation.
  *
- * @param request
- * @param reply
- * @returns
+ * @param request - The request object containing the swap details.
+ * @param reply - The response object used to send the response.
+ * @returns A response indicating the status of the swap.
  */
 // eslint-disable-next-line consistent-return
 export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: FastifyReply) => {
@@ -108,28 +107,27 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     }
 
     /* ***************************************************** */
-    /* 2. makeTransaction: open concurrent operation      */
+    /* 2. swap: open concurrent operation         */
     /* ***************************************************** */
-    if (await hasPhoneOperationInProgress(channel_user_id, ConcurrentOperationsEnum.Swap)) {
+    const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
+    if (userOperations) {
       validationError = `Concurrent swap operation for phone: ${channel_user_id}.`;
-      Logger.log(`swap: ${validationError}`);
-      await SendConcurrecyOperationNotification(channel_user_id);
-      return await returnErrorResponse(
+      Logger.log(`swap, ${validationError}`);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(
         reply,
-        400,
-        'Error making swap transaction',
-        validationError
+        'You have another operation in progress. Please wait until it is finished.'
       );
     }
     await openOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
 
     /* ***************************************************** */
-    /* 2. swap: send initial response                        */
+    /* 3. swap: send initial response                        */
     /* ***************************************************** */
     await returnSuccessResponse(reply, 'Swap in progress, it may take a few minutes.');
 
     /* ***************************************************** */
-    /* 3. swap: check user balance                           */
+    /* 4. swap: check user balance                           */
     /* ***************************************************** */
 
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
@@ -157,7 +155,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     }
 
     /* ***************************************************** */
-    /* 4. swap: check blockchain conditions                  */
+    /* 5. swap: check blockchain conditions                  */
     /* ***************************************************** */
     const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
       await checkBlockchainConditions(networkConfig, channel_user_id);
@@ -167,12 +165,6 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;
     }
-
-    /* ***************************************************** */
-    /* 5. swap: save transaciton with pending status         */
-    /* ***************************************************** */
-
-    // TODO: swap: save transaciton with pending status
 
     /* ***************************************************** */
     /* 6. swap: make operation                               */
@@ -192,7 +184,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     }
 
     /* ***************************************************** */
-    /* 7. swap: swap: update bdd with result                 */
+    /* 7. swap: update database with result                  */
     /* ***************************************************** */
 
     // Get the new balances after the transaction
@@ -212,7 +204,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     );
 
     // Save transactions OUT
-    Logger.log('Updating swap transactions in database.');
+    Logger.log('swap', 'Updating swap transactions in database.');
     await saveTransaction(
       executeSwapResult.approveTransactionHash,
       proxyAddress,
@@ -235,7 +227,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     );
 
     /* ***************************************************** */
-    /* 8. swap: send notificaiton to user                    */
+    /* 8. swap: send notification to user                    */
     /* ***************************************************** */
 
     await sendSwapNotification(
@@ -249,9 +241,10 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
     Logger.info(
+      'swap',
       `Swap completed successfully approveTransactionHash: ${executeSwapResult.approveTransactionHash}, swapTransactionHash: ${executeSwapResult.swapTransactionHash}.`
     );
   } catch (error) {
-    Logger.error('Error swapping tokens:', error);
+    Logger.error('swap', error);
   }
 };

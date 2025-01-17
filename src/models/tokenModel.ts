@@ -13,7 +13,7 @@ const tokenSchema = new Schema<IToken>({
   name: { type: String, required: true },
   chain_id: { type: Number, required: true },
   decimals: { type: Number, required: true },
-  address: { type: String, required: true },
+  address: { type: String, required: true, unique: true },
   logo: { type: String, required: false },
   symbol: { type: String, required: true }
 });

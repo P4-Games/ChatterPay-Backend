@@ -1,9 +1,11 @@
 import mongoose from 'mongoose';
+import { start } from '@google-cloud/trace-agent';
 import { FastifyInstance } from 'fastify/types/instance';
 
 import { startServer } from './config/server';
 import { Logger } from './helpers/loggerHelper';
 import { connectToDatabase } from './config/database';
+import { BUN_ENV, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
 
 /**
  * Sets up a graceful shutdown process for the server and database connection.
@@ -15,13 +17,37 @@ function setupGracefulShutdown(server: FastifyInstance): void {
     try {
       await server.close();
       await mongoose.connection.close();
-      Logger.log('Server and MongoDB connection closed');
+      Logger.log('setupGracefulShutdown', 'Server and MongoDB connection closed');
       process.exit(0);
     } catch (err) {
-      Logger.error('Error during shutdown:', err);
+      Logger.error('setupGracefulShutdown', err);
       process.exit(1);
     }
   });
+}
+
+/**
+ * Initializes Cloud Trace for the application.
+ * Should be called before any other operations to ensure tracing works.
+ */
+function initializeCloudTrace(): void {
+  if (GCP_CLOUD_TRACE_ENABLED) {
+    try {
+      start({
+        // logLevel: 4,
+        samplingRate: 20, // capture up to 20 requests per second for tracing.
+        serviceContext: {
+          service: `chatterpay-service-${BUN_ENV}`,
+          version: '1.0.0'
+        }
+      });
+      Logger.log('Cloud Trace initialized.');
+    } catch (error) {
+      Logger.error(`Error initializing cloud Trace: ${(error as Error).message}`);
+    }
+  } else {
+    Logger.log('Cloud Trace is not enabled.');
+  }
 }
 
 /**
@@ -32,11 +58,12 @@ function setupGracefulShutdown(server: FastifyInstance): void {
  */
 async function main(): Promise<void> {
   try {
+    initializeCloudTrace();
     await connectToDatabase();
     const server = await startServer();
     setupGracefulShutdown(server);
   } catch (err) {
-    Logger.error('Error starting application:', err);
+    Logger.error('main', 'Error starting application:', err);
     process.exit(1);
   }
 }

@@ -5,6 +5,7 @@ import fastifySwaggerUi, { FastifySwaggerUiOptions } from '@fastify/swagger-ui';
 /**
  * Sets up Swagger documentation for the Fastify server.
  * @param {FastifyInstance} server - The Fastify server instance
+ * @returns {Promise<void>} Resolves once Swagger is successfully set up
  */
 export async function setupSwagger(server: FastifyInstance): Promise<void> {
   await server.register(fastifySwagger, {

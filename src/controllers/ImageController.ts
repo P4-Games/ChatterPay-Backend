@@ -1,9 +1,14 @@
 import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { getUser } from '../services/userService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { getUser } from '../services/mongo/mongoService';
+import { isShortUrl } from '../helpers/validationHelper';
 import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
+import {
+  returnErrorResponse,
+  returnSuccessResponse,
+  returnErrorResponse500
+} from '../helpers/requestHelper';
 
 interface UploadBody {
   phone_number: string;
@@ -19,10 +24,10 @@ interface UploadResponse {
 }
 
 /**
- *
- * @param imageUrl
- * @param fileName
- * @returns
+ * Processes and uploads an image to ICP and IPFS.
+ * @param {string} imageUrl - The URL of the image to download and process.
+ * @param {string} fileName - The file name to be used for the image upload.
+ * @returns {Promise<UploadResponse>} The result of the upload operation.
  */
 async function processAndUploadImage(imageUrl: string, fileName: string): Promise<UploadResponse> {
   try {
@@ -38,7 +43,7 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
       ipfs_url: ipfsUrl
     };
   } catch (error) {
-    Logger.error('Error processing and uploading the image:', error);
+    Logger.error('processAndUploadImage', error);
     return {
       success: false,
       message: 'Error processing and uploading the image',
@@ -48,10 +53,10 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
 }
 
 /**
- *
- * @param request
- * @param reply
- * @returns
+ * Handles the image upload process for a user.
+ * @param {FastifyRequest} request - The Fastify request object containing the phone number and image URL.
+ * @param {FastifyReply} reply - The Fastify reply object used to send the response.
+ * @returns {Promise<FastifyReply>} The Fastify reply object with the result of the upload operation.
  */
 export const uploadImage: RouteHandlerMethod = async (
   request: FastifyRequest,
@@ -65,18 +70,23 @@ export const uploadImage: RouteHandlerMethod = async (
     const { phone_number, image_url } = request.body as UploadBody;
 
     if (!phone_number) {
-      Logger.warn('Phone number not provided');
+      Logger.warn('uploadImage', 'Phone number not provided');
       return await returnErrorResponse(reply, 400, 'Phone number not provided');
     }
 
     if (!image_url) {
-      Logger.warn('Image URL not provided');
+      Logger.warn('uploadImage', 'Image URL not provided');
       return await returnErrorResponse(reply, 400, 'Image URL not provided');
+    }
+
+    if (isShortUrl(image_url)) {
+      Logger.warn('generateNftOriginal', 'Short Url not allowed');
+      return await returnErrorResponse(reply, 400, 'Short Url not allowed');
     }
 
     const user = await getUser(phone_number);
     if (!user) {
-      Logger.warn('User not found:', phone_number);
+      Logger.warn('uploadImage', `User not found: ${phone_number}`);
       return await returnErrorResponse(reply, 404, 'User not found');
     }
 
@@ -87,17 +97,17 @@ export const uploadImage: RouteHandlerMethod = async (
       user.photo = uploadResult.ipfs_url ?? '';
       await user.save();
 
-      Logger.log('Image uploaded successfully:', uploadResult);
+      Logger.log('uploadImage', uploadResult);
       return await returnSuccessResponse(reply, 'Image uploaded successfully', {
         icp_url: uploadResult.icp_url,
         ipfs_url: uploadResult.ipfs_url
       });
     }
 
-    Logger.error('Error uploading image:', uploadResult.error);
+    Logger.error('uploadImage', uploadResult.error);
     return await returnErrorResponse(reply, 500, 'Error uploading image', uploadResult.error);
   } catch (error) {
-    Logger.error('Error uploading image:', error);
-    return returnErrorResponse(reply, 500, 'Internal Server Error');
+    Logger.error('uploadImage', error);
+    return returnErrorResponse500(reply);
   }
 };

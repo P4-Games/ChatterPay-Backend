@@ -38,10 +38,13 @@ async function getLatestBlockNumber(): Promise<number> {
 async function initializeLastProcessedBlock() {
   try {
     await mongoose.connect(MONGODB_URI);
-    Logger.log('Conectado a MongoDB');
+    Logger.log('initializeLastProcessedBlock', 'Conectado a MongoDB');
 
     const latestBlockNumber = await getLatestBlockNumber();
-    Logger.log(`Last block number in network: ${latestBlockNumber}`);
+    Logger.log(
+      'initializeLastProcessedBlock',
+      `Last block number in network: ${latestBlockNumber}`
+    );
 
     const result = await LastProcessedBlock.findOneAndUpdate(
       { networkName: NETWORK_NAME },
@@ -52,13 +55,18 @@ async function initializeLastProcessedBlock() {
       { upsert: true, new: true }
     );
 
-    Logger.log(`LastProcessedBlock actualizado/creado: ${JSON.stringify(result)}`);
+    Logger.log(
+      'initializeLastProcessedBlock',
+      `LastProcessedBlock actualizado/creado: ${JSON.stringify(result)}`
+    );
   } catch (error) {
-    Logger.error('Error:', error);
+    Logger.error('initializeLastProcessedBlock', error);
   } finally {
     await mongoose.disconnect();
-    Logger.log('Desconectado de MongoDB');
+    Logger.log('initializeLastProcessedBlock', 'Desconectado de MongoDB');
   }
 }
 
-initializeLastProcessedBlock().catch(Logger.error);
+initializeLastProcessedBlock().catch((error) =>
+  Logger.error('initializeLastProcessedBlock', error)
+);

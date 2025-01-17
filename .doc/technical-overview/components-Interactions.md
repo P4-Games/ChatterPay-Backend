@@ -14,6 +14,17 @@
 - intercambiar_tokens => https://back.chatterpay.net/swap/, POST
 - copiar_certificado_existente => https://back.chatterpay.net/mint_existing/, POST
 - generar_certificado => https://back.chatterpay.net/nft/, POST
+- ramp_user_onboarding => https://back.chatterpay.net/ramp/onboarding, POST
+- ramp_create_user => https://back.chatterpay.net/ramp/user, POST
+- ramp_user_compliance_documents_upload => https://back.chatterpay.net/ramp/user/:userId/compliance/documents, POST
+- ramp_user_compliance_documents_status => https://back.chatterpay.net/ramp/user/:userId/compliance/documents/status, GET
+- ramp_user_compliance_status => https://back.chatterpay.net/ramp/user/:userId/compliance/status, GET
+- ramp_user_limits => https://back.chatterpay.net/ramp/user/:userId/limits, GET
+- ramp_user_add_bank_account => https://back.chatterpay.net/ramp/user/:userId/bankaccount/ARS, POST
+- ramp_user_remove_bank_account => https://back.chatterpay.net/ramp/user/:userId/bankaccount/ARS/:accountId, DELETE
+- ramp_market_price => https://back.chatterpay.net/ramp/market/price, GET
+- ramp_on => https://back.chatterpay.net/ramp/on, POST
+- ramp_off => https://back.chatterpay.net/ramp/off, POST
 
 ## BOT => Sitio tdm
 
@@ -36,10 +47,15 @@
 
 ## Backend => BOT
 
+- sendWalletCreationNotification => chatbot/conversations/send-message
 - sendSwapNotification => chatbot/conversations/send-message
 - sendMintNotification => chatbot/conversations/send-message
 - sendTransferNotification => chatbot/conversations/send-message
 - sendOutgoingTransferNotification => chatbot/conversations/send-message
+- sendUserInsufficientBalanceNotification => chatbot/conversations/send-message
+- sendNoValidBlockchainConditionsNotification => chatbot/conversations/send-message
+- sendInternalErrorNotification => chatbot/conversations/send-message
+- SendConcurrecyOperationNotification => chatbot/conversations/send-message
 
 ## Backend => The Graph
 
@@ -52,6 +68,10 @@
 - sendMintNotification => Push to Chatterpay Channel
 - sendTransferNotification => Push to Chatterpay Channel
 - sendOutgoingTransferNotification => Push to Chatterpay Channel
+- sendUserInsufficientBalanceNotification => Push to Chatterpay Channel
+- sendNoValidBlockchainConditionsNotification => Push to Chatterpay Channel
+- sendInternalErrorNotification => Push to Chatterpay Channel
+- SendConcurrecyOperationNotification => Push to Chatterpay Channel
 
 ## Backend => Smart Contracts
 
@@ -76,3 +96,27 @@
   - ChatterPayWalletFactory.computeProxyAddress
   - SimpleSwap.swapWETHforUSDT
   - SimpleSwap.swapUSDTforWETH
+
+## Backend => Manteca
+
+- ramp-On
+- ramp-Off
+
+## Backend => GCP
+
+- NFT: Mint Original => upload image to Bucket
+- NFT: Mint Copy => upload image to Bucket
+
+## Backend => ICP
+
+- NFT: Mint Original => upload image to Bucket
+- NFT: Mint Copy => upload image to Bucket
+
+## Backend => IFPS
+
+- NFT: Mint Original => upload image to Bucket
+- NFT: Mint Copy => upload image to Bucket
+
+## GCP Cloud Scheduler => Backend
+
+`- checking_depositos => /check_deposits, CRON: _/10 _ \* \* \*`

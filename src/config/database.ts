@@ -5,15 +5,16 @@ import { Logger } from '../helpers/loggerHelper';
 
 /**
  * Connects to the MongoDB database using the provided URI or a default local URI.
+ * @returns {Promise<void>} Resolves once the connection is established or throws an error if the connection fails
  */
 export async function connectToDatabase(): Promise<void> {
-  Logger.info('Connecting to database');
+  Logger.info('connectToDatabase', 'Connecting to database');
   const MongoURI: string = MONGO_URI ?? 'mongodb://localhost:27017/chatterpay';
   try {
     await mongoose.connect(MongoURI);
-    Logger.info('MongoDB connected');
+    Logger.info('connectToDatabase', 'MongoDB connected');
   } catch (error) {
-    Logger.error('Failed to connect to MongoDB:', error);
+    Logger.error('connectToDatabase', 'Failed to connect to MongoDB:', error);
     throw error;
   }
 }

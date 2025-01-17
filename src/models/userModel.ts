@@ -24,6 +24,7 @@ export interface IUser extends Document {
       language: string;
     };
   };
+  lastOperationDate?: Date;
   operations_in_progress?: {
     transfer: number;
     swap: number;
@@ -59,6 +60,7 @@ const userSchema = new Schema<IUser>({
       language: { type: String, required: true, default: SETTINGS_NOTIFICATION_LANGUAGE_DFAULT }
     }
   },
+  lastOperationDate: { type: Date, required: false },
   operations_in_progress: {
     transfer: { type: Number, required: false, default: 0 },
     swap: { type: Number, required: false, default: 0 },
@@ -68,4 +70,4 @@ const userSchema = new Schema<IUser>({
   }
 });
 
-export const User = model<IUser>('User', userSchema, 'users');
+export const UserModel = model<IUser>('User', userSchema, 'users');

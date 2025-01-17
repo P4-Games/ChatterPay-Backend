@@ -2,11 +2,16 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
-import { IUser, IUserWallet } from '../models/user';
-import { getUser, getUserWalletByChainId } from '../services/userService';
+import { getUser } from '../services/mongo/mongoService';
+import { IUser, IUserWallet } from '../models/userModel';
+import { getUserWalletByChainId } from '../services/userService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
+import {
+  returnErrorResponse,
+  returnSuccessResponse,
+  returnErrorResponse500
+} from '../helpers/requestHelper';
 import {
   getFiatQuotes,
   getTokenBalances,
@@ -42,7 +47,10 @@ async function getAddressBalanceWithNfts(
 ): Promise<FastifyReply> {
   const { networkConfig } = fastify;
 
-  Logger.log(`Fetching balance for address: ${address} on network ${networkConfig.name}`);
+  Logger.log(
+    'getAddressBalanceWithNfts',
+    `Fetching balance for address: ${address} on network ${networkConfig.name}`
+  );
 
   try {
     const [fiatQuotes, tokenBalances, NFTs] = await Promise.all([
@@ -63,15 +71,13 @@ async function getAddressBalanceWithNfts(
 
     return await returnSuccessResponse(reply, 'Wallet balance fetched successfully', response);
   } catch (error) {
-    Logger.error('Error fetching wallet balance:', error);
-    return returnErrorResponse(reply, 500, 'Internal Server Error');
+    Logger.error('getAddressBalanceWithNfts', 'Error fetching wallet balance:', error);
+    return returnErrorResponse500(reply);
   }
 }
 
 /**
- *
  * Route handler for getting wallet balance
- *
  * @param request
  * @param reply
  * @returns
@@ -94,9 +100,7 @@ export const walletBalance = async (
 };
 
 /**
- *
  * Route handler for getting balance by phone number
- *
  * @param request
  * @param reply
  * @returns
@@ -108,12 +112,12 @@ export const balanceByPhoneNumber = async (
   const { channel_user_id: phone } = request.query as { channel_user_id?: string };
 
   if (!phone) {
-    Logger.warn('Phone number is required');
+    Logger.warn('balanceByPhoneNumber', 'Phone number is required');
     return returnErrorResponse(reply, 400, 'Phone number is required');
   }
 
   if (!isValidPhoneNumber(phone)) {
-    Logger.warn(`Phone number ${phone} is invalid`);
+    Logger.warn('balanceByPhoneNumber', `Phone number ${phone} is invalid`);
     const msgError = `'${phone}' is invalid. 'phone' parameter must be a phone number (without spaces or symbols)`;
     return returnErrorResponse(reply, 400, msgError);
   }
@@ -121,7 +125,7 @@ export const balanceByPhoneNumber = async (
   try {
     const user: IUser | null = await getUser(phone);
     if (!user) {
-      Logger.warn(`User not found for phone number: ${phone}`);
+      Logger.warn('balanceByPhoneNumber', `User not found for phone number: ${phone}`);
       return await returnErrorResponse(reply, 404, `User not found for phone number: ${phone}`);
     }
 
@@ -130,7 +134,10 @@ export const balanceByPhoneNumber = async (
     const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, chain_id);
 
     if (!userWallet) {
-      Logger.warn(`Wallet not found for phone number: ${phone} and chainId ${chain_id}`);
+      Logger.warn(
+        'balanceByPhoneNumber',
+        `Wallet not found for phone number: ${phone} and chainId ${chain_id}`
+      );
       return await returnErrorResponse(reply, 404, 'Wallet not found');
     }
 
@@ -141,7 +148,7 @@ export const balanceByPhoneNumber = async (
       request.server
     );
   } catch (error) {
-    Logger.error('Error fetching user balance:', error);
-    return returnErrorResponse(reply, 500, 'Internal Server Error');
+    Logger.error('balanceByPhoneNumber', 'Error fetching user balance:', error);
+    return returnErrorResponse500(reply);
   }
 };

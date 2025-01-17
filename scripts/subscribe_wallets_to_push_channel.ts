@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 import * as PushAPI from '@pushprotocol/restapi';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
-import { IUser } from '../src/models/user';
+import { IUser } from '../src/models/userModel';
 import { Logger } from '../src/helpers/loggerHelper';
 import { generatePrivateKey } from '../src/helpers/SecurityHelper';
 
@@ -105,6 +105,12 @@ async function isUserSubscribed(pk: string): Promise<boolean> {
   }
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 /**
  * Subscribe the user to the Push protocol
  * @param pn - The phone number of the user
@@ -157,12 +163,6 @@ async function subscribeUser(pn: string, sk: string, pk: string): Promise<boolea
   };
 
   return retrySubscription(0);
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }
 
 /**

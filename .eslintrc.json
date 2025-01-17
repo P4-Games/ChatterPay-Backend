@@ -30,14 +30,10 @@
     }
   },
   "rules": {
-    "no-console": 0,
-    "no-unused-vars": "off",
-    "no-param-reassign": 0,
+    "no-console": ["error", { "allow": ["error"] }],
     "no-underscore-dangle": 0,
-    "no-restricted-exports": 0,
     "import/prefer-default-export": 0,
     "@typescript-eslint/naming-convention": 0,
-    "@typescript-eslint/no-use-before-define": 0,
     "prefer-destructuring": [
       1,
       {
@@ -45,16 +41,9 @@
         "array": false
       }
     ],
-    "@typescript-eslint/no-unused-vars": [
-      1,
-      {
-        "args": "none"
-      }
-    ],
-    // unused-imports
-    "unused-imports/no-unused-imports": 1,
+    "unused-imports/no-unused-imports": "error",
     "unused-imports/no-unused-vars": [
-      0,
+      1,
       {
         "vars": "all",
         "varsIgnorePattern": "^_",
@@ -107,5 +96,13 @@
         "internal-pattern": ["src/**"]
       }
     ]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["vitest.config.ts"],
+      "rules": {
+        "import/no-extraneous-dependencies": ["error", { "devDependencies": true }]
+      }
+    }
+  ]
 }

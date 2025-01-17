@@ -3,11 +3,12 @@ import * as crypto from 'crypto';
 
 import { Logger } from '../helpers/loggerHelper';
 import { SIGNING_KEY } from '../config/constants';
-import { IBlockchain } from '../models/blockchain';
 import { getNetworkConfig } from './networkService';
+import { IBlockchain } from '../models/blockchainModel';
 import { getDynamicGas } from '../helpers/paymasterHelper';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { getChatterPayWalletFactoryABI } from './bucketService';
+import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
 
 export interface PhoneNumberToAddress {
@@ -24,7 +25,7 @@ export interface PhoneNumberToAddress {
  * @throws {Error} If the seed private key is not found in environment variables.
  */
 function phoneNumberToAddress(phoneNumber: string): PhoneNumberToAddress {
-  const privateKey = generatePrivateKey(phoneNumber);
+  const privateKey = generatePrivateKey(getPhoneNumberFormatted(phoneNumber));
   const wallet = new ethers.Wallet(privateKey);
   const publicKey = wallet.address;
   const hashedPrivateKey = crypto.createHash('sha256').update(privateKey).digest('hex');
@@ -70,11 +71,12 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
   const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
     gasLimit: 1000000
   });
-  Logger.log(`Computed proxy address: ${proxyAddress}`);
+  Logger.log('computeProxyAddressFromPhone', `Computed proxy address: ${proxyAddress}`);
 
   const code = await provider.getCode(proxyAddress);
   if (code === '0x') {
     Logger.log(
+      'computeProxyAddressFromPhone',
       `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}...`
     );
     const gasLimit = await getDynamicGas(factory, 'createProxy', [ownerAddress.publicKey]);
@@ -85,7 +87,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
   }
 
   Logger.log(
-    'Data: ',
+    'computeProxyAddressFromPhone',
     JSON.stringify({
       proxyAddress,
       EOAAddress: ownerAddress.publicKey

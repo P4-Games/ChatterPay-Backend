@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { User, IUser } from '../models/user';
 import { Logger } from '../helpers/loggerHelper';
+import { IUser, UserModel } from '../models/userModel';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**
@@ -16,13 +16,13 @@ export const createUser = async (
 ): Promise<FastifyReply> => {
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(reply, 400, 'Request body is required');
     }
-    const newUser = new User(request.body);
+    const newUser = new UserModel(request.body);
     await newUser.save();
     return await returnSuccessResponse(reply, 'User created successfully', { user: newUser });
   } catch (error) {
-    Logger.error('Error creating user:', error);
+    Logger.error('createUser', 'Error creating user:', error);
     return returnErrorResponse(reply, 400, 'Bad Request');
   }
 };
@@ -38,10 +38,10 @@ export const getAllUsers = async (
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   try {
-    const users = await User.find();
+    const users = await UserModel.find();
     return await returnSuccessResponse(reply, 'Users fetched successfully', { users });
   } catch (error) {
-    Logger.error('Error fetching users:', error);
+    Logger.error('getAllUsers', 'Error fetching users:', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch users');
   }
 };
@@ -59,16 +59,16 @@ export const getUserById = async (
   const { id } = request.params as { id: string };
 
   try {
-    const user = await User.findById(id);
+    const user = await UserModel.findById(id);
 
     if (!user) {
-      Logger.warn('User not found');
+      Logger.warn('getUserById', 'User not found');
       return await returnErrorResponse(reply, 404, 'User not found');
     }
 
     return await returnSuccessResponse(reply, 'User fetched successfully', user.toJSON());
   } catch (error) {
-    Logger.error('Error fetching user:', error);
+    Logger.error('getUserById', 'Error fetching user:', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch user');
   }
 };
@@ -87,19 +87,19 @@ export const updateUser = async (
 
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(reply, 400, 'Request body is required');
     }
 
-    const updatedUser = await User.findByIdAndUpdate(id, request.body, { new: true });
+    const updatedUser = await UserModel.findByIdAndUpdate(id, request.body, { new: true });
 
     if (!updatedUser) {
-      Logger.warn('User not found');
+      Logger.warn('updateUser', 'User not found');
       return await returnErrorResponse(reply, 404, 'User not found');
     }
 
     return await returnSuccessResponse(reply, 'User updated successfully', updatedUser.toJSON());
   } catch (error) {
-    Logger.error('Error updating user:', error);
+    Logger.error('updateUser', 'Error updating user:', error);
     return returnErrorResponse(reply, 400, 'Bad Request');
   }
 };
@@ -117,7 +117,7 @@ export const deleteUser = async (
   const { id } = request.params as { id: string };
 
   try {
-    const deletedUser = await User.findByIdAndDelete(id);
+    const deletedUser = await UserModel.findByIdAndDelete(id);
 
     if (!deletedUser) {
       return await returnErrorResponse(reply, 404, 'User not found');
@@ -125,7 +125,7 @@ export const deleteUser = async (
 
     return await returnSuccessResponse(reply, 'User deleted successfully');
   } catch (error) {
-    Logger.error('Error deleting user:', error);
+    Logger.error('deleteUser', 'Error deleting user:', error);
     return returnErrorResponse(reply, 400, 'Bad Request');
   }
 };

@@ -3,42 +3,6 @@ import { ethers, Contract, BigNumber } from 'ethers';
 import { Logger } from './loggerHelper';
 
 /**
- * Decodes and validates the paymasterAndData field
- * @param paymasterAndData - The encoded paymaster data
- * @returns Decoded components and validation status
- */
-/*
-function decodePaymasterAndData(paymasterAndData: string): {
-  paymasterAddress: string;
-  signature: string;
-  expirationTimestamp: number;
-  hasExpired: boolean;
-} {
-  // Remove '0x' prefix if present
-  const data = paymasterAndData.startsWith('0x') ? paymasterAndData.slice(2) : paymasterAndData;
-
-  // Extract components
-  const paymasterAddress = `0x${data.slice(0, 40)}`; // 20 bytes
-  const signature = `0x${data.slice(40, 40 + 130)}`; // 65 bytes
-  const expirationBytes = `0x${data.slice(40 + 130, 40 + 130 + 16)}`; // 8 bytes
-
-  // Convert expiration bytes to number
-  const expirationTimestamp = Number(ethers.BigNumber.from(expirationBytes));
-
-  // Check if expired
-  const currentTimestamp = Math.floor(Date.now() / 1000);
-  const hasExpired = currentTimestamp > expirationTimestamp;
-
-  return {
-    paymasterAddress,
-    signature,
-    expirationTimestamp,
-    hasExpired
-  };
-}
-  */
-
-/**
  * Creates the paymasterAndData field with required signature and expiration
  * @param paymasterAddress - Address of the paymaster contract
  * @param proxyAddress - Address of the sender (proxy)
@@ -76,45 +40,6 @@ export async function createPaymasterAndData(
 }
 
 /**
- * Verifies if the signature in paymasterAndData is valid
- * @param paymasterAndData - The encoded paymaster data
- * @param proxyAddress - The sender's proxy address
- * @param backendAddress - The expected signer's address
- * @returns Whether the signature is valid
- */
-/*
-export function verifyPaymasterSignature(
-  paymasterAndData: string,
-  proxyAddress: string,
-  backendAddress: string
-): boolean {
-  const decoded = decodePaymasterAndData(paymasterAndData);
-
-  // If expired, signature is invalid
-  if (decoded.hasExpired) {
-    return false;
-  }
-
-  // Recreate the message hash
-  const messageHash = ethers.utils.solidityKeccak256(
-    ['address', 'uint64'],
-    [proxyAddress, decoded.expirationTimestamp]
-  );
-
-  // Verify the signature
-  try {
-    const messageHashBytes = ethers.utils.arrayify(messageHash);
-    const recoveredAddress = ethers.utils.verifyMessage(messageHashBytes, decoded.signature);
-
-    return recoveredAddress.toLowerCase() === backendAddress.toLowerCase();
-  } catch (error) {
-    Logger.error('Error verifying signature:', error);
-    return false;
-  }
-}
-*/
-
-/**
  * Get gas limit for a transaction w/ dynamic gas.
  *
  * @param contract - Instance of the contract to call.
@@ -146,10 +71,10 @@ export async function getDynamicGas(
     const gasLimit: BigNumber = estimatedGas
       .mul(BigNumber.from(100 + gasBufferPercentage))
       .div(BigNumber.from(100));
-    Logger.log(`Estimated gas limit for ${methodName}:`, gasLimit.toString());
+    Logger.log('getDynamicGas', `Estimated gas limit for ${methodName}:`, gasLimit.toString());
     return gasLimit;
   } catch (error) {
-    Logger.warn(`Gas estimation failed for ${methodName}:`, error);
+    Logger.warn('getDynamicGas', `Gas estimation failed for ${methodName}:`, error);
     // If the estimation fails, use the default gas limit
     return defaultGasLimit;
   }

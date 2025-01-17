@@ -1,11 +1,11 @@
 import { gql, request } from 'graphql-request';
 
-import { User } from '../models/user';
-import Transaction from '../models/transaction';
+import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
+import Transaction from '../models/transactionModel';
 import { DEFAULT_CHAIN_ID } from '../config/constants';
 import { sendTransferNotification } from './notificationService';
-import { LastProcessedBlock } from '../models/lastProcessedBlock';
+import { LastProcessedBlock } from '../models/lastProcessedBlockModel';
 
 /**
  * The GraphQL API URLs for querying external deposits.
@@ -49,6 +49,38 @@ interface Transfer {
 }
 
 /**
+ * Processes a single external deposit.
+ * @async
+ * @param {Transfer & { token: string }} transfer - The transfer object to process.
+ * @param {string} token - The token type (USDT or WETH).
+ */
+async function processExternalDeposit(transfer: Transfer & { token: string }, token: string) {
+  const user = await UserModel.findOne({ wallet: { $regex: new RegExp(`^${transfer.to}$`, 'i') } });
+
+  if (user) {
+    const value = (Number(transfer.value) / 1e18).toFixed(4);
+
+    // Send incoming transfer notification message, and record tx data
+    sendTransferNotification(transfer.to, user.phone_number, value, token);
+    new Transaction({
+      trx_hash: transfer.id,
+      wallet_from: transfer.from,
+      wallet_to: transfer.to,
+      type: 'deposit',
+      date: new Date(),
+      status: 'completed',
+      amount: value,
+      token
+    }).save();
+  } else {
+    Logger.log(
+      'processExternalDeposit',
+      `Transfer detected, not processed: ${JSON.stringify(transfer)}`
+    );
+  }
+}
+
+/**
  * Fetches and processes external deposits for users in the ecosystem.
  * @async
  */
@@ -64,7 +96,7 @@ export async function fetchExternalDeposits(
     const fromBlock = lastProcessedBlock ? lastProcessedBlock.blockNumber : 0;
 
     // Fetch all user wallet addresses
-    const users = await User.find(
+    const users = await UserModel.find(
       {
         'wallets.chain_id': DEFAULT_CHAIN_ID
       },
@@ -118,34 +150,5 @@ export async function fetchExternalDeposits(
     return `No new deposits found since block ${fromBlock}`;
   } catch (error) {
     return `Error fetching external deposits: ${error}`;
-  }
-}
-
-/**
- * Processes a single external deposit.
- * @async
- * @param {Transfer & { token: string }} transfer - The transfer object to process.
- * @param {string} token - The token type (USDT or WETH).
- */
-async function processExternalDeposit(transfer: Transfer & { token: string }, token: string) {
-  const user = await User.findOne({ wallet: { $regex: new RegExp(`^${transfer.to}$`, 'i') } });
-
-  if (user) {
-    const value = (Number(transfer.value) / 1e18).toFixed(4);
-
-    // Send incoming transfer notification message, and record tx data
-    sendTransferNotification(transfer.to, user.phone_number, value, token);
-    new Transaction({
-      trx_hash: transfer.id,
-      wallet_from: transfer.from,
-      wallet_to: transfer.to,
-      type: 'deposit',
-      date: new Date(),
-      status: 'completed',
-      amount: value,
-      token
-    }).save();
-  } else {
-    Logger.log(`Transfer detected, not processed: ${JSON.stringify(transfer)}`);
   }
 }

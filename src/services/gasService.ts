@@ -3,6 +3,7 @@ import { ethers, BigNumber } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
 
 import { Logger } from '../helpers/loggerHelper';
+import { QUEUE_GAS_INTERVAL } from '../config/constants';
 import { getUserOpHash } from '../helpers/userOperationHekper';
 import { PackedUserOperationType } from '../types/userOperation';
 
@@ -42,12 +43,23 @@ const createGasServiceConfig = (
   network
 });
 
+/**
+ * Generates a dummy signature for a given UserOperation.
+ *
+ * This function creates a dummy version of the UserOperation, computes its hash,
+ * and then signs it using a random private key to generate a dummy signature.
+ *
+ * @param userOperation - The user operation for which a dummy signature will be generated.
+ * @param entryPointAddress - The entry point address for the operation.
+ * @param chainId - The chain ID for the operation.
+ * @returns The generated dummy signature.
+ */
 export async function generateDummySignature(
   userOperation: Partial<PackedUserOperationType>,
   entryPointAddress: string,
   chainId: number
 ): Promise<string> {
-  // Crear una versión "dummy" de la UserOperation
+  // Create a "dummy" version of the UserOperation
   const dummyUserOp: PackedUserOperationType = {
     sender: userOperation.sender ?? ethers.constants.AddressZero,
     nonce: userOperation.nonce || ethers.constants.Zero,
@@ -62,21 +74,33 @@ export async function generateDummySignature(
     signature: '0x'
   };
 
-  // Calcular el hash de la operación dummy
+  // Compute the hash of the dummy operation
   const userOpHash = getUserOpHash(dummyUserOp, entryPointAddress, chainId);
 
-  // Generar una firma dummy
-  // Utilizamos una clave privada aleatoria para esto
+  // Generate a dummy signature
+  // We use a random private key for this
   const dummyWallet = ethers.Wallet.createRandom();
   const dummySignature = await dummyWallet.signMessage(ethers.utils.arrayify(userOpHash));
 
-  Logger.log('Generated dummy signature:', dummySignature);
+  Logger.log('generateDummySignature', dummySignature);
 
   return dummySignature;
 }
+// 1 request every 10 seconds
+const queue = new PQueue({ interval: QUEUE_GAS_INTERVAL, intervalCap: 1 });
 
-const queue = new PQueue({ interval: 10000, intervalCap: 1 }); // 1 request each 10 seg
-
+/**
+ * Retrieves the paymaster data for a UserOperation from the gas service.
+ *
+ * This function requests the paymaster data, including the gas limits and other parameters,
+ * by interacting with an external gas service API.
+ *
+ * @param config - Configuration for the gas service.
+ * @param userOp - The user operation for which paymaster data is required.
+ * @param signer - The signer for the operation.
+ * @param overrides - Optional gas overrides for customization.
+ * @returns The gas service response containing paymaster data and gas limits.
+ */
 export async function getPaymasterAndData(
   config: GasServiceConfig,
   userOp: Partial<PackedUserOperationType>,
@@ -107,7 +131,7 @@ export async function getPaymasterAndData(
   };
 
   try {
-    // Wrapper function in quue to avoid erro 429 (rate-limit)
+    // Wrapper function in queue to avoid error 429 (rate-limit)
     const response = (await queue.add(async () =>
       axios.post(process.env.ARBITRUM_SEPOLIA_RPC_URL ?? '', payload, {
         headers: {
@@ -123,11 +147,23 @@ export async function getPaymasterAndData(
 
     return response.data.result;
   } catch (error) {
-    Logger.error('Error fetching paymaster data:', error);
+    Logger.error('getPaymasterAndData', error);
     throw error;
   }
 }
 
+/**
+ * Applies the paymaster data to a UserOperation.
+ *
+ * This function retrieves the required paymaster data and updates the UserOperation with it,
+ * including the gas limits and other parameters provided by the gas service.
+ *
+ * @param config - Configuration for the gas service.
+ * @param userOp - The user operation to update.
+ * @param signer - The signer for the operation.
+ * @param overrides - Optional gas overrides for customization.
+ * @returns A new UserOperation with the paymaster data applied.
+ */
 const applyPaymasterDataToUserOp = async (
   config: GasServiceConfig,
   userOp: Partial<PackedUserOperationType>,
