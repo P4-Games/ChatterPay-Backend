@@ -9,10 +9,10 @@ import { sendUserOperation } from '../services/transferService';
 import { verifyWalletBalanceInRpc } from '../services/balanceService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import Transaction, { ITransaction } from '../models/transactionModel';
-import { INFURA_API_KEY, GCP_CLOUD_TRACE_ENABLED } from '../config/constants';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
+import { INFURA_URL, INFURA_API_KEY, GCP_CLOUD_TRACE_ENABLED } from '../config/constants';
 import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
 import {
   ConcurrentOperationsEnum,
@@ -96,7 +96,7 @@ export const checkTransactionStatus = async (
   const { trx_hash } = request.params;
 
   try {
-    const web3 = new Web3(`https://mainnet.infura.io/v3/${INFURA_API_KEY}`);
+    const web3 = new Web3(`${INFURA_URL}/${INFURA_API_KEY}`);
 
     const transaction = await Transaction.findOne({ trx_hash });
     if (!transaction) {
