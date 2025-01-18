@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
-import { LogLevelType, validLogLevels } from '../types/logger';
+import { LogLevelType, validLogLevels } from '../types/loggerType';
 
 dotenv.config();
 
@@ -125,3 +125,6 @@ export const QUEUE_GAS_INTERVAL = 10000; // 10 Seg
 
 export const FASTIFY_REFRESH_TOKENS_INTERVAL_MS: number = Number(fastifyRefreshNetworksIntervalMs);
 export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(fastifyRefreshTokensIntervalMs);
+
+export const WHATSAPP_API_URL = 'https://api.whatsapp.com';
+export const CHATIZALO_PHONE_NUMBER = IS_DEVELOPMENT ? 5491164629653 : 5491164629653;
