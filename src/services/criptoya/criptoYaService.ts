@@ -1,14 +1,6 @@
 import { Logger } from '../../helpers/loggerHelper';
-import { CurrencyType, FiatQuoteType } from '../../types/commonType';
-
-/**
- * API endpoints for fiat currency conversion rates
- */
-const CRIPTO_YA_URLS: [CurrencyType, string][] = [
-  ['UYU', 'https://criptoya.com/api/ripio/USDT/UYU'],
-  ['ARS', 'https://criptoya.com/api/ripio/USDT/ARS'],
-  ['BRL', 'https://criptoya.com/api/ripio/USDT/BRL']
-];
+import { FiatQuoteType } from '../../types/commonType';
+import { CRIPTO_YA_URLS } from '../../config/constants';
 
 /**
  * Fetches fiat quotes from external APIs

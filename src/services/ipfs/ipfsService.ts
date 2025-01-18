@@ -2,7 +2,7 @@ import { Readable } from 'stream';
 import PinataSDK from '@pinata/sdk';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { PINATA_JWT, NFT_UPLOAD_IMAGE_IPFS } from '../../config/constants';
+import { PINATA_JWT, PINATA_IPFS_URL, NFT_UPLOAD_IMAGE_IPFS } from '../../config/constants';
 
 export const ipfsService = {
   /*
@@ -31,7 +31,7 @@ export const ipfsService = {
         pinataOptions: { cidVersion: 0 }
       });
 
-      const url = `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
+      const url = `${PINATA_IPFS_URL}/${result.IpfsHash}`;
       Logger.log('uploadToIpfs', `Image successfully uploaded to IPFS: ${url}`);
       return url;
     } catch (error) {

@@ -5,7 +5,12 @@ import { Ed25519KeyIdentity } from '@dfinity/identity';
 import { mnemonicToSeed, validateMnemonic } from 'bip39';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { ICP_MNEMONIC, ICP_CANISTER_ID, NFT_UPLOAD_IMAGE_ICP } from '../../config/constants';
+import {
+  ICP_URL,
+  ICP_MNEMONIC,
+  ICP_CANISTER_ID,
+  NFT_UPLOAD_IMAGE_ICP
+} from '../../config/constants';
 
 /**
  * Generates an Ed25519KeyIdentity from a mnemonic seed phrase.
@@ -33,7 +38,7 @@ async function generateIdentityFromMnemonic(mnemonic: string): Promise<Ed25519Ke
  */
 async function createAgent(identity: Ed25519KeyIdentity): Promise<HttpAgent> {
   const agent = new HttpAgent({
-    host: 'https://ic0.app',
+    host: ICP_URL,
     identity
   });
 
