@@ -7,8 +7,8 @@ import {
   MantecaUser,
   MantecaOrder,
   MantecaUserCreate,
-  IMantecaBankAccount
-} from '../../../types/manteca';
+  MantecaBankAccount
+} from '../../../types/mantecaType';
 
 export const mantecaUserService = {
   /**
@@ -177,8 +177,8 @@ export const mantecaUserService = {
    *
    * @param {string} userId - Numeric ID of the user.
    * @param {string} coin - Currency code (e.g., ARS or USD).
-   * @param {IMantecaBankAccount} bankData - Bank account details.
-   * @returns {Promise<IMantecaBankAccount>} Response of the added bank account.
+   * @param {MantecaBankAccount} bankData - Bank account details.
+   * @returns {Promise<MantecaBankAccount>} Response of the added bank account.
    * @example
    * {
    *   "bankCode": "-",
@@ -192,8 +192,8 @@ export const mantecaUserService = {
   async addBankAccount(
     userId: string,
     coin: string,
-    bankData: IMantecaBankAccount
-  ): Promise<IMantecaBankAccount> {
+    bankData: MantecaBankAccount
+  ): Promise<MantecaBankAccount> {
     try {
       const response = await axios.post(
         `${MANTECA_BASE_URL}/crypto/v1/user/${userId}/bankaccount/${coin}`,

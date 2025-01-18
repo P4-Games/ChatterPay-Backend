@@ -41,7 +41,7 @@ export interface BalanceInfoType {
   balance_conv: Record<CurrencyType, number>;
 }
 
-export interface walletBalanceInfoType {
+export interface WalletBalanceInfoType {
   walletBalance: string;
   amountToCheck: string;
   enoughBalance: boolean;
@@ -49,7 +49,7 @@ export interface walletBalanceInfoType {
 
 export interface CheckBalanceConditionsResultType {
   success: boolean;
-  setupContractsResult: setupContractReturnType | null;
+  setupContractsResult: SetupContractReturnType | null;
   entryPointContract: ethers.Contract | null;
 }
 
@@ -69,7 +69,7 @@ export interface ExecueTransactionResultType {
   transactionHash: string;
 }
 
-export interface setupContractReturnType {
+export interface SetupContractReturnType {
   provider: ethers.providers.JsonRpcProvider;
   signer: ethers.Wallet;
   backendSigner: ethers.Wallet;
