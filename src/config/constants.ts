@@ -139,4 +139,6 @@ export const CRIPTO_YA_URLS: [string, string][] = [
   ['ARS', 'https://criptoya.com/api/ripio/USDT/ARS'],
   ['BRL', 'https://criptoya.com/api/ripio/USDT/BRL']
 ];
+
+export const ICP_URL = 'https://ic0.app';
 export const PINATA_IPFS_URL = 'https://gateway.pinata.cloud/ipfs';
