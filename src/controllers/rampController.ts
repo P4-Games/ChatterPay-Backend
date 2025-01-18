@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { MantecaUserBalance } from '../types/mantecaType';
+import { MANTECA_MOCK_UPLOAD_DOCUMENTS_URL } from '../config/constants';
 import { mantecaUserService } from '../services/manteca/user/mantecaUserService';
 import { mantecaPriceService } from '../services/manteca/market/mantecaPriceService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
@@ -129,10 +130,10 @@ export const createRampUser = async (request: FastifyRequest, reply: FastifyRepl
 export const uploadRampUserDocuments = async (request: FastifyRequest, reply: FastifyReply) => {
   Logger.log('userUploadDocuments', 'Fetching upload URL for documents');
 
-  // Mocking the upload URL response
-  const uploadUrl = 'https://upload.manteca.dev/file-upload-url';
-
-  Logger.log('userUploadDocuments', `Uploading document to URL: ${uploadUrl}`);
+  Logger.log(
+    'userUploadDocuments',
+    `Uploading document to URL: ${MANTECA_MOCK_UPLOAD_DOCUMENTS_URL}`
+  );
   return returnSuccessResponse(reply, 'Document uploaded successfully');
 };
 
