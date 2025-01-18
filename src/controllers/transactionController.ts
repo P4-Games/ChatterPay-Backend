@@ -5,11 +5,12 @@ import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 
 import { Logger } from '../helpers/loggerHelper';
 import { IUser, IUserWallet } from '../models/userModel';
-import { getUser } from '../services/mongo/mongoService';
-import { verifyWalletBalanceInRpc } from '../services/walletService';
+import { sendUserOperation } from '../services/transferService';
+import { verifyWalletBalanceInRpc } from '../services/balanceService';
+import { mongoUserService } from '../services/mongo/mongoUserService';
 import Transaction, { ITransaction } from '../models/transactionModel';
 import { INFURA_API_KEY, GCP_CLOUD_TRACE_ENABLED } from '../config/constants';
-import { saveTransaction, sendUserOperation } from '../services/transferService';
+import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
@@ -17,7 +18,7 @@ import {
   ConcurrentOperationsEnum,
   ExecueTransactionResultType,
   CheckBalanceConditionsResultType
-} from '../types/common';
+} from '../types/commonType';
 import {
   openOperation,
   closeOperation,
@@ -301,7 +302,7 @@ export const makeTransaction = async (
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
-    const fromUser: IUser | null = await getUser(channel_user_id);
+    const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
     if (!fromUser) {
       validationError = 'User not found. You must have an account to make a transaction';
       rootSpan?.endSpan();
@@ -478,7 +479,7 @@ export const makeTransaction = async (
       : undefined;
 
     Logger.log('makeTransaction', 'Updating transaction in database.');
-    await saveTransaction(
+    await mongoTransactionService.saveTransaction(
       executeTransactionResult.transactionHash,
       userWallet.wallet_proxy,
       toAddress,
