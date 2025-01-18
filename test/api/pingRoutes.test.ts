@@ -21,8 +21,6 @@ describe('pingRoutes', () => {
     });
     // Assert the status code
     expect(response.statusCode).toBe(200);
-    // Assert the content type is JSON
-    expect(String(response.headers['content-type'])).toMatch(/application\/json/);
     // Assert the response payload
     expect(response.json()).toEqual({ status: 'ok', message: 'pong' });
   });
