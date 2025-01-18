@@ -7,11 +7,7 @@ import { IBlockchain } from '../../models/blockchainModel';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from './userOpExecutorService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
-import {
-  TokenAddressesType,
-  ExecuteSwapResultType,
-  SetupContractReturnType
-} from '../../types/commonType';
+import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../../types/commonType';
 
 /**
  * Creates callData for token approval
@@ -131,11 +127,11 @@ async function executeOperation(
  */
 export async function executeSwap(
   networkConfig: IBlockchain,
-  setupContractsResult: SetupContractReturnType,
+  setupContractsResult: SetupContractReturn,
   entryPointContract: ethers.Contract,
-  tokenAddresses: TokenAddressesType,
+  tokenAddresses: TokenAddresses,
   amount: string
-): Promise<ExecuteSwapResultType> {
+): Promise<ExecuteSwapResult> {
   try {
     const isWETHtoUSDT =
       tokenAddresses.tokenAddressInput.toUpperCase() === 'WETH' &&

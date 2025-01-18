@@ -1,8 +1,8 @@
 import { ethers } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
+import { PackedUserOperation } from '../../types/userOperationType';
 import { createPaymasterAndData } from '../../helpers/paymasterHelper';
-import { PackedUserOperationType } from '../../types/userOperationType';
 import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../../config/constants';
 
 /**
@@ -17,10 +17,10 @@ import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../../config/co
  * @returns A new UserOperation with the added paymaster data.
  */
 export async function addPaymasterData(
-  userOp: PackedUserOperationType,
+  userOp: PackedUserOperation,
   paymasterAddress: string,
   backendSigner: ethers.Signer
-): Promise<PackedUserOperationType> {
+): Promise<PackedUserOperation> {
   const paymasterAndData = await createPaymasterAndData(
     paymasterAddress,
     userOp.sender,

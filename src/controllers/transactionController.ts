@@ -15,9 +15,9 @@ import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validation
 import { INFURA_URL, INFURA_API_KEY, GCP_CLOUD_TRACE_ENABLED } from '../config/constants';
 import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
 import {
+  ExecueTransactionResult,
   ConcurrentOperationsEnum,
-  ExecueTransactionResultType,
-  CheckBalanceConditionsResultType
+  CheckBalanceConditionsResult
 } from '../types/commonType';
 import {
   openOperation,
@@ -383,7 +383,7 @@ export const makeTransaction = async (
       ? tracer?.createChildSpan({ name: 'checkBlockchainConditions' })
       : undefined;
 
-    const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
+    const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
       await checkBlockchainConditions(networkConfig, channel_user_id);
 
     if (!checkBlockchainConditionsResult.success) {
@@ -451,7 +451,7 @@ export const makeTransaction = async (
       ? tracer?.createChildSpan({ name: 'executeTransaction' })
       : undefined;
 
-    const executeTransactionResult: ExecueTransactionResultType = await sendUserOperation(
+    const executeTransactionResult: ExecueTransactionResult = await sendUserOperation(
       networkConfig,
       checkBlockchainConditionsResult.setupContractsResult!,
       checkBlockchainConditionsResult.entryPointContract!,

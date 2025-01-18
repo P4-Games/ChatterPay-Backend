@@ -1,12 +1,12 @@
+import { FiatQuote } from '../../types/commonType';
 import { Logger } from '../../helpers/loggerHelper';
-import { FiatQuoteType } from '../../types/commonType';
 import { CRIPTO_YA_URLS } from '../../config/constants';
 
 /**
  * Fetches fiat quotes from external APIs
- * @returns {Promise<FiatQuoteType[]>} Array of fiat currency quotes
+ * @returns {Promise<FiatQuote[]>} Array of fiat currency quotes
  */
-export async function getFiatQuotes(): Promise<FiatQuoteType[]> {
+export async function getFiatQuotes(): Promise<FiatQuote[]> {
   return Promise.all(
     CRIPTO_YA_URLS.map(async ([currency, url]) => {
       try {

@@ -4,7 +4,7 @@ import { Logger } from '../../helpers/loggerHelper';
 import { SIGNING_KEY } from '../../config/constants';
 import { getChatterpayABI } from '../gcp/gcpService';
 import { IBlockchain } from '../../models/blockchainModel';
-import { SetupContractReturnType } from '../../types/commonType';
+import { SetupContractReturn } from '../../types/commonType';
 import { computeProxyAddressFromPhone } from '../predictWalletService';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
 
@@ -36,7 +36,7 @@ export async function setupContracts(
   blockchain: IBlockchain,
   privateKey: string,
   fromNumber: string
-): Promise<SetupContractReturnType> {
+): Promise<SetupContractReturn> {
   const rpUrl = blockchain.rpc;
   if (!rpUrl) {
     throw new Error(`Unsupported chain ID: ${blockchain.chain_id}`);
@@ -58,7 +58,7 @@ export async function setupContracts(
   const chatterpayABI = await getChatterpayABI();
   const chatterPayContract = new ethers.Contract(proxy.proxyAddress, chatterpayABI, signer);
 
-  const result: SetupContractReturnType = {
+  const result: SetupContractReturn = {
     provider,
     signer,
     backendSigner,

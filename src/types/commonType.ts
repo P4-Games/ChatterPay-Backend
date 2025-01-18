@@ -5,7 +5,7 @@ import { ComputedAddress } from '../services/predictWalletService';
 /**
  * Basic token information including price
  */
-export interface TokenInfoType {
+export interface TokenInfo {
   symbol: string;
   address: string;
   rateUSD: number;
@@ -14,62 +14,62 @@ export interface TokenInfoType {
 /**
  * Supported fiat currencies for conversion
  */
-export type CurrencyType = 'USD' | 'UYU' | 'ARS' | 'BRL';
+export type Currency = 'USD' | 'UYU' | 'ARS' | 'BRL';
 
 /**
  * Fiat currency quote information
  */
-export interface FiatQuoteType {
-  currency: CurrencyType;
+export interface FiatQuote {
+  currency: Currency;
   rate: number;
 }
 
 /**
  * Token information including balance
  */
-export interface TokenBalanceType extends TokenInfoType {
+export interface TokenBalance extends TokenInfo {
   balance: string;
 }
 
 /**
  * Detailed balance information for a token including conversions
  */
-export interface BalanceInfoType {
+export interface BalanceInfo {
   network: string;
   token: string;
   balance: number;
-  balance_conv: Record<CurrencyType, number>;
+  balance_conv: Record<Currency, number>;
 }
 
-export interface WalletBalanceInfoType {
+export interface WalletBalanceInfo {
   walletBalance: string;
   amountToCheck: string;
   enoughBalance: boolean;
 }
 
-export interface CheckBalanceConditionsResultType {
+export interface CheckBalanceConditionsResult {
   success: boolean;
-  setupContractsResult: SetupContractReturnType | null;
+  setupContractsResult: SetupContractReturn | null;
   entryPointContract: ethers.Contract | null;
 }
 
-export interface TokenAddressesType {
+export interface TokenAddresses {
   tokenAddressInput: string;
   tokenAddressOutput: string;
 }
 
-export interface ExecuteSwapResultType {
+export interface ExecuteSwapResult {
   success: boolean;
   approveTransactionHash: string;
   swapTransactionHash: string;
 }
 
-export interface ExecueTransactionResultType {
+export interface ExecueTransactionResult {
   success: boolean;
   transactionHash: string;
 }
 
-export interface SetupContractReturnType {
+export interface SetupContractReturn {
   provider: ethers.providers.JsonRpcProvider;
   signer: ethers.Wallet;
   backendSigner: ethers.Wallet;

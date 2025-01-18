@@ -6,7 +6,7 @@ import { Logger } from '../../helpers/loggerHelper';
 import { IBlockchain } from '../../models/blockchainModel';
 import { QUEUE_GAS_INTERVAL } from '../../config/constants';
 import { getUserOpHash } from '../../helpers/userOperationHekper';
-import { PackedUserOperationType } from '../../types/userOperationType';
+import { PackedUserOperation } from '../../types/userOperationType';
 
 interface AlchemyGasResponse {
   paymasterAndData: string;
@@ -56,12 +56,12 @@ const createGasServiceConfig = (
  * @returns The generated dummy signature.
  */
 export async function generateDummySignature(
-  userOperation: Partial<PackedUserOperationType>,
+  userOperation: Partial<PackedUserOperation>,
   entryPointAddress: string,
   chainId: number
 ): Promise<string> {
   // Create a "dummy" version of the UserOperation
-  const dummyUserOp: PackedUserOperationType = {
+  const dummyUserOp: PackedUserOperation = {
     sender: userOperation.sender ?? ethers.constants.AddressZero,
     nonce: userOperation.nonce || ethers.constants.Zero,
     initCode: userOperation.initCode ?? '0x',
@@ -105,7 +105,7 @@ const queue = new PQueue({ interval: QUEUE_GAS_INTERVAL, intervalCap: 1 });
 export async function getPaymasterAndData(
   networkConfig: IBlockchain,
   config: GasServiceConfig,
-  userOp: Partial<PackedUserOperationType>,
+  userOp: Partial<PackedUserOperation>,
   signer: ethers.Signer,
   overrides?: GasOverrides
 ): Promise<AlchemyGasResponse> {
@@ -169,10 +169,10 @@ export async function getPaymasterAndData(
 const applyPaymasterDataToUserOp = async (
   networkConfig: IBlockchain,
   config: GasServiceConfig,
-  userOp: Partial<PackedUserOperationType>,
+  userOp: Partial<PackedUserOperation>,
   signer: ethers.Signer,
   overrides?: GasOverrides
-): Promise<PackedUserOperationType> => {
+): Promise<PackedUserOperation> => {
   const gasData = await getPaymasterAndData(networkConfig, config, userOp, signer, overrides);
 
   return {
@@ -183,7 +183,7 @@ const applyPaymasterDataToUserOp = async (
     preVerificationGas: BigNumber.from(gasData.preVerificationGas),
     maxFeePerGas: BigNumber.from(gasData.maxFeePerGas),
     maxPriorityFeePerGas: BigNumber.from(gasData.maxPriorityFeePerGas)
-  } as PackedUserOperationType;
+  } as PackedUserOperation;
 };
 
 export const gasService = {
