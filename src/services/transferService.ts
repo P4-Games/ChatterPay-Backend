@@ -1,22 +1,21 @@
 import { ethers } from 'ethers';
 
 import { IToken } from '../models/tokenModel';
-import { getUser } from './mongo/mongoService';
 import { Logger } from '../helpers/loggerHelper';
-import { getTokenBalances } from './walletService';
-import { setupERC20 } from './contractSetupService';
-import Transaction from '../models/transactionModel';
-import { addPaymasterData } from './paymasterService';
+import { getTokenBalances } from './balanceService';
 import { IBlockchain } from '../models/blockchainModel';
+import { setupERC20 } from './web3/contractSetupService';
 import { IUser, IUserWallet } from '../models/userModel';
-import { sendUserOperationToBundler } from './bundlerService';
+import { addPaymasterData } from './web3/paymasterService';
+import { mongoUserService } from './mongo/mongoUserService';
 import { checkBlockchainConditions } from './blockchainService';
-import { waitForUserOperationReceipt } from './userOpExecutorService';
+import { sendUserOperationToBundler } from './web3/bundlerService';
+import { waitForUserOperationReceipt } from './web3/userOpExecutorService';
 import {
   signUserOperation,
   createTransferCallData,
   createGenericUserOperation
-} from './userOperationService';
+} from './web3/userOperationService';
 import {
   openOperation,
   closeOperation,
@@ -25,11 +24,11 @@ import {
 } from './userService';
 import {
   TokenBalanceType,
-  setupContractReturnType,
+  SetupContractReturnType,
   ConcurrentOperationsEnum,
   ExecueTransactionResultType,
   CheckBalanceConditionsResultType
-} from '../types/common';
+} from '../types/commonType';
 
 /**
  * Sends a user operation for token transfer.
@@ -45,7 +44,7 @@ import {
  */
 export async function sendUserOperation(
   networkConfig: IBlockchain,
-  setupContractsResult: setupContractReturnType,
+  setupContractsResult: SetupContractReturnType,
   entryPointContract: ethers.Contract,
   fromNumber: string,
   to: string,
@@ -115,39 +114,6 @@ export async function sendUserOperation(
   }
 }
 
-/**
- * Saves the transaction details to the database.
- */
-export async function saveTransaction(
-  tx: string,
-  walletFrom: string,
-  walletTo: string,
-  amount: number,
-  token: string,
-  type: string,
-  status: string
-) {
-  try {
-    await Transaction.create({
-      trx_hash: tx,
-      wallet_from: walletFrom,
-      wallet_to: walletTo,
-      type,
-      date: new Date(),
-      status,
-      amount,
-      token
-    });
-  } catch (error: unknown) {
-    // avoid throw error
-    Logger.error(
-      'saveTransaction',
-      `Error saving transaction ${tx} in database from: ${walletFrom}, to: ${walletTo}, amount: ${amount.toString()}, token: ${token}}:`,
-      (error as Error).message
-    );
-  }
-}
-
 export async function withdrawWalletAllFunds(
   tokens: IToken[],
   networkConfig: IBlockchain,
@@ -155,7 +121,7 @@ export async function withdrawWalletAllFunds(
   to_wallet: string
 ): Promise<{ result: boolean; message: string }> {
   try {
-    const bddUser: IUser | null = await getUser(channel_user_id);
+    const bddUser: IUser | null = await mongoUserService.getUser(channel_user_id);
     if (!bddUser) {
       return { result: false, message: 'There are not user with that phone number' };
     }

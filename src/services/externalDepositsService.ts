@@ -2,10 +2,10 @@ import { gql, request } from 'graphql-request';
 
 import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
-import Transaction from '../models/transactionModel';
 import { DEFAULT_CHAIN_ID } from '../config/constants';
 import { sendTransferNotification } from './notificationService';
 import { LastProcessedBlock } from '../models/lastProcessedBlockModel';
+import { mongoTransactionService } from './mongo/mongoTransactionService';
 
 /**
  * The GraphQL API URLs for querying external deposits.
@@ -58,20 +58,20 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
   const user = await UserModel.findOne({ wallet: { $regex: new RegExp(`^${transfer.to}$`, 'i') } });
 
   if (user) {
-    const value = (Number(transfer.value) / 1e18).toFixed(4);
+    const value = Number((Number(transfer.value) / 1e18).toFixed(4));
+
+    await mongoTransactionService.saveTransaction(
+      transfer.id,
+      transfer.from,
+      transfer.to,
+      value,
+      token,
+      'deposit',
+      'completed'
+    );
 
     // Send incoming transfer notification message, and record tx data
-    sendTransferNotification(transfer.to, user.phone_number, value, token);
-    new Transaction({
-      trx_hash: transfer.id,
-      wallet_from: transfer.from,
-      wallet_to: transfer.to,
-      type: 'deposit',
-      date: new Date(),
-      status: 'completed',
-      amount: value,
-      token
-    }).save();
+    await sendTransferNotification(transfer.to, user.phone_number, value.toString(), token);
   } else {
     Logger.log(
       'processExternalDeposit',

@@ -1,37 +1,12 @@
 import { ethers } from 'ethers';
 
-import { Logger } from '../helpers/loggerHelper';
-import { getChatterpayABI } from './bucketService';
-import { getNetworkConfig } from './networkService';
-import { IBlockchain } from '../models/blockchainModel';
-import { setupContractReturnType } from '../types/common';
-import { computeProxyAddressFromPhone } from './predictWalletService';
-
-/**
- * Returns a valid public Bundler RPC URL from Stackup given a chain id
- * @param chainId The chain ID Number
- * @returns {string} (The url)
- */
-function getBundlerUrl(chainId: number): string {
-  const bundlerUrls: { [key: number]: string | undefined } = {
-    1: 'https://public.stackup.sh/api/v1/node/ethereum-mainnet',
-    11155111: 'https://public.stackup.sh/api/v1/node/ethereum-sepolia',
-    137: 'https://public.stackup.sh/api/v1/node/polygon-mainnet',
-    80001: 'https://public.stackup.sh/api/v1/node/polygon-mumbai',
-    43114: 'https://public.stackup.sh/api/v1/node/avalanche-mainnet',
-    43113: 'https://public.stackup.sh/api/v1/node/avalanche-fuji',
-    10: 'https://public.stackup.sh/api/v1/node/optimism-mainnet',
-    11155420: 'https://public.stackup.sh/api/v1/node/optimism-sepolia',
-    56: 'https://public.stackup.sh/api/v1/node/bsc-mainnet',
-    97: 'https://public.stackup.sh/api/v1/node/bsc-testnet',
-    42161: 'https://public.stackup.sh/api/v1/node/arbitrum-one',
-    421614: process.env.ARBITRUM_SEPOLIA_RPC_URL,
-    8453: 'https://public.stackup.sh/api/v1/node/base-mainnet',
-    84532: 'https://public.stackup.sh/api/v1/node/base-sepolia'
-  };
-
-  return bundlerUrls[chainId] || '';
-}
+import { Logger } from '../../helpers/loggerHelper';
+import { SIGNING_KEY } from '../../config/constants';
+import { getChatterpayABI } from '../gcp/gcpService';
+import { IBlockchain } from '../../models/blockchainModel';
+import { SetupContractReturnType } from '../../types/commonType';
+import { computeProxyAddressFromPhone } from '../predictWalletService';
+import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
 
 /**
  * Validate Bundle Url
@@ -61,33 +36,33 @@ export async function setupContracts(
   blockchain: IBlockchain,
   privateKey: string,
   fromNumber: string
-): Promise<setupContractReturnType> {
-  const bundlerUrl = getBundlerUrl(blockchain.chain_id);
-  if (!bundlerUrl) {
+): Promise<SetupContractReturnType> {
+  const rpUrl = blockchain.rpc;
+  if (!rpUrl) {
     throw new Error(`Unsupported chain ID: ${blockchain.chain_id}`);
   }
 
-  Logger.log('setupContracts', `Validating bundler URL: ${bundlerUrl}`);
-  const isValidBundler = await validateBundlerUrl(bundlerUrl);
+  Logger.log('setupContracts', `Validating RPC URL: ${rpUrl}`);
+  const isValidBundler = await validateBundlerUrl(rpUrl);
   if (!isValidBundler) {
-    throw new Error(`Invalid or unreachable bundler URL: ${bundlerUrl}`);
+    throw new Error(`Invalid or unreachable RPC URL: ${rpUrl}`);
   }
 
-  const network = await getNetworkConfig();
+  const network = await mongoBlockchainService.getNetworkConfig();
   const provider = new ethers.providers.JsonRpcProvider(network.rpc);
   const signer = new ethers.Wallet(privateKey, provider);
-  const backendSigner = new ethers.Wallet(process.env.SIGNING_KEY!, provider);
+  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
   const proxy = await computeProxyAddressFromPhone(fromNumber);
   const accountExists = true;
 
   const chatterpayABI = await getChatterpayABI();
   const chatterPayContract = new ethers.Contract(proxy.proxyAddress, chatterpayABI, signer);
 
-  const result: setupContractReturnType = {
+  const result: SetupContractReturnType = {
     provider,
     signer,
     backendSigner,
-    bundlerUrl,
+    bundlerUrl: rpUrl,
     chatterPay: chatterPayContract,
     proxy,
     accountExists

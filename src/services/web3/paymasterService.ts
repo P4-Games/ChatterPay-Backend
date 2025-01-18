@@ -1,9 +1,9 @@
 import { ethers } from 'ethers';
 
-import { Logger } from '../helpers/loggerHelper';
-import { PackedUserOperationType } from '../types/userOperation';
-import { createPaymasterAndData } from '../helpers/paymasterHelper';
-import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../config/constants';
+import { Logger } from '../../helpers/loggerHelper';
+import { createPaymasterAndData } from '../../helpers/paymasterHelper';
+import { PackedUserOperationType } from '../../types/userOperationType';
+import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../../config/constants';
 
 /**
  * Adds paymaster-related data to the given UserOperation.

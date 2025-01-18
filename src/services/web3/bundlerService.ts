@@ -2,9 +2,9 @@ import PQueue from 'p-queue';
 import { ethers } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
 
-import { Logger } from '../helpers/loggerHelper';
-import { QUEUE_BUNDLER_INTERVAL } from '../config/constants';
-import { PackedUserOperationType } from '../types/userOperation';
+import { Logger } from '../../helpers/loggerHelper';
+import { QUEUE_BUNDLER_INTERVAL } from '../../config/constants';
+import { PackedUserOperationType } from '../../types/userOperationType';
 
 const queue = new PQueue({ interval: QUEUE_BUNDLER_INTERVAL, intervalCap: 1 }); // 1 request each 10 seg
 
