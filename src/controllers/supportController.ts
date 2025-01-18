@@ -1,12 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
+import { mongoUserService } from '../services/mongo/mongoUserService';
 import { returnSuccessResponse, returnErrorResponse500 } from '../helpers/requestHelper';
-import {
-  resetUserOperationsCounter,
-  getUsersWithOperationsInProgress,
-  resetUserOperationsCounterWithTimeCondition
-} from '../services/mongo/mongoService';
 
 /**
  * Handler to check for users with open operations in progress.
@@ -21,7 +17,7 @@ export const checkUsersWithOpenOperations = async (
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   try {
-    const users = await getUsersWithOperationsInProgress();
+    const users = await mongoUserService.getUsersWithOperationsInProgress();
     return await returnSuccessResponse(reply, '', { users });
   } catch (error) {
     Logger.error('checkUsersWithOpenOperations', error);
@@ -42,7 +38,7 @@ export const resetUsersOperations = async (
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   try {
-    const updatedCount = await resetUserOperationsCounter();
+    const updatedCount = await mongoUserService.resetUserOperationsCounter();
     return await returnSuccessResponse(
       reply,
       `${updatedCount} users' operations has been reset to 0.`
@@ -67,7 +63,7 @@ export const resetUsersOperationsWithTimeCondition = async (
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   try {
-    const updatedCount = await resetUserOperationsCounterWithTimeCondition();
+    const updatedCount = await mongoUserService.resetUserOperationsCounterWithTimeCondition();
     return await returnSuccessResponse(
       reply,
       `${updatedCount} users' operations have been reset to 0 based on the time condition.`

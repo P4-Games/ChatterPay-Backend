@@ -1,12 +1,15 @@
 import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
-import { Logger } from '../helpers/loggerHelper';
-import { getEntryPointABI } from './bucketService';
+import { Logger } from '../../helpers/loggerHelper';
+import { getEntryPointABI } from '../gcp/gcpService';
 import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
-import { UserOperationReceipt, UserOperationReceiptData } from '../types/userOperation';
+import {
+  UserOperationReceiptType,
+  UserOperationReceiptDataType
+} from '../../types/userOperationType';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -23,20 +26,20 @@ declare module 'fastify' {
  * @param {string} userOpHash - The hash of the user operation to wait for.
  * @param {number} timeout - The maximum time to wait for the receipt, in milliseconds. Default is 60000ms.
  * @param {number} interval - The interval between retries, in milliseconds. Default is 5000ms.
- * @returns {Promise<UserOperationReceipt>} The user operation receipt when available.
+ * @returns {Promise<UserOperationReceiptType>} The user operation receipt when available.
  */
 export async function waitForUserOperationReceipt(
   provider: ethers.providers.JsonRpcProvider,
   userOpHash: string,
   timeout = 60000,
   interval = 5000
-): Promise<UserOperationReceipt> {
+): Promise<UserOperationReceiptType> {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
     const checkReceipt = () => {
       provider
         .send('eth_getUserOperationReceipt', [userOpHash])
-        .then((receipt: UserOperationReceipt | null) => {
+        .then((receipt: UserOperationReceiptType | null) => {
           if (receipt) {
             resolve(receipt);
           } else if (Date.now() - startTime < timeout) {
@@ -68,14 +71,14 @@ export async function waitForUserOperationReceipt(
  * @param {string} callData - The data for the transaction call.
  * @param {ethers.Wallet} signer - The signer used to sign the user operation.
  * @param {string} senderAddress - The address of the sender initiating the user operation.
- * @returns {Promise<UserOperationReceiptData>} The receipt data of the user operation once the transaction is mined.
+ * @returns {Promise<UserOperationReceiptDataType>} The receipt data of the user operation once the transaction is mined.
  */
 export async function executeUserOperation(
   fastify: FastifyInstance,
   callData: string,
   signer: ethers.Wallet,
   senderAddress: string
-): Promise<UserOperationReceiptData> {
+): Promise<UserOperationReceiptDataType> {
   Logger.log('executeUserOperation', 'Starting executeUserOperation.');
   Logger.log('executeUserOperation', 'Sender address:', senderAddress);
   Logger.log('executeUserOperation', 'Call data:', callData);

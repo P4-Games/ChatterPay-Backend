@@ -3,11 +3,11 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { SIGNING_KEY } from '../config/constants';
-import { executeSwap } from '../services/swapService';
-import { setupERC20 } from '../services/contractSetupService';
-import { saveTransaction } from '../services/transferService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { executeSwap } from '../services/web3/simpleSwapService';
+import { setupERC20 } from '../services/web3/contractSetupService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
 import {
@@ -20,7 +20,7 @@ import {
   ExecuteSwapResultType,
   ConcurrentOperationsEnum,
   CheckBalanceConditionsResultType
-} from '../types/common';
+} from '../types/commonType';
 import {
   sendSwapNotification,
   sendInternalErrorNotification,
@@ -205,7 +205,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     // Save transactions OUT
     Logger.log('swap', 'Updating swap transactions in database.');
-    await saveTransaction(
+    await mongoTransactionService.saveTransaction(
       executeSwapResult.approveTransactionHash,
       proxyAddress,
       networkConfig.contracts.simpleSwapAddress,
@@ -216,7 +216,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     );
 
     // Save transactions IN
-    await saveTransaction(
+    await mongoTransactionService.saveTransaction(
       executeSwapResult.swapTransactionHash,
       networkConfig.contracts.simpleSwapAddress,
       proxyAddress,

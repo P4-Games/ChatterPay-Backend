@@ -3,7 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { Logger } from '../../helpers/loggerHelper';
 import Token, { IToken } from '../../models/tokenModel';
 import { IBlockchain } from '../../models/blockchainModel';
-import { getNetworkConfig } from '../../services/networkService';
+import { mongoBlockchainService } from '../../services/mongo/mongoBlockchainService';
 import {
   FASTIFY_REFRESH_TOKENS_INTERVAL_MS,
   FASTIFY_REFRESH_NETWORKS_INTERVAL_MS
@@ -28,7 +28,7 @@ export async function setupNetworkConfigPlugin(server: FastifyInstance): Promise
   const initialTokens = await Token.find();
 
   // Fetch the network configuration once during server startup
-  const networkConfig = await getNetworkConfig();
+  const networkConfig = await mongoBlockchainService.getNetworkConfig();
 
   // Decorate Fastify instance with network configuration and tokens
   // eslint-disable-next-line no-param-reassign
@@ -58,7 +58,7 @@ export async function setupNetworkConfigPlugin(server: FastifyInstance): Promise
    */
   server.decorate('refreshBlockchains', async () => {
     try {
-      const updatedConfig = await getNetworkConfig();
+      const updatedConfig = await mongoBlockchainService.getNetworkConfig();
       // eslint-disable-next-line no-param-reassign
       server.networkConfig = updatedConfig;
       Logger.info('refreshBlockchains', 'Network config refreshed successfully');

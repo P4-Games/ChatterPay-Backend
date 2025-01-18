@@ -4,20 +4,28 @@ import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
+import { icpService } from '../services/icp/icpService';
 import { IUser, IUserWallet } from '../models/userModel';
 import { getDynamicGas } from '../helpers/paymasterHelper';
-import { ConcurrentOperationsEnum } from '../types/common';
-import { getNetworkConfig } from '../services/networkService';
+import { ipfsService } from '../services/ipfs/ipfsService';
+import { ConcurrentOperationsEnum } from '../types/commonType';
 import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
+import { downloadAndProcessImage } from '../services/imageService';
 import { sendMintNotification } from '../services/notificationService';
-import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
+import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
-import { uploadToICP, uploadToIpfs, downloadAndProcessImage } from '../services/uploadService';
 import {
   returnErrorResponse,
   returnSuccessResponse,
   returnErrorResponse500
 } from '../helpers/requestHelper';
+import {
+  SIGNING_KEY,
+  defaultNftImage,
+  DEFAULT_CHAIN_ID,
+  WHATSAPP_API_URL,
+  CHATIZALO_PHONE_NUMBER
+} from '../config/constants';
 import {
   getUserWallet,
   openOperation,
@@ -66,7 +74,7 @@ const mintNftOriginal = async (
   bddIdToUseAsUri: string
 ): Promise<NFTData> => {
   try {
-    const networkConfig = await getNetworkConfig(DEFAULT_CHAIN_ID);
+    const networkConfig = await mongoBlockchainService.getNetworkConfig(DEFAULT_CHAIN_ID);
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const nftContract = new ethers.Contract(
@@ -123,7 +131,7 @@ const mintNftCopy = async (
   bddIdToUseAsUri: string
 ): Promise<NFTData> => {
   try {
-    const networkConfig = await getNetworkConfig(DEFAULT_CHAIN_ID);
+    const networkConfig = await mongoBlockchainService.getNetworkConfig(DEFAULT_CHAIN_ID);
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const nftContract = new ethers.Contract(
@@ -342,7 +350,7 @@ export const generateNftOriginal = async (
   let icpImageUrl = '';
 
   try {
-    ipfsImageUrl = await uploadToIpfs(processedImage, fileName);
+    ipfsImageUrl = await ipfsService.uploadToIpfs(processedImage, fileName);
   } catch (error) {
     Logger.warn(
       'generateNftOriginal',
@@ -353,7 +361,7 @@ export const generateNftOriginal = async (
   }
 
   try {
-    icpImageUrl = await uploadToICP(processedImage, fileName);
+    icpImageUrl = await icpService.uploadToICP(processedImage, fileName);
   } catch (error) {
     Logger.warn(
       'generateNftOriginal',
@@ -610,7 +618,8 @@ export const getLastNFT = async (
 
     // Check postman requests
     const isPostman = request.headers['user-agent']?.includes('Postman');
-    const returnUrl = `https://api.whatsapp.com/send/?phone=5491164629653&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`;
+
+    const returnUrl = `${WHATSAPP_API_URL}/send/?phone=${CHATIZALO_PHONE_NUMBER}&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`;
 
     if (isPostman) {
       return await returnSuccessResponse(reply, 'URL para compartir el NFT', { url: returnUrl });
@@ -633,7 +642,7 @@ export const getPhoneNFTs = async (
   phone_number: string
 ): Promise<{ count: number; nfts: NFTInfo[] }> => {
   try {
-    const networkConfig = await getNetworkConfig(DEFAULT_CHAIN_ID);
+    const networkConfig = await mongoBlockchainService.getNetworkConfig(DEFAULT_CHAIN_ID);
     const nfts = await NFTModel.find({ channel_user_id: phone_number });
 
     return {

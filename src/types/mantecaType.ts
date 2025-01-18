@@ -1,4 +1,4 @@
-export interface IMantecaBankAccount {
+export interface MantecaBankAccount {
   description: string;
   cbu: string;
   bankCode: string;
@@ -36,7 +36,7 @@ export interface MantecaUser {
   civilState: string;
   name: string;
   creationTime: string;
-  bankAccounts: Record<string, IMantecaBankAccount[]>;
+  bankAccounts: Record<string, MantecaBankAccount[]>;
   balance: MantecaUserBalance;
   addresses: Record<string, string>;
   exchangeCountry: string;

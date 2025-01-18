@@ -1,14 +1,14 @@
 /**
  * Base interface for request parameters
  */
-interface BaseParams<T> {
+interface BaseParamsType<T> {
   Params: T;
 }
 
 /**
  * Interface for simple GET requests
  */
-export interface SimpleQuerystring {
+export interface SimpleQuerystringType {
   Querystring: {
     channel_user_id: string;
   };
@@ -17,14 +17,14 @@ export interface SimpleQuerystring {
 /**
  * Interface for GET requests with numeric id parameter
  */
-export type IDParam = BaseParams<{ id: number }>;
+export type IdParamType = BaseParamsType<{ id: number }>;
 
 /**
  * Interface for GET requests with string id parameter
  */
-export type IDStringParam = BaseParams<{ id: string }>;
+export type IdStringParamType = BaseParamsType<{ id: string }>;
 
 /**
  * Interface for GET requests with token id parameter
  */
-export type NFTListParam = BaseParams<{ tokenId: number }>;
+export type NftListParamType = BaseParamsType<{ tokenId: number }>;
