@@ -1,32 +1,32 @@
 import { ethers } from 'ethers';
-import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
-import { SIGNING_KEY } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { SIGNING_KEY } from '../config/constants';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
-import { checkBlockchainConditions, getTokensAddresses } from '../services/blockchainService';
-import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
-import {
-  sendInternalErrorNotification,
-  sendNoValidBlockchainConditionsNotification,
-  sendSwapNotification,
-  sendUserInsufficientBalanceNotification
-} from '../services/notificationService';
-import { computeProxyAddressFromPhone } from '../services/predictWalletService';
-import {
-  closeOperation,
-  hasPhoneAnyOperationInProgress,
-  openOperation
-} from '../services/userService';
-import { setupERC20 } from '../services/web3/contractSetupService';
 import { executeSwap } from '../services/web3/simpleSwapService';
+import { setupERC20 } from '../services/web3/contractSetupService';
+import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
 import {
-  CheckBalanceConditionsResultType,
-  ConcurrentOperationsEnum,
+  openOperation,
+  closeOperation,
+  hasPhoneAnyOperationInProgress
+} from '../services/userService';
+import {
+  TokenAddressesType,
   ExecuteSwapResultType,
-  TokenAddressesType
+  ConcurrentOperationsEnum,
+  CheckBalanceConditionsResultType
 } from '../types/commonType';
+import {
+  sendSwapNotification,
+  sendInternalErrorNotification,
+  sendUserInsufficientBalanceNotification,
+  sendNoValidBlockchainConditionsNotification
+} from '../services/notificationService';
 
 interface SwapBody {
   channel_user_id: string;

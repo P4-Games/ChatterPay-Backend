@@ -37,15 +37,15 @@ export async function setupContracts(
   privateKey: string,
   fromNumber: string
 ): Promise<SetupContractReturnType> {
-  const { bundlerUrl } = blockchain;
-  if (!bundlerUrl) {
+  const rpUrl = blockchain.rpc;
+  if (!rpUrl) {
     throw new Error(`Unsupported chain ID: ${blockchain.chain_id}`);
   }
 
-  Logger.log('setupContracts', `Validating bundler URL: ${bundlerUrl}`);
-  const isValidBundler = await validateBundlerUrl(bundlerUrl);
+  Logger.log('setupContracts', `Validating RPC URL: ${rpUrl}`);
+  const isValidBundler = await validateBundlerUrl(rpUrl);
   if (!isValidBundler) {
-    throw new Error(`Invalid or unreachable bundler URL: ${bundlerUrl}`);
+    throw new Error(`Invalid or unreachable RPC URL: ${rpUrl}`);
   }
 
   const network = await mongoBlockchainService.getNetworkConfig();
@@ -62,7 +62,7 @@ export async function setupContracts(
     provider,
     signer,
     backendSigner,
-    bundlerUrl,
+    bundlerUrl: rpUrl,
     chatterPay: chatterPayContract,
     proxy,
     accountExists
