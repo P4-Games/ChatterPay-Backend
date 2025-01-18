@@ -24,7 +24,7 @@ import {
 } from './userService';
 import {
   TokenBalanceType,
-  setupContractReturnType,
+  SetupContractReturnType,
   ConcurrentOperationsEnum,
   ExecueTransactionResultType,
   CheckBalanceConditionsResultType
@@ -44,7 +44,7 @@ import {
  */
 export async function sendUserOperation(
   networkConfig: IBlockchain,
-  setupContractsResult: setupContractReturnType,
+  setupContractsResult: SetupContractReturnType,
   entryPointContract: ethers.Contract,
   fromNumber: string,
   to: string,

@@ -10,7 +10,7 @@ import { signUserOperation, createGenericUserOperation } from './userOperationSe
 import {
   TokenAddressesType,
   ExecuteSwapResultType,
-  setupContractReturnType
+  SetupContractReturnType
 } from '../../types/commonType';
 
 /**
@@ -131,7 +131,7 @@ async function executeOperation(
  */
 export async function executeSwap(
   networkConfig: IBlockchain,
-  setupContractsResult: setupContractReturnType,
+  setupContractsResult: SetupContractReturnType,
   entryPointContract: ethers.Contract,
   tokenAddresses: TokenAddressesType,
   amount: string

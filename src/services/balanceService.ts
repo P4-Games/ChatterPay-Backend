@@ -13,7 +13,7 @@ import {
   TokenInfoType,
   BalanceInfoType,
   TokenBalanceType,
-  walletBalanceInfoType
+  WalletBalanceInfoType
 } from '../types/commonType';
 
 // Initialize the cache with a 5-minute TTL (Time To Live)
@@ -213,13 +213,13 @@ export function calculateBalancesTotals(balances: BalanceInfoType[]): Record<Cur
  * @param {ethers.Contract} tokenContract - Token contract instance
  * @param {string} walletAddress - Wallet address to check
  * @param {string} amountToCheck - Amount to check in wallet
- * @returns {Promise<walletBalanceInfoType>} Wallet balance information
+ * @returns {Promise<WalletBalanceInfoType>} Wallet balance information
  */
 export async function verifyWalletBalance(
   tokenContract: ethers.Contract,
   walletAddress: string,
   amountToCheck: string
-): Promise<walletBalanceInfoType> {
+): Promise<WalletBalanceInfoType> {
   const symbol: string = await tokenContract.symbol();
   Logger.log(
     'verifyWalletBalance',
@@ -235,7 +235,7 @@ export async function verifyWalletBalance(
     `Balance of wallet ${walletAddress}: ${walletBalanceFormatted} ${symbol}`
   );
 
-  const result: walletBalanceInfoType = {
+  const result: WalletBalanceInfoType = {
     walletBalance: walletBalanceFormatted,
     amountToCheck,
     enoughBalance: walletBalance.gte(amountToCheckFormatted)
@@ -250,14 +250,14 @@ export async function verifyWalletBalance(
  * @param {string} tokenContractAddress - Token contract address
  * @param {string} walletAddress - Wallet address to check
  * @param {string} amountToCheck - Amount to check in wallet
- * @returns {Promise<walletBalanceInfoType>} Wallet balance information
+ * @returns {Promise<WalletBalanceInfoType>} Wallet balance information
  */
 export async function verifyWalletBalanceByTokenAddress(
   blockchainConfig: IBlockchain,
   tokenContractAddress: string,
   walletAddress: string,
   amountToCheck: string
-): Promise<walletBalanceInfoType> {
+): Promise<WalletBalanceInfoType> {
   const provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpc);
   const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
   const tokenContract: ethers.Contract = await setupERC20(tokenContractAddress, backendSigner);
@@ -271,7 +271,7 @@ export async function verifyWalletBalanceByTokenAddress(
  * @param {string} tokenSymbol - Symbol of the token
  * @param {string} walletAddress - Wallet address to check
  * @param {string} amountToCheck - Amount to check in wallet
- * @returns {Promise<walletBalanceInfoType>} Wallet balance information
+ * @returns {Promise<WalletBalanceInfoType>} Wallet balance information
  */
 export async function verifyWalletBalanceByTokenSymbol(
   blockchainConfig: IBlockchain,
@@ -279,7 +279,7 @@ export async function verifyWalletBalanceByTokenSymbol(
   tokenSymbol: string,
   walletAddress: string,
   amountToCheck: string
-): Promise<walletBalanceInfoType> {
+): Promise<WalletBalanceInfoType> {
   const provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpc);
   const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
   const tokenContractAddress = getTokenAddress(blockchainConfig, blockchainTokens, tokenSymbol);
@@ -293,14 +293,14 @@ export async function verifyWalletBalanceByTokenSymbol(
  * @param {string} tokenAddress - Token contract address
  * @param {string} walletAddress - Wallet address to check
  * @param {string} amountToCheck - Amount to check in wallet
- * @returns {Promise<walletBalanceInfoType>} Wallet balance information
+ * @returns {Promise<WalletBalanceInfoType>} Wallet balance information
  */
 export async function verifyWalletBalanceInRpc(
   rpcUrl: string,
   tokenAddress: string,
   walletAddress: string,
   amountToCheck: string
-): Promise<walletBalanceInfoType> {
+): Promise<WalletBalanceInfoType> {
   const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
   const erc20Abi = [
     'function transfer(address to, uint256 amount) returns (bool)',

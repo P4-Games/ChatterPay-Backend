@@ -10,7 +10,7 @@ import { ensurePaymasterHasEnoughEth } from './web3/paymasterService';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import {
   TokenAddressesType,
-  setupContractReturnType,
+  SetupContractReturnType,
   CheckBalanceConditionsResultType
 } from '../types/commonType';
 import {
@@ -196,7 +196,7 @@ export async function checkBlockchainConditions(
     }
 
     const privateKey = generatePrivateKey(fromNumber);
-    const setupContractsResult: setupContractReturnType = await setupContracts(
+    const setupContractsResult: SetupContractReturnType = await setupContracts(
       blockchain,
       privateKey,
       fromNumber

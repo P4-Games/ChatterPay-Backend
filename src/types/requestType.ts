@@ -17,14 +17,14 @@ export interface SimpleQuerystringType {
 /**
  * Interface for GET requests with numeric id parameter
  */
-export type IDParamType = BaseParamsType<{ id: number }>;
+export type IdParamType = BaseParamsType<{ id: number }>;
 
 /**
  * Interface for GET requests with string id parameter
  */
-export type IDStringParamType = BaseParamsType<{ id: string }>;
+export type IdStringParamType = BaseParamsType<{ id: string }>;
 
 /**
  * Interface for GET requests with token id parameter
  */
-export type NFTListParamType = BaseParamsType<{ tokenId: number }>;
+export type NftListParamType = BaseParamsType<{ tokenId: number }>;

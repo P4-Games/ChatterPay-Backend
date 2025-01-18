@@ -1,32 +1,32 @@
 import { ethers } from 'ethers';
-import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-import { Logger } from '../helpers/loggerHelper';
 import { SIGNING_KEY } from '../config/constants';
-import { executeSwap } from '../services/web3/simpleSwapService';
-import { isValidPhoneNumber } from '../helpers/validationHelper';
-import { setupERC20 } from '../services/web3/contractSetupService';
-import { saveTransaction } from '../services/mongo/mongoTransactionService';
-import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
-import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
+import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { checkBlockchainConditions, getTokensAddresses } from '../services/blockchainService';
+import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import {
-  openOperation,
-  closeOperation,
-  hasPhoneAnyOperationInProgress
-} from '../services/userService';
-import {
-  TokenAddressesType,
-  ExecuteSwapResultType,
-  ConcurrentOperationsEnum,
-  CheckBalanceConditionsResultType
-} from '../types/commonType';
-import {
-  sendSwapNotification,
   sendInternalErrorNotification,
-  sendUserInsufficientBalanceNotification,
-  sendNoValidBlockchainConditionsNotification
+  sendNoValidBlockchainConditionsNotification,
+  sendSwapNotification,
+  sendUserInsufficientBalanceNotification
 } from '../services/notificationService';
+import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import {
+  closeOperation,
+  hasPhoneAnyOperationInProgress,
+  openOperation
+} from '../services/userService';
+import { setupERC20 } from '../services/web3/contractSetupService';
+import { executeSwap } from '../services/web3/simpleSwapService';
+import {
+  CheckBalanceConditionsResultType,
+  ConcurrentOperationsEnum,
+  ExecuteSwapResultType,
+  TokenAddressesType
+} from '../types/commonType';
 
 interface SwapBody {
   channel_user_id: string;
@@ -205,7 +205,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     // Save transactions OUT
     Logger.log('swap', 'Updating swap transactions in database.');
-    await saveTransaction(
+    await mongoTransactionService.saveTransaction(
       executeSwapResult.approveTransactionHash,
       proxyAddress,
       networkConfig.contracts.simpleSwapAddress,
@@ -216,7 +216,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     );
 
     // Save transactions IN
-    await saveTransaction(
+    await mongoTransactionService.saveTransaction(
       executeSwapResult.swapTransactionHash,
       networkConfig.contracts.simpleSwapAddress,
       proxyAddress,

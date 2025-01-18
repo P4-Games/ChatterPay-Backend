@@ -24,7 +24,7 @@ const blockchainSchema = new Schema<IBlockchain>({
   name: { type: String, required: true },
   chain_id: { type: Number, required: true },
   rpc: { type: String, required: true },
-  bundlerUrl: { type: String, required: falseqqq },
+  bundlerUrl: { type: String, required: false },
   logo: { type: String, required: true },
   explorer: { type: String, required: true },
   scan_apikey: { type: String, required: true },
