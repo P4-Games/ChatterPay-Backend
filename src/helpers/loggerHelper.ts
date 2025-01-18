@@ -1,7 +1,7 @@
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
-import { LogLevelType, validLogLevels } from '../types/logger';
+import { LogLevelType, validLogLevels } from '../types/loggerType';
 import { IS_DEVELOPMENT, CURRENT_LOG_LEVEL } from '../config/constants';
 
 // Create a pretty stream for local console output with colorized logs
