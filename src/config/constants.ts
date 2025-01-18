@@ -128,9 +128,15 @@ export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(fastifyRefres
 
 export const WHATSAPP_API_URL = 'https://api.whatsapp.com';
 export const CHATIZALO_PHONE_NUMBER = IS_DEVELOPMENT ? 5491164629653 : 5491164629653;
+
 export const MANTECA_MOCK_UPLOAD_DOCUMENTS_URL = 'https://upload.manteca.dev/file-upload-url';
 export const INFURA_URL = 'https://mainnet.infura.io/v3';
 export const BINANCE_API_URL = 'https://api.binance.us/api/v3';
+export const GRAPH_API_USDT_URL =
+  'https://api.studio.thegraph.com/query/91286/balance-sepolia/version/latest';
+export const GRAPH_API_WETH_URL =
+  'https://api.studio.thegraph.com/query/91286/balance-sepolia-weth/version/latest';
+
 /**
  * API endpoints for fiat currency conversion rates
  */
