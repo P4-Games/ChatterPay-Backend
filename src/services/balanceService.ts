@@ -3,10 +3,10 @@ import NodeCache from 'node-cache';
 
 import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
-import { SIGNING_KEY } from '../config/constants';
 import { getTokenAddress } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
 import { setupERC20 } from './web3/contractSetupService';
+import { SIGNING_KEY, BINANCE_API_URL } from '../config/constants';
 import {
   CurrencyType,
   FiatQuoteType,
@@ -92,7 +92,7 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
       try {
         const symbolReplaced = symbol.replace('WETH', 'ETH');
         const response = await fetch(
-          `https://api.binance.us/api/v3/ticker/price?symbol=${symbolReplaced}USDT`
+          `${BINANCE_API_URL}/ticker/price?symbol=${symbolReplaced}USDT`
         );
         const data = await response.json();
         if (data.price) {
