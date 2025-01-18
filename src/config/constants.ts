@@ -130,4 +130,12 @@ export const WHATSAPP_API_URL = 'https://api.whatsapp.com';
 export const CHATIZALO_PHONE_NUMBER = IS_DEVELOPMENT ? 5491164629653 : 5491164629653;
 export const INFURA_URL = 'https://mainnet.infura.io/v3';
 export const BINANCE_API_URL = 'https://api.binance.us/api/v3';
+/**
+ * API endpoints for fiat currency conversion rates
+ */
+export const CRIPTO_YA_URLS: [string, string][] = [
+  ['UYU', 'https://criptoya.com/api/ripio/USDT/UYU'],
+  ['ARS', 'https://criptoya.com/api/ripio/USDT/ARS'],
+  ['BRL', 'https://criptoya.com/api/ripio/USDT/BRL']
+];
 export const PINATA_IPFS_URL = 'https://gateway.pinata.cloud/ipfs';
