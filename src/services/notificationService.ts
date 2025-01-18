@@ -5,8 +5,8 @@ import { pushService } from './push/pushService';
 import { IBlockchain } from '../models/blockchainModel';
 import { mongoUserService } from './mongo/mongoUserService';
 import { chatizaloService } from './chatizalo/chatizaloService';
+import { chatizaloOperatorReply } from '../types/chatizaloType';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
-import { chatizaloOperatorReplyType } from '../types/chatizaloType';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { templateEnum, mongoTemplateService } from './mongo/mongoTemplateService';
 import {
@@ -143,7 +143,7 @@ export async function sendTransferNotification(
       .replaceAll('[AMOUNT]', amount)
       .replaceAll('[TOKEN]', token);
 
-    const payload: chatizaloOperatorReplyType = {
+    const payload: chatizaloOperatorReply = {
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message: formattedMessage
@@ -196,7 +196,7 @@ export async function sendSwapNotification(
       .replaceAll('[EXPLORER]', networkConfig.explorer)
       .replaceAll('[TRANSACTION_HASH]', transactionHash);
 
-    const payload: chatizaloOperatorReplyType = {
+    const payload: chatizaloOperatorReply = {
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message: formattedMessage
@@ -236,7 +236,7 @@ export async function sendMintNotification(
       .replaceAll('[ID]', id)
       .replaceAll('[NFTS_SHARE_URL]', CHATTERPAY_NFTS_SHARE_URL);
 
-    const payload: chatizaloOperatorReplyType = {
+    const payload: chatizaloOperatorReply = {
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message: formattedMessage
@@ -287,7 +287,7 @@ export async function sendOutgoingTransferNotification(
       .replaceAll('[EXPLORER]', networkConfig.explorer)
       .replaceAll('[TX_HASH]', txHash);
 
-    const payload: chatizaloOperatorReplyType = {
+    const payload: chatizaloOperatorReply = {
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message: formattedMessage
@@ -324,7 +324,7 @@ export async function sendUserInsufficientBalanceNotification(
       NotificationEnum.user_balance_not_enough
     );
 
-    const payload: chatizaloOperatorReplyType = {
+    const payload: chatizaloOperatorReply = {
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message
@@ -361,7 +361,7 @@ export async function sendNoValidBlockchainConditionsNotification(
       NotificationEnum.no_valid_blockchain_conditions
     );
 
-    const payload: chatizaloOperatorReplyType = {
+    const payload: chatizaloOperatorReply = {
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message
@@ -398,7 +398,7 @@ export async function sendInternalErrorNotification(
       NotificationEnum.internal_error
     );
 
-    const payload: chatizaloOperatorReplyType = {
+    const payload: chatizaloOperatorReply = {
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message
@@ -434,7 +434,7 @@ export async function SendConcurrecyOperationNotification(
       NotificationEnum.concurrent_operation
     );
 
-    const payload: chatizaloOperatorReplyType = {
+    const payload: chatizaloOperatorReply = {
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message

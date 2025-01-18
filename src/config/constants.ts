@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
-import { LogLevelType, validLogLevels } from '../types/loggerType';
+import { LogLevel, validLogLevels } from '../types/loggerType';
 
 dotenv.config();
 
@@ -91,10 +91,10 @@ export const PUSH_NETWORK: string = pushNetwork;
 export const PUSH_ENVIRONMENT: ENV = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;
 export const CHATTERPAY_DOMAIN: string = `https://${IS_DEVELOPMENT ? 'dev.' : ''}chatterpay.net`;
 export const CHATTERPAY_NFTS_SHARE_URL: string = `${CHATTERPAY_DOMAIN}/nfts/share`;
-export const CURRENT_LOG_LEVEL: LogLevelType = validLogLevels.includes(
-  minorLogLevel.toLowerCase() as LogLevelType
+export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
+  minorLogLevel.toLowerCase() as LogLevel
 )
-  ? (minorLogLevel.toLowerCase() as LogLevelType)
+  ? (minorLogLevel.toLowerCase() as LogLevel)
   : 'error';
 
 export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];

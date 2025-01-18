@@ -23,11 +23,11 @@ import {
   hasUserAnyOperationInProgress
 } from './userService';
 import {
-  TokenBalanceType,
-  SetupContractReturnType,
+  TokenBalance,
+  SetupContractReturn,
+  ExecueTransactionResult,
   ConcurrentOperationsEnum,
-  ExecueTransactionResultType,
-  CheckBalanceConditionsResultType
+  CheckBalanceConditionsResult
 } from '../types/commonType';
 
 /**
@@ -44,13 +44,13 @@ import {
  */
 export async function sendUserOperation(
   networkConfig: IBlockchain,
-  setupContractsResult: SetupContractReturnType,
+  setupContractsResult: SetupContractReturn,
   entryPointContract: ethers.Contract,
   fromNumber: string,
   to: string,
   tokenAddress: string,
   amount: string
-): Promise<ExecueTransactionResultType> {
+): Promise<ExecueTransactionResult> {
   try {
     // Create transfer-specific call data
     const erc20 = await setupERC20(tokenAddress, setupContractsResult.signer);
@@ -151,14 +151,14 @@ export async function withdrawWalletAllFunds(
 
     const to_wallet_formatted: string = !to_wallet.startsWith('0x') ? `0x${to_wallet}` : to_wallet;
 
-    const walletTokensBalance: TokenBalanceType[] = await getTokenBalances(
+    const walletTokensBalance: TokenBalance[] = await getTokenBalances(
       userWallet.wallet_proxy,
       tokens,
       networkConfig
     );
 
     // Check Blockchain Conditions
-    const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
+    const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
       await checkBlockchainConditions(networkConfig, channel_user_id);
 
     if (!checkBlockchainConditionsResult.success) {

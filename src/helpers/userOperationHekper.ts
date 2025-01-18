@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 
-import { PackedUserOperationType } from '../types/userOperationType';
+import { PackedUserOperation } from '../types/userOperationType';
 
 /**
  * Packs the UserOperation fields as per the contract's pack function.
@@ -11,7 +11,7 @@ import { PackedUserOperationType } from '../types/userOperationType';
  * @param userOp - The UserOperation object containing fields to be packed.
  * @returns The ABI-encoded packed user operation as a hex string.
  */
-function packUserOp(userOp: PackedUserOperationType): string {
+function packUserOp(userOp: PackedUserOperation): string {
   const { sender } = userOp;
   const { nonce } = userOp;
   const hashInitCode = ethers.utils.keccak256(userOp.initCode);
@@ -63,7 +63,7 @@ function packUserOp(userOp: PackedUserOperationType): string {
  * @param userOp - The UserOperation object containing the fields to be hashed.
  * @returns The hash of the packed user operation as a hex string.
  */
-function hashUserOp(userOp: PackedUserOperationType): string {
+function hashUserOp(userOp: PackedUserOperation): string {
   const packedUserOp = packUserOp(userOp);
   return ethers.utils.keccak256(packedUserOp);
 }
@@ -81,7 +81,7 @@ function hashUserOp(userOp: PackedUserOperationType): string {
  * @returns The userOpHash as a hex string, which is used for signing.
  */
 export function getUserOpHash(
-  userOp: PackedUserOperationType,
+  userOp: PackedUserOperation,
   entryPointAddress: string,
   chainId: number
 ): string {
