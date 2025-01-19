@@ -135,7 +135,7 @@ export async function getPaymasterAndData(
   try {
     // Wrapper function in queue to avoid error 429 (rate-limit)
     const response = (await queue.add(async () =>
-      axios.post(networkConfig.bundlerUrl, payload, {
+      axios.post(networkConfig.bundlerUrl!, payload, {
         headers: {
           accept: 'application/json',
           'content-type': 'application/json'
