@@ -9,9 +9,9 @@ import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { ensurePaymasterHasEnoughEth } from './web3/paymasterService';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import {
-  TokenAddressesType,
-  SetupContractReturnType,
-  CheckBalanceConditionsResultType
+  TokenAddresses,
+  SetupContractReturn,
+  CheckBalanceConditionsResult
 } from '../types/commonType';
 import {
   USER_SIGNER_MIN_BALANCE,
@@ -59,7 +59,7 @@ export function getTokensAddresses(
   blockchainTokens: IToken[],
   lookUpTokenSymbolInput: string,
   lookUpTokenSymbolOutput: string
-): TokenAddressesType {
+): TokenAddresses {
   const chainTokens = blockchainTokens.filter(
     (token) => token.chain_id === blockchainConfig.chain_id
   );
@@ -185,7 +185,7 @@ export async function ensureUserSignerHasEnoughEth(
 export async function checkBlockchainConditions(
   networkConfig: IBlockchain,
   fromNumber: string
-): Promise<CheckBalanceConditionsResultType> {
+): Promise<CheckBalanceConditionsResult> {
   try {
     const blockchain: IBlockchain | null = await mongoBlockchainService.getBlockchain(
       networkConfig.chain_id
@@ -196,7 +196,7 @@ export async function checkBlockchainConditions(
     }
 
     const privateKey = generatePrivateKey(fromNumber);
-    const setupContractsResult: SetupContractReturnType = await setupContracts(
+    const setupContractsResult: SetupContractReturn = await setupContracts(
       blockchain,
       privateKey,
       fromNumber

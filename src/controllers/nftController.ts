@@ -13,13 +13,19 @@ import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
 import { downloadAndProcessImage } from '../services/imageService';
 import { sendMintNotification } from '../services/notificationService';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
-import { SIGNING_KEY, defaultNftImage, DEFAULT_CHAIN_ID } from '../config/constants';
 import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
 import {
   returnErrorResponse,
   returnSuccessResponse,
   returnErrorResponse500
 } from '../helpers/requestHelper';
+import {
+  SIGNING_KEY,
+  defaultNftImage,
+  DEFAULT_CHAIN_ID,
+  WHATSAPP_API_URL,
+  CHATIZALO_PHONE_NUMBER
+} from '../config/constants';
 import {
   getUserWallet,
   openOperation,
@@ -612,7 +618,8 @@ export const getLastNFT = async (
 
     // Check postman requests
     const isPostman = request.headers['user-agent']?.includes('Postman');
-    const returnUrl = `https://api.whatsapp.com/send/?phone=5491164629653&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`;
+
+    const returnUrl = `${WHATSAPP_API_URL}/send/?phone=${CHATIZALO_PHONE_NUMBER}&text=Me%20gustar%C3%ADa%20mintear%20el%20NFT%20${nft.id}`;
 
     if (isPostman) {
       return await returnSuccessResponse(reply, 'URL para compartir el NFT', { url: returnUrl });

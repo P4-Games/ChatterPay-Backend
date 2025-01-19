@@ -2,18 +2,14 @@ import { gql, request } from 'graphql-request';
 
 import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
-import { DEFAULT_CHAIN_ID } from '../config/constants';
 import { sendTransferNotification } from './notificationService';
 import { LastProcessedBlock } from '../models/lastProcessedBlockModel';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
+import { DEFAULT_CHAIN_ID, GRAPH_API_USDT_URL, GRAPH_API_WETH_URL } from '../config/constants';
 
 /**
  * The GraphQL API URLs for querying external deposits.
  */
-const GRAPH_API_URL_USDT =
-  'https://api.studio.thegraph.com/query/91286/balance-sepolia/version/latest';
-const GRAPH_API_URL_WETH =
-  'https://api.studio.thegraph.com/query/91286/balance-sepolia-weth/version/latest';
 
 /**
  * GraphQL query to fetch external deposits.
@@ -116,8 +112,8 @@ export async function fetchExternalDeposits(
 
     // Execute the GraphQL queries for both USDT and WETH
     const [dataUSDT, dataWETH] = await Promise.all([
-      request<{ transfers: Transfer[] }>(GRAPH_API_URL_USDT, QUERY_EXTERNAL_DEPOSITS, variables),
-      request<{ transfers: Transfer[] }>(GRAPH_API_URL_WETH, QUERY_EXTERNAL_DEPOSITS, variables)
+      request<{ transfers: Transfer[] }>(GRAPH_API_USDT_URL, QUERY_EXTERNAL_DEPOSITS, variables),
+      request<{ transfers: Transfer[] }>(GRAPH_API_WETH_URL, QUERY_EXTERNAL_DEPOSITS, variables)
     ]);
 
     // Combine and filter out internal transfers and SimpleSwap transfers

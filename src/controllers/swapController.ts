@@ -16,10 +16,10 @@ import {
   hasPhoneAnyOperationInProgress
 } from '../services/userService';
 import {
-  TokenAddressesType,
-  ExecuteSwapResultType,
+  TokenAddresses,
+  ExecuteSwapResult,
   ConcurrentOperationsEnum,
-  CheckBalanceConditionsResultType
+  CheckBalanceConditionsResult
 } from '../types/commonType';
 import {
   sendSwapNotification,
@@ -45,7 +45,7 @@ interface SwapBody {
  */
 const validateInputs = async (
   inputs: SwapBody,
-  tokenAddresses: TokenAddressesType
+  tokenAddresses: TokenAddresses
 ): Promise<string> => {
   const { channel_user_id, inputCurrency, outputCurrency, amount } = inputs;
 
@@ -93,7 +93,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     const { tokens: blockchainTokens, networkConfig } = request.server as FastifyInstance;
 
-    const tokenAddresses: TokenAddressesType = getTokensAddresses(
+    const tokenAddresses: TokenAddresses = getTokensAddresses(
       networkConfig,
       blockchainTokens,
       inputCurrency,
@@ -157,7 +157,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     /* ***************************************************** */
     /* 5. swap: check blockchain conditions                  */
     /* ***************************************************** */
-    const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
+    const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
       await checkBlockchainConditions(networkConfig, channel_user_id);
 
     if (!checkBlockchainConditionsResult.success) {
@@ -170,7 +170,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     /* 6. swap: make operation                               */
     /* ***************************************************** */
 
-    const executeSwapResult: ExecuteSwapResultType = await executeSwap(
+    const executeSwapResult: ExecuteSwapResult = await executeSwap(
       networkConfig,
       checkBlockchainConditionsResult.setupContractsResult!,
       checkBlockchainConditionsResult.entryPointContract!,

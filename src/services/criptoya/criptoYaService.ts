@@ -1,22 +1,14 @@
+import { FiatQuote } from '../../types/commonType';
 import { Logger } from '../../helpers/loggerHelper';
-import { CurrencyType, FiatQuoteType } from '../../types/commonType';
-
-/**
- * API endpoints for fiat currency conversion rates
- */
-const API_URLs: [CurrencyType, string][] = [
-  ['UYU', 'https://criptoya.com/api/ripio/USDT/UYU'],
-  ['ARS', 'https://criptoya.com/api/ripio/USDT/ARS'],
-  ['BRL', 'https://criptoya.com/api/ripio/USDT/BRL']
-];
+import { CRIPTO_YA_URLS } from '../../config/constants';
 
 /**
  * Fetches fiat quotes from external APIs
- * @returns {Promise<FiatQuoteType[]>} Array of fiat currency quotes
+ * @returns {Promise<FiatQuote[]>} Array of fiat currency quotes
  */
-export async function getFiatQuotes(): Promise<FiatQuoteType[]> {
+export async function getFiatQuotes(): Promise<FiatQuote[]> {
   return Promise.all(
-    API_URLs.map(async ([currency, url]) => {
+    CRIPTO_YA_URLS.map(async ([currency, url]) => {
       try {
         const response = await fetch(url);
         const data = await response.json();

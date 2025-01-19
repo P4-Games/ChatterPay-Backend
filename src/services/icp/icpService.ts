@@ -5,13 +5,19 @@ import { Ed25519KeyIdentity } from '@dfinity/identity';
 import { mnemonicToSeed, validateMnemonic } from 'bip39';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { ICP_MNEMONIC, ICP_CANISTER_ID, NFT_UPLOAD_IMAGE_ICP } from '../../config/constants';
+import {
+  ICP_URL,
+  ICP_MNEMONIC,
+  ICP_CANISTER_ID,
+  NFT_UPLOAD_IMAGE_ICP
+} from '../../config/constants';
 
 /**
- * Generates an Ed25519KeyIdentity from a mnemonic seed phrase
- * @param mnemonic The seed phrase used to generate the identity
- * @returns The generated identity
- * @throws Error if the mnemonic is invalid
+ * Generates an Ed25519KeyIdentity from a mnemonic seed phrase.
+ *
+ * @param {string} mnemonic - The seed phrase used to generate the identity.
+ * @returns {Promise<Ed25519KeyIdentity>} The generated identity.
+ * @throws {Error} Throws an error if the mnemonic is invalid.
  */
 async function generateIdentityFromMnemonic(mnemonic: string): Promise<Ed25519KeyIdentity> {
   const isValidMnemonic = validateMnemonic(mnemonic);
@@ -25,13 +31,14 @@ async function generateIdentityFromMnemonic(mnemonic: string): Promise<Ed25519Ke
 }
 
 /**
- * Creates an HTTP agent using the provided identity
- * @param identity The identity used to create the agent
- * @returns The created HttpAgent instance
+ * Creates an HTTP agent using the provided identity.
+ *
+ * @param {Ed25519KeyIdentity} identity - The identity used to create the agent.
+ * @returns {Promise<HttpAgent>} The created HttpAgent instance.
  */
 async function createAgent(identity: Ed25519KeyIdentity): Promise<HttpAgent> {
   const agent = new HttpAgent({
-    host: 'https://ic0.app',
+    host: ICP_URL,
     identity
   });
 
@@ -40,11 +47,12 @@ async function createAgent(identity: Ed25519KeyIdentity): Promise<HttpAgent> {
 
 export const icpService = {
   /**
-   * Uploads an image to ICP (Internet Computer Protocol)
-   * @param imageBuffer The image buffer to upload
-   * @param fileName The name of the file to upload
-   * @returns The URL of the uploaded image
-   * @throws Error if the upload fails
+   * Uploads an image to ICP (Internet Computer Protocol).
+   *
+   * @param {Buffer} imageBuffer - The image buffer to upload.
+   * @param {string} fileName - The name of the file to upload.
+   * @returns {Promise<string>} The URL of the uploaded image.
+   * @throws {Error} Throws an error if the upload fails or if required environment variables are missing.
    */
   uploadToICP: async (imageBuffer: Buffer, fileName: string): Promise<string> => {
     if (!NFT_UPLOAD_IMAGE_ICP) {

@@ -2,7 +2,7 @@ import { ethers, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { getUserOpHash } from '../../helpers/userOperationHekper';
-import { PackedUserOperationType } from '../../types/userOperationType';
+import { PackedUserOperation } from '../../types/userOperationType';
 import {
   CALL_GAS_LIMIT,
   MAX_FEE_PER_GAS,
@@ -18,13 +18,13 @@ import {
  * @param {string} callData - The encoded data for the function call.
  * @param {string} sender - The sender address initiating the user operation.
  * @param {BigNumber} nonce - The nonce value to prevent replay attacks.
- * @returns {Promise<PackedUserOperationType>} The created user operation with predefined gas limits and fee parameters.
+ * @returns {Promise<PackedUserOperation>} The created user operation with predefined gas limits and fee parameters.
  */
 export async function createGenericUserOperation(
   callData: string,
   sender: string,
   nonce: BigNumber
-): Promise<PackedUserOperationType> {
+): Promise<PackedUserOperation> {
   Logger.log('createGenericUserOperation', 'Creating Generic UserOperation.');
   Logger.log('createGenericUserOperation', 'Sender Address:', sender);
   Logger.log('createGenericUserOperation', 'Call Data:', callData);
@@ -36,7 +36,7 @@ export async function createGenericUserOperation(
   Logger.log('createGenericUserOperation', 'MAX_PRIORITY_FEE_PER_GAS', MAX_PRIORITY_FEE_PER_GAS);
 
   // Use high fixed values for gas
-  const userOp: PackedUserOperationType = {
+  const userOp: PackedUserOperation = {
     sender,
     nonce,
     initCode: '0x',
@@ -99,17 +99,17 @@ export function createTransferCallData(
  * Signs the UserOperation by generating a hash of the operation and using the provided signer to sign it.
  * This method ensures the integrity of the user operation and prevents tampering by verifying the signature.
  *
- * @param {PackedUserOperationType} userOperation - The user operation to be signed.
+ * @param {PackedUserOperation} userOperation - The user operation to be signed.
  * @param {string} entryPointAddress - The address of the entry point contract.
  * @param {ethers.Wallet} signer - The wallet used to sign the user operation.
- * @returns {Promise<PackedUserOperationType>} The user operation with the generated signature.
+ * @returns {Promise<PackedUserOperation>} The user operation with the generated signature.
  * @throws {Error} If the signature verification fails.
  */
 export async function signUserOperation(
-  userOperation: PackedUserOperationType,
+  userOperation: PackedUserOperation,
   entryPointAddress: string,
   signer: ethers.Wallet
-): Promise<PackedUserOperationType> {
+): Promise<PackedUserOperation> {
   Logger.log('signUserOperation', 'Signing UserOperation.');
 
   const chainId = await signer.getChainId();

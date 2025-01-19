@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
-import { LogLevelType, validLogLevels } from '../types/loggerType';
+import { LogLevel, validLogLevels } from '../types/loggerType';
 
 dotenv.config();
 
@@ -91,10 +91,10 @@ export const PUSH_NETWORK: string = pushNetwork;
 export const PUSH_ENVIRONMENT: ENV = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;
 export const CHATTERPAY_DOMAIN: string = `https://${IS_DEVELOPMENT ? 'dev.' : ''}chatterpay.net`;
 export const CHATTERPAY_NFTS_SHARE_URL: string = `${CHATTERPAY_DOMAIN}/nfts/share`;
-export const CURRENT_LOG_LEVEL: LogLevelType = validLogLevels.includes(
-  minorLogLevel.toLowerCase() as LogLevelType
+export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
+  minorLogLevel.toLowerCase() as LogLevel
 )
-  ? (minorLogLevel.toLowerCase() as LogLevelType)
+  ? (minorLogLevel.toLowerCase() as LogLevel)
   : 'error';
 
 export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];
@@ -125,3 +125,26 @@ export const QUEUE_GAS_INTERVAL = 10000; // 10 Seg
 
 export const FASTIFY_REFRESH_TOKENS_INTERVAL_MS: number = Number(fastifyRefreshNetworksIntervalMs);
 export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(fastifyRefreshTokensIntervalMs);
+
+export const WHATSAPP_API_URL = 'https://api.whatsapp.com';
+export const CHATIZALO_PHONE_NUMBER = IS_DEVELOPMENT ? 5491164629653 : 5491164629653;
+
+export const MANTECA_MOCK_UPLOAD_DOCUMENTS_URL = 'https://upload.manteca.dev/file-upload-url';
+export const INFURA_URL = 'https://mainnet.infura.io/v3';
+export const BINANCE_API_URL = 'https://api.binance.us/api/v3';
+export const GRAPH_API_USDT_URL =
+  'https://api.studio.thegraph.com/query/91286/balance-sepolia/version/latest';
+export const GRAPH_API_WETH_URL =
+  'https://api.studio.thegraph.com/query/91286/balance-sepolia-weth/version/latest';
+
+/**
+ * API endpoints for fiat currency conversion rates
+ */
+export const CRIPTO_YA_URLS: [string, string][] = [
+  ['UYU', 'https://criptoya.com/api/ripio/USDT/UYU'],
+  ['ARS', 'https://criptoya.com/api/ripio/USDT/ARS'],
+  ['BRL', 'https://criptoya.com/api/ripio/USDT/BRL']
+];
+
+export const ICP_URL = 'https://ic0.app';
+export const PINATA_IPFS_URL = 'https://gateway.pinata.cloud/ipfs';
