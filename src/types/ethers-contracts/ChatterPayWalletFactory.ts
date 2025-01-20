@@ -4,6 +4,7 @@
 import type {
   BaseContract,
   BigNumber,
+  BigNumberish,
   BytesLike,
   CallOverrides,
   ContractTransaction,
@@ -12,31 +13,112 @@ import type {
   Signer,
   utils
 } from 'ethers';
-import type { FunctionFragment, Result } from '@ethersproject/abi';
+import type { FunctionFragment, Result, EventFragment } from '@ethersproject/abi';
 import type { Listener, Provider } from '@ethersproject/providers';
 import type { TypedEventFilter, TypedEvent, TypedListener, OnEvent } from './common';
 
 export interface ChatterPayWalletFactoryInterface extends utils.Interface {
   functions: {
-    'createProxy(address)': FunctionFragment;
     'computeProxyAddress(address)': FunctionFragment;
+    'createProxy(address)': FunctionFragment;
+    'getProxies()': FunctionFragment;
     'getProxiesCount()': FunctionFragment;
+    'getProxyOwner(address)': FunctionFragment;
+    'getProxyOwnerAddress(address)': FunctionFragment;
+    'owner()': FunctionFragment;
+    'paymaster()': FunctionFragment;
+    'proxies(uint256)': FunctionFragment;
+    'renounceOwnership()': FunctionFragment;
+    'router()': FunctionFragment;
+    'setImplementationAddress(address)': FunctionFragment;
+    'transferOwnership(address)': FunctionFragment;
+    'walletImplementation()': FunctionFragment;
   };
 
   getFunction(
-    nameOrSignatureOrTopic: 'createProxy' | 'computeProxyAddress' | 'getProxiesCount'
+    nameOrSignatureOrTopic:
+      | 'computeProxyAddress'
+      | 'createProxy'
+      | 'getProxies'
+      | 'getProxiesCount'
+      | 'getProxyOwner'
+      | 'getProxyOwnerAddress'
+      | 'owner'
+      | 'paymaster'
+      | 'proxies'
+      | 'renounceOwnership'
+      | 'router'
+      | 'setImplementationAddress'
+      | 'transferOwnership'
+      | 'walletImplementation'
   ): FunctionFragment;
 
-  encodeFunctionData(functionFragment: 'createProxy', values: [string]): string;
   encodeFunctionData(functionFragment: 'computeProxyAddress', values: [string]): string;
+  encodeFunctionData(functionFragment: 'createProxy', values: [string]): string;
+  encodeFunctionData(functionFragment: 'getProxies', values?: undefined): string;
   encodeFunctionData(functionFragment: 'getProxiesCount', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'getProxyOwner', values: [string]): string;
+  encodeFunctionData(functionFragment: 'getProxyOwnerAddress', values: [string]): string;
+  encodeFunctionData(functionFragment: 'owner', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'paymaster', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'proxies', values: [BigNumberish]): string;
+  encodeFunctionData(functionFragment: 'renounceOwnership', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'router', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'setImplementationAddress', values: [string]): string;
+  encodeFunctionData(functionFragment: 'transferOwnership', values: [string]): string;
+  encodeFunctionData(functionFragment: 'walletImplementation', values?: undefined): string;
 
-  decodeFunctionResult(functionFragment: 'createProxy', data: BytesLike): Result;
   decodeFunctionResult(functionFragment: 'computeProxyAddress', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'createProxy', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'getProxies', data: BytesLike): Result;
   decodeFunctionResult(functionFragment: 'getProxiesCount', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'getProxyOwner', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'getProxyOwnerAddress', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'owner', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'paymaster', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'proxies', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'renounceOwnership', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'router', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'setImplementationAddress', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'transferOwnership', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'walletImplementation', data: BytesLike): Result;
 
-  events: {};
+  events: {
+    'NewImplementation(address)': EventFragment;
+    'OwnershipTransferred(address,address)': EventFragment;
+    'ProxyCreated(address,address)': EventFragment;
+  };
+
+  getEvent(nameOrSignatureOrTopic: 'NewImplementation'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'OwnershipTransferred'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'ProxyCreated'): EventFragment;
 }
+
+export interface NewImplementationEventObject {
+  _walletImplementation: string;
+}
+export type NewImplementationEvent = TypedEvent<[string], NewImplementationEventObject>;
+
+export type NewImplementationEventFilter = TypedEventFilter<NewImplementationEvent>;
+
+export interface OwnershipTransferredEventObject {
+  previousOwner: string;
+  newOwner: string;
+}
+export type OwnershipTransferredEvent = TypedEvent<
+  [string, string],
+  OwnershipTransferredEventObject
+>;
+
+export type OwnershipTransferredEventFilter = TypedEventFilter<OwnershipTransferredEvent>;
+
+export interface ProxyCreatedEventObject {
+  owner: string;
+  proxyAddress: string;
+}
+export type ProxyCreatedEvent = TypedEvent<[string, string], ProxyCreatedEventObject>;
+
+export type ProxyCreatedEventFilter = TypedEventFilter<ProxyCreatedEvent>;
 
 export interface ChatterPayWalletFactory extends BaseContract {
   connect(signerOrProvider: Signer | Provider | string): this;
@@ -63,51 +145,229 @@ export interface ChatterPayWalletFactory extends BaseContract {
   removeListener: OnEvent<this>;
 
   functions: {
+    computeProxyAddress(_owner: string, overrides?: CallOverrides): Promise<[string]>;
+
     createProxy(
       _owner: string,
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
-    computeProxyAddress(_owner: string, overrides?: CallOverrides): Promise<[string]>;
+    getProxies(overrides?: CallOverrides): Promise<[string[]]>;
 
     getProxiesCount(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    getProxyOwner(
+      proxy: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
+    getProxyOwnerAddress(
+      proxy: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
+    owner(overrides?: CallOverrides): Promise<[string]>;
+
+    paymaster(overrides?: CallOverrides): Promise<[string]>;
+
+    proxies(arg0: BigNumberish, overrides?: CallOverrides): Promise<[string]>;
+
+    renounceOwnership(overrides?: Overrides & { from?: string }): Promise<ContractTransaction>;
+
+    router(overrides?: CallOverrides): Promise<[string]>;
+
+    setImplementationAddress(
+      _walletImplementation: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
+    transferOwnership(
+      newOwner: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
+    walletImplementation(overrides?: CallOverrides): Promise<[string]>;
   };
+
+  computeProxyAddress(_owner: string, overrides?: CallOverrides): Promise<string>;
 
   createProxy(
     _owner: string,
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
-  computeProxyAddress(_owner: string, overrides?: CallOverrides): Promise<string>;
+  getProxies(overrides?: CallOverrides): Promise<string[]>;
 
   getProxiesCount(overrides?: CallOverrides): Promise<BigNumber>;
 
-  callStatic: {
-    createProxy(_owner: string, overrides?: CallOverrides): Promise<string>;
+  getProxyOwner(
+    proxy: string,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
 
+  getProxyOwnerAddress(
+    proxy: string,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
+  owner(overrides?: CallOverrides): Promise<string>;
+
+  paymaster(overrides?: CallOverrides): Promise<string>;
+
+  proxies(arg0: BigNumberish, overrides?: CallOverrides): Promise<string>;
+
+  renounceOwnership(overrides?: Overrides & { from?: string }): Promise<ContractTransaction>;
+
+  router(overrides?: CallOverrides): Promise<string>;
+
+  setImplementationAddress(
+    _walletImplementation: string,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
+  transferOwnership(
+    newOwner: string,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
+  walletImplementation(overrides?: CallOverrides): Promise<string>;
+
+  callStatic: {
     computeProxyAddress(_owner: string, overrides?: CallOverrides): Promise<string>;
 
+    createProxy(_owner: string, overrides?: CallOverrides): Promise<string>;
+
+    getProxies(overrides?: CallOverrides): Promise<string[]>;
+
     getProxiesCount(overrides?: CallOverrides): Promise<BigNumber>;
+
+    getProxyOwner(proxy: string, overrides?: CallOverrides): Promise<string>;
+
+    getProxyOwnerAddress(proxy: string, overrides?: CallOverrides): Promise<string>;
+
+    owner(overrides?: CallOverrides): Promise<string>;
+
+    paymaster(overrides?: CallOverrides): Promise<string>;
+
+    proxies(arg0: BigNumberish, overrides?: CallOverrides): Promise<string>;
+
+    renounceOwnership(overrides?: CallOverrides): Promise<void>;
+
+    router(overrides?: CallOverrides): Promise<string>;
+
+    setImplementationAddress(
+      _walletImplementation: string,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    transferOwnership(newOwner: string, overrides?: CallOverrides): Promise<void>;
+
+    walletImplementation(overrides?: CallOverrides): Promise<string>;
   };
 
-  filters: {};
+  filters: {
+    'NewImplementation(address)'(
+      _walletImplementation?: string | null
+    ): NewImplementationEventFilter;
+    NewImplementation(_walletImplementation?: string | null): NewImplementationEventFilter;
+
+    'OwnershipTransferred(address,address)'(
+      previousOwner?: string | null,
+      newOwner?: string | null
+    ): OwnershipTransferredEventFilter;
+    OwnershipTransferred(
+      previousOwner?: string | null,
+      newOwner?: string | null
+    ): OwnershipTransferredEventFilter;
+
+    'ProxyCreated(address,address)'(
+      owner?: string | null,
+      proxyAddress?: string | null
+    ): ProxyCreatedEventFilter;
+    ProxyCreated(owner?: string | null, proxyAddress?: string | null): ProxyCreatedEventFilter;
+  };
 
   estimateGas: {
-    createProxy(_owner: string, overrides?: Overrides & { from?: string }): Promise<BigNumber>;
-
     computeProxyAddress(_owner: string, overrides?: CallOverrides): Promise<BigNumber>;
 
+    createProxy(_owner: string, overrides?: Overrides & { from?: string }): Promise<BigNumber>;
+
+    getProxies(overrides?: CallOverrides): Promise<BigNumber>;
+
     getProxiesCount(overrides?: CallOverrides): Promise<BigNumber>;
+
+    getProxyOwner(proxy: string, overrides?: Overrides & { from?: string }): Promise<BigNumber>;
+
+    getProxyOwnerAddress(
+      proxy: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
+    owner(overrides?: CallOverrides): Promise<BigNumber>;
+
+    paymaster(overrides?: CallOverrides): Promise<BigNumber>;
+
+    proxies(arg0: BigNumberish, overrides?: CallOverrides): Promise<BigNumber>;
+
+    renounceOwnership(overrides?: Overrides & { from?: string }): Promise<BigNumber>;
+
+    router(overrides?: CallOverrides): Promise<BigNumber>;
+
+    setImplementationAddress(
+      _walletImplementation: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
+    transferOwnership(
+      newOwner: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
+    walletImplementation(overrides?: CallOverrides): Promise<BigNumber>;
   };
 
   populateTransaction: {
+    computeProxyAddress(_owner: string, overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
     createProxy(
       _owner: string,
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
-    computeProxyAddress(_owner: string, overrides?: CallOverrides): Promise<PopulatedTransaction>;
+    getProxies(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     getProxiesCount(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    getProxyOwner(
+      proxy: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    getProxyOwnerAddress(
+      proxy: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    owner(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    paymaster(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    proxies(arg0: BigNumberish, overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    renounceOwnership(overrides?: Overrides & { from?: string }): Promise<PopulatedTransaction>;
+
+    router(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    setImplementationAddress(
+      _walletImplementation: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    transferOwnership(
+      newOwner: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    walletImplementation(overrides?: CallOverrides): Promise<PopulatedTransaction>;
   };
 }

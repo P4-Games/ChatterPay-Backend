@@ -9,36 +9,314 @@ import type {
   CallOverrides,
   ContractTransaction,
   Overrides,
+  PayableOverrides,
   PopulatedTransaction,
   Signer,
   utils
 } from 'ethers';
-import type { FunctionFragment, Result } from '@ethersproject/abi';
+import type { FunctionFragment, Result, EventFragment } from '@ethersproject/abi';
 import type { Listener, Provider } from '@ethersproject/providers';
 import type { TypedEventFilter, TypedEvent, TypedListener, OnEvent } from './common';
 
+export type UserOperationStruct = {
+  sender: string;
+  nonce: BigNumberish;
+  initCode: BytesLike;
+  callData: BytesLike;
+  callGasLimit: BigNumberish;
+  verificationGasLimit: BigNumberish;
+  preVerificationGas: BigNumberish;
+  maxFeePerGas: BigNumberish;
+  maxPriorityFeePerGas: BigNumberish;
+  paymasterAndData: BytesLike;
+  signature: BytesLike;
+};
+
+export type UserOperationStructOutput = [
+  string,
+  BigNumber,
+  string,
+  string,
+  BigNumber,
+  BigNumber,
+  BigNumber,
+  BigNumber,
+  BigNumber,
+  string,
+  string
+] & {
+  sender: string;
+  nonce: BigNumber;
+  initCode: string;
+  callData: string;
+  callGasLimit: BigNumber;
+  verificationGasLimit: BigNumber;
+  preVerificationGas: BigNumber;
+  maxFeePerGas: BigNumber;
+  maxPriorityFeePerGas: BigNumber;
+  paymasterAndData: string;
+  signature: string;
+};
+
 export interface ChatterPayInterface extends utils.Interface {
   functions: {
+    'MAX_DEADLINE()': FunctionFragment;
+    'MAX_FEE_IN_CENTS()': FunctionFragment;
+    'POOL_FEE_HIGH()': FunctionFragment;
+    'POOL_FEE_LOW()': FunctionFragment;
+    'POOL_FEE_MEDIUM()': FunctionFragment;
+    'PRICE_FEED_PRECISION()': FunctionFragment;
+    'PRICE_FRESHNESS_THRESHOLD()': FunctionFragment;
+    'SLIPPAGE_BTC()': FunctionFragment;
+    'SLIPPAGE_ETH()': FunctionFragment;
+    'SLIPPAGE_STABLES()': FunctionFragment;
+    'UPGRADE_INTERFACE_VERSION()': FunctionFragment;
+    'VERSION()': FunctionFragment;
+    'approveToken(address,uint256)': FunctionFragment;
     'execute(address,uint256,bytes)': FunctionFragment;
-    'initialize(address,address,address,address)': FunctionFragment;
+    'executeSwap(address,address,uint256,uint256,address)': FunctionFragment;
+    'factory()': FunctionFragment;
+    'initialize(address,address,address,address,address)': FunctionFragment;
+    'owner()': FunctionFragment;
+    'proxiableUUID()': FunctionFragment;
+    'removeTokenFromWhitelist(address)': FunctionFragment;
+    'renounceOwnership()': FunctionFragment;
+    's_feeAdmin()': FunctionFragment;
+    's_feeInCents()': FunctionFragment;
+    's_paymaster()': FunctionFragment;
+    's_priceFeeds(address)': FunctionFragment;
+    's_whitelistedTokens(address)': FunctionFragment;
+    'setTokenWhitelistAndPriceFeed(address,bool,address)': FunctionFragment;
+    'swapRouter()': FunctionFragment;
+    'transferOwnership(address)': FunctionFragment;
+    'updateFee(uint256)': FunctionFragment;
+    'updateFeeAdmin(address)': FunctionFragment;
+    'upgradeToAndCall(address,bytes)': FunctionFragment;
+    'validateUserOp((address,uint256,bytes,bytes,uint256,uint256,uint256,uint256,uint256,bytes,bytes),bytes32,uint256)': FunctionFragment;
   };
 
-  getFunction(nameOrSignatureOrTopic: 'execute' | 'initialize'): FunctionFragment;
+  getFunction(
+    nameOrSignatureOrTopic:
+      | 'MAX_DEADLINE'
+      | 'MAX_FEE_IN_CENTS'
+      | 'POOL_FEE_HIGH'
+      | 'POOL_FEE_LOW'
+      | 'POOL_FEE_MEDIUM'
+      | 'PRICE_FEED_PRECISION'
+      | 'PRICE_FRESHNESS_THRESHOLD'
+      | 'SLIPPAGE_BTC'
+      | 'SLIPPAGE_ETH'
+      | 'SLIPPAGE_STABLES'
+      | 'UPGRADE_INTERFACE_VERSION'
+      | 'VERSION'
+      | 'approveToken'
+      | 'execute'
+      | 'executeSwap'
+      | 'factory'
+      | 'initialize'
+      | 'owner'
+      | 'proxiableUUID'
+      | 'removeTokenFromWhitelist'
+      | 'renounceOwnership'
+      | 's_feeAdmin'
+      | 's_feeInCents'
+      | 's_paymaster'
+      | 's_priceFeeds'
+      | 's_whitelistedTokens'
+      | 'setTokenWhitelistAndPriceFeed'
+      | 'swapRouter'
+      | 'transferOwnership'
+      | 'updateFee'
+      | 'updateFeeAdmin'
+      | 'upgradeToAndCall'
+      | 'validateUserOp'
+  ): FunctionFragment;
 
+  encodeFunctionData(functionFragment: 'MAX_DEADLINE', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'MAX_FEE_IN_CENTS', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'POOL_FEE_HIGH', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'POOL_FEE_LOW', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'POOL_FEE_MEDIUM', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'PRICE_FEED_PRECISION', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'PRICE_FRESHNESS_THRESHOLD', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'SLIPPAGE_BTC', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'SLIPPAGE_ETH', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'SLIPPAGE_STABLES', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'UPGRADE_INTERFACE_VERSION', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'VERSION', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'approveToken', values: [string, BigNumberish]): string;
   encodeFunctionData(
     functionFragment: 'execute',
     values: [string, BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(
+    functionFragment: 'executeSwap',
+    values: [string, string, BigNumberish, BigNumberish, string]
+  ): string;
+  encodeFunctionData(functionFragment: 'factory', values?: undefined): string;
+  encodeFunctionData(
     functionFragment: 'initialize',
-    values: [string, string, string, string]
+    values: [string, string, string, string, string]
+  ): string;
+  encodeFunctionData(functionFragment: 'owner', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'proxiableUUID', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'removeTokenFromWhitelist', values: [string]): string;
+  encodeFunctionData(functionFragment: 'renounceOwnership', values?: undefined): string;
+  encodeFunctionData(functionFragment: 's_feeAdmin', values?: undefined): string;
+  encodeFunctionData(functionFragment: 's_feeInCents', values?: undefined): string;
+  encodeFunctionData(functionFragment: 's_paymaster', values?: undefined): string;
+  encodeFunctionData(functionFragment: 's_priceFeeds', values: [string]): string;
+  encodeFunctionData(functionFragment: 's_whitelistedTokens', values: [string]): string;
+  encodeFunctionData(
+    functionFragment: 'setTokenWhitelistAndPriceFeed',
+    values: [string, boolean, string]
+  ): string;
+  encodeFunctionData(functionFragment: 'swapRouter', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'transferOwnership', values: [string]): string;
+  encodeFunctionData(functionFragment: 'updateFee', values: [BigNumberish]): string;
+  encodeFunctionData(functionFragment: 'updateFeeAdmin', values: [string]): string;
+  encodeFunctionData(functionFragment: 'upgradeToAndCall', values: [string, BytesLike]): string;
+  encodeFunctionData(
+    functionFragment: 'validateUserOp',
+    values: [UserOperationStruct, BytesLike, BigNumberish]
   ): string;
 
+  decodeFunctionResult(functionFragment: 'MAX_DEADLINE', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'MAX_FEE_IN_CENTS', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'POOL_FEE_HIGH', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'POOL_FEE_LOW', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'POOL_FEE_MEDIUM', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'PRICE_FEED_PRECISION', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'PRICE_FRESHNESS_THRESHOLD', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'SLIPPAGE_BTC', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'SLIPPAGE_ETH', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'SLIPPAGE_STABLES', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'UPGRADE_INTERFACE_VERSION', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'VERSION', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'approveToken', data: BytesLike): Result;
   decodeFunctionResult(functionFragment: 'execute', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'executeSwap', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'factory', data: BytesLike): Result;
   decodeFunctionResult(functionFragment: 'initialize', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'owner', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'proxiableUUID', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'removeTokenFromWhitelist', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'renounceOwnership', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 's_feeAdmin', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 's_feeInCents', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 's_paymaster', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 's_priceFeeds', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 's_whitelistedTokens', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'setTokenWhitelistAndPriceFeed', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'swapRouter', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'transferOwnership', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'updateFee', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'updateFeeAdmin', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'upgradeToAndCall', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'validateUserOp', data: BytesLike): Result;
 
-  events: {};
+  events: {
+    'FeeAdminUpdated(address,address)': EventFragment;
+    'FeeUpdated(uint256,uint256)': EventFragment;
+    'Initialized(uint64)': EventFragment;
+    'OwnershipTransferred(address,address)': EventFragment;
+    'PriceFeedUpdated(address,address)': EventFragment;
+    'SwapExecuted(address,address,uint256,uint256,address)': EventFragment;
+    'TokenApproved(address,address,uint256)': EventFragment;
+    'TokenWhitelisted(address,bool)': EventFragment;
+    'Upgraded(address)': EventFragment;
+  };
+
+  getEvent(nameOrSignatureOrTopic: 'FeeAdminUpdated'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'FeeUpdated'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'Initialized'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'OwnershipTransferred'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'PriceFeedUpdated'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'SwapExecuted'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'TokenApproved'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'TokenWhitelisted'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'Upgraded'): EventFragment;
 }
+
+export interface FeeAdminUpdatedEventObject {
+  oldAdmin: string;
+  newAdmin: string;
+}
+export type FeeAdminUpdatedEvent = TypedEvent<[string, string], FeeAdminUpdatedEventObject>;
+
+export type FeeAdminUpdatedEventFilter = TypedEventFilter<FeeAdminUpdatedEvent>;
+
+export interface FeeUpdatedEventObject {
+  oldFee: BigNumber;
+  newFee: BigNumber;
+}
+export type FeeUpdatedEvent = TypedEvent<[BigNumber, BigNumber], FeeUpdatedEventObject>;
+
+export type FeeUpdatedEventFilter = TypedEventFilter<FeeUpdatedEvent>;
+
+export interface InitializedEventObject {
+  version: BigNumber;
+}
+export type InitializedEvent = TypedEvent<[BigNumber], InitializedEventObject>;
+
+export type InitializedEventFilter = TypedEventFilter<InitializedEvent>;
+
+export interface OwnershipTransferredEventObject {
+  previousOwner: string;
+  newOwner: string;
+}
+export type OwnershipTransferredEvent = TypedEvent<
+  [string, string],
+  OwnershipTransferredEventObject
+>;
+
+export type OwnershipTransferredEventFilter = TypedEventFilter<OwnershipTransferredEvent>;
+
+export interface PriceFeedUpdatedEventObject {
+  token: string;
+  priceFeed: string;
+}
+export type PriceFeedUpdatedEvent = TypedEvent<[string, string], PriceFeedUpdatedEventObject>;
+
+export type PriceFeedUpdatedEventFilter = TypedEventFilter<PriceFeedUpdatedEvent>;
+
+export interface SwapExecutedEventObject {
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: BigNumber;
+  amountOut: BigNumber;
+  recipient: string;
+}
+export type SwapExecutedEvent = TypedEvent<
+  [string, string, BigNumber, BigNumber, string],
+  SwapExecutedEventObject
+>;
+
+export type SwapExecutedEventFilter = TypedEventFilter<SwapExecutedEvent>;
+
+export interface TokenApprovedEventObject {
+  token: string;
+  spender: string;
+  amount: BigNumber;
+}
+export type TokenApprovedEvent = TypedEvent<[string, string, BigNumber], TokenApprovedEventObject>;
+
+export type TokenApprovedEventFilter = TypedEventFilter<TokenApprovedEvent>;
+
+export interface TokenWhitelistedEventObject {
+  token: string;
+  status: boolean;
+}
+export type TokenWhitelistedEvent = TypedEvent<[string, boolean], TokenWhitelistedEventObject>;
+
+export type TokenWhitelistedEventFilter = TypedEventFilter<TokenWhitelistedEvent>;
+
+export interface UpgradedEventObject {
+  implementation: string;
+}
+export type UpgradedEvent = TypedEvent<[string], UpgradedEventObject>;
+
+export type UpgradedEventFilter = TypedEventFilter<UpgradedEvent>;
 
 export interface ChatterPay extends BaseContract {
   connect(signerOrProvider: Signer | Provider | string): this;
@@ -65,6 +343,36 @@ export interface ChatterPay extends BaseContract {
   removeListener: OnEvent<this>;
 
   functions: {
+    MAX_DEADLINE(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    MAX_FEE_IN_CENTS(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    POOL_FEE_HIGH(overrides?: CallOverrides): Promise<[number]>;
+
+    POOL_FEE_LOW(overrides?: CallOverrides): Promise<[number]>;
+
+    POOL_FEE_MEDIUM(overrides?: CallOverrides): Promise<[number]>;
+
+    PRICE_FEED_PRECISION(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    PRICE_FRESHNESS_THRESHOLD(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    SLIPPAGE_BTC(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    SLIPPAGE_ETH(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    SLIPPAGE_STABLES(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    UPGRADE_INTERFACE_VERSION(overrides?: CallOverrides): Promise<[string]>;
+
+    VERSION(overrides?: CallOverrides): Promise<[string]>;
+
+    approveToken(
+      token: string,
+      amount: BigNumberish,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
     execute(
       dest: string,
       value: BigNumberish,
@@ -72,14 +380,114 @@ export interface ChatterPay extends BaseContract {
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
+    executeSwap(
+      tokenIn: string,
+      tokenOut: string,
+      amountIn: BigNumberish,
+      amountOutMin: BigNumberish,
+      recipient: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
+    factory(overrides?: CallOverrides): Promise<[string]>;
+
     initialize(
-      entryPoint: string,
-      owner: string,
-      l1Storage: string,
-      paymaster: string,
+      _entryPoint: string,
+      _newOwner: string,
+      _paymaster: string,
+      _router: string,
+      _factory: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
+    owner(overrides?: CallOverrides): Promise<[string]>;
+
+    proxiableUUID(overrides?: CallOverrides): Promise<[string]>;
+
+    removeTokenFromWhitelist(
+      token: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
+    renounceOwnership(overrides?: Overrides & { from?: string }): Promise<ContractTransaction>;
+
+    s_feeAdmin(overrides?: CallOverrides): Promise<[string]>;
+
+    s_feeInCents(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    s_paymaster(overrides?: CallOverrides): Promise<[string]>;
+
+    s_priceFeeds(arg0: string, overrides?: CallOverrides): Promise<[string]>;
+
+    s_whitelistedTokens(arg0: string, overrides?: CallOverrides): Promise<[boolean]>;
+
+    setTokenWhitelistAndPriceFeed(
+      token: string,
+      status: boolean,
+      priceFeed: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
+    swapRouter(overrides?: CallOverrides): Promise<[string]>;
+
+    transferOwnership(
+      newOwner: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
+    updateFee(
+      _newFeeInCents: BigNumberish,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
+    updateFeeAdmin(
+      _newAdmin: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
+    upgradeToAndCall(
+      newImplementation: string,
+      data: BytesLike,
+      overrides?: PayableOverrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
+    validateUserOp(
+      userOp: UserOperationStruct,
+      userOpHash: BytesLike,
+      missingAccountFunds: BigNumberish,
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
   };
+
+  MAX_DEADLINE(overrides?: CallOverrides): Promise<BigNumber>;
+
+  MAX_FEE_IN_CENTS(overrides?: CallOverrides): Promise<BigNumber>;
+
+  POOL_FEE_HIGH(overrides?: CallOverrides): Promise<number>;
+
+  POOL_FEE_LOW(overrides?: CallOverrides): Promise<number>;
+
+  POOL_FEE_MEDIUM(overrides?: CallOverrides): Promise<number>;
+
+  PRICE_FEED_PRECISION(overrides?: CallOverrides): Promise<BigNumber>;
+
+  PRICE_FRESHNESS_THRESHOLD(overrides?: CallOverrides): Promise<BigNumber>;
+
+  SLIPPAGE_BTC(overrides?: CallOverrides): Promise<BigNumber>;
+
+  SLIPPAGE_ETH(overrides?: CallOverrides): Promise<BigNumber>;
+
+  SLIPPAGE_STABLES(overrides?: CallOverrides): Promise<BigNumber>;
+
+  UPGRADE_INTERFACE_VERSION(overrides?: CallOverrides): Promise<string>;
+
+  VERSION(overrides?: CallOverrides): Promise<string>;
+
+  approveToken(
+    token: string,
+    amount: BigNumberish,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
 
   execute(
     dest: string,
@@ -88,15 +496,111 @@ export interface ChatterPay extends BaseContract {
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
+  executeSwap(
+    tokenIn: string,
+    tokenOut: string,
+    amountIn: BigNumberish,
+    amountOutMin: BigNumberish,
+    recipient: string,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
+  factory(overrides?: CallOverrides): Promise<string>;
+
   initialize(
-    entryPoint: string,
-    owner: string,
-    l1Storage: string,
-    paymaster: string,
+    _entryPoint: string,
+    _newOwner: string,
+    _paymaster: string,
+    _router: string,
+    _factory: string,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
+  owner(overrides?: CallOverrides): Promise<string>;
+
+  proxiableUUID(overrides?: CallOverrides): Promise<string>;
+
+  removeTokenFromWhitelist(
+    token: string,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
+  renounceOwnership(overrides?: Overrides & { from?: string }): Promise<ContractTransaction>;
+
+  s_feeAdmin(overrides?: CallOverrides): Promise<string>;
+
+  s_feeInCents(overrides?: CallOverrides): Promise<BigNumber>;
+
+  s_paymaster(overrides?: CallOverrides): Promise<string>;
+
+  s_priceFeeds(arg0: string, overrides?: CallOverrides): Promise<string>;
+
+  s_whitelistedTokens(arg0: string, overrides?: CallOverrides): Promise<boolean>;
+
+  setTokenWhitelistAndPriceFeed(
+    token: string,
+    status: boolean,
+    priceFeed: string,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
+  swapRouter(overrides?: CallOverrides): Promise<string>;
+
+  transferOwnership(
+    newOwner: string,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
+  updateFee(
+    _newFeeInCents: BigNumberish,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
+  updateFeeAdmin(
+    _newAdmin: string,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
+  upgradeToAndCall(
+    newImplementation: string,
+    data: BytesLike,
+    overrides?: PayableOverrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
+  validateUserOp(
+    userOp: UserOperationStruct,
+    userOpHash: BytesLike,
+    missingAccountFunds: BigNumberish,
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
   callStatic: {
+    MAX_DEADLINE(overrides?: CallOverrides): Promise<BigNumber>;
+
+    MAX_FEE_IN_CENTS(overrides?: CallOverrides): Promise<BigNumber>;
+
+    POOL_FEE_HIGH(overrides?: CallOverrides): Promise<number>;
+
+    POOL_FEE_LOW(overrides?: CallOverrides): Promise<number>;
+
+    POOL_FEE_MEDIUM(overrides?: CallOverrides): Promise<number>;
+
+    PRICE_FEED_PRECISION(overrides?: CallOverrides): Promise<BigNumber>;
+
+    PRICE_FRESHNESS_THRESHOLD(overrides?: CallOverrides): Promise<BigNumber>;
+
+    SLIPPAGE_BTC(overrides?: CallOverrides): Promise<BigNumber>;
+
+    SLIPPAGE_ETH(overrides?: CallOverrides): Promise<BigNumber>;
+
+    SLIPPAGE_STABLES(overrides?: CallOverrides): Promise<BigNumber>;
+
+    UPGRADE_INTERFACE_VERSION(overrides?: CallOverrides): Promise<string>;
+
+    VERSION(overrides?: CallOverrides): Promise<string>;
+
+    approveToken(token: string, amount: BigNumberish, overrides?: CallOverrides): Promise<void>;
+
     execute(
       dest: string,
       value: BigNumberish,
@@ -104,18 +608,171 @@ export interface ChatterPay extends BaseContract {
       overrides?: CallOverrides
     ): Promise<void>;
 
-    initialize(
-      entryPoint: string,
-      owner: string,
-      l1Storage: string,
-      paymaster: string,
+    executeSwap(
+      tokenIn: string,
+      tokenOut: string,
+      amountIn: BigNumberish,
+      amountOutMin: BigNumberish,
+      recipient: string,
       overrides?: CallOverrides
     ): Promise<void>;
+
+    factory(overrides?: CallOverrides): Promise<string>;
+
+    initialize(
+      _entryPoint: string,
+      _newOwner: string,
+      _paymaster: string,
+      _router: string,
+      _factory: string,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    owner(overrides?: CallOverrides): Promise<string>;
+
+    proxiableUUID(overrides?: CallOverrides): Promise<string>;
+
+    removeTokenFromWhitelist(token: string, overrides?: CallOverrides): Promise<void>;
+
+    renounceOwnership(overrides?: CallOverrides): Promise<void>;
+
+    s_feeAdmin(overrides?: CallOverrides): Promise<string>;
+
+    s_feeInCents(overrides?: CallOverrides): Promise<BigNumber>;
+
+    s_paymaster(overrides?: CallOverrides): Promise<string>;
+
+    s_priceFeeds(arg0: string, overrides?: CallOverrides): Promise<string>;
+
+    s_whitelistedTokens(arg0: string, overrides?: CallOverrides): Promise<boolean>;
+
+    setTokenWhitelistAndPriceFeed(
+      token: string,
+      status: boolean,
+      priceFeed: string,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    swapRouter(overrides?: CallOverrides): Promise<string>;
+
+    transferOwnership(newOwner: string, overrides?: CallOverrides): Promise<void>;
+
+    updateFee(_newFeeInCents: BigNumberish, overrides?: CallOverrides): Promise<void>;
+
+    updateFeeAdmin(_newAdmin: string, overrides?: CallOverrides): Promise<void>;
+
+    upgradeToAndCall(
+      newImplementation: string,
+      data: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    validateUserOp(
+      userOp: UserOperationStruct,
+      userOpHash: BytesLike,
+      missingAccountFunds: BigNumberish,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
   };
 
-  filters: {};
+  filters: {
+    'FeeAdminUpdated(address,address)'(
+      oldAdmin?: string | null,
+      newAdmin?: string | null
+    ): FeeAdminUpdatedEventFilter;
+    FeeAdminUpdated(oldAdmin?: string | null, newAdmin?: string | null): FeeAdminUpdatedEventFilter;
+
+    'FeeUpdated(uint256,uint256)'(
+      oldFee?: BigNumberish | null,
+      newFee?: BigNumberish | null
+    ): FeeUpdatedEventFilter;
+    FeeUpdated(oldFee?: BigNumberish | null, newFee?: BigNumberish | null): FeeUpdatedEventFilter;
+
+    'Initialized(uint64)'(version?: null): InitializedEventFilter;
+    Initialized(version?: null): InitializedEventFilter;
+
+    'OwnershipTransferred(address,address)'(
+      previousOwner?: string | null,
+      newOwner?: string | null
+    ): OwnershipTransferredEventFilter;
+    OwnershipTransferred(
+      previousOwner?: string | null,
+      newOwner?: string | null
+    ): OwnershipTransferredEventFilter;
+
+    'PriceFeedUpdated(address,address)'(
+      token?: string | null,
+      priceFeed?: string | null
+    ): PriceFeedUpdatedEventFilter;
+    PriceFeedUpdated(token?: string | null, priceFeed?: string | null): PriceFeedUpdatedEventFilter;
+
+    'SwapExecuted(address,address,uint256,uint256,address)'(
+      tokenIn?: string | null,
+      tokenOut?: string | null,
+      amountIn?: null,
+      amountOut?: null,
+      recipient?: null
+    ): SwapExecutedEventFilter;
+    SwapExecuted(
+      tokenIn?: string | null,
+      tokenOut?: string | null,
+      amountIn?: null,
+      amountOut?: null,
+      recipient?: null
+    ): SwapExecutedEventFilter;
+
+    'TokenApproved(address,address,uint256)'(
+      token?: string | null,
+      spender?: string | null,
+      amount?: null
+    ): TokenApprovedEventFilter;
+    TokenApproved(
+      token?: string | null,
+      spender?: string | null,
+      amount?: null
+    ): TokenApprovedEventFilter;
+
+    'TokenWhitelisted(address,bool)'(
+      token?: string | null,
+      status?: boolean | null
+    ): TokenWhitelistedEventFilter;
+    TokenWhitelisted(token?: string | null, status?: boolean | null): TokenWhitelistedEventFilter;
+
+    'Upgraded(address)'(implementation?: string | null): UpgradedEventFilter;
+    Upgraded(implementation?: string | null): UpgradedEventFilter;
+  };
 
   estimateGas: {
+    MAX_DEADLINE(overrides?: CallOverrides): Promise<BigNumber>;
+
+    MAX_FEE_IN_CENTS(overrides?: CallOverrides): Promise<BigNumber>;
+
+    POOL_FEE_HIGH(overrides?: CallOverrides): Promise<BigNumber>;
+
+    POOL_FEE_LOW(overrides?: CallOverrides): Promise<BigNumber>;
+
+    POOL_FEE_MEDIUM(overrides?: CallOverrides): Promise<BigNumber>;
+
+    PRICE_FEED_PRECISION(overrides?: CallOverrides): Promise<BigNumber>;
+
+    PRICE_FRESHNESS_THRESHOLD(overrides?: CallOverrides): Promise<BigNumber>;
+
+    SLIPPAGE_BTC(overrides?: CallOverrides): Promise<BigNumber>;
+
+    SLIPPAGE_ETH(overrides?: CallOverrides): Promise<BigNumber>;
+
+    SLIPPAGE_STABLES(overrides?: CallOverrides): Promise<BigNumber>;
+
+    UPGRADE_INTERFACE_VERSION(overrides?: CallOverrides): Promise<BigNumber>;
+
+    VERSION(overrides?: CallOverrides): Promise<BigNumber>;
+
+    approveToken(
+      token: string,
+      amount: BigNumberish,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
     execute(
       dest: string,
       value: BigNumberish,
@@ -123,16 +780,116 @@ export interface ChatterPay extends BaseContract {
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
 
+    executeSwap(
+      tokenIn: string,
+      tokenOut: string,
+      amountIn: BigNumberish,
+      amountOutMin: BigNumberish,
+      recipient: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
+    factory(overrides?: CallOverrides): Promise<BigNumber>;
+
     initialize(
-      entryPoint: string,
-      owner: string,
-      l1Storage: string,
-      paymaster: string,
+      _entryPoint: string,
+      _newOwner: string,
+      _paymaster: string,
+      _router: string,
+      _factory: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
+    owner(overrides?: CallOverrides): Promise<BigNumber>;
+
+    proxiableUUID(overrides?: CallOverrides): Promise<BigNumber>;
+
+    removeTokenFromWhitelist(
+      token: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
+    renounceOwnership(overrides?: Overrides & { from?: string }): Promise<BigNumber>;
+
+    s_feeAdmin(overrides?: CallOverrides): Promise<BigNumber>;
+
+    s_feeInCents(overrides?: CallOverrides): Promise<BigNumber>;
+
+    s_paymaster(overrides?: CallOverrides): Promise<BigNumber>;
+
+    s_priceFeeds(arg0: string, overrides?: CallOverrides): Promise<BigNumber>;
+
+    s_whitelistedTokens(arg0: string, overrides?: CallOverrides): Promise<BigNumber>;
+
+    setTokenWhitelistAndPriceFeed(
+      token: string,
+      status: boolean,
+      priceFeed: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
+    swapRouter(overrides?: CallOverrides): Promise<BigNumber>;
+
+    transferOwnership(
+      newOwner: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
+    updateFee(
+      _newFeeInCents: BigNumberish,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
+    updateFeeAdmin(
+      _newAdmin: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
+    upgradeToAndCall(
+      newImplementation: string,
+      data: BytesLike,
+      overrides?: PayableOverrides & { from?: string }
+    ): Promise<BigNumber>;
+
+    validateUserOp(
+      userOp: UserOperationStruct,
+      userOpHash: BytesLike,
+      missingAccountFunds: BigNumberish,
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
   };
 
   populateTransaction: {
+    MAX_DEADLINE(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    MAX_FEE_IN_CENTS(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    POOL_FEE_HIGH(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    POOL_FEE_LOW(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    POOL_FEE_MEDIUM(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    PRICE_FEED_PRECISION(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    PRICE_FRESHNESS_THRESHOLD(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    SLIPPAGE_BTC(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    SLIPPAGE_ETH(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    SLIPPAGE_STABLES(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    UPGRADE_INTERFACE_VERSION(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    VERSION(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    approveToken(
+      token: string,
+      amount: BigNumberish,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
     execute(
       dest: string,
       value: BigNumberish,
@@ -140,11 +897,81 @@ export interface ChatterPay extends BaseContract {
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
+    executeSwap(
+      tokenIn: string,
+      tokenOut: string,
+      amountIn: BigNumberish,
+      amountOutMin: BigNumberish,
+      recipient: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    factory(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
     initialize(
-      entryPoint: string,
-      owner: string,
-      l1Storage: string,
-      paymaster: string,
+      _entryPoint: string,
+      _newOwner: string,
+      _paymaster: string,
+      _router: string,
+      _factory: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    owner(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    proxiableUUID(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    removeTokenFromWhitelist(
+      token: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    renounceOwnership(overrides?: Overrides & { from?: string }): Promise<PopulatedTransaction>;
+
+    s_feeAdmin(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    s_feeInCents(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    s_paymaster(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    s_priceFeeds(arg0: string, overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    s_whitelistedTokens(arg0: string, overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    setTokenWhitelistAndPriceFeed(
+      token: string,
+      status: boolean,
+      priceFeed: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    swapRouter(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    transferOwnership(
+      newOwner: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    updateFee(
+      _newFeeInCents: BigNumberish,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    updateFeeAdmin(
+      _newAdmin: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    upgradeToAndCall(
+      newImplementation: string,
+      data: BytesLike,
+      overrides?: PayableOverrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    validateUserOp(
+      userOp: UserOperationStruct,
+      userOpHash: BytesLike,
+      missingAccountFunds: BigNumberish,
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
   };
