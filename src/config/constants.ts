@@ -127,7 +127,7 @@ export const FASTIFY_REFRESH_TOKENS_INTERVAL_MS: number = Number(fastifyRefreshN
 export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(fastifyRefreshTokensIntervalMs);
 
 export const WHATSAPP_API_URL = 'https://api.whatsapp.com';
-export const CHATIZALO_PHONE_NUMBER = IS_DEVELOPMENT ? 5491164629653 : 5491164629653;
+export const CHATIZALO_PHONE_NUMBER = IS_DEVELOPMENT ? 5491168690963 : 5491164629653;
 
 export const MANTECA_MOCK_UPLOAD_DOCUMENTS_URL = 'https://upload.manteca.dev/file-upload-url';
 export const INFURA_URL = 'https://mainnet.infura.io/v3';

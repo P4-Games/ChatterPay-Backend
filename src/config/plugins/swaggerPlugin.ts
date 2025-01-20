@@ -2,6 +2,8 @@ import { FastifyInstance } from 'fastify';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi, { FastifySwaggerUiOptions } from '@fastify/swagger-ui';
 
+import { IS_DEVELOPMENT } from '../constants';
+
 /**
  * Sets up Swagger documentation for the Fastify server.
  * @param {FastifyInstance} server - The Fastify server instance
@@ -22,12 +24,8 @@ export async function setupSwagger(server: FastifyInstance): Promise<void> {
           description: 'Local server'
         },
         {
-          url: 'https://dev.back.chatterpay.net/',
-          description: 'Development server'
-        },
-        {
-          url: 'https://back.chatterpay.net/',
-          description: 'Production server'
+          url: `https://${IS_DEVELOPMENT ? 'dev.' : ''}back.chatterpay.net/`,
+          description: `${IS_DEVELOPMENT ? 'Development' : 'Production'} server`
         }
       ],
       tags: [
