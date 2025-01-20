@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 
-import { PRIVATE_KEY } from '../config/constants';
+import { BUN_ENV, PRIVATE_KEY } from '../config/constants';
 import { getPhoneNumberFormatted } from './formatHelper';
 
 /**
@@ -20,6 +20,6 @@ export function generatePrivateKey(phoneNumber: string, chanId: string): string 
     throw new Error('Seed private key not found in environment variables');
   }
 
-  const seed = `${PRIVATE_KEY}${chanId}${getPhoneNumberFormatted(phoneNumber)}`;
+  const seed = `${PRIVATE_KEY}${chanId}${BUN_ENV}${getPhoneNumberFormatted(phoneNumber)}`;
   return `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
 }
