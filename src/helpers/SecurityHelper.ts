@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 
-import { BUN_ENV, PRIVATE_KEY } from '../config/constants';
 import { getPhoneNumberFormatted } from './formatHelper';
+import { BUN_ENV, PRIVATE_KEY } from '../config/constants';
 
 /**
  * Generates a private key based on a seed private key, a phone number, and a chain ID.
