@@ -62,7 +62,7 @@ async function getUsers(): Promise<IUser[]> {
 }
 
 function getUserData(phoneNumber: string): { pk: string; sk: string } {
-  const sk = generatePrivateKey(phoneNumber);
+  const sk = generatePrivateKey(phoneNumber, DEFAULT_CHAIN_ID.toString());
   const wallet = new ethers.Wallet(sk);
 
   return {

@@ -7,6 +7,7 @@ import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
 import { IUser } from '../src/models/userModel';
 import { Logger } from '../src/helpers/loggerHelper';
+import { DEFAULT_CHAIN_ID } from '../src/config/constants';
 import { generatePrivateKey } from '../src/helpers/SecurityHelper';
 
 dotenv.config();
@@ -70,12 +71,12 @@ async function getUsers(): Promise<IUser[]> {
 }
 
 /**
- * Get user data based on phone number
+ * Get user data based on phone number and chainId
  * @param phoneNumber
  * @returns Object containing pk and sk
  */
-function getUserData(phoneNumber: string): { pk: string; sk: string } {
-  const sk = generatePrivateKey(phoneNumber);
+function getUserWalletData(phoneNumber: string): { pk: string; sk: string } {
+  const sk = generatePrivateKey(phoneNumber, DEFAULT_CHAIN_ID.toString());
   const wallet = new ethers.Wallet(sk);
 
   return {
@@ -177,7 +178,7 @@ async function processUser(user: IUser): Promise<void> {
   }
 
   try {
-    const { pk, sk } = getUserData(phoneNumber);
+    const { pk, sk } = getUserWalletData(phoneNumber);
 
     const alreadySubscribed = await isUserSubscribed(pk);
     if (alreadySubscribed) {
