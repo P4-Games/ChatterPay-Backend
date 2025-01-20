@@ -18,14 +18,23 @@ export interface PhoneNumberToAddress {
 }
 
 /**
- * Generates a deterministic Ethereum address from a phone number.
+ * Generates a deterministic Ethereum address based on a phone number and a chain ID.
+ *
+ * This function derives an Ethereum address by combining the phone number and chain ID
+ * with the environment-defined seed private key. The result includes the hashed private key,
+ * the private key, and the public key (Ethereum address).
  *
  * @param {string} phoneNumber - The phone number to generate the address from.
- * @returns {PhoneNumberToAddress} An object containing the hashed private key, private key, and public key.
+ * @param {string} chainId - The chain ID to include in the address generation.
+ * @returns {PhoneNumberToAddress} An object containing:
+ *   - `hashedPrivateKey`: A SHA-256 hash of the generated private key.
+ *   - `privateKey`: The deterministic private key.
+ *   - `publicKey`: The Ethereum address corresponding to the private key.
+ *
  * @throws {Error} If the seed private key is not found in environment variables.
  */
-function phoneNumberToAddress(phoneNumber: string): PhoneNumberToAddress {
-  const privateKey = generatePrivateKey(getPhoneNumberFormatted(phoneNumber));
+function phoneNumberToAddress(phoneNumber: string, chainId: string): PhoneNumberToAddress {
+  const privateKey = generatePrivateKey(getPhoneNumberFormatted(phoneNumber), chainId);
   const wallet = new ethers.Wallet(privateKey);
   const publicKey = wallet.address;
   const hashedPrivateKey = crypto.createHash('sha256').update(privateKey).digest('hex');
@@ -66,7 +75,10 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
     backendSigner
   );
 
-  const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(phoneNumber);
+  const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(
+    phoneNumber,
+    networkConfig.chain_id.toString()
+  );
 
   const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
     gasLimit: 1000000

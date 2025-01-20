@@ -195,7 +195,7 @@ export async function checkBlockchainConditions(
       throw new Error(`Blockchain with chain_id ${networkConfig.chain_id} not found`);
     }
 
-    const privateKey = generatePrivateKey(fromNumber);
+    const privateKey = generatePrivateKey(fromNumber, networkConfig.chain_id.toString());
     const setupContractsResult: SetupContractReturn = await setupContracts(
       blockchain,
       privateKey,
