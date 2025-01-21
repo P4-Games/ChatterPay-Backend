@@ -132,3 +132,4 @@
 ## Smart Contracts => Api3
 
 - Retrieves token prices for non-stable tokens through the API3 price feed contracts.
+
