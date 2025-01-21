@@ -28,6 +28,7 @@ steps:
       - GCP_CLOUD_TRACE_ENABLED=${_GCP_CLOUD_TRACE_ENABLED}
       - CORS_ORIGINS=${_CORS_ORIGINS}
       - BLACKLIST_IPS=${_BLACKLIST_IPS}
+      - DEFAULT_CHAIN_ID=${_DEFAULT_CHAIN_ID}
 
     secretEnv: [
       'CHATIZALO_TOKEN', 
@@ -109,6 +110,8 @@ steps:
       'CORS_ORIGINS=${_CORS_ORIGINS}',
       '--build-arg',
       'BLACKLIST_IPS=${_BLACKLIST_IPS}',
+      '--build-arg',
+      'DEFAULT_CHAIN_ID=${_DEFAULT_CHAIN_ID}',
       '.'
     ]
     secretEnv: [
