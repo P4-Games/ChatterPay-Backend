@@ -45,5 +45,6 @@ docker build \
   --build-arg GCP_CLOUD_TRACE_ENABLED="$GCP_CLOUD_TRACE_ENABLED" \
   --build-arg CORS_ORIGINS="$CORS_ORIGINS" \
   --build-arg BLACKLIST_IPS="$BLACKLIST_IPS" \
+  --build-arg DEFAULT_CHAIN_ID="$DEFAULT_CHAIN_ID" \ 
   -t chatterpay-back-app ..
 

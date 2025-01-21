@@ -39,6 +39,7 @@ const {
   MANTECA_API_KEY,
   CORS_ORIGINS = '*',
   BLACKLIST_IPS = '',
+  DEFAULT_CHAIN_ID: defaultChainId = 421614, // Arbitrum Sepolia
   FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: fastifyRefreshNetworksIntervalMs = 86400000,
   FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000
 } = process.env;
@@ -65,6 +66,7 @@ export {
 export const IS_DEVELOPMENT = BUN_ENV.toLowerCase() === 'development';
 export const PORT = Number(envPort) || 3000;
 export const MONGO_URI: string = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
+export const DEFAULT_CHAIN_ID = Number(defaultChainId);
 
 export const GCP_ABIs = {
   ChatterPay: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPay.json`,
@@ -112,7 +114,6 @@ export const BACKEND_SIGNER_MIN_BALANCE: string = '0.5'; // must have at least: 
 export const USER_SIGNER_MIN_BALANCE: string = '0.0008';
 export const USER_SIGNER_BALANCE_TO_TRANSFER: string = '0.001';
 
-export const DEFAULT_CHAIN_ID = 421614; // Arbitrum Sepolia
 export const LIFI_SLIPPAGE = 30 / 1000;
 export const LIFI_TYPE = 'SAFEST';
 
