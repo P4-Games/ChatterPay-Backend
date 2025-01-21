@@ -101,6 +101,10 @@
 
 - Get FIAT Prices
 
+## Backend => Binance
+
+- Get Token Prices
+
 ## Backend => Manteca
 
 - ramp-On
@@ -124,3 +128,7 @@
 ## GCP Cloud Scheduler => Backend
 
 `- checking_depositos => /check_deposits, CRON: _/10 _ \* \* \*`
+
+## Smart Contracts => Api3
+
+- Retrieves token prices for non-stable tokens through the API3 price feed contracts.
