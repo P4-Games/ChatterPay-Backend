@@ -41,7 +41,8 @@ const {
   BLACKLIST_IPS = '',
   DEFAULT_CHAIN_ID: defaultChainId = 421614, // Arbitrum Sepolia
   FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: fastifyRefreshNetworksIntervalMs = 86400000,
-  FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000
+  FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000,
+  ABIS_VERSION = 'v1.0.0'
 } = process.env;
 
 export {
@@ -52,6 +53,7 @@ export {
   BOT_API_URL,
   ICP_MNEMONIC,
   CORS_ORIGINS,
+  ABIS_VERSION,
   BLACKLIST_IPS,
   INFURA_API_KEY,
   BOT_DATA_TOKEN,
@@ -69,12 +71,12 @@ export const MONGO_URI: string = envMongoUri ?? 'mongodb://localhost:27017/chatt
 export const DEFAULT_CHAIN_ID = Number(defaultChainId);
 
 export const GCP_ABIs = {
-  ChatterPay: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPay.json`,
-  ChatterPayWallet: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPayWallet.json`,
-  ChatterPayWalletFactory: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPayWalletFactory.json`,
-  ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/ChatterPayNFT.json`,
-  EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/EntryPoint.json`,
-  ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/ERC20.json`
+  ChatterPay: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPay.json`,
+  ChatterPayWallet: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWallet.json`,
+  ChatterPayWalletFactory: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletFactory.json`,
+  ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayNFT.json`,
+  EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/EntryPoint.json`,
+  ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.json`
 };
 
 export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
