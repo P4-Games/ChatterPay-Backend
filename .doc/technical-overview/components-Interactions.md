@@ -101,6 +101,10 @@
 
 - Get FIAT Prices
 
+## Backend => Binance
+
+- Get Token Prices
+
 ## Backend => Manteca
 
 - ramp-On
