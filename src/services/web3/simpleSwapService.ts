@@ -1,17 +1,13 @@
 import { ethers } from 'ethers';
 
-import { Logger } from '../helpers/loggerHelper';
+import { Logger } from '../../helpers/loggerHelper';
 import { setupERC20 } from './contractSetupService';
 import { addPaymasterData } from './paymasterService';
-import { IBlockchain } from '../models/blockchainModel';
+import { IBlockchain } from '../../models/blockchainModel';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from './userOpExecutorService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
-import {
-  TokenAddressesType,
-  ExecuteSwapResultType,
-  setupContractReturnType
-} from '../types/common';
+import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../../types/commonType';
 
 /**
  * Creates callData for token approval
@@ -131,11 +127,11 @@ async function executeOperation(
  */
 export async function executeSwap(
   networkConfig: IBlockchain,
-  setupContractsResult: setupContractReturnType,
+  setupContractsResult: SetupContractReturn,
   entryPointContract: ethers.Contract,
-  tokenAddresses: TokenAddressesType,
+  tokenAddresses: TokenAddresses,
   amount: string
-): Promise<ExecuteSwapResultType> {
+): Promise<ExecuteSwapResult> {
   try {
     const isWETHtoUSDT =
       tokenAddresses.tokenAddressInput.toUpperCase() === 'WETH' &&

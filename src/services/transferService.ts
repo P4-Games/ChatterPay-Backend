@@ -1,22 +1,23 @@
+/* eslint-disable no-restricted-syntax */
 import { ethers } from 'ethers';
 
 import { IToken } from '../models/tokenModel';
-import { getUser } from './mongo/mongoService';
 import { Logger } from '../helpers/loggerHelper';
-import { getTokenBalances } from './walletService';
-import { setupERC20 } from './contractSetupService';
-import Transaction from '../models/transactionModel';
-import { addPaymasterData } from './paymasterService';
+import { getTokenBalances } from './balanceService';
 import { IBlockchain } from '../models/blockchainModel';
 import { IUser, IUserWallet } from '../models/userModel';
-import { sendUserOperationToBundler } from './bundlerService';
+import { setupERC20 } from './web3/contractSetupService';
+import { addPaymasterData } from './web3/paymasterService';
+import { mongoUserService } from './mongo/mongoUserService';
 import { checkBlockchainConditions } from './blockchainService';
-import { waitForUserOperationReceipt } from './userOpExecutorService';
+import { sendUserOperationToBundler } from './web3/bundlerService';
+import { mongoTransactionService } from './mongo/mongoTransactionService';
+import { waitForUserOperationReceipt } from './web3/userOpExecutorService';
 import {
   signUserOperation,
   createTransferCallData,
   createGenericUserOperation
-} from './userOperationService';
+} from './web3/userOperationService';
 import {
   openOperation,
   closeOperation,
@@ -24,12 +25,13 @@ import {
   hasUserAnyOperationInProgress
 } from './userService';
 import {
-  TokenBalanceType,
-  setupContractReturnType,
+  TokenBalance,
+  TransactionData,
+  SetupContractReturn,
+  ExecueTransactionResult,
   ConcurrentOperationsEnum,
-  ExecueTransactionResultType,
-  CheckBalanceConditionsResultType
-} from '../types/common';
+  CheckBalanceConditionsResult
+} from '../types/commonType';
 
 /**
  * Sends a user operation for token transfer.
@@ -45,13 +47,13 @@ import {
  */
 export async function sendUserOperation(
   networkConfig: IBlockchain,
-  setupContractsResult: setupContractReturnType,
+  setupContractsResult: SetupContractReturn,
   entryPointContract: ethers.Contract,
   fromNumber: string,
   to: string,
   tokenAddress: string,
   amount: string
-): Promise<ExecueTransactionResultType> {
+): Promise<ExecueTransactionResult> {
   try {
     // Create transfer-specific call data
     const erc20 = await setupERC20(tokenAddress, setupContractsResult.signer);
@@ -115,39 +117,6 @@ export async function sendUserOperation(
   }
 }
 
-/**
- * Saves the transaction details to the database.
- */
-export async function saveTransaction(
-  tx: string,
-  walletFrom: string,
-  walletTo: string,
-  amount: number,
-  token: string,
-  type: string,
-  status: string
-) {
-  try {
-    await Transaction.create({
-      trx_hash: tx,
-      wallet_from: walletFrom,
-      wallet_to: walletTo,
-      type,
-      date: new Date(),
-      status,
-      amount,
-      token
-    });
-  } catch (error: unknown) {
-    // avoid throw error
-    Logger.error(
-      'saveTransaction',
-      `Error saving transaction ${tx} in database from: ${walletFrom}, to: ${walletTo}, amount: ${amount.toString()}, token: ${token}}:`,
-      (error as Error).message
-    );
-  }
-}
-
 export async function withdrawWalletAllFunds(
   tokens: IToken[],
   networkConfig: IBlockchain,
@@ -155,7 +124,7 @@ export async function withdrawWalletAllFunds(
   to_wallet: string
 ): Promise<{ result: boolean; message: string }> {
   try {
-    const bddUser: IUser | null = await getUser(channel_user_id);
+    const bddUser: IUser | null = await mongoUserService.getUser(channel_user_id);
     if (!bddUser) {
       return { result: false, message: 'There are not user with that phone number' };
     }
@@ -185,14 +154,14 @@ export async function withdrawWalletAllFunds(
 
     const to_wallet_formatted: string = !to_wallet.startsWith('0x') ? `0x${to_wallet}` : to_wallet;
 
-    const walletTokensBalance: TokenBalanceType[] = await getTokenBalances(
+    const walletTokensBalance: TokenBalance[] = await getTokenBalances(
       userWallet.wallet_proxy,
       tokens,
       networkConfig
     );
 
     // Check Blockchain Conditions
-    const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
+    const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
       await checkBlockchainConditions(networkConfig, channel_user_id);
 
     if (!checkBlockchainConditionsResult.success) {
@@ -207,9 +176,13 @@ export async function withdrawWalletAllFunds(
         setTimeout(resolve, ms);
       });
 
+    // Arrays to store transactions data for later persistence
+    const transactionsOutToSave: TransactionData[] = [];
+
+    // Iterate through tokens and execute transactions
     for (let index = 0; index < walletTokensBalance.length; index += 1) {
-      const tokenBalance = walletTokensBalance[index];
-      const { balance, address } = tokenBalance;
+      const tokenBalance: TokenBalance = walletTokensBalance[index];
+      const { balance, address, symbol } = tokenBalance;
       const amount = parseFloat(balance);
 
       if (amount > 0) {
@@ -218,7 +191,7 @@ export async function withdrawWalletAllFunds(
         // but it resulted in the failure of the user operation calls.
         //
         // eslint-disable-next-line no-await-in-loop
-        await sendUserOperation(
+        const executeTransactionResult: ExecueTransactionResult = await sendUserOperation(
           networkConfig,
           checkBlockchainConditionsResult.setupContractsResult!,
           checkBlockchainConditionsResult.entryPointContract!,
@@ -228,12 +201,30 @@ export async function withdrawWalletAllFunds(
           balance
         );
 
+        // Store transaction out data as a generic object
+        transactionsOutToSave.push({
+          tx: executeTransactionResult.transactionHash,
+          walletFrom: userWallet.wallet_proxy,
+          walletTo: to_wallet_formatted,
+          amount,
+          token: symbol,
+          type: 'withdraw',
+          status: 'completed'
+        });
+
         // Only if it's not the last one
         if (index < walletTokensBalance.length - 1) {
           delay(15000); // 15 seg delay
         }
       }
     }
+
+    // Persist all transaction data to the database after the loop
+    await Promise.all(
+      transactionsOutToSave.map((transaction) =>
+        mongoTransactionService.saveTransaction(transaction)
+      )
+    );
   } catch (error: unknown) {
     return { result: false, message: (error as Error).message };
   }

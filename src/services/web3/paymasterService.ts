@@ -1,12 +1,12 @@
 import { ethers } from 'ethers';
 
-import { Logger } from '../helpers/loggerHelper';
-import { PackedUserOperationType } from '../types/userOperation';
-import { createPaymasterAndData } from '../helpers/paymasterHelper';
-import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../config/constants';
+import { Logger } from '../../helpers/loggerHelper';
+import { PackedUserOperation } from '../../types/userOperationType';
+import { createPaymasterAndData } from '../../helpers/paymasterHelper';
+import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../../config/constants';
 
 /**
- * Adds paymaster-related data to the given UserOperation.
+ * Add paymaster-related data to the given UserOperation.
  *
  * This function computes and attaches the necessary data that the paymaster requires for the UserOperation,
  * such as the paymaster address, the sender's address, and validity period.
@@ -17,10 +17,10 @@ import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../config/const
  * @returns A new UserOperation with the added paymaster data.
  */
 export async function addPaymasterData(
-  userOp: PackedUserOperationType,
+  userOp: PackedUserOperation,
   paymasterAddress: string,
   backendSigner: ethers.Signer
-): Promise<PackedUserOperationType> {
+): Promise<PackedUserOperation> {
   const paymasterAndData = await createPaymasterAndData(
     paymasterAddress,
     userOp.sender,
@@ -75,7 +75,7 @@ export async function ensurePaymasterHasEnoughEth(
 
     // If the paymaster balance is less than the minimum, perform a deposit
     if (paymasterBalance.lt(minBalance)) {
-      Logger.log('ensurePaymasterHasEnoughEth', 'Paymaster does not have sufficient prefund.');
+      Logger.log('ensurePaymasterHasEnoughEth', 'Paymaster does not have enough pre-fund.');
       const missingFunds = targetBalance.sub(paymasterBalance);
       Logger.log(
         'ensurePaymasterHasEnoughEth',
@@ -97,7 +97,7 @@ export async function ensurePaymasterHasEnoughEth(
         `New balance after deposit: ${ethers.utils.formatEther(newBalance)} ETH`
       );
     } else {
-      Logger.log('ensurePaymasterHasEnoughEth', 'Paymaster has sufficient prefund.');
+      Logger.log('ensurePaymasterHasEnoughEth', 'Paymaster has enough pre-fund.');
     }
     return true;
   } catch (error) {

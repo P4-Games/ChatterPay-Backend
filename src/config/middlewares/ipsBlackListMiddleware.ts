@@ -20,7 +20,7 @@ export function ipBlacklistMiddleware(
   // Extract client IP, considering potential proxies
   const clientIp =
     request.headers['x-forwarded-for']?.toString().split(',')[0].trim() || request.ip;
-  Logger.log('ipBlacklistMiddleware', `url: ${request.url}, }Detected IP: ${clientIp}`);
+  Logger.log('ipBlacklistMiddleware', `url: ${request.url}, Detected IP: ${clientIp}`);
 
   if (blacklistedIps.includes(clientIp)) {
     returnErrorResponse(reply, 403, `Access forbidden: your IP ${clientIp} is blacklisted`);

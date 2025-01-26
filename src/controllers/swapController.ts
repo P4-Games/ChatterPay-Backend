@@ -3,11 +3,11 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { SIGNING_KEY } from '../config/constants';
-import { executeSwap } from '../services/swapService';
-import { setupERC20 } from '../services/contractSetupService';
-import { saveTransaction } from '../services/transferService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { executeSwap } from '../services/web3/simpleSwapService';
+import { setupERC20 } from '../services/web3/contractSetupService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
+import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
 import {
@@ -16,11 +16,12 @@ import {
   hasPhoneAnyOperationInProgress
 } from '../services/userService';
 import {
-  TokenAddressesType,
-  ExecuteSwapResultType,
+  TokenAddresses,
+  TransactionData,
+  ExecuteSwapResult,
   ConcurrentOperationsEnum,
-  CheckBalanceConditionsResultType
-} from '../types/common';
+  CheckBalanceConditionsResult
+} from '../types/commonType';
 import {
   sendSwapNotification,
   sendInternalErrorNotification,
@@ -45,7 +46,7 @@ interface SwapBody {
  */
 const validateInputs = async (
   inputs: SwapBody,
-  tokenAddresses: TokenAddressesType
+  tokenAddresses: TokenAddresses
 ): Promise<string> => {
   const { channel_user_id, inputCurrency, outputCurrency, amount } = inputs;
 
@@ -93,7 +94,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     const { tokens: blockchainTokens, networkConfig } = request.server as FastifyInstance;
 
-    const tokenAddresses: TokenAddressesType = getTokensAddresses(
+    const tokenAddresses: TokenAddresses = getTokensAddresses(
       networkConfig,
       blockchainTokens,
       inputCurrency,
@@ -157,7 +158,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     /* ***************************************************** */
     /* 5. swap: check blockchain conditions                  */
     /* ***************************************************** */
-    const checkBlockchainConditionsResult: CheckBalanceConditionsResultType =
+    const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
       await checkBlockchainConditions(networkConfig, channel_user_id);
 
     if (!checkBlockchainConditionsResult.success) {
@@ -170,7 +171,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     /* 6. swap: make operation                               */
     /* ***************************************************** */
 
-    const executeSwapResult: ExecuteSwapResultType = await executeSwap(
+    const executeSwapResult: ExecuteSwapResult = await executeSwap(
       networkConfig,
       checkBlockchainConditionsResult.setupContractsResult!,
       checkBlockchainConditionsResult.entryPointContract!,
@@ -205,26 +206,28 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     // Save transactions OUT
     Logger.log('swap', 'Updating swap transactions in database.');
-    await saveTransaction(
-      executeSwapResult.approveTransactionHash,
-      proxyAddress,
-      networkConfig.contracts.simpleSwapAddress,
-      fromTokensSentInUnits,
-      inputCurrency,
-      'swap',
-      'completed'
-    );
+    const transactionOut: TransactionData = {
+      tx: executeSwapResult.approveTransactionHash,
+      walletFrom: proxyAddress,
+      walletTo: networkConfig.contracts.simpleSwapAddress,
+      amount: fromTokensSentInUnits,
+      token: inputCurrency,
+      type: 'swap',
+      status: 'completed'
+    };
+    await mongoTransactionService.saveTransaction(transactionOut);
 
     // Save transactions IN
-    await saveTransaction(
-      executeSwapResult.swapTransactionHash,
-      networkConfig.contracts.simpleSwapAddress,
-      proxyAddress,
-      toTokensReceivedInUnits,
-      outputCurrency,
-      'swap',
-      'completed'
-    );
+    const transactionIn: TransactionData = {
+      tx: executeSwapResult.swapTransactionHash,
+      walletFrom: networkConfig.contracts.simpleSwapAddress,
+      walletTo: proxyAddress,
+      amount: toTokensReceivedInUnits,
+      token: outputCurrency,
+      type: 'swap',
+      status: 'completed'
+    };
+    await mongoTransactionService.saveTransaction(transactionIn);
 
     /* ***************************************************** */
     /* 8. swap: send notification to user                    */

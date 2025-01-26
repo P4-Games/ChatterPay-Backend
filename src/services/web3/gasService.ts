@@ -2,10 +2,11 @@ import PQueue from 'p-queue';
 import { ethers, BigNumber } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
 
-import { Logger } from '../helpers/loggerHelper';
-import { QUEUE_GAS_INTERVAL } from '../config/constants';
-import { getUserOpHash } from '../helpers/userOperationHekper';
-import { PackedUserOperationType } from '../types/userOperation';
+import { Logger } from '../../helpers/loggerHelper';
+import { IBlockchain } from '../../models/blockchainModel';
+import { QUEUE_GAS_INTERVAL } from '../../config/constants';
+import { getUserOpHash } from '../../helpers/userOperationHekper';
+import { PackedUserOperation } from '../../types/userOperationType';
 
 interface AlchemyGasResponse {
   paymasterAndData: string;
@@ -55,12 +56,12 @@ const createGasServiceConfig = (
  * @returns The generated dummy signature.
  */
 export async function generateDummySignature(
-  userOperation: Partial<PackedUserOperationType>,
+  userOperation: Partial<PackedUserOperation>,
   entryPointAddress: string,
   chainId: number
 ): Promise<string> {
   // Create a "dummy" version of the UserOperation
-  const dummyUserOp: PackedUserOperationType = {
+  const dummyUserOp: PackedUserOperation = {
     sender: userOperation.sender ?? ethers.constants.AddressZero,
     nonce: userOperation.nonce || ethers.constants.Zero,
     initCode: userOperation.initCode ?? '0x',
@@ -102,8 +103,9 @@ const queue = new PQueue({ interval: QUEUE_GAS_INTERVAL, intervalCap: 1 });
  * @returns The gas service response containing paymaster data and gas limits.
  */
 export async function getPaymasterAndData(
+  networkConfig: IBlockchain,
   config: GasServiceConfig,
-  userOp: Partial<PackedUserOperationType>,
+  userOp: Partial<PackedUserOperation>,
   signer: ethers.Signer,
   overrides?: GasOverrides
 ): Promise<AlchemyGasResponse> {
@@ -133,7 +135,7 @@ export async function getPaymasterAndData(
   try {
     // Wrapper function in queue to avoid error 429 (rate-limit)
     const response = (await queue.add(async () =>
-      axios.post(process.env.ARBITRUM_SEPOLIA_RPC_URL ?? '', payload, {
+      axios.post(networkConfig.bundlerUrl!, payload, {
         headers: {
           accept: 'application/json',
           'content-type': 'application/json'
@@ -165,12 +167,13 @@ export async function getPaymasterAndData(
  * @returns A new UserOperation with the paymaster data applied.
  */
 const applyPaymasterDataToUserOp = async (
+  networkConfig: IBlockchain,
   config: GasServiceConfig,
-  userOp: Partial<PackedUserOperationType>,
+  userOp: Partial<PackedUserOperation>,
   signer: ethers.Signer,
   overrides?: GasOverrides
-): Promise<PackedUserOperationType> => {
-  const gasData = await getPaymasterAndData(config, userOp, signer, overrides);
+): Promise<PackedUserOperation> => {
+  const gasData = await getPaymasterAndData(networkConfig, config, userOp, signer, overrides);
 
   return {
     ...userOp,
@@ -180,7 +183,7 @@ const applyPaymasterDataToUserOp = async (
     preVerificationGas: BigNumber.from(gasData.preVerificationGas),
     maxFeePerGas: BigNumber.from(gasData.maxFeePerGas),
     maxPriorityFeePerGas: BigNumber.from(gasData.maxPriorityFeePerGas)
-  } as PackedUserOperationType;
+  } as PackedUserOperation;
 };
 
 export const gasService = {

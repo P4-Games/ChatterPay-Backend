@@ -1,11 +1,12 @@
-import { getUser } from './mongo/mongoService';
 import { Logger } from '../helpers/loggerHelper';
-import { ConcurrentOperationsEnum } from '../types/common';
+import { pushService } from './push/pushService';
+import { mongoUserService } from './mongo/mongoUserService';
+import { ConcurrentOperationsEnum } from '../types/commonType';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { IUser, UserModel, IUserWallet } from '../models/userModel';
+import { sendWalletCreationNotification } from './notificationService';
 import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
 import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
-import { subscribeToPushChannel, sendWalletCreationNotification } from './notificationService';
 
 /**
  * Updates the operation count for the user by the specified increment.
@@ -85,7 +86,10 @@ export const createUserWithWallet = async (
   await user.save();
 
   Logger.log('createUserWithWallet', 'Push protocol', phoneNumber, predictedWallet.EOAAddress);
-  await subscribeToPushChannel(predictedWallet.privateKeyNotHashed, predictedWallet.EOAAddress);
+  await pushService.subscribeToPushChannel(
+    predictedWallet.privateKeyNotHashed,
+    predictedWallet.EOAAddress
+  );
   sendWalletCreationNotification(predictedWallet.EOAAddress, phoneNumber);
 
   return user;
@@ -214,7 +218,7 @@ export const getOrCreateUser = async (
   phoneNumber: string,
   chatterpayImplementation: string
 ): Promise<IUser> => {
-  const user = await getUser(phoneNumber);
+  const user = await mongoUserService.getUser(phoneNumber);
 
   if (user) return user;
 

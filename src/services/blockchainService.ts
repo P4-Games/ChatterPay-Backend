@@ -2,17 +2,17 @@ import { ethers } from 'ethers';
 
 import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
-import { getEntryPointABI } from './bucketService';
-import { getBlockchain } from './mongo/mongoService';
+import { getEntryPointABI } from './gcp/gcpService';
 import { IBlockchain } from '../models/blockchainModel';
-import { setupContracts } from './contractSetupService';
+import { setupContracts } from './web3/contractSetupService';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
-import { ensurePaymasterHasEnoughEth } from './paymasterService';
+import { ensurePaymasterHasEnoughEth } from './web3/paymasterService';
+import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import {
-  TokenAddressesType,
-  setupContractReturnType,
-  CheckBalanceConditionsResultType
-} from '../types/common';
+  TokenAddresses,
+  SetupContractReturn,
+  CheckBalanceConditionsResult
+} from '../types/commonType';
 import {
   USER_SIGNER_MIN_BALANCE,
   BACKEND_SIGNER_MIN_BALANCE,
@@ -59,7 +59,7 @@ export function getTokensAddresses(
   blockchainTokens: IToken[],
   lookUpTokenSymbolInput: string,
   lookUpTokenSymbolOutput: string
-): TokenAddressesType {
+): TokenAddresses {
   const chainTokens = blockchainTokens.filter(
     (token) => token.chain_id === blockchainConfig.chain_id
   );
@@ -185,16 +185,18 @@ export async function ensureUserSignerHasEnoughEth(
 export async function checkBlockchainConditions(
   networkConfig: IBlockchain,
   fromNumber: string
-): Promise<CheckBalanceConditionsResultType> {
+): Promise<CheckBalanceConditionsResult> {
   try {
-    const blockchain: IBlockchain | null = await getBlockchain(networkConfig.chain_id);
+    const blockchain: IBlockchain | null = await mongoBlockchainService.getBlockchain(
+      networkConfig.chain_id
+    );
 
     if (!blockchain) {
       throw new Error(`Blockchain with chain_id ${networkConfig.chain_id} not found`);
     }
 
-    const privateKey = generatePrivateKey(fromNumber);
-    const setupContractsResult: setupContractReturnType = await setupContracts(
+    const privateKey = generatePrivateKey(fromNumber, networkConfig.chain_id.toString());
+    const setupContractsResult: SetupContractReturn = await setupContracts(
       blockchain,
       privateKey,
       fromNumber

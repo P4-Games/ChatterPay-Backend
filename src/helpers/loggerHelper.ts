@@ -1,7 +1,7 @@
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
-import { LogLevelType, validLogLevels } from '../types/logger';
+import { LogLevel, validLogLevels } from '../types/loggerType';
 import { IS_DEVELOPMENT, CURRENT_LOG_LEVEL } from '../config/constants';
 
 // Create a pretty stream for local console output with colorized logs
@@ -41,7 +41,7 @@ const logger = pino(
 );
 
 export class Logger {
-  private static logMessage(level: LogLevelType, method: string, ...args: unknown[]): void {
+  private static logMessage(level: LogLevel, method: string, ...args: unknown[]): void {
     try {
       const message = args
         .map((arg) =>
@@ -59,7 +59,7 @@ export class Logger {
     }
   }
 
-  private static shouldLog(level: LogLevelType): boolean {
+  private static shouldLog(level: LogLevel): boolean {
     const currentLevelIndex = validLogLevels.indexOf(CURRENT_LOG_LEVEL);
     const messageLevelIndex = validLogLevels.indexOf(level);
     return messageLevelIndex >= currentLevelIndex;
