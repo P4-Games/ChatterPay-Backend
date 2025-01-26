@@ -2,6 +2,7 @@ import { gql, request } from 'graphql-request';
 
 import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
+import { TransactionData } from '../types/commonType';
 import { sendTransferNotification } from './notificationService';
 import { LastProcessedBlock } from '../models/lastProcessedBlockModel';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
@@ -56,15 +57,17 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
   if (user) {
     const value = Number((Number(transfer.value) / 1e18).toFixed(4));
 
-    await mongoTransactionService.saveTransaction(
-      transfer.id,
-      transfer.from,
-      transfer.to,
-      value,
+    Logger.log('processExternalDeposit', 'Updating swap transactions in database.');
+    const transactionData: TransactionData = {
+      tx: transfer.id,
+      walletFrom: transfer.from,
+      walletTo: transfer.to,
+      amount: value,
       token,
-      'deposit',
-      'completed'
-    );
+      type: 'deposit',
+      status: 'completed'
+    };
+    await mongoTransactionService.saveTransaction(transactionData);
 
     // Send incoming transfer notification message, and record tx data
     await sendTransferNotification(transfer.to, user.phone_number, value.toString(), token);

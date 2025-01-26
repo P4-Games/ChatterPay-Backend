@@ -15,6 +15,7 @@ import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validation
 import { INFURA_URL, INFURA_API_KEY, GCP_CLOUD_TRACE_ENABLED } from '../config/constants';
 import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
 import {
+  TransactionData,
   ExecueTransactionResult,
   ConcurrentOperationsEnum,
   CheckBalanceConditionsResult
@@ -479,15 +480,16 @@ export const makeTransaction = async (
       : undefined;
 
     Logger.log('makeTransaction', 'Updating transaction in database.');
-    await mongoTransactionService.saveTransaction(
-      executeTransactionResult.transactionHash,
-      userWallet.wallet_proxy,
-      toAddress,
-      parseFloat(amount),
-      tokenSymbol,
-      'transfer',
-      'completed'
-    );
+    const transactionOut: TransactionData = {
+      tx: executeTransactionResult.transactionHash,
+      walletFrom: userWallet.wallet_proxy,
+      walletTo: toAddress,
+      amount: parseFloat(amount),
+      token: tokenSymbol,
+      type: 'transfer',
+      status: 'completed'
+    };
+    await mongoTransactionService.saveTransaction(transactionOut);
     saveTransactionSpan?.endSpan();
 
     /* ***************************************************** */
