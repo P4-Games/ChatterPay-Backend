@@ -86,3 +86,13 @@ export enum ConcurrentOperationsEnum {
   MintNftCopy = 'mint_nft_copy',
   WithdrawAll = 'withdraw_all'
 }
+
+export interface TransactionData {
+  tx: string;
+  walletFrom: string;
+  walletTo: string;
+  amount: number;
+  token: string;
+  type: string;
+  status: string;
+}
