@@ -17,6 +17,7 @@ import {
 } from '../services/userService';
 import {
   TokenAddresses,
+  TransactionData,
   ExecuteSwapResult,
   ConcurrentOperationsEnum,
   CheckBalanceConditionsResult
@@ -205,26 +206,28 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     // Save transactions OUT
     Logger.log('swap', 'Updating swap transactions in database.');
-    await mongoTransactionService.saveTransaction(
-      executeSwapResult.approveTransactionHash,
-      proxyAddress,
-      networkConfig.contracts.simpleSwapAddress,
-      fromTokensSentInUnits,
-      inputCurrency,
-      'swap',
-      'completed'
-    );
+    const transactionOut: TransactionData = {
+      tx: executeSwapResult.approveTransactionHash,
+      walletFrom: proxyAddress,
+      walletTo: networkConfig.contracts.simpleSwapAddress,
+      amount: fromTokensSentInUnits,
+      token: inputCurrency,
+      type: 'swap',
+      status: 'completed'
+    };
+    await mongoTransactionService.saveTransaction(transactionOut);
 
     // Save transactions IN
-    await mongoTransactionService.saveTransaction(
-      executeSwapResult.swapTransactionHash,
-      networkConfig.contracts.simpleSwapAddress,
-      proxyAddress,
-      toTokensReceivedInUnits,
-      outputCurrency,
-      'swap',
-      'completed'
-    );
+    const transactionIn: TransactionData = {
+      tx: executeSwapResult.swapTransactionHash,
+      walletFrom: networkConfig.contracts.simpleSwapAddress,
+      walletTo: proxyAddress,
+      amount: toTokensReceivedInUnits,
+      token: outputCurrency,
+      type: 'swap',
+      status: 'completed'
+    };
+    await mongoTransactionService.saveTransaction(transactionIn);
 
     /* ***************************************************** */
     /* 8. swap: send notification to user                    */
