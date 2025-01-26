@@ -75,7 +75,7 @@ export async function ensurePaymasterHasEnoughEth(
 
     // If the paymaster balance is less than the minimum, perform a deposit
     if (paymasterBalance.lt(minBalance)) {
-      Logger.log('ensurePaymasterHasEnoughEth', 'Paymaster does not have sufficient prefund.');
+      Logger.log('ensurePaymasterHasEnoughEth', 'Paymaster does not have enough pre-fund.');
       const missingFunds = targetBalance.sub(paymasterBalance);
       Logger.log(
         'ensurePaymasterHasEnoughEth',
@@ -97,7 +97,7 @@ export async function ensurePaymasterHasEnoughEth(
         `New balance after deposit: ${ethers.utils.formatEther(newBalance)} ETH`
       );
     } else {
-      Logger.log('ensurePaymasterHasEnoughEth', 'Paymaster has sufficient prefund.');
+        Logger.log('ensurePaymasterHasEnoughEth', 'Paymaster has enough pre-fund.');
     }
     return true;
   } catch (error) {
