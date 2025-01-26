@@ -1,15 +1,17 @@
+/* eslint-disable no-restricted-syntax */
 import { ethers } from 'ethers';
 
 import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenBalances } from './balanceService';
 import { IBlockchain } from '../models/blockchainModel';
-import { setupERC20 } from './web3/contractSetupService';
 import { IUser, IUserWallet } from '../models/userModel';
+import { setupERC20 } from './web3/contractSetupService';
 import { addPaymasterData } from './web3/paymasterService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { checkBlockchainConditions } from './blockchainService';
 import { sendUserOperationToBundler } from './web3/bundlerService';
+import { mongoTransactionService } from './mongo/mongoTransactionService';
 import { waitForUserOperationReceipt } from './web3/userOpExecutorService';
 import {
   signUserOperation,
@@ -24,6 +26,7 @@ import {
 } from './userService';
 import {
   TokenBalance,
+  TransactionData,
   SetupContractReturn,
   ExecueTransactionResult,
   ConcurrentOperationsEnum,
@@ -173,9 +176,13 @@ export async function withdrawWalletAllFunds(
         setTimeout(resolve, ms);
       });
 
+    // Arrays to store transactions data for later persistence
+    const transactionsOutToSave: TransactionData[] = [];
+
+    // Iterate through tokens and execute transactions
     for (let index = 0; index < walletTokensBalance.length; index += 1) {
-      const tokenBalance = walletTokensBalance[index];
-      const { balance, address } = tokenBalance;
+      const tokenBalance: TokenBalance = walletTokensBalance[index];
+      const { balance, address, symbol } = tokenBalance;
       const amount = parseFloat(balance);
 
       if (amount > 0) {
@@ -184,7 +191,7 @@ export async function withdrawWalletAllFunds(
         // but it resulted in the failure of the user operation calls.
         //
         // eslint-disable-next-line no-await-in-loop
-        await sendUserOperation(
+        const executeTransactionResult: ExecueTransactionResult = await sendUserOperation(
           networkConfig,
           checkBlockchainConditionsResult.setupContractsResult!,
           checkBlockchainConditionsResult.entryPointContract!,
@@ -194,12 +201,30 @@ export async function withdrawWalletAllFunds(
           balance
         );
 
+        // Store transaction out data as a generic object
+        transactionsOutToSave.push({
+          tx: executeTransactionResult.transactionHash,
+          walletFrom: userWallet.wallet_proxy,
+          walletTo: to_wallet_formatted,
+          amount,
+          token: symbol,
+          type: 'withdraw',
+          status: 'completed'
+        });
+
         // Only if it's not the last one
         if (index < walletTokensBalance.length - 1) {
           delay(15000); // 15 seg delay
         }
       }
     }
+
+    // Persist all transaction data to the database after the loop
+    await Promise.all(
+      transactionsOutToSave.map((transaction) =>
+        mongoTransactionService.saveTransaction(transaction)
+      )
+    );
   } catch (error: unknown) {
     return { result: false, message: (error as Error).message };
   }
