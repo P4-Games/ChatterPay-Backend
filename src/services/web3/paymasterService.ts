@@ -97,7 +97,7 @@ export async function ensurePaymasterHasEnoughEth(
         `New balance after deposit: ${ethers.utils.formatEther(newBalance)} ETH`
       );
     } else {
-        Logger.log('ensurePaymasterHasEnoughEth', 'Paymaster has enough pre-fund.');
+      Logger.log('ensurePaymasterHasEnoughEth', 'Paymaster has enough pre-fund.');
     }
     return true;
   } catch (error) {
