@@ -6,7 +6,7 @@ import { createPaymasterAndData } from '../../helpers/paymasterHelper';
 import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../../config/constants';
 
 /**
- * Adds paymaster-related data to the given UserOperation.
+ * Add paymaster-related data to the given UserOperation.
  *
  * This function computes and attaches the necessary data that the paymaster requires for the UserOperation,
  * such as the paymaster address, the sender's address, and validity period.
