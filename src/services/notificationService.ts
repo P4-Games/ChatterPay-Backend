@@ -8,6 +8,7 @@ import { chatizaloService } from './chatizalo/chatizaloService';
 import { chatizaloOperatorReply } from '../types/chatizaloType';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
+import { formatPhoneNumberWithOptionalName } from '../helpers/formatHelper';
 import { templateEnum, mongoTemplateService } from './mongo/mongoTemplateService';
 import {
   BOT_DATA_TOKEN,
@@ -112,48 +113,51 @@ export async function sendWalletCreationNotification(
 }
 
 /**
- * Sends a notification for a transfer.
+ * Sends a notification for a received transfer
  *
- * @param channel_user_id
- * @param from
+ * @param phoneNumberFrom
+ * @param nameFrom
+ * @param phoneNumberTo
  * @param amount
  * @param token
  * @returns
  */
-export async function sendTransferNotification(
-  channel_user_id: string,
-  from: string | null,
+export async function sendReceivedTransferNotification(
+  phoneNumberFrom: string,
+  nameFrom: string,
+  phoneNumberTo: string,
   amount: string,
   token: string,
   traceHeader?: string
 ): Promise<unknown> {
   try {
     Logger.log(
-      'sendTransferNotification',
-      `Sending transfer notification from ${from} to ${channel_user_id}`
+      'sendReceivedTransferNotification',
+      `Sending received transfer notification from ${phoneNumberFrom} to ${phoneNumberTo}`
     );
-    if (!isValidPhoneNumber(channel_user_id)) return '';
+    if (!isValidPhoneNumber(phoneNumberTo)) return '';
 
     const { title, message } = await getNotificationTemplate(
-      channel_user_id,
+      phoneNumberTo,
       NotificationEnum.transfer
     );
+    const fromNumberAndName = formatPhoneNumberWithOptionalName(phoneNumberFrom, nameFrom);
     const formattedMessage = message
-      .replaceAll('[FROM]', from || '0X')
+      .replaceAll('[FROM]', fromNumberAndName)
       .replaceAll('[AMOUNT]', amount)
       .replaceAll('[TOKEN]', token);
 
     const payload: chatizaloOperatorReply = {
       data_token: BOT_DATA_TOKEN!,
-      channel_user_id,
+      channel_user_id: phoneNumberTo,
       message: formattedMessage
     };
 
     const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-    pushService.sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
+    pushService.sendPushNotificaton(title, formattedMessage, phoneNumberTo); // avoid await
     return data;
   } catch (error) {
-    Logger.error('sendTransferNotification', error);
+    Logger.error('sendReceivedTransferNotification', error);
     throw error;
   }
 }
@@ -254,17 +258,19 @@ export async function sendMintNotification(
 /**
  * Sends a notification for an outgoing transfer.
  *
- * @param address_of_user
- * @param channel_user_id
- * @param walletTo
+ * @param phoneNumberFrom
+ * @param phoneNumberTo
+ * @param toName
  * @param amount
  * @param token
  * @param txHash
+ * @param traceHeader
  * @returns
  */
 export async function sendOutgoingTransferNotification(
-  channel_user_id: string,
-  walletTo: string | null,
+  phoneNumberFrom: string,
+  phoneNumberTo: string,
+  toName: string,
   amount: string,
   token: string,
   txHash: string,
@@ -272,29 +278,30 @@ export async function sendOutgoingTransferNotification(
 ): Promise<unknown> {
   try {
     Logger.log('sendOutgoingTransferNotification', 'Sending outgoing transfer notification');
-    if (!isValidPhoneNumber(channel_user_id)) return '';
+    if (!isValidPhoneNumber(phoneNumberFrom)) return '';
 
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
 
     const { title, message } = await getNotificationTemplate(
-      channel_user_id,
+      phoneNumberFrom,
       NotificationEnum.outgoing_transfer
     );
+    const toNumberAndName = formatPhoneNumberWithOptionalName(phoneNumberTo, toName);
     const formattedMessage = message
       .replaceAll('[AMOUNT]', amount)
       .replaceAll('[TOKEN]', token)
-      .replaceAll('[TO]', channel_user_id || walletTo || '0x')
+      .replaceAll('[TO]', toNumberAndName)
       .replaceAll('[EXPLORER]', networkConfig.explorer)
       .replaceAll('[TX_HASH]', txHash);
 
     const payload: chatizaloOperatorReply = {
       data_token: BOT_DATA_TOKEN!,
-      channel_user_id,
+      channel_user_id: phoneNumberFrom,
       message: formattedMessage
     };
 
     const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-    pushService.sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
+    pushService.sendPushNotificaton(title, formattedMessage, phoneNumberFrom); // avoid await
     return data;
   } catch (error) {
     Logger.error('sendOutgoingTransferNotification', error);
