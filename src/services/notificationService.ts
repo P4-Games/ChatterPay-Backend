@@ -141,20 +141,33 @@ export async function sendReceivedTransferNotification(
       phoneNumberTo,
       NotificationEnum.transfer
     );
-    const fromNumberAndName = formatPhoneNumberWithOptionalName(phoneNumberFrom, nameFrom);
-    const formattedMessage = message
-      .replaceAll('[FROM]', fromNumberAndName)
-      .replaceAll('[AMOUNT]', amount)
-      .replaceAll('[TOKEN]', token);
+
+    const formatMessage = (fromNumberAndName: string) =>
+      message
+        .replaceAll('[FROM]', fromNumberAndName)
+        .replaceAll('[AMOUNT]', amount)
+        .replaceAll('[TOKEN]', token);
+
+    const fromNumberAndName = formatPhoneNumberWithOptionalName(phoneNumberFrom, nameFrom, false);
+    const fromNumberAndNameMasked = formatPhoneNumberWithOptionalName(
+      phoneNumberFrom,
+      nameFrom,
+      true
+    );
+
+    const formattedMessageBot = formatMessage(fromNumberAndName);
+    const formattedMessagePush = formatMessage(fromNumberAndNameMasked);
 
     const payload: chatizaloOperatorReply = {
       data_token: BOT_DATA_TOKEN!,
       channel_user_id: phoneNumberTo,
-      message: formattedMessage
+      message: formattedMessageBot
     };
 
     const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-    pushService.sendPushNotificaton(title, formattedMessage, phoneNumberTo); // avoid await
+
+    // Send push notification with masked phone number
+    pushService.sendPushNotificaton(title, formattedMessagePush, phoneNumberTo); // avoid await
     return data;
   } catch (error) {
     Logger.error('sendReceivedTransferNotification', error);
@@ -286,22 +299,31 @@ export async function sendOutgoingTransferNotification(
       phoneNumberFrom,
       NotificationEnum.outgoing_transfer
     );
-    const toNumberAndName = formatPhoneNumberWithOptionalName(phoneNumberTo, toName);
-    const formattedMessage = message
-      .replaceAll('[AMOUNT]', amount)
-      .replaceAll('[TOKEN]', token)
-      .replaceAll('[TO]', toNumberAndName)
-      .replaceAll('[EXPLORER]', networkConfig.explorer)
-      .replaceAll('[TX_HASH]', txHash);
+
+    const formatMessage = (toNumberAndName: string) =>
+      message
+        .replaceAll('[AMOUNT]', amount)
+        .replaceAll('[TOKEN]', token)
+        .replaceAll('[TO]', toNumberAndName)
+        .replaceAll('[EXPLORER]', networkConfig.explorer)
+        .replaceAll('[TX_HASH]', txHash);
+
+    const toNumberAndName = formatPhoneNumberWithOptionalName(phoneNumberTo, toName, false);
+    const toNumberAndNameMasked = formatPhoneNumberWithOptionalName(phoneNumberTo, toName, true);
+
+    const formattedMessageBot = formatMessage(toNumberAndName);
+    const formattedMessagePush = formatMessage(toNumberAndNameMasked);
 
     const payload: chatizaloOperatorReply = {
       data_token: BOT_DATA_TOKEN!,
       channel_user_id: phoneNumberFrom,
-      message: formattedMessage
+      message: formattedMessageBot
     };
 
     const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-    pushService.sendPushNotificaton(title, formattedMessage, phoneNumberFrom); // avoid await
+
+    // Send push notification with masked phone number
+    pushService.sendPushNotificaton(title, formattedMessagePush, phoneNumberFrom); // avoid await
     return data;
   } catch (error) {
     Logger.error('sendOutgoingTransferNotification', error);
