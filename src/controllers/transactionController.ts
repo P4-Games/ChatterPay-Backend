@@ -29,8 +29,8 @@ import {
   hasUserAnyOperationInProgress
 } from '../services/userService';
 import {
-  sendTransferNotification,
   sendInternalErrorNotification,
+  sendReceivedTransferNotification,
   sendOutgoingTransferNotification,
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
@@ -499,16 +499,22 @@ export const makeTransaction = async (
       ? tracer?.createChildSpan({ name: 'sendUserNotifications' })
       : undefined;
 
-    const fromName = fromUser.name ?? fromUser.phone_number ?? 'Alguien';
-
-    await sendTransferNotification(toUser.phone_number, fromName, amount, tokenSymbol, traceHeader);
-
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
-      toAddress,
+      toUser.phone_number,
+      toUser.name,
       amount,
       tokenSymbol,
       executeTransactionResult.transactionHash,
+      traceHeader
+    );
+
+    await sendReceivedTransferNotification(
+      fromUser.phone_number,
+      fromUser.name,
+      toUser.phone_number,
+      amount,
+      tokenSymbol,
       traceHeader
     );
 

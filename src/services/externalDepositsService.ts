@@ -3,8 +3,8 @@ import { gql, request } from 'graphql-request';
 import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { TransactionData } from '../types/commonType';
-import { sendTransferNotification } from './notificationService';
 import { LastProcessedBlock } from '../models/lastProcessedBlockModel';
+import { sendReceivedTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
 import { DEFAULT_CHAIN_ID, GRAPH_API_USDT_URL, GRAPH_API_WETH_URL } from '../config/constants';
 
@@ -70,7 +70,13 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
     await mongoTransactionService.saveTransaction(transactionData);
 
     // Send incoming transfer notification message, and record tx data
-    await sendTransferNotification(transfer.to, user.phone_number, value.toString(), token);
+    await sendReceivedTransferNotification(
+      user.phone_number,
+      user.name,
+      transfer.to,
+      value.toString(),
+      token
+    );
   } else {
     Logger.log(
       'processExternalDeposit',

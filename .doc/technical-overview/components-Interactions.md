@@ -50,7 +50,7 @@
 - sendWalletCreationNotification => chatbot/conversations/send-message
 - sendSwapNotification => chatbot/conversations/send-message
 - sendMintNotification => chatbot/conversations/send-message
-- sendTransferNotification => chatbot/conversations/send-message
+- sendReceivedTransferNotification => chatbot/conversations/send-message
 - sendOutgoingTransferNotification => chatbot/conversations/send-message
 - sendUserInsufficientBalanceNotification => chatbot/conversations/send-message
 - sendNoValidBlockchainConditionsNotification => chatbot/conversations/send-message
@@ -66,7 +66,7 @@
 - sendWalletCreationNotification => Push to Chatterpay Channel
 - sendSwapNotification => Push to Chatterpay Channel
 - sendMintNotification => Push to Chatterpay Channel
-- sendTransferNotification => Push to Chatterpay Channel
+- sendReceivedTransferNotification => Push to Chatterpay Channel
 - sendOutgoingTransferNotification => Push to Chatterpay Channel
 - sendUserInsufficientBalanceNotification => Push to Chatterpay Channel
 - sendNoValidBlockchainConditionsNotification => Push to Chatterpay Channel
