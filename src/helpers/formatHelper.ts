@@ -9,11 +9,24 @@ export function getPhoneNumberFormatted(phone: string): string {
 
 /**
  * Concatenates a phone number with a name if the name is provided.
+ * Optionally masks the last 5 digits of the phone number.
  *
  * @param phoneNumber - The phone number to be displayed.
  * @param name - The name to be included with the phone number (optional).
- * @returns A string containing the phone number, optionally concatenated with the name in parentheses.
+ * @param maskPhoneNumber - If true, masks the last 5 digits of the phone number with "*".
+ * @returns A string containing the phone number (masked if applicable), optionally concatenated with the name in parentheses.
  */
-export function formatPhoneNumberWithOptionalName(phoneNumber: string, name?: string): string {
-  return name ? `${phoneNumber} (${name})` : phoneNumber;
+export function formatPhoneNumberWithOptionalName(
+  phoneNumber: string,
+  name?: string,
+  maskPhoneNumber?: boolean
+): string {
+  let formattedPhoneNumber = phoneNumber;
+
+  // Mask the last 5 digits if maskPhoneNumber is true
+  if (maskPhoneNumber) {
+    formattedPhoneNumber = `${phoneNumber.slice(0, phoneNumber.length - 5)}xxxxx`;
+  }
+
+  return name ? `${formattedPhoneNumber} (${name})` : formattedPhoneNumber;
 }
