@@ -1,6 +1,6 @@
-import { FiatQuote } from '../../types/commonType';
 import { Logger } from '../../helpers/loggerHelper';
-import { CRIPTO_YA_URLS } from '../../config/constants';
+import { Currency, FiatQuote } from '../../types/commonType';
+import { CRIPTO_YA_URL, FIAT_CURRENCIES } from '../../config/constants';
 
 /**
  * Fetches fiat quotes from external APIs
@@ -8,11 +8,12 @@ import { CRIPTO_YA_URLS } from '../../config/constants';
  */
 export async function getFiatQuotes(): Promise<FiatQuote[]> {
   return Promise.all(
-    CRIPTO_YA_URLS.map(async ([currency, url]) => {
+    (FIAT_CURRENCIES as Currency[]).map(async (currency) => {
+      const url = `${CRIPTO_YA_URL}/${currency}`;
       try {
         const response = await fetch(url);
         const data = await response.json();
-        return { currency, rate: data.bid };
+        return { currency, rate: Number(data.bid) } as FiatQuote;
       } catch (error) {
         Logger.error('getFiatQuotes', `Error fetching ${currency} quote:`, error);
         return { currency, rate: 1 }; // Fallback to 1:1 rate

@@ -140,14 +140,8 @@ export const GRAPH_API_USDT_URL =
 export const GRAPH_API_WETH_URL =
   'https://api.studio.thegraph.com/query/91286/balance-sepolia-weth/version/latest';
 
-/**
- * API endpoints for fiat currency conversion rates
- */
-export const CRIPTO_YA_URLS: [string, string][] = [
-  ['UYU', 'https://criptoya.com/api/ripio/USDT/UYU'],
-  ['ARS', 'https://criptoya.com/api/ripio/USDT/ARS'],
-  ['BRL', 'https://criptoya.com/api/ripio/USDT/BRL']
-];
+export const CRIPTO_YA_URL: string = 'https://criptoya.com/api/ripio/USDT';
+export const FIAT_CURRENCIES = ['UYU', 'ARS', 'BRL'];
 
 export const ICP_URL = 'https://ic0.app';
 export const PINATA_IPFS_URL = 'https://gateway.pinata.cloud/ipfs';
