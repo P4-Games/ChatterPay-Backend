@@ -29,11 +29,29 @@
       "@typescript-eslint/parser": [".ts", ".tsx"]
     }
   },
+  "ignorePatterns": [".github/**", ".husky/**", "coverage/**", "dist/**", "node_modules/**"],
   "rules": {
-    "no-console": ["error", { "allow": ["error"] }],
+    "no-console": [
+      "error",
+      {
+        "allow": ["error"]
+      }
+    ],
+    "no-alert": 0,
+    "camelcase": 0,
+    "no-unused-vars": [
+      "off",
+      {
+        "ignoreRestSiblings": true
+      }
+    ],
+    "no-param-reassign": 0,
     "no-underscore-dangle": 0,
+    "no-restricted-exports": 0,
+    "no-promise-executor-return": 0,
     "import/prefer-default-export": 0,
     "@typescript-eslint/naming-convention": 0,
+    "@typescript-eslint/no-use-before-define": 0,
     "prefer-destructuring": [
       1,
       {
@@ -41,7 +59,15 @@
         "array": false
       }
     ],
-    "unused-imports/no-unused-imports": "error",
+    "@typescript-eslint/no-unused-vars": [
+      1,
+      {
+        "args": "none"
+      }
+    ],
+    // unused-imports
+    // https://www.npmjs.com/package/eslint-plugin-unused-imports
+    "unused-imports/no-unused-imports": 1,
     "unused-imports/no-unused-vars": [
       1,
       {
@@ -52,6 +78,7 @@
       }
     ],
     // perfectionist
+    // https://eslint-plugin-perfectionist.azat.io/
     "perfectionist/sort-named-imports": [
       1,
       {
