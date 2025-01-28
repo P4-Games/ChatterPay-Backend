@@ -48,9 +48,13 @@ jobs:
           yarn install
           yarn add -D typescript
 
+      - name: Run typescript type check
+        run: |
+          tsc --noEmit
+
       - name: Run ESLint
         run: |
-          yarn lint --max-warnings=0 # Ejecutar ESLint con el comando configurado
+          yarn lint --max-warnings=0
 
   tests:
     name: Test Application
