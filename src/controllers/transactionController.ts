@@ -30,8 +30,8 @@ import {
 } from '../services/userService';
 import {
   sendInternalErrorNotification,
-  sendReceivedTransferNotification,
   sendOutgoingTransferNotification,
+  sendReceivedTransferNotification,
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
@@ -43,6 +43,7 @@ type MakeTransactionInputs = {
   token: string;
   amount: string;
   chain_id?: string;
+  async?: boolean;
 };
 
 /**
@@ -346,7 +347,9 @@ export const makeTransaction = async (
     /* ***************************************************** */
     /* 3. makeTransaction: send initial response             */
     /* ***************************************************** */
-    await returnSuccessResponse(reply, 'The transfer is in progress, it may take a few minutes.');
+    if (request.body.async ?? false) {
+      await returnSuccessResponse(reply, 'The transfer is in progress, it may take a few minutes.');
+    }
 
     /* ***************************************************** */
     /* 4. makeTransaction: check user balance                */
@@ -523,6 +526,11 @@ export const makeTransaction = async (
     notificationSpan?.endSpan();
     rootSpan?.endSpan();
     Logger.info('makeTransaction', `Maketransaction completed successfully.`);
+
+    if (request.body.async ?? false) {
+      return await Promise.resolve();
+    }
+    return await returnSuccessResponse(reply, 'Transer done.');
   } catch (error) {
     rootSpan?.addLabel('error', (error as Error).message);
     rootSpan?.endSpan();
