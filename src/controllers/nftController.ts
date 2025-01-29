@@ -256,7 +256,7 @@ export const generateNftOriginal = async (
   await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
 
   if (request.body.async ?? false) {
-    await returnSuccessResponse(reply, 'The certificate is being generated');
+    returnSuccessResponse(reply, 'The certificate is being generated');
   }
 
   let processedImage;
@@ -394,7 +394,7 @@ export const generateNftOriginal = async (
   if (request.body.async ?? false) {
     return Promise.resolve();
   }
-  return returnSuccessResponse(reply, 'The certificate has been generated.');
+  returnSuccessResponse(reply, 'The certificate has been generated.');
 };
 
 /**
@@ -459,7 +459,7 @@ export const generateNftCopy = async (
     Logger.log('generateNftCopy', 'sending notification: the certificate is being generated');
 
     if (request.body.async ?? false) {
-      await returnSuccessResponse(reply, 'The certificate copy is being generated');
+      returnSuccessResponse(reply, 'The certificate copy is being generated');
     }
 
     // search by NFT original
@@ -549,10 +549,10 @@ export const generateNftCopy = async (
 
   Logger.log('generateNftCopy', 'NFT copy end.');
   if (request.body.async ?? false) {
-    // Retorna void explícitamente
+    // Explicitly return void
     return Promise.resolve();
   }
-  return returnSuccessResponse(reply, 'The certificate copy has been generated.');
+  returnSuccessResponse(reply, 'The certificate copy has been generated.');
 };
 
 /**

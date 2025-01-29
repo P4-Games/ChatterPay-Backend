@@ -527,10 +527,9 @@ export const makeTransaction = async (
     rootSpan?.endSpan();
     Logger.info('makeTransaction', `Maketransaction completed successfully.`);
 
-    if (request.body.async ?? false) {
-      return await Promise.resolve();
+    if (request.body.async !== true) {
+      await returnSuccessResponse(reply, 'Transer done.');
     }
-    return await returnSuccessResponse(reply, 'Transer done.');
   } catch (error) {
     rootSpan?.addLabel('error', (error as Error).message);
     rootSpan?.endSpan();

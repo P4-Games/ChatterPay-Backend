@@ -251,9 +251,9 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       `Swap completed successfully approveTransactionHash: ${executeSwapResult.approveTransactionHash}, swapTransactionHash: ${executeSwapResult.swapTransactionHash}.`
     );
     if (request.body.async ?? false) {
-      return await Promise.resolve();
+      await Promise.resolve();
     }
-    return await returnSuccessResponse(reply, 'Swap done');
+    await returnSuccessResponse(reply, 'Swap done');
   } catch (error) {
     Logger.error('swap', error);
   }
