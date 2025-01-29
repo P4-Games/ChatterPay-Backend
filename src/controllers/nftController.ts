@@ -4,6 +4,7 @@ import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
+import { delaySeconds } from '../helpers/timeHelper';
 import { icpService } from '../services/icp/icpService';
 import { IUser, IUserWallet } from '../models/userModel';
 import { getDynamicGas } from '../helpers/paymasterHelper';
@@ -20,13 +21,6 @@ import {
   returnErrorResponse500
 } from '../helpers/requestHelper';
 import {
-  SIGNING_KEY,
-  defaultNftImage,
-  DEFAULT_CHAIN_ID,
-  WHATSAPP_API_URL,
-  CHATIZALO_PHONE_NUMBER
-} from '../config/constants';
-import {
   getUserWallet,
   openOperation,
   closeOperation,
@@ -34,6 +28,14 @@ import {
   getUserWalletByChainId,
   hasPhoneAnyOperationInProgress
 } from '../services/userService';
+import {
+  SIGNING_KEY,
+  defaultNftImage,
+  DEFAULT_CHAIN_ID,
+  WHATSAPP_API_URL,
+  CHATIZALO_PHONE_NUMBER,
+  COMMON_REPLY_OPERATION_IN_PROGRESS
+} from '../config/constants';
 
 export interface NFTInfo {
   description: string;
@@ -56,6 +58,19 @@ const defaultMetadata: INFTMetadata = {
     latitud: '',
     longitud: ''
   }
+};
+
+type generateNftOriginalInputs = {
+  channel_user_id: string;
+  url: string;
+  mensaje: string;
+  latitud: string;
+  longitud: string;
+};
+
+type generateNftCopyInputs = {
+  channel_user_id: string;
+  id: string;
 };
 
 const cache = new NodeCache();
@@ -194,21 +209,18 @@ const mintNftCopy = async (
  */
 export const generateNftOriginal = async (
   request: FastifyRequest<{
-    Body: {
-      channel_user_id: string;
-      url: string;
-      mensaje: string;
-      latitud: string;
-      longitud: string;
-    };
+    Body: generateNftOriginalInputs;
+    Querystring?: { lastBotMsgDelaySeconds?: number };
   }>,
   reply: FastifyReply
-): Promise<void> => {
+  // eslint-disable-next-line consistent-return
+) => {
   if (!request.body) {
     return returnErrorResponse(reply, 400, 'You have to send a body with this request');
   }
 
   const { channel_user_id, url, mensaje, latitud, longitud } = request.body;
+  const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
 
   if (!channel_user_id || !url) {
     return returnErrorResponse(
@@ -254,7 +266,9 @@ export const generateNftOriginal = async (
   }
   await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
 
-  returnSuccessResponse(reply, 'The certificate is being generated');
+  // optimistic response
+  Logger.log('generateNftOriginal', 'sending notification: operation in progress');
+  await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
 
   let processedImage;
   try {
@@ -318,17 +332,6 @@ export const generateNftOriginal = async (
   }
   const nftMintedId = nftData.tokenId.toString();
 
-  try {
-    await sendMintNotification(userWallet.wallet_proxy, channel_user_id, nftMintedId);
-  } catch (error) {
-    Logger.warn(
-      'generateNftOriginal',
-      'Error sending NFT minting notification:',
-      (error as Error).message
-    );
-    // No error is thrown here to continue with the process
-  }
-
   // Update in bdd trxId and tokenId
   try {
     Logger.info('generateNftOriginal', 'Updating tokenId and trxId in the database');
@@ -343,6 +346,23 @@ export const generateNftOriginal = async (
     );
   } catch (error) {
     Logger.error('generateNftOriginal', 'Error updating NFT in bdd', (error as Error).message);
+  }
+
+  try {
+    if (lastBotMsgDelaySeconds > 0) {
+      Logger.log(
+        'generateNftOriginal',
+        `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`
+      );
+      await delaySeconds(lastBotMsgDelaySeconds);
+    }
+  } catch (error) {
+    Logger.warn(
+      'generateNftOriginal',
+      'Error sending NFT minting notification:',
+      (error as Error).message
+    );
+    // No error is thrown here to continue with the process
   }
 
   const fileName = `${channel_user_id.toString()}_${Date.now()}.jpg`;
@@ -387,8 +407,8 @@ export const generateNftOriginal = async (
     Logger.error('generateNftOriginal', 'Error updating NFT in bdd', (error as Error).message);
   }
   await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
+  await sendMintNotification(userWallet.wallet_proxy, channel_user_id, nftMintedId);
   Logger.log('generateNftOriginal', 'NFT minting end.');
-  return Promise.resolve();
 };
 
 /**
@@ -399,19 +419,19 @@ export const generateNftOriginal = async (
  */
 export const generateNftCopy = async (
   request: FastifyRequest<{
-    Body: {
-      channel_user_id: string;
-      id: string;
-    };
+    Body: generateNftCopyInputs;
+    Querystring?: { lastBotMsgDelaySeconds?: number };
   }>,
   reply: FastifyReply
-): Promise<void> => {
+  // eslint-disable-next-line consistent-return
+) => {
   try {
     if (!request.body) {
       return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
 
     const { channel_user_id, id } = request.body;
+    const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
 
     if (!channel_user_id) {
       return await returnErrorResponse(
@@ -446,11 +466,11 @@ export const generateNftCopy = async (
         'You have another operation in progress. Please wait until it is finished.'
       );
     }
-    await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
-
     // optimistic response
-    Logger.log('generateNftCopy', 'sending notification: the certificate is being generated');
-    returnSuccessResponse(reply, 'The certificate is being generated');
+    Logger.log('generateNftOriginal', 'sending notification: operation in progress');
+    await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
+
+    await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
 
     // search by NFT original
     let copy_of_original = nftCopyOf.id;
@@ -528,6 +548,11 @@ export const generateNftCopy = async (
     );
 
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
+
+    if (lastBotMsgDelaySeconds > 0) {
+      Logger.log('generateNftCopy', `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`);
+      await delaySeconds(lastBotMsgDelaySeconds);
+    }
     await sendMintNotification(
       userWallet.wallet_proxy,
       channel_user_id,
@@ -538,9 +563,6 @@ export const generateNftCopy = async (
   } catch (error) {
     Logger.error('generateNftCopy', (error as Error).message);
   }
-
-  // Retorna void explícitamente
-  return Promise.resolve();
 };
 
 /**
