@@ -35,6 +35,7 @@ interface SwapBody {
   inputCurrency: string;
   outputCurrency: string;
   amount: number;
+  async?: boolean;
 }
 
 /**
@@ -125,7 +126,9 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     /* ***************************************************** */
     /* 3. swap: send initial response                        */
     /* ***************************************************** */
-    await returnSuccessResponse(reply, 'Swap in progress, it may take a few minutes.');
+    if (request.body.async ?? false) {
+      await returnSuccessResponse(reply, 'Swap in progress, it may take a few minutes.');
+    }
 
     /* ***************************************************** */
     /* 4. swap: check user balance                           */
@@ -247,6 +250,10 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       'swap',
       `Swap completed successfully approveTransactionHash: ${executeSwapResult.approveTransactionHash}, swapTransactionHash: ${executeSwapResult.swapTransactionHash}.`
     );
+    if (request.body.async ?? false) {
+      return await Promise.resolve();
+    }
+    return await returnSuccessResponse(reply, 'Swap done');
   } catch (error) {
     Logger.error('swap', error);
   }
