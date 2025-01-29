@@ -200,6 +200,7 @@ export const generateNftOriginal = async (
       mensaje: string;
       latitud: string;
       longitud: string;
+      async?: boolean;
     };
   }>,
   reply: FastifyReply
@@ -254,7 +255,9 @@ export const generateNftOriginal = async (
   }
   await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
 
-  returnSuccessResponse(reply, 'The certificate is being generated');
+  if (request.body.async ?? false) {
+    await returnSuccessResponse(reply, 'The certificate is being generated');
+  }
 
   let processedImage;
   try {
@@ -388,7 +391,10 @@ export const generateNftOriginal = async (
   }
   await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
   Logger.log('generateNftOriginal', 'NFT minting end.');
-  return Promise.resolve();
+  if (request.body.async ?? false) {
+    return Promise.resolve();
+  }
+  return returnSuccessResponse(reply, 'The certificate has been generated.');
 };
 
 /**
@@ -402,6 +408,7 @@ export const generateNftCopy = async (
     Body: {
       channel_user_id: string;
       id: string;
+      async?: boolean;
     };
   }>,
   reply: FastifyReply
@@ -450,7 +457,10 @@ export const generateNftCopy = async (
 
     // optimistic response
     Logger.log('generateNftCopy', 'sending notification: the certificate is being generated');
-    returnSuccessResponse(reply, 'The certificate is being generated');
+
+    if (request.body.async ?? false) {
+      await returnSuccessResponse(reply, 'The certificate copy is being generated');
+    }
 
     // search by NFT original
     let copy_of_original = nftCopyOf.id;
@@ -533,14 +543,16 @@ export const generateNftCopy = async (
       channel_user_id,
       nftData.tokenId.toString()
     );
-
-    Logger.log('generateNftCopy', 'NFT copy end.');
   } catch (error) {
     Logger.error('generateNftCopy', (error as Error).message);
   }
 
-  // Retorna void explícitamente
-  return Promise.resolve();
+  Logger.log('generateNftCopy', 'NFT copy end.');
+  if (request.body.async ?? false) {
+    // Retorna void explícitamente
+    return Promise.resolve();
+  }
+  return returnSuccessResponse(reply, 'The certificate copy has been generated.');
 };
 
 /**
