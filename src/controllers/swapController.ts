@@ -2,12 +2,13 @@ import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { SIGNING_KEY } from '../config/constants';
+import { delaySeconds } from '../helpers/timeHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { executeSwap } from '../services/web3/simpleSwapService';
 import { setupERC20 } from '../services/web3/contractSetupService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
+import { SIGNING_KEY, COMMON_REPLY_OPERATION_IN_PROGRESS } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
 import {
@@ -81,7 +82,11 @@ const validateInputs = async (
  * @returns A response indicating the status of the swap.
  */
 // eslint-disable-next-line consistent-return
-export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: FastifyReply) => {
+export const swap = async (
+  request: FastifyRequest<{ Body: SwapBody; Querystring?: { lastBotMsgDelaySeconds?: number } }>,
+  reply: FastifyReply
+  // eslint-disable-next-line consistent-return
+) => {
   try {
     /* ***************************************************** */
     /* 1. swap: input params                                 */
@@ -92,6 +97,7 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
 
     const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
 
+    const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
     const { tokens: blockchainTokens, networkConfig } = request.server as FastifyInstance;
 
     const tokenAddresses: TokenAddresses = getTokensAddresses(
@@ -125,9 +131,9 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     /* ***************************************************** */
     /* 3. swap: send initial response                        */
     /* ***************************************************** */
-  
-      await returnSuccessResponse(reply, 'Swap in progress, it may take a few minutes.');
-
+    // optimistic response
+    Logger.log('swap', 'sending notification: operation in progress');
+    await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
 
     /* ***************************************************** */
     /* 4. swap: check user balance                           */
@@ -234,7 +240,12 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
     /* ***************************************************** */
     /* 8. swap: send notification to user                    */
     /* ***************************************************** */
+    await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
 
+    if (lastBotMsgDelaySeconds > 0) {
+      Logger.log('swap', `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`);
+      await delaySeconds(lastBotMsgDelaySeconds);
+    }
     await sendSwapNotification(
       channel_user_id,
       inputCurrency,
@@ -244,14 +255,10 @@ export const swap = async (request: FastifyRequest<{ Body: SwapBody }>, reply: F
       executeSwapResult.swapTransactionHash
     );
 
-    await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
     Logger.info(
       'swap',
       `Swap completed successfully approveTransactionHash: ${executeSwapResult.approveTransactionHash}, swapTransactionHash: ${executeSwapResult.swapTransactionHash}.`
     );
-
-      await Promise.resolve();
-
   } catch (error) {
     Logger.error('swap', error);
   }
