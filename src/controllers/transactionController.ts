@@ -43,7 +43,6 @@ type MakeTransactionInputs = {
   token: string;
   amount: string;
   chain_id?: string;
-  async?: boolean;
 };
 
 /**
@@ -347,9 +346,9 @@ export const makeTransaction = async (
     /* ***************************************************** */
     /* 3. makeTransaction: send initial response             */
     /* ***************************************************** */
-    if (request.body.async ?? false) {
+  
       await returnSuccessResponse(reply, 'The transfer is in progress, it may take a few minutes.');
-    }
+   
 
     /* ***************************************************** */
     /* 4. makeTransaction: check user balance                */
@@ -527,9 +526,9 @@ export const makeTransaction = async (
     rootSpan?.endSpan();
     Logger.info('makeTransaction', `Maketransaction completed successfully.`);
 
-    if (request.body.async !== true) {
+
       await returnSuccessResponse(reply, 'Transer done.');
-    }
+
   } catch (error) {
     rootSpan?.addLabel('error', (error as Error).message);
     rootSpan?.endSpan();
