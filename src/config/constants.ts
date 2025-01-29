@@ -145,3 +145,6 @@ export const FIAT_CURRENCIES = ['UYU', 'ARS', 'BRL'];
 
 export const ICP_URL = 'https://ic0.app';
 export const PINATA_IPFS_URL = 'https://gateway.pinata.cloud/ipfs';
+
+export const COMMON_REPLY_OPERATION_IN_PROGRESS =
+  'The operation is being processed. We will notify you once it is completed or if any issues arise.';
