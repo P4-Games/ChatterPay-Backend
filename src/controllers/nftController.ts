@@ -200,7 +200,6 @@ export const generateNftOriginal = async (
       mensaje: string;
       latitud: string;
       longitud: string;
-      async?: boolean;
     };
   }>,
   reply: FastifyReply
@@ -255,9 +254,9 @@ export const generateNftOriginal = async (
   }
   await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
 
-  if (request.body.async ?? false) {
-    returnSuccessResponse(reply, 'The certificate is being generated');
-  }
+
+  returnSuccessResponse(reply, 'The certificate is being generated');
+
 
   let processedImage;
   try {
@@ -391,10 +390,9 @@ export const generateNftOriginal = async (
   }
   await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
   Logger.log('generateNftOriginal', 'NFT minting end.');
-  if (request.body.async ?? false) {
+
     return Promise.resolve();
-  }
-  returnSuccessResponse(reply, 'The certificate has been generated.');
+  
 };
 
 /**
@@ -458,9 +456,8 @@ export const generateNftCopy = async (
     // optimistic response
     Logger.log('generateNftCopy', 'sending notification: the certificate is being generated');
 
-    if (request.body.async ?? false) {
+  
       returnSuccessResponse(reply, 'The certificate copy is being generated');
-    }
 
     // search by NFT original
     let copy_of_original = nftCopyOf.id;
@@ -548,11 +545,10 @@ export const generateNftCopy = async (
   }
 
   Logger.log('generateNftCopy', 'NFT copy end.');
-  if (request.body.async ?? false) {
+
     // Explicitly return void
     return Promise.resolve();
-  }
-  returnSuccessResponse(reply, 'The certificate copy has been generated.');
+
 };
 
 /**
