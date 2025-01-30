@@ -82,13 +82,10 @@ export function createTransferCallData(
     throw new Error('Invalid amount');
   }
 
-  const transferEncode = erc20Contract.interface.encodeFunctionData('transfer', [to, amount_bn]);
-  Logger.log('createTransferCallData', 'Transfer Encode:', transferEncode);
-
-  const callData = chatterPayContract.interface.encodeFunctionData('execute', [
+  const callData = chatterPayContract.interface.encodeFunctionData('executeTokenTransfer', [
     erc20Contract.address,
-    0,
-    transferEncode
+    to,
+    amount_bn
   ]);
   Logger.log('createTransferCallData', 'Transfer Call Data:', callData);
 
