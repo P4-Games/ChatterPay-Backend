@@ -8,11 +8,12 @@ import { setupSwagger } from './plugins/swaggerPlugin';
 import { setupRateLimit } from './plugins/rateLimitPlugin';
 import { authMiddleware } from './middlewares/authMiddleware';
 import { traceMiddleware } from './middlewares/traceMiddleware';
-import { setupCorsMiddleware } from './middlewares/corsMiddleware';
+import { originMiddleware } from './middlewares/originMiddleware';
 import { setupNetworkConfigPlugin } from './plugins/networkConfigPlugin';
 import { ipBlacklistMiddleware } from './middlewares/ipsBlackListMiddleware';
 import { PORT, CURRENT_LOG_LEVEL, GCP_CLOUD_TRACE_ENABLED } from './constants';
 import { setupBodyParserMiddleware } from './middlewares/bodyParserMiddleware';
+
 /**
  * Starts the Fastify server with all necessary configurations.
  * @returns {Promise<FastifyInstance>} A promise that resolves to the configured Fastify server instance
@@ -27,13 +28,14 @@ export async function startServer(): Promise<FastifyInstance> {
     }
   });
 
-  server.addHook('onRequest', authMiddleware);
+  server.addHook('onRequest', originMiddleware);
   server.addHook('onRequest', ipBlacklistMiddleware);
+  server.addHook('onRequest', authMiddleware);
+
   if (GCP_CLOUD_TRACE_ENABLED) {
     server.addHook('onRequest', traceMiddleware);
   }
 
-  await setupCorsMiddleware(server);
   await setupRateLimit(server);
   await setupNetworkConfigPlugin(server);
   await setupBodyParserMiddleware(server);

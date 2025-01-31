@@ -30,6 +30,7 @@ steps:
       - BLACKLIST_IPS=${_BLACKLIST_IPS}
       - DEFAULT_CHAIN_ID=${_DEFAULT_CHAIN_ID}
       - ABIS_VERSION=${_ABIS_VERSION}
+      - CORS_ORIGINS_CHECK_POSTMAN=${_CORS_ORIGINS_CHECK_POSTMAN}
 
     secretEnv: [
       'CHATIZALO_TOKEN', 
@@ -115,6 +116,8 @@ steps:
       'DEFAULT_CHAIN_ID=${_DEFAULT_CHAIN_ID}',
       '--build-arg',
       'ABIS_VERSION=${_ABIS_VERSION}',
+      '--build-arg',
+      'CORS_ORIGINS_CHECK_POSTMAN=${_CORS_ORIGINS_CHECK_POSTMAN}',
       '.'
     ]
     secretEnv: [
