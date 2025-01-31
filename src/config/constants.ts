@@ -42,7 +42,8 @@ const {
   DEFAULT_CHAIN_ID: defaultChainId = 421614, // Arbitrum Sepolia
   FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: fastifyRefreshNetworksIntervalMs = 86400000,
   FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000,
-  ABIS_VERSION = 'v1.0.0'
+  ABIS_VERSION = 'v1.0.0',
+  CORS_ORIGINS_CHECK_POSTMAN: corsOriginsCheckPostman = 'false'
 } = process.env;
 
 export {
@@ -148,3 +149,4 @@ export const PINATA_IPFS_URL = 'https://gateway.pinata.cloud/ipfs';
 
 export const COMMON_REPLY_OPERATION_IN_PROGRESS =
   'The operation is being processed. We will notify you once it is completed or if any issues arise.';
+export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
