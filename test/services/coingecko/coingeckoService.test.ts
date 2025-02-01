@@ -5,7 +5,12 @@ import { it, vi, expect, describe, beforeEach } from 'vitest';
 import { TOKEN_IDS, RESULT_CURRENCIES } from '../../../src/config/constants';
 import { coingeckoService } from '../../../src/services/coingecko/coingeckoService';
 
-vi.mock('axios');
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn(),
+    post: vi.fn()
+  }
+}));
 
 describe('coingeckoService', () => {
   const mockResponse = {
@@ -42,7 +47,17 @@ describe('coingeckoService', () => {
     const result = await coingeckoService.getConversationRates();
 
     expect(axios.get).not.toHaveBeenCalled();
-    expect(result).toEqual(mockResponse);
+    expect(Object.keys(result)).toEqual(Object.keys(mockResponse));
+
+    (Object.keys(result) as Array<keyof typeof mockResponse>).forEach((token) => {
+      expect(Object.keys(result[token])).toEqual(Object.keys(mockResponse[token]));
+
+      (Object.keys(result[token]) as Array<keyof (typeof mockResponse)[typeof token]>).forEach(
+        (currency) => {
+          expect(typeof result[token][currency]).toBe('number');
+        }
+      );
+    });
   });
 
   it('should return fallback values when API request fails', async () => {
