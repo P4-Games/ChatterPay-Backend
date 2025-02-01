@@ -1,9 +1,5 @@
 # Chatterpay Components Interactions
 
-## BOT => Frontend
-
-- precio_de_tokens => https://chatterpay.net/api/v1/bot/rates/, GET
-
 ## BOT => Backend
 
 - consultar_balance => https://back.chatterpay.net/balance_by_phone/, GET
@@ -14,6 +10,7 @@
 - intercambiar_tokens => https://back.chatterpay.net/swap/, POST
 - copiar_certificado_existente => https://back.chatterpay.net/mint_existing/, POST
 - generar_certificado => https://back.chatterpay.net/nft/, POST
+- precio_de_tokens => https://back.chatterpay.net/tokens/rates/, GET
 - ramp_user_onboarding => https://back.chatterpay.net/ramp/onboarding, POST
 - ramp_create_user => https://back.chatterpay.net/ramp/user, POST
 - ramp_user_compliance_documents_upload => https://back.chatterpay.net/ramp/user/:userId/compliance/documents, POST
@@ -125,9 +122,13 @@
 - NFT: Mint Original => upload image to Bucket
 - NFT: Mint Copy => upload image to Bucket
 
+## Backend => Coingecko
+
+- Get Token Rates
+
 ## GCP Cloud Scheduler => Backend
 
-`- checking_depositos => /check_deposits, CRON: _/10 _ \* \* \*`
+- checking_depositos => /check_deposits`
 
 ## Smart Contracts => Api3
 
