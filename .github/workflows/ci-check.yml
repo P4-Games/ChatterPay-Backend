@@ -76,7 +76,7 @@ jobs:
   tests:
     name: Test Application
     runs-on: ubuntu-latest
-    needs: lint
+    needs: setup
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
