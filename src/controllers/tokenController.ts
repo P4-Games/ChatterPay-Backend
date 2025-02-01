@@ -4,6 +4,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import { Logger } from '../helpers/loggerHelper';
 import Token, { IToken } from '../models/tokenModel';
 import { SIGNING_KEY, IS_DEVELOPMENT } from '../config/constants';
+import { coingeckoService } from '../services/coingecko/coingeckoService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
 /**
@@ -55,6 +56,28 @@ export const getAllTokens = async (
   } catch (error) {
     Logger.error('getAllTokens', error);
     return returnErrorResponse(reply, 400, 'Failed to fetch tokens');
+  }
+};
+
+/**
+ * Retrieves all token conversion rates from the CoinGecko service.
+ *
+ * @param {FastifyRequest} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object used to send the response.
+ * @returns {Promise<FastifyReply>} A promise that resolves with the Fastify reply containing the token conversion rates.
+ */
+export const getAllTokenConvertionRates = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  try {
+    const rates = await coingeckoService.getConversationRates();
+    return await returnSuccessResponse(reply, 'Tokens conversion rates fetched successfully', {
+      rates
+    });
+  } catch (error) {
+    Logger.error('getAllTokenConvertionRates', error);
+    return returnErrorResponse(reply, 400, 'Failed to fetch tokens conversion rates');
   }
 };
 
