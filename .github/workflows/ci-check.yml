@@ -76,13 +76,16 @@ jobs:
   tests:
     name: Test Application
     runs-on: ubuntu-latest
-    needs: setup
+    needs: lint
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
+
+      - name: Ensure axios is installed
+        run: bun add axios
 
       - name: Run tests
         run: bun test
