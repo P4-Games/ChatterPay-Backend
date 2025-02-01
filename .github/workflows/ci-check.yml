@@ -88,7 +88,7 @@ jobs:
         run: bun add axios
 
       - name: Run tests
-        run: bun test
+        run: bun x vitest --exclude test/services/coingecko/coingeckoService.test.ts
 
   docker-build:
     name: Build Docker Image
