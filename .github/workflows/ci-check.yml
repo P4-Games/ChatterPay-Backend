@@ -64,6 +64,9 @@ jobs:
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
 
+      - name: Install Bun types
+        run: bun add -d @types/bun
+
       - name: Run TypeScript type check
         run: bun x tsc --noEmit
 
