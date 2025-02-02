@@ -96,3 +96,9 @@ export interface TransactionData {
   type: string;
   status: string;
 }
+
+export interface ConversionRates {
+  [token: string]: {
+    [currency: string]: number;
+  };
+}

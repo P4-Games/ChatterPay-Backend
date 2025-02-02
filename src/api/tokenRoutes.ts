@@ -6,7 +6,8 @@ import {
   updateToken,
   getAllTokens,
   getTokenById,
-  issueTokensHandler
+  issueTokensHandler,
+  getAllTokenConvertionRates
 } from '../controllers/tokenController';
 
 /**
@@ -28,6 +29,13 @@ const tokenRoutes = async (fastify: FastifyInstance): Promise<void> => {
    * @returns {Array} List of all tokens
    */
   fastify.get('/tokens', getAllTokens);
+
+  /**
+   * Route to get all tokens Rates
+   * @route GET /tokens
+   * @returns {Array} List of all tokens
+   */
+  fastify.get('/tokens/rates', getAllTokenConvertionRates);
 
   /**
    * Route to get a specific token by its ID

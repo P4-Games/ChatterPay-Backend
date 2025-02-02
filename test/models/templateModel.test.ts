@@ -2,7 +2,12 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { it, expect, describe, afterEach, beforeEach } from 'vitest';
 
-import { TemplateType, ITemplateSchema } from '../../src/models/templateModel';
+import {
+  TemplateType,
+  ITemplateSchema,
+  NotificationEnum,
+  NotificationTemplateType
+} from '../../src/models/templateModel';
 
 describe('Template Model', () => {
   let mongoServer: MongoMemoryServer;
@@ -21,7 +26,9 @@ describe('Template Model', () => {
   });
 
   it('should create and save a Template document successfully', async () => {
-    const validTemplate: Partial<ITemplateSchema> = {
+    type TestTemplateSchema = Partial<ITemplateSchema>;
+
+    const validTemplate: TestTemplateSchema = {
       notifications: {
         transfer: {
           title: {
@@ -122,7 +129,15 @@ describe('Template Model', () => {
   });
 
   it('should fail to save without required fields', async () => {
-    const invalidTemplate: Partial<ITemplateSchema> = {
+    type PartialNotifications = Partial<{
+      [key in NotificationEnum]: Partial<NotificationTemplateType>;
+    }>;
+
+    type TestTemplateSchema = Omit<ITemplateSchema, 'notifications'> & {
+      notifications?: PartialNotifications;
+    };
+
+    const invalidTemplate = {
       notifications: {
         transfer: {
           title: {
@@ -133,7 +148,7 @@ describe('Template Model', () => {
           // missing message field
         }
       }
-    };
+    } as TestTemplateSchema;
 
     const template = new TemplateType(invalidTemplate);
 

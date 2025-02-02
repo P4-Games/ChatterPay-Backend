@@ -57,6 +57,7 @@ GCP_CLOUD_TRACE_ENABLED= true | false
 
 # Security
 CORS_ORIGINS='*'
+CORS_ORIGINS_CHECK_POSTMAN=true | false
 BLACKLIST_IPS=''
 
 # Network

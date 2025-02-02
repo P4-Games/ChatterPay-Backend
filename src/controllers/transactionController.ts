@@ -4,6 +4,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 
 import { Logger } from '../helpers/loggerHelper';
+import { delaySeconds } from '../helpers/timeHelper';
 import { IUser, IUserWallet } from '../models/userModel';
 import { sendUserOperation } from '../services/transferService';
 import { verifyWalletBalanceInRpc } from '../services/balanceService';
@@ -12,8 +13,13 @@ import Transaction, { ITransaction } from '../models/transactionModel';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
-import { INFURA_URL, INFURA_API_KEY, GCP_CLOUD_TRACE_ENABLED } from '../config/constants';
 import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
+import {
+  INFURA_URL,
+  INFURA_API_KEY,
+  GCP_CLOUD_TRACE_ENABLED,
+  COMMON_REPLY_OPERATION_IN_PROGRESS
+} from '../config/constants';
 import {
   TransactionData,
   ExecueTransactionResult,
@@ -29,8 +35,8 @@ import {
   hasUserAnyOperationInProgress
 } from '../services/userService';
 import {
-  sendTransferNotification,
   sendInternalErrorNotification,
+  sendReceivedTransferNotification,
   sendOutgoingTransferNotification,
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
@@ -260,7 +266,10 @@ export const deleteTransaction = async (
  * @returns
  */
 export const makeTransaction = async (
-  request: FastifyRequest<{ Body: MakeTransactionInputs }>,
+  request: FastifyRequest<{
+    Body: MakeTransactionInputs;
+    Querystring?: { lastBotMsgDelaySeconds?: number };
+  }>,
   reply: FastifyReply
   // eslint-disable-next-line consistent-return
 ) => {
@@ -284,6 +293,7 @@ export const makeTransaction = async (
     }
 
     const { channel_user_id, to, token: tokenSymbol, amount } = request.body;
+    const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
     const { networkConfig, tokens: tokensConfig } = request.server as FastifyInstance;
 
     const tokenAddress: string = getTokenAddress(
@@ -346,7 +356,9 @@ export const makeTransaction = async (
     /* ***************************************************** */
     /* 3. makeTransaction: send initial response             */
     /* ***************************************************** */
-    await returnSuccessResponse(reply, 'The transfer is in progress, it may take a few minutes.');
+    // optimistic response
+    Logger.log('makeTransaction', 'sending notification: operation in progress');
+    await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
 
     /* ***************************************************** */
     /* 4. makeTransaction: check user balance                */
@@ -499,20 +511,30 @@ export const makeTransaction = async (
       ? tracer?.createChildSpan({ name: 'sendUserNotifications' })
       : undefined;
 
-    const fromName = fromUser.name ?? fromUser.phone_number ?? 'Alguien';
+    await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
 
-    await sendTransferNotification(toUser.phone_number, fromName, amount, tokenSymbol, traceHeader);
+    if (lastBotMsgDelaySeconds > 0) {
+      Logger.log('makeTransaction', `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`);
+      await delaySeconds(lastBotMsgDelaySeconds);
+    }
+    await sendReceivedTransferNotification(
+      fromUser.phone_number,
+      fromUser.name,
+      toUser.phone_number,
+      amount,
+      tokenSymbol,
+      traceHeader
+    );
 
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
-      toAddress,
+      toUser.phone_number,
+      toUser.name,
       amount,
       tokenSymbol,
       executeTransactionResult.transactionHash,
       traceHeader
     );
-
-    await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
 
     notificationSpan?.endSpan();
     rootSpan?.endSpan();
