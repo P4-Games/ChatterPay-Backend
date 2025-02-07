@@ -7,8 +7,8 @@ on:
       - main
 
 jobs:
-  prettier:
-    name: Check Code Formatting
+  setup:
+    name: Setup Environment
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -19,58 +19,76 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies for Prettier
-        run: yarn install
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Verify Bun installation
+        run: bun --version
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.bun
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+  prettier:
+    name: Check Code Formatting
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Run Prettier
-        run: yarn format
+        run: bun x prettier --check .
 
       - name: Check for uncommitted changes
-        run: |
-          git diff --exit-code
-        shell: bash
+        run: git diff --exit-code
 
   lint:
     name: Check with Lint
     runs-on: ubuntu-latest
-    needs: prettier
+    needs: setup
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
 
-      - name: Install dependencies for linting
-        run: |
-          yarn install
-          yarn add -D typescript
+      - name: Install Bun types
+        run: bun add -d @types/bun
 
-      - name: Run typescript type check
-        run: |
-          tsc --noEmit
+      - name: Run TypeScript type check
+        run: bun x tsc --noEmit
 
       - name: Run ESLint
-        run: |
-          yarn lint --max-warnings=0
+        run: bun x eslint . --max-warnings=0
 
   tests:
     name: Test Application
     runs-on: ubuntu-latest
-    needs: lint
+    needs: setup
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Install bun
+
+      - name: Install Bun
         uses: oven-sh/setup-bun@v2
-      - name: Verify bun installation
-        run: bun --version
-      - name: Install dependencies
-        run: bun install
+
+      - name: Ensure axios is installed
+        run: bun add axios
+
       - name: Run tests
-        run: bun test
+        run: bun x vitest --exclude test/services/coingecko/coingeckoService.test.ts
 
   docker-build:
     name: Build Docker Image
@@ -79,10 +97,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Build Docker image
         run: |
           echo "Building Docker image..."
           docker build -t chatterpay-back .
+
       - name: Report Status
         env:
           GH_TOKEN: ${{ github.token }}

@@ -65,7 +65,7 @@ export const createUserWithWallet = async (
     ],
     creationDate: new Date(),
     code: null,
-    photo: '/assets/images/avatars/generic_user.jpg',
+    photo: '/assets/images/avatars/generic-user.png',
     email: null,
     name: null,
     settings: {
