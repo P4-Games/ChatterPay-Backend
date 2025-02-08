@@ -8,17 +8,20 @@ describe('Transaction Model', () => {
   let mongoServer: MongoMemoryServer;
 
   beforeEach(async () => {
-    mongoServer = await MongoMemoryServer.create();
+    mongoServer = new MongoMemoryServer();
+    await mongoServer.start();
     const uri = mongoServer.getUri();
 
     await mongoose.disconnect();
     await mongoose.connect(uri, {});
-    await Transaction.syncIndexes(); // Ensures unique indexes
+    await Transaction.syncIndexes();
   });
 
   afterEach(async () => {
     await mongoose.disconnect();
-    await mongoServer.stop();
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
   });
 
   it('should create and save a Transaction document successfully', async () => {
