@@ -8,13 +8,12 @@ describe('Transaction Model', () => {
   let mongoServer: MongoMemoryServer;
 
   beforeEach(async () => {
-    mongoServer = new MongoMemoryServer();
-    await mongoServer.start();
+    mongoServer = await MongoMemoryServer.create();
     const uri = mongoServer.getUri();
 
     await mongoose.disconnect();
     await mongoose.connect(uri, {});
-    await Transaction.syncIndexes();
+    await Transaction.syncIndexes(); // Ensures unique indexes
   });
 
   afterEach(async () => {
