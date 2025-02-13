@@ -11,7 +11,6 @@
     "start": "bun run src/index.ts",
     "dev": "bun --watch src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target node",
-    "generate-types": "typechain --target=ethers-v5 --out-dir ./src/types/ethers-contracts './scripts/artifacts/**/*.json'",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.js",
     "lint:fix": "eslint . --ext .ts --fix && yarn type-check",
