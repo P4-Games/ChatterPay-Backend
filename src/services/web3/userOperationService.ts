@@ -82,11 +82,17 @@ export function createTransferCallData(
     throw new Error('Invalid amount');
   }
 
-  const callData = chatterPayContract.interface.encodeFunctionData('executeTokenTransfer', [
+  /*const callData = chatterPayContract.interface.encodeFunctionData('executeTokenTransfer', [
     erc20Contract.address,
     to,
     amount_bn
+  ]);*/
+  const callData = chatterPayContract.interface.encodeFunctionData('setTokenWhitelistAndPriceFeed', [
+    "0xe6B817E31421929403040c3e42A6a5C5D2958b4A",
+    true,
+    "0x80EDee6f667eCc9f63a0a6f55578F870651f06A4"
   ]);
+
   Logger.log('createTransferCallData', 'Transfer Call Data:', callData);
 
   return callData;
@@ -102,31 +108,38 @@ export function createTransferCallData(
  * @returns {Promise<PackedUserOperation>} The user operation with the generated signature.
  * @throws {Error} If the signature verification fails.
  */
+
 export async function signUserOperation(
   userOperation: PackedUserOperation,
   entryPointAddress: string,
   signer: ethers.Wallet
 ): Promise<PackedUserOperation> {
-  Logger.log('signUserOperation', 'Signing UserOperation.');
+  const { provider } = signer;
+  const { chainId } = await provider!.getNetwork();
 
-  const chainId = await signer.getChainId();
-  Logger.log('signUserOperation', 'Chain ID:', chainId);
-
-  Logger.log('signUserOperation', 'Computing userOpHash.');
+  // 1. Generate userOpHash (correct format for EntryPoint)
   const userOpHash = getUserOpHash(userOperation, entryPointAddress, chainId);
-  Logger.log('signUserOperation', 'UserOpHash:', userOpHash);
 
-  const signature = await signer.signMessage(ethers.utils.arrayify(userOpHash));
-  Logger.log('signUserOperation', 'Generated signature:', signature);
+  // 2. Sign the hash WITHOUT Ethereum prefix
+  const { _signingKey } = signer;
+  
+  const signature = _signingKey().signDigest(
+    ethers.utils.arrayify(userOpHash)
+  );
 
-  const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(userOpHash), signature);
-  Logger.log('signUserOperation', 'Recovered address:', recoveredAddress);
-  Logger.log('signUserOperation', 'Signer address:', await signer.getAddress());
+  // 3. Verify using EntryPoint's method (without prefix)
+  const recoveredAddress = ethers.utils.recoverAddress(
+    userOpHash, // Original hash, no prefix
+    signature
+  );
 
-  if (recoveredAddress.toLowerCase() !== (await signer.getAddress()).toLowerCase()) {
-    throw new Error('signUserOperation: Signature verification failed on client side');
+  const { getAddress } = ethers.utils;
+  if (getAddress(recoveredAddress) !== getAddress(await signer.getAddress())) {
+    throw new Error('Invalid signature');
   }
 
-  Logger.log('signUserOperation', 'UserOperation signed successfully');
-  return { ...userOperation, signature };
+  return { 
+    ...userOperation,
+    signature: ethers.utils.joinSignature(signature) 
+  };
 }

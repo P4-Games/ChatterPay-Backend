@@ -109,7 +109,10 @@ export async function executeUserOperation(
   userOperation = await addPaymasterData(
     userOperation,
     networkConfig.contracts.paymasterAddress!,
-    backendSigner
+    backendSigner,
+    networkConfig.contracts.entryPoint,
+    callData,
+    networkConfig.chain_id
   );
   Logger.log('executeUserOperation', 'Paymaster data added');
 

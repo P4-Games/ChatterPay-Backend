@@ -82,7 +82,10 @@ async function executeOperation(
   userOperation = await addPaymasterData(
     userOperation,
     networkConfig.contracts.paymasterAddress!,
-    backendSigner
+    backendSigner,
+    networkConfig.contracts.entryPoint,
+    callData,
+    networkConfig.chain_id
   );
 
   // Sign the user operation
