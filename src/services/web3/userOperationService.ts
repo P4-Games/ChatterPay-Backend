@@ -82,16 +82,22 @@ export function createTransferCallData(
     throw new Error('Invalid amount');
   }
 
-  /*const callData = chatterPayContract.interface.encodeFunctionData('executeTokenTransfer', [
+  const callData = chatterPayContract.interface.encodeFunctionData('executeTokenTransfer', [
     erc20Contract.address,
     to,
     amount_bn
-  ]);*/
-  const callData = chatterPayContract.interface.encodeFunctionData('setTokenWhitelistAndPriceFeed', [
-    "0xe6B817E31421929403040c3e42A6a5C5D2958b4A",
-    true,
-    "0x80EDee6f667eCc9f63a0a6f55578F870651f06A4"
   ]);
+  
+  /*
+    The following code is an example of how to encode a different function call.
+    It must work if validated by the paymaster.
+
+    const callData = chatterPayContract.interface.encodeFunctionData('setTokenWhitelistAndPriceFeed', [
+      "0xe6B817E31421929403040c3e42A6a5C5D2958b4A",
+      true,
+      "0x80EDee6f667eCc9f63a0a6f55578F870651f06A4"
+    ]);
+  */
 
   Logger.log('createTransferCallData', 'Transfer Call Data:', callData);
 
