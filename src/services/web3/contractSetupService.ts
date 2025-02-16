@@ -56,7 +56,11 @@ export async function setupContracts(
   const accountExists = true;
 
   const chatterpayABI = await getChatterpayABI();
-  const chatterPayContract = new ethers.Contract(proxy.proxyAddress, chatterpayABI, signer);
+  const chatterPayContract = new ethers.Contract(
+    blockchain.contracts.chatterPayAddress,
+    chatterpayABI,
+    signer
+  );
 
   const result: SetupContractReturn = {
     provider,
