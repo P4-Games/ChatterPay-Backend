@@ -85,6 +85,10 @@ export function createTransferCallData(
   const transferEncode = erc20Contract.interface.encodeFunctionData('transfer', [to, amount_bn]);
   Logger.log('createTransferCallData', 'Transfer Encode:', transferEncode);
 
+  Logger.log(
+    'createTransferCallData',
+    `Chatterpay Proxy Contract Address ${chatterPayContract.address}`
+  );
   const callData = chatterPayContract.interface.encodeFunctionData('execute', [
     erc20Contract.address,
     0,
