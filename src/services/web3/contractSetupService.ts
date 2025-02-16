@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { SIGNING_KEY } from '../../config/constants';
-import { getChatterpayABI } from '../gcp/gcpService';
+import { getChatterpayABI } from '../gcp/gcpService2';
 import { IBlockchain } from '../../models/blockchainModel';
 import { SetupContractReturn } from '../../types/commonType';
 import { computeProxyAddressFromPhone } from '../predictWalletService';

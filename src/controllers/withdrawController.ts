@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { withdrawWalletAllFunds } from '../services/transferService';
+import { withdrawWalletAllFunds } from '../services/_transferService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 

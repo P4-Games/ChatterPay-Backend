@@ -1,5 +1,5 @@
-import dotenv from 'dotenv';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
+import dotenv from 'dotenv';
 
 import { LogLevel, validLogLevels } from '../types/loggerType';
 
@@ -79,6 +79,18 @@ export const GCP_ABIs = {
   EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/EntryPoint.json`,
   ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.json`
 };
+
+export const LOCAL_ABIs = {
+  ChatterPay: `Chatterpay.sol/ChatterPay.json`,
+  ChatterPayWallet: `ChatterPayWallet.sol/ChatterPayWallet.json`,
+  ChatterPayWalletFactory: `ChatterPayWalletFactory.sol/ChatterPayWalletFactory.json`,
+  ChatterPayNFT: `ChatterPayNFT.sol/ChatterPayNFT.json`,
+  EntryPoint: `EntryPoint.sol/EntryPoint.json`,
+  ERC20: `ERC20/IERC20.sol/IERC20.json`,
+  IERC20: `ERC20/IERC20.sol/IERC20.json`
+};
+
+
 
 export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
 export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' || true;

@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 import { FastifyInstance } from 'fastify';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { getEntryPointABI } from '../gcp/gcpService';
+import { getEntryPointABI } from '../gcp/gcpService2';
 import { addPaymasterData } from './paymasterService';
 import { sendUserOperationToBundler } from './bundlerService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';

@@ -60,9 +60,11 @@ export async function sendUserOperation(
     const callData = createTransferCallData(setupContractsResult.chatterPay, erc20, to, amount);
 
     // Get the nonce
+    Logger.log('sendUserOperation', 'Getting Nonce');
     const nonce = await entryPointContract.getNonce(setupContractsResult.proxy.proxyAddress, 0);
 
     // Create the base user operation
+    Logger.log('sendUserOperation', 'Creating Generic User Operation');
     let userOperation = await createGenericUserOperation(
       callData,
       setupContractsResult.proxy.proxyAddress,
@@ -70,6 +72,7 @@ export async function sendUserOperation(
     );
 
     // Add paymaster data
+    Logger.log('sendUserOperation', 'Adding Paymaster Data');
     userOperation = await addPaymasterData(
       userOperation,
       networkConfig.contracts.paymasterAddress!,
@@ -80,6 +83,7 @@ export async function sendUserOperation(
     );
 
     // Sign the user operation
+    Logger.log('sendUserOperation', 'Signing User Operation');
     userOperation = await signUserOperation(
       userOperation,
       networkConfig.contracts.entryPoint,
