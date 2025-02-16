@@ -1,12 +1,12 @@
 import { ethers } from 'ethers';
 
-import { Logger } from '../../helpers/loggerHelper';
 import { SIGNING_KEY } from '../../config/constants';
-import { getChatterpayABI } from '../gcp/gcpService';
+import { Logger } from '../../helpers/loggerHelper';
 import { IBlockchain } from '../../models/blockchainModel';
 import { SetupContractReturn } from '../../types/commonType';
-import { computeProxyAddressFromPhone } from '../predictWalletService';
+import { getChatterpayABI } from '../gcp/gcpService';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
+import { computeProxyAddressFromPhone } from '../predictWalletService';
 
 /**
  * Validate Bundle Url
@@ -56,7 +56,11 @@ export async function setupContracts(
   const accountExists = true;
 
   const chatterpayABI = await getChatterpayABI();
-  const chatterPayContract = new ethers.Contract(proxy.proxyAddress, chatterpayABI, signer);
+  const chatterPayContract = new ethers.Contract(
+    blockchain.contracts.chatterPayAddress,
+    chatterpayABI,
+    signer
+  );
 
   const result: SetupContractReturn = {
     provider,
