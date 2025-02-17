@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { PackedUserOperation } from '../../types/userOperationType';
-import { createPaymasterAndData } from '../../helpers/paymasterHelper';
+import { createPaymasterAndData, createPaymasterAndData2 } from '../../helpers/paymasterHelper';
 import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../../config/constants';
 
 /**
@@ -24,7 +24,31 @@ export async function addPaymasterData(
   callData: string,
   chainId: number
 ): Promise<PackedUserOperation> {
-  const paymasterAndData = await createPaymasterAndData(
+
+  Logger.log('addPaymasterData', 'data to encode in paymasterAndData:', JSON.stringify({
+      paymasterAndData: paymasterAddress,
+      sender: userOp.sender,
+      backendSigner,  
+      entrypoint,
+      callData,
+      expiration: 3600,
+      chainId
+    }));
+
+  /*
+  const paymasterAndDataOld = await createPaymasterAndData(
+    paymasterAddress,
+    userOp.sender,
+    backendSigner,
+    entrypoint,
+    callData,
+    3600, // 1 hour validity
+    chainId
+  );
+  Logger.log('addPaymasterData', 'Generated paymasterAndData (OLD):', paymasterAndDataOld);
+  */
+
+  const paymasterAndData = await createPaymasterAndData2(
     paymasterAddress,
     userOp.sender,
     backendSigner,

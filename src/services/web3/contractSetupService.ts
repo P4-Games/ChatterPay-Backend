@@ -2,9 +2,9 @@ import { ethers } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { SIGNING_KEY } from '../../config/constants';
-import { getChatterpayABI } from '../gcp/gcpService2';
 import { IBlockchain } from '../../models/blockchainModel';
 import { SetupContractReturn } from '../../types/commonType';
+import { getERC20ABI, getChatterpayABI } from '../gcp/gcpService2';
 import { computeProxyAddressFromPhone } from '../predictWalletService';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
 
@@ -56,7 +56,8 @@ export async function setupContracts(
   const accountExists = true;
 
   const chatterpayABI = await getChatterpayABI();
-  const chatterPayContract = new ethers.Contract(proxy.proxyAddress, chatterpayABI, signer);
+  // const chatterPayContract = new ethers.Contract(proxy.proxyAddress, chatterpayABI, signer);
+  const chatterPayContract = new ethers.Contract(blockchain.contracts.chatterPayAddress, chatterpayABI);
 
   const result: SetupContractReturn = {
     provider,
@@ -78,8 +79,11 @@ export async function setupContracts(
  * @returns An ethers.Contract instance for the ERC20 token.
  */
 export async function setupERC20(tokenAddress: string, signer: ethers.Wallet) {
+  const ERC20ABI = await getERC20ABI();
   return new ethers.Contract(
     tokenAddress,
+    ERC20ABI,
+    /*
     [
       'function transfer(address to, uint256 amount) returns (bool)',
       'function balanceOf(address owner) view returns (uint256)',
@@ -87,7 +91,7 @@ export async function setupERC20(tokenAddress: string, signer: ethers.Wallet) {
       'function allowance(address owner, address spender) view returns (uint256)',
       'function decimals() view returns (uint8)',
       'function symbol() view returns (string)'
-    ],
+    ], */
     signer
   );
 }

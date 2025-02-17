@@ -1,12 +1,6 @@
 import { ethers } from 'ethers';
-import { FastifyInstance } from 'fastify';
 
-import { Logger } from '../../helpers/loggerHelper';
-import { getEntryPointABI } from '../gcp/gcpService2';
-import { addPaymasterData } from './paymasterService';
-import { sendUserOperationToBundler } from './bundlerService';
-import { signUserOperation, createGenericUserOperation } from './userOperationService';
-import { UserOperationReceipt, UserOperationReceiptData } from '../../types/userOperationType';
+import { UserOperationReceipt } from '../../types/userOperationType';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -60,16 +54,8 @@ export async function waitForUserOperationReceipt(
   });
 }
 
-/**
- * Executes a user operation by creating, signing, sending, and waiting for the transaction receipt.
- * It uses the global Fastify context to access network configuration and backend services.
- *
- * @param {FastifyInstance} fastify - The Fastify instance providing the network and backend services.
- * @param {string} callData - The data for the transaction call.
- * @param {ethers.Wallet} signer - The signer used to sign the user operation.
- * @param {string} senderAddress - The address of the sender initiating the user operation.
- * @returns {Promise<UserOperationReceiptData>} The receipt data of the user operation once the transaction is mined.
- */
+
+/*
 export async function executeUserOperation(
   fastify: FastifyInstance,
   callData: string,
@@ -149,3 +135,4 @@ export async function executeUserOperation(
   );
   return receipt.receipt;
 }
+*/

@@ -1,7 +1,7 @@
 import { ethers, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { getUserOpHash } from '../../helpers/userOperationHekper';
+import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation } from '../../types/userOperationType';
 import {
   CALL_GAS_LIMIT,
@@ -65,32 +65,45 @@ export async function createGenericUserOperation(
  * @returns {string} The encoded call data for the token transfer.
  * @throws {Error} If the 'to' address is invalid or the amount cannot be parsed.
  */
-export function createTransferCallData(
+export async function createTransferCallData(
   chatterPayContract: ethers.Contract,
   erc20Contract: ethers.Contract,
   to: string,
   amount: string
-): string {
+): Promise<string> {
   if (!ethers.utils.isAddress(to)) {
     throw new Error("Invalid 'to' address");
   }
 
   let amount_bn;
   try {
-    amount_bn = ethers.utils.parseUnits(amount, erc20Contract.decimals);
+    const decimals = 18; // await erc20Contract.decimals(); // TO_FIX!!!
+    Logger.log('createTransferCallData', 'contract decimals', decimals);
+    amount_bn = ethers.utils.parseUnits(amount, decimals);
   } catch (error) {
-    throw new Error('Invalid amount');
+    Logger.error('createTransferCallData', `amount ${amount} error`, error);
+    throw error;
   }
 
-  Logger.log('createTransferCallData', erc20Contract.address, to, amount_bn)
-  const callData = chatterPayContract.interface.encodeFunctionData('executeTokenTransfer', [
-    erc20Contract.address,
-    to,
-    amount_bn
-  ]);
+  try {
+    // ////////////////////////////////////////////////// REPLACED!!! //////////////////////////////////////////////////
+    /*
+    Logger.log('createTransferCallData', '*** [ executeTokenTransfer1 ] *** ', erc20Contract.address, to, amount_bn)
+    const callData = chatterPayContract.interface.encodeFunctionData('executeTokenTransfer1', [
+      erc20Contract.address,
+      to,
+      amount_bn
+    ]);
+    */
 
+    Logger.log('createTransferCallData', '*** [ setTokenWhitelistAndPriceFeed ] *** ', erc20Contract.address, to, amount_bn)
+    const callData = chatterPayContract.interface.encodeFunctionData('setTokenWhitelistAndPriceFeed', [
+      "0xe6B817E31421929403040c3e42A6a5C5D2958b4A",
+      true,
+      "0x80EDee6f667eCc9f63a0a6f55578F870651f06A4"
+    ]);
 
-  /*
+    /*
     The following code is an example of how to encode a different function call.
     It must work if validated by the paymaster.
 
@@ -101,9 +114,14 @@ export function createTransferCallData(
       "0x80EDee6f667eCc9f63a0a6f55578F870651f06A4"
     ]);
   */
-  Logger.log('createTransferCallData', 'Transfer Call Data:', callData);
+    Logger.log('createTransferCallData', 'Transfer Call Data:', callData);
+    return callData;
 
-  return callData;
+  } catch (error) {
+    Logger.error('createTransferCallData', 'encodeFunctionData error', error);
+    throw error;
+  }
+
 }
 
 /**
@@ -149,5 +167,74 @@ export async function signUserOperation(
   return { 
     ...userOperation,
     signature: ethers.utils.joinSignature(signature) 
+  };
+}
+
+export async function signUserOperation2(
+  userOperation: PackedUserOperation,
+  entryPointAddress: string,
+  signer: ethers.Wallet
+): Promise<PackedUserOperation> {
+
+  console.log('1')
+  const { provider } = signer;
+  const { chainId } = await provider!.getNetwork();
+
+  console.log('2')
+  // 1. Generate userOpHash (correct format for EntryPoint)
+  const userOpHash = getUserOpHash(userOperation, entryPointAddress, chainId);
+  console.log('3')
+
+  // 2. Sign the hash WITHOUT Ethereum prefix
+  const { _signingKey } = signer;
+  console.log('4')
+
+  const signature = _signingKey().signDigest(
+    ethers.utils.arrayify(userOpHash)
+  );
+  console.log('5')
+
+  const signature2 = await signer.signMessage(ethers.utils.arrayify(userOpHash));
+
+  console.log('6')
+
+
+  // 3. Verify using EntryPoint's method (without prefix)
+  const recoveredAddress = ethers.utils.recoverAddress(
+    userOpHash, // Original hash, no prefix
+    signature
+  );
+  console.log('7')
+
+    // 3. Verify using EntryPoint's method (without prefix)
+    const recoveredAddress2 = ethers.utils.recoverAddress(
+      userOpHash, // Original hash, no prefix
+      signature2
+    );
+    console.log('8')
+
+  const { getAddress } = ethers.utils;
+  if (getAddress(recoveredAddress) !== getAddress(await signer.getAddress())) {
+    throw new Error('Invalid signature');
+  }
+  console.log('9')
+
+  if (getAddress(recoveredAddress2) !== getAddress(await signer.getAddress())) {
+    console.log('9.1')
+    throw new Error('Invalid signature2');
+  }
+  console.log('10')
+
+  Logger.log('signUserOperation.old', `
+    signature: ${signature}
+  `)
+
+  Logger.log('signUserOperation', `
+    signature: ${signature2}
+  `)
+
+  return { 
+    ...userOperation,
+    signature: ethers.utils.joinSignature(signature2) 
   };
 }

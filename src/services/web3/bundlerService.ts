@@ -52,6 +52,7 @@ export async function sendUserOperationToBundler(
       params: [serializedUserOp, entryPointAddress],
       id: Date.now()
     };
+    Logger.log('sendUserOperationToBundler',`payload: ${JSON.stringify(payload)}`);
 
     // Wrapper function in quue to avoid erro 429 (rate-limit)
     const response = (await queue.add(async () =>
