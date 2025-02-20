@@ -3,8 +3,8 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
+import { executeSwap } from '../services/web3/swapService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
-import { executeSwap } from '../services/web3/simpleSwapService';
 import { setupERC20 } from '../services/web3/contractSetupService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
@@ -184,7 +184,8 @@ export const swap = async (
       checkBlockchainConditionsResult.setupContractsResult!,
       checkBlockchainConditionsResult.entryPointContract!,
       tokenAddresses,
-      amount.toString()
+      amount.toString(),
+      proxyAddress
     );
     if (!executeSwapResult.success) {
       await sendInternalErrorNotification(proxyAddress, channel_user_id);

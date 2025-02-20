@@ -77,7 +77,8 @@ export const GCP_ABIs = {
   ChatterPayWalletFactory: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletFactory.json`,
   ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayNFT.json`,
   EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/EntryPoint.json`,
-  ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.json`
+  ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.json`,
+  ChainlinkPriceFeed: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChainlinkPriceFeed.json`
 };
 
 export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;

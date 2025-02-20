@@ -86,3 +86,10 @@ export const getEntryPointABI = async (): Promise<ABI> => getFile(GCP_ABIs.Entry
  * @returns {Promise<ABI>} The ChatterPay ABI object.
  */
 export const getChatterpayABI = async (): Promise<ABI> => getFile(GCP_ABIs.ChatterPay);
+
+/**
+ * Retrieves the Chainlink ABI from the GCP bucket.
+ *
+ * @returns {Promise<ABI>} The ChatterPay ABI object.
+ */
+export const getPriceFeedABI = async (): Promise<ABI> => getFile(GCP_ABIs.ChainlinkPriceFeed);
