@@ -43,7 +43,11 @@ const {
   FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: fastifyRefreshNetworksIntervalMs = 86400000,
   FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000,
   ABIS_VERSION = 'v1.0.0',
-  CORS_ORIGINS_CHECK_POSTMAN: corsOriginsCheckPostman = 'false'
+  CORS_ORIGINS_CHECK_POSTMAN: corsOriginsCheckPostman = 'false',
+  SLIPPAGE_CONFIG_STABLE: slippage_config_stable = 300,
+  SLIPPAGE_CONFIG_DEFAULT: slippage_config_default = 500,
+  SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
+  STABLE_TOKENS='USDT,USDC,DAI'
 } = process.env;
 
 export {
@@ -56,6 +60,7 @@ export {
   CORS_ORIGINS,
   ABIS_VERSION,
   BLACKLIST_IPS,
+  STABLE_TOKENS,
   INFURA_API_KEY,
   BOT_DATA_TOKEN,
   FRONTEND_TOKEN,
@@ -63,7 +68,7 @@ export {
   CHATIZALO_TOKEN,
   MANTECA_API_KEY,
   MANTECA_BASE_URL,
-  GCP_BUCKET_BASE_URL
+  GCP_BUCKET_BASE_URL,
 };
 
 export const IS_DEVELOPMENT = BUN_ENV.toLowerCase() === 'development';
@@ -157,3 +162,8 @@ export const CORS_ORIGINS_EXCEPTIONS: string = '/metadata/opensea,/favicon.ico,/
 export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/price';
 export const TOKEN_IDS = ['usd-coin', 'tether', 'ethereum', 'bitcoin', 'wrapped-bitcoin', 'dai'];
 export const RESULT_CURRENCIES = ['usd', 'ars', 'brl', 'uyu'];
+
+export const STABLE_TOKENS_ARRAY = STABLE_TOKENS.split(',');
+export const SLIPPAGE_CONFIG_STABLE = Number(slippage_config_stable);
+export const SLIPPAGE_CONFIG_DEFAULT = Number(slippage_config_default);
+export const SLIPPAGE_CONFIG_EXTRA = Number(slippage_config_extra);

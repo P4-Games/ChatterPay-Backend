@@ -8,21 +8,22 @@ import { waitForUserOperationReceipt } from './userOpExecutorService';
 import { getERC20ABI, getPriceFeedABI, getChatterpayABI } from '../gcp/gcpService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
 import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../../types/commonType';
+import { STABLE_TOKENS_ARRAY, SLIPPAGE_CONFIG_EXTRA, SLIPPAGE_CONFIG_STABLE, SLIPPAGE_CONFIG_DEFAULT } from '../../config/constants';
 
 /**
  * Constants for slippage configurations based on token types
  */
 const SLIPPAGE_CONFIG = {
-  STABLE: 300,  // 3% for stablecoins
-  DEFAULT: 500, // 5% default
-  EXTRA: 300   // 3% extra
+  STABLE: SLIPPAGE_CONFIG_STABLE,
+  DEFAULT: SLIPPAGE_CONFIG_DEFAULT,
+  EXTRA: SLIPPAGE_CONFIG_EXTRA
 } as const;
 
 /**
  * Token type classification
  */
 const TOKEN_LISTS = {
-  STABLE: ['USDT', 'USDC', 'DAI'],
+  STABLE: STABLE_TOKENS_ARRAY,
 } as {
   STABLE: string[];
 };
