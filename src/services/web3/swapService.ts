@@ -231,18 +231,18 @@ export async function executeSwap(
       getBinancePrice(tokenOutSymbol)
     ]);
 
-    Logger.info('executeSwap', `Prices - Input: Chainlink ${chainlinkPriceIn.toString()}, Binance ${binancePriceIn}`);
-    Logger.info('executeSwap', `Prices - Output: Chainlink ${chainlinkPriceOut.toString()}, Binance ${binancePriceOut}`);
+    Logger.info('executeSwap', `Prices - Input: Chainlink ${chainlinkPriceIn}, Binance ${binancePriceIn}`);
+    Logger.info('executeSwap', `Prices - Output: Chainlink ${chainlinkPriceOut}, Binance ${binancePriceOut}`);
 
     // Use the lower price for output token for safety
     const effectivePriceOut = !binancePriceOut ? 
-      chainlinkPriceOut.toNumber() 
-      : Math.min(chainlinkPriceOut.toNumber(), binancePriceOut);
+      chainlinkPriceOut 
+      : Math.min(chainlinkPriceOut, binancePriceOut);
 
     // Use the higher price for input token for safety
     const effectivePriceIn = !binancePriceIn ?
-      chainlinkPriceIn.toNumber()
-      : Math.max(chainlinkPriceIn.toNumber(), binancePriceIn);
+      chainlinkPriceIn
+      : Math.max(chainlinkPriceIn, binancePriceIn);
 
     Logger.info('executeSwap', `Using effective prices - In: ${effectivePriceIn}, Out: ${effectivePriceOut}`);
 
@@ -263,6 +263,7 @@ export async function executeSwap(
       swapAmount,
       chainlinkPriceIn,
       effectivePriceOut,
+      tokenInDecimals,
       tokenOutDecimals
     );
     Logger.info('executeSwap', `Expected output amount: ${expectedOutput.toString()}`);
@@ -348,13 +349,16 @@ async function getChainlinkPrice(
   priceFeedAddress: string,
   priceFeedABI: ContractInterface,
   provider: ethers.providers.Provider
-): Promise<ethers.BigNumber> {
+): Promise<number> {
   Logger.debug('getChainlinkPrice', `Fetching Chainlink price from feed: ${priceFeedAddress}`);
   const priceFeed = new ethers.Contract(priceFeedAddress, priceFeedABI, provider);
   const roundData = await priceFeed.latestRoundData();
   Logger.debug('getChainlinkPrice', `Latest round data: ${JSON.stringify(roundData)}`);
-  Logger.info('getChainlinkPrice', `Current price: ${roundData.answer.toString()}`);
-  return roundData.answer;
+  // Chainlink price feeds return prices with 8 decimals
+  const priceWith8Decimals = roundData.answer;
+  const priceAsNumber = Number(ethers.utils.formatUnits(priceWith8Decimals, 8));
+  Logger.info('getChainlinkPrice', `Current price: ${priceAsNumber}`);
+  return priceAsNumber;
 }
 
 async function getBinancePrice(symbol: string): Promise<number | null> {
@@ -394,10 +398,14 @@ function calculateFeeInToken(
 ): ethers.BigNumber {
   Logger.debug('calculateFeeInToken', `Calculating fee. Fee in cents: ${feeInCents.toString()}, Decimals: ${tokenDecimals}, Token price: ${tokenPrice}`);
   
+  // Convert dollar cents to dollars (divide by 100)
+  // Then multiply by token decimals to get the proper token amount
+  // Then divide by token price to convert to token units
   const fee = feeInCents
     .mul(ethers.BigNumber.from(10).pow(tokenDecimals))
-    .mul(ethers.BigNumber.from(1e8))
-    .div(ethers.BigNumber.from(Math.floor(tokenPrice * 100)));
+    .div(100)  // convert cents to dollars
+    .div(ethers.BigNumber.from(Math.floor(tokenPrice * 1e6)))  // divide by price (with 6 decimals precision)
+    .mul(1e6); // adjust for the precision we added to price
     
   Logger.debug('calculateFeeInToken', `Calculated fee in token: ${fee.toString()}`);
   return fee;
@@ -405,18 +413,29 @@ function calculateFeeInToken(
 
 function calculateExpectedOutput(
   swapAmount: ethers.BigNumber,
-  priceIn: ethers.BigNumber,
+  priceIn: number,
   priceOut: number,
+  decimalsIn: number,
   decimalsOut: number
 ): ethers.BigNumber {
-  Logger.debug('calculateExpectedOutput', `Calculating expected output. Swap amount: ${swapAmount.toString()}, Price in: ${priceIn.toString()}, Price out: ${priceOut}, Decimals out: ${decimalsOut}`);
-  
-  const expectedOutput = swapAmount
-    .mul(priceIn)
-    .div(ethers.BigNumber.from(Math.floor(priceOut)))
+  Logger.debug(
+    'calculateExpectedOutput', 
+    `Calculating expected output. Swap amount: ${swapAmount.toString()}, ` +
+    `Price in: ${priceIn}, Price out: ${priceOut}, ` +
+    `Decimals in: ${decimalsIn}, Decimals out: ${decimalsOut}`
+  );
+
+  // 1. Convert swap amount to USD value (considering decimals)
+  const valueInUsd = swapAmount
+    .mul(ethers.BigNumber.from(Math.floor(priceIn * 1e6)))
+    .div(ethers.BigNumber.from(10).pow(decimalsIn))
+    .div(1e6);
+
+  // 2. Convert USD value to output token amount with proper decimals
+  const expectedOutput = valueInUsd
     .mul(ethers.BigNumber.from(10).pow(decimalsOut))
-    .div(1e8);
-    
+    .div(ethers.BigNumber.from(Math.floor(priceOut)));
+
   Logger.info('calculateExpectedOutput', `Expected output amount: ${expectedOutput.toString()}`);
   return expectedOutput;
 }
