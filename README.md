@@ -7,8 +7,8 @@
 ![](https://img.shields.io/badge/Alchemy-informational?style=flat&logo=alchemy&logoColor=white&color=6aa6f8)
 ![](https://img.shields.io/badge/Web3-informational?style=flat&logo=web3&logoColor=white&color=6aa6f8)
 ![](https://img.shields.io/badge/Ethers.js-informational?style=flat&logo=ethersjs&logoColor=white&color=6aa6f8)
-![](https://img.shields.io/badge/LI.FI-informational?style=flat&logo=li.fi&logoColor=white&color=6aa6f8)
-![](https://img.shields.io/badge/api3-informational?style=flat&logo=api3&logoColor=white&color=6aa6f8)
+![](https://img.shields.io/badge/UniswapV3-informational?style=flat&logo=uniswap&logoColor=white&color=6aa6f8)
+![](https://img.shields.io/badge/Chainlink?style=flat&logo=chainlink&logoColor=white&color=6aa6f8)
 ![](https://img.shields.io/badge/jsdoc-informational?style=flat&logo=jsdoc&logoColor=white&color=6aa6f8)
 ![](https://img.shields.io/badge/userOps.js-informational?style=flat&logo=useropsjs&logoColor=white&color=6aa6f8)
 
@@ -43,9 +43,8 @@ This repository contains the backend API source code.
 -   Database ODM: [mongoose](https://mongoosejs.com/)
 -   web3 SDK: [Alchemy](https://www.alchemy.com/sdk)
 -   web3 Library: [ethers.js](https://docs.ethers.org/v5/)
--   web3 swap/bridges SDK: [LI.FI](https://li.fi/sdk/)
--   web3 ERC-4337 Library: [Stackup userOps.js](https://github.com/stackup-wallet/userop.js#readme)
--   web3 Data Feed: [api3](https://api3.org/)
+-   web3 Swaps: [Uniswap V3](https://app.uniswap.org/)
+-   web3 Chainlink Price Feeds: [ChainLink](https://docs.chain.link/data-feeds/price-feeds/)
 -   Source Code Documentation: [jsDoc](https://jsdoc.app/)
 
 # Getting Started

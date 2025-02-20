@@ -14,9 +14,9 @@ export interface IBlockchain extends Document {
     entryPoint: string;
     factoryAddress: string;
     chatterPayAddress: string;
-    simpleSwapAddress: string;
     chatterNFTAddress: string;
     paymasterAddress?: string;
+    routerAddress?: string;
   };
 }
 
@@ -34,7 +34,6 @@ const blockchainSchema = new Schema<IBlockchain>({
     entryPoint: { type: String, required: false },
     factoryAddress: { type: String, required: false },
     chatterPayAddress: { type: String, required: false },
-    simpleSwapAddress: { type: String, required: false },
     chatterNFTAddress: { type: String, required: false },
     paymasterAddress: { type: String, required: false }
   }

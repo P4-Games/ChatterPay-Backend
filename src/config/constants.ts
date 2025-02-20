@@ -123,9 +123,6 @@ export const BACKEND_SIGNER_MIN_BALANCE: string = '0.5'; // must have at least: 
 export const USER_SIGNER_MIN_BALANCE: string = '0.0008';
 export const USER_SIGNER_BALANCE_TO_TRANSFER: string = '0.001';
 
-export const LIFI_SLIPPAGE = 30 / 1000;
-export const LIFI_TYPE = 'SAFEST';
-
 export const NOTIFICATION_TEMPLATE_CACHE_TTL = 60800; // 1 week
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
 export const GCP_CLOUD_TRACE_ENABLED: boolean = gcpCloudTraceEnabled.toLowerCase() === 'true';

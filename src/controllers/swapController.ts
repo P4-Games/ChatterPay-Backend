@@ -29,6 +29,7 @@ import {
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
+import { getChatterpayABI } from '../services/gcp/gcpService';
 
 interface SwapBody {
   channel_user_id: string;
@@ -218,7 +219,7 @@ export const swap = async (
     const transactionOut: TransactionData = {
       tx: executeSwapResult.approveTransactionHash,
       walletFrom: proxyAddress,
-      walletTo: networkConfig.contracts.simpleSwapAddress,
+      walletTo: networkConfig.contracts.routerAddress!,
       amount: fromTokensSentInUnits,
       token: inputCurrency,
       type: 'swap',
@@ -229,7 +230,7 @@ export const swap = async (
     // Save transactions IN
     const transactionIn: TransactionData = {
       tx: executeSwapResult.swapTransactionHash,
-      walletFrom: networkConfig.contracts.simpleSwapAddress,
+      walletFrom: networkConfig.contracts.routerAddress!,
       walletTo: proxyAddress,
       amount: toTokensReceivedInUnits,
       token: outputCurrency,

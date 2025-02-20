@@ -82,17 +82,14 @@
 - NFT: Mint Copy (/mint_existing) => ChatterPayNFT.mintCopy
 
 - Make Transaction (/make_transaction)
-
   - ChatterPayWalletFactory.computeProxyAddress
-  - [ERC20].approve
   - Chatterpay.execute
   - Chatterpay.balanceOf
-  - CHatterpay.transfer
+  - Chatterpay.transfer
 
 - Swap (/swap)
   - ChatterPayWalletFactory.computeProxyAddress
-  - SimpleSwap.swapWETHforUSDT
-  - SimpleSwap.swapUSDTforWETH
+  - Chatterpay.executeSwap
 
 ## Backend => Criptoya
 
