@@ -220,7 +220,7 @@ export async function executeSwap(
     Logger.debug('executeSwap', `Fee in cents: ${feeInCents.toString()}`);
 
     let effectivePriceIn = 1;
-    let effectivePriceOut = 10;
+    let effectivePriceOut = 5;
 
     if (!isTestEnvironment && priceFeedABI) {
       // Get price feeds and current prices
@@ -293,6 +293,17 @@ export async function executeSwap(
     
     const amountOutMin = expectedOutput.mul(10000 - totalSlippage).div(10000);
     Logger.info('executeSwap', `Minimum output amount: ${amountOutMin.toString()}`);
+    
+    // Check token allowance and approves the max if needed
+    await checkAndApproveToken(
+      networkConfig,
+      tokenIn,
+      amountInBN,
+      setupContractsResult,
+      erc20ABI,
+      chatterPayContract,
+      entryPointContract
+    );
 
     // Execute the swap
     Logger.debug('executeSwap', 'Creating swap call data');
@@ -461,4 +472,59 @@ function calculateExpectedOutput(
 
   Logger.info('calculateExpectedOutput', `Expected output amount: ${expectedOutput.toString()}`);
   return expectedOutput;
+}
+
+async function checkAndApproveToken(
+  networkConfig: IBlockchain,
+  tokenIn: string,
+  amountIn: ethers.BigNumber,
+  setupContractsResult: SetupContractReturn,
+  erc20ABI: ContractInterface,
+  chatterPayContract: ethers.Contract,
+  entryPointContract: ethers.Contract,
+): Promise<string | null> {
+  
+  const tokenContract = new ethers.Contract(tokenIn, erc20ABI, setupContractsResult.provider);
+  const { routerAddress } = networkConfig.contracts;
+  
+  Logger.debug('checkAndApproveToken', `Checking allowance for token ${tokenIn}, and swap router ${routerAddress}`);
+
+  // Check current allowance
+  const currentAllowance = await tokenContract.allowance(
+    setupContractsResult.proxy.proxyAddress,
+    routerAddress
+  );
+  Logger.debug('checkAndApproveToken', `Current allowance: ${currentAllowance.toString()}`);
+
+  if (currentAllowance.lt(amountIn)) {
+    Logger.info('checkAndApproveToken', 'Insufficient allowance, approving...');
+    
+    // Create approve call data
+    const approveCallData = chatterPayContract.interface.encodeFunctionData('approveToken', [
+      tokenIn,
+      ethers.constants.MaxUint256 // Approve maximum amount
+    ]);
+
+    // Execute approve operation
+    try {
+      const approveHash = await executeOperation(
+        networkConfig,
+        approveCallData,
+        setupContractsResult.signer,
+        setupContractsResult.backendSigner,
+        entryPointContract,
+        setupContractsResult.bundlerUrl,
+        setupContractsResult.proxy.proxyAddress,
+        setupContractsResult.provider
+      );
+      Logger.info('checkAndApproveToken', `Token approved successfully. Hash: ${approveHash}`);
+      return approveHash;
+    } catch (error) {
+      Logger.error('checkAndApproveToken', `Approval failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
+  }
+
+  Logger.info('checkAndApproveToken', 'Token already has sufficient allowance');
+  return null;
 }
