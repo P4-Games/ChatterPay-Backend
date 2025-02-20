@@ -172,13 +172,19 @@ export async function executeSwap(
   
   try {
     Logger.debug('executeSwap', 'Fetching contract ABIs');
-    const abisPromises = [
-      getChatterpayABI(),
-      getERC20ABI(),
-      getPriceFeedABI(),
-    ];
+    
+    // In test environments we should not consider token price as we are using test pools
+    const { environment } = networkConfig;
+    const isTestEnvironment = environment === 'TEST';
 
-    const [chatterpayABI, erc20ABI, priceFeedABI] = await Promise.all(abisPromises);
+    const abisToFetch = [getChatterpayABI(), getERC20ABI()];
+    
+    if (!isTestEnvironment) {
+      abisToFetch.push(getPriceFeedABI());
+    }
+
+    const [chatterpayABI, erc20ABI, ...otherABIs] = await Promise.all(abisToFetch);
+    const priceFeedABI = isTestEnvironment ? null : otherABIs[0];
     Logger.debug('executeSwap', 'ABIs fetched successfully');
 
     // Initialize ChatterPay contract
@@ -194,7 +200,7 @@ export async function executeSwap(
     // Fetch token details
     Logger.debug('executeSwap', 'Fetching token details');
 
-    Logger.debug('executeSwap', `ABIs first lines ERC20: ${JSON.stringify(erc20ABI).slice(0, 100)}, PriceFeed: ${JSON.stringify(priceFeedABI).slice(0, 100)}`);
+    Logger.debug('executeSwap', `ABIs first lines ERC20: ${JSON.stringify(erc20ABI).slice(0, 100)}, PriceFeed: ${priceFeedABI ? JSON.stringify(priceFeedABI).slice(0, 100) : 'Not loaded in test env'}`);
     const [
       tokenInDecimals,
       tokenOutDecimals,
@@ -212,39 +218,46 @@ export async function executeSwap(
     Logger.info('executeSwap', `Token details - Input: ${tokenInSymbol} (${tokenInDecimals} decimals), Output: ${tokenOutSymbol} (${tokenOutDecimals} decimals)`);
     Logger.debug('executeSwap', `Fee in cents: ${feeInCents.toString()}`);
 
-    // Get price feeds and current prices
-    Logger.debug('executeSwap', 'Fetching price feeds');
-    const [tokenInFeed, tokenOutFeed] = await Promise.all([
-      chatterPayContract.getPriceFeed(tokenIn),
-      chatterPayContract.getPriceFeed(tokenOut)
-    ]);
+    let effectivePriceIn = 1;
+    let effectivePriceOut = 10;
 
-    Logger.debug('executeSwap', 'Fetching current prices from Chainlink');
-    const [chainlinkPriceIn, chainlinkPriceOut] = await Promise.all([
-      getChainlinkPrice(tokenInFeed, priceFeedABI, setupContractsResult.provider),
-      getChainlinkPrice(tokenOutFeed, priceFeedABI, setupContractsResult.provider)
-    ]);
+    if (!isTestEnvironment && priceFeedABI) {
+      // Get price feeds and current prices
+      Logger.debug('executeSwap', 'Fetching price feeds');
+      const [tokenInFeed, tokenOutFeed] = await Promise.all([
+        chatterPayContract.getPriceFeed(tokenIn),
+        chatterPayContract.getPriceFeed(tokenOut)
+      ]);
 
-    Logger.debug('executeSwap', 'Fetching current prices from Binance');
-    const [binancePriceIn, binancePriceOut] = await Promise.all([
-      getBinancePrice(tokenInSymbol),
-      getBinancePrice(tokenOutSymbol)
-    ]);
+      Logger.debug('executeSwap', 'Fetching current prices from Chainlink');
+      const [chainlinkPriceIn, chainlinkPriceOut] = await Promise.all([
+        getChainlinkPrice(tokenInFeed, priceFeedABI, setupContractsResult.provider),
+        getChainlinkPrice(tokenOutFeed, priceFeedABI, setupContractsResult.provider)
+      ]);
 
-    Logger.info('executeSwap', `Prices - Input: Chainlink ${chainlinkPriceIn}, Binance ${binancePriceIn}`);
-    Logger.info('executeSwap', `Prices - Output: Chainlink ${chainlinkPriceOut}, Binance ${binancePriceOut}`);
+      Logger.debug('executeSwap', 'Fetching current prices from Binance');
+      const [binancePriceIn, binancePriceOut] = await Promise.all([
+        getBinancePrice(tokenInSymbol),
+        getBinancePrice(tokenOutSymbol)
+      ]);
 
-    // Use the lower price for output token for safety
-    const effectivePriceOut = !binancePriceOut ? 
-      chainlinkPriceOut 
-      : Math.min(chainlinkPriceOut, binancePriceOut);
+      Logger.info('executeSwap', `Prices - Input: Chainlink ${chainlinkPriceIn}, Binance ${binancePriceIn}`);
+      Logger.info('executeSwap', `Prices - Output: Chainlink ${chainlinkPriceOut}, Binance ${binancePriceOut}`);
 
-    // Use the higher price for input token for safety
-    const effectivePriceIn = !binancePriceIn ?
-      chainlinkPriceIn
-      : Math.max(chainlinkPriceIn, binancePriceIn);
+      // Use the lower price for output token for safety
+      effectivePriceOut = !binancePriceOut ? 
+        chainlinkPriceOut 
+        : Math.min(chainlinkPriceOut, binancePriceOut);
 
-    Logger.info('executeSwap', `Using effective prices - In: ${effectivePriceIn}, Out: ${effectivePriceOut}`);
+      // Use the higher price for input token for safety  
+      effectivePriceIn = !binancePriceIn ?
+        chainlinkPriceIn
+        : Math.max(chainlinkPriceIn, binancePriceIn);
+
+      Logger.info('executeSwap', `Using effective prices - In: ${effectivePriceIn}, Out: ${effectivePriceOut}`);
+    } else {
+      Logger.info('executeSwap', 'Test environment detected - using 1:1 price ratio with high slippage');
+    }
 
     // Calculate fee and amounts
     const feeInTokenIn = calculateFeeInToken(
@@ -261,7 +274,7 @@ export async function executeSwap(
     // Calculate expected output with price adjustment
     const expectedOutput = calculateExpectedOutput(
       swapAmount,
-      chainlinkPriceIn,
+      effectivePriceIn,
       effectivePriceOut,
       tokenInDecimals,
       tokenOutDecimals
@@ -425,6 +438,12 @@ function calculateExpectedOutput(
     `Decimals in: ${decimalsIn}, Decimals out: ${decimalsOut}`
   );
 
+  // Add validation to prevent division by zero
+  if (priceOut === 0) {
+    Logger.error('calculateExpectedOutput', 'Output token price cannot be zero');
+    throw new Error('Output token price cannot be zero');
+  }
+
   // 1. Convert swap amount to USD value (considering decimals)
   const valueInUsd = swapAmount
     .mul(ethers.BigNumber.from(Math.floor(priceIn * 1e6)))
@@ -432,9 +451,12 @@ function calculateExpectedOutput(
     .div(1e6);
 
   // 2. Convert USD value to output token amount with proper decimals
+  // Ensure priceOut is converted to BigNumber with sufficient precision
+  const priceOutBN = ethers.BigNumber.from(Math.floor(priceOut * 1e6));
   const expectedOutput = valueInUsd
     .mul(ethers.BigNumber.from(10).pow(decimalsOut))
-    .div(ethers.BigNumber.from(Math.floor(priceOut)));
+    .mul(1e6) // Adjust for price precision
+    .div(priceOutBN);
 
   Logger.info('calculateExpectedOutput', `Expected output amount: ${expectedOutput.toString()}`);
   return expectedOutput;
