@@ -22,7 +22,7 @@ declare module 'fastify' {
 export async function waitForUserOperationReceipt(
   provider: ethers.providers.JsonRpcProvider,
   userOpHash: string,
-  timeout = 60000,
+  timeout = 1200000,
   interval = 5000
 ): Promise<UserOperationReceipt> {
   return new Promise((resolve, reject) => {
