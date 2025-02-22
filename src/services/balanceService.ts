@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 
 import { IToken } from '../models/tokenModel';
+import { getERC20ABI } from './web3/abiService';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenAddress } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
@@ -32,13 +33,13 @@ async function getContractBalance(
   address: string
 ): Promise<string> {
   try {
-    const erc20Contract = new ethers.Contract(
-      contractAddress,
-      ['function balanceOf(address owner) view returns (uint256)'],
-      signer
-    );
+    const ERC20ABI: ethers.ContractInterface = await getERC20ABI();
+
+    const erc20Contract = new ethers.Contract(contractAddress, ERC20ABI, signer);
+
     const balance = await erc20Contract.balanceOf(address);
-    return ethers.utils.formatUnits(balance, 18);
+    const decimals = await erc20Contract.decimals();
+    return ethers.utils.formatUnits(balance, decimals);
   } catch (error) {
     Logger.error(
       'getContractBalance',
@@ -221,12 +222,13 @@ export async function verifyWalletBalance(
   amountToCheck: string
 ): Promise<WalletBalanceInfo> {
   const symbol: string = await tokenContract.symbol();
+  const decimals = await tokenContract.decimals();
+
   Logger.log(
     'verifyWalletBalance',
     `Checking balance for ${walletAddress} and token ${tokenContract.address}, to spend: ${amountToCheck} ${symbol}`
   );
   const walletBalance = await tokenContract.balanceOf(walletAddress);
-  const decimals = await tokenContract.decimals();
   const amountToCheckFormatted = ethers.utils.parseUnits(amountToCheck, decimals);
   const walletBalanceFormatted = ethers.utils.formatEther(walletBalance);
 
@@ -284,6 +286,7 @@ export async function verifyWalletBalanceByTokenSymbol(
   const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
   const tokenContractAddress = getTokenAddress(blockchainConfig, blockchainTokens, tokenSymbol);
   const tokenContract: ethers.Contract = await setupERC20(tokenContractAddress, backendSigner);
+
   return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
 }
 
