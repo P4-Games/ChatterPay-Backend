@@ -72,13 +72,26 @@ export const PORT = Number(envPort) || 3000;
 export const MONGO_URI: string = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
 export const DEFAULT_CHAIN_ID = Number(defaultChainId);
 
-export const GCP_ABIs = {
+interface ABIs {
+  [key: string]: string;
+}
+
+export const GCP_ABIs: ABIs = {
   ChatterPay: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPay.json`,
   ChatterPayWallet: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWallet.json`,
   ChatterPayWalletFactory: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletFactory.json`,
   ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayNFT.json`,
   EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/EntryPoint.json`,
   ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.json`
+};
+
+export const LOCAL_ABIs: ABIs = {
+  ChatterPay: `Chatterpay.sol/ChatterPay.json`,
+  ChatterPayWallet: `ChatterPayWallet.sol/ChatterPayWallet.json`,
+  ChatterPayWalletFactory: `ChatterPayWalletFactory.sol/ChatterPayWalletFactory.json`,
+  ChatterPayNFT: `ChatterPayNFT.sol/ChatterPayNFT.json`,
+  EntryPoint: `EntryPoint.sol/EntryPoint.json`,
+  ERC20: `ERC20.sol/ERC20.json`
 };
 
 export const ABIS_READ_FROM = abisReadFrom.toLowerCase();
