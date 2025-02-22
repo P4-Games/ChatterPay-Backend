@@ -118,7 +118,7 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
   : 'error';
 
 export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];
-export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'en';
+export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'es';
 
 export const MAX_FEE_PER_GAS: string = maxFeeperGas;
 export const MAX_PRIORITY_FEE_PER_GAS: string = maxPriorityFeePerGas;
