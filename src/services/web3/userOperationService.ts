@@ -85,26 +85,31 @@ export async function createTransferCallData(
     throw error;
   }
 
-  const callData = chatterPayContract.interface.encodeFunctionData('executeTokenTransfer', [
-    erc20Contract.address,
-    to,
-    amount_bn
-  ]);
-  
-  /*
-    The following code is an example of how to encode a different function call.
-    It must work if validated by the paymaster.
+  try {
+    Logger.log(
+      'createTransferCallData',
+      '*** [ executeTokenTransfer ] *** ',
+      erc20Contract.address,
+      to,
+      amount_bn
+    );
 
-    const callData = chatterPayContract.interface.encodeFunctionData('setTokenWhitelistAndPriceFeed', [
-      "0xe6B817E31421929403040c3e42A6a5C5D2958b4A",
-      true,
-      "0x80EDee6f667eCc9f63a0a6f55578F870651f06A4"
-    ]);
-  */
+    const functionSignature = 'executeTokenTransfer(address,address,uint256)';
+    const functionSelector = ethers.utils
+      .keccak256(ethers.utils.toUtf8Bytes(functionSignature))
+      .substring(0, 10);
+    const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+      ['address', 'address', 'uint256'],
+      [erc20Contract.address, to, amount_bn]
+    );
+    const callData = functionSelector + encodedParameters.slice(2);
+    Logger.log('createTransferCallData', 'Transfer Call Data:', callData);
 
-  Logger.log('createTransferCallData', 'Transfer Call Data:', callData);
-
-  return callData;
+    return callData;
+  } catch (error) {
+    Logger.error('createTransferCallData', 'encodeFunctionData error', error);
+    throw error;
+  }
 }
 
 /**
@@ -117,7 +122,6 @@ export async function createTransferCallData(
  * @returns {Promise<PackedUserOperation>} The user operation with the generated signature.
  * @throws {Error} If the signature verification fails.
  */
-
 export async function signUserOperation(
   userOperation: PackedUserOperation,
   entryPointAddress: string,
