@@ -86,7 +86,7 @@ export const GCP_ABIs: ABIs = {
 };
 
 export const LOCAL_ABIs: ABIs = {
-  ChatterPay: `Chatterpay.sol/ChatterPay.json`,
+  ChatterPay: `ChatterPay.sol/ChatterPay.json`,
   ChatterPayWalletProxy: `ChatterPayWalletProxy.sol/ChatterPayWalletProxy.json`,
   ChatterPayWalletFactory: `ChatterPayWalletFactory.sol/ChatterPayWalletFactory.json`,
   ChatterPayNFT: `ChatterPayNFT.sol/ChatterPayNFT.json`,
