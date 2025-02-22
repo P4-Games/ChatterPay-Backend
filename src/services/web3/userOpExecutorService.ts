@@ -1,12 +1,6 @@
 import { ethers } from 'ethers';
-import { FastifyInstance } from 'fastify';
 
-import { Logger } from '../../helpers/loggerHelper';
-import { getEntryPointABI } from '../gcp/gcpService';
-import { addPaymasterData } from './paymasterService';
-import { sendUserOperationToBundler } from './bundlerService';
-import { signUserOperation, createGenericUserOperation } from './userOperationService';
-import { UserOperationReceipt, UserOperationReceiptData } from '../../types/userOperationType';
+import { UserOperationReceipt } from '../../types/userOperationType';
 
 declare module 'fastify' {
   interface FastifyInstance {
