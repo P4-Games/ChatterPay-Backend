@@ -196,13 +196,14 @@ async function mintToken(
   amount: string,
   nonce: number
 ): Promise<MintResult> {
-  const erc20: ethers.Contract = new ethers.Contract(
+  const erc20Contract: ethers.Contract = new ethers.Contract(
     tokenAddress,
-    ['function mint(address to, uint256 amount)'],
+    ['function mint(address to, uint256 amount)', 'function decimals() view returns (uint8)'],
     signer
   );
 
-  const amountBN: ethers.BigNumber = ethers.utils.parseUnits(amount, 18);
+  const decimals = await erc20Contract.decimals();
+  const amountBN: ethers.BigNumber = ethers.utils.parseUnits(amount, decimals);
   const gasLimit: number = 5000000; // Set a reasonable gas limit.
 
   // Estimate gas price.
@@ -211,7 +212,7 @@ async function mintToken(
   // Increase gas price by 20% to ensure the transaction goes through.
   const adjustedGasPrice: ethers.BigNumber = gasPrice.mul(120).div(100);
 
-  const tx: ethers.ContractTransaction = await erc20.mint(recipientAddress, amountBN, {
+  const tx: ethers.ContractTransaction = await erc20Contract.mint(recipientAddress, amountBN, {
     gasLimit,
     nonce,
     gasPrice: adjustedGasPrice

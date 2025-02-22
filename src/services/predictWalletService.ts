@@ -6,7 +6,7 @@ import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchainModel';
 import { getDynamicGas } from '../helpers/paymasterHelper';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
-import { getChatterPayWalletFactoryABI } from './gcp/gcpService';
+import { getChatterPayWalletFactoryABI } from './web3/abiService';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';

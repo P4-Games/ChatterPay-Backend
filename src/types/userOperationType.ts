@@ -2,29 +2,35 @@ import { BigNumber } from 'ethers';
 
 /**
  * Represents a packed user operation for Ethereum transactions.
+ *
+ * sender: The account making the operation.
+ * nonce: Anti-replay parameter (see �Semi-abstracted Nonce Support�).
+ * initCode: The initCode of the account, needed only if the account is not
+ * yet on-chain and needs to be created.
+ * callData: The data to pass to the sender during the main execution call.
+ * callGasLimit: The amount of gas allocated for the main execution call.
+ * verificationGasLimit: The amount of gas allocated for the verification step.
+ * preVerificationGas: The gas paid to compensate the bundler for
+ * pre-verification execution and calldata.
+ * maxFeePerGas: Maximum fee per gas (similar to EIP-1559 max_fee_per_gas).
+ * maxPriorityFeePerGas: Maximum priority fee per gas (similar to
+ * EIP-1559 max_priority_fee_per_gas).
+ * paymasterAndData: Address of paymaster sponsoring the transaction, followed
+ * by extra data sent to the paymaster (empty for self-sponsored transactions).
+ * signature: Data passed into the account along with the nonce during the
+ * verification step.
  */
 export interface PackedUserOperation {
-  /** The address of the sender */
   sender: string;
-  /** The nonce of the operation */
   nonce: BigNumber;
-  /** The initialization code for the operation */
   initCode: string;
-  /** The call data for the operation */
   callData: string;
-  /** The gas limit for the call */
   callGasLimit: BigNumber;
-  /** The gas limit for verification */
   verificationGasLimit: BigNumber;
-  /** The gas used before the main execution */
   preVerificationGas: BigNumber;
-  /** The maximum fee per gas unit the user is willing to pay */
   maxFeePerGas: BigNumber;
-  /** The maximum priority fee per gas unit */
   maxPriorityFeePerGas: BigNumber;
-  /** The paymaster data, if any */
   paymasterAndData: string;
-  /** The signature of the operation */
   signature: string;
 }
 

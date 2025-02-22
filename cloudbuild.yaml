@@ -31,6 +31,7 @@ steps:
       - DEFAULT_CHAIN_ID=${_DEFAULT_CHAIN_ID}
       - ABIS_VERSION=${_ABIS_VERSION}
       - CORS_ORIGINS_CHECK_POSTMAN=${_CORS_ORIGINS_CHECK_POSTMAN}
+      - ABIS_READ_FROM=${_ABIS_READ_FROM}
 
     secretEnv: [
       'CHATIZALO_TOKEN', 
@@ -118,6 +119,8 @@ steps:
       'ABIS_VERSION=${_ABIS_VERSION}',
       '--build-arg',
       'CORS_ORIGINS_CHECK_POSTMAN=${_CORS_ORIGINS_CHECK_POSTMAN}',
+      '--build-arg',
+      'ABIS_READ_FROM=${_ABIS_READ_FROM}',
       '.'
     ]
     secretEnv: [

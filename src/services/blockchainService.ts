@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 
 import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
-import { getEntryPointABI } from './gcp/gcpService';
+import { getEntryPointABI } from './web3/abiService';
 import { IBlockchain } from '../models/blockchainModel';
 import { setupContracts } from './web3/contractSetupService';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
