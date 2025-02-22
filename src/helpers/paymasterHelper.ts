@@ -1,18 +1,18 @@
-import { utils, ethers, Signer, Wallet, Contract, BigNumber } from 'ethers';
+import { ethers, Signer, Wallet, Contract, BigNumber } from 'ethers';
 
 import { Logger } from './loggerHelper';
 
 /**
  * Creates the paymasterAndData field with required signature and expiration
  * @param paymasterAddress - Address of the paymaster contract
- * @param proxyAddress - Address of the sender (proxy)
+ * @param userProxyAddress - Address of the sender (proxy)
  * @param backendSigner - Signer with the backend's private key
  * @param validityDurationSeconds - How long the signature should be valid (in seconds)
  * @returns The encoded paymasterAndData bytes
  */
 export async function createPaymasterAndData(
   paymasterAddress: string,
-  proxyAddress: string,
+  userProxyAddress: string,
   backendSigner: Signer,
   entryPointAddress: string,
   callData: string,
@@ -26,7 +26,7 @@ export async function createPaymasterAndData(
   const messageHash = ethers.utils.solidityKeccak256(
     ['address', 'uint64', 'uint256', 'address', 'bytes'],
     [
-      proxyAddress,
+      userProxyAddress,
       expirationTimestamp,
       chainId || (await backendSigner.getChainId()),
       entryPointAddress,
@@ -36,14 +36,20 @@ export async function createPaymasterAndData(
 
   // 2. Sign WITHOUT Ethereum prefix (use signDigest)
   const walletSigner = backendSigner as unknown as Wallet;
-  const signature = walletSigner._signingKey().signDigest(
-    ethers.utils.arrayify(messageHash)
-  );
+  const signature = walletSigner._signingKey().signDigest(ethers.utils.arrayify(messageHash));
 
   // 3. Convert expiration to bytes8
-  const expirationBytes = ethers.utils.hexZeroPad(
-    ethers.utils.hexlify(expirationTimestamp),
-    8
+  const expirationBytes = ethers.utils.hexZeroPad(ethers.utils.hexlify(expirationTimestamp), 8);
+
+  Logger.log(
+    'createPaymasterAndData',
+    `
+    paymasterAddress: ${paymasterAddress},
+    messageHash: ${messageHash}, 
+    walletSigner: ${walletSigner.address},
+    signature: ${signature.toString()},
+    join-signature: ${ethers.utils.joinSignature(signature)}
+    expirationBytes: ${expirationBytes}`
   );
 
   // 4. Concatenate components
