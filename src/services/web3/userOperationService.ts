@@ -1,7 +1,7 @@
 import { ethers, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { getUserOpHash } from '../../helpers/userOperationHekper';
+import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation } from '../../types/userOperationType';
 import {
   CALL_GAS_LIMIT,
@@ -65,21 +65,24 @@ export async function createGenericUserOperation(
  * @returns {string} The encoded call data for the token transfer.
  * @throws {Error} If the 'to' address is invalid or the amount cannot be parsed.
  */
-export function createTransferCallData(
+export async function createTransferCallData(
   chatterPayContract: ethers.Contract,
   erc20Contract: ethers.Contract,
   to: string,
   amount: string
-): string {
+): Promise<string> {
   if (!ethers.utils.isAddress(to)) {
     throw new Error("Invalid 'to' address");
   }
 
   let amount_bn;
   try {
-    amount_bn = ethers.utils.parseUnits(amount, 18);
+    const decimals = await erc20Contract.decimals();
+    Logger.log('createTransferCallData', 'contract decimals', decimals);
+    amount_bn = ethers.utils.parseUnits(amount, decimals);
   } catch (error) {
-    throw new Error('Invalid amount');
+    Logger.error('createTransferCallData', `amount ${amount} error`, error);
+    throw error;
   }
 
   const callData = chatterPayContract.interface.encodeFunctionData('executeTokenTransfer', [
@@ -110,7 +113,7 @@ export function createTransferCallData(
  *
  * @param {PackedUserOperation} userOperation - The user operation to be signed.
  * @param {string} entryPointAddress - The address of the entry point contract.
- * @param {ethers.Wallet} signer - The wallet used to sign the user operation.
+ * @param {ethers.Wallet} signer - The User wallet used to sign the user operation.
  * @returns {Promise<PackedUserOperation>} The user operation with the generated signature.
  * @throws {Error} If the signature verification fails.
  */
