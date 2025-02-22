@@ -302,15 +302,10 @@ export async function verifyWalletBalanceInRpc(
   amountToCheck: string
 ): Promise<WalletBalanceInfo> {
   const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-  const erc20Abi = [
-    'function transfer(address to, uint256 amount) returns (bool)',
-    'function balanceOf(address owner) view returns (uint256)',
-    'function approve(address spender, uint256 amount) returns (bool)',
-    'function allowance(address owner, address spender) view returns (uint256)',
-    'function decimals() view returns (uint8)',
-    'function symbol() view returns (string)'
-  ];
 
-  const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, provider);
+  const ERC20ABI = await getERC20ABI();
+
+  const tokenContract = new ethers.Contract(tokenAddress, ERC20ABI, provider);
+
   return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
 }
