@@ -63,5 +63,6 @@ BLACKLIST_IPS=''
 # Network
 DEFAULT_CHAIN_ID=421614
 
-# Contacts
+# Contracts
 ABIS_VERSION=v1.0.0 | v1.0.1 | v2.0.0
+ABIS_READ_FROM='local' | 'gcp'
