@@ -43,7 +43,8 @@ const {
   FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: fastifyRefreshNetworksIntervalMs = 86400000,
   FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000,
   ABIS_VERSION = 'v1.0.0',
-  CORS_ORIGINS_CHECK_POSTMAN: corsOriginsCheckPostman = 'false'
+  CORS_ORIGINS_CHECK_POSTMAN: corsOriginsCheckPostman = 'false',
+  ABIS_READ_FROM: abisReadFrom = 'local'
 } = process.env;
 
 export {
@@ -80,6 +81,7 @@ export const GCP_ABIs = {
   ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.json`
 };
 
+export const ABIS_READ_FROM = abisReadFrom.toLowerCase();
 export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
 export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' || true;
 export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
