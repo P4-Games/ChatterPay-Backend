@@ -12,7 +12,8 @@ import { Logger } from '../../helpers/loggerHelper';
 export const getGcpFile = async (urlFile: string): Promise<unknown> => {
   try {
     const response = await axios.get(urlFile);
-    return response.data;
+    const { abi } = response.data;
+    return abi;
   } catch (error) {
     Logger.error('getGcpFile', urlFile, (error as Error).message);
     throw new Error('Error obteniendo archivo de GCP');
