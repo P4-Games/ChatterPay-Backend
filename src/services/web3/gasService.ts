@@ -113,7 +113,7 @@ export async function getPaymasterAndData(
   const dummySignature = await generateDummySignature(userOp, config.entryPoint, chainId);
 
   const payload = {
-    id: 1,
+    id: `ChatterPay.${Date.now().toLocaleString()}`,
     jsonrpc: '2.0',
     method: 'alchemy_requestGasAndPaymasterAndData',
     params: [
