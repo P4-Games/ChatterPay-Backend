@@ -130,29 +130,26 @@ export async function signUserOperation(
   const { provider } = signer;
   const { chainId } = await provider!.getNetwork();
 
-  // 1. Generate userOpHash (correct format for EntryPoint)
   const userOpHash = getUserOpHash(userOperation, entryPointAddress, chainId);
 
-  // 2. Sign the hash WITHOUT Ethereum prefix
-  const { _signingKey } = signer;
-  
-  const signature = _signingKey().signDigest(
-    ethers.utils.arrayify(userOpHash)
+  const ethSignedMessageHash = ethers.utils.keccak256(
+    ethers.utils.solidityPack(
+      ['string', 'bytes32'],
+      ['\x19Ethereum Signed Message:\n32', userOpHash]
+    )
   );
 
-  // 3. Verify using EntryPoint's method (without prefix)
-  const recoveredAddress = ethers.utils.recoverAddress(
-    userOpHash, // Original hash, no prefix
-    signature
-  );
+  const { _signingKey } = signer;
+  const signature = _signingKey().signDigest(ethers.utils.arrayify(ethSignedMessageHash));
+  const recoveredAddress = ethers.utils.recoverAddress(ethSignedMessageHash, signature);
 
   const { getAddress } = ethers.utils;
   if (getAddress(recoveredAddress) !== getAddress(await signer.getAddress())) {
     throw new Error('Invalid signature');
   }
 
-  return { 
+  return {
     ...userOperation,
-    signature: ethers.utils.joinSignature(signature) 
+    signature: ethers.utils.joinSignature(signature)
   };
 }
