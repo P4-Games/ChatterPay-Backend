@@ -76,7 +76,8 @@ export const getChatterPayNFTABI = async (): Promise<ABI> => getFile('ChatterPay
  *
  * @returns {Promise<ABI>} The ChatterPay Wallet ABI object.
  */
-export const getChatterPayWalletABI = async (): Promise<ABI> => getFile('ChatterPayWallet');
+export const getChatterPayWalletProxyABI = async (): Promise<ABI> =>
+  getFile('ChatterPayWalletProxy');
 
 /**
  * Retrieves the ChatterPay Wallet Factory ABI.

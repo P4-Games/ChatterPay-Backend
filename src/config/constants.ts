@@ -78,7 +78,7 @@ interface ABIs {
 
 export const GCP_ABIs: ABIs = {
   ChatterPay: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPay.json`,
-  ChatterPayWallet: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWallet.json`,
+  ChatterPayWalletProxy: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletProxy.json`,
   ChatterPayWalletFactory: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletFactory.json`,
   ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayNFT.json`,
   EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/EntryPoint.json`,
@@ -87,7 +87,7 @@ export const GCP_ABIs: ABIs = {
 
 export const LOCAL_ABIs: ABIs = {
   ChatterPay: `Chatterpay.sol/ChatterPay.json`,
-  ChatterPayWallet: `ChatterPayWallet.sol/ChatterPayWallet.json`,
+  ChatterPayWalletProxy: `ChatterPayWalletProxy.sol/ChatterPayWalletProxy.json`,
   ChatterPayWalletFactory: `ChatterPayWalletFactory.sol/ChatterPayWalletFactory.json`,
   ChatterPayNFT: `ChatterPayNFT.sol/ChatterPayNFT.json`,
   EntryPoint: `EntryPoint.sol/EntryPoint.json`,
