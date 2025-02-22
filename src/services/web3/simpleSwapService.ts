@@ -12,13 +12,14 @@ import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../../ty
 /**
  * Creates callData for token approval
  */
-function createApproveCallData(
+async function createApproveCallData(
   chatterPayContract: ethers.Contract,
   tokenContract: ethers.Contract,
   spender: string,
   amount: string
-): string {
-  const amount_bn = ethers.utils.parseUnits(amount, 18);
+): Promise<string> {
+  const fromTokenDecimals = await tokenContract.decimals();
+  const amount_bn = ethers.utils.parseUnits(amount, fromTokenDecimals);
   const approveEncode = tokenContract.interface.encodeFunctionData('approve', [spender, amount_bn]);
   Logger.log('createApproveCallData', 'Approve Encode:', approveEncode);
 
@@ -41,7 +42,7 @@ function createSwapCallData(
   isWETHtoUSDT: boolean,
   amount: string
 ): string {
-  const amount_bn = ethers.utils.parseUnits(amount, 18);
+  const amount_bn = ethers.utils.parseUnits(amount, 18); // TO-FIX (use decimals() from tokenContract!)
   const swapEncode = swapContract.interface.encodeFunctionData(
     isWETHtoUSDT ? 'swapWETHforUSDT' : 'swapUSDTforWETH',
     [amount_bn]
@@ -153,7 +154,7 @@ export async function executeSwap(
     // 1. Execute approve operation
     Logger.log('executeSwap', 'Swap: Executing approve operation.');
     const erc20 = await setupERC20(tokenAddresses.tokenAddressInput, setupContractsResult.signer);
-    const approveCallData = createApproveCallData(
+    const approveCallData = await createApproveCallData(
       setupContractsResult.chatterPay,
       erc20,
       networkConfig.contracts.simpleSwapAddress,
