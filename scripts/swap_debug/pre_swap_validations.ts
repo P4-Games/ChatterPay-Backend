@@ -292,8 +292,8 @@ async function main() {
         const RECIPIENT = process.env.RECIPIENT ?? '0x1c875fD25BEb9b72011864831a95eeb67ae8f06d';
         
         // RPC configuration
-        const { INFURA_API_KEY } = process.env;
-        const rpcUrl = `${process.env.RPC_URL ?? "https://arbitrum-sepolia.infura.io/v3/"}${INFURA_API_KEY}`;
+        const { INFURA_API_KEY, RPC_URL } = process.env;
+        const rpcUrl = `${RPC_URL ?? "https://arbitrum-sepolia.infura.io/v3/"}${INFURA_API_KEY}`;
 
         // Configure provider
         const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
