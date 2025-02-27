@@ -1,6 +1,7 @@
-/* eslint-disable no-console */
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
+
+import { Logger } from '../../src/helpers/loggerHelper';
 
 // Load environment variables
 dotenv.config();
@@ -18,13 +19,13 @@ async function executeDirectSwap(
     amount: string,
     recipient: string
 ): Promise<boolean> {
-    console.log('=====================================================');
-    console.log('DIRECT SWAP EXECUTION (BYPASSING USEROP/ENTRYPOINT)');
-    console.log('=====================================================');
+    Logger.info('executeDirectSwap', '=====================================================');
+    Logger.info('executeDirectSwap', 'DIRECT SWAP EXECUTION (BYPASSING USEROP/ENTRYPOINT)');
+    Logger.info('executeDirectSwap', '=====================================================');
     
     try {
         // 1. Load contracts and ABIs
-        console.log('1. Loading contracts...');
+        Logger.info('executeDirectSwap', '1. Loading contracts...');
         
         const chatterPayABI = [
             "function approveToken(address token, uint256 amount) external",
@@ -46,7 +47,7 @@ async function executeDirectSwap(
         }
         
         const signer = new ethers.Wallet(process.env.SIGNING_KEY, provider);
-        console.log(`Using signer address: ${signer.address}`);
+        Logger.info('executeDirectSwap', `Using signer address: ${signer.address}`);
         
         // Initialize contracts
         const proxy = new ethers.Contract(proxyAddress, chatterPayABI, provider);
@@ -54,23 +55,23 @@ async function executeDirectSwap(
         const tokenInContract = new ethers.Contract(tokenIn, erc20ABI, provider);
         const tokenOutContract = new ethers.Contract(tokenOut, erc20ABI, provider);
         
-        console.log(`ChatterPay Implementation: ${chatterPayAddress}`);
-        console.log(`Proxy: ${proxyAddress}`);
-        console.log(`TokenIn: ${tokenIn}`);
-        console.log(`TokenOut: ${tokenOut}`);
+        Logger.info('executeDirectSwap', `ChatterPay Implementation: ${chatterPayAddress}`);
+        Logger.info('executeDirectSwap', `Proxy: ${proxyAddress}`);
+        Logger.info('executeDirectSwap', `TokenIn: ${tokenIn}`);
+        Logger.info('executeDirectSwap', `TokenOut: ${tokenOut}`);
         
         // 2. Verify the owner
-        console.log('\n2. Verifying owner permissions...');
+        Logger.info('executeDirectSwap', '\n2. Verifying owner permissions...');
         const proxyOwner = await proxy.owner();
         
         if (proxyOwner.toLowerCase() !== signer.address.toLowerCase()) {
-            console.error(`ERROR: Signer (${signer.address}) is not the owner of the proxy (${proxyOwner})`);
+            Logger.error('executeDirectSwap', `ERROR: Signer (${signer.address}) is not the owner of the proxy (${proxyOwner})`);
             return false;
         }
-        console.log('Signer is the owner of the proxy ✅');
+        Logger.info('executeDirectSwap', 'Signer is the owner of the proxy ✅');
         
         // 3. Get token information
-        console.log('\n3. Getting token information...');
+        Logger.info('executeDirectSwap', '\n3. Getting token information...');
         
         const [tokenInSymbol, tokenInDecimals, tokenOutSymbol, tokenOutDecimals] = await Promise.all([
             tokenInContract.symbol(),
@@ -79,75 +80,90 @@ async function executeDirectSwap(
             tokenOutContract.decimals()
         ]);
         
-        console.log(`TokenIn: ${tokenInSymbol} (${tokenInDecimals} decimals)`);
-        console.log(`TokenOut: ${tokenOutSymbol} (${tokenOutDecimals} decimals)`);
+        Logger.info('executeDirectSwap', `TokenIn: ${tokenInSymbol} (${tokenInDecimals} decimals)`);
+        Logger.info('executeDirectSwap', `TokenOut: ${tokenOutSymbol} (${tokenOutDecimals} decimals)`);
         
         // 4. Check initial balances
-        console.log('\n4. Checking initial balances...');
+        Logger.info('executeDirectSwap', '\n4. Checking initial balances...');
         
         const amountInBN = ethers.utils.parseUnits(amount, tokenInDecimals);
         const initialInBalance = await tokenInContract.balanceOf(proxyAddress);
         const initialOutBalance = await tokenOutContract.balanceOf(recipient);
         
-        console.log(`Initial ${tokenInSymbol} balance: ${ethers.utils.formatUnits(initialInBalance, tokenInDecimals)}`);
-        console.log(`Initial ${tokenOutSymbol} balance: ${ethers.utils.formatUnits(initialOutBalance, tokenOutDecimals)}`);
+        Logger.info('executeDirectSwap', `Initial ${tokenInSymbol} balance: ${ethers.utils.formatUnits(initialInBalance, tokenInDecimals)}`);
+        Logger.info('executeDirectSwap', `Initial ${tokenOutSymbol} balance: ${ethers.utils.formatUnits(initialOutBalance, tokenOutDecimals)}`);
         
         if (initialInBalance.lt(amountInBN)) {
-            console.error(`ERROR: Insufficient balance. Need at least ${ethers.utils.formatUnits(amountInBN, tokenInDecimals)} ${tokenInSymbol}`);
+            Logger.error('executeDirectSwap', `ERROR: Insufficient balance. Need at least ${ethers.utils.formatUnits(amountInBN, tokenInDecimals)} ${tokenInSymbol}`);
             return false;
         }
         
         // 5. Check and approve tokens if needed
-        console.log('\n5. Checking and approving tokens...');
+        Logger.info('executeDirectSwap', '\n5. Checking and approving tokens...');
         
         const router = await proxy.getSwapRouter();
-        console.log(`Router address: ${router}`);
+        Logger.info('executeDirectSwap', `Router address: ${router}`);
         
-        /* const currentAllowance = await tokenInContract.allowance(proxyAddress, router);
-        console.log(`Current allowance: ${ethers.utils.formatUnits(currentAllowance, tokenInDecimals)} ${tokenInSymbol}`);
-        
-        // Approve tokens if needed
-        if (currentAllowance.lt(amountInBN)) {
-            console.log('Insufficient allowance, executing approval...');
+        try {
+            // Get gas settings from environment or use defaults
+            const gasLimit = process.env.GAS_LIMIT ? parseInt(process.env.GAS_LIMIT, 10) : undefined;
+            const gasPrice = process.env.GAS_PRICE ? ethers.utils.parseUnits(process.env.GAS_PRICE, 'gwei') : undefined;
             
-            try {
-                const approvalTx = await proxyWithSigner.approveToken(
-                    tokenIn,
-                    ethers.constants.MaxUint256 // Approve maximum to avoid future issues
-                );
-                
-                console.log(`Approval transaction sent: ${approvalTx.hash}`);
-                console.log('Waiting for confirmation...');
-                
-                await approvalTx.wait();
-                console.log('Approval confirmed ✅');
-                
-                // Verify the new allowance
-                const newAllowance = await tokenInContract.allowance(proxyAddress, router);
-                console.log(`New allowance: ${ethers.utils.formatUnits(newAllowance, tokenInDecimals)} ${tokenInSymbol}`);
-                
-                if (newAllowance.lt(amountInBN)) {
-                    console.error('ERROR: Approval was not effective ❌');
-                    return false;
-                }
-            } catch (error) {
-                console.error('ERROR approving tokens:', error);
-                return false;
-            }
-        } else {
-            console.log('Allowance is sufficient, skipping approval ✅');
+            const txOptions: {gasLimit?: number, gasPrice?: ethers.BigNumber} = {};
+            if (gasLimit) txOptions.gasLimit = gasLimit;
+            if (gasPrice) txOptions.gasPrice = gasPrice;
+            
+            const approvalTx = await proxyWithSigner.approveToken(
+                tokenIn,
+                ethers.constants.MaxUint256, // Approve maximum to avoid future issues
+                txOptions
+            );
+            
+            Logger.info('executeDirectSwap', `Approval transaction sent: ${approvalTx.hash}`);
+            Logger.info('executeDirectSwap', 'Waiting for confirmation...');
+            
+            const approvalReceipt = await approvalTx.wait();
+            Logger.info('executeDirectSwap', `Approval confirmed ✅ (block ${approvalReceipt.blockNumber}, gas used: ${approvalReceipt.gasUsed.toString()})`);
+        } catch (error) {
+            Logger.error('executeDirectSwap', 'ERROR approving tokens:', error);
+            return false;
         }
-        */
+        
         // 6. Calculate amountOutMin with high slippage for testing
-        console.log('\n6. Calculating amountOutMin with high slippage...');
+        Logger.info('executeDirectSwap', '\n6. Calculating amountOutMin with high slippage...');
+        
+        // Get slippage from environment or use default
+        const slippagePercent = parseInt(process.env.SLIPPAGE_PERCENT || '99', 10);
         
         // Use a very low value to ensure swap works in testing
-        const amountOutMin = ethers.BigNumber.from(1); // Practically 0
+        // If ZERO_MINOUT is set to true, use 1 as the minimum out
+        let amountOutMin;
+        if (process.env.ZERO_MINOUT === 'true') {
+            amountOutMin = ethers.BigNumber.from(1); // Practically 0
+            Logger.info('executeDirectSwap', 'Using minimum output of 1 (ZERO_MINOUT=true)');
+        } else {
+            // Estimate minimal output with slippage
+            const estimatedOut = amountInBN.mul(100 - slippagePercent).div(100);
+            amountOutMin = estimatedOut;
+            Logger.info('executeDirectSwap', `Using estimated output with ${slippagePercent}% slippage`);
+        }
         
-        console.log(`AmountOutMin: ${amountOutMin.toString()} (almost 100% slippage for testing)`);
+        Logger.info('executeDirectSwap', `AmountOutMin: ${amountOutMin.toString()}`);
         
         // 7. Execute the swap
-        console.log('\n7. Executing swap...');
+        Logger.info('executeDirectSwap', '\n7. Executing swap...');
+        
+        // Get gas settings from environment or use defaults
+        const gasLimit = process.env.GAS_LIMIT ? parseInt(process.env.GAS_LIMIT, 10) : undefined;
+        const gasPrice = process.env.GAS_PRICE ? ethers.utils.parseUnits(process.env.GAS_PRICE, 'gwei') : undefined;
+        
+        const txOptions: {gasLimit?: number, gasPrice?: ethers.BigNumber} = {};
+        if (gasLimit) txOptions.gasLimit = gasLimit;
+        if (gasPrice) txOptions.gasPrice = gasPrice;
+        
+        if (Object.keys(txOptions).length > 0) {
+            Logger.debug('executeDirectSwap', 'Using custom gas settings:', txOptions);
+        }
         
         try {
             const swapTx = await proxyWithSigner.executeSwap(
@@ -155,42 +171,43 @@ async function executeDirectSwap(
                 tokenOut,
                 amountInBN,
                 amountOutMin,
-                recipient
+                recipient,
+                txOptions
             );
             
-            console.log(`Swap transaction sent: ${swapTx.hash}`);
-            console.log('Waiting for confirmation...');
+            Logger.info('executeDirectSwap', `Swap transaction sent: ${swapTx.hash}`);
+            Logger.info('executeDirectSwap', 'Waiting for confirmation...');
             
-            await swapTx.wait();
-            console.log('Swap confirmed ✅');
+            const receipt = await swapTx.wait();
+            Logger.info('executeDirectSwap', `Swap confirmed ✅ (block ${receipt.blockNumber}, gas used: ${receipt.gasUsed.toString()})`);
             
             // Check final token balances
             const finalInBalance = await tokenInContract.balanceOf(proxyAddress);
             const finalOutBalance = await tokenOutContract.balanceOf(recipient);
             
-            console.log(`\nFinal ${tokenInSymbol} balance: ${ethers.utils.formatUnits(finalInBalance, tokenInDecimals)}`);
-            console.log(`Final ${tokenOutSymbol} balance: ${ethers.utils.formatUnits(finalOutBalance, tokenOutDecimals)}`);
+            Logger.info('executeDirectSwap', `\nFinal ${tokenInSymbol} balance: ${ethers.utils.formatUnits(finalInBalance, tokenInDecimals)}`);
+            Logger.info('executeDirectSwap', `Final ${tokenOutSymbol} balance: ${ethers.utils.formatUnits(finalOutBalance, tokenOutDecimals)}`);
             
             const inDiff = initialInBalance.sub(finalInBalance);
             const outDiff = finalOutBalance.sub(initialOutBalance);
             
-            console.log(`\n${tokenInSymbol} spent: ${ethers.utils.formatUnits(inDiff, tokenInDecimals)}`);
-            console.log(`${tokenOutSymbol} received: ${ethers.utils.formatUnits(outDiff, tokenOutDecimals)}`);
+            Logger.info('executeDirectSwap', `\n${tokenInSymbol} spent: ${ethers.utils.formatUnits(inDiff, tokenInDecimals)}`);
+            Logger.info('executeDirectSwap', `${tokenOutSymbol} received: ${ethers.utils.formatUnits(outDiff, tokenOutDecimals)}`);
             
             if (outDiff.gt(0)) {
-                console.log('\nSWAP EXECUTED SUCCESSFULLY ✅');
+                Logger.info('executeDirectSwap', '\nSWAP EXECUTED SUCCESSFULLY ✅');
                 return true;
             }
 
-            console.error('\nERROR: No tokens received ❌');
+            Logger.error('executeDirectSwap', '\nERROR: No tokens received ❌');
             return false;
         } catch (error) {
-            console.error('ERROR executing swap:', error);
-            console.error('Error details:', (error as Error).message);
+            Logger.error('executeDirectSwap', 'ERROR executing swap:', error);
+            Logger.error('executeDirectSwap', 'Error details:', (error as Error).message);
             return false;
         }
     } catch (error) {
-        console.error('Execution error:', error);
+        Logger.error('executeDirectSwap', 'Execution error:', error);
         return false;
     }
 }
@@ -198,9 +215,6 @@ async function executeDirectSwap(
 // Main function
 async function main() {
     try {
-        // Get environment variables or use defaults
-        const rpcUrl =  ('https://arbitrum-sepolia.infura.io/v3/INF_KEY').replace('INF_KEY', process.env.INFURA_API_KEY ?? '');
-        
         // Contract addresses
         const CHATTERPAY_ADDRESS = process.env.CHATTERPAY_ADDRESS || '0xBc5a2FE45C825BB091075664cae88914FB3f73f0';
         const PROXY_ADDRESS = process.env.PROXY_ADDRESS || '0x56b1f585c1a08dad9fcfe38ab2c8f8ee1620bdd4';
@@ -209,12 +223,16 @@ async function main() {
         const AMOUNT = process.env.AMOUNT || '0.001'; // Small amount for testing
         const RECIPIENT = process.env.RECIPIENT || PROXY_ADDRESS; // Default to proxy address
         
+        // RPC configuration
+        const { INFURA_API_KEY, RPC_URL } = process.env;
+        const rpcUrl = `${RPC_URL ?? "https://arbitrum-sepolia.infura.io/v3/"}${INFURA_API_KEY}`;
+        
         // Configure provider
-        console.log(`Connecting to ${rpcUrl}...`);
+        Logger.info('main', `Connecting to ${rpcUrl}...`);
         const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
         
         // Execute direct swap
-        console.log('Starting direct swap execution...');
+        Logger.info('main', 'Starting direct swap execution...');
         const result = await executeDirectSwap(
             provider,
             CHATTERPAY_ADDRESS,
@@ -225,11 +243,11 @@ async function main() {
             RECIPIENT
         );
         
-        console.log(`\nExecution ${result ? 'successful ✅' : 'failed ❌'}`);
+        Logger.info('main', `\nExecution ${result ? 'successful ✅' : 'failed ❌'}`);
         
         process.exit(result ? 0 : 1);
     } catch (error) {
-        console.error('Fatal error during execution:', error);
+        Logger.error('main', 'Fatal error during execution:', error);
         process.exit(1);
     }
 }
