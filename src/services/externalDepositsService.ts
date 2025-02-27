@@ -89,10 +89,7 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
  * Fetches and processes external deposits for users in the ecosystem.
  * @async
  */
-export async function fetchExternalDeposits(
-  networkName: string,
-  routerAddress: string
-) {
+export async function fetchExternalDeposits(networkName: string, routerAddress: string) {
   try {
     // Get the last processed block number
     const lastProcessedBlock = await LastProcessedBlock.findOne({

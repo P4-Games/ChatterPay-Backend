@@ -69,7 +69,7 @@ export {
   CHATIZALO_TOKEN,
   MANTECA_API_KEY,
   MANTECA_BASE_URL,
-  GCP_BUCKET_BASE_URL,
+  GCP_BUCKET_BASE_URL
 };
 
 export const IS_DEVELOPMENT = BUN_ENV.toLowerCase() === 'development';

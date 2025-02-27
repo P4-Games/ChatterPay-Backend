@@ -82,6 +82,7 @@
 - NFT: Mint Copy (/mint_existing) => ChatterPayNFT.mintCopy
 
 - Make Transaction (/make_transaction)
+
   - ChatterPayWalletFactory.computeProxyAddress
   - Chatterpay.execute
   - Chatterpay.balanceOf
