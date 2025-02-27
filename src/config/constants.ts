@@ -97,7 +97,8 @@ export const LOCAL_ABIs: ABIs = {
   ChatterPayWalletFactory: `ChatterPayWalletFactory.sol/ChatterPayWalletFactory.json`,
   ChatterPayNFT: `ChatterPayNFT.sol/ChatterPayNFT.json`,
   EntryPoint: `EntryPoint.sol/EntryPoint.json`,
-  ERC20: `ERC20.sol/ERC20.json`
+  ERC20: `ERC20.sol/ERC20.json`,
+  ChainlinkPriceFeed: `ChainlinkPriceFeed.json`
 };
 
 export const ABIS_READ_FROM = abisReadFrom.toLowerCase();

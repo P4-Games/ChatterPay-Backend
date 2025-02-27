@@ -5,7 +5,7 @@ import { addPaymasterData } from './paymasterService';
 import { IBlockchain } from '../../models/blockchainModel';
 import { sendUserOperationToBundler } from './bundlerService';
 import { waitForUserOperationReceipt } from './userOpExecutorService';
-import { getERC20ABI, getPriceFeedABI, getChatterpayABI } from '../gcp/gcpService';
+import { getERC20ABI, getPriceFeedABI, getChatterpayABI } from './abiService';
 import { signUserOperation, createGenericUserOperation } from './userOperationService';
 import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../../types/commonType';
 import { STABLE_TOKENS_ARRAY, SLIPPAGE_CONFIG_EXTRA, SLIPPAGE_CONFIG_STABLE, SLIPPAGE_CONFIG_DEFAULT } from '../../config/constants';
@@ -54,7 +54,7 @@ async function executeOperation(
 ): Promise<string> {
   Logger.info('executeOperation', `Starting operation execution for proxy: ${proxyAddress}`);
   Logger.debug('executeOperation', `Network config: ${JSON.stringify(networkConfig)}`);
-  
+
   // Get the current nonce for the proxy account
   const nonce = await entrypointContract.getNonce(proxyAddress, 0);
   Logger.info('executeOperation', `Current nonce for proxy ${proxyAddress}: ${nonce.toString()}`);
@@ -63,13 +63,16 @@ async function executeOperation(
   Logger.debug('executeOperation', 'Creating generic user operation');
   let userOperation = await createGenericUserOperation(callData, proxyAddress, nonce);
   Logger.debug('executeOperation', `Initial user operation: ${JSON.stringify(userOperation)}`);
-  
+
   // Add paymaster data using the backend signer
   Logger.debug('executeOperation', `Adding paymaster data with address: ${networkConfig.contracts.paymasterAddress}`);
   userOperation = await addPaymasterData(
     userOperation,
     networkConfig.contracts.paymasterAddress!,
-    backendSigner
+    backendSigner,
+    networkConfig.contracts.entryPoint,
+    callData,
+    networkConfig.chain_id
   );
   Logger.debug('executeOperation', `User operation with paymaster: ${JSON.stringify(userOperation)}`);
 
@@ -93,7 +96,7 @@ async function executeOperation(
 
   Logger.info('executeOperation', 'Waiting for operation receipt');
   const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
-  
+
   if (!receipt?.success) {
     Logger.error('executeOperation', `Operation failed. Receipt: ${JSON.stringify(receipt)}`);
     throw new Error(
@@ -117,7 +120,7 @@ function createSwapCallData(
   recipient: string
 ): string {
   Logger.debug('createSwapCallData', `Creating swap call data. TokenIn: ${tokenIn}, TokenOut: ${tokenOut}, AmountIn: ${amountIn.toString()}, AmountOutMin: ${amountOutMin.toString()}, Recipient: ${recipient}`);
-  
+
   const swapEncode = chatterPayContract.interface.encodeFunctionData('executeSwap', [
     tokenIn,
     tokenOut,
@@ -125,7 +128,7 @@ function createSwapCallData(
     amountOutMin,
     recipient
   ]);
-  
+
   Logger.debug('createSwapCallData', `Generated swap encode: ${swapEncode}`);
   return swapEncode;
 }
@@ -139,10 +142,10 @@ async function determineSlippage(
   tokenOut: string
 ): Promise<number> {
   Logger.debug('determineSlippage', `Determining slippage for token ${tokenSymbol}`);
-  
+
   const customSlippage = await chatterPayContract.getCustomSlippage(tokenOut);
   Logger.debug('determineSlippage', `Custom slippage: ${customSlippage.toString()}`);
-  
+
   if (customSlippage.gt(0)) {
     Logger.info('determineSlippage', `Using custom slippage: ${customSlippage.toString()}`);
     return customSlippage.toNumber();
@@ -151,7 +154,7 @@ async function determineSlippage(
   if (TOKEN_LISTS.STABLE.includes(tokenSymbol)) {
     Logger.info('determineSlippage', `Using stable token slippage (${SLIPPAGE_CONFIG.STABLE}) for ${tokenSymbol}`);
     return SLIPPAGE_CONFIG.STABLE;
-  } 
+  }
 
   Logger.info('determineSlippage', `Using default slippage (${SLIPPAGE_CONFIG.DEFAULT}) for ${tokenSymbol}`);
   return SLIPPAGE_CONFIG.DEFAULT;
@@ -170,16 +173,16 @@ export async function executeSwap(
 ): Promise<ExecuteSwapResult> {
   Logger.info('executeSwap', `Starting swap execution. Amount: ${amount}, Recipient: ${recipient}`);
   Logger.debug('executeSwap', `Token addresses: ${JSON.stringify(tokenAddresses)}`);
-  
+
   try {
     Logger.debug('executeSwap', 'Fetching contract ABIs');
-    
+
     // In test environments we should not consider token price as we are using test pools
     const { environment } = networkConfig;
     const isTestEnvironment = environment === 'TEST';
 
     const abisToFetch = [getChatterpayABI(), getERC20ABI()];
-    
+
     if (!isTestEnvironment) {
       abisToFetch.push(getPriceFeedABI());
     }
@@ -246,8 +249,8 @@ export async function executeSwap(
       Logger.info('executeSwap', `Prices - Output: Chainlink ${chainlinkPriceOut}, Binance ${binancePriceOut}`);
 
       // Use the lower price for output token for safety
-      effectivePriceOut = !binancePriceOut ? 
-        chainlinkPriceOut 
+      effectivePriceOut = !binancePriceOut ?
+        chainlinkPriceOut
         : Math.min(chainlinkPriceOut, binancePriceOut);
 
       // Use the higher price for input token for safety  
@@ -290,10 +293,10 @@ export async function executeSwap(
     );
     const totalSlippage = baseSlippage + SLIPPAGE_CONFIG.EXTRA;
     Logger.info('executeSwap', `Total slippage: ${totalSlippage} bps`);
-    
+
     const amountOutMin = expectedOutput.mul(10000 - totalSlippage).div(10000);
     Logger.info('executeSwap', `Minimum output amount: ${amountOutMin.toString()}`);
-    
+
     // Check token allowance and approves the max if needed
     await checkAndApproveToken(
       networkConfig,
@@ -388,26 +391,26 @@ async function getChainlinkPrice(
 
 async function getBinancePrice(symbol: string): Promise<number | null> {
   Logger.debug('getBinancePrice', `Fetching Binance price for symbol: ${symbol}`);
-  
+
   // Special handling for WETH
   if (symbol === 'WETH' || symbol === "WBTC") {
     symbol = symbol.replace("W", "");
   }
-  
+
   try {
     const url = `https://api.binance.us/api/v3/ticker/price?symbol=${symbol}USD`;
     Logger.debug('getBinancePrice', `Making request to: ${url}`);
-    
+
     const response = await fetch(url);
     if (!response.ok) {
       Logger.info('getBinancePrice', `No Binance price available for ${symbol}`);
       return null;
     }
-    
+
     const data = await response.json();
     Logger.debug('getBinancePrice', `Binance response: ${JSON.stringify(data)}`);
     Logger.info('getBinancePrice', `Current price for ${symbol}: ${data.price}`);
-    
+
     return parseFloat(data.price);
   } catch (error) {
     Logger.info('getBinancePrice', `Could not fetch Binance price for ${symbol}`);
@@ -422,7 +425,7 @@ function calculateFeeInToken(
   tokenPrice: number
 ): ethers.BigNumber {
   Logger.debug('calculateFeeInToken', `Calculating fee. Fee in cents: ${feeInCents.toString()}, Decimals: ${tokenDecimals}, Token price: ${tokenPrice}`);
-  
+
   // Convert dollar cents to dollars (divide by 100)
   // Then multiply by token decimals to get the proper token amount
   // Then divide by token price to convert to token units
@@ -431,7 +434,7 @@ function calculateFeeInToken(
     .div(100)  // convert cents to dollars
     .div(ethers.BigNumber.from(Math.floor(tokenPrice * 1e6)))  // divide by price (with 6 decimals precision)
     .mul(1e6); // adjust for the precision we added to price
-    
+
   Logger.debug('calculateFeeInToken', `Calculated fee in token: ${fee.toString()}`);
   return fee;
 }
@@ -444,7 +447,7 @@ function calculateExpectedOutput(
   decimalsOut: number
 ): ethers.BigNumber {
   Logger.debug(
-    'calculateExpectedOutput', 
+    'calculateExpectedOutput',
     `Calculating expected output. Swap amount: ${swapAmount.toString()}, ` +
     `Price in: ${priceIn}, Price out: ${priceOut}, ` +
     `Decimals in: ${decimalsIn}, Decimals out: ${decimalsOut}`
@@ -483,10 +486,10 @@ async function checkAndApproveToken(
   chatterPayContract: ethers.Contract,
   entryPointContract: ethers.Contract,
 ): Promise<string | null> {
-  
+
   const tokenContract = new ethers.Contract(tokenIn, erc20ABI, setupContractsResult.provider);
   const { routerAddress } = networkConfig.contracts;
-  
+
   Logger.debug('checkAndApproveToken', `Checking allowance for token ${tokenIn}, and swap router ${routerAddress}`);
 
   // Check current allowance
@@ -498,7 +501,7 @@ async function checkAndApproveToken(
 
   if (currentAllowance.lt(amountIn)) {
     Logger.info('checkAndApproveToken', 'Insufficient allowance, approving...');
-    
+
     // Create approve call data
     const approveCallData = chatterPayContract.interface.encodeFunctionData('approveToken', [
       tokenIn,

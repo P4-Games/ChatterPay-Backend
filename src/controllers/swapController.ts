@@ -29,7 +29,6 @@ import {
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
-import { getChatterpayABI } from '../services/gcp/gcpService';
 
 interface SwapBody {
   channel_user_id: string;
@@ -98,7 +97,7 @@ export const swap = async (
 
     const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
 
-    const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
+    const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds ?? 0;
     const { tokens: blockchainTokens, networkConfig } = request.server as FastifyInstance;
 
     const tokenAddresses: TokenAddresses = getTokensAddresses(
