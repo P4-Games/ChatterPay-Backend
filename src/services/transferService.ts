@@ -39,8 +39,8 @@ import {
  * @param networkConfig
  * @param setupContractsResult
  * @param entryPointContract
- * @param fromNumber
- * @param to
+ * @param fromAddress
+ * @param toAddress
  * @param tokenAddress
  * @param amount
  * @returns
@@ -49,47 +49,99 @@ export async function sendUserOperation(
   networkConfig: IBlockchain,
   setupContractsResult: SetupContractReturn,
   entryPointContract: ethers.Contract,
-  fromNumber: string,
-  to: string,
+  fromAddress: string,
+  toAddress: string,
   tokenAddress: string,
   amount: string
 ): Promise<ExecueTransactionResult> {
   try {
-    // Create transfer-specific call data
+    Logger.log('sendUserOperation', 'Getting ERC20 Contract');
     const erc20 = await setupERC20(tokenAddress, setupContractsResult.signer);
-    const callData = createTransferCallData(setupContractsResult.chatterPay, erc20, to, amount);
+    Logger.log('sendUserOperation', 'Getted ERC20 Contract OK');
+
+    Logger.log('sendUserOperation', 'Validating sender contract init-code');
+    const code = await setupContractsResult.provider.getCode(fromAddress);
+    if (code === '0x') {
+      Logger.log('sendUserOperation', `Invalid Init Code in user wallet ${fromAddress}`, code);
+    }
+    Logger.log('sendUserOperation', `Verified Init Code in user wallet ${fromAddress}`, code);
+
+    Logger.log('sendUserOperation', 'Creating Transfer Call Data');
+    Logger.log(
+      'sendUserOperation',
+      'Creating Transfer Call Data, chatterpay contract address:',
+      setupContractsResult.chatterPay.address
+    );
+    const callData = await createTransferCallData(
+      setupContractsResult.chatterPay,
+      erc20,
+      toAddress,
+      amount
+    );
+    Logger.log('sendUserOperation', 'Created Transfer Call Data OK', callData);
 
     // Get the nonce
+    Logger.log('sendUserOperation', 'Getting Nonce');
     const nonce = await entryPointContract.getNonce(setupContractsResult.proxy.proxyAddress, 0);
+    Logger.log('sendUserOperation', 'Getted Nonce OK', nonce);
 
     // Create the base user operation
-    let userOperation = await createGenericUserOperation(
+    Logger.log('sendUserOperation', 'Creating Generic User Operation');
+    const userOperation = await createGenericUserOperation(
       callData,
       setupContractsResult.proxy.proxyAddress,
       nonce
     );
+    Logger.log('sendUserOperation', 'Created Generic User Operation OK', userOperation);
 
     // Add paymaster data
-    userOperation = await addPaymasterData(
+    Logger.log('sendUserOperation', 'Adding Paymaster Data');
+    const userOperationWithPaymaster = await addPaymasterData(
       userOperation,
       networkConfig.contracts.paymasterAddress!,
-      setupContractsResult.backendSigner
+      setupContractsResult.backendSigner,
+      networkConfig.contracts.entryPoint,
+      callData,
+      networkConfig.chain_id
+    );
+    Logger.log(
+      'sendUserOperation',
+      'Added Paymaster Data OK (userOp 2)',
+      JSON.stringify(userOperationWithPaymaster)
     );
 
-    // Sign the user operation
-    userOperation = await signUserOperation(
-      userOperation,
+    Logger.log('sendUserOperation', 'Signing User Operation');
+    const userOperationSigned = await signUserOperation(
+      userOperationWithPaymaster,
       networkConfig.contracts.entryPoint,
       setupContractsResult.signer
     );
 
-    Logger.log('sendUserOperation', 'Sending user operation to bundler');
+    Logger.log(
+      'sendUserOperation',
+      'Signed User Operation OK (userOp 3)',
+      JSON.stringify(userOperationSigned)
+    );
+    Logger.log(
+      'sendUserOperation',
+      'paymasterAndData length (must be 93 !!!!):',
+      userOperationWithPaymaster.paymasterAndData.length
+    );
+
+    //  return;
+    Logger.log(
+      'sendUserOperation',
+      'Sending user operation to bundler',
+      setupContractsResult.bundlerUrl
+    );
+
     const bundlerResponse = await sendUserOperationToBundler(
       setupContractsResult.bundlerUrl,
-      userOperation,
+      userOperationSigned,
       entryPointContract.address
     );
     Logger.log('sendUserOperation', 'Bundler response:', bundlerResponse);
+    Logger.log('sendUserOperation', 'Sent User Operation to Bundler OK');
 
     Logger.log('sendUserOperation', 'Waiting for transaction to be mined.');
     const receipt = await waitForUserOperationReceipt(
@@ -109,7 +161,7 @@ export async function sendUserOperation(
   } catch (error) {
     Logger.error(
       'sendUserOperation',
-      `Error, from: ${fromNumber}, to: ${to}, ` +
+      `Error, from: ${fromAddress}, to: ${toAddress}, ` +
         `token address: ${tokenAddress}, amount: ${amount}, error: `,
       JSON.stringify(error)
     );

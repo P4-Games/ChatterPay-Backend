@@ -47,7 +47,8 @@ const {
   SLIPPAGE_CONFIG_STABLE: slippage_config_stable = 300,
   SLIPPAGE_CONFIG_DEFAULT: slippage_config_default = 500,
   SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
-  STABLE_TOKENS='USDT,USDC,DAI'
+  STABLE_TOKENS = 'USDT,USDC,DAI',
+  ABIS_READ_FROM: abisReadFrom = 'local'
 } = process.env;
 
 export {
@@ -76,16 +77,30 @@ export const PORT = Number(envPort) || 3000;
 export const MONGO_URI: string = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
 export const DEFAULT_CHAIN_ID = Number(defaultChainId);
 
-export const GCP_ABIs = {
-  ChatterPay: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPay.json`,
-  ChatterPayWallet: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWallet.json`,
-  ChatterPayWalletFactory: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletFactory.json`,
-  ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayNFT.json`,
-  EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/EntryPoint.json`,
-  ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.json`,
+interface ABIs {
+  [key: string]: string;
+}
+
+export const GCP_ABIs: ABIs = {
+  ChatterPay: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPay.sol/ChatterPay.json`,
+  ChatterPayWalletProxy: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletProxy.sol/ChatterPayWalletProxy.json`,
+  ChatterPayWalletFactory: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletFactory.sol/ChatterPayWalletFactory.json`,
+  ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayNFT.sol/ChatterPayNFT.json`,
+  EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/EntryPoint.sol/EntryPoint.json`,
+  ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.sol/ERC20.json`,
   ChainlinkPriceFeed: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChainlinkPriceFeed.json`
 };
 
+export const LOCAL_ABIs: ABIs = {
+  ChatterPay: `ChatterPay.sol/ChatterPay.json`,
+  ChatterPayWalletProxy: `ChatterPayWalletProxy.sol/ChatterPayWalletProxy.json`,
+  ChatterPayWalletFactory: `ChatterPayWalletFactory.sol/ChatterPayWalletFactory.json`,
+  ChatterPayNFT: `ChatterPayNFT.sol/ChatterPayNFT.json`,
+  EntryPoint: `EntryPoint.sol/EntryPoint.json`,
+  ERC20: `ERC20.sol/ERC20.json`
+};
+
+export const ABIS_READ_FROM = abisReadFrom.toLowerCase();
 export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
 export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' || true;
 export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
@@ -109,7 +124,7 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
   : 'error';
 
 export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];
-export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'en';
+export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'es';
 
 export const MAX_FEE_PER_GAS: string = maxFeeperGas;
 export const MAX_PRIORITY_FEE_PER_GAS: string = maxPriorityFeePerGas;
@@ -119,7 +134,7 @@ export const PRE_VERIFICATION_GAS: number = Number(preVerificationGas);
 
 export const PAYMASTER_MIN_BALANCE: string = '0.15';
 export const PAYMASTER_TARGET_BALANCE: string = '0.3';
-export const BACKEND_SIGNER_MIN_BALANCE: string = '0.5'; // must have at least: PAYMASTER_TARGET_BALANCE + 0.005
+export const BACKEND_SIGNER_MIN_BALANCE: string = '0.01'; // must have at least: PAYMASTER_TARGET_BALANCE + 0.005
 export const USER_SIGNER_MIN_BALANCE: string = '0.0008';
 export const USER_SIGNER_BALANCE_TO_TRANSFER: string = '0.001';
 

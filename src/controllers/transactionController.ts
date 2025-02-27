@@ -331,7 +331,7 @@ export const makeTransaction = async (
     }
 
     /* ***************************************************** */
-    /* 2. makeTransaction: open concurrent operation      */
+    /* 2. makeTransaction: open concurrent operation         */
     /* ***************************************************** */
     const concurrentOperationSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'checkConcurrentOperation' })

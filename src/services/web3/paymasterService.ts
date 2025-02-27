@@ -19,14 +19,21 @@ import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../../config/co
 export async function addPaymasterData(
   userOp: PackedUserOperation,
   paymasterAddress: string,
-  backendSigner: ethers.Signer
+  backendSigner: ethers.Signer,
+  entrypoint: string,
+  callData: string,
+  chainId: number
 ): Promise<PackedUserOperation> {
   const paymasterAndData = await createPaymasterAndData(
     paymasterAddress,
     userOp.sender,
     backendSigner,
-    3600 // 1 hour validity
+    entrypoint,
+    callData,
+    3600, // 1 hour validity
+    chainId
   );
+
   Logger.log('addPaymasterData', 'Generated paymasterAndData:', paymasterAndData);
 
   // Return the user operation with the added paymaster data

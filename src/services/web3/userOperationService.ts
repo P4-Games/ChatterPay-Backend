@@ -1,7 +1,7 @@
 import { ethers, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { getUserOpHash } from '../../helpers/userOperationHekper';
+import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation } from '../../types/userOperationType';
 import {
   CALL_GAS_LIMIT,
@@ -65,38 +65,51 @@ export async function createGenericUserOperation(
  * @returns {string} The encoded call data for the token transfer.
  * @throws {Error} If the 'to' address is invalid or the amount cannot be parsed.
  */
-export function createTransferCallData(
+export async function createTransferCallData(
   chatterPayContract: ethers.Contract,
   erc20Contract: ethers.Contract,
   to: string,
   amount: string
-): string {
+): Promise<string> {
   if (!ethers.utils.isAddress(to)) {
     throw new Error("Invalid 'to' address");
   }
 
   let amount_bn;
   try {
-    amount_bn = ethers.utils.parseUnits(amount, 18);
+    const decimals = await erc20Contract.decimals();
+    Logger.log('createTransferCallData', 'contract decimals', decimals);
+    amount_bn = ethers.utils.parseUnits(amount, decimals);
   } catch (error) {
-    throw new Error('Invalid amount');
+    Logger.error('createTransferCallData', `amount ${amount} error`, error);
+    throw error;
   }
 
-  const transferEncode = erc20Contract.interface.encodeFunctionData('transfer', [to, amount_bn]);
-  Logger.log('createTransferCallData', 'Transfer Encode:', transferEncode);
+  try {
+    Logger.log(
+      'createTransferCallData',
+      '*** [ executeTokenTransfer ] *** ',
+      erc20Contract.address,
+      to,
+      amount_bn
+    );
 
-  Logger.log(
-    'createTransferCallData',
-    `Chatterpay Proxy Contract Address ${chatterPayContract.address}`
-  );
-  const callData = chatterPayContract.interface.encodeFunctionData('execute', [
-    erc20Contract.address,
-    0,
-    transferEncode
-  ]);
-  Logger.log('createTransferCallData', 'Transfer Call Data:', callData);
+    const functionSignature = 'executeTokenTransfer(address,address,uint256)';
+    const functionSelector = ethers.utils
+      .keccak256(ethers.utils.toUtf8Bytes(functionSignature))
+      .substring(0, 10);
+    const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+      ['address', 'address', 'uint256'],
+      [erc20Contract.address, to, amount_bn]
+    );
+    const callData = functionSelector + encodedParameters.slice(2);
+    Logger.log('createTransferCallData', 'Transfer Call Data:', callData);
 
-  return callData;
+    return callData;
+  } catch (error) {
+    Logger.error('createTransferCallData', 'encodeFunctionData error', error);
+    throw error;
+  }
 }
 
 /**
@@ -105,7 +118,7 @@ export function createTransferCallData(
  *
  * @param {PackedUserOperation} userOperation - The user operation to be signed.
  * @param {string} entryPointAddress - The address of the entry point contract.
- * @param {ethers.Wallet} signer - The wallet used to sign the user operation.
+ * @param {ethers.Wallet} signer - The User wallet used to sign the user operation.
  * @returns {Promise<PackedUserOperation>} The user operation with the generated signature.
  * @throws {Error} If the signature verification fails.
  */
@@ -114,26 +127,29 @@ export async function signUserOperation(
   entryPointAddress: string,
   signer: ethers.Wallet
 ): Promise<PackedUserOperation> {
-  Logger.log('signUserOperation', 'Signing UserOperation.');
+  const { provider } = signer;
+  const { chainId } = await provider!.getNetwork();
 
-  const chainId = await signer.getChainId();
-  Logger.log('signUserOperation', 'Chain ID:', chainId);
-
-  Logger.log('signUserOperation', 'Computing userOpHash.');
   const userOpHash = getUserOpHash(userOperation, entryPointAddress, chainId);
-  Logger.log('signUserOperation', 'UserOpHash:', userOpHash);
 
-  const signature = await signer.signMessage(ethers.utils.arrayify(userOpHash));
-  Logger.log('signUserOperation', 'Generated signature:', signature);
+  const ethSignedMessageHash = ethers.utils.keccak256(
+    ethers.utils.solidityPack(
+      ['string', 'bytes32'],
+      ['\x19Ethereum Signed Message:\n32', userOpHash]
+    )
+  );
 
-  const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(userOpHash), signature);
-  Logger.log('signUserOperation', 'Recovered address:', recoveredAddress);
-  Logger.log('signUserOperation', 'Signer address:', await signer.getAddress());
+  const { _signingKey } = signer;
+  const signature = _signingKey().signDigest(ethers.utils.arrayify(ethSignedMessageHash));
+  const recoveredAddress = ethers.utils.recoverAddress(ethSignedMessageHash, signature);
 
-  if (recoveredAddress.toLowerCase() !== (await signer.getAddress()).toLowerCase()) {
-    throw new Error('signUserOperation: Signature verification failed on client side');
+  const { getAddress } = ethers.utils;
+  if (getAddress(recoveredAddress) !== getAddress(await signer.getAddress())) {
+    throw new Error('Invalid signature');
   }
 
-  Logger.log('signUserOperation', 'UserOperation signed successfully');
-  return { ...userOperation, signature };
+  return {
+    ...userOperation,
+    signature: ethers.utils.joinSignature(signature)
+  };
 }

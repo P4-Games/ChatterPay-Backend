@@ -5,7 +5,7 @@ import axios, { AxiosResponse } from 'axios';
 import { Logger } from '../../helpers/loggerHelper';
 import { IBlockchain } from '../../models/blockchainModel';
 import { QUEUE_GAS_INTERVAL } from '../../config/constants';
-import { getUserOpHash } from '../../helpers/userOperationHekper';
+import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation } from '../../types/userOperationType';
 
 interface AlchemyGasResponse {
@@ -113,7 +113,7 @@ export async function getPaymasterAndData(
   const dummySignature = await generateDummySignature(userOp, config.entryPoint, chainId);
 
   const payload = {
-    id: 1,
+    id: `ChatterPay.${Date.now().toLocaleString()}`,
     jsonrpc: '2.0',
     method: 'alchemy_requestGasAndPaymasterAndData',
     params: [

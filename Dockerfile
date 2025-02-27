@@ -1,9 +1,26 @@
-# Usa la imagen oficial de Bun
-FROM oven/bun:1
+# Use Node.js 20.13.1 as base
+FROM node:20.13.1-bullseye AS base
+
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.1.21" && \
+    echo 'export BUN_INSTALL="$HOME/.bun"' >> ~/.bashrc && \
+    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.bashrc && \
+    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.profile && \
+    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.bash_profile
+
+# Ensure Bun is available in PATH
+ENV BUN_INSTALL="/root/.bun"
+ENV PATH="${BUN_INSTALL}/bin:${PATH}"
+
+# Verify Node.js and Bun versions before starting
+RUN node -v && bun -v
 
 # Establece el directorio de trabajo en el contenedor
 WORKDIR /app
 
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy environment variables as build arguments
 ARG BUN_ENV
 ARG INFURA_API_KEY
 ARG MAX_FEE_PER_GAS
@@ -42,7 +59,9 @@ ARG SLIPPAGE_CONFIG_STABLE
 ARG SLIPPAGE_CONFIG_DEFAULT
 ARG SLIPPAGE_CONFIG_EXTRA
 ARG STABLE_TOKENS
+ARG ABIS_READ_FROM
 
+# Set environment variables
 ENV BUN_ENV $BUN_ENV
 ENV INFURA_API_KEY $INFURA_API_KEY
 ENV MAX_FEE_PER_GAS $MAX_FEE_PER_GAS
@@ -81,19 +100,20 @@ ENV SLIPPAGE_CONFIG_STABLE $SLIPPAGE_CONFIG_STABLE
 ENV SLIPPAGE_CONFIG_DEFAULT $SLIPPAGE_CONFIG_DEFAULT
 ENV SLIPPAGE_CONFIG_EXTRA $SLIPPAGE_CONFIG_EXTRA
 ENV STABLE_TOKENS $STABLE_TOKENS
+ENV ABIS_READ_FROM $ABIS_READ_FROM
 
-# Copia los archivos de configuración del proyecto
+# Copy project configuration files
 COPY package.json bun.lockb tsconfig.json ./
 
-# Instala las dependencias
+# Install dependencies securely
 RUN bun install --frozen-lockfile
 
-# Copia el código fuente
+# Copy source code
 COPY src ./src
 
-# Expone el puerto en el que se ejecuta la aplicación
+# Expose the port where the application runs
 EXPOSE 3000
 ENV PORT 3000
-# Comando para ejecutar la aplicación
-CMD ["bun", "start"]
 
+# Command to run the application
+CMD ["bun", "start"]

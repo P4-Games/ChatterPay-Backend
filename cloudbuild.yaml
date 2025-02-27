@@ -35,6 +35,7 @@ steps:
       - SLIPPAGE_CONFIG_DEFAULT=${_SLIPPAGE_CONFIG_DEFAULT}
       - SLIPPAGE_CONFIG_EXTRA=${_SLIPPAGE_CONFIG_EXTRA}
       - STABLE_TOKENS=${_STABLE_TOKENS}
+      - ABIS_READ_FROM=${_ABIS_READ_FROM}
 
     secretEnv: [
       'CHATIZALO_TOKEN', 
@@ -122,6 +123,8 @@ steps:
       'ABIS_VERSION=${_ABIS_VERSION}',
       '--build-arg',
       'CORS_ORIGINS_CHECK_POSTMAN=${_CORS_ORIGINS_CHECK_POSTMAN}',
+      '--build-arg',
+      'ABIS_READ_FROM=${_ABIS_READ_FROM}',
       '.'
     ]
     secretEnv: [

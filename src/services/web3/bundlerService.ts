@@ -45,13 +45,13 @@ export async function sendUserOperationToBundler(
 ): Promise<string> {
   try {
     const serializedUserOp = serializeUserOperation(userOperation);
-    Logger.log('sendUserOperationToBundler', JSON.stringify(serializedUserOp));
     const payload = {
       jsonrpc: '2.0',
       method: 'eth_sendUserOperation',
       params: [serializedUserOp, entryPointAddress],
-      id: Date.now()
+      id: `ChatterPay.${Date.now().toLocaleString()}`
     };
+    Logger.log('sendUserOperationToBundler', `payload: ${JSON.stringify(payload)}`);
 
     // Wrapper function in quue to avoid erro 429 (rate-limit)
     const response = (await queue.add(async () =>
@@ -102,7 +102,7 @@ export async function estimateUserOperationGas(
       jsonrpc: '2.0',
       method: 'eth_estimateUserOperationGas',
       params: [serializedUserOp, entryPointAddress],
-      id: Date.now()
+      id: `ChatterPay.${Date.now().toLocaleString()}`
     };
 
     // Wrapper function in quue to avoid erro 429 (rate-limit)
