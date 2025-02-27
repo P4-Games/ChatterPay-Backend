@@ -1,8 +1,8 @@
 import { ethers, ContractInterface } from 'ethers';
 
 import { Logger } from '../helpers/loggerHelper';
-import { addPaymasterData } from './web3/paymasterService';
 import { IBlockchain } from '../models/blockchainModel';
+import { addPaymasterData } from './web3/paymasterService';
 import { sendUserOperationToBundler } from './web3/bundlerService';
 import { waitForUserOperationReceipt } from './web3/userOpExecutorService';
 import { getERC20ABI, getPriceFeedABI, getChatterpayABI } from './web3/abiService';
