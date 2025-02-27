@@ -1,14 +1,14 @@
 import { ethers, ContractInterface } from 'ethers';
 
-import { Logger } from '../../helpers/loggerHelper';
-import { addPaymasterData } from './paymasterService';
-import { IBlockchain } from '../../models/blockchainModel';
-import { sendUserOperationToBundler } from './bundlerService';
-import { waitForUserOperationReceipt } from './userOpExecutorService';
-import { getERC20ABI, getPriceFeedABI, getChatterpayABI } from './abiService';
-import { signUserOperation, createGenericUserOperation } from './userOperationService';
-import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../../types/commonType';
-import { STABLE_TOKENS_ARRAY, SLIPPAGE_CONFIG_EXTRA, SLIPPAGE_CONFIG_STABLE, SLIPPAGE_CONFIG_DEFAULT } from '../../config/constants';
+import { Logger } from '../helpers/loggerHelper';
+import { addPaymasterData } from './web3/paymasterService';
+import { IBlockchain } from '../models/blockchainModel';
+import { sendUserOperationToBundler } from './web3/bundlerService';
+import { waitForUserOperationReceipt } from './web3/userOpExecutorService';
+import { getERC20ABI, getPriceFeedABI, getChatterpayABI } from './web3/abiService';
+import { signUserOperation, createGenericUserOperation } from './web3/userOperationService';
+import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../types/commonType';
+import { STABLE_TOKENS_ARRAY, SLIPPAGE_CONFIG_EXTRA, SLIPPAGE_CONFIG_STABLE, SLIPPAGE_CONFIG_DEFAULT } from '../config/constants';
 
 /**
  * Constants for slippage configurations based on token types

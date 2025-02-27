@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
-import { executeSwap } from '../services/web3/swapService';
+import { executeSwap } from '../services/swapService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { setupERC20 } from '../services/web3/contractSetupService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';

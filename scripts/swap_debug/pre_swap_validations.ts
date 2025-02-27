@@ -282,7 +282,7 @@ async function main() {
 
         // Obtener parámetros del archivo .env o usar valores predeterminados
         const CHATTERPAY_ADDRESS = '0xBc5a2FE45C825BB091075664cae88914FB3f73f0';
-        const PROXY_ADDRESS = '0x56b1f585c1a08dad9fcfe38ab2c8f8ee1620bdd4';
+        const PROXY_ADDRESS = '0x1c875fD25BEb9b72011864831a95eeb67ae8f06d';
         const TOKEN_IN = '0xE9C723D01393a437bac13CE8f925A5bc8E1c335c'; // WETH
         const TOKEN_OUT = '0xe6B817E31421929403040c3e42A6a5C5D2958b4A'; // USDT
         const AMOUNT = '10';
