@@ -1,13 +1,14 @@
-/* eslint-disable no-console */
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 
-// Cargar variables de entorno
+import { Logger } from '../../src/helpers/loggerHelper';
+
+// Load environment variables
 dotenv.config();
 
 /**
- * Script para crear un nuevo proxy directamente con el Factory
- * Sin usar Account Abstraction (sin UserOp ni Paymaster)
+ * Script to create a new proxy directly with the Factory
+ * Without using Account Abstraction (no UserOp or Paymaster)
  */
 async function createProxy(
     provider: ethers.providers.Provider,
@@ -15,11 +16,11 @@ async function createProxy(
     factoryAddress: string,
     ownerAddress: string
 ): Promise<string> {
-    console.log('=====================================================');
-    console.log('CREANDO NUEVO PROXY WALLET');
-    console.log('=====================================================');
+    Logger.info('createProxy', '=====================================================');
+    Logger.info('createProxy', 'CREATING NEW PROXY WALLET');
+    Logger.info('createProxy', '=====================================================');
 
-    // Factory ABI mínimo para crear proxy
+    // Factory ABI for creating proxy
     const factoryABI = [
         "function createProxy(address _owner) external returns (address)",
         "function computeProxyAddress(address _owner) external view returns (address)",
@@ -27,100 +28,110 @@ async function createProxy(
         "function owner() external view returns (address)"
     ];
 
-    console.log(`\n1. Conectando al Factory: ${factoryAddress}`);
+    Logger.info('createProxy', `\n1. Connecting to Factory: ${factoryAddress}`);
     const factory = new ethers.Contract(factoryAddress, factoryABI, signer);
 
-    // Verificar que estamos autorizados (opcional)
+    // Verify authorization (optional)
     const factoryOwner = await factory.owner();
-    console.log(`Factory owner: ${factoryOwner}`);
-    console.log(`Transaction signer: ${signer.address}`);
+    Logger.info('createProxy', `Factory owner: ${factoryOwner}`);
+    Logger.info('createProxy', `Transaction signer: ${signer.address}`);
 
-    // Calcular la dirección del proxy antes de crearlo
-    console.log(`\n2. Calculando dirección futura del proxy...`);
+    // Calculate the proxy address before creating it
+    Logger.info('createProxy', `\n2. Calculating future proxy address...`);
     try {
         const expectedAddress = await factory.computeProxyAddress(ownerAddress);
-        console.log(`Dirección esperada del proxy: ${expectedAddress}`);
+        Logger.info('createProxy', `Expected proxy address: ${expectedAddress}`);
     } catch (error: unknown) {
-        console.log(`No se pudo calcular la dirección futura: ${(error as Error).message}`);
+        Logger.warn('createProxy', `Could not calculate future address: ${(error as Error).message}`);
     }
 
-    // Obtener proxies existentes
-    console.log(`\n3. Verificando proxies existentes...`);
+    // Get existing proxies
+    Logger.info('createProxy', `\n3. Verifying existing proxies...`);
     const existingProxies = await factory.getProxies();
-    console.log(`Proxies existentes: ${existingProxies.length}`);
+    Logger.info('createProxy', `Existing proxies: ${existingProxies.length}`);
 
     // eslint-disable-next-line no-restricted-syntax
     for (const proxy of existingProxies) {
-        console.log(`- ${proxy}`);
+        Logger.debug('createProxy', `- ${proxy}`);
     }
 
-    // Crear el proxy
-    console.log(`\n4. Creando nuevo proxy con owner: ${ownerAddress}...`);
+    // Create the proxy
+    Logger.info('createProxy', `\n4. Creating new proxy with owner: ${ownerAddress}...`);
 
     try {
-        console.log('Enviando transacción...');
-        const tx = await factory.createProxy(ownerAddress, {
-            gasLimit: 5000000, // Límite de gas suficiente
-        });
+        // Get gas settings from environment or use defaults
+        const gasLimit = process.env.GAS_LIMIT ? parseInt(process.env.GAS_LIMIT, 10) : 5000000;
+        const gasPrice = process.env.GAS_PRICE ? ethers.utils.parseUnits(process.env.GAS_PRICE, 'gwei') : undefined;
+        
+        const txOptions: {gasLimit: number, gasPrice?: ethers.BigNumber} = {
+            gasLimit
+        };
+        
+        if (gasPrice) txOptions.gasPrice = gasPrice;
 
-        console.log(`Transacción enviada: ${tx.hash}`);
-        console.log('Esperando confirmación...');
+        Logger.info('createProxy', 'Sending transaction...');
+        Logger.debug('createProxy', 'Transaction options:', txOptions);
+        
+        const tx = await factory.createProxy(ownerAddress, txOptions);
+
+        Logger.info('createProxy', `Transaction sent: ${tx.hash}`);
+        Logger.info('createProxy', 'Waiting for confirmation...');
 
         const receipt = await tx.wait();
-        console.log(`Transacción confirmada en el bloque: ${receipt.blockNumber}`);
+        Logger.info('createProxy', `Transaction confirmed in block: ${receipt.blockNumber} (gas used: ${receipt.gasUsed.toString()})`);
 
-        // Buscar el evento ProxyCreated en los logs
+        // Look for the ProxyCreated event in the logs
         const proxyAddress = findProxyAddressFromLogs(receipt.logs, ownerAddress);
 
         if (proxyAddress) {
-            console.log(`\n¡ÉXITO! Nuevo proxy creado en: ${proxyAddress} ✅`);
+            Logger.info('createProxy', `\n✅ SUCCESS! New proxy created at: ${proxyAddress}`);
             return proxyAddress;
         }
 
-        // Obtener los proxies de nuevo para encontrar el nuevo
+        // Get the proxies again to find the new one
         const updatedProxies = await factory.getProxies();
         const newProxies = updatedProxies.filter((p: unknown) => !existingProxies.includes(p));
 
         if (newProxies.length > 0) {
-            console.log(`\n¡ÉXITO! Nuevo proxy creado en: ${newProxies[0]} ✅`);
-            return newProxies[0];
+            Logger.info('createProxy', `\n✅ SUCCESS! New proxy created at: ${newProxies[0]}`);
+            return newProxies[0] as string;
         }
 
-        console.log(`\nNo se pudo identificar la dirección del nuevo proxy ❌`);
+        Logger.error('createProxy', `\n❌ Could not identify the address of the new proxy`);
         return '';
 
     } catch (error: unknown) {
-        console.error(`\nERROR al crear el proxy: ${(error as Error).message} ❌`);
+        Logger.error('createProxy', `\n❌ ERROR creating proxy: ${(error as Error).message}`);
 
-        // Verificar si el error es de gas insuficiente
+        // Check if the error is related to insufficient gas
         if ((error as Error).message.includes('gas') || (error as Error).message.includes('insufficient funds')) {
-            console.log('\nSugerencia: Podría ser un problema de gas. Verifica que tu wallet tenga suficiente ETH.');
+            Logger.info('createProxy', '\nSuggestion: Could be a gas issue. Verify your wallet has sufficient ETH.');
         }
 
         return '';
     }
 }
 
-// Función para encontrar la dirección del proxy en los logs
+// Function to find the proxy address in the logs
 function findProxyAddressFromLogs(logs: ethers.providers.Log[], ownerAddress: string): string {
-    // El evento ProxyCreated tiene un formato similar a:
+    // The ProxyCreated event has a format similar to:
     // event ProxyCreated(address indexed owner, address indexed proxyAddress);
 
     return logs.reduce((result, log) => {
-        // Si ya encontramos un resultado, lo mantenemos
+        // If we already found a result, keep it
         if (result) return result;
 
-        // Intentamos identificar el evento por su estructura
+        // Try to identify the event by its structure
         if (log.topics.length === 3) {
-            // El primer topic es el hash del evento
-            // El segundo topic debería ser el owner (indexado)
-            // El tercer topic debería ser el proxy (indexado)
+            // First topic is the event hash
+            // Second topic should be the owner (indexed)
+            // Third topic should be the proxy (indexed)
 
-            // Convertir el address indexado a formato de dirección
+            // Convert indexed address to address format
             const topicOwner = `0x${log.topics[1].slice(26)}`;
             const topicProxy = `0x${log.topics[2].slice(26)}`;
 
-            // Comparar con el owner que estamos buscando (caso insensitivo)
+            // Compare with the owner we're looking for (case insensitive)
             if (topicOwner.toLowerCase() === ownerAddress.toLowerCase()) {
                 return topicProxy;
             }
@@ -129,40 +140,43 @@ function findProxyAddressFromLogs(logs: ethers.providers.Log[], ownerAddress: st
     }, '');
 }
 
-// Función principal
+// Main function
 async function main() {
     try {
-        // Obtener variables de entorno
-        const RPC_URL = ('https://arbitrum-sepolia.infura.io/v3/INF_KEY').replace('INF_KEY', process.env.INFURA_API_KEY ?? '');
+        // Get environment variables
         const SIGNING_KEY = process.env.SIGNING_KEY || process.env.PRIVATE_KEY;
-        const FACTORY_ADDRESS = "0xeCD34e3CB296Ed7c4a875290d49217f2C7cFf95b";
+        const FACTORY_ADDRESS = process.env.FACTORY_ADDRESS || "0xeCD34e3CB296Ed7c4a875290d49217f2C7cFf95b";
 
-        // Verificar que tenemos las variables necesarias
-        if (!RPC_URL) {
-            console.error('ERROR: Falta RPC_URL en el archivo .env');
+        // RPC configuration
+        const { INFURA_API_KEY, RPC_URL } = process.env;
+        const rpcUrl = `${RPC_URL ?? "https://arbitrum-sepolia.infura.io/v3/"}${INFURA_API_KEY}`;
+
+        // Verify we have the necessary variables
+        if (!INFURA_API_KEY) {
+            Logger.error('main', 'ERROR: INFURA_API_KEY missing in .env file');
             process.exit(1);
         }
 
         if (!SIGNING_KEY) {
-            console.error('ERROR: Falta SIGNING_KEY o PRIVATE_KEY en el archivo .env');
+            Logger.error('main', 'ERROR: SIGNING_KEY or PRIVATE_KEY missing in .env file');
             process.exit(1);
         }
 
         if (!FACTORY_ADDRESS) {
-            console.error('ERROR: Falta FACTORY_ADDRESS en el archivo .env');
+            Logger.error('main', 'ERROR: FACTORY_ADDRESS missing in .env file');
             process.exit(1);
         }
 
-        // Configurar provider y signer
-        const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
+        // Configure provider and signer
+        const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
         const signer = new ethers.Wallet(SIGNING_KEY, provider);
 
-        console.log(`Ejecutando como: ${signer.address}`);
+        Logger.info('main', `Executing as: ${signer.address}`);
 
-        // Por defecto, el owner del proxy será la misma dirección que firma la transacción
+        // By default, the proxy owner will be the same address that signs the transaction
         const ownerAddress = process.env.OWNER_ADDRESS || signer.address;
 
-        // Crear el proxy
+        // Create the proxy
         const proxyAddress = await createProxy(
             provider,
             signer,
@@ -171,25 +185,25 @@ async function main() {
         );
 
         if (proxyAddress) {
-            // Guardar la dirección del proxy para uso futuro
-            console.log('\n=====================================================');
-            console.log('INFORMACIÓN DEL NUEVO PROXY');
-            console.log('=====================================================');
-            console.log(`Dirección: ${proxyAddress}`);
-            console.log(`Owner: ${ownerAddress}`);
-            console.log(`Red: ${(await provider.getNetwork()).name} (${(await provider.getNetwork()).chainId})`);
-            console.log('=====================================================');
-            console.log('Agrega esta dirección a tu .env como PROXY_ADDRESS para usarla en otros scripts');
+            // Save the proxy address for future use
+            Logger.info('main', '\n=====================================================');
+            Logger.info('main', 'NEW PROXY INFORMATION');
+            Logger.info('main', '=====================================================');
+            Logger.info('main', `Address: ${proxyAddress}`);
+            Logger.info('main', `Owner: ${ownerAddress}`);
+            Logger.info('main', `Network: ${(await provider.getNetwork()).name} (${(await provider.getNetwork()).chainId})`);
+            Logger.info('main', '=====================================================');
+            Logger.info('main', 'Add this address to your .env as PROXY_ADDRESS to use it in other scripts');
 
             process.exit(0);
         } else {
             process.exit(1);
         }
     } catch (error) {
-        console.error('Error fatal durante la ejecución:', error);
+        Logger.error('main', 'Fatal error during execution:', error);
         process.exit(1);
     }
 }
 
-// Ejecutar el script
+// Run the script
 main();
