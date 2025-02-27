@@ -260,7 +260,7 @@ export async function executeSwap(
 
       Logger.info('executeSwap', `Using effective prices - In: ${effectivePriceIn}, Out: ${effectivePriceOut}`);
     } else {
-      Logger.info('executeSwap', 'Test environment detected - using 1:1 price ratio with high slippage');
+      Logger.info('executeSwap', 'Test environment detected - using price ratio with high slippage');
     }
 
     // Calculate fee and amounts
