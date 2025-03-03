@@ -88,7 +88,7 @@ export const GCP_ABIs: ABIs = {
   ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayNFT.sol/ChatterPayNFT.json`,
   EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/EntryPoint.sol/EntryPoint.json`,
   ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.sol/ERC20.json`,
-  ChainlinkPriceFeed: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChainlinkPriceFeed.json`
+  ChainlinkPriceFeed: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`
 };
 
 export const LOCAL_ABIs: ABIs = {
@@ -98,7 +98,7 @@ export const LOCAL_ABIs: ABIs = {
   ChatterPayNFT: `ChatterPayNFT.sol/ChatterPayNFT.json`,
   EntryPoint: `EntryPoint.sol/EntryPoint.json`,
   ERC20: `ERC20.sol/ERC20.json`,
-  ChainlinkPriceFeed: `ChainlinkPriceFeed.json`
+  ChainlinkPriceFeed: `ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`
 };
 
 export const ABIS_READ_FROM = abisReadFrom.toLowerCase();
