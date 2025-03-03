@@ -12,18 +12,18 @@ import { signUserOperation, createGenericUserOperation } from './web3/userOperat
 import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../types/commonType';
 import {
   BINANCE_API_URL,
-  SLIPPAGE_CONFIG_EXTRA,
-  SLIPPAGE_CONFIG_STABLE,
-  SLIPPAGE_CONFIG_DEFAULT
+  SWAP_SLIPPAGE_CONFIG_EXTRA,
+  SWAP_SLIPPAGE_CONFIG_STABLE,
+  SWAP_SLIPPAGE_CONFIG_DEFAULT
 } from '../config/constants';
 
 /**
  * Constants for slippage configurations based on token types
  */
 const SLIPPAGE_CONFIG = {
-  STABLE: SLIPPAGE_CONFIG_STABLE,
-  DEFAULT: SLIPPAGE_CONFIG_DEFAULT,
-  EXTRA: SLIPPAGE_CONFIG_EXTRA
+  STABLE: SWAP_SLIPPAGE_CONFIG_STABLE,
+  DEFAULT: SWAP_SLIPPAGE_CONFIG_DEFAULT,
+  EXTRA: SWAP_SLIPPAGE_CONFIG_EXTRA
 } as const;
 
 /**
