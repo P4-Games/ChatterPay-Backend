@@ -52,5 +52,4 @@ docker build \
   --build-arg SLIPPAGE_CONFIG_STABLE="$SLIPPAGE_CONFIG_STABLE" \
   --build-arg SLIPPAGE_CONFIG_DEFAULT="$SLIPPAGE_CONFIG_DEFAULT" \
   --build-arg SLIPPAGE_CONFIG_EXTRA="$SLIPPAGE_CONFIG_EXTRA" \
-  --build-arg STABLE_TOKENS="$STABLE_TOKENS" \
   -t chatterpay-back-app ..
