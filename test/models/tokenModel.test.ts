@@ -28,7 +28,8 @@ describe('Token Model', () => {
       decimals: 18,
       address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
       logo: 'https://etherscan.io/token/images/weth_32.png',
-      symbol: 'WETH'
+      symbol: 'WETH',
+      type: 'variable'
     };
 
     const token = new Token(validToken);
@@ -58,7 +59,8 @@ describe('Token Model', () => {
       chain_id: 1,
       decimals: 6,
       address: '0x1234567890abcdef1234567890abcdef12345678',
-      symbol: 'NOLOGO'
+      symbol: 'NOLOGO',
+      type: 'stable'
     };
 
     const token = new Token(validToken);
@@ -75,7 +77,8 @@ describe('Token Model', () => {
       decimals: 18,
       address: '0x1234567890abcdef1234567890abcdef12345678',
       logo: 'https://example.com/logo1.png',
-      symbol: 'TOKEN1'
+      symbol: 'TOKEN1',
+      type: 'variable'
     };
 
     const duplicateTokenData: Partial<IToken> = {
@@ -84,7 +87,8 @@ describe('Token Model', () => {
       decimals: 18,
       address: '0x1234567890abcdef1234567890abcdef12345678', // Duplicate address
       logo: 'https://example.com/logo2.png',
-      symbol: 'TOKEN2'
+      symbol: 'TOKEN2',
+      type: 'variable'
     };
 
     const token1 = new Token(tokenData);
