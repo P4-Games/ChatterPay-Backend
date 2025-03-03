@@ -9,6 +9,7 @@ import { getERC20ABI, getPriceFeedABI, getChatterpayABI } from './web3/abiServic
 import { signUserOperation, createGenericUserOperation } from './web3/userOperationService';
 import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../types/commonType';
 import {
+  BINANCE_API_URL,
   STABLE_TOKENS_ARRAY,
   SLIPPAGE_CONFIG_EXTRA,
   SLIPPAGE_CONFIG_STABLE,
@@ -181,6 +182,201 @@ async function determineSlippage(
     `Using default slippage (${SLIPPAGE_CONFIG.DEFAULT}) for ${tokenSymbol}`
   );
   return SLIPPAGE_CONFIG.DEFAULT;
+}
+
+/**
+ * Helper Functions
+ */
+
+async function getTokenDecimals(
+  tokenAddress: string,
+  erc20ABI: ContractInterface,
+  provider: ethers.providers.Provider
+): Promise<number> {
+  Logger.debug('getTokenDecimals', `Fetching decimals for token: ${tokenAddress}`);
+  const token = new ethers.Contract(tokenAddress, erc20ABI, provider);
+  const decimals = await token.decimals();
+  Logger.debug('getTokenDecimals', `Token decimals: ${decimals}`);
+  return decimals;
+}
+
+async function getTokenSymbol(
+  tokenAddress: string,
+  erc20ABI: ContractInterface,
+  provider: ethers.providers.Provider
+): Promise<string> {
+  Logger.debug('getTokenSymbol', `Fetching symbol for token: ${tokenAddress}`);
+  const token = new ethers.Contract(tokenAddress, erc20ABI, provider);
+  const symbol = await token.symbol();
+  Logger.debug('getTokenSymbol', `Token symbol: ${symbol}`);
+  return symbol;
+}
+
+async function getChainlinkPrice(
+  priceFeedAddress: string,
+  priceFeedABI: ContractInterface,
+  provider: ethers.providers.Provider
+): Promise<number> {
+  Logger.debug('getChainlinkPrice', `Fetching Chainlink price from feed: ${priceFeedAddress}`);
+  const priceFeed = new ethers.Contract(priceFeedAddress, priceFeedABI, provider);
+  const roundData = await priceFeed.latestRoundData();
+  Logger.debug('getChainlinkPrice', `Latest round data: ${JSON.stringify(roundData)}`);
+  // Chainlink price feeds return prices with 8 decimals
+  const priceWith8Decimals = roundData.answer;
+  const priceAsNumber = Number(ethers.utils.formatUnits(priceWith8Decimals, 8));
+  Logger.info('getChainlinkPrice', `Current price: ${priceAsNumber}`);
+  return priceAsNumber;
+}
+
+async function getBinancePrice(symbol: string): Promise<number | null> {
+  Logger.debug('getBinancePrice', `Fetching Binance price for symbol: ${symbol}`);
+
+  // Special handling for WETH
+  if (symbol === 'WETH' || symbol === 'WBTC') {
+    symbol = symbol.replace('W', '');
+  }
+
+  try {
+    const url = `${BINANCE_API_URL}/ticker/price?symbol=${symbol}USD`;
+    Logger.debug('getBinancePrice', `Making request to: ${url}`);
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      Logger.info('getBinancePrice', `No Binance price available for ${symbol}`);
+      return null;
+    }
+
+    const data = await response.json();
+    Logger.debug('getBinancePrice', `Binance response: ${JSON.stringify(data)}`);
+    Logger.info('getBinancePrice', `Current price for ${symbol}: ${data.price}`);
+
+    return parseFloat(data.price);
+  } catch (error) {
+    Logger.info('getBinancePrice', `Could not fetch Binance price for ${symbol}`);
+    Logger.debug('getBinancePrice', `Error details: ${JSON.stringify(error)}`);
+    return null;
+  }
+}
+
+function calculateFeeInToken(
+  feeInCents: ethers.BigNumber,
+  tokenDecimals: number,
+  tokenPrice: number
+): ethers.BigNumber {
+  Logger.debug(
+    'calculateFeeInToken',
+    `Calculating fee. Fee in cents: ${feeInCents.toString()}, Decimals: ${tokenDecimals}, Token price: ${tokenPrice}`
+  );
+
+  // Convert dollar cents to dollars (divide by 100)
+  // Then multiply by token decimals to get the proper token amount
+  // Then divide by token price to convert to token units
+  const fee = feeInCents
+    .mul(ethers.BigNumber.from(10).pow(tokenDecimals))
+    .div(100) // convert cents to dollars
+    .div(ethers.BigNumber.from(Math.floor(tokenPrice * 1e6))) // divide by price (with 6 decimals precision)
+    .mul(1e6); // adjust for the precision we added to price
+
+  Logger.debug('calculateFeeInToken', `Calculated fee in token: ${fee.toString()}`);
+  return fee;
+}
+
+function calculateExpectedOutput(
+  swapAmount: ethers.BigNumber,
+  priceIn: number,
+  priceOut: number,
+  decimalsIn: number,
+  decimalsOut: number
+): ethers.BigNumber {
+  Logger.debug(
+    'calculateExpectedOutput',
+    `Calculating expected output. Swap amount: ${swapAmount.toString()}, ` +
+      `Price in: ${priceIn}, Price out: ${priceOut}, ` +
+      `Decimals in: ${decimalsIn}, Decimals out: ${decimalsOut}`
+  );
+
+  // Add validation to prevent division by zero
+  if (priceOut === 0) {
+    Logger.error('calculateExpectedOutput', 'Output token price cannot be zero');
+    throw new Error('Output token price cannot be zero');
+  }
+
+  // 1. Convert swap amount to USD value (considering decimals)
+  const valueInUsd = swapAmount
+    .mul(ethers.BigNumber.from(Math.floor(priceIn * 1e6)))
+    .div(ethers.BigNumber.from(10).pow(decimalsIn))
+    .div(1e6);
+
+  // 2. Convert USD value to output token amount with proper decimals
+  // Ensure priceOut is converted to BigNumber with sufficient precision
+  const priceOutBN = ethers.BigNumber.from(Math.floor(priceOut * 1e6));
+  const expectedOutput = valueInUsd
+    .mul(ethers.BigNumber.from(10).pow(decimalsOut))
+    .mul(1e6) // Adjust for price precision
+    .div(priceOutBN);
+
+  Logger.info('calculateExpectedOutput', `Expected output amount: ${expectedOutput.toString()}`);
+  return expectedOutput;
+}
+
+async function checkAndApproveToken(
+  networkConfig: IBlockchain,
+  tokenIn: string,
+  amountIn: ethers.BigNumber,
+  setupContractsResult: SetupContractReturn,
+  erc20ABI: ContractInterface,
+  chatterPayContract: ethers.Contract,
+  entryPointContract: ethers.Contract
+): Promise<string | null> {
+  const tokenContract = new ethers.Contract(tokenIn, erc20ABI, setupContractsResult.provider);
+  const { routerAddress } = networkConfig.contracts;
+
+  Logger.debug(
+    'checkAndApproveToken',
+    `Checking allowance for token ${tokenIn}, and swap router ${routerAddress}`
+  );
+
+  // Check current allowance
+  const currentAllowance = await tokenContract.allowance(
+    setupContractsResult.proxy.proxyAddress,
+    routerAddress
+  );
+  Logger.debug('checkAndApproveToken', `Current allowance: ${currentAllowance.toString()}`);
+
+  if (currentAllowance.lt(amountIn)) {
+    Logger.info('checkAndApproveToken', 'Insufficient allowance, approving...');
+
+    // Create approve call data
+    const approveCallData = chatterPayContract.interface.encodeFunctionData('approveToken', [
+      tokenIn,
+      ethers.constants.MaxUint256 // Approve maximum amount
+    ]);
+
+    // Execute approve operation
+    try {
+      const approveHash = await executeOperation(
+        networkConfig,
+        approveCallData,
+        setupContractsResult.signer,
+        setupContractsResult.backendSigner,
+        entryPointContract,
+        setupContractsResult.bundlerUrl,
+        setupContractsResult.proxy.proxyAddress,
+        setupContractsResult.provider
+      );
+      Logger.info('checkAndApproveToken', `Token approved successfully. Hash: ${approveHash}`);
+      return approveHash;
+    } catch (error) {
+      Logger.error(
+        'checkAndApproveToken',
+        `Approval failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      throw error;
+    }
+  }
+
+  Logger.info('checkAndApproveToken', 'Token already has sufficient allowance');
+  return null;
 }
 
 /**
@@ -376,199 +572,4 @@ export async function executeSwap(
     Logger.debug('executeSwap', `Error details: ${JSON.stringify(error)}`);
     return { success: false, swapTransactionHash: '', approveTransactionHash: '' };
   }
-}
-
-/**
- * Helper Functions
- */
-
-async function getTokenDecimals(
-  tokenAddress: string,
-  erc20ABI: ContractInterface,
-  provider: ethers.providers.Provider
-): Promise<number> {
-  Logger.debug('getTokenDecimals', `Fetching decimals for token: ${tokenAddress}`);
-  const token = new ethers.Contract(tokenAddress, erc20ABI, provider);
-  const decimals = await token.decimals();
-  Logger.debug('getTokenDecimals', `Token decimals: ${decimals}`);
-  return decimals;
-}
-
-async function getTokenSymbol(
-  tokenAddress: string,
-  erc20ABI: ContractInterface,
-  provider: ethers.providers.Provider
-): Promise<string> {
-  Logger.debug('getTokenSymbol', `Fetching symbol for token: ${tokenAddress}`);
-  const token = new ethers.Contract(tokenAddress, erc20ABI, provider);
-  const symbol = await token.symbol();
-  Logger.debug('getTokenSymbol', `Token symbol: ${symbol}`);
-  return symbol;
-}
-
-async function getChainlinkPrice(
-  priceFeedAddress: string,
-  priceFeedABI: ContractInterface,
-  provider: ethers.providers.Provider
-): Promise<number> {
-  Logger.debug('getChainlinkPrice', `Fetching Chainlink price from feed: ${priceFeedAddress}`);
-  const priceFeed = new ethers.Contract(priceFeedAddress, priceFeedABI, provider);
-  const roundData = await priceFeed.latestRoundData();
-  Logger.debug('getChainlinkPrice', `Latest round data: ${JSON.stringify(roundData)}`);
-  // Chainlink price feeds return prices with 8 decimals
-  const priceWith8Decimals = roundData.answer;
-  const priceAsNumber = Number(ethers.utils.formatUnits(priceWith8Decimals, 8));
-  Logger.info('getChainlinkPrice', `Current price: ${priceAsNumber}`);
-  return priceAsNumber;
-}
-
-async function getBinancePrice(symbol: string): Promise<number | null> {
-  Logger.debug('getBinancePrice', `Fetching Binance price for symbol: ${symbol}`);
-
-  // Special handling for WETH
-  if (symbol === 'WETH' || symbol === 'WBTC') {
-    symbol = symbol.replace('W', '');
-  }
-
-  try {
-    const url = `https://api.binance.us/api/v3/ticker/price?symbol=${symbol}USD`;
-    Logger.debug('getBinancePrice', `Making request to: ${url}`);
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      Logger.info('getBinancePrice', `No Binance price available for ${symbol}`);
-      return null;
-    }
-
-    const data = await response.json();
-    Logger.debug('getBinancePrice', `Binance response: ${JSON.stringify(data)}`);
-    Logger.info('getBinancePrice', `Current price for ${symbol}: ${data.price}`);
-
-    return parseFloat(data.price);
-  } catch (error) {
-    Logger.info('getBinancePrice', `Could not fetch Binance price for ${symbol}`);
-    Logger.debug('getBinancePrice', `Error details: ${JSON.stringify(error)}`);
-    return null;
-  }
-}
-
-function calculateFeeInToken(
-  feeInCents: ethers.BigNumber,
-  tokenDecimals: number,
-  tokenPrice: number
-): ethers.BigNumber {
-  Logger.debug(
-    'calculateFeeInToken',
-    `Calculating fee. Fee in cents: ${feeInCents.toString()}, Decimals: ${tokenDecimals}, Token price: ${tokenPrice}`
-  );
-
-  // Convert dollar cents to dollars (divide by 100)
-  // Then multiply by token decimals to get the proper token amount
-  // Then divide by token price to convert to token units
-  const fee = feeInCents
-    .mul(ethers.BigNumber.from(10).pow(tokenDecimals))
-    .div(100) // convert cents to dollars
-    .div(ethers.BigNumber.from(Math.floor(tokenPrice * 1e6))) // divide by price (with 6 decimals precision)
-    .mul(1e6); // adjust for the precision we added to price
-
-  Logger.debug('calculateFeeInToken', `Calculated fee in token: ${fee.toString()}`);
-  return fee;
-}
-
-function calculateExpectedOutput(
-  swapAmount: ethers.BigNumber,
-  priceIn: number,
-  priceOut: number,
-  decimalsIn: number,
-  decimalsOut: number
-): ethers.BigNumber {
-  Logger.debug(
-    'calculateExpectedOutput',
-    `Calculating expected output. Swap amount: ${swapAmount.toString()}, ` +
-      `Price in: ${priceIn}, Price out: ${priceOut}, ` +
-      `Decimals in: ${decimalsIn}, Decimals out: ${decimalsOut}`
-  );
-
-  // Add validation to prevent division by zero
-  if (priceOut === 0) {
-    Logger.error('calculateExpectedOutput', 'Output token price cannot be zero');
-    throw new Error('Output token price cannot be zero');
-  }
-
-  // 1. Convert swap amount to USD value (considering decimals)
-  const valueInUsd = swapAmount
-    .mul(ethers.BigNumber.from(Math.floor(priceIn * 1e6)))
-    .div(ethers.BigNumber.from(10).pow(decimalsIn))
-    .div(1e6);
-
-  // 2. Convert USD value to output token amount with proper decimals
-  // Ensure priceOut is converted to BigNumber with sufficient precision
-  const priceOutBN = ethers.BigNumber.from(Math.floor(priceOut * 1e6));
-  const expectedOutput = valueInUsd
-    .mul(ethers.BigNumber.from(10).pow(decimalsOut))
-    .mul(1e6) // Adjust for price precision
-    .div(priceOutBN);
-
-  Logger.info('calculateExpectedOutput', `Expected output amount: ${expectedOutput.toString()}`);
-  return expectedOutput;
-}
-
-async function checkAndApproveToken(
-  networkConfig: IBlockchain,
-  tokenIn: string,
-  amountIn: ethers.BigNumber,
-  setupContractsResult: SetupContractReturn,
-  erc20ABI: ContractInterface,
-  chatterPayContract: ethers.Contract,
-  entryPointContract: ethers.Contract
-): Promise<string | null> {
-  const tokenContract = new ethers.Contract(tokenIn, erc20ABI, setupContractsResult.provider);
-  const { routerAddress } = networkConfig.contracts;
-
-  Logger.debug(
-    'checkAndApproveToken',
-    `Checking allowance for token ${tokenIn}, and swap router ${routerAddress}`
-  );
-
-  // Check current allowance
-  const currentAllowance = await tokenContract.allowance(
-    setupContractsResult.proxy.proxyAddress,
-    routerAddress
-  );
-  Logger.debug('checkAndApproveToken', `Current allowance: ${currentAllowance.toString()}`);
-
-  if (currentAllowance.lt(amountIn)) {
-    Logger.info('checkAndApproveToken', 'Insufficient allowance, approving...');
-
-    // Create approve call data
-    const approveCallData = chatterPayContract.interface.encodeFunctionData('approveToken', [
-      tokenIn,
-      ethers.constants.MaxUint256 // Approve maximum amount
-    ]);
-
-    // Execute approve operation
-    try {
-      const approveHash = await executeOperation(
-        networkConfig,
-        approveCallData,
-        setupContractsResult.signer,
-        setupContractsResult.backendSigner,
-        entryPointContract,
-        setupContractsResult.bundlerUrl,
-        setupContractsResult.proxy.proxyAddress,
-        setupContractsResult.provider
-      );
-      Logger.info('checkAndApproveToken', `Token approved successfully. Hash: ${approveHash}`);
-      return approveHash;
-    } catch (error) {
-      Logger.error(
-        'checkAndApproveToken',
-        `Approval failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-      throw error;
-    }
-  }
-
-  Logger.info('checkAndApproveToken', 'Token already has sufficient allowance');
-  return null;
 }
