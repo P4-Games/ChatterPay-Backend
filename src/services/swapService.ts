@@ -1,6 +1,8 @@
 import { ethers, ContractInterface } from 'ethers';
 
+import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
+import { getTokenInfo } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
 import { addPaymasterData } from './web3/paymasterService';
 import { sendUserOperationToBundler } from './web3/bundlerService';
@@ -10,7 +12,6 @@ import { signUserOperation, createGenericUserOperation } from './web3/userOperat
 import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../types/commonType';
 import {
   BINANCE_API_URL,
-  STABLE_TOKENS_ARRAY,
   SLIPPAGE_CONFIG_EXTRA,
   SLIPPAGE_CONFIG_STABLE,
   SLIPPAGE_CONFIG_DEFAULT
@@ -24,15 +25,6 @@ const SLIPPAGE_CONFIG = {
   DEFAULT: SLIPPAGE_CONFIG_DEFAULT,
   EXTRA: SLIPPAGE_CONFIG_EXTRA
 } as const;
-
-/**
- * Token type classification
- */
-const TOKEN_LISTS = {
-  STABLE: STABLE_TOKENS_ARRAY
-} as {
-  STABLE: string[];
-};
 
 /**
  * Executes a user operation with the given callData through the EntryPoint contract
@@ -157,6 +149,7 @@ function createSwapCallData(
 async function determineSlippage(
   chatterPayContract: ethers.Contract,
   tokenSymbol: string,
+  isStable: boolean,
   tokenOut: string
 ): Promise<number> {
   Logger.debug('determineSlippage', `Determining slippage for token ${tokenSymbol}`);
@@ -169,7 +162,7 @@ async function determineSlippage(
     return customSlippage.toNumber();
   }
 
-  if (TOKEN_LISTS.STABLE.includes(tokenSymbol)) {
+  if (isStable) {
     Logger.info(
       'determineSlippage',
       `Using stable token slippage (${SLIPPAGE_CONFIG.STABLE}) for ${tokenSymbol}`
@@ -387,6 +380,7 @@ export async function executeSwap(
   setupContractsResult: SetupContractReturn,
   entryPointContract: ethers.Contract,
   tokenAddresses: TokenAddresses,
+  blockchainTokens: IToken[],
   amount: string,
   recipient: string
 ): Promise<ExecuteSwapResult> {
@@ -430,13 +424,14 @@ export async function executeSwap(
       'executeSwap',
       `ABIs first lines ERC20: ${JSON.stringify(erc20ABI).slice(0, 100)}, PriceFeed: ${priceFeedABI ? JSON.stringify(priceFeedABI).slice(0, 100) : 'Not loaded in test env'}`
     );
-    const [tokenInDecimals, tokenOutDecimals, tokenInSymbol, tokenOutSymbol, feeInCents] =
+    const [tokenInDecimals, tokenOutDecimals, tokenInSymbol, tokenOutSymbol, feeInCents, tokenInfo] =
       await Promise.all([
         getTokenDecimals(tokenIn, erc20ABI, setupContractsResult.provider),
         getTokenDecimals(tokenOut, erc20ABI, setupContractsResult.provider),
         getTokenSymbol(tokenIn, erc20ABI, setupContractsResult.provider),
         getTokenSymbol(tokenOut, erc20ABI, setupContractsResult.provider),
-        chatterPayContract.getFeeInCents()
+        chatterPayContract.getFeeInCents(),
+        getTokenInfo(networkConfig, blockchainTokens, tokenOut)
       ]);
 
     Logger.info(
@@ -516,8 +511,10 @@ export async function executeSwap(
     );
     Logger.info('executeSwap', `Expected output amount: ${expectedOutput.toString()}`);
 
+    const isOutStable = tokenInfo?.type === "stable";
+
     // Determine and apply slippage
-    const baseSlippage = await determineSlippage(chatterPayContract, tokenOutSymbol, tokenOut);
+    const baseSlippage = await determineSlippage(chatterPayContract, tokenOutSymbol, isOutStable, tokenOut);
     const totalSlippage = baseSlippage + SLIPPAGE_CONFIG.EXTRA;
     Logger.info('executeSwap', `Total slippage: ${totalSlippage} bps`);
 

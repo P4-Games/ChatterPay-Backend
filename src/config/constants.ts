@@ -47,7 +47,6 @@ const {
   SLIPPAGE_CONFIG_STABLE: slippage_config_stable = 300,
   SLIPPAGE_CONFIG_DEFAULT: slippage_config_default = 500,
   SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
-  STABLE_TOKENS = 'USDT,USDC,DAI',
   ABIS_READ_FROM: abisReadFrom = 'local'
 } = process.env;
 
@@ -61,7 +60,6 @@ export {
   CORS_ORIGINS,
   ABIS_VERSION,
   BLACKLIST_IPS,
-  STABLE_TOKENS,
   INFURA_API_KEY,
   BOT_DATA_TOKEN,
   FRONTEND_TOKEN,
@@ -176,7 +174,6 @@ export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/p
 export const TOKEN_IDS = ['usd-coin', 'tether', 'ethereum', 'bitcoin', 'wrapped-bitcoin', 'dai'];
 export const RESULT_CURRENCIES = ['usd', 'ars', 'brl', 'uyu'];
 
-export const STABLE_TOKENS_ARRAY = STABLE_TOKENS.split(',');
 export const SLIPPAGE_CONFIG_STABLE = Number(slippage_config_stable);
 export const SLIPPAGE_CONFIG_DEFAULT = Number(slippage_config_default);
 export const SLIPPAGE_CONFIG_EXTRA = Number(slippage_config_extra);

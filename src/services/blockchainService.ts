@@ -20,6 +20,33 @@ import {
 } from '../config/constants';
 
 /**
+ * Gets token info based on token address or symbol
+ * @param blockchainConfig
+ * @param blockchainTokens
+ * @param tokenSimbolOrAddress
+ * @returns {TokenInfo | undefined}
+ */
+export function getTokenInfo(
+  blockchainConfig: IBlockchain,
+  blockchainTokens: IToken[],
+  tokenSimbolOrAddress: string
+): IToken | undefined {
+  if (!blockchainTokens) return undefined;
+
+  const chainTokens = blockchainTokens.filter(
+    (token) => token.chain_id === blockchainConfig.chain_id
+  );
+
+  const foundToken = chainTokens.find(
+    (t) =>
+      t.symbol.toLowerCase() === tokenSimbolOrAddress.toLowerCase() ||
+      t.address.toLowerCase() === tokenSimbolOrAddress.toLowerCase()
+  );
+
+  return foundToken;
+}
+
+/**
  * Gets token address based on Token symbols
  *
  * @param blockchainConfig

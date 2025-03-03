@@ -184,6 +184,7 @@ export const swap = async (
       checkBlockchainConditionsResult.setupContractsResult!,
       checkBlockchainConditionsResult.entryPointContract!,
       tokenAddresses,
+      blockchainTokens,
       amount.toString(),
       proxyAddress
     );
