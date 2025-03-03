@@ -44,9 +44,9 @@ const {
   FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000,
   ABIS_VERSION = 'v1.0.0',
   CORS_ORIGINS_CHECK_POSTMAN: corsOriginsCheckPostman = 'false',
-  SLIPPAGE_CONFIG_STABLE: slippage_config_stable = 300,
-  SLIPPAGE_CONFIG_DEFAULT: slippage_config_default = 500,
-  SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
+  SWAP_SLIPPAGE_CONFIG_STABLE: slippage_config_stable = 300,
+  SWAP_SLIPPAGE_CONFIG_DEFAULT: slippage_config_default = 500,
+  SWAP_SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
   ABIS_READ_FROM: abisReadFrom = 'local'
 } = process.env;
 
@@ -174,6 +174,6 @@ export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/p
 export const TOKEN_IDS = ['usd-coin', 'tether', 'ethereum', 'bitcoin', 'wrapped-bitcoin', 'dai'];
 export const RESULT_CURRENCIES = ['usd', 'ars', 'brl', 'uyu'];
 
-export const SLIPPAGE_CONFIG_STABLE = Number(slippage_config_stable);
-export const SLIPPAGE_CONFIG_DEFAULT = Number(slippage_config_default);
-export const SLIPPAGE_CONFIG_EXTRA = Number(slippage_config_extra);
+export const SWAP_SLIPPAGE_CONFIG_STABLE = Number(slippage_config_stable);
+export const SWAP_SLIPPAGE_CONFIG_DEFAULT = Number(slippage_config_default);
+export const SWAP_SLIPPAGE_CONFIG_EXTRA = Number(slippage_config_extra);
