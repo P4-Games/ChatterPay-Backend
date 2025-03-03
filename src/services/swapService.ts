@@ -424,19 +424,20 @@ export async function executeSwap(
       'executeSwap',
       `ABIs first lines ERC20: ${JSON.stringify(erc20ABI).slice(0, 100)}, PriceFeed: ${priceFeedABI ? JSON.stringify(priceFeedABI).slice(0, 100) : 'Not loaded in test env'}`
     );
-    const [tokenInDecimals, tokenOutDecimals, tokenInSymbol, tokenOutSymbol, feeInCents, tokenInfo] =
+    const [tokenInDecimals, tokenOutDecimals, tokenInSymbol, tokenOutSymbol, feeInCents] =
       await Promise.all([
         getTokenDecimals(tokenIn, erc20ABI, setupContractsResult.provider),
         getTokenDecimals(tokenOut, erc20ABI, setupContractsResult.provider),
         getTokenSymbol(tokenIn, erc20ABI, setupContractsResult.provider),
         getTokenSymbol(tokenOut, erc20ABI, setupContractsResult.provider),
         chatterPayContract.getFeeInCents(),
-        getTokenInfo(networkConfig, blockchainTokens, tokenOut)
       ]);
+      
+    const tokenInfo = getTokenInfo(networkConfig, blockchainTokens, tokenOut);
 
     Logger.info(
       'executeSwap',
-      `Token details - Input: ${tokenInSymbol} (${tokenInDecimals} decimals), Output: ${tokenOutSymbol} (${tokenOutDecimals} decimals)`
+      `Token details - Input: ${tokenInSymbol} (${tokenInDecimals} decimals), Output: ${tokenOutSymbol} (${tokenOutDecimals} decimals, type: ${tokenInfo?.type})`
     );
     Logger.debug('executeSwap', `Fee in cents: ${feeInCents.toString()}`);
 
