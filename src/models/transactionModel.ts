@@ -12,7 +12,7 @@ export interface ITransaction extends Document {
 }
 
 const transactionSchema = new Schema<ITransaction>({
-  trx_hash: { type: String, required: true, unique: true },
+  trx_hash: { type: String, required: true },
   wallet_from: { type: String, required: true },
   wallet_to: { type: String, required: true },
   type: { type: String, required: true },
@@ -21,6 +21,11 @@ const transactionSchema = new Schema<ITransaction>({
   amount: { type: Number, required: true },
   token: { type: String, required: true }
 });
+
+transactionSchema.index(
+  { trx_hash: 1, wallet_from: 1, wallet_to: 1 },
+  { name: 'trx_hash_wallet_from_to', unique: true }
+);
 
 const Transaction = model<ITransaction>('Transaction', transactionSchema, 'transactions');
 
