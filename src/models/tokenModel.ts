@@ -7,6 +7,7 @@ export interface IToken extends Document {
   logo: string;
   address: string;
   symbol: string;
+  type: string;
 }
 
 const tokenSchema = new Schema<IToken>({
@@ -15,7 +16,8 @@ const tokenSchema = new Schema<IToken>({
   decimals: { type: Number, required: true },
   address: { type: String, required: true, unique: true },
   logo: { type: String, required: false },
-  symbol: { type: String, required: true }
+  symbol: { type: String, required: true },
+  type: { type: String, required: true },
 });
 
 const Token = model<IToken>('Token', tokenSchema, 'tokens');
