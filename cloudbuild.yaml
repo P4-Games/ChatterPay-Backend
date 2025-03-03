@@ -124,6 +124,14 @@ steps:
       '--build-arg',
       'CORS_ORIGINS_CHECK_POSTMAN=${_CORS_ORIGINS_CHECK_POSTMAN}',
       '--build-arg',
+      'SLIPPAGE_CONFIG_STABLE=${_SLIPPAGE_CONFIG_STABLE}',
+      '--build-arg',
+      'SLIPPAGE_CONFIG_DEFAULT=${_SLIPPAGE_CONFIG_DEFAULT}',
+      '--build-arg',
+      'SLIPPAGE_CONFIG_EXTRA=${_SLIPPAGE_CONFIG_EXTRA}',
+      '--build-arg',
+      'STABLE_TOKENS=${_STABLE_TOKENS}',
+      '--build-arg',
       'ABIS_READ_FROM=${_ABIS_READ_FROM}',
       '.'
     ]
