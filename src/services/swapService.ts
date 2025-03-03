@@ -430,9 +430,9 @@ export async function executeSwap(
         getTokenDecimals(tokenOut, erc20ABI, setupContractsResult.provider),
         getTokenSymbol(tokenIn, erc20ABI, setupContractsResult.provider),
         getTokenSymbol(tokenOut, erc20ABI, setupContractsResult.provider),
-        chatterPayContract.getFeeInCents(),
+        chatterPayContract.getFeeInCents()
       ]);
-      
+
     const tokenInfo = getTokenInfo(networkConfig, blockchainTokens, tokenOut);
 
     Logger.info(
@@ -512,10 +512,15 @@ export async function executeSwap(
     );
     Logger.info('executeSwap', `Expected output amount: ${expectedOutput.toString()}`);
 
-    const isOutStable = tokenInfo?.type === "stable";
+    const isOutStable = tokenInfo?.type === 'stable';
 
     // Determine and apply slippage
-    const baseSlippage = await determineSlippage(chatterPayContract, tokenOutSymbol, isOutStable, tokenOut);
+    const baseSlippage = await determineSlippage(
+      chatterPayContract,
+      tokenOutSymbol,
+      isOutStable,
+      tokenOut
+    );
     const totalSlippage = baseSlippage + SLIPPAGE_CONFIG.EXTRA;
     Logger.info('executeSwap', `Total slippage: ${totalSlippage} bps`);
 

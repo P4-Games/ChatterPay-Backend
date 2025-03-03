@@ -17,7 +17,7 @@ const tokenSchema = new Schema<IToken>({
   address: { type: String, required: true, unique: true },
   logo: { type: String, required: false },
   symbol: { type: String, required: true },
-  type: { type: String, required: true },
+  type: { type: String, required: true }
 });
 
 const Token = model<IToken>('Token', tokenSchema, 'tokens');
