@@ -5,7 +5,7 @@ import { IBlockchain } from '../models/blockchainModel';
 import { addPaymasterData } from './web3/paymasterService';
 import { sendUserOperationToBundler } from './web3/bundlerService';
 import { waitForUserOperationReceipt } from './web3/userOpExecutorService';
-import { getERC20ABI, getPriceFeedABI, getChatterpayABI } from './web3/abiService';
+import { getERC20ABI, getChatterpayABI, getChainlinkPriceFeedABI } from './web3/abiService';
 import { signUserOperation, createGenericUserOperation } from './web3/userOperationService';
 import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../types/commonType';
 import {
@@ -403,7 +403,7 @@ export async function executeSwap(
     const abisToFetch = [getChatterpayABI(), getERC20ABI()];
 
     if (!isTestEnvironment) {
-      abisToFetch.push(getPriceFeedABI());
+      abisToFetch.push(getChainlinkPriceFeedABI());
     }
 
     const [chatterpayABI, erc20ABI, ...otherABIs] = await Promise.all(abisToFetch);

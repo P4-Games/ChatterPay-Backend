@@ -102,8 +102,8 @@ export const getEntryPointABI = async (): Promise<ABI> => getFile('EntryPoint');
 export const getChatterpayABI = async (): Promise<ABI> => getFile('ChatterPay');
 
 /**
- * Retrieves the Price Feed ABI.
+ * Retrieves the Chailink Price Feed ABI.
  *
- * @returns {Promise<ABI>} The ChatterPay ABI object.
+ * @returns {Promise<ABI>} The Chailink Price Feed ABI object.
  */
-export const getPriceFeedABI = async (): Promise<ABI> => getFile('ChainlinkPriceFeed');
+export const getChainlinkPriceFeedABI = async (): Promise<ABI> => getFile('ChainlinkPriceFeed');
