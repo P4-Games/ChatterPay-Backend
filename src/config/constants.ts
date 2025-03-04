@@ -44,6 +44,9 @@ const {
   FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000,
   ABIS_VERSION = 'v1.0.0',
   CORS_ORIGINS_CHECK_POSTMAN: corsOriginsCheckPostman = 'false',
+  SWAP_SLIPPAGE_CONFIG_STABLE: slippage_config_stable = 300,
+  SWAP_SLIPPAGE_CONFIG_DEFAULT: slippage_config_default = 500,
+  SWAP_SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
   ABIS_READ_FROM: abisReadFrom = 'local'
 } = process.env;
 
@@ -82,7 +85,8 @@ export const GCP_ABIs: ABIs = {
   ChatterPayWalletFactory: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletFactory.sol/ChatterPayWalletFactory.json`,
   ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayNFT.sol/ChatterPayNFT.json`,
   EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/EntryPoint.sol/EntryPoint.json`,
-  ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.sol/ERC20.json`
+  ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.sol/ERC20.json`,
+  ChainlinkPriceFeed: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`
 };
 
 export const LOCAL_ABIs: ABIs = {
@@ -91,7 +95,8 @@ export const LOCAL_ABIs: ABIs = {
   ChatterPayWalletFactory: `ChatterPayWalletFactory.sol/ChatterPayWalletFactory.json`,
   ChatterPayNFT: `ChatterPayNFT.sol/ChatterPayNFT.json`,
   EntryPoint: `EntryPoint.sol/EntryPoint.json`,
-  ERC20: `ERC20.sol/ERC20.json`
+  ERC20: `ERC20.sol/ERC20.json`,
+  ChainlinkPriceFeed: `ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`
 };
 
 export const ABIS_READ_FROM = abisReadFrom.toLowerCase();
@@ -132,9 +137,6 @@ export const BACKEND_SIGNER_MIN_BALANCE: string = '0.01'; // must have at least:
 export const USER_SIGNER_MIN_BALANCE: string = '0.0008';
 export const USER_SIGNER_BALANCE_TO_TRANSFER: string = '0.001';
 
-export const LIFI_SLIPPAGE = 30 / 1000;
-export const LIFI_TYPE = 'SAFEST';
-
 export const NOTIFICATION_TEMPLATE_CACHE_TTL = 60800; // 1 week
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
 export const GCP_CLOUD_TRACE_ENABLED: boolean = gcpCloudTraceEnabled.toLowerCase() === 'true';
@@ -171,3 +173,7 @@ export const CORS_ORIGINS_EXCEPTIONS: string = '/metadata/opensea,/favicon.ico,/
 export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/price';
 export const TOKEN_IDS = ['usd-coin', 'tether', 'ethereum', 'bitcoin', 'wrapped-bitcoin', 'dai'];
 export const RESULT_CURRENCIES = ['usd', 'ars', 'brl', 'uyu'];
+
+export const SWAP_SLIPPAGE_CONFIG_STABLE = Number(slippage_config_stable);
+export const SWAP_SLIPPAGE_CONFIG_DEFAULT = Number(slippage_config_default);
+export const SWAP_SLIPPAGE_CONFIG_EXTRA = Number(slippage_config_extra);

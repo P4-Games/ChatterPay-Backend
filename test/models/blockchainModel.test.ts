@@ -48,7 +48,6 @@ describe('Blockchain Model', () => {
         entryPoint: '0xEntryPointAddress',
         factoryAddress: '0xFactoryAddress',
         chatterPayAddress: '0xChatterPayAddress',
-        simpleSwapAddress: '0xSimpleSwapAddress',
         chatterNFTAddress: '0xChatterNFTAddress'
       }
     };

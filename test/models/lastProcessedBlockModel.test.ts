@@ -34,7 +34,7 @@ describe('Blockchain Model', () => {
         entryPoint: '0xEntryPointAddress',
         factoryAddress: '0xFactoryAddress',
         chatterPayAddress: '0xChatterPayAddress',
-        simpleSwapAddress: '0xSimpleSwapAddress',
+        routerAddress: '0xUniswapV3Address',
         chatterNFTAddress: '0xChatterNFTAddress'
       }
     };
@@ -72,7 +72,7 @@ describe('Blockchain Model', () => {
         entryPoint: '0xEntryPointAddress',
         factoryAddress: '',
         chatterPayAddress: '',
-        simpleSwapAddress: '',
+        routerAddress: '',
         chatterNFTAddress: ''
       }
     };

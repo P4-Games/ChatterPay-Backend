@@ -62,7 +62,6 @@
     "@fastify/swagger": "8.15.0",
     "@fastify/swagger-ui": "4.0.1",
     "@google-cloud/trace-agent": "^8.0.0",
-    "@lifi/sdk": "^2.5.1",
     "@openzeppelin/contracts": "^5.0.2",
     "@pinata/sdk": "^2.1.0",
     "@pushprotocol/restapi": "^1.7.29",

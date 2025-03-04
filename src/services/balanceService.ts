@@ -136,6 +136,7 @@ async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo
   return chainTokens.map((token) => ({
     symbol: token.symbol,
     address: token.address,
+    type: token.type,
     rateUSD: prices.get(token.symbol) || 0
   }));
 }
