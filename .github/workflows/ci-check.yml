@@ -87,6 +87,16 @@ jobs:
       - name: Ensure axios is installed
         run: bun add axios
 
+      - name: Clean MongoDB cache
+        run: |
+          rm -rf /home/runner/.cache/mongodb-binaries
+          mkdir -p /tmp/mongodb-binaries
+
+      - name: Pre-download MongoDB binary
+        run: |
+          bun add mongodb-memory-server-core
+          bun --eval "const { MongoBinary } = require('mongodb-memory-server-core'); MongoBinary.getPath({ downloadDir: '/tmp/mongodb-binaries', version: '7.0.14' });"
+
       - name: Run tests
         run: bun x vitest --exclude test/services/coingecko/coingeckoService.test.ts
 
