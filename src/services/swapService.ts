@@ -27,8 +27,9 @@ const SLIPPAGE_CONFIG = {
 } as const;
 
 /**
- * Executes a user operation with the given callData through the EntryPoint contract
- *
+ * Executes a user operation with the given callData through the EntryPoint contract.
+ * Handles retries for replacement underpriced errors up to 3 times.
+ * 
  * @param networkConfig - Network configuration containing contract addresses and network details
  * @param callData - Encoded function call data
  * @param signer - Wallet for signing the transaction
@@ -37,6 +38,7 @@ const SLIPPAGE_CONFIG = {
  * @param bundlerUrl - URL of the bundler service
  * @param proxyAddress - Address of the user's proxy contract
  * @param provider - Ethereum provider instance
+ * @param retryCount - Number of retry attempts made (default: 0)
  * @returns Transaction hash of the executed operation
  * @throws Error if the transaction fails or receipt is not found
  */
@@ -48,18 +50,23 @@ async function executeOperation(
   entrypointContract: ethers.Contract,
   bundlerUrl: string,
   proxyAddress: string,
-  provider: ethers.providers.JsonRpcProvider
+  provider: ethers.providers.JsonRpcProvider,
+  retryCount = 0
 ): Promise<string> {
-  Logger.info('executeOperation', `Starting operation execution for proxy: ${proxyAddress}`);
+  Logger.info('executeOperation', `Starting operation execution for proxy: ${proxyAddress}, retry: ${retryCount}`);
   Logger.debug('executeOperation', `Network config: ${JSON.stringify(networkConfig)}`);
 
   // Get the current nonce for the proxy account
   const nonce = await entrypointContract.getNonce(proxyAddress, 0);
   Logger.info('executeOperation', `Current nonce for proxy ${proxyAddress}: ${nonce.toString()}`);
 
-  // Create and prepare the user operation
+  // Calculate gas multiplier based on retry count
+  // 1.0x for first attempt, 1.3x for first retry, 1.6x for second, 2.0x for third
+  const gasMultiplier = retryCount === 0 ? 1.0 : (1.0 + (retryCount * 0.3));
+
+  // Create and prepare the user operation with the gas multiplier
   Logger.debug('executeOperation', 'Creating generic user operation');
-  let userOperation = await createGenericUserOperation(callData, proxyAddress, nonce);
+  let userOperation = await createGenericUserOperation(callData, proxyAddress, nonce, gasMultiplier);
   Logger.debug('executeOperation', `Initial user operation: ${JSON.stringify(userOperation)}`);
 
   // Add paymaster data using the backend signer
@@ -89,30 +96,63 @@ async function executeOperation(
   );
   Logger.info('executeOperation', 'User operation signed successfully');
 
-  // Send the operation to the bundler and wait for receipt
-  Logger.info('executeOperation', `Sending operation to bundler: ${bundlerUrl}`);
-  const bundlerResponse = await sendUserOperationToBundler(
-    bundlerUrl,
-    userOperation,
-    entrypointContract.address
-  );
-  Logger.debug('executeOperation', `Bundler response: ${JSON.stringify(bundlerResponse)}`);
-
-  Logger.info('executeOperation', 'Waiting for operation receipt');
-  const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
-
-  if (!receipt?.success) {
-    Logger.error('executeOperation', `Operation failed. Receipt: ${JSON.stringify(receipt)}`);
-    throw new Error(
-      `Transaction failed or not found. Receipt: ${receipt.success}, Hash: ${receipt.userOpHash}`
+  try {
+    // Send the operation to the bundler and wait for receipt
+    Logger.info('executeOperation', `Sending operation to bundler: ${bundlerUrl}`);
+    const bundlerResponse = await sendUserOperationToBundler(
+      bundlerUrl,
+      userOperation,
+      entrypointContract.address
     );
-  }
+    Logger.debug('executeOperation', `Bundler response: ${JSON.stringify(bundlerResponse)}`);
 
-  Logger.info(
-    'executeOperation',
-    `Operation completed successfully. Hash: ${receipt.receipt.transactionHash}`
-  );
-  return receipt.receipt.transactionHash;
+    Logger.info('executeOperation', 'Waiting for operation receipt');
+    const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
+
+    if (!receipt?.success) {
+      Logger.error('executeOperation', `Operation failed. Receipt: ${JSON.stringify(receipt)}`);
+      throw new Error(
+        `Transaction failed or not found. Receipt: ${receipt.success}, Hash: ${receipt.userOpHash}`
+      );
+    }
+
+    Logger.info(
+      'executeOperation',
+      `Operation completed successfully. Hash: ${receipt.receipt.transactionHash}`
+    );
+    return receipt.receipt.transactionHash;
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    Logger.debug('executeOperation', `Error caught: ${errorMessage}`);
+    
+    // If we get a replacement underpriced error and haven't exceeded retries
+    if (errorMessage.includes("replacement underpriced") && retryCount < 3) {
+      Logger.warn('executeOperation', `Detected replacement underpriced (retry ${retryCount + 1}/3)`);
+      
+      // Wait before retrying
+      const waitTime = 3000 + (Math.random() * 2000);
+      Logger.info('executeOperation', `Waiting ${Math.round(waitTime/1000)} seconds before retry...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      
+      // Retry with increased retry count (which will increase gas multiplier)
+      return executeOperation(
+        networkConfig,
+        callData,
+        signer,
+        backendSigner,
+        entrypointContract,
+        bundlerUrl,
+        proxyAddress,
+        provider,
+        retryCount + 1
+      );
+    }
+    
+    // For other errors or if retries exhausted, propagate the error
+    Logger.error('executeOperation', `Operation failed: ${errorMessage}`);
+    throw error;
+  }
 }
 
 /**
