@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 
+import { Logger } from '../../helpers/loggerHelper';
 import { UserOperationReceipt } from '../../types/userOperationType';
 
 declare module 'fastify' {
@@ -22,8 +23,8 @@ declare module 'fastify' {
 export async function waitForUserOperationReceipt(
   provider: ethers.providers.JsonRpcProvider,
   userOpHash: string,
-  timeout = 1200000,
-  interval = 5000
+  timeout = 300000, // 5 minutes
+  interval = 5000 // 5 seconds
 ): Promise<UserOperationReceipt> {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
@@ -34,6 +35,8 @@ export async function waitForUserOperationReceipt(
           if (receipt) {
             resolve(receipt);
           } else if (Date.now() - startTime < timeout) {
+            const elapsed = Date.now() - startTime;
+            Logger.log('waitForUserOperationReceipt', `Retrying... ${elapsed} / ${timeout} ms`);
             setTimeout(checkReceipt, interval);
           } else {
             reject(
@@ -43,6 +46,11 @@ export async function waitForUserOperationReceipt(
         })
         .catch((error) => {
           if (Date.now() - startTime < timeout) {
+            const elapsed = Date.now() - startTime;
+            Logger.log(
+              'waitForUserOperationReceipt',
+              `Retrying after error... ${elapsed} / ${timeout} ms`
+            );
             setTimeout(checkReceipt, interval);
           } else {
             reject(error);
