@@ -29,7 +29,7 @@ const SLIPPAGE_CONFIG = {
 /**
  * Executes a user operation with the given callData through the EntryPoint contract.
  * Handles retries for replacement underpriced errors up to 3 times.
- * 
+ *
  * @param networkConfig - Network configuration containing contract addresses and network details
  * @param callData - Encoded function call data
  * @param signer - Wallet for signing the transaction
@@ -53,7 +53,10 @@ async function executeOperation(
   provider: ethers.providers.JsonRpcProvider,
   retryCount = 0
 ): Promise<string> {
-  Logger.info('executeOperation', `Starting operation execution for proxy: ${proxyAddress}, retry: ${retryCount}`);
+  Logger.info(
+    'executeOperation',
+    `Starting operation execution for proxy: ${proxyAddress}, retry: ${retryCount}`
+  );
   Logger.debug('executeOperation', `Network config: ${JSON.stringify(networkConfig)}`);
 
   // Get the current nonce for the proxy account
@@ -62,11 +65,16 @@ async function executeOperation(
 
   // Calculate gas multiplier based on retry count
   // 1.0x for first attempt, 1.3x for first retry, 1.6x for second, 2.0x for third
-  const gasMultiplier = retryCount === 0 ? 1.0 : (1.0 + (retryCount * 0.3));
+  const gasMultiplier = retryCount === 0 ? 1.0 : 1.0 + retryCount * 0.3;
 
   // Create and prepare the user operation with the gas multiplier
   Logger.debug('executeOperation', 'Creating generic user operation');
-  let userOperation = await createGenericUserOperation(callData, proxyAddress, nonce, gasMultiplier);
+  let userOperation = await createGenericUserOperation(
+    callData,
+    proxyAddress,
+    nonce,
+    gasMultiplier
+  );
   Logger.debug('executeOperation', `Initial user operation: ${JSON.stringify(userOperation)}`);
 
   // Add paymaster data using the backend signer
@@ -121,20 +129,25 @@ async function executeOperation(
       `Operation completed successfully. Hash: ${receipt.receipt.transactionHash}`
     );
     return receipt.receipt.transactionHash;
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     Logger.debug('executeOperation', `Error caught: ${errorMessage}`);
-    
+
     // If we get a replacement underpriced error and haven't exceeded retries
-    if (errorMessage.includes("replacement underpriced") && retryCount < 3) {
-      Logger.warn('executeOperation', `Detected replacement underpriced (retry ${retryCount + 1}/3)`);
-      
+    if (errorMessage.includes('replacement underpriced') && retryCount < 3) {
+      Logger.warn(
+        'executeOperation',
+        `Detected replacement underpriced (retry ${retryCount + 1}/3)`
+      );
+
       // Wait before retrying
-      const waitTime = 3000 + (Math.random() * 2000);
-      Logger.info('executeOperation', `Waiting ${Math.round(waitTime/1000)} seconds before retry...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-      
+      const waitTime = 3000 + Math.random() * 2000;
+      Logger.info(
+        'executeOperation',
+        `Waiting ${Math.round(waitTime / 1000)} seconds before retry...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+
       // Retry with increased retry count (which will increase gas multiplier)
       return executeOperation(
         networkConfig,
@@ -148,7 +161,7 @@ async function executeOperation(
         retryCount + 1
       );
     }
-    
+
     // For other errors or if retries exhausted, propagate the error
     Logger.error('executeOperation', `Operation failed: ${errorMessage}`);
     throw error;

@@ -38,24 +38,36 @@ export async function createGenericUserOperation(
   // Calculate adjusted gas values
   const baseMaxFeePerGas = ethers.utils.parseUnits(MAX_FEE_PER_GAS, 'gwei');
   const baseMaxPriorityFeePerGas = ethers.utils.parseUnits(MAX_PRIORITY_FEE_PER_GAS, 'gwei');
-  
+
   // Apply multiplier if different from 1.0
   let effectiveMaxFeePerGas = baseMaxFeePerGas;
   let effectiveMaxPriorityFeePerGas = baseMaxPriorityFeePerGas;
-  
+
   if (gasMultiplier !== 1.0) {
     // Convert multiplier to basis points (e.g., 1.2 → 120)
     const multiplierBasisPoints = Math.floor(gasMultiplier * 100);
-    
+
     // Apply multiplier to base values
     effectiveMaxFeePerGas = baseMaxFeePerGas.mul(multiplierBasisPoints).div(100);
     effectiveMaxPriorityFeePerGas = baseMaxPriorityFeePerGas.mul(multiplierBasisPoints).div(100);
-    
-    Logger.log('createGenericUserOperation', `Applying gas multiplier: ${gasMultiplier.toFixed(2)}x`);
-    Logger.log('createGenericUserOperation', `Original MAX_FEE_PER_GAS: ${MAX_FEE_PER_GAS} gwei → ${ethers.utils.formatUnits(effectiveMaxFeePerGas, 'gwei')} gwei`);
-    Logger.log('createGenericUserOperation', `Original MAX_PRIORITY_FEE_PER_GAS: ${MAX_PRIORITY_FEE_PER_GAS} gwei → ${ethers.utils.formatUnits(effectiveMaxPriorityFeePerGas, 'gwei')} gwei`);
+
+    Logger.log(
+      'createGenericUserOperation',
+      `Applying gas multiplier: ${gasMultiplier.toFixed(2)}x`
+    );
+    Logger.log(
+      'createGenericUserOperation',
+      `Original MAX_FEE_PER_GAS: ${MAX_FEE_PER_GAS} gwei → ${ethers.utils.formatUnits(effectiveMaxFeePerGas, 'gwei')} gwei`
+    );
+    Logger.log(
+      'createGenericUserOperation',
+      `Original MAX_PRIORITY_FEE_PER_GAS: ${MAX_PRIORITY_FEE_PER_GAS} gwei → ${ethers.utils.formatUnits(effectiveMaxPriorityFeePerGas, 'gwei')} gwei`
+    );
   } else {
-    Logger.log('createGenericUserOperation', `Using standard gas values: MAX_FEE_PER_GAS: ${MAX_FEE_PER_GAS} gwei, MAX_PRIORITY_FEE_PER_GAS: ${MAX_PRIORITY_FEE_PER_GAS} gwei`);
+    Logger.log(
+      'createGenericUserOperation',
+      `Using standard gas values: MAX_FEE_PER_GAS: ${MAX_FEE_PER_GAS} gwei, MAX_PRIORITY_FEE_PER_GAS: ${MAX_PRIORITY_FEE_PER_GAS} gwei`
+    );
   }
 
   // Create and return userOp with adjusted gas values
