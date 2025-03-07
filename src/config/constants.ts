@@ -131,6 +131,28 @@ export const VERIFICATION_GAS_LIMIT: number = Number(verificationGasLimit);
 export const CALL_GAS_LIMIT: number = Number(callGasLimit);
 export const PRE_VERIFICATION_GAS: number = Number(preVerificationGas);
 
+/*
+  EntryPoint gas cost logic:
+    requiredGas = CALL_GAS_LIMIT + (VERIFICATION_GAS_LIMIT * 3) + PRE_VERIFICATION_GAS
+    requiredPrefund = requiredGas * MAX_FEE_PER_GAS;
+*/
+export const GAS_VALUES_BY_OP_TYPE = {
+  transfer: {
+    maxFeePerGas: '0.5',
+    maxPriorityFeePerGas: '0.05',
+    verificationGasLimit: 50000,
+    callGasLimit: 149456,
+    preVerificationGas: 50000
+  },
+  swap: {
+    maxFeePerGas: '0.5',
+    maxPriorityFeePerGas: '0.05',
+    verificationGasLimit: 80000,
+    callGasLimit: 200000,
+    preVerificationGas: 50000
+  }
+};
+
 export const PAYMASTER_MIN_BALANCE: string = '0.15';
 export const PAYMASTER_TARGET_BALANCE: string = '0.3';
 export const BACKEND_SIGNER_MIN_BALANCE: string = '0.01'; // must have at least: PAYMASTER_TARGET_BALANCE + 0.005

@@ -1,15 +1,9 @@
 import { ethers, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
+import { GAS_VALUES_BY_OP_TYPE } from '../../config/constants';
 import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation } from '../../types/userOperationType';
-import {
-  CALL_GAS_LIMIT,
-  MAX_FEE_PER_GAS,
-  PRE_VERIFICATION_GAS,
-  VERIFICATION_GAS_LIMIT,
-  MAX_PRIORITY_FEE_PER_GAS
-} from '../../config/constants';
 
 /**
  * Creates a generic user operation for any type of transaction.
@@ -25,19 +19,32 @@ export async function createGenericUserOperation(
   callData: string,
   sender: string,
   nonce: BigNumber,
+  userOpType: 'transfer' | 'swap',
   gasMultiplier: number = 1.0
 ): Promise<PackedUserOperation> {
+  const gasValues = GAS_VALUES_BY_OP_TYPE[userOpType];
+
   Logger.log('createGenericUserOperation', 'Creating Generic UserOperation.');
   Logger.log('createGenericUserOperation', 'Sender Address:', sender);
   Logger.log('createGenericUserOperation', 'Call Data:', callData);
   Logger.log('createGenericUserOperation', 'Nonce:', nonce.toString());
-  Logger.log('createGenericUserOperation', 'PRE_VERIFICATION_GAS', PRE_VERIFICATION_GAS);
-  Logger.log('createGenericUserOperation', 'CALL_GAS_LIMIT', CALL_GAS_LIMIT);
-  Logger.log('createGenericUserOperation', 'VERIFICATION_GAS_LIMIT', VERIFICATION_GAS_LIMIT);
+  Logger.log('createGenericUserOperation', 'MAX_FEE_PER_GAS', gasValues.maxFeePerGas);
+  Logger.log(
+    'createGenericUserOperation',
+    'MAX_PRIORITY_FEE_PER_GAS',
+    gasValues.maxPriorityFeePerGas
+  );
+  Logger.log(
+    'createGenericUserOperation',
+    'VERIFICATION_GAS_LIMIT',
+    gasValues.verificationGasLimit
+  );
+  Logger.log('createGenericUserOperation', 'CALL_GAS_LIMIT', gasValues.callGasLimit);
+  Logger.log('createGenericUserOperation', 'PRE_VERIFICATION_GAS', gasValues.preVerificationGas);
 
   // Calculate adjusted gas values
-  const baseMaxFeePerGas = ethers.utils.parseUnits(MAX_FEE_PER_GAS, 'gwei');
-  const baseMaxPriorityFeePerGas = ethers.utils.parseUnits(MAX_PRIORITY_FEE_PER_GAS, 'gwei');
+  const baseMaxFeePerGas = ethers.utils.parseUnits(gasValues.maxFeePerGas, 'gwei');
+  const baseMaxPriorityFeePerGas = ethers.utils.parseUnits(gasValues.maxPriorityFeePerGas, 'gwei');
 
   // Apply multiplier if different from 1.0
   let effectiveMaxFeePerGas = baseMaxFeePerGas;
@@ -57,16 +64,16 @@ export async function createGenericUserOperation(
     );
     Logger.log(
       'createGenericUserOperation',
-      `Original MAX_FEE_PER_GAS: ${MAX_FEE_PER_GAS} gwei → ${ethers.utils.formatUnits(effectiveMaxFeePerGas, 'gwei')} gwei`
+      `Original MAX_FEE_PER_GAS: ${gasValues.maxFeePerGas} gwei → ${ethers.utils.formatUnits(effectiveMaxFeePerGas, 'gwei')} gwei`
     );
     Logger.log(
       'createGenericUserOperation',
-      `Original MAX_PRIORITY_FEE_PER_GAS: ${MAX_PRIORITY_FEE_PER_GAS} gwei → ${ethers.utils.formatUnits(effectiveMaxPriorityFeePerGas, 'gwei')} gwei`
+      `Original MAX_PRIORITY_FEE_PER_GAS: ${gasValues.maxPriorityFeePerGas} gwei → ${ethers.utils.formatUnits(effectiveMaxPriorityFeePerGas, 'gwei')} gwei`
     );
   } else {
     Logger.log(
       'createGenericUserOperation',
-      `Using standard gas values: MAX_FEE_PER_GAS: ${MAX_FEE_PER_GAS} gwei, MAX_PRIORITY_FEE_PER_GAS: ${MAX_PRIORITY_FEE_PER_GAS} gwei`
+      `Using standard gas values: MAX_FEE_PER_GAS: ${gasValues.maxFeePerGas} gwei, MAX_PRIORITY_FEE_PER_GAS: ${gasValues.maxPriorityFeePerGas} gwei`
     );
   }
 
@@ -76,9 +83,9 @@ export async function createGenericUserOperation(
     nonce,
     initCode: '0x',
     callData,
-    verificationGasLimit: BigNumber.from(VERIFICATION_GAS_LIMIT),
-    callGasLimit: BigNumber.from(CALL_GAS_LIMIT),
-    preVerificationGas: BigNumber.from(PRE_VERIFICATION_GAS),
+    verificationGasLimit: BigNumber.from(gasValues.verificationGasLimit),
+    callGasLimit: BigNumber.from(gasValues.callGasLimit),
+    preVerificationGas: BigNumber.from(gasValues.preVerificationGas),
     maxFeePerGas: effectiveMaxFeePerGas,
     maxPriorityFeePerGas: effectiveMaxPriorityFeePerGas,
     paymasterAndData: '0x', // Will be filled by the paymaster service

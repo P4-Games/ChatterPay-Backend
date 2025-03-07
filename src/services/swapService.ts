@@ -4,12 +4,12 @@ import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
-import { addPaymasterData } from './web3/paymasterService';
 import { sendUserOperationToBundler } from './web3/bundlerService';
 import { waitForUserOperationReceipt } from './web3/userOpExecutorService';
 import { getERC20ABI, getChatterpayABI, getChainlinkPriceFeedABI } from './web3/abiService';
 import { signUserOperation, createGenericUserOperation } from './web3/userOperationService';
 import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../types/commonType';
+import { addPaymasterData, getPaymasterEntryPointDepositValue } from './web3/paymasterService';
 import {
   BINANCE_API_URL,
   SWAP_SLIPPAGE_CONFIG_EXTRA,
@@ -73,6 +73,7 @@ async function executeOperation(
     callData,
     proxyAddress,
     nonce,
+    'swap',
     gasMultiplier
   );
   Logger.debug('executeOperation', `Initial user operation: ${JSON.stringify(userOperation)}`);
@@ -128,6 +129,7 @@ async function executeOperation(
       'executeOperation',
       `Operation completed successfully. Hash: ${receipt.receipt.transactionHash}`
     );
+
     return receipt.receipt.transactionHash;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -497,6 +499,12 @@ export async function executeSwap(
     let effectivePriceIn = 1;
     let effectivePriceOut = 5;
 
+    // Keep Paymater Deposit Value
+    const paymasterDepositValuePrev = await getPaymasterEntryPointDepositValue(
+      entryPointContract,
+      networkConfig.contracts.paymasterAddress!
+    );
+
     if (!isTestEnvironment && priceFeedABI) {
       // Get price feeds and current prices
       Logger.debug('executeSwap', 'Fetching price feeds');
@@ -612,6 +620,22 @@ export async function executeSwap(
       setupContractsResult.bundlerUrl,
       setupContractsResult.proxy.proxyAddress,
       setupContractsResult.provider
+    );
+
+    const paymasterDepositValueNow = await getPaymasterEntryPointDepositValue(
+      entryPointContract,
+      networkConfig.contracts.paymasterAddress!
+    );
+    const cost = paymasterDepositValuePrev.value.sub(paymasterDepositValueNow.value);
+    const costInEth = (
+      parseFloat(paymasterDepositValuePrev.inEth) - parseFloat(paymasterDepositValueNow.inEth)
+    ).toFixed(6);
+
+    Logger.info(
+      'executeOperation',
+      `Paymaster pre: ${paymasterDepositValuePrev.value.toString()} (${paymasterDepositValuePrev.inEth}), ` +
+        `Paymaster now: ${paymasterDepositValueNow.value.toString()} (${paymasterDepositValueNow.inEth}), ` +
+        `Cost: ${cost.toString()} (${costInEth} ETH)`
     );
 
     Logger.info('executeSwap', `Swap completed successfully. Hash: ${swapHash}`);

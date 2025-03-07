@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+import { ethers, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { PackedUserOperation } from '../../types/userOperationType';
@@ -110,5 +110,22 @@ export async function ensurePaymasterHasEnoughEth(
   } catch (error) {
     Logger.error('ensurePaymasterHasEnoughEth', error);
     return false;
+  }
+}
+
+export async function getPaymasterEntryPointDepositValue(
+  entrypointContract: ethers.Contract,
+  paymasterContractAddress: string
+): Promise<{ value: BigNumber; inEth: string }> {
+  try {
+    // Get the current balance of the paymaster
+    const paymasterBalance = await entrypointContract.balanceOf(paymasterContractAddress);
+    return {
+      value: paymasterBalance,
+      inEth: `${ethers.utils.formatEther(paymasterBalance)} eth`
+    };
+  } catch (error) {
+    Logger.error('ensurePaymasterHasEnoughEth', error);
+    return { value: BigNumber.from('0'), inEth: '' };
   }
 }
