@@ -179,7 +179,7 @@ export async function sendTransferUserOperation(
     ).toFixed(6);
 
     Logger.info(
-      'executeOperation',
+      'sendTransferUserOperation',
       `Paymaster pre: ${paymasterDepositValuePrev.value.toString()} (${paymasterDepositValuePrev.inEth}), ` +
         `Paymaster now: ${paymasterDepositValueNow.value.toString()} (${paymasterDepositValueNow.inEth}), ` +
         `Cost: ${cost.toString()} (${costInEth} ETH)`

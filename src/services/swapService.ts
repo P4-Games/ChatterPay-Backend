@@ -632,7 +632,7 @@ export async function executeSwap(
     ).toFixed(6);
 
     Logger.info(
-      'executeOperation',
+      'executeSwap',
       `Paymaster pre: ${paymasterDepositValuePrev.value.toString()} (${paymasterDepositValuePrev.inEth}), ` +
         `Paymaster now: ${paymasterDepositValueNow.value.toString()} (${paymasterDepositValueNow.inEth}), ` +
         `Cost: ${cost.toString()} (${costInEth} ETH)`

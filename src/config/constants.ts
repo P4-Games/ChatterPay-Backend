@@ -131,7 +131,6 @@ export const VERIFICATION_GAS_LIMIT: number = Number(verificationGasLimit);
 export const CALL_GAS_LIMIT: number = Number(callGasLimit);
 export const PRE_VERIFICATION_GAS: number = Number(preVerificationGas);
 
-
 /*
   EntryPoint gas cost logic:
     requiredGas = CALL_GAS_LIMIT + (VERIFICATION_GAS_LIMIT * 3) + PRE_VERIFICATION_GAS
@@ -153,7 +152,6 @@ export const GAS_VALUES_BY_OP_TYPE = {
     preVerificationGas: 50000
   }
 };
-
 
 export const PAYMASTER_MIN_BALANCE: string = '0.1';
 export const PAYMASTER_TARGET_BALANCE: string = '0.15';
