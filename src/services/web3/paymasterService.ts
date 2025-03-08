@@ -1,9 +1,9 @@
 import { ethers, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
+import { IBlockchain } from '../../models/blockchainModel';
 import { PackedUserOperation } from '../../types/userOperationType';
 import { createPaymasterAndData } from '../../helpers/paymasterHelper';
-import { PAYMASTER_MIN_BALANCE, PAYMASTER_TARGET_BALANCE } from '../../config/constants';
 
 /**
  * Add paymaster-related data to the given UserOperation.
@@ -36,7 +36,6 @@ export async function addPaymasterData(
 
   Logger.log('addPaymasterData', 'Generated paymasterAndData:', paymasterAndData);
 
-  // Return the user operation with the added paymaster data
   return {
     ...userOp,
     paymasterAndData
@@ -54,14 +53,14 @@ export async function addPaymasterData(
  * @returns A boolean indicating whether the operation was successful.
  */
 export async function ensurePaymasterHasEnoughEth(
+  blockchainBalances: IBlockchain['balances'],
   entrypointContract: ethers.Contract,
   paymasterContractAddress: string
 ): Promise<boolean> {
   try {
-    // Get the current balance of the paymaster
     const paymasterBalance = await entrypointContract.balanceOf(paymasterContractAddress);
-    const minBalance = ethers.utils.parseEther(PAYMASTER_MIN_BALANCE);
-    const targetBalance = ethers.utils.parseEther(PAYMASTER_TARGET_BALANCE);
+    const minBalance = ethers.utils.parseEther(blockchainBalances.paymasterMinBalance);
+    const targetBalance = ethers.utils.parseEther(blockchainBalances.paymasterTargetBalance);
 
     Logger.log(
       'ensurePaymasterHasEnoughEth',
@@ -113,12 +112,20 @@ export async function ensurePaymasterHasEnoughEth(
   }
 }
 
+/**
+ * Retrieves the deposit balance of a Paymaster contract within the EntryPoint contract.
+ *
+ * @param {ethers.Contract} entrypointContract - The EntryPoint contract instance to check the Paymaster's balance.
+ * @param {string} paymasterContractAddress - The address of the Paymaster contract.
+ * @returns {Promise<{ value: BigNumber; inEth: string }>}
+ *          - `value`: The Paymaster's deposit balance as a BigNumber.
+ *          - `inEth`: The Paymaster's deposit balance formatted as a string in ETH.
+ */
 export async function getPaymasterEntryPointDepositValue(
   entrypointContract: ethers.Contract,
   paymasterContractAddress: string
 ): Promise<{ value: BigNumber; inEth: string }> {
   try {
-    // Get the current balance of the paymaster
     const paymasterBalance = await entrypointContract.balanceOf(paymasterContractAddress);
     return {
       value: paymasterBalance,

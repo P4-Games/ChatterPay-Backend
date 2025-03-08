@@ -2,13 +2,13 @@ import { model, Schema, Document } from 'mongoose';
 
 export interface IBlockchain extends Document {
   name: string;
-  chain_id: number;
+  chainId: number;
   rpc: string;
   bundlerUrl?: string;
   logo: string;
   explorer: string;
-  scan_apikey: string;
-  marketplace_opensea_url: string;
+  scanApiKey: string;
+  marketplaceOpenseaUrl: string;
   environment: string;
   contracts: {
     entryPoint: string;
@@ -18,17 +18,42 @@ export interface IBlockchain extends Document {
     paymasterAddress?: string;
     routerAddress?: string;
   };
+  gas: {
+    operations: {
+      transfer: {
+        maxFeePerGas: string;
+        maxPriorityFeePerGas: string;
+        verificationGasLimit: number;
+        callGasLimit: number;
+        preVerificationGas: number;
+      };
+      swap: {
+        maxFeePerGas: string;
+        maxPriorityFeePerGas: string;
+        verificationGasLimit: number;
+        callGasLimit: number;
+        preVerificationGas: number;
+      };
+    };
+  };
+  balances: {
+    paymasterMinBalance: string;
+    paymasterTargetBalance: string;
+    backendSignerMinBalance: string;
+    userSignerMinBalance: string;
+    userSignerBalanceToTransfer: string;
+  };
 }
 
 const blockchainSchema = new Schema<IBlockchain>({
   name: { type: String, required: true },
-  chain_id: { type: Number, required: true },
+  chainId: { type: Number, required: true },
   rpc: { type: String, required: true },
   bundlerUrl: { type: String, required: false },
   logo: { type: String, required: true },
   explorer: { type: String, required: true },
-  scan_apikey: { type: String, required: true },
-  marketplace_opensea_url: { type: String, required: true },
+  scanApiKey: { type: String, required: true },
+  marketplaceOpenseaUrl: { type: String, required: true },
   environment: { type: String, required: true },
   contracts: {
     entryPoint: { type: String, required: false },
@@ -37,6 +62,31 @@ const blockchainSchema = new Schema<IBlockchain>({
     chatterNFTAddress: { type: String, required: false },
     paymasterAddress: { type: String, required: false },
     routerAddress: { type: String, required: false }
+  },
+  gas: {
+    operations: {
+      transfer: {
+        maxFeePerGas: { type: String, required: true },
+        maxPriorityFeePerGas: { type: String, required: true },
+        verificationGasLimit: { type: Number, required: true },
+        callGasLimit: { type: Number, required: true },
+        preVerificationGas: { type: Number, required: true }
+      },
+      swap: {
+        maxFeePerGas: { type: String, required: true },
+        maxPriorityFeePerGas: { type: String, required: true },
+        verificationGasLimit: { type: Number, required: true },
+        callGasLimit: { type: Number, required: true },
+        preVerificationGas: { type: Number, required: true }
+      }
+    }
+  },
+  balances: {
+    paymasterMinBalance: { type: String, required: true },
+    paymasterTargetBalance: { type: String, required: true },
+    backendSignerMinBalance: { type: String, required: true },
+    userSignerMinBalance: { type: String, required: true },
+    userSignerBalanceToTransfer: { type: String, required: true }
   }
 });
 

@@ -155,7 +155,7 @@ export async function getTokenBalances(
 ): Promise<TokenBalance[]> {
   const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
   const signer = new ethers.Wallet(SIGNING_KEY!, provider);
-  const tokenInfo = await getTokenInfo(tokens, networkConfig.chain_id);
+  const tokenInfo = await getTokenInfo(tokens, networkConfig.chainId);
 
   return Promise.all(
     tokenInfo.map(async (token) => {

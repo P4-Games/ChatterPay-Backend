@@ -70,6 +70,7 @@ async function executeOperation(
   // Create and prepare the user operation with the gas multiplier
   Logger.debug('executeOperation', 'Creating generic user operation');
   let userOperation = await createGenericUserOperation(
+    networkConfig.gas,
     callData,
     proxyAddress,
     nonce,
@@ -89,7 +90,7 @@ async function executeOperation(
     backendSigner,
     networkConfig.contracts.entryPoint,
     callData,
-    networkConfig.chain_id
+    networkConfig.chainId
   );
   Logger.debug(
     'executeOperation',

@@ -1,28 +1,31 @@
 import { ethers, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { GAS_VALUES_BY_OP_TYPE } from '../../config/constants';
+import { IBlockchain } from '../../models/blockchainModel';
 import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation } from '../../types/userOperationType';
 
 /**
- * Creates a generic user operation for any type of transaction.
- * This method uses a high fixed value for various gas-related parameters and returns the packed user operation.
+ * Creates a generic user operation for a transaction.
+ * Retrieves gas parameters from the blockchain config and applies a multiplier.
  *
- * @param {string} callData - The encoded data for the function call.
- * @param {string} sender - The sender address initiating the user operation.
- * @param {BigNumber} nonce - The nonce value to prevent replay attacks.
- * @param {number} gasMultiplier - Optional multiplier for gas values (default: 1.0).
- * @returns {Promise<PackedUserOperation>} The created user operation with predefined gas limits and fee parameters.
+ * @param {IBlockchain['gas']} gasConfig - Blockchain gas config with predefined values.
+ * @param {string} callData - Encoded function call data.
+ * @param {string} sender - Sender address initiating the operation.
+ * @param {BigNumber} nonce - Nonce value to prevent replay attacks.
+ * @param {'transfer' | 'swap'} userOpType - Operation type determining gas parameters.
+ * @param {number} [gasMultiplier=1.0] - Optional multiplier to adjust gas values (default: 1.0).
+ * @returns {Promise<PackedUserOperation>} The created user operation with adjusted gas limits and fees.
  */
 export async function createGenericUserOperation(
+  gasConfig: IBlockchain['gas'],
   callData: string,
   sender: string,
   nonce: BigNumber,
   userOpType: 'transfer' | 'swap',
   gasMultiplier: number = 1.0
 ): Promise<PackedUserOperation> {
-  const gasValues = GAS_VALUES_BY_OP_TYPE[userOpType];
+  const gasValues = gasConfig.operations[userOpType];
 
   Logger.log('createGenericUserOperation', 'Creating Generic UserOperation.');
   Logger.log('createGenericUserOperation', 'Sender Address:', sender);

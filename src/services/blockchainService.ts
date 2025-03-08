@@ -13,11 +13,6 @@ import {
   SetupContractReturn,
   CheckBalanceConditionsResult
 } from '../types/commonType';
-import {
-  USER_SIGNER_MIN_BALANCE,
-  BACKEND_SIGNER_MIN_BALANCE,
-  USER_SIGNER_BALANCE_TO_TRANSFER
-} from '../config/constants';
 
 /**
  * Gets token info based on token address or symbol
@@ -34,7 +29,7 @@ export function getTokenInfo(
   if (!blockchainTokens) return undefined;
 
   const chainTokens = blockchainTokens.filter(
-    (token) => token.chain_id === blockchainConfig.chain_id
+    (token) => token.chain_id === blockchainConfig.chainId
   );
 
   const foundToken = chainTokens.find(
@@ -62,7 +57,7 @@ export function getTokenAddress(
   if (!blockchainTokens) return '';
 
   const chainTokens = blockchainTokens.filter(
-    (token) => token.chain_id === blockchainConfig.chain_id
+    (token) => token.chain_id === blockchainConfig.chainId
   );
 
   const foundToken = chainTokens.find(
@@ -88,7 +83,7 @@ export function getTokensAddresses(
   lookUpTokenSymbolOutput: string
 ): TokenAddresses {
   const chainTokens = blockchainTokens.filter(
-    (token) => token.chain_id === blockchainConfig.chain_id
+    (token) => token.chain_id === blockchainConfig.chainId
   );
 
   const foundTokenInput = chainTokens.find(
@@ -112,13 +107,14 @@ export function getTokensAddresses(
  * @returns
  */
 export async function ensureBackendSignerHasEnoughEth(
+  blockchainBalances: IBlockchain['balances'],
   backendSignerWalletAddress: string,
   provider: ethers.providers.JsonRpcProvider
 ): Promise<boolean> {
   try {
     Logger.log(
       'ensureBackendSignerHasEnoughEth',
-      `Checking if Backend Signer ${backendSignerWalletAddress} has minimal funds (${BACKEND_SIGNER_MIN_BALANCE}) to make transactions.`
+      `Checking if Backend Signer ${backendSignerWalletAddress} has minimal funds (${blockchainBalances.backendSignerMinBalance}) to make transactions.`
     );
 
     const walletBalance = await provider.getBalance(backendSignerWalletAddress);
@@ -128,11 +124,11 @@ export async function ensureBackendSignerHasEnoughEth(
       `Backend Signer ${backendSignerWalletAddress} balance: ${walletBalanceFormatted} ETH.`
     );
 
-    if (walletBalance.lt(ethers.utils.parseEther(BACKEND_SIGNER_MIN_BALANCE))) {
+    if (walletBalance.lt(ethers.utils.parseEther(blockchainBalances.backendSignerMinBalance))) {
       Logger.error(
         'ensureBackendSignerHasEnoughEth',
         `Backend Signer ${backendSignerWalletAddress} current balance: ${walletBalanceFormatted} ETH, ` +
-          `balance required: ${BACKEND_SIGNER_MIN_BALANCE} ETH.`
+          `balance required: ${blockchainBalances.backendSignerMinBalance} ETH.`
       );
       return false;
     }
@@ -157,6 +153,7 @@ export async function ensureBackendSignerHasEnoughEth(
  * @returns
  */
 export async function ensureUserSignerHasEnoughEth(
+  blockchainBalances: IBlockchain['balances'],
   userSignerWalletAdddress: string,
   backendSignerWallet: ethers.Wallet,
   provider: ethers.providers.JsonRpcProvider
@@ -165,7 +162,7 @@ export async function ensureUserSignerHasEnoughEth(
     const backendSignerWalletAddress = await backendSignerWallet.getAddress();
     Logger.log(
       'ensureUserSignerHasEnoughEth',
-      `Checking if User EOA ${userSignerWalletAdddress} has minimal funds (${USER_SIGNER_MIN_BALANCE}) to sign the transaction.`
+      `Checking if User EOA ${userSignerWalletAdddress} has minimal funds (${blockchainBalances.userSignerMinBalance}) to sign the transaction.`
     );
 
     const EOABalance = await provider.getBalance(userSignerWalletAdddress);
@@ -174,16 +171,16 @@ export async function ensureUserSignerHasEnoughEth(
       `User EOA ${userSignerWalletAdddress} balance: ${ethers.utils.formatEther(EOABalance)} ETH.`
     );
 
-    if (EOABalance.lt(ethers.utils.parseEther(USER_SIGNER_MIN_BALANCE))) {
+    if (EOABalance.lt(ethers.utils.parseEther(blockchainBalances.userSignerMinBalance))) {
       Logger.log(
         'ensureUserSignerHasEnoughEth',
-        `Sending ${USER_SIGNER_BALANCE_TO_TRANSFER} ETH from backendSigner ${backendSignerWalletAddress} ` +
+        `Sending ${blockchainBalances.userSignerBalanceToTransfer} ETH from backendSigner ${backendSignerWalletAddress} ` +
           `to User EOA ${userSignerWalletAdddress}.`
       );
 
       const tx = await backendSignerWallet.sendTransaction({
         to: userSignerWalletAdddress,
-        value: ethers.utils.parseEther(USER_SIGNER_BALANCE_TO_TRANSFER),
+        value: ethers.utils.parseEther(blockchainBalances.userSignerBalanceToTransfer),
         gasLimit: 210000
       });
 
@@ -215,14 +212,14 @@ export async function checkBlockchainConditions(
 ): Promise<CheckBalanceConditionsResult> {
   try {
     const blockchain: IBlockchain | null = await mongoBlockchainService.getBlockchain(
-      networkConfig.chain_id
+      networkConfig.chainId
     );
 
     if (!blockchain) {
-      throw new Error(`Blockchain with chain_id ${networkConfig.chain_id} not found`);
+      throw new Error(`Blockchain with chain_id ${networkConfig.chainId} not found`);
     }
 
-    const privateKey = generatePrivateKey(fromNumber, networkConfig.chain_id.toString());
+    const privateKey = generatePrivateKey(fromNumber, networkConfig.chainId.toString());
     const setupContractsResult: SetupContractReturn = await setupContracts(
       blockchain,
       privateKey,
@@ -238,6 +235,7 @@ export async function checkBlockchainConditions(
 
     const backendSignerWalletAddress = await setupContractsResult.backendSigner.getAddress();
     const checkBackendSignerBalanceresult = await ensureBackendSignerHasEnoughEth(
+      networkConfig.balances,
       backendSignerWalletAddress,
       setupContractsResult.provider
     );
@@ -249,6 +247,7 @@ export async function checkBlockchainConditions(
 
     const userWalletAddress = await setupContractsResult.signer.getAddress();
     const checkUserEthBalanceResult = await ensureUserSignerHasEnoughEth(
+      networkConfig.balances,
       userWalletAddress,
       setupContractsResult.backendSigner,
       setupContractsResult.provider
@@ -267,6 +266,7 @@ export async function checkBlockchainConditions(
     );
 
     const ensurePaymasterPrefundResult = await ensurePaymasterHasEnoughEth(
+      networkConfig.balances,
       entrypointContract,
       networkConfig.contracts.paymasterAddress!
     );
