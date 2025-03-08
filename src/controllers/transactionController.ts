@@ -6,10 +6,10 @@ import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IUser, IUserWallet } from '../models/userModel';
-import { sendUserOperation } from '../services/transferService';
 import { verifyWalletBalanceInRpc } from '../services/balanceService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import Transaction, { ITransaction } from '../models/transactionModel';
+import { sendTransferUserOperation } from '../services/transferService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
@@ -464,7 +464,7 @@ export const makeTransaction = async (
       ? tracer?.createChildSpan({ name: 'executeTransaction' })
       : undefined;
 
-    const executeTransactionResult: ExecueTransactionResult = await sendUserOperation(
+    const executeTransactionResult: ExecueTransactionResult = await sendTransferUserOperation(
       networkConfig,
       checkBlockchainConditionsResult.setupContractsResult!,
       checkBlockchainConditionsResult.entryPointContract!,
