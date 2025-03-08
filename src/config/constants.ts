@@ -156,7 +156,6 @@ export const GAS_VALUES_BY_OP_TYPE = {
 export const PAYMASTER_MIN_BALANCE: string = '0.1';
 export const PAYMASTER_TARGET_BALANCE: string = '0.15';
 export const BACKEND_SIGNER_MIN_BALANCE: string = '0.05';
-
 export const USER_SIGNER_MIN_BALANCE: string = '0.0008';
 export const USER_SIGNER_BALANCE_TO_TRANSFER: string = '0.001';
 
