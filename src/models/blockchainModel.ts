@@ -18,6 +18,31 @@ export interface IBlockchain extends Document {
     paymasterAddress?: string;
     routerAddress?: string;
   };
+  gas: {
+    operations: {
+      transfer: {
+        maxFeePerGas: string;
+        maxPriorityFeePerGas: string;
+        verificationGasLimit: number;
+        callGasLimit: number;
+        preVerificationGas: number;
+      };
+      swap: {
+        maxFeePerGas: string;
+        maxPriorityFeePerGas: string;
+        verificationGasLimit: number;
+        callGasLimit: number;
+        preVerificationGas: number;
+      };
+    };
+  };
+  balances: {
+    paymasterMinBalance: string;
+    paymasterTargetBalance: string;
+    backendSignerMinBalance: string;
+    userSignerMinBalance: string;
+    userSignerBalanceToTransfer: string;
+  };
 }
 
 const blockchainSchema = new Schema<IBlockchain>({
@@ -37,6 +62,31 @@ const blockchainSchema = new Schema<IBlockchain>({
     chatterNFTAddress: { type: String, required: false },
     paymasterAddress: { type: String, required: false },
     routerAddress: { type: String, required: false }
+  },
+  gas: {
+    operations: {
+      transfer: {
+        maxFeePerGas: { type: String, required: true },
+        maxPriorityFeePerGas: { type: String, required: true },
+        verificationGasLimit: { type: Number, required: true },
+        callGasLimit: { type: Number, required: true },
+        preVerificationGas: { type: Number, required: true }
+      },
+      swap: {
+        maxFeePerGas: { type: String, required: true },
+        maxPriorityFeePerGas: { type: String, required: true },
+        verificationGasLimit: { type: Number, required: true },
+        callGasLimit: { type: Number, required: true },
+        preVerificationGas: { type: Number, required: true }
+      }
+    }
+  },
+  balances: {
+    paymasterMinBalance: { type: String, required: true },
+    paymasterTargetBalance: { type: String, required: true },
+    backendSignerMinBalance: { type: String, required: true },
+    userSignerMinBalance: { type: String, required: true },
+    userSignerBalanceToTransfer: { type: String, required: true }
   }
 });
 
