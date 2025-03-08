@@ -96,6 +96,7 @@ export async function sendTransferUserOperation(
     // Create the base user operation
     Logger.log('sendTransferUserOperation', 'Creating Generic User Operation');
     const userOperation = await createGenericUserOperation(
+      networkConfig.gas,
       callData,
       setupContractsResult.proxy.proxyAddress,
       nonce,
