@@ -36,6 +36,31 @@ describe('Blockchain Model', () => {
         chatterPayAddress: '0xChatterPayAddress',
         routerAddress: '0xUniswapV3Address',
         chatterNFTAddress: '0xChatterNFTAddress'
+      },
+      gas: {
+        operations: {
+          transfer: {
+            maxFeePerGas: '0.5',
+            maxPriorityFeePerGas: '0.05',
+            verificationGasLimit: 50000,
+            callGasLimit: 149456,
+            preVerificationGas: 50000
+          },
+          swap: {
+            maxFeePerGas: '0.5',
+            maxPriorityFeePerGas: '0.05',
+            verificationGasLimit: 80000,
+            callGasLimit: 200000,
+            preVerificationGas: 50000
+          }
+        }
+      },
+      balances: {
+        paymasterMinBalance: '0.05',
+        paymasterTargetBalance: '0.1',
+        backendSignerMinBalance: '0.01',
+        userSignerMinBalance: '0.0008',
+        userSignerBalanceToTransfer: '0.001'
       }
     };
 
@@ -45,6 +70,8 @@ describe('Blockchain Model', () => {
     expect(savedBlockchain._id).toBeDefined();
     expect(savedBlockchain.name).toBe(validBlockchain.name);
     expect(savedBlockchain.chain_id).toBe(validBlockchain.chain_id);
+    expect(savedBlockchain.gas.operations.transfer.maxFeePerGas).toBe('0.5');
+    expect(savedBlockchain.balances.paymasterMinBalance).toBe('0.05');
   });
 
   it('should fail to save without required fields', async () => {
@@ -74,6 +101,31 @@ describe('Blockchain Model', () => {
         chatterPayAddress: '',
         routerAddress: '',
         chatterNFTAddress: ''
+      },
+      gas: {
+        operations: {
+          transfer: {
+            maxFeePerGas: '0.5',
+            maxPriorityFeePerGas: '0.05',
+            verificationGasLimit: 50000,
+            callGasLimit: 149456,
+            preVerificationGas: 50000
+          },
+          swap: {
+            maxFeePerGas: '0.5',
+            maxPriorityFeePerGas: '0.05',
+            verificationGasLimit: 80000,
+            callGasLimit: 200000,
+            preVerificationGas: 50000
+          }
+        }
+      },
+      balances: {
+        paymasterMinBalance: '0.05',
+        paymasterTargetBalance: '0.1',
+        backendSignerMinBalance: '0.01',
+        userSignerMinBalance: '0.0008',
+        userSignerBalanceToTransfer: '0.001'
       }
     };
 
@@ -82,5 +134,7 @@ describe('Blockchain Model', () => {
 
     expect(savedBlockchain.contracts.factoryAddress).toBe('');
     expect(savedBlockchain.contracts.paymasterAddress).toBeUndefined(); // Optional field
+    expect(savedBlockchain.gas.operations.transfer.maxFeePerGas).toBe('0.5');
+    expect(savedBlockchain.balances.userSignerMinBalance).toBe('0.0008');
   });
 });
