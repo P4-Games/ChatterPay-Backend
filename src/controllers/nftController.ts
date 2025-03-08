@@ -671,7 +671,7 @@ export const getPhoneNFTs = async (
       count: nfts.length,
       nfts: nfts.map((nft: INFT) => ({
         description: nft.metadata.description,
-        url: `${networkConfig.marketplace_opensea_url}/${networkConfig.contracts.chatterNFTAddress}/${nft.id}`
+        url: `${networkConfig.marketplaceOpenseaUrl}/${networkConfig.contracts.chatterNFTAddress}/${nft.id}`
       }))
     };
   } catch (error) {

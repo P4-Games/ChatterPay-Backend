@@ -90,7 +90,7 @@ async function executeOperation(
     backendSigner,
     networkConfig.contracts.entryPoint,
     callData,
-    networkConfig.chain_id
+    networkConfig.chainId
   );
   Logger.debug(
     'executeOperation',

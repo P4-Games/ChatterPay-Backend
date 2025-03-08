@@ -23,12 +23,12 @@ describe('Blockchain Model', () => {
   it('should create and save a blockchain document successfully', async () => {
     const validBlockchain: Partial<IBlockchain> = {
       name: 'Ethereum',
-      chain_id: 1,
+      chainId: 1,
       rpc: 'https://mainnet.infura.io/v3/YOUR-PROJECT-ID',
       logo: 'https://ethereum.org/logo.png',
       explorer: 'https://etherscan.io',
-      scan_apikey: 'example-api-key',
-      marketplace_opensea_url: 'https://opensea.io',
+      scanApiKey: 'example-api-key',
+      marketplaceOpenseaUrl: 'https://opensea.io',
       environment: 'production',
       contracts: {
         entryPoint: '0xEntryPointAddress',
@@ -69,14 +69,14 @@ describe('Blockchain Model', () => {
 
     expect(savedBlockchain._id).toBeDefined();
     expect(savedBlockchain.name).toBe(validBlockchain.name);
-    expect(savedBlockchain.chain_id).toBe(validBlockchain.chain_id);
+    expect(savedBlockchain.chainId).toBe(validBlockchain.chainId);
     expect(savedBlockchain.gas.operations.transfer.maxFeePerGas).toBe('0.5');
     expect(savedBlockchain.balances.paymasterMinBalance).toBe('0.05');
   });
 
   it('should fail to save without required fields', async () => {
     const invalidBlockchain: Partial<IBlockchain> = {
-      chain_id: 1,
+      chainId: 1,
       rpc: 'https://mainnet.infura.io/v3/YOUR-PROJECT-ID'
     };
 
@@ -88,12 +88,12 @@ describe('Blockchain Model', () => {
   it('should allow optional contract fields to be empty', async () => {
     const blockchainData: Partial<IBlockchain> = {
       name: 'Polygon',
-      chain_id: 137,
+      chainId: 137,
       rpc: 'https://polygon-rpc.com',
       logo: 'https://polygon.technology/logo.png',
       explorer: 'https://polygonscan.com',
-      scan_apikey: 'another-api-key',
-      marketplace_opensea_url: 'https://opensea.io',
+      scanApiKey: 'another-api-key',
+      marketplaceOpenseaUrl: 'https://opensea.io',
       environment: 'production',
       contracts: {
         entryPoint: '0xEntryPointAddress',

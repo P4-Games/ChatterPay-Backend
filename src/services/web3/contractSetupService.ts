@@ -39,7 +39,7 @@ export async function setupContracts(
 ): Promise<SetupContractReturn> {
   const rpUrl = blockchain.rpc;
   if (!rpUrl) {
-    throw new Error(`Unsupported chain ID: ${blockchain.chain_id}`);
+    throw new Error(`Unsupported chain ID: ${blockchain.chainId}`);
   }
 
   Logger.log('setupContracts', `Validating RPC URL: ${rpUrl}`);

@@ -130,7 +130,7 @@ export const balanceByPhoneNumber = async (
     }
 
     const fastify = request.server;
-    const { chain_id } = fastify.networkConfig;
+    const { chainId: chain_id } = fastify.networkConfig;
     const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, chain_id);
 
     if (!userWallet) {

@@ -64,7 +64,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
   const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
   const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
     name: 'arbitrum-sepolia',
-    chainId: networkConfig.chain_id
+    chainId: networkConfig.chainId
   });
 
   const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
@@ -77,7 +77,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
 
   const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(
     phoneNumber,
-    networkConfig.chain_id.toString()
+    networkConfig.chainId.toString()
   );
 
   const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {

@@ -112,7 +112,7 @@ export async function sendTransferUserOperation(
       setupContractsResult.backendSigner,
       networkConfig.contracts.entryPoint,
       callData,
-      networkConfig.chain_id
+      networkConfig.chainId
     );
     Logger.log(
       'sendTransferUserOperation',
@@ -219,10 +219,10 @@ export async function withdrawWalletAllFunds(
 
     const userWallet: IUserWallet | null = getUserWalletByChainId(
       bddUser.wallets,
-      networkConfig.chain_id
+      networkConfig.chainId
     );
     if (!userWallet) {
-      return { result: false, message: `No wallet found for chain ${networkConfig.chain_id}` };
+      return { result: false, message: `No wallet found for chain ${networkConfig.chainId}` };
     }
 
     if (

@@ -10,7 +10,7 @@ export const mongoBlockchainService = {
    * @throws Error if the blockchain with the specified chain ID is not found.
    */
   getBlockchain: async (chain_id: number): Promise<IBlockchain | null> => {
-    const blockchain: IBlockchain | null = await Blockchain.findOne({ chain_id });
+    const blockchain: IBlockchain | null = await Blockchain.findOne({ chainId: chain_id });
     return blockchain;
   },
 
@@ -23,7 +23,7 @@ export const mongoBlockchainService = {
    * @throws {Error} If the network configuration is not found.
    */
   getNetworkConfig: async (chainId: number = DEFAULT_CHAIN_ID): Promise<IBlockchain> => {
-    const network = await Blockchain.findOne({ chain_id: chainId });
+    const network = await Blockchain.findOne({ chainId });
     if (!network) {
       throw new Error(`Network configuration not found for chain ID ${chainId}`);
     }

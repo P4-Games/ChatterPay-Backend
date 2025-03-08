@@ -244,11 +244,11 @@ export async function issueTokensCore(
   const signer: ethers.Wallet = new ethers.Wallet(SIGNING_KEY!, provider);
 
   // Get tokens for the current chain from the decorator.
-  const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chain_id);
+  const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chainId);
   const tokenAddresses: string[] = chainTokens.map((token) => token.address);
 
   if (tokenAddresses.length === 0) {
-    throw new Error(`No tokens found for chain ${networkConfig.chain_id}`);
+    throw new Error(`No tokens found for chain ${networkConfig.chainId}`);
   }
 
   // Get the current nonce for the signer.
@@ -256,7 +256,7 @@ export async function issueTokensCore(
   Logger.log('issueTokensCore', `Current Nonce: ${currentNonce}`);
   Logger.log(
     'issueTokensCore',
-    `Minting tokens on chain ${networkConfig.chain_id} for wallet ${recipientAddress} and tokens:`,
+    `Minting tokens on chain ${networkConfig.chainId} for wallet ${recipientAddress} and tokens:`,
     tokenAddresses
   );
 

@@ -29,7 +29,7 @@ export function getTokenInfo(
   if (!blockchainTokens) return undefined;
 
   const chainTokens = blockchainTokens.filter(
-    (token) => token.chain_id === blockchainConfig.chain_id
+    (token) => token.chain_id === blockchainConfig.chainId
   );
 
   const foundToken = chainTokens.find(
@@ -57,7 +57,7 @@ export function getTokenAddress(
   if (!blockchainTokens) return '';
 
   const chainTokens = blockchainTokens.filter(
-    (token) => token.chain_id === blockchainConfig.chain_id
+    (token) => token.chain_id === blockchainConfig.chainId
   );
 
   const foundToken = chainTokens.find(
@@ -83,7 +83,7 @@ export function getTokensAddresses(
   lookUpTokenSymbolOutput: string
 ): TokenAddresses {
   const chainTokens = blockchainTokens.filter(
-    (token) => token.chain_id === blockchainConfig.chain_id
+    (token) => token.chain_id === blockchainConfig.chainId
   );
 
   const foundTokenInput = chainTokens.find(
@@ -212,14 +212,14 @@ export async function checkBlockchainConditions(
 ): Promise<CheckBalanceConditionsResult> {
   try {
     const blockchain: IBlockchain | null = await mongoBlockchainService.getBlockchain(
-      networkConfig.chain_id
+      networkConfig.chainId
     );
 
     if (!blockchain) {
-      throw new Error(`Blockchain with chain_id ${networkConfig.chain_id} not found`);
+      throw new Error(`Blockchain with chain_id ${networkConfig.chainId} not found`);
     }
 
-    const privateKey = generatePrivateKey(fromNumber, networkConfig.chain_id.toString());
+    const privateKey = generatePrivateKey(fromNumber, networkConfig.chainId.toString());
     const setupContractsResult: SetupContractReturn = await setupContracts(
       blockchain,
       privateKey,
