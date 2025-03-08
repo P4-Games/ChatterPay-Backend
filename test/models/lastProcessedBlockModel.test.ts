@@ -23,19 +23,43 @@ describe('Blockchain Model', () => {
   it('should create and save a blockchain document successfully', async () => {
     const validBlockchain: Partial<IBlockchain> = {
       name: 'Ethereum',
-      chain_id: 1,
+      chainId: 1,
       rpc: 'https://mainnet.infura.io/v3/YOUR-PROJECT-ID',
       logo: 'https://ethereum.org/logo.png',
       explorer: 'https://etherscan.io',
-      scan_apikey: 'example-api-key',
-      marketplace_opensea_url: 'https://opensea.io',
+      marketplaceOpenseaUrl: 'https://opensea.io',
       environment: 'production',
       contracts: {
         entryPoint: '0xEntryPointAddress',
         factoryAddress: '0xFactoryAddress',
         chatterPayAddress: '0xChatterPayAddress',
-        simpleSwapAddress: '0xSimpleSwapAddress',
+        routerAddress: '0xUniswapV3Address',
         chatterNFTAddress: '0xChatterNFTAddress'
+      },
+      gas: {
+        operations: {
+          transfer: {
+            maxFeePerGas: '0.5',
+            maxPriorityFeePerGas: '0.05',
+            verificationGasLimit: 50000,
+            callGasLimit: 149456,
+            preVerificationGas: 50000
+          },
+          swap: {
+            maxFeePerGas: '0.5',
+            maxPriorityFeePerGas: '0.05',
+            verificationGasLimit: 80000,
+            callGasLimit: 200000,
+            preVerificationGas: 50000
+          }
+        }
+      },
+      balances: {
+        paymasterMinBalance: '0.05',
+        paymasterTargetBalance: '0.1',
+        backendSignerMinBalance: '0.01',
+        userSignerMinBalance: '0.0008',
+        userSignerBalanceToTransfer: '0.001'
       }
     };
 
@@ -44,12 +68,14 @@ describe('Blockchain Model', () => {
 
     expect(savedBlockchain._id).toBeDefined();
     expect(savedBlockchain.name).toBe(validBlockchain.name);
-    expect(savedBlockchain.chain_id).toBe(validBlockchain.chain_id);
+    expect(savedBlockchain.chainId).toBe(validBlockchain.chainId);
+    expect(savedBlockchain.gas.operations.transfer.maxFeePerGas).toBe('0.5');
+    expect(savedBlockchain.balances.paymasterMinBalance).toBe('0.05');
   });
 
   it('should fail to save without required fields', async () => {
     const invalidBlockchain: Partial<IBlockchain> = {
-      chain_id: 1,
+      chainId: 1,
       rpc: 'https://mainnet.infura.io/v3/YOUR-PROJECT-ID'
     };
 
@@ -61,19 +87,43 @@ describe('Blockchain Model', () => {
   it('should allow optional contract fields to be empty', async () => {
     const blockchainData: Partial<IBlockchain> = {
       name: 'Polygon',
-      chain_id: 137,
+      chainId: 137,
       rpc: 'https://polygon-rpc.com',
       logo: 'https://polygon.technology/logo.png',
       explorer: 'https://polygonscan.com',
-      scan_apikey: 'another-api-key',
-      marketplace_opensea_url: 'https://opensea.io',
+      marketplaceOpenseaUrl: 'https://opensea.io',
       environment: 'production',
       contracts: {
         entryPoint: '0xEntryPointAddress',
         factoryAddress: '',
         chatterPayAddress: '',
-        simpleSwapAddress: '',
+        routerAddress: '',
         chatterNFTAddress: ''
+      },
+      gas: {
+        operations: {
+          transfer: {
+            maxFeePerGas: '0.5',
+            maxPriorityFeePerGas: '0.05',
+            verificationGasLimit: 50000,
+            callGasLimit: 149456,
+            preVerificationGas: 50000
+          },
+          swap: {
+            maxFeePerGas: '0.5',
+            maxPriorityFeePerGas: '0.05',
+            verificationGasLimit: 80000,
+            callGasLimit: 200000,
+            preVerificationGas: 50000
+          }
+        }
+      },
+      balances: {
+        paymasterMinBalance: '0.05',
+        paymasterTargetBalance: '0.1',
+        backendSignerMinBalance: '0.01',
+        userSignerMinBalance: '0.0008',
+        userSignerBalanceToTransfer: '0.001'
       }
     };
 
@@ -82,5 +132,7 @@ describe('Blockchain Model', () => {
 
     expect(savedBlockchain.contracts.factoryAddress).toBe('');
     expect(savedBlockchain.contracts.paymasterAddress).toBeUndefined(); // Optional field
+    expect(savedBlockchain.gas.operations.transfer.maxFeePerGas).toBe('0.5');
+    expect(savedBlockchain.balances.userSignerMinBalance).toBe('0.0008');
   });
 });

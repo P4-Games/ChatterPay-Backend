@@ -54,7 +54,7 @@ export const createWallet = async (
 
     if (existingUser) {
       // Check for existing wallet for the user in the given blockchain
-      const { chain_id } = fastify.networkConfig;
+      const { chainId: chain_id } = fastify.networkConfig;
       userWallet = getUserWalletByChainId(existingUser.wallets, chain_id);
 
       if (userWallet) {

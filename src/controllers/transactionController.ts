@@ -6,10 +6,10 @@ import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IUser, IUserWallet } from '../models/userModel';
-import { sendUserOperation } from '../services/transferService';
 import { verifyWalletBalanceInRpc } from '../services/balanceService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import Transaction, { ITransaction } from '../models/transactionModel';
+import { sendTransferUserOperation } from '../services/transferService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
@@ -304,7 +304,7 @@ export const makeTransaction = async (
 
     let validationError: string = await validateInputs(
       request.body,
-      networkConfig.chain_id,
+      networkConfig.chainId,
       tokenAddress
     );
 
@@ -322,16 +322,16 @@ export const makeTransaction = async (
 
     const userWallet: IUserWallet | null = getUserWalletByChainId(
       fromUser?.wallets,
-      networkConfig.chain_id
+      networkConfig.chainId
     );
     if (!userWallet) {
-      validationError = `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chain_id}`;
+      validationError = `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chainId}`;
       rootSpan?.endSpan();
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
     /* ***************************************************** */
-    /* 2. makeTransaction: open concurrent operation      */
+    /* 2. makeTransaction: open concurrent operation         */
     /* ***************************************************** */
     const concurrentOperationSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'checkConcurrentOperation' })
@@ -424,11 +424,11 @@ export const makeTransaction = async (
     let toAddress: string;
 
     if (to.startsWith('0x')) {
-      toUser = await getUserByWalletAndChainid(to, networkConfig.chain_id);
+      toUser = await getUserByWalletAndChainid(to, networkConfig.chainId);
       if (!toUser) {
         Logger.error(
           'makeTransaction',
-          `Invalid wallet-to ${to} for chainId ${networkConfig.chain_id}`
+          `Invalid wallet-to ${to} for chainId ${networkConfig.chainId}`
         );
         await sendNoValidBlockchainConditionsNotification(
           userWallet.wallet_proxy,
@@ -442,8 +442,7 @@ export const makeTransaction = async (
       }
 
       // we already validate that exists wallet for this chain_id with find in getUserByWalletAndChainid
-      toAddress =
-        getUserWalletByChainId(toUser.wallets, networkConfig.chain_id)?.wallet_proxy || '';
+      toAddress = getUserWalletByChainId(toUser.wallets, networkConfig.chainId)?.wallet_proxy || '';
     } else {
       const chatterpayImplementation: string = networkConfig.contracts.chatterPayAddress;
       toUser = await getOrCreateUser(to, chatterpayImplementation);
@@ -464,7 +463,7 @@ export const makeTransaction = async (
       ? tracer?.createChildSpan({ name: 'executeTransaction' })
       : undefined;
 
-    const executeTransactionResult: ExecueTransactionResult = await sendUserOperation(
+    const executeTransactionResult: ExecueTransactionResult = await sendTransferUserOperation(
       networkConfig,
       checkBlockchainConditionsResult.setupContractsResult!,
       checkBlockchainConditionsResult.entryPointContract!,

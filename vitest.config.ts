@@ -20,6 +20,8 @@ export default defineConfig({
         'scripts',
         '**/dist/**'
       ]
-    }
+    },
+    hookTimeout: 30000,
+    setupFiles: ['./test/setupTests.ts']
   }
 });

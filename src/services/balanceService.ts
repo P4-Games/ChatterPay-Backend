@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import NodeCache from 'node-cache';
 
 import { IToken } from '../models/tokenModel';
+import { getERC20ABI } from './web3/abiService';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenAddress } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
@@ -32,13 +33,13 @@ async function getContractBalance(
   address: string
 ): Promise<string> {
   try {
-    const erc20Contract = new ethers.Contract(
-      contractAddress,
-      ['function balanceOf(address owner) view returns (uint256)'],
-      signer
-    );
+    const ERC20ABI: ethers.ContractInterface = await getERC20ABI();
+
+    const erc20Contract = new ethers.Contract(contractAddress, ERC20ABI, signer);
+
     const balance = await erc20Contract.balanceOf(address);
-    return ethers.utils.formatUnits(balance, 18);
+    const decimals = await erc20Contract.decimals();
+    return ethers.utils.formatUnits(balance, decimals);
   } catch (error) {
     Logger.error(
       'getContractBalance',
@@ -135,6 +136,7 @@ async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo
   return chainTokens.map((token) => ({
     symbol: token.symbol,
     address: token.address,
+    type: token.type,
     rateUSD: prices.get(token.symbol) || 0
   }));
 }
@@ -153,7 +155,7 @@ export async function getTokenBalances(
 ): Promise<TokenBalance[]> {
   const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
   const signer = new ethers.Wallet(SIGNING_KEY!, provider);
-  const tokenInfo = await getTokenInfo(tokens, networkConfig.chain_id);
+  const tokenInfo = await getTokenInfo(tokens, networkConfig.chainId);
 
   return Promise.all(
     tokenInfo.map(async (token) => {
@@ -221,12 +223,13 @@ export async function verifyWalletBalance(
   amountToCheck: string
 ): Promise<WalletBalanceInfo> {
   const symbol: string = await tokenContract.symbol();
+  const decimals = await tokenContract.decimals();
+
   Logger.log(
     'verifyWalletBalance',
     `Checking balance for ${walletAddress} and token ${tokenContract.address}, to spend: ${amountToCheck} ${symbol}`
   );
   const walletBalance = await tokenContract.balanceOf(walletAddress);
-  const decimals = await tokenContract.decimals();
   const amountToCheckFormatted = ethers.utils.parseUnits(amountToCheck, decimals);
   const walletBalanceFormatted = ethers.utils.formatEther(walletBalance);
 
@@ -284,6 +287,7 @@ export async function verifyWalletBalanceByTokenSymbol(
   const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
   const tokenContractAddress = getTokenAddress(blockchainConfig, blockchainTokens, tokenSymbol);
   const tokenContract: ethers.Contract = await setupERC20(tokenContractAddress, backendSigner);
+
   return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
 }
 
@@ -302,15 +306,10 @@ export async function verifyWalletBalanceInRpc(
   amountToCheck: string
 ): Promise<WalletBalanceInfo> {
   const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-  const erc20Abi = [
-    'function transfer(address to, uint256 amount) returns (bool)',
-    'function balanceOf(address owner) view returns (uint256)',
-    'function approve(address spender, uint256 amount) returns (bool)',
-    'function allowance(address owner, address spender) view returns (uint256)',
-    'function decimals() view returns (uint8)',
-    'function symbol() view returns (string)'
-  ];
 
-  const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, provider);
+  const ERC20ABI = await getERC20ABI();
+
+  const tokenContract = new ethers.Contract(tokenAddress, ERC20ABI, provider);
+
   return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
 }

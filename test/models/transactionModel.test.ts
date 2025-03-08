@@ -18,7 +18,9 @@ describe('Transaction Model', () => {
 
   afterEach(async () => {
     await mongoose.disconnect();
-    await mongoServer.stop();
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
   });
 
   it('should create and save a Transaction document successfully', async () => {

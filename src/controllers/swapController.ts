@@ -3,8 +3,8 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
+import { executeSwap } from '../services/swapService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
-import { executeSwap } from '../services/web3/simpleSwapService';
 import { setupERC20 } from '../services/web3/contractSetupService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
@@ -97,7 +97,7 @@ export const swap = async (
 
     const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
 
-    const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
+    const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds ?? 0;
     const { tokens: blockchainTokens, networkConfig } = request.server as FastifyInstance;
 
     const tokenAddresses: TokenAddresses = getTokensAddresses(
@@ -184,7 +184,9 @@ export const swap = async (
       checkBlockchainConditionsResult.setupContractsResult!,
       checkBlockchainConditionsResult.entryPointContract!,
       tokenAddresses,
-      amount.toString()
+      blockchainTokens,
+      amount.toString(),
+      proxyAddress
     );
     if (!executeSwapResult.success) {
       await sendInternalErrorNotification(proxyAddress, channel_user_id);
@@ -217,7 +219,7 @@ export const swap = async (
     const transactionOut: TransactionData = {
       tx: executeSwapResult.approveTransactionHash,
       walletFrom: proxyAddress,
-      walletTo: networkConfig.contracts.simpleSwapAddress,
+      walletTo: networkConfig.contracts.routerAddress!,
       amount: fromTokensSentInUnits,
       token: inputCurrency,
       type: 'swap',
@@ -228,7 +230,7 @@ export const swap = async (
     // Save transactions IN
     const transactionIn: TransactionData = {
       tx: executeSwapResult.swapTransactionHash,
-      walletFrom: networkConfig.contracts.simpleSwapAddress,
+      walletFrom: networkConfig.contracts.routerAddress!,
       walletTo: proxyAddress,
       amount: toTokensReceivedInUnits,
       token: outputCurrency,

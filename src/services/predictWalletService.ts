@@ -6,7 +6,7 @@ import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchainModel';
 import { getDynamicGas } from '../helpers/paymasterHelper';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
-import { getChatterPayWalletFactoryABI } from './gcp/gcpService';
+import { getChatterPayWalletFactoryABI } from './web3/abiService';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
@@ -63,8 +63,8 @@ export interface ComputedAddress {
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
   const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
   const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
-    name: 'arbitrum-sepolia',
-    chainId: networkConfig.chain_id
+    name: networkConfig.name,
+    chainId: networkConfig.chainId
   });
 
   const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
@@ -77,7 +77,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
 
   const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(
     phoneNumber,
-    networkConfig.chain_id.toString()
+    networkConfig.chainId.toString()
   );
 
   const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {

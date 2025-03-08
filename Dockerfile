@@ -1,16 +1,28 @@
-# Usa la imagen oficial de Bun
-FROM oven/bun:1
+# Use Node.js 20.13.1 as base
+FROM node:20.13.1-bullseye AS base
+
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.1.21" && \
+    echo 'export BUN_INSTALL="$HOME/.bun"' >> ~/.bashrc && \
+    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.bashrc && \
+    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.profile && \
+    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.bash_profile
+
+# Ensure Bun is available in PATH
+ENV BUN_INSTALL="/root/.bun"
+ENV PATH="${BUN_INSTALL}/bin:${PATH}"
+
+# Verify Node.js and Bun versions before starting
+RUN node -v && bun -v
 
 # Establece el directorio de trabajo en el contenedor
 WORKDIR /app
 
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy environment variables as build arguments
 ARG BUN_ENV
 ARG INFURA_API_KEY
-ARG MAX_FEE_PER_GAS
-ARG MAX_PRIORITY_FEE_PER_GAS
-ARG VERIFICATION_GAS_LIMIT
-ARG CALL_GAS_LIMIT
-ARG PRE_VERIFICATION_GAS
 ARG MONGO_URI
 ARG PRIVATE_KEY
 ARG SIGNING_KEY
@@ -38,14 +50,14 @@ ARG BLACKLIST_IPS
 ARG DEFAULT_CHAIN_ID
 ARG ABIS_VERSION
 ARG CORS_ORIGINS_CHECK_POSTMAN
+ARG SWAP_SLIPPAGE_CONFIG_STABLE
+ARG SWAP_SLIPPAGE_CONFIG_DEFAULT
+ARG SWAP_SLIPPAGE_CONFIG_EXTRA
+ARG ABIS_READ_FROM
 
+# Set environment variables
 ENV BUN_ENV $BUN_ENV
 ENV INFURA_API_KEY $INFURA_API_KEY
-ENV MAX_FEE_PER_GAS $MAX_FEE_PER_GAS
-ENV MAX_PRIORITY_FEE_PER_GAS $MAX_PRIORITY_FEE_PER_GAS
-ENV VERIFICATION_GAS_LIMIT $VERIFICATION_GAS_LIMIT
-ENV CALL_GAS_LIMIT $CALL_GAS_LIMIT
-ENV PRE_VERIFICATION_GAS $PRE_VERIFICATION_GAS
 ENV MONGO_URI $MONGO_URI
 ENV PRIVATE_KEY $PRIVATE_KEY
 ENV SIGNING_KEY $SIGNING_KEY
@@ -73,19 +85,23 @@ ENV BLACKLIST_IPS $BLACKLIST_IPS
 ENV DEFAULT_CHAIN_ID $DEFAULT_CHAIN_ID
 ENV ABIS_VERSION $ABIS_VERSION
 ENV CORS_ORIGINS_CHECK_POSTMAN $CORS_ORIGINS_CHECK_POSTMAN
+ENV SWAP_SLIPPAGE_CONFIG_STABLE $SWAP_SLIPPAGE_CONFIG_STABLE
+ENV SWAP_SLIPPAGE_CONFIG_DEFAULT $SWAP_SLIPPAGE_CONFIG_DEFAULT
+ENV SWAP_SLIPPAGE_CONFIG_EXTRA $SWAP_SLIPPAGE_CONFIG_EXTRA
+ENV ABIS_READ_FROM $ABIS_READ_FROM
 
-# Copia los archivos de configuración del proyecto
+# Copy project configuration files
 COPY package.json bun.lockb tsconfig.json ./
 
-# Instala las dependencias
+# Install dependencies securely
 RUN bun install --frozen-lockfile
 
-# Copia el código fuente
+# Copy source code
 COPY src ./src
 
-# Expone el puerto en el que se ejecuta la aplicación
+# Expose the port where the application runs
 EXPOSE 3000
 ENV PORT 3000
-# Comando para ejecutar la aplicación
-CMD ["bun", "start"]
 
+# Command to run the application
+CMD ["bun", "start"]

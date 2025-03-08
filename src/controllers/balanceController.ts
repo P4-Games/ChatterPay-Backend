@@ -27,8 +27,8 @@ import {
  */
 export const checkExternalDeposits = async (request: FastifyRequest, reply: FastifyReply) => {
   const fastify = request.server;
-  const simpleSwapContractAddress = fastify.networkConfig.contracts.simpleSwapAddress;
-  const depositsStatus = await fetchExternalDeposits('ARBITRUM_SEPOLIA', simpleSwapContractAddress);
+  const { routerAddress } = fastify.networkConfig.contracts;
+  const depositsStatus = await fetchExternalDeposits('ARBITRUM_SEPOLIA', routerAddress!);
   return returnSuccessResponse(reply, depositsStatus);
 };
 
@@ -130,7 +130,7 @@ export const balanceByPhoneNumber = async (
     }
 
     const fastify = request.server;
-    const { chain_id } = fastify.networkConfig;
+    const { chainId: chain_id } = fastify.networkConfig;
     const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, chain_id);
 
     if (!userWallet) {

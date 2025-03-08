@@ -15,11 +15,6 @@ const {
   ICP_CANISTER_ID,
   ICP_MNEMONIC,
   INFURA_API_KEY,
-  MAX_FEE_PER_GAS: maxFeeperGas = '30',
-  MAX_PRIORITY_FEE_PER_GAS: maxPriorityFeePerGas = '5',
-  VERIFICATION_GAS_LIMIT: verificationGasLimit = 74908,
-  CALL_GAS_LIMIT: callGasLimit = 79728,
-  PRE_VERIFICATION_GAS: preVerificationGas = 500000,
   BOT_DATA_TOKEN,
   BOT_API_URL,
   BOT_NOTIFICATIONS_ENABLED: botNotificationsEnabled = 'true',
@@ -43,7 +38,11 @@ const {
   FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: fastifyRefreshNetworksIntervalMs = 86400000,
   FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000,
   ABIS_VERSION = 'v1.0.0',
-  CORS_ORIGINS_CHECK_POSTMAN: corsOriginsCheckPostman = 'false'
+  CORS_ORIGINS_CHECK_POSTMAN: corsOriginsCheckPostman = 'false',
+  SWAP_SLIPPAGE_CONFIG_STABLE: slippage_config_stable = 300,
+  SWAP_SLIPPAGE_CONFIG_DEFAULT: slippage_config_default = 500,
+  SWAP_SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
+  ABIS_READ_FROM: abisReadFrom = 'local'
 } = process.env;
 
 export {
@@ -66,20 +65,37 @@ export {
   GCP_BUCKET_BASE_URL
 };
 
-export const IS_DEVELOPMENT = BUN_ENV.toLowerCase() === 'development';
+export const IS_DEVELOPMENT =
+  BUN_ENV.toLowerCase() === 'development' || BUN_ENV.toLowerCase() === 'testing';
 export const PORT = Number(envPort) || 3000;
 export const MONGO_URI: string = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
 export const DEFAULT_CHAIN_ID = Number(defaultChainId);
 
-export const GCP_ABIs = {
-  ChatterPay: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPay.json`,
-  ChatterPayWallet: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWallet.json`,
-  ChatterPayWalletFactory: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletFactory.json`,
-  ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayNFT.json`,
-  EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/EntryPoint.json`,
-  ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.json`
+interface ABIs {
+  [key: string]: string;
+}
+
+export const GCP_ABIs: ABIs = {
+  ChatterPay: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPay.sol/ChatterPay.json`,
+  ChatterPayWalletProxy: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletProxy.sol/ChatterPayWalletProxy.json`,
+  ChatterPayWalletFactory: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletFactory.sol/ChatterPayWalletFactory.json`,
+  ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayNFT.sol/ChatterPayNFT.json`,
+  EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/EntryPoint.sol/EntryPoint.json`,
+  ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.sol/ERC20.json`,
+  ChainlinkPriceFeed: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`
 };
 
+export const LOCAL_ABIs: ABIs = {
+  ChatterPay: `ChatterPay.sol/ChatterPay.json`,
+  ChatterPayWalletProxy: `ChatterPayWalletProxy.sol/ChatterPayWalletProxy.json`,
+  ChatterPayWalletFactory: `ChatterPayWalletFactory.sol/ChatterPayWalletFactory.json`,
+  ChatterPayNFT: `ChatterPayNFT.sol/ChatterPayNFT.json`,
+  EntryPoint: `EntryPoint.sol/EntryPoint.json`,
+  ERC20: `ERC20.sol/ERC20.json`,
+  ChainlinkPriceFeed: `ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`
+};
+
+export const ABIS_READ_FROM = abisReadFrom.toLowerCase();
 export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
 export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' || true;
 export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
@@ -103,22 +119,7 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
   : 'error';
 
 export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];
-export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'en';
-
-export const MAX_FEE_PER_GAS: string = maxFeeperGas;
-export const MAX_PRIORITY_FEE_PER_GAS: string = maxPriorityFeePerGas;
-export const VERIFICATION_GAS_LIMIT: number = Number(verificationGasLimit);
-export const CALL_GAS_LIMIT: number = Number(callGasLimit);
-export const PRE_VERIFICATION_GAS: number = Number(preVerificationGas);
-
-export const PAYMASTER_MIN_BALANCE: string = '0.15';
-export const PAYMASTER_TARGET_BALANCE: string = '0.3';
-export const BACKEND_SIGNER_MIN_BALANCE: string = '0.5'; // must have at least: PAYMASTER_TARGET_BALANCE + 0.005
-export const USER_SIGNER_MIN_BALANCE: string = '0.0008';
-export const USER_SIGNER_BALANCE_TO_TRANSFER: string = '0.001';
-
-export const LIFI_SLIPPAGE = 30 / 1000;
-export const LIFI_TYPE = 'SAFEST';
+export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'es';
 
 export const NOTIFICATION_TEMPLATE_CACHE_TTL = 60800; // 1 week
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
@@ -151,8 +152,12 @@ export const COMMON_REPLY_OPERATION_IN_PROGRESS =
   'The operation is being processed. We will notify you once it is completed or if any issues arise.';
 
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
-export const CORS_ORIGINS_EXCEPTIONS: string = '/metadata/opensea,/favicon.ico';
+export const CORS_ORIGINS_EXCEPTIONS: string = '/metadata/opensea,/favicon.ico,/docs';
 
 export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/price';
 export const TOKEN_IDS = ['usd-coin', 'tether', 'ethereum', 'bitcoin', 'wrapped-bitcoin', 'dai'];
 export const RESULT_CURRENCIES = ['usd', 'ars', 'brl', 'uyu'];
+
+export const SWAP_SLIPPAGE_CONFIG_STABLE = Number(slippage_config_stable);
+export const SWAP_SLIPPAGE_CONFIG_DEFAULT = Number(slippage_config_default);
+export const SWAP_SLIPPAGE_CONFIG_EXTRA = Number(slippage_config_extra);

@@ -1,51 +1,96 @@
 import { ethers, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { getUserOpHash } from '../../helpers/userOperationHekper';
+import { IBlockchain } from '../../models/blockchainModel';
+import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation } from '../../types/userOperationType';
-import {
-  CALL_GAS_LIMIT,
-  MAX_FEE_PER_GAS,
-  PRE_VERIFICATION_GAS,
-  VERIFICATION_GAS_LIMIT,
-  MAX_PRIORITY_FEE_PER_GAS
-} from '../../config/constants';
 
 /**
- * Creates a generic user operation for any type of transaction.
- * This method uses a high fixed value for various gas-related parameters and returns the packed user operation.
+ * Creates a generic user operation for a transaction.
+ * Retrieves gas parameters from the blockchain config and applies a multiplier.
  *
- * @param {string} callData - The encoded data for the function call.
- * @param {string} sender - The sender address initiating the user operation.
- * @param {BigNumber} nonce - The nonce value to prevent replay attacks.
- * @returns {Promise<PackedUserOperation>} The created user operation with predefined gas limits and fee parameters.
+ * @param {IBlockchain['gas']} gasConfig - Blockchain gas config with predefined values.
+ * @param {string} callData - Encoded function call data.
+ * @param {string} sender - Sender address initiating the operation.
+ * @param {BigNumber} nonce - Nonce value to prevent replay attacks.
+ * @param {'transfer' | 'swap'} userOpType - Operation type determining gas parameters.
+ * @param {number} [gasMultiplier=1.0] - Optional multiplier to adjust gas values (default: 1.0).
+ * @returns {Promise<PackedUserOperation>} The created user operation with adjusted gas limits and fees.
  */
 export async function createGenericUserOperation(
+  gasConfig: IBlockchain['gas'],
   callData: string,
   sender: string,
-  nonce: BigNumber
+  nonce: BigNumber,
+  userOpType: 'transfer' | 'swap',
+  gasMultiplier: number = 1.0
 ): Promise<PackedUserOperation> {
+  const gasValues = gasConfig.operations[userOpType];
+
   Logger.log('createGenericUserOperation', 'Creating Generic UserOperation.');
   Logger.log('createGenericUserOperation', 'Sender Address:', sender);
   Logger.log('createGenericUserOperation', 'Call Data:', callData);
   Logger.log('createGenericUserOperation', 'Nonce:', nonce.toString());
-  Logger.log('createGenericUserOperation', 'PRE_VERIFICATION_GAS', PRE_VERIFICATION_GAS);
-  Logger.log('createGenericUserOperation', 'CALL_GAS_LIMIT', CALL_GAS_LIMIT);
-  Logger.log('createGenericUserOperation', 'VERIFICATION_GAS_LIMIT', VERIFICATION_GAS_LIMIT);
-  Logger.log('createGenericUserOperation', 'MAX_FEE_PER_GAS', MAX_FEE_PER_GAS);
-  Logger.log('createGenericUserOperation', 'MAX_PRIORITY_FEE_PER_GAS', MAX_PRIORITY_FEE_PER_GAS);
+  Logger.log('createGenericUserOperation', 'MAX_FEE_PER_GAS', gasValues.maxFeePerGas);
+  Logger.log(
+    'createGenericUserOperation',
+    'MAX_PRIORITY_FEE_PER_GAS',
+    gasValues.maxPriorityFeePerGas
+  );
+  Logger.log(
+    'createGenericUserOperation',
+    'VERIFICATION_GAS_LIMIT',
+    gasValues.verificationGasLimit
+  );
+  Logger.log('createGenericUserOperation', 'CALL_GAS_LIMIT', gasValues.callGasLimit);
+  Logger.log('createGenericUserOperation', 'PRE_VERIFICATION_GAS', gasValues.preVerificationGas);
 
-  // Use high fixed values for gas
+  // Calculate adjusted gas values
+  const baseMaxFeePerGas = ethers.utils.parseUnits(gasValues.maxFeePerGas, 'gwei');
+  const baseMaxPriorityFeePerGas = ethers.utils.parseUnits(gasValues.maxPriorityFeePerGas, 'gwei');
+
+  // Apply multiplier if different from 1.0
+  let effectiveMaxFeePerGas = baseMaxFeePerGas;
+  let effectiveMaxPriorityFeePerGas = baseMaxPriorityFeePerGas;
+
+  if (gasMultiplier !== 1.0) {
+    // Convert multiplier to basis points (e.g., 1.2 → 120)
+    const multiplierBasisPoints = Math.floor(gasMultiplier * 100);
+
+    // Apply multiplier to base values
+    effectiveMaxFeePerGas = baseMaxFeePerGas.mul(multiplierBasisPoints).div(100);
+    effectiveMaxPriorityFeePerGas = baseMaxPriorityFeePerGas.mul(multiplierBasisPoints).div(100);
+
+    Logger.log(
+      'createGenericUserOperation',
+      `Applying gas multiplier: ${gasMultiplier.toFixed(2)}x`
+    );
+    Logger.log(
+      'createGenericUserOperation',
+      `Original MAX_FEE_PER_GAS: ${gasValues.maxFeePerGas} gwei → ${ethers.utils.formatUnits(effectiveMaxFeePerGas, 'gwei')} gwei`
+    );
+    Logger.log(
+      'createGenericUserOperation',
+      `Original MAX_PRIORITY_FEE_PER_GAS: ${gasValues.maxPriorityFeePerGas} gwei → ${ethers.utils.formatUnits(effectiveMaxPriorityFeePerGas, 'gwei')} gwei`
+    );
+  } else {
+    Logger.log(
+      'createGenericUserOperation',
+      `Using standard gas values: MAX_FEE_PER_GAS: ${gasValues.maxFeePerGas} gwei, MAX_PRIORITY_FEE_PER_GAS: ${gasValues.maxPriorityFeePerGas} gwei`
+    );
+  }
+
+  // Create and return userOp with adjusted gas values
   const userOp: PackedUserOperation = {
     sender,
     nonce,
     initCode: '0x',
     callData,
-    verificationGasLimit: BigNumber.from(VERIFICATION_GAS_LIMIT),
-    callGasLimit: BigNumber.from(CALL_GAS_LIMIT),
-    preVerificationGas: BigNumber.from(PRE_VERIFICATION_GAS),
-    maxFeePerGas: BigNumber.from(ethers.utils.parseUnits(MAX_FEE_PER_GAS, 'gwei')),
-    maxPriorityFeePerGas: BigNumber.from(ethers.utils.parseUnits(MAX_PRIORITY_FEE_PER_GAS, 'gwei')),
+    verificationGasLimit: BigNumber.from(gasValues.verificationGasLimit),
+    callGasLimit: BigNumber.from(gasValues.callGasLimit),
+    preVerificationGas: BigNumber.from(gasValues.preVerificationGas),
+    maxFeePerGas: effectiveMaxFeePerGas,
+    maxPriorityFeePerGas: effectiveMaxPriorityFeePerGas,
     paymasterAndData: '0x', // Will be filled by the paymaster service
     signature: '0x' // Empty signature initially
   };
@@ -65,34 +110,51 @@ export async function createGenericUserOperation(
  * @returns {string} The encoded call data for the token transfer.
  * @throws {Error} If the 'to' address is invalid or the amount cannot be parsed.
  */
-export function createTransferCallData(
+export async function createTransferCallData(
   chatterPayContract: ethers.Contract,
   erc20Contract: ethers.Contract,
   to: string,
   amount: string
-): string {
+): Promise<string> {
   if (!ethers.utils.isAddress(to)) {
     throw new Error("Invalid 'to' address");
   }
 
   let amount_bn;
   try {
-    amount_bn = ethers.utils.parseUnits(amount, 18);
+    const decimals = await erc20Contract.decimals();
+    Logger.log('createTransferCallData', 'contract decimals', decimals);
+    amount_bn = ethers.utils.parseUnits(amount, decimals);
   } catch (error) {
-    throw new Error('Invalid amount');
+    Logger.error('createTransferCallData', `amount ${amount} error`, error);
+    throw error;
   }
 
-  const transferEncode = erc20Contract.interface.encodeFunctionData('transfer', [to, amount_bn]);
-  Logger.log('createTransferCallData', 'Transfer Encode:', transferEncode);
+  try {
+    Logger.log(
+      'createTransferCallData',
+      '*** [ executeTokenTransfer ] *** ',
+      erc20Contract.address,
+      to,
+      amount_bn
+    );
 
-  const callData = chatterPayContract.interface.encodeFunctionData('execute', [
-    erc20Contract.address,
-    0,
-    transferEncode
-  ]);
-  Logger.log('createTransferCallData', 'Transfer Call Data:', callData);
+    const functionSignature = 'executeTokenTransfer(address,address,uint256)';
+    const functionSelector = ethers.utils
+      .keccak256(ethers.utils.toUtf8Bytes(functionSignature))
+      .substring(0, 10);
+    const encodedParameters = ethers.utils.defaultAbiCoder.encode(
+      ['address', 'address', 'uint256'],
+      [erc20Contract.address, to, amount_bn]
+    );
+    const callData = functionSelector + encodedParameters.slice(2);
+    Logger.log('createTransferCallData', 'Transfer Call Data:', callData);
 
-  return callData;
+    return callData;
+  } catch (error) {
+    Logger.error('createTransferCallData', 'encodeFunctionData error', error);
+    throw error;
+  }
 }
 
 /**
@@ -101,7 +163,7 @@ export function createTransferCallData(
  *
  * @param {PackedUserOperation} userOperation - The user operation to be signed.
  * @param {string} entryPointAddress - The address of the entry point contract.
- * @param {ethers.Wallet} signer - The wallet used to sign the user operation.
+ * @param {ethers.Wallet} signer - The User wallet used to sign the user operation.
  * @returns {Promise<PackedUserOperation>} The user operation with the generated signature.
  * @throws {Error} If the signature verification fails.
  */
@@ -110,26 +172,29 @@ export async function signUserOperation(
   entryPointAddress: string,
   signer: ethers.Wallet
 ): Promise<PackedUserOperation> {
-  Logger.log('signUserOperation', 'Signing UserOperation.');
+  const { provider } = signer;
+  const { chainId } = await provider!.getNetwork();
 
-  const chainId = await signer.getChainId();
-  Logger.log('signUserOperation', 'Chain ID:', chainId);
-
-  Logger.log('signUserOperation', 'Computing userOpHash.');
   const userOpHash = getUserOpHash(userOperation, entryPointAddress, chainId);
-  Logger.log('signUserOperation', 'UserOpHash:', userOpHash);
 
-  const signature = await signer.signMessage(ethers.utils.arrayify(userOpHash));
-  Logger.log('signUserOperation', 'Generated signature:', signature);
+  const ethSignedMessageHash = ethers.utils.keccak256(
+    ethers.utils.solidityPack(
+      ['string', 'bytes32'],
+      ['\x19Ethereum Signed Message:\n32', userOpHash]
+    )
+  );
 
-  const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(userOpHash), signature);
-  Logger.log('signUserOperation', 'Recovered address:', recoveredAddress);
-  Logger.log('signUserOperation', 'Signer address:', await signer.getAddress());
+  const { _signingKey } = signer;
+  const signature = _signingKey().signDigest(ethers.utils.arrayify(ethSignedMessageHash));
+  const recoveredAddress = ethers.utils.recoverAddress(ethSignedMessageHash, signature);
 
-  if (recoveredAddress.toLowerCase() !== (await signer.getAddress()).toLowerCase()) {
-    throw new Error('signUserOperation: Signature verification failed on client side');
+  const { getAddress } = ethers.utils;
+  if (getAddress(recoveredAddress) !== getAddress(await signer.getAddress())) {
+    throw new Error('Invalid signature');
   }
 
-  Logger.log('signUserOperation', 'UserOperation signed successfully');
-  return { ...userOperation, signature };
+  return {
+    ...userOperation,
+    signature: ethers.utils.joinSignature(signature)
+  };
 }

@@ -89,10 +89,7 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
  * Fetches and processes external deposits for users in the ecosystem.
  * @async
  */
-export async function fetchExternalDeposits(
-  networkName: string,
-  simpleSwapContractAddress: string
-) {
+export async function fetchExternalDeposits(networkName: string, routerAddress: string) {
   try {
     // Get the last processed block number
     const lastProcessedBlock = await LastProcessedBlock.findOne({
@@ -125,7 +122,7 @@ export async function fetchExternalDeposits(
       request<{ transfers: Transfer[] }>(GRAPH_API_WETH_URL, QUERY_EXTERNAL_DEPOSITS, variables)
     ]);
 
-    // Combine and filter out internal transfers and SimpleSwap transfers
+    // Combine and filter out internal transfers and Uniswap V3 router transfers
     const allTransfers = [
       ...dataUSDT.transfers.map((t) => ({ ...t, token: 'USDT' })),
       ...dataWETH.transfers.map((t) => ({ ...t, token: 'WETH' }))
@@ -133,7 +130,7 @@ export async function fetchExternalDeposits(
     const externalDeposits = allTransfers.filter(
       (transfer) =>
         !ecosystemAddresses.includes(transfer.from.toLowerCase()) &&
-        transfer.from.toLowerCase() !== simpleSwapContractAddress.toLowerCase()
+        transfer.from.toLowerCase() !== routerAddress.toLowerCase()
     );
 
     // Process each external deposit
