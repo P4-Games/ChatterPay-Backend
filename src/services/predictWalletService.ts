@@ -63,7 +63,7 @@ export interface ComputedAddress {
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
   const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
   const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
-    name: 'arbitrum-sepolia',
+    name: networkConfig.name,
     chainId: networkConfig.chainId
   });
 
