@@ -41,7 +41,6 @@ describe('Blockchain Model', () => {
       rpc: 'https://mainnet.infura.io/v3/YOUR-PROJECT-ID',
       logo: 'https://ethereum.org/logo.png',
       explorer: 'https://etherscan.io',
-      scanApiKey: 'example-api-key',
       marketplaceOpenseaUrl: 'https://opensea.io',
       environment: 'production',
       contracts: {

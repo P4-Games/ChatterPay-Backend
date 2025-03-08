@@ -27,7 +27,6 @@ describe('Blockchain Model', () => {
       rpc: 'https://mainnet.infura.io/v3/YOUR-PROJECT-ID',
       logo: 'https://ethereum.org/logo.png',
       explorer: 'https://etherscan.io',
-      scanApiKey: 'example-api-key',
       marketplaceOpenseaUrl: 'https://opensea.io',
       environment: 'production',
       contracts: {
@@ -92,7 +91,6 @@ describe('Blockchain Model', () => {
       rpc: 'https://polygon-rpc.com',
       logo: 'https://polygon.technology/logo.png',
       explorer: 'https://polygonscan.com',
-      scanApiKey: 'another-api-key',
       marketplaceOpenseaUrl: 'https://opensea.io',
       environment: 'production',
       contracts: {
