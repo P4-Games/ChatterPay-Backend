@@ -65,7 +65,7 @@ export {
   GCP_BUCKET_BASE_URL
 };
 
-export const IS_DEVELOPMENT = BUN_ENV.toLowerCase() === 'development';
+export const IS_DEVELOPMENT = BUN_ENV.toLowerCase() === 'development' || BUN_ENV.toLowerCase() === 'testing';
 export const PORT = Number(envPort) || 3000;
 export const MONGO_URI: string = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
 export const DEFAULT_CHAIN_ID = Number(defaultChainId);
