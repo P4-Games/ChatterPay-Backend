@@ -7,7 +7,6 @@ export interface IBlockchain extends Document {
   bundlerUrl?: string;
   logo: string;
   explorer: string;
-  scanApiKey: string;
   marketplaceOpenseaUrl: string;
   environment: string;
   contracts: {
@@ -52,7 +51,6 @@ const blockchainSchema = new Schema<IBlockchain>({
   bundlerUrl: { type: String, required: false },
   logo: { type: String, required: true },
   explorer: { type: String, required: true },
-  scanApiKey: { type: String, required: true },
   marketplaceOpenseaUrl: { type: String, required: true },
   environment: { type: String, required: true },
   contracts: {
