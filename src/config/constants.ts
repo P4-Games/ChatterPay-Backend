@@ -15,11 +15,6 @@ const {
   ICP_CANISTER_ID,
   ICP_MNEMONIC,
   INFURA_API_KEY,
-  MAX_FEE_PER_GAS: maxFeeperGas = '30',
-  MAX_PRIORITY_FEE_PER_GAS: maxPriorityFeePerGas = '5',
-  VERIFICATION_GAS_LIMIT: verificationGasLimit = 74908,
-  CALL_GAS_LIMIT: callGasLimit = 79728,
-  PRE_VERIFICATION_GAS: preVerificationGas = 500000,
   BOT_DATA_TOKEN,
   BOT_API_URL,
   BOT_NOTIFICATIONS_ENABLED: botNotificationsEnabled = 'true',
@@ -124,34 +119,6 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
 
 export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];
 export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'es';
-
-export const MAX_FEE_PER_GAS: string = maxFeeperGas;
-export const MAX_PRIORITY_FEE_PER_GAS: string = maxPriorityFeePerGas;
-export const VERIFICATION_GAS_LIMIT: number = Number(verificationGasLimit);
-export const CALL_GAS_LIMIT: number = Number(callGasLimit);
-export const PRE_VERIFICATION_GAS: number = Number(preVerificationGas);
-
-/*
-  EntryPoint gas cost logic:
-    requiredGas = CALL_GAS_LIMIT + (VERIFICATION_GAS_LIMIT * 3) + PRE_VERIFICATION_GAS
-    requiredPrefund = requiredGas * MAX_FEE_PER_GAS;
-*/
-export const GAS_VALUES_BY_OP_TYPE = {
-  transfer: {
-    maxFeePerGas: '0.5',
-    maxPriorityFeePerGas: '0.05',
-    verificationGasLimit: 50000,
-    callGasLimit: 149456,
-    preVerificationGas: 50000
-  },
-  swap: {
-    maxFeePerGas: '0.5',
-    maxPriorityFeePerGas: '0.05',
-    verificationGasLimit: 80000,
-    callGasLimit: 200000,
-    preVerificationGas: 50000
-  }
-};
 
 export const NOTIFICATION_TEMPLATE_CACHE_TTL = 60800; // 1 week
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
