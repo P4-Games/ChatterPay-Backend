@@ -8,8 +8,8 @@ export interface INFTMetadata {
   };
   description: string;
   geolocation?: {
-    latitud: string;
-    longitud: string;
+    latitude: string;
+    longitude: string;
   };
 }
 
@@ -58,8 +58,8 @@ const NFTSchema = new Schema<INFT>({
     geolocation: {
       type: new Schema(
         {
-          longitud: { type: String, required: false },
-          latitud: { type: String, required: false }
+          longitude: { type: String, required: false },
+          latitude: { type: String, required: false }
         },
         { _id: false }
       ),
