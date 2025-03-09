@@ -25,6 +25,7 @@ export interface INFT extends Document {
   copy_order: number;
   copy_of_original?: string | null;
   copy_order_original: number;
+  minted_contract_address: string;
   metadata: INFTMetadata;
 }
 
@@ -40,6 +41,7 @@ const NFTSchema = new Schema<INFT>({
   copy_order: { type: Number, required: true },
   copy_of_original: { type: String, required: false },
   copy_order_original: { type: Number, required: true },
+  minted_contract_address: { type: String, required: true },
   metadata: {
     image_url: {
       type: new Schema(
