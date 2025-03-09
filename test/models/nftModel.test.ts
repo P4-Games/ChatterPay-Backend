@@ -99,15 +99,15 @@ describe('NFT Model', () => {
       metadata: {
         image_url: { gcp: 'https://example.com/image.jpg', ipfs: 'ipfs://example' },
         description: 'Test NFT with metadata',
-        geolocation: { latitud: '40.7128', longitud: '-74.0060' }
+        geolocation: { latitude: '40.7128', longitude: '-74.0060' }
       }
     };
 
     const nft = new NFTModel(validNFT);
     const savedNFT = await nft.save();
 
-    expect(savedNFT.metadata.geolocation?.latitud).toBe('40.7128');
-    expect(savedNFT.metadata.geolocation?.longitud).toBe('-74.0060');
+    expect(savedNFT.metadata.geolocation?.latitude).toBe('40.7128');
+    expect(savedNFT.metadata.geolocation?.longitude).toBe('-74.0060');
     expect(savedNFT.metadata.image_url.ipfs).toBe('ipfs://example');
   });
 });
