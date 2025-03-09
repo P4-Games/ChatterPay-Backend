@@ -31,6 +31,7 @@ describe('NFT Model', () => {
       total_of_this: 1,
       copy_order: 0,
       copy_order_original: 0,
+      minted_contract_address: '0x',
       metadata: {
         image_url: { gcp: 'https://example.com/image.jpg' },
         description: 'Test NFT'
@@ -68,6 +69,7 @@ describe('NFT Model', () => {
       total_of_this: 1,
       copy_order: 0,
       copy_order_original: 0,
+      minted_contract_address: '0x',
       metadata: {
         image_url: { gcp: 'https://example.com/image.jpg' },
         description: 'Test NFT'
@@ -93,6 +95,7 @@ describe('NFT Model', () => {
       total_of_this: 1,
       copy_order: 0,
       copy_order_original: 0,
+      minted_contract_address: '0x',
       metadata: {
         image_url: { gcp: 'https://example.com/image.jpg', ipfs: 'ipfs://example' },
         description: 'Test NFT with metadata',
