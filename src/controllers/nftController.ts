@@ -11,6 +11,7 @@ import { getDynamicGas } from '../helpers/paymasterHelper';
 import { ipfsService } from '../services/ipfs/ipfsService';
 import { ConcurrentOperationsEnum } from '../types/commonType';
 import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
+import { getChatterPayNFTABI } from '../services/web3/abiService';
 import { downloadAndProcessImage } from '../services/imageService';
 import { sendMintNotification } from '../services/notificationService';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
@@ -42,7 +43,8 @@ export interface NFTInfo {
   url: string;
 }
 
-interface NFTData {
+interface NFTMintData {
+  contractAddress: string;
   receipt: ethers.ContractReceipt;
   tokenId: ethers.BigNumber;
 }
@@ -55,17 +57,17 @@ const defaultMetadata: INFTMetadata = {
   },
   description: '',
   geolocation: {
-    latitud: '',
-    longitud: ''
+    latitude: '',
+    longitude: ''
   }
 };
 
 type generateNftOriginalInputs = {
   channel_user_id: string;
   url: string;
-  mensaje: string;
-  latitud: string;
-  longitud: string;
+  description: string;
+  latitude: string;
+  longitude: string;
 };
 
 type generateNftCopyInputs = {
@@ -81,23 +83,22 @@ const cache = new NodeCache();
  * @param {string} name - The name of the NFT.
  * @param {string} description - The description of the NFT.
  * @param {string} image - The URL of the image associated with the NFT.
- * @returns {Promise<{ receipt: ethers.ContractReceipt, tokenId: ethers.BigNumber }>} An object containing the transaction receipt and the minted token ID.
+ * @returns {Promise<{ receipt: ethers.ContractReceipt, tokenId: ethers.BigNumber }>} An object containing
+ * the transaction receipt and the minted token ID.
  * @throws {Error} If minting fails.
  */
 const mintNftOriginal = async (
   recipientAddress: string,
   bddIdToUseAsUri: string
-): Promise<NFTData> => {
+): Promise<NFTMintData> => {
   try {
     const networkConfig = await mongoBlockchainService.getNetworkConfig(DEFAULT_CHAIN_ID);
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    const contractABI: ethers.ContractInterface = await getChatterPayNFTABI();
     const nftContract = new ethers.Contract(
       networkConfig.contracts.chatterNFTAddress,
-      [
-        'function mintOriginal(address to, string memory uri) public',
-        'event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)'
-      ],
+      contractABI,
       backendSigner
     );
 
@@ -119,11 +120,9 @@ const mintNftOriginal = async (
 
     Logger.log('mintNftOriginal', 'Transaction sent: ', tx.hash);
 
-    // Esperar a que la transacción se confirme
     const receipt = await tx.wait();
     Logger.log('mintNftOriginal', 'Transaction confirmed: ', receipt.transactionHash);
 
-    // Filtrar el evento Minted para obtener el tokenId
     const event = receipt.events?.find((e: { event: string }) => e.event === 'Transfer');
 
     if (!event) {
@@ -133,7 +132,7 @@ const mintNftOriginal = async (
     const tokenId = event.args?.tokenId;
     Logger.log('mintNftOriginal', 'Token ID minted: ', tokenId.toString());
 
-    return { receipt, tokenId };
+    return { receipt, tokenId, contractAddress: networkConfig.contracts.chatterNFTAddress };
   } catch (error) {
     Logger.error('mintNftOriginal', error);
     throw new Error('Minting NFT Original failed');
@@ -144,17 +143,15 @@ const mintNftCopy = async (
   recipientAddress: string,
   originalTOkenId: string,
   bddIdToUseAsUri: string
-): Promise<NFTData> => {
+): Promise<NFTMintData> => {
   try {
     const networkConfig = await mongoBlockchainService.getNetworkConfig(DEFAULT_CHAIN_ID);
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    const contractABI: ethers.ContractInterface = await getChatterPayNFTABI();
     const nftContract = new ethers.Contract(
       networkConfig.contracts.chatterNFTAddress,
-      [
-        'function mintCopy(address to, uint256 originalTokenId, string memory uri) public',
-        'event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)'
-      ],
+      contractABI,
       backendSigner
     );
 
@@ -180,13 +177,10 @@ const mintNftCopy = async (
 
     Logger.log('mintNftCopy', 'Transaction sent: ', tx.hash);
 
-    // Esperar a que la transacción se confirme
     const receipt = await tx.wait();
     Logger.log('mintNftCopy', 'Transaction confirmed: ', receipt.transactionHash);
 
-    // Filtrar el evento Minted para obtener el tokenId
     const event = receipt.events?.find((e: { event: string }) => e.event === 'Transfer');
-
     if (!event) {
       throw new Error('Minted event not found in transaction receipt');
     }
@@ -194,7 +188,7 @@ const mintNftCopy = async (
     const tokenId = event.args?.tokenId;
     Logger.log('mintNftCopy', 'NFT Copy ID minted: ', tokenId.toString());
 
-    return { receipt, tokenId };
+    return { receipt, tokenId, contractAddress: networkConfig.contracts.chatterNFTAddress };
   } catch (error) {
     Logger.error('mintNftCopy', error);
     throw new Error('Minting NFT Copy failed');
@@ -219,14 +213,14 @@ export const generateNftOriginal = async (
     return returnErrorResponse(reply, 400, 'You have to send a body with this request');
   }
 
-  const { channel_user_id, url, mensaje, latitud, longitud } = request.body;
+  const { channel_user_id, url, description, latitude, longitude } = request.body;
   const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
 
-  if (!channel_user_id || !url) {
+  if (!channel_user_id || !url || !description) {
     return returnErrorResponse(
       reply,
       400,
-      'Missing parameters in body. You have to send: channel_user_id, url, mensaje, latitud, longitud'
+      'Missing parameters in body. You have to send: channel_user_id, url, description, latitude, longitude'
     );
   }
 
@@ -300,16 +294,17 @@ export const generateNftOriginal = async (
       copy_of_original: null,
       copy_order: 1,
       copy_order_original: 1,
+      minted_contract_address: '0x', // tbc later nftData.contractAddress,
       metadata: {
         image_url: {
           gcp: url || '',
           icp: '',
           ipfs: ''
         },
-        description: mensaje || '',
+        description: description || '',
         geolocation: {
-          latitud: latitud || '',
-          longitud: longitud || ''
+          latitude: latitude || '',
+          longitude: longitude || ''
         }
       }
     });
@@ -319,9 +314,9 @@ export const generateNftOriginal = async (
     return Promise.resolve(); // If the initial creation fails, it makes no sense to continue.
   }
 
-  let nftData: NFTData;
+  let nftMintData: NFTMintData;
   try {
-    nftData = await mintNftOriginal(
+    nftMintData = await mintNftOriginal(
       userWallet.wallet_proxy,
       (mongoData._id as ObjectId).toString()
     );
@@ -330,7 +325,7 @@ export const generateNftOriginal = async (
     Logger.error('generateNftOriginal', 'Error minting NFT', error);
     return Promise.resolve();
   }
-  const nftMintedId = nftData.tokenId.toString();
+  const nftMintedId = nftMintData.tokenId.toString();
 
   // Update in bdd trxId and tokenId
   try {
@@ -339,8 +334,9 @@ export const generateNftOriginal = async (
       { _id: mongoData._id },
       {
         $set: {
-          trxId: nftData.receipt.transactionHash || '',
-          id: nftData.tokenId.toString()
+          id: nftMintedId,
+          trxId: nftMintData.receipt.transactionHash || '',
+          minted_contract_address: nftMintData.contractAddress
         }
       }
     );
@@ -514,6 +510,7 @@ export const generateNftCopy = async (
       copy_order: nftCopyOf.total_of_this + 1,
       copy_of_original,
       copy_order_original,
+      minted_contract_address: '0x',
       wallet: userWallet.wallet_proxy,
       metadata: nftCopyOf.metadata ? nftCopyOf.metadata : defaultMetadata
     });
@@ -523,9 +520,9 @@ export const generateNftCopy = async (
     await NFTModel.updateOne({ _id: nftCopyOf._id }, { $inc: { total_of_this: 1 } });
 
     // mint
-    let nftData: NFTData;
+    let nftMintData: NFTMintData;
     try {
-      nftData = await mintNftCopy(
+      nftMintData = await mintNftCopy(
         userWallet.wallet_proxy,
         nftCopyOf.id,
         (mongoData._id as ObjectId).toString()
@@ -541,8 +538,9 @@ export const generateNftCopy = async (
       { _id: mongoData._id },
       {
         $set: {
-          id: nftData.tokenId.toString(),
-          trxId: nftData.receipt.transactionHash
+          id: nftMintData.tokenId.toString(),
+          trxId: nftMintData.receipt.transactionHash || '',
+          minted_contract_address: nftMintData.contractAddress
         }
       }
     );
@@ -556,7 +554,7 @@ export const generateNftCopy = async (
     await sendMintNotification(
       userWallet.wallet_proxy,
       channel_user_id,
-      nftData.tokenId.toString()
+      nftMintData.tokenId.toString()
     );
 
     Logger.log('generateNftCopy', 'NFT copy end.');
@@ -890,11 +888,11 @@ export const getNftMetadataRequiredByOpenSea = async (
         },
         {
           trait_type: 'Latitude',
-          value: nft.metadata.geolocation?.latitud || ''
+          value: nft.metadata.geolocation?.latitude || ''
         },
         {
           trait_type: 'Longitude',
-          value: nft.metadata.geolocation?.longitud || ''
+          value: nft.metadata.geolocation?.longitude || ''
         },
         {
           trait_type: 'GCP Image',
