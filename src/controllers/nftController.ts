@@ -57,17 +57,17 @@ const defaultMetadata: INFTMetadata = {
   },
   description: '',
   geolocation: {
-    latitud: '',
-    longitud: ''
+    latitude: '',
+    longitude: ''
   }
 };
 
 type generateNftOriginalInputs = {
   channel_user_id: string;
   url: string;
-  mensaje: string;
-  latitud: string;
-  longitud: string;
+  description: string;
+  latitude: string;
+  longitude: string;
 };
 
 type generateNftCopyInputs = {
@@ -213,14 +213,14 @@ export const generateNftOriginal = async (
     return returnErrorResponse(reply, 400, 'You have to send a body with this request');
   }
 
-  const { channel_user_id, url, mensaje, latitud, longitud } = request.body;
+  const { channel_user_id, url, description, latitude, longitude } = request.body;
   const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
 
-  if (!channel_user_id || !url) {
+  if (!channel_user_id || !url || !description) {
     return returnErrorResponse(
       reply,
       400,
-      'Missing parameters in body. You have to send: channel_user_id, url, mensaje, latitud, longitud'
+      'Missing parameters in body. You have to send: channel_user_id, url, description, latitude, longitude'
     );
   }
 
@@ -301,10 +301,10 @@ export const generateNftOriginal = async (
           icp: '',
           ipfs: ''
         },
-        description: mensaje || '',
+        description: description || '',
         geolocation: {
-          latitud: latitud || '',
-          longitud: longitud || ''
+          latitude: latitude || '',
+          longitude: longitude || ''
         }
       }
     });
@@ -888,11 +888,11 @@ export const getNftMetadataRequiredByOpenSea = async (
         },
         {
           trait_type: 'Latitude',
-          value: nft.metadata.geolocation?.latitud || ''
+          value: nft.metadata.geolocation?.latitude || ''
         },
         {
           trait_type: 'Longitude',
-          value: nft.metadata.geolocation?.longitud || ''
+          value: nft.metadata.geolocation?.longitude || ''
         },
         {
           trait_type: 'GCP Image',
