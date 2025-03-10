@@ -31,6 +31,7 @@ export async function createGenericUserOperation(
   Logger.log('createGenericUserOperation', 'Sender Address:', sender);
   Logger.log('createGenericUserOperation', 'Call Data:', callData);
   Logger.log('createGenericUserOperation', 'Nonce:', nonce.toString());
+  /*
   Logger.log('createGenericUserOperation', 'MAX_FEE_PER_GAS', gasValues.maxFeePerGas);
   Logger.log(
     'createGenericUserOperation',
@@ -44,15 +45,17 @@ export async function createGenericUserOperation(
   );
   Logger.log('createGenericUserOperation', 'CALL_GAS_LIMIT', gasValues.callGasLimit);
   Logger.log('createGenericUserOperation', 'PRE_VERIFICATION_GAS', gasValues.preVerificationGas);
+  */
 
   // Calculate adjusted gas values
   const baseMaxFeePerGas = ethers.utils.parseUnits(gasValues.maxFeePerGas, 'gwei');
   const baseMaxPriorityFeePerGas = ethers.utils.parseUnits(gasValues.maxPriorityFeePerGas, 'gwei');
 
   // Apply multiplier if different from 1.0
-  let effectiveMaxFeePerGas = baseMaxFeePerGas;
-  let effectiveMaxPriorityFeePerGas = baseMaxPriorityFeePerGas;
+  const effectiveMaxFeePerGas = baseMaxFeePerGas;
+  const effectiveMaxPriorityFeePerGas = baseMaxPriorityFeePerGas;
 
+  /*
   if (gasMultiplier !== 1.0) {
     // Convert multiplier to basis points (e.g., 1.2 → 120)
     const multiplierBasisPoints = Math.floor(gasMultiplier * 100);
@@ -79,6 +82,7 @@ export async function createGenericUserOperation(
       `Using standard gas values: MAX_FEE_PER_GAS: ${gasValues.maxFeePerGas} gwei, MAX_PRIORITY_FEE_PER_GAS: ${gasValues.maxPriorityFeePerGas} gwei`
     );
   }
+  */
 
   // Create and return userOp with adjusted gas values
   const userOp: PackedUserOperation = {

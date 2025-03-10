@@ -158,6 +158,8 @@ export const swap = async (
     const enoughBalance: boolean = fromTokenCurrentBalance.gte(amountToCheck);
 
     if (!enoughBalance) {
+      validationError = `Insufficient balance, phone: ${channel_user_id}, wallet: ${proxyAddress}. Required: ${toTokenCurrentBalance}, Available: ${fromTokenCurrentBalance}.`;
+      Logger.info('swap', validationError);
       await sendUserInsufficientBalanceNotification(proxyAddress, channel_user_id);
       await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;

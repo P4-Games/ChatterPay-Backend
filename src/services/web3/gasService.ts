@@ -186,8 +186,69 @@ const applyPaymasterDataToUserOp = async (
   } as PackedUserOperation;
 };
 
+const getPerGasValues = async (
+  provider: ethers.providers.JsonRpcProvider
+): Promise<{ maxPriorityFeePerGas: BigNumber; maxFeePerGas: BigNumber }> => {
+  // Using: eth_feeHistory - Ethereum
+  // docs: https://docs.alchemy.com/reference/eth-feehistory
+
+  try {
+    const feeHistory = await provider.send('eth_feeHistory', ['0x5', 'latest', [25, 50, 75]]);
+    const baseFees = feeHistory.baseFeePerGas.map((fee: string) => BigNumber.from(fee));
+    const priorityFees = feeHistory.reward.flat().map((fee: string) => BigNumber.from(fee));
+
+    if (priorityFees.length === 0 || baseFees.length < 2) {
+      throw new Error('Invalid fee history data');
+    }
+
+    const avgPriorityFee = priorityFees
+      .reduce((a: BigNumber, b: BigNumber) => a.add(b), BigNumber.from(0))
+      .div(priorityFees.length);
+    const latestBaseFee = baseFees[baseFees.length - 2]; // Use the second-to-last base fee
+
+    let adjustedPriorityFee = avgPriorityFee.mul(120).div(100); // Increase by 20%
+    const adjustedMaxFee = latestBaseFee.add(adjustedPriorityFee);
+
+    if (adjustedPriorityFee <= 0) {
+      adjustedPriorityFee = ethers.utils.parseUnits('0.005', 'gwei');
+    }
+
+    Logger.log(
+      'getRecommendedGasFees',
+      `Base Fee: ${latestBaseFee.toString()}, Priority Fee: ${adjustedPriorityFee.toString()}, Max Fee: ${adjustedMaxFee.toString()}`
+    );
+
+    
+    return {
+      maxPriorityFeePerGas: adjustedPriorityFee,
+      maxFeePerGas: adjustedMaxFee
+    };
+  } catch (error) {
+    Logger.error('getRecommendedGasFees', error);
+    return {
+      maxPriorityFeePerGas: ethers.utils.parseUnits('0.005', 'gwei'), // Fallback: 0.005 Gwei
+      maxFeePerGas: ethers.utils.parseUnits('0.5', 'gwei') // Fallback: 0.5 Gwei
+    };
+  }
+
+  // Returns 0!
+  /*
+  try {
+    const priorityFeeWei = await provider.send("eth_maxPriorityFeePerGas", []);
+    const priorityFeeBN = BigNumber.from(priorityFeeWei);
+    const adjustedPriorityFee = priorityFeeBN.mul(120).div(100); // Increase by 20%
+    Logger.log('getMaxPriorityPerGas', `Base: ${priorityFeeBN.toString()}, Adjusted: ${adjustedPriorityFee.toString()}`);
+    return adjustedPriorityFee;
+  } catch (error) {
+    Logger.error('getMaxPriorityPerGas', error);
+    throw new Error('Failed to fetch maxPriorityFeePerGas');
+  }
+  */
+};
+
 export const gasService = {
   createConfig: createGasServiceConfig,
   getPaymasterAndData,
-  applyPaymasterDataToUserOp
+  applyPaymasterDataToUserOp,
+  getPerGasValues
 };

@@ -1,13 +1,14 @@
 import { ethers, ContractInterface } from 'ethers';
 
 import { IToken } from '../models/tokenModel';
+import { gasService } from './web3/gasService';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
 import { sendUserOperationToBundler } from './web3/bundlerService';
 import { waitForUserOperationReceipt } from './web3/userOpExecutorService';
-import { getERC20ABI, getChatterpayABI, getChainlinkPriceFeedABI } from './web3/abiService';
 import { signUserOperation, createGenericUserOperation } from './web3/userOperationService';
+import { getERC20ABI, getChatterpayABI, getChainlinkPriceFeedABI } from './web3/abiService';
 import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../types/commonType';
 import { addPaymasterData, getPaymasterEntryPointDepositValue } from './web3/paymasterService';
 import {
@@ -164,6 +165,297 @@ async function executeOperation(
         retryCount + 1
       );
     }
+
+    // For other errors or if retries exhausted, propagate the error
+    Logger.error('executeOperation', `Operation failed: ${errorMessage}`);
+    throw error;
+  }
+}
+
+/**
+ * Executes a user operation with the given callData through the EntryPoint contract.
+ * Handles retries for replacement underpriced errors up to 3 times.
+ *
+ * @param networkConfig - Network configuration containing contract addresses and network details
+ * @param callData - Encoded function call data
+ * @param signer - Wallet for signing the transaction
+ * @param backendSigner - Backend wallet for signing paymaster data
+ * @param entrypointContract - EntryPoint contract instance
+ * @param bundlerUrl - URL of the bundler service
+ * @param proxyAddress - Address of the user's proxy contract
+ * @param provider - Ethereum provider instance
+ * @param retryCount - Number of retry attempts made (default: 0)
+ * @returns Transaction hash of the executed operation
+ * @throws Error if the transaction fails or receipt is not found
+ */
+async function executeOperation2(
+  networkConfig: IBlockchain,
+  callData: string,
+  signer: ethers.Wallet,
+  backendSigner: ethers.Wallet,
+  entrypointContract: ethers.Contract,
+  bundlerUrl: string,
+  proxyAddress: string,
+  provider: ethers.providers.JsonRpcProvider,
+  retryCount = 0
+): Promise<string> {
+  Logger.info(
+    'executeOperation',
+    `Starting operation execution for proxy: ${proxyAddress}, retry: ${retryCount}`
+  );
+  Logger.debug('executeOperation', `Network config: ${JSON.stringify(networkConfig)}`);
+
+  // Get the current nonce for the proxy account
+  const nonce = await entrypointContract.getNonce(proxyAddress, 0);
+  Logger.info('executeOperation', `Current nonce for proxy ${proxyAddress}: ${nonce.toString()}`);
+
+  // Calculate gas multiplier based on retry count
+  // 1.0x for first attempt, 1.3x for first retry, 1.6x for second, 2.0x for third
+  const gasMultiplier = retryCount === 0 ? 1.0 : 1.0 + retryCount * 0.3;
+
+  // Create and prepare the user operation with the gas multiplier
+  Logger.debug('executeOperation', 'Creating generic user operation');
+  let userOperation = await createGenericUserOperation(
+    networkConfig.gas,
+    callData,
+    proxyAddress,
+    nonce,
+    'swap',
+    gasMultiplier
+  );
+
+  // REPLACED **************************************************************
+
+  const perGasData = await gasService.getPerGasValues(provider);
+  Logger.log('executeOperation', '********* REPLACEMENT PER GAS VALUES!');
+  userOperation.maxPriorityFeePerGas = perGasData.maxPriorityFeePerGas;
+  userOperation.maxFeePerGas = perGasData.maxFeePerGas;
+
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log('perGasData', perGasData);
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  
+
+  
+  
+  Logger.log(
+    'executeOperation',
+    'MAX_FEE_PER_GAS',
+    `${userOperation.maxFeePerGas.toString()} (${userOperation.maxFeePerGas.toNumber()})`
+  );
+
+  Logger.log(
+    'executeOperation',
+    'MAX_PRIORITY_FEE_PER_GAS',
+    `${userOperation.maxPriorityFeePerGas.toString()} (${userOperation.maxPriorityFeePerGas.toNumber()})`
+  );
+
+  Logger.log(
+    'executeOperation',
+    'VERIFICATION_GAS_LIMIT',
+    `${userOperation.verificationGasLimit.toString()} (${userOperation.verificationGasLimit.toNumber()})`
+  );
+
+  Logger.log(
+    'executeOperation',
+    'CALL_GAS_LIMIT',
+    `${userOperation.callGasLimit.toString()} (${userOperation.callGasLimit.toNumber()})`
+  );
+
+  Logger.log(
+    'executeOperation',
+    'PRE_VERIFICATION_GAS',
+    `${userOperation.preVerificationGas.toString()} (${userOperation.preVerificationGas.toNumber()})`
+  );
+
+  // REPLACED **************************************************************
+
+  // Logger.debug('executeOperation', `Initial user operation: ${JSON.stringify(userOperation)}`);
+
+  // Add paymaster data using the backend signer
+  Logger.debug(
+    'executeOperation',
+    `Adding paymaster data with address: ${networkConfig.contracts.paymasterAddress}`
+  );
+  userOperation = await addPaymasterData(
+    userOperation,
+    networkConfig.contracts.paymasterAddress!,
+    backendSigner,
+    networkConfig.contracts.entryPoint,
+    callData,
+    networkConfig.chainId
+  );
+  /*
+  Logger.debug(
+    'executeOperation',
+    `User operation with paymaster: ${JSON.stringify(userOperation)}`
+  );
+  */
+
+  // Sign the user operation with the user's signer
+  Logger.debug('executeOperation', 'Signing user operation');
+  userOperation = await signUserOperation(
+    userOperation,
+    networkConfig.contracts.entryPoint,
+    signer
+  );
+  Logger.info('executeOperation', 'User operation signed successfully');
+
+  
+  const AlchemyUserOp = {
+    sender: userOperation.sender,
+    nonce: userOperation.nonce.toHexString(),
+    initCode: userOperation.initCode,
+    callData: userOperation.callData,
+    maxFeePerGas: "0x656703D00", // userOperation.maxFeePerGas.toHexString(),
+    maxPriorityFeePerGas: "0x13AB6680", // userOperation.maxPriorityFeePerGas.toHexString(),
+    paymasterAndData: userOperation.paymasterAndData,
+    signature: userOperation.signature
+  };
+
+  const response = await fetch(networkConfig.rpc, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "eth_estimateUserOperationGas",
+      params: [
+        AlchemyUserOp,
+        entrypointContract.address
+      ]
+    })
+  });
+  
+  const alchemyResult = await response.json();
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log(alchemyResult);
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  
+  const gasResult = {
+    callGasLimit: ethers.BigNumber.from(alchemyResult.result.callGasLimit),
+    verificationGasLimit: ethers.BigNumber.from(alchemyResult.result.verificationGasLimit),
+    preVerificationGas: ethers.BigNumber.from(alchemyResult.result.preVerificationGas),
+  };
+  userOperation.callGasLimit= gasResult.callGasLimit
+  userOperation.verificationGasLimit = gasResult.verificationGasLimit
+  userOperation.preVerificationGas = gasResult.preVerificationGas
+
+  // Volver a firmar
+  userOperation = await signUserOperation(
+    userOperation,
+    networkConfig.contracts.entryPoint,
+    signer
+  );
+
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log(JSON.stringify(userOperation));
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+  
+
+  
+  Logger.log(
+    'executeOperation',
+    'MAX_FEE_PER_GAS',
+    `${userOperation.maxFeePerGas.toString()} (${userOperation.maxFeePerGas.toNumber()})`
+  );
+
+  Logger.log(
+    'executeOperation',
+    'MAX_PRIORITY_FEE_PER_GAS',
+    `${userOperation.maxPriorityFeePerGas.toString()} (${userOperation.maxPriorityFeePerGas.toNumber()})`
+  );
+
+  Logger.log(
+    'executeOperation',
+    'VERIFICATION_GAS_LIMIT',
+    `${userOperation.verificationGasLimit.toString()} (${userOperation.verificationGasLimit.toNumber()})`
+  );
+
+  Logger.log(
+    'executeOperation',
+    'CALL_GAS_LIMIT',
+    `${userOperation.callGasLimit.toString()} (${userOperation.callGasLimit.toNumber()})`
+  );
+
+  Logger.log(
+    'executeOperation',
+    'PRE_VERIFICATION_GAS',
+    `${userOperation.preVerificationGas.toString()} (${userOperation.preVerificationGas.toNumber()})`
+  );
+
+  try {
+    // Send the operation to the bundler and wait for receipt
+    Logger.info('executeOperation', `Sending operation to bundler: ${bundlerUrl}`);
+    const bundlerResponse = await sendUserOperationToBundler(
+      bundlerUrl,
+      userOperation,
+      entrypointContract.address
+    );
+    Logger.debug('executeOperation', `Bundler response: ${JSON.stringify(bundlerResponse)}`);
+
+    Logger.info('executeOperation', 'Waiting for operation receipt');
+    const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
+
+    if (!receipt?.success) {
+      Logger.error('executeOperation', `Operation failed. Receipt: ${JSON.stringify(receipt)}`);
+      throw new Error(
+        `Transaction failed or not found. Receipt: ${receipt.success}, Hash: ${receipt.userOpHash}`
+      );
+    }
+
+    Logger.info(
+      'executeOperation',
+      `Operation completed successfully. Hash: ${receipt.receipt.transactionHash}`
+    );
+
+    return receipt.receipt.transactionHash;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    // Logger.debug('executeOperation', `Error caught: ${errorMessage}`);
+
+    /*
+    // If we get a replacement underpriced error and haven't exceeded retries
+    if (errorMessage.includes('replacement underpriced') && retryCount < 3) {
+      Logger.warn(
+        'executeOperation',
+        `Detected replacement underpriced (retry ${retryCount + 1}/3)`
+      );
+
+      // Wait before retrying
+      const waitTime = 3000 + Math.random() * 2000;
+      Logger.info(
+        'executeOperation',
+        `Waiting ${Math.round(waitTime / 1000)} seconds before retry...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+
+      // Retry with increased retry count (which will increase gas multiplier)
+      return executeOperation(
+        networkConfig,
+        callData,
+        signer,
+        backendSigner,
+        entrypointContract,
+        bundlerUrl,
+        proxyAddress,
+        provider,
+        retryCount + 1
+      );
+    }
+    */
 
     // For other errors or if retries exhausted, propagate the error
     Logger.error('executeOperation', `Operation failed: ${errorMessage}`);
@@ -403,7 +695,7 @@ async function checkAndApproveToken(
 
     // Execute approve operation
     try {
-      const approveHash = await executeOperation(
+      const approveHash = await executeOperation2(
         networkConfig,
         approveCallData,
         setupContractsResult.signer,
@@ -612,7 +904,7 @@ export async function executeSwap(
     );
 
     Logger.info('executeSwap', 'Executing swap operation');
-    const swapHash = await executeOperation(
+    const swapHash = await executeOperation2(
       networkConfig,
       swapCallData,
       setupContractsResult.signer,
@@ -654,3 +946,4 @@ export async function executeSwap(
     return { success: false, swapTransactionHash: '', approveTransactionHash: '' };
   }
 }
+
