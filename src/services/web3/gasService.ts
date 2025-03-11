@@ -253,7 +253,85 @@ const getPerGasValues = async (
     };
   }
 };
+
+/**
+ * Estimates gas values required for a user operation.
+ *
+ * @param userOperation - The packed user operation containing transaction details.
+ * @param rpcUrl - The RPC URL to send the request for gas estimation.
+ * @param entryPointContractAddress - The address of the EntryPoint contract.
+ * @param gasMultiplier - A multiplier to adjust the estimated gas limits (default is 1).
+ *
+ * @returns An object containing estimated gas limits:
+ *          - callGasLimit: The gas required for executing the call.
+ *          - verificationGasLimit: The gas required for verification.
+ *          - preVerificationGas: The gas required before verification.
+ */
+const getcallDataGasValues = async (
+  userOperation: PackedUserOperation,
+  rpcUrl: string,
+  entryPointContractAddress: string,
+  gasMultiplier: number = 1
+): Promise<{
+  callGasLimit: BigNumber;
+  verificationGasLimit: BigNumber;
+  preVerificationGas: BigNumber;
+}> => {
+  const AlchemyUserOp = {
+    sender: userOperation.sender,
+    nonce: userOperation.nonce.toHexString(),
+    initCode: userOperation.initCode,
+    callData: userOperation.callData,
+    maxFeePerGas: userOperation.maxFeePerGas.toHexString(),
+    maxPriorityFeePerGas: userOperation.maxPriorityFeePerGas.toHexString(),
+    paymasterAndData: userOperation.paymasterAndData,
+    signature: userOperation.signature
+  };
+
+  const response = await fetch(rpcUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_estimateUserOperationGas',
+      params: [AlchemyUserOp, entryPointContractAddress]
+    })
+  });
+
+  const alchemyResult = await response.json();
+
+  const gasResult = {
+    // callGasLimit: ethers.BigNumber.from(alchemyResult.result.callGasLimit),
+    callGasLimit: ethers.BigNumber.from(alchemyResult.result.callGasLimit)
+      .mul(Math.round(gasMultiplier * 100))
+      .div(100),
+    verificationGasLimit: ethers.BigNumber.from(alchemyResult.result.verificationGasLimit),
+    preVerificationGas: ethers.BigNumber.from(alchemyResult.result.preVerificationGas)
+  };
+
+  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
+  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
+  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
+  Logger.log('getcallDataGasValues', JSON.stringify(userOperation));
+  Logger.log(
+    'getcallDataGasValues',
+    `Gas Params - callGasLimit: ${userOperation.callGasLimit.toString()}, verificationGasLimit: ${userOperation.verificationGasLimit.toString()}, preVerificationGas: ${userOperation.preVerificationGas.toString()}, maxFeePerGas: ${userOperation.maxFeePerGas.toString()} , maxPriorityFeePerGas: ${userOperation.maxPriorityFeePerGas.toString()}`
+  );
+  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
+  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
+  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
+
+  return {
+    callGasLimit: gasResult.callGasLimit,
+    verificationGasLimit: gasResult.verificationGasLimit,
+    preVerificationGas: gasResult.preVerificationGas
+  };
+};
+
 export const gasService = {
   getPaymasterAndData,
-  applyPaymasterDataToUserOp
+  applyPaymasterDataToUserOp,
+  getPerGasValues,
+  getcallDataGasValues
 };
