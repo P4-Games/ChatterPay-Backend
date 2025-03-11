@@ -376,7 +376,7 @@ export const makeTransaction = async (
 
     if (!checkBalanceResult.enoughBalance) {
       validationError = `Insufficient balance, phone: ${fromUser.phone_number}, wallet: ${userWallet.wallet_proxy}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
-      Logger.log('makeTransaction', validationError);
+      Logger.info('makeTransaction', validationError);
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       await sendUserInsufficientBalanceNotification(
         userWallet.wallet_proxy,
