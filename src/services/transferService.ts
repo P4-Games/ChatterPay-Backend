@@ -9,14 +9,11 @@ import { IUser, IUserWallet } from '../models/userModel';
 import { setupERC20 } from './web3/contractSetupService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { checkBlockchainConditions } from './blockchainService';
-import { sendUserOperationToBundler } from './web3/bundlerService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-import { waitForUserOperationReceipt } from './web3/userOpExecutorService';
-import { addPaymasterData, getPaymasterEntryPointDepositValue } from './web3/paymasterService';
+import { getPaymasterEntryPointDepositValue } from './web3/paymasterService';
 import {
-  signUserOperation,
   createTransferCallData,
-  createGenericUserOperation
+  prepareAndExecuteUserOperation
 } from './web3/userOperationService';
 import {
   openOperation,
@@ -88,25 +85,45 @@ export async function sendTransferUserOperation(
     );
     Logger.log('sendTransferUserOperation', 'Created Transfer Call Data OK', callData);
 
-    // Get the nonce
+    // Keep Paymater Deposit Value
+    const paymasterDepositValuePrev = await getPaymasterEntryPointDepositValue(
+      entryPointContract,
+      networkConfig.contracts.paymasterAddress!
+    );
+
+    /*
+    // Get the current nonce for the proxy account
     Logger.log('sendTransferUserOperation', 'Getting Nonce');
     const nonce = await entryPointContract.getNonce(setupContractsResult.proxy.proxyAddress, 0);
-    Logger.log('sendTransferUserOperation', 'Getted Nonce OK', nonce);
 
-    // Create the base user operation
+    Logger.info(
+      'sendTransferUserOperation',
+      `Current nonce for proxy ${setupContractsResult.proxy.proxyAddress}: ${nonce.toString()}`
+    );
+
+    // Calculate gas multiplier based on retry count
+    // 1.0x for first attempt, 1.3x for first retry, 1.6x for second, 2.0x for third
+    const perGasMultiplier = 1.5;
+    const callDataGasMultiplir = 1.2;
+
+    // Create and prepare the user operation with the gas multiplier
     Logger.log('sendTransferUserOperation', 'Creating Generic User Operation');
-    const userOperation = await createGenericUserOperation(
+    let userOperation = await createGenericUserOperation(
+      setupContractsResult.provider,
       networkConfig.gas,
       callData,
       setupContractsResult.proxy.proxyAddress,
       nonce,
-      'transfer'
+      'transfer',
+      perGasMultiplier
     );
-    Logger.log('sendTransferUserOperation', 'Created Generic User Operation OK', userOperation);
 
-    // Add paymaster data
-    Logger.log('sendTransferUserOperation', 'Adding Paymaster Data');
-    const userOperationWithPaymaster = await addPaymasterData(
+    // Add paymaster data using the backend signer
+    Logger.debug(
+      'sendTransferUserOperation',
+      `Adding paymaster data with address: ${networkConfig.contracts.paymasterAddress}`
+    );
+    userOperation = await addPaymasterData(
       userOperation,
       networkConfig.contracts.paymasterAddress!,
       setupContractsResult.backendSigner,
@@ -114,50 +131,50 @@ export async function sendTransferUserOperation(
       callData,
       networkConfig.chainId
     );
-    Logger.log(
-      'sendTransferUserOperation',
-      'Added Paymaster Data OK (userOp 2)',
-      JSON.stringify(userOperationWithPaymaster)
-    );
 
-    Logger.log('sendTransferUserOperation', 'Signing User Operation');
-    const userOperationSigned = await signUserOperation(
-      userOperationWithPaymaster,
+    // Sign the user operation with the user's signer
+    Logger.debug('sendTransferUserOperation', 'Signing user operation');
+    userOperation = await signUserOperation(
+      userOperation,
+      networkConfig.contracts.entryPoint,
+      setupContractsResult.signer
+    );
+    Logger.info('sendTransferUserOperation', 'User operation signed successfully');
+
+    // Get dynamic callData Gas Values and update userOperation
+    Logger.debug('sendTransferUserOperation', 'Update gas values');
+    const callDataGasValues = await gasService.getcallDataGasValues(
+      userOperation,
+      networkConfig.rpc,
+      entryPointContract.address,
+      callDataGasMultiplir
+    );
+    userOperation.callGasLimit = callDataGasValues.callGasLimit;
+    userOperation.verificationGasLimit = callDataGasValues.verificationGasLimit;
+    userOperation.preVerificationGas = callDataGasValues.preVerificationGas;
+
+    // re-sign User Operation
+    Logger.debug('sendTransferUserOperation', 're-sign user operation');
+    userOperation = await signUserOperation(
+      userOperation,
       networkConfig.contracts.entryPoint,
       setupContractsResult.signer
     );
 
-    Logger.log(
+    // Send the operation to the bundler and wait for receipt
+    Logger.info(
       'sendTransferUserOperation',
-      'Signed User Operation OK (userOp 3)',
-      JSON.stringify(userOperationSigned)
+      `Sending operation to bundler: ${setupContractsResult.bundlerUrl}`
     );
-    Logger.log(
-      'sendTransferUserOperation',
-      'paymasterAndData length (must be 93 !!!!):',
-      userOperationWithPaymaster.paymasterAndData.length
-    );
-
-    //  return;
-    Logger.log(
-      'sendTransferUserOperation',
-      'Sending user operation to bundler',
-      setupContractsResult.bundlerUrl
-    );
-
-    // Keep Paymater Deposit Value
-    const paymasterDepositValuePrev = await getPaymasterEntryPointDepositValue(
-      entryPointContract,
-      networkConfig.contracts.paymasterAddress!
-    );
-
     const bundlerResponse = await sendUserOperationToBundler(
       setupContractsResult.bundlerUrl,
-      userOperationSigned,
+      userOperation,
       entryPointContract.address
     );
-    Logger.log('sendTransferUserOperation', 'Bundler response:', bundlerResponse);
-    Logger.log('sendTransferUserOperation', 'Sent User Operation to Bundler OK');
+    Logger.debug(
+      'sendTransferUserOperation',
+      `Bundler response: ${JSON.stringify(bundlerResponse)}`
+    );
 
     Logger.log('sendTransferUserOperation', 'Waiting for transaction to be mined.');
     const receipt = await waitForUserOperationReceipt(
@@ -167,9 +184,35 @@ export async function sendTransferUserOperation(
     Logger.log('sendTransferUserOperation', 'Transaction receipt:', JSON.stringify(receipt));
 
     if (!receipt?.success) {
-      throw new Error('sendTransferUserOperation: Transaction failed or not found');
+      Logger.error(
+        'sendTransferUserOperation',
+        `Operation failed. Receipt: ${JSON.stringify(receipt)}`
+      );
+      throw new Error(
+        `Transaction failed or not found. Receipt: ${receipt.success}, Hash: ${receipt.userOpHash}`
+      );
     }
 
+    Logger.info(
+      'sendTransferUserOperation',
+      `Operation completed successfully. Hash: ${receipt.receipt.transactionHash}, Block: ${receipt.receipt.blockNumber}`
+    );
+    */
+
+    const userOpResult = await prepareAndExecuteUserOperation(
+      networkConfig,
+      setupContractsResult.provider,
+      setupContractsResult.signer,
+      setupContractsResult.backendSigner,
+      entryPointContract,
+      callData,
+      setupContractsResult.proxy.proxyAddress,
+      'transfer',
+      1.5,
+      1.2
+    );
+
+    // -------------------------------
     const paymasterDepositValueNow = await getPaymasterEntryPointDepositValue(
       entryPointContract,
       networkConfig.contracts.paymasterAddress!
@@ -178,30 +221,24 @@ export async function sendTransferUserOperation(
     const costInEth = (
       parseFloat(paymasterDepositValuePrev.inEth) - parseFloat(paymasterDepositValueNow.inEth)
     ).toFixed(6);
-
     Logger.info(
       'sendTransferUserOperation',
       `Paymaster pre: ${paymasterDepositValuePrev.value.toString()} (${paymasterDepositValuePrev.inEth}), ` +
         `Paymaster now: ${paymasterDepositValueNow.value.toString()} (${paymasterDepositValueNow.inEth}), ` +
         `Cost: ${cost.toString()} (${costInEth} ETH)`
     );
+    // -------------------------------
 
-    Logger.log(
-      'sendTransferUserOperation',
-      'Transaction confirmed in block:',
-      receipt.receipt.blockNumber
-    );
-    Logger.log('sendTransferUserOperation', 'end!');
-
-    return { success: true, transactionHash: receipt.receipt.transactionHash };
+    return userOpResult;
   } catch (error) {
+    const errorMessage = JSON.stringify(error);
     Logger.error(
       'sendTransferUserOperation',
       `Error, from: ${fromAddress}, to: ${toAddress}, ` +
         `token address: ${tokenAddress}, amount: ${amount}, error: `,
-      JSON.stringify(error)
+      errorMessage
     );
-    return { success: false, transactionHash: '' };
+    return { success: false, transactionHash: '', error: errorMessage };
   }
 }
 
