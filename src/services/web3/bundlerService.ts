@@ -32,14 +32,14 @@ function serializeUserOperation(userOp: PackedUserOperation): Record<string, str
 /**
  * Sends a user operation to the bundler.
  *
- * @param bundlerUrl - The URL of the bundler.
+ * @param rpcUrl - The URL of the rpc.
  * @param userOperation - The packed user operation to send.
  * @param entryPointAddress - The address of the EntryPoint contract.
  * @returns The bundler's response.
  * @throws Error if the request fails.
  */
 export async function sendUserOperationToBundler(
-  bundlerUrl: string,
+  rpcUrl: string,
   userOperation: PackedUserOperation,
   entryPointAddress: string
 ): Promise<string> {
@@ -51,11 +51,14 @@ export async function sendUserOperationToBundler(
       params: [serializedUserOp, entryPointAddress],
       id: `ChatterPay.${Date.now().toLocaleString()}`
     };
-    Logger.log('sendUserOperationToBundler', `payload: ${JSON.stringify(payload)}`);
+    Logger.log(
+      'sendUserOperationToBundler',
+      `payload: ${JSON.stringify(payload)}, bundlerUrl: ${rpcUrl}`
+    );
 
     // Wrapper function in quue to avoid erro 429 (rate-limit)
     const response = (await queue.add(async () =>
-      axios.post(bundlerUrl, payload, {
+      axios.post(rpcUrl, payload, {
         headers: {
           'Content-Type': 'application/json'
         }
@@ -80,49 +83,6 @@ export async function sendUserOperationToBundler(
       'sendUserOperationToBundler',
       error instanceof Error ? error.message : 'Unknown error'
     );
-    throw error;
-  }
-}
-
-/**
- * Estimates the gas that will be used in the UserOperation
- *
- * @param bundlerUrl
- * @param userOperation
- * @param entryPointAddress
- */
-export async function estimateUserOperationGas(
-  bundlerUrl: string,
-  userOperation: PackedUserOperation,
-  entryPointAddress: string
-): Promise<void> {
-  try {
-    const serializedUserOp = serializeUserOperation(userOperation);
-    const payload = {
-      jsonrpc: '2.0',
-      method: 'eth_estimateUserOperationGas',
-      params: [serializedUserOp, entryPointAddress],
-      id: `ChatterPay.${Date.now().toLocaleString()}`
-    };
-
-    // Wrapper function in quue to avoid erro 429 (rate-limit)
-    const response = (await queue.add(async () =>
-      axios.post(bundlerUrl, payload, {
-        headers: {
-          accept: 'application/json',
-          'Content-Type': 'application/json'
-        }
-      })
-    )) as AxiosResponse;
-
-    if (response.data.error) {
-      Logger.error('estimateUserOperationGas', response.data.error);
-      throw new Error(`Gas estimation failed: ${response.data.error.message}`);
-    }
-
-    Logger.log('estimateUserOperationGas', response.data.result);
-  } catch (error) {
-    Logger.error('estimateUserOperationGas', error);
     throw error;
   }
 }

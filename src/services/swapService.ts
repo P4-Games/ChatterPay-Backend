@@ -4,12 +4,15 @@ import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
-import { sendUserOperationToBundler } from './web3/bundlerService';
-import { waitForUserOperationReceipt } from './web3/userOpExecutorService';
+import { getPaymasterEntryPointDepositValue } from './web3/paymasterService';
+import { prepareAndExecuteUserOperation } from './web3/userOperationService';
 import { getERC20ABI, getChatterpayABI, getChainlinkPriceFeedABI } from './web3/abiService';
-import { signUserOperation, createGenericUserOperation } from './web3/userOperationService';
-import { TokenAddresses, ExecuteSwapResult, SetupContractReturn } from '../types/commonType';
-import { addPaymasterData, getPaymasterEntryPointDepositValue } from './web3/paymasterService';
+import {
+  TokenAddresses,
+  ExecuteSwapResult,
+  SetupContractReturn,
+  ExecueTransactionResult
+} from '../types/commonType';
 import {
   BINANCE_API_URL,
   SWAP_SLIPPAGE_CONFIG_EXTRA,
@@ -34,140 +37,47 @@ const SLIPPAGE_CONFIG = {
  * @param callData - Encoded function call data
  * @param signer - Wallet for signing the transaction
  * @param backendSigner - Backend wallet for signing paymaster data
- * @param entrypointContract - EntryPoint contract instance
- * @param bundlerUrl - URL of the bundler service
+ * @param entryPointContract - EntryPoint contract instance
  * @param proxyAddress - Address of the user's proxy contract
  * @param provider - Ethereum provider instance
  * @param retryCount - Number of retry attempts made (default: 0)
  * @returns Transaction hash of the executed operation
  * @throws Error if the transaction fails or receipt is not found
  */
-async function executeOperation(
+async function sendSwapUserOperation(
   networkConfig: IBlockchain,
   callData: string,
   signer: ethers.Wallet,
   backendSigner: ethers.Wallet,
-  entrypointContract: ethers.Contract,
-  bundlerUrl: string,
+  entryPointContract: ethers.Contract,
   proxyAddress: string,
   provider: ethers.providers.JsonRpcProvider,
   retryCount = 0
-): Promise<string> {
-  Logger.info(
-    'executeOperation',
-    `Starting operation execution for proxy: ${proxyAddress}, retry: ${retryCount}`
-  );
-  Logger.debug('executeOperation', `Network config: ${JSON.stringify(networkConfig)}`);
-
-  // Get the current nonce for the proxy account
-  const nonce = await entrypointContract.getNonce(proxyAddress, 0);
-  Logger.info('executeOperation', `Current nonce for proxy ${proxyAddress}: ${nonce.toString()}`);
-
-  // Calculate gas multiplier based on retry count
-  // 1.0x for first attempt, 1.3x for first retry, 1.6x for second, 2.0x for third
-  const gasMultiplier = retryCount === 0 ? 1.0 : 1.0 + retryCount * 0.3;
-
-  // Create and prepare the user operation with the gas multiplier
-  Logger.debug('executeOperation', 'Creating generic user operation');
-  let userOperation = await createGenericUserOperation(
-    networkConfig.gas,
-    callData,
-    proxyAddress,
-    nonce,
-    'swap',
-    gasMultiplier
-  );
-  Logger.debug('executeOperation', `Initial user operation: ${JSON.stringify(userOperation)}`);
-
-  // Add paymaster data using the backend signer
-  Logger.debug(
-    'executeOperation',
-    `Adding paymaster data with address: ${networkConfig.contracts.paymasterAddress}`
-  );
-  userOperation = await addPaymasterData(
-    userOperation,
-    networkConfig.contracts.paymasterAddress!,
-    backendSigner,
-    networkConfig.contracts.entryPoint,
-    callData,
-    networkConfig.chainId
-  );
-  Logger.debug(
-    'executeOperation',
-    `User operation with paymaster: ${JSON.stringify(userOperation)}`
-  );
-
-  // Sign the user operation with the user's signer
-  Logger.debug('executeOperation', 'Signing user operation');
-  userOperation = await signUserOperation(
-    userOperation,
-    networkConfig.contracts.entryPoint,
-    signer
-  );
-  Logger.info('executeOperation', 'User operation signed successfully');
-
+): Promise<ExecueTransactionResult> {
   try {
-    // Send the operation to the bundler and wait for receipt
-    Logger.info('executeOperation', `Sending operation to bundler: ${bundlerUrl}`);
-    const bundlerResponse = await sendUserOperationToBundler(
-      bundlerUrl,
-      userOperation,
-      entrypointContract.address
-    );
-    Logger.debug('executeOperation', `Bundler response: ${JSON.stringify(bundlerResponse)}`);
-
-    Logger.info('executeOperation', 'Waiting for operation receipt');
-    const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
-
-    if (!receipt?.success) {
-      Logger.error('executeOperation', `Operation failed. Receipt: ${JSON.stringify(receipt)}`);
-      throw new Error(
-        `Transaction failed or not found. Receipt: ${receipt.success}, Hash: ${receipt.userOpHash}`
-      );
-    }
-
     Logger.info(
       'executeOperation',
-      `Operation completed successfully. Hash: ${receipt.receipt.transactionHash}`
+      `Starting operation execution for proxy: ${proxyAddress}, retry: ${retryCount}`
     );
 
-    return receipt.receipt.transactionHash;
+    const userOpResult = await prepareAndExecuteUserOperation(
+      networkConfig,
+      provider,
+      signer,
+      backendSigner,
+      entryPointContract,
+      callData,
+      proxyAddress,
+      'swap',
+      1.5,
+      1.2
+    );
+
+    return userOpResult;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    Logger.debug('executeOperation', `Error caught: ${errorMessage}`);
-
-    // If we get a replacement underpriced error and haven't exceeded retries
-    if (errorMessage.includes('replacement underpriced') && retryCount < 3) {
-      Logger.warn(
-        'executeOperation',
-        `Detected replacement underpriced (retry ${retryCount + 1}/3)`
-      );
-
-      // Wait before retrying
-      const waitTime = 3000 + Math.random() * 2000;
-      Logger.info(
-        'executeOperation',
-        `Waiting ${Math.round(waitTime / 1000)} seconds before retry...`
-      );
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-
-      // Retry with increased retry count (which will increase gas multiplier)
-      return executeOperation(
-        networkConfig,
-        callData,
-        signer,
-        backendSigner,
-        entrypointContract,
-        bundlerUrl,
-        proxyAddress,
-        provider,
-        retryCount + 1
-      );
-    }
-
-    // For other errors or if retries exhausted, propagate the error
+    const errorMessage = JSON.stringify(error);
     Logger.error('executeOperation', `Operation failed: ${errorMessage}`);
-    throw error;
+    return { success: false, transactionHash: '', error: errorMessage };
   }
 }
 
@@ -403,18 +313,25 @@ async function checkAndApproveToken(
 
     // Execute approve operation
     try {
-      const approveHash = await executeOperation(
+      const approveTransactionResult: ExecueTransactionResult = await sendSwapUserOperation(
         networkConfig,
         approveCallData,
         setupContractsResult.signer,
         setupContractsResult.backendSigner,
         entryPointContract,
-        setupContractsResult.bundlerUrl,
         setupContractsResult.proxy.proxyAddress,
         setupContractsResult.provider
       );
-      Logger.info('checkAndApproveToken', `Token approved successfully. Hash: ${approveHash}`);
-      return approveHash;
+
+      if (!approveTransactionResult.success) {
+        throw new Error(approveTransactionResult.error);
+      }
+
+      Logger.info(
+        'checkAndApproveToken',
+        `Token approved successfully. Hash: ${approveTransactionResult.transactionHash}`
+      );
+      return approveTransactionResult.transactionHash;
     } catch (error) {
       Logger.error(
         'checkAndApproveToken',
@@ -473,9 +390,7 @@ export async function executeSwap(
 
     const { tokenAddressInput: tokenIn, tokenAddressOutput: tokenOut } = tokenAddresses;
 
-    // Fetch token details
     Logger.debug('executeSwap', 'Fetching token details');
-
     Logger.debug(
       'executeSwap',
       `ABIs first lines ERC20: ${JSON.stringify(erc20ABI).slice(0, 100)}, PriceFeed: ${priceFeedABI ? JSON.stringify(priceFeedABI).slice(0, 100) : 'Not loaded in test env'}`
@@ -590,7 +505,7 @@ export async function executeSwap(
     Logger.info('executeSwap', `Minimum output amount: ${amountOutMin.toString()}`);
 
     // Check token allowance and approves the max if needed
-    await checkAndApproveToken(
+    const approveTrxHash = await checkAndApproveToken(
       networkConfig,
       tokenIn,
       amountInBN,
@@ -612,13 +527,12 @@ export async function executeSwap(
     );
 
     Logger.info('executeSwap', 'Executing swap operation');
-    const swapHash = await executeOperation(
+    const swapTransactionResult: ExecueTransactionResult = await sendSwapUserOperation(
       networkConfig,
       swapCallData,
       setupContractsResult.signer,
       setupContractsResult.backendSigner,
       entryPointContract,
-      setupContractsResult.bundlerUrl,
       setupContractsResult.proxy.proxyAddress,
       setupContractsResult.provider
     );
@@ -639,18 +553,20 @@ export async function executeSwap(
         `Cost: ${cost.toString()} (${costInEth} ETH)`
     );
 
-    Logger.info('executeSwap', `Swap completed successfully. Hash: ${swapHash}`);
+    Logger.info(
+      'executeSwap',
+      `Swap completed successfully. Hash: ${swapTransactionResult.transactionHash}`
+    );
     return {
       success: true,
-      approveTransactionHash: swapHash,
-      swapTransactionHash: swapHash
+      approveTransactionHash: approveTrxHash || '',
+      swapTransactionHash: swapTransactionResult.transactionHash
     };
   } catch (error) {
     Logger.error(
       'executeSwap',
       `Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
-    Logger.debug('executeSwap', `Error details: ${JSON.stringify(error)}`);
     return { success: false, swapTransactionHash: '', approveTransactionHash: '' };
   }
 }
