@@ -32,8 +32,8 @@ export async function createGenericUserOperation(
 ): Promise<PackedUserOperation> {
   const gasValues = gasConfig.operations[userOpType];
   const perGasData: { maxPriorityFeePerGas: BigNumber; maxFeePerGas: BigNumber } = {
-    maxPriorityFeePerGas: BigNumber.from(gasValues.maxPriorityFeePerGas),
-    maxFeePerGas: BigNumber.from(gasValues.maxFeePerGas)
+    maxPriorityFeePerGas: ethers.utils.parseUnits(gasValues.maxPriorityFeePerGas, 'gwei'),
+    maxFeePerGas: ethers.utils.parseUnits(gasValues.maxFeePerGas, 'gwei')
   };
 
   if (!gasConfig.useFixedValues) {
