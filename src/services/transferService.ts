@@ -2,6 +2,7 @@
 import { ethers } from 'ethers';
 
 import { IToken } from '../models/tokenModel';
+import { gasService } from './web3/gasService';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenBalances } from './balanceService';
 import { IBlockchain } from '../models/blockchainModel';
@@ -96,11 +97,13 @@ export async function sendTransferUserOperation(
     // Create the base user operation
     Logger.log('sendTransferUserOperation', 'Creating Generic User Operation');
     const userOperation = await createGenericUserOperation(
+      setupContractsResult.provider,
       networkConfig.gas,
       callData,
       setupContractsResult.proxy.proxyAddress,
       nonce,
-      'transfer'
+      'transfer',
+      1.2
     );
     Logger.log('sendTransferUserOperation', 'Created Generic User Operation OK', userOperation);
 
@@ -126,23 +129,25 @@ export async function sendTransferUserOperation(
       networkConfig.contracts.entryPoint,
       setupContractsResult.signer
     );
+    Logger.info('sendTransferUserOperation', 'User operation signed successfully');
 
-    Logger.log(
-      'sendTransferUserOperation',
-      'Signed User Operation OK (userOp 3)',
-      JSON.stringify(userOperationSigned)
+    // Get dynamic callData Gas Values and update userOperation
+    Logger.debug('executeOperation', 'Update gas values');
+    const callDataGasValues = await gasService.getcallDataGasValues(
+      userOperationSigned,
+      networkConfig.rpc,
+      entryPointContract.address
     );
-    Logger.log(
-      'sendTransferUserOperation',
-      'paymasterAndData length (must be 93 !!!!):',
-      userOperationWithPaymaster.paymasterAndData.length
-    );
+    userOperationSigned.callGasLimit = callDataGasValues.callGasLimit;
+    userOperationSigned.verificationGasLimit = callDataGasValues.verificationGasLimit;
+    userOperationSigned.preVerificationGas = callDataGasValues.preVerificationGas;
 
-    //  return;
-    Logger.log(
-      'sendTransferUserOperation',
-      'Sending user operation to bundler',
-      setupContractsResult.bundlerUrl
+    // re-sign User Operation
+    Logger.debug('executeOperation', 're-sign user operation');
+    const userOperationSigned2 = await signUserOperation(
+      userOperationSigned,
+      networkConfig.contracts.entryPoint,
+      setupContractsResult.signer
     );
 
     // Keep Paymater Deposit Value
@@ -153,7 +158,7 @@ export async function sendTransferUserOperation(
 
     const bundlerResponse = await sendUserOperationToBundler(
       setupContractsResult.bundlerUrl,
-      userOperationSigned,
+      userOperationSigned2,
       entryPointContract.address
     );
     Logger.log('sendTransferUserOperation', 'Bundler response:', bundlerResponse);

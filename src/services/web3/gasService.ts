@@ -186,11 +186,26 @@ const applyPaymasterDataToUserOp = async (
   } as PackedUserOperation;
 };
 
+/**
+ * Calculates recommended gas values, prioritizing latest network estimations.
+ * Applies a custom multiplier (percentage increase) to the recommended gas values.
+ * Falls back to provided defaults if estimation fails or results are zero.
+ *
+ * @param defaultPerGasValues - Default gas values (as strings in Gwei)
+ * @param provider - Ethereum JSON RPC provider
+ * @param gasMultiplier - Multiplier for recommended gas values (e.g., 1.2 for 20% increase)
+ * @returns Recommended maxPriorityFeePerGas and maxFeePerGas as BigNumbers
+ */
 const getPerGasValues = async (
-  provider: ethers.providers.JsonRpcProvider
+  defaultPerGasValues: { maxFeePerGas: string; maxPriorityFeePerGas: string },
+  provider: ethers.providers.JsonRpcProvider,
+  gasMultiplier: number = 1.2
 ): Promise<{ maxPriorityFeePerGas: BigNumber; maxFeePerGas: BigNumber }> => {
-  // Using: eth_feeHistory - Ethereum
-  // docs: https://docs.alchemy.com/reference/eth-feehistory
+  const DEFAULT_MAX_FEE = ethers.utils.parseUnits(defaultPerGasValues.maxFeePerGas, 'gwei');
+  const DEFAULT_PRIORITY_FEE = ethers.utils.parseUnits(
+    defaultPerGasValues.maxPriorityFeePerGas,
+    'gwei'
+  );
 
   try {
     const feeHistory = await provider.send('eth_feeHistory', ['0x5', 'latest', [25, 50, 75]]);
@@ -201,24 +216,43 @@ const getPerGasValues = async (
       throw new Error('Invalid fee history data');
     }
 
+    const latestBaseFee = baseFees[baseFees.length - 2];
     const avgPriorityFee = priorityFees
       .reduce((a: BigNumber, b: BigNumber) => a.add(b), BigNumber.from(0))
       .div(priorityFees.length);
-    const latestBaseFee = baseFees[baseFees.length - 2]; // Use the second-to-last base fee
 
-    let adjustedPriorityFee = avgPriorityFee.mul(120).div(100); // Increase by 20%
-    const adjustedMaxFee = latestBaseFee.add(adjustedPriorityFee);
+    let adjustedMaxFee = latestBaseFee
+      .add(avgPriorityFee)
+      .mul(Math.round(gasMultiplier * 100))
+      .div(100);
 
-    if (adjustedPriorityFee <= 0) {
-      adjustedPriorityFee = ethers.utils.parseUnits('0.005', 'gwei');
+    let adjustedPriorityFee = avgPriorityFee.mul(Math.round(gasMultiplier * 100)).div(100);
+
+    if (adjustedMaxFee.lte(0)) {
+      adjustedMaxFee = ethers.utils.parseUnits(defaultPerGasValues.maxFeePerGas, 'gwei');
+    }
+
+    if (adjustedPriorityFee.lte(0)) {
+      adjustedPriorityFee = ethers.utils.parseUnits(
+        defaultPerGasValues.maxPriorityFeePerGas,
+        'gwei'
+      );
     }
 
     Logger.log(
       'getRecommendedGasFees',
-      `Base Fee: ${latestBaseFee.toString()}, Priority Fee: ${adjustedPriorityFee.toString()}, Max Fee: ${adjustedMaxFee.toString()}`
+      `Base Fee: ${latestBaseFee.toString()} (${ethers.utils.formatUnits(
+        latestBaseFee,
+        'gwei'
+      )} gwei), Priority Fee: ${adjustedPriorityFee.toString()} (${ethers.utils.formatUnits(
+        adjustedPriorityFee,
+        'gwei'
+      )} gwei), Max Fee: ${adjustedMaxFee.toString()} (${ethers.utils.formatUnits(
+        adjustedMaxFee,
+        'gwei'
+      )} gwei)`
     );
 
-    
     return {
       maxPriorityFeePerGas: adjustedPriorityFee,
       maxFeePerGas: adjustedMaxFee
@@ -226,29 +260,96 @@ const getPerGasValues = async (
   } catch (error) {
     Logger.error('getRecommendedGasFees', error);
     return {
-      maxPriorityFeePerGas: ethers.utils.parseUnits('0.005', 'gwei'), // Fallback: 0.005 Gwei
-      maxFeePerGas: ethers.utils.parseUnits('0.5', 'gwei') // Fallback: 0.5 Gwei
+      maxPriorityFeePerGas: DEFAULT_PRIORITY_FEE,
+      maxFeePerGas: DEFAULT_MAX_FEE
     };
   }
+};
 
-  // Returns 0!
-  /*
-  try {
-    const priorityFeeWei = await provider.send("eth_maxPriorityFeePerGas", []);
-    const priorityFeeBN = BigNumber.from(priorityFeeWei);
-    const adjustedPriorityFee = priorityFeeBN.mul(120).div(100); // Increase by 20%
-    Logger.log('getMaxPriorityPerGas', `Base: ${priorityFeeBN.toString()}, Adjusted: ${adjustedPriorityFee.toString()}`);
-    return adjustedPriorityFee;
-  } catch (error) {
-    Logger.error('getMaxPriorityPerGas', error);
-    throw new Error('Failed to fetch maxPriorityFeePerGas');
-  }
-  */
+const getcallDataGasValues = async (
+  userOperation: PackedUserOperation,
+  rpcUrl: string,
+  entryPointContractAddress: string
+): Promise<{
+  callGasLimit: BigNumber;
+  verificationGasLimit: BigNumber;
+  preVerificationGas: BigNumber;
+}> => {
+  const AlchemyUserOp = {
+    sender: userOperation.sender,
+    nonce: userOperation.nonce.toHexString(),
+    initCode: userOperation.initCode,
+    callData: userOperation.callData,
+    maxFeePerGas: userOperation.maxFeePerGas.toHexString(),
+    maxPriorityFeePerGas: userOperation.maxPriorityFeePerGas.toHexString(),
+    paymasterAndData: userOperation.paymasterAndData,
+    signature: userOperation.signature
+  };
+
+  const response = await fetch(rpcUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_estimateUserOperationGas',
+      params: [AlchemyUserOp, entryPointContractAddress]
+    })
+  });
+
+  const alchemyResult = await response.json();
+
+  const gasMultiplier2 = 5;
+  const gasResult = {
+    // callGasLimit: ethers.BigNumber.from(alchemyResult.result.callGasLimit),
+    callGasLimit: ethers.BigNumber.from(alchemyResult.result.callGasLimit)
+      .mul(Math.round(gasMultiplier2 * 100))
+      .div(100),
+    verificationGasLimit: ethers.BigNumber.from(alchemyResult.result.verificationGasLimit),
+    preVerificationGas: ethers.BigNumber.from(alchemyResult.result.preVerificationGas)
+  };
+
+  Logger.log(
+    'getcallDataGasValues',
+    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
+  );
+  Logger.log(
+    'getcallDataGasValues',
+    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
+  );
+  Logger.log(
+    'getcallDataGasValues',
+    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
+  );
+  Logger.log('getcallDataGasValues', JSON.stringify(userOperation));
+  Logger.log(
+    'getcallDataGasValues',
+    `Gas Params - callGasLimit: ${userOperation.callGasLimit.toString()}, verificationGasLimit: ${userOperation.verificationGasLimit.toString()}, preVerificationGas: ${userOperation.preVerificationGas.toString()}, maxFeePerGas: ${userOperation.maxFeePerGas.toString()} , maxPriorityFeePerGas: ${userOperation.maxPriorityFeePerGas.toString()}`
+  );
+  Logger.log(
+    'getcallDataGasValues',
+    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
+  );
+  Logger.log(
+    'getcallDataGasValues',
+    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
+  );
+  Logger.log(
+    'getcallDataGasValues',
+    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
+  );
+
+  return {
+    callGasLimit: gasResult.callGasLimit,
+    verificationGasLimit: gasResult.verificationGasLimit,
+    preVerificationGas: gasResult.preVerificationGas
+  };
 };
 
 export const gasService = {
   createConfig: createGasServiceConfig,
   getPaymasterAndData,
   applyPaymasterDataToUserOp,
-  getPerGasValues
+  getPerGasValues,
+  getcallDataGasValues
 };

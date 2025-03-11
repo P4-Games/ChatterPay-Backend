@@ -43,7 +43,8 @@ const SLIPPAGE_CONFIG = {
  * @returns Transaction hash of the executed operation
  * @throws Error if the transaction fails or receipt is not found
  */
-async function executeOperation(
+/*
+async function executeOperation1(
   networkConfig: IBlockchain,
   callData: string,
   signer: ethers.Wallet,
@@ -71,6 +72,7 @@ async function executeOperation(
   // Create and prepare the user operation with the gas multiplier
   Logger.debug('executeOperation', 'Creating generic user operation');
   let userOperation = await createGenericUserOperation(
+    provider,
     networkConfig.gas,
     callData,
     proxyAddress,
@@ -107,6 +109,30 @@ async function executeOperation(
   );
   Logger.info('executeOperation', 'User operation signed successfully');
 
+  Logger.log(
+    'executeOperation',
+    'MAX_FEE_PER_GAS',
+    `${userOperation.maxFeePerGas.toString()} (${userOperation.maxFeePerGas.toNumber()})`
+  );
+
+  Logger.log(
+    'executeOperation',
+    'MAX_PRIORITY_FEE_PER_GAS',
+    `${userOperation.maxPriorityFeePerGas.toString()} (${userOperation.maxPriorityFeePerGas.toNumber()})`
+  );
+
+  Logger.log(
+    'executeOperation',
+    'VERIFICATION_GAS_LIMIT',
+    `${userOperation.verificationGasLimit.toString()} (${userOperation.verificationGasLimit.toNumber()})`
+  );
+
+  Logger.log(
+    'executeOperation',
+    'CALL_GAS_LIMIT',
+    `${userOperation.callGasLimit.toString()} (${userOperation.callGasLimit.toNumber()})`
+  );
+
   try {
     // Send the operation to the bundler and wait for receipt
     Logger.info('executeOperation', `Sending operation to bundler: ${bundlerUrl}`);
@@ -135,42 +161,13 @@ async function executeOperation(
     return receipt.receipt.transactionHash;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    Logger.debug('executeOperation', `Error caught: ${errorMessage}`);
-
-    // If we get a replacement underpriced error and haven't exceeded retries
-    if (errorMessage.includes('replacement underpriced') && retryCount < 3) {
-      Logger.warn(
-        'executeOperation',
-        `Detected replacement underpriced (retry ${retryCount + 1}/3)`
-      );
-
-      // Wait before retrying
-      const waitTime = 3000 + Math.random() * 2000;
-      Logger.info(
-        'executeOperation',
-        `Waiting ${Math.round(waitTime / 1000)} seconds before retry...`
-      );
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-
-      // Retry with increased retry count (which will increase gas multiplier)
-      return executeOperation(
-        networkConfig,
-        callData,
-        signer,
-        backendSigner,
-        entrypointContract,
-        bundlerUrl,
-        proxyAddress,
-        provider,
-        retryCount + 1
-      );
-    }
 
     // For other errors or if retries exhausted, propagate the error
     Logger.error('executeOperation', `Operation failed: ${errorMessage}`);
     throw error;
   }
 }
+*/
 
 /**
  * Executes a user operation with the given callData through the EntryPoint contract.
@@ -180,7 +177,7 @@ async function executeOperation(
  * @param callData - Encoded function call data
  * @param signer - Wallet for signing the transaction
  * @param backendSigner - Backend wallet for signing paymaster data
- * @param entrypointContract - EntryPoint contract instance
+ * @param entryPointContract - EntryPoint contract instance
  * @param bundlerUrl - URL of the bundler service
  * @param proxyAddress - Address of the user's proxy contract
  * @param provider - Ethereum provider instance
@@ -193,7 +190,7 @@ async function executeOperation2(
   callData: string,
   signer: ethers.Wallet,
   backendSigner: ethers.Wallet,
-  entrypointContract: ethers.Contract,
+  entryPointContract: ethers.Contract,
   bundlerUrl: string,
   proxyAddress: string,
   provider: ethers.providers.JsonRpcProvider,
@@ -206,16 +203,17 @@ async function executeOperation2(
   Logger.debug('executeOperation', `Network config: ${JSON.stringify(networkConfig)}`);
 
   // Get the current nonce for the proxy account
-  const nonce = await entrypointContract.getNonce(proxyAddress, 0);
+  const nonce = await entryPointContract.getNonce(proxyAddress, 0);
   Logger.info('executeOperation', `Current nonce for proxy ${proxyAddress}: ${nonce.toString()}`);
 
   // Calculate gas multiplier based on retry count
   // 1.0x for first attempt, 1.3x for first retry, 1.6x for second, 2.0x for third
-  const gasMultiplier = retryCount === 0 ? 1.0 : 1.0 + retryCount * 0.3;
+  const gasMultiplier = 1.5; // retryCount === 0 ? 1.0 : 1.0 + retryCount * 0.3;
 
   // Create and prepare the user operation with the gas multiplier
   Logger.debug('executeOperation', 'Creating generic user operation');
   let userOperation = await createGenericUserOperation(
+    provider,
     networkConfig.gas,
     callData,
     proxyAddress,
@@ -223,58 +221,6 @@ async function executeOperation2(
     'swap',
     gasMultiplier
   );
-
-  // REPLACED **************************************************************
-
-  const perGasData = await gasService.getPerGasValues(provider);
-  Logger.log('executeOperation', '********* REPLACEMENT PER GAS VALUES!');
-  userOperation.maxPriorityFeePerGas = perGasData.maxPriorityFeePerGas;
-  userOperation.maxFeePerGas = perGasData.maxFeePerGas;
-
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log('perGasData', perGasData);
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  
-
-  
-  
-  Logger.log(
-    'executeOperation',
-    'MAX_FEE_PER_GAS',
-    `${userOperation.maxFeePerGas.toString()} (${userOperation.maxFeePerGas.toNumber()})`
-  );
-
-  Logger.log(
-    'executeOperation',
-    'MAX_PRIORITY_FEE_PER_GAS',
-    `${userOperation.maxPriorityFeePerGas.toString()} (${userOperation.maxPriorityFeePerGas.toNumber()})`
-  );
-
-  Logger.log(
-    'executeOperation',
-    'VERIFICATION_GAS_LIMIT',
-    `${userOperation.verificationGasLimit.toString()} (${userOperation.verificationGasLimit.toNumber()})`
-  );
-
-  Logger.log(
-    'executeOperation',
-    'CALL_GAS_LIMIT',
-    `${userOperation.callGasLimit.toString()} (${userOperation.callGasLimit.toNumber()})`
-  );
-
-  Logger.log(
-    'executeOperation',
-    'PRE_VERIFICATION_GAS',
-    `${userOperation.preVerificationGas.toString()} (${userOperation.preVerificationGas.toNumber()})`
-  );
-
-  // REPLACED **************************************************************
-
-  // Logger.debug('executeOperation', `Initial user operation: ${JSON.stringify(userOperation)}`);
 
   // Add paymaster data using the backend signer
   Logger.debug(
@@ -289,12 +235,6 @@ async function executeOperation2(
     callData,
     networkConfig.chainId
   );
-  /*
-  Logger.debug(
-    'executeOperation',
-    `User operation with paymaster: ${JSON.stringify(userOperation)}`
-  );
-  */
 
   // Sign the user operation with the user's signer
   Logger.debug('executeOperation', 'Signing user operation');
@@ -305,95 +245,23 @@ async function executeOperation2(
   );
   Logger.info('executeOperation', 'User operation signed successfully');
 
-  
-  const AlchemyUserOp = {
-    sender: userOperation.sender,
-    nonce: userOperation.nonce.toHexString(),
-    initCode: userOperation.initCode,
-    callData: userOperation.callData,
-    maxFeePerGas: "0x656703D00", // userOperation.maxFeePerGas.toHexString(),
-    maxPriorityFeePerGas: "0x13AB6680", // userOperation.maxPriorityFeePerGas.toHexString(),
-    paymasterAndData: userOperation.paymasterAndData,
-    signature: userOperation.signature
-  };
+  // Get dynamic callData Gas Values and update userOperation
+  Logger.debug('executeOperation', 'Update gas values');
+  const callDataGasValues = await gasService.getcallDataGasValues(
+    userOperation,
+    networkConfig.rpc,
+    entryPointContract.address
+  );
+  userOperation.callGasLimit = callDataGasValues.callGasLimit;
+  userOperation.verificationGasLimit = callDataGasValues.verificationGasLimit;
+  userOperation.preVerificationGas = callDataGasValues.preVerificationGas;
 
-  const response = await fetch(networkConfig.rpc, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "eth_estimateUserOperationGas",
-      params: [
-        AlchemyUserOp,
-        entrypointContract.address
-      ]
-    })
-  });
-  
-  const alchemyResult = await response.json();
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log(alchemyResult);
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  
-  const gasResult = {
-    callGasLimit: ethers.BigNumber.from(alchemyResult.result.callGasLimit),
-    verificationGasLimit: ethers.BigNumber.from(alchemyResult.result.verificationGasLimit),
-    preVerificationGas: ethers.BigNumber.from(alchemyResult.result.preVerificationGas),
-  };
-  userOperation.callGasLimit= gasResult.callGasLimit
-  userOperation.verificationGasLimit = gasResult.verificationGasLimit
-  userOperation.preVerificationGas = gasResult.preVerificationGas
-
-  // Volver a firmar
+  // re-sign User Operation
+  Logger.debug('executeOperation', 're-sign user operation');
   userOperation = await signUserOperation(
     userOperation,
     networkConfig.contracts.entryPoint,
     signer
-  );
-
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log(JSON.stringify(userOperation));
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  console.log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-  
-
-  
-  Logger.log(
-    'executeOperation',
-    'MAX_FEE_PER_GAS',
-    `${userOperation.maxFeePerGas.toString()} (${userOperation.maxFeePerGas.toNumber()})`
-  );
-
-  Logger.log(
-    'executeOperation',
-    'MAX_PRIORITY_FEE_PER_GAS',
-    `${userOperation.maxPriorityFeePerGas.toString()} (${userOperation.maxPriorityFeePerGas.toNumber()})`
-  );
-
-  Logger.log(
-    'executeOperation',
-    'VERIFICATION_GAS_LIMIT',
-    `${userOperation.verificationGasLimit.toString()} (${userOperation.verificationGasLimit.toNumber()})`
-  );
-
-  Logger.log(
-    'executeOperation',
-    'CALL_GAS_LIMIT',
-    `${userOperation.callGasLimit.toString()} (${userOperation.callGasLimit.toNumber()})`
-  );
-
-  Logger.log(
-    'executeOperation',
-    'PRE_VERIFICATION_GAS',
-    `${userOperation.preVerificationGas.toString()} (${userOperation.preVerificationGas.toNumber()})`
   );
 
   try {
@@ -402,7 +270,7 @@ async function executeOperation2(
     const bundlerResponse = await sendUserOperationToBundler(
       bundlerUrl,
       userOperation,
-      entrypointContract.address
+      entryPointContract.address
     );
     Logger.debug('executeOperation', `Bundler response: ${JSON.stringify(bundlerResponse)}`);
 
@@ -424,40 +292,6 @@ async function executeOperation2(
     return receipt.receipt.transactionHash;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    // Logger.debug('executeOperation', `Error caught: ${errorMessage}`);
-
-    /*
-    // If we get a replacement underpriced error and haven't exceeded retries
-    if (errorMessage.includes('replacement underpriced') && retryCount < 3) {
-      Logger.warn(
-        'executeOperation',
-        `Detected replacement underpriced (retry ${retryCount + 1}/3)`
-      );
-
-      // Wait before retrying
-      const waitTime = 3000 + Math.random() * 2000;
-      Logger.info(
-        'executeOperation',
-        `Waiting ${Math.round(waitTime / 1000)} seconds before retry...`
-      );
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-
-      // Retry with increased retry count (which will increase gas multiplier)
-      return executeOperation(
-        networkConfig,
-        callData,
-        signer,
-        backendSigner,
-        entrypointContract,
-        bundlerUrl,
-        proxyAddress,
-        provider,
-        retryCount + 1
-      );
-    }
-    */
-
-    // For other errors or if retries exhausted, propagate the error
     Logger.error('executeOperation', `Operation failed: ${errorMessage}`);
     throw error;
   }
@@ -946,4 +780,3 @@ export async function executeSwap(
     return { success: false, swapTransactionHash: '', approveTransactionHash: '' };
   }
 }
-
