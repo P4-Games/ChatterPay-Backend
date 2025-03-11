@@ -269,7 +269,8 @@ const getPerGasValues = async (
 const getcallDataGasValues = async (
   userOperation: PackedUserOperation,
   rpcUrl: string,
-  entryPointContractAddress: string
+  entryPointContractAddress: string,
+  gasMultiplier: number = 1
 ): Promise<{
   callGasLimit: BigNumber;
   verificationGasLimit: BigNumber;
@@ -299,45 +300,26 @@ const getcallDataGasValues = async (
 
   const alchemyResult = await response.json();
 
-  const gasMultiplier2 = 5;
   const gasResult = {
     // callGasLimit: ethers.BigNumber.from(alchemyResult.result.callGasLimit),
     callGasLimit: ethers.BigNumber.from(alchemyResult.result.callGasLimit)
-      .mul(Math.round(gasMultiplier2 * 100))
+      .mul(Math.round(gasMultiplier * 100))
       .div(100),
     verificationGasLimit: ethers.BigNumber.from(alchemyResult.result.verificationGasLimit),
     preVerificationGas: ethers.BigNumber.from(alchemyResult.result.preVerificationGas)
   };
 
-  Logger.log(
-    'getcallDataGasValues',
-    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
-  );
-  Logger.log(
-    'getcallDataGasValues',
-    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
-  );
-  Logger.log(
-    'getcallDataGasValues',
-    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
-  );
+  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
+  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
+  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
   Logger.log('getcallDataGasValues', JSON.stringify(userOperation));
   Logger.log(
     'getcallDataGasValues',
     `Gas Params - callGasLimit: ${userOperation.callGasLimit.toString()}, verificationGasLimit: ${userOperation.verificationGasLimit.toString()}, preVerificationGas: ${userOperation.preVerificationGas.toString()}, maxFeePerGas: ${userOperation.maxFeePerGas.toString()} , maxPriorityFeePerGas: ${userOperation.maxPriorityFeePerGas.toString()}`
   );
-  Logger.log(
-    'getcallDataGasValues',
-    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
-  );
-  Logger.log(
-    'getcallDataGasValues',
-    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
-  );
-  Logger.log(
-    'getcallDataGasValues',
-    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
-  );
+  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
+  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
+  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
 
   return {
     callGasLimit: gasResult.callGasLimit,

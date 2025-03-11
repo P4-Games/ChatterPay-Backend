@@ -68,6 +68,7 @@ export interface ExecuteSwapResult {
 export interface ExecueTransactionResult {
   success: boolean;
   transactionHash: string;
+  error: string;
 }
 
 export interface SetupContractReturn {
