@@ -32,14 +32,14 @@ function serializeUserOperation(userOp: PackedUserOperation): Record<string, str
 /**
  * Sends a user operation to the bundler.
  *
- * @param bundlerUrl - The URL of the bundler.
+ * @param rpcUrl - The URL of the rpc.
  * @param userOperation - The packed user operation to send.
  * @param entryPointAddress - The address of the EntryPoint contract.
  * @returns The bundler's response.
  * @throws Error if the request fails.
  */
 export async function sendUserOperationToBundler(
-  bundlerUrl: string,
+  rpcUrl: string,
   userOperation: PackedUserOperation,
   entryPointAddress: string
 ): Promise<string> {
@@ -51,11 +51,14 @@ export async function sendUserOperationToBundler(
       params: [serializedUserOp, entryPointAddress],
       id: `ChatterPay.${Date.now().toLocaleString()}`
     };
-    Logger.log('sendUserOperationToBundler', `payload: ${JSON.stringify(payload)}`);
+    Logger.log(
+      'sendUserOperationToBundler',
+      `payload: ${JSON.stringify(payload)}, bundlerUrl: ${rpcUrl}`
+    );
 
     // Wrapper function in quue to avoid erro 429 (rate-limit)
     const response = (await queue.add(async () =>
-      axios.post(bundlerUrl, payload, {
+      axios.post(rpcUrl, payload, {
         headers: {
           'Content-Type': 'application/json'
         }
