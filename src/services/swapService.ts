@@ -40,7 +40,6 @@ const SLIPPAGE_CONFIG = {
  * @param signer - Wallet for signing the transaction
  * @param backendSigner - Backend wallet for signing paymaster data
  * @param entryPointContract - EntryPoint contract instance
- * @param bundlerUrl - URL of the bundler service
  * @param proxyAddress - Address of the user's proxy contract
  * @param provider - Ethereum provider instance
  * @param retryCount - Number of retry attempts made (default: 0)
@@ -53,7 +52,6 @@ async function sendSwapUserOperation(
   signer: ethers.Wallet,
   backendSigner: ethers.Wallet,
   entryPointContract: ethers.Contract,
-  bundlerUrl: string,
   proxyAddress: string,
   provider: ethers.providers.JsonRpcProvider,
   retryCount = 0
@@ -419,7 +417,6 @@ async function checkAndApproveToken(
         setupContractsResult.signer,
         setupContractsResult.backendSigner,
         entryPointContract,
-        setupContractsResult.bundlerUrl,
         setupContractsResult.proxy.proxyAddress,
         setupContractsResult.provider
       );
@@ -634,7 +631,6 @@ export async function executeSwap(
       setupContractsResult.signer,
       setupContractsResult.backendSigner,
       entryPointContract,
-      setupContractsResult.bundlerUrl,
       setupContractsResult.proxy.proxyAddress,
       setupContractsResult.provider
     );
@@ -669,7 +665,6 @@ export async function executeSwap(
       'executeSwap',
       `Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
-    Logger.debug('executeSwap', `Error details: ${JSON.stringify(error)}`);
     return { success: false, swapTransactionHash: '', approveTransactionHash: '' };
   }
 }

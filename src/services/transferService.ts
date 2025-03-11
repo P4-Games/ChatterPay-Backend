@@ -229,8 +229,6 @@ export async function sendTransferUserOperation(
     );
     // -------------------------------
 
-    Logger.log('sendTransferUserOperation', 'end!');
-
     return userOpResult;
   } catch (error) {
     const errorMessage = JSON.stringify(error);

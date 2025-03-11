@@ -463,6 +463,7 @@ export const makeTransaction = async (
       ? tracer?.createChildSpan({ name: 'executeTransaction' })
       : undefined;
 
+      console.log('--------------------', checkBlockchainConditionsResult.setupContractsResult!.bundlerUrl)
     const executeTransactionResult: ExecueTransactionResult = await sendTransferUserOperation(
       networkConfig,
       checkBlockchainConditionsResult.setupContractsResult!,

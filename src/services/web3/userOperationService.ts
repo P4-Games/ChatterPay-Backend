@@ -305,7 +305,8 @@ export async function prepareAndExecuteUserOperation(
     // Send the operation to the bundler and wait for receipt
     Logger.info(userOpType, `Sending operation to bundler: ${networkConfig.bundlerUrl}`);
     const bundlerResponse = await sendUserOperationToBundler(
-      networkConfig.bundlerUrl!,
+      // networkConfig.bundlerUrl!,
+      networkConfig.rpc,
       userOperation,
       entryPointContract.address
     );
@@ -331,7 +332,7 @@ export async function prepareAndExecuteUserOperation(
 
     return { success: true, transactionHash: receipt.receipt.transactionHash, error: '' };
   } catch (error) {
-    const errorMessage = JSON.stringify(error);
+    const errorMessage = (error as Error).message;
     Logger.error(userOpType, `Error executing operation: ${errorMessage}`);
     return { success: false, transactionHash: '', error: errorMessage };
   }
