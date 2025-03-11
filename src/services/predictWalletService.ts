@@ -89,7 +89,7 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
   if (code === '0x') {
     Logger.log(
       'computeProxyAddressFromPhone',
-      `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}...`
+      `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}.`
     );
     const gasLimit = await getDynamicGas(factory, 'createProxy', [ownerAddress.publicKey]);
     const tx = await factory.createProxy(ownerAddress.publicKey, {

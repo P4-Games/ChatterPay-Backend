@@ -100,7 +100,7 @@ export async function createTransferCallData(
   try {
     Logger.log(
       'createTransferCallData',
-      '*** [ executeTokenTransfer ] *** ',
+      '[ executeTokenTransfer ]',
       erc20Contract.address,
       to,
       amount_bn
@@ -326,7 +326,6 @@ export async function prepareAndExecuteUserOperation(
 
     Logger.log(userOpType, 'Waiting for transaction to be mined.');
     const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
-    Logger.log(userOpType, 'Transaction receipt:', JSON.stringify(receipt));
 
     if (!receipt?.success) {
       Logger.error(userOpType, `Operation failed. Receipt: ${JSON.stringify(receipt)}`);
