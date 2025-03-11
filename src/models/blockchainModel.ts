@@ -1,5 +1,13 @@
 import { model, Schema, Document } from 'mongoose';
 
+export interface OpGasValues {
+  maxFeePerGas: string;
+  maxPriorityFeePerGas: string;
+  verificationGasLimit: number;
+  callGasLimit: number;
+  preVerificationGas: number;
+}
+
 export interface IBlockchain extends Document {
   name: string;
   chainId: number;
@@ -18,21 +26,10 @@ export interface IBlockchain extends Document {
     routerAddress?: string;
   };
   gas: {
+    useFixedValues: boolean;
     operations: {
-      transfer: {
-        maxFeePerGas: string;
-        maxPriorityFeePerGas: string;
-        verificationGasLimit: number;
-        callGasLimit: number;
-        preVerificationGas: number;
-      };
-      swap: {
-        maxFeePerGas: string;
-        maxPriorityFeePerGas: string;
-        verificationGasLimit: number;
-        callGasLimit: number;
-        preVerificationGas: number;
-      };
+      transfer: OpGasValues;
+      swap: OpGasValues;
     };
   };
   balances: {
