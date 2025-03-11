@@ -3,10 +3,10 @@ import { ethers, BigNumber } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { IBlockchain } from '../../models/blockchainModel';
 import { QUEUE_GAS_INTERVAL } from '../../config/constants';
 import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation } from '../../types/userOperationType';
+import { IBlockchain, OpGasValues } from '../../models/blockchainModel';
 
 interface AlchemyGasResponse {
   paymasterAndData: string;
@@ -187,7 +187,7 @@ const applyPaymasterDataToUserOp = async (
 const getPerGasValues = async (
   defaultPerGasValues: { maxFeePerGas: string; maxPriorityFeePerGas: string },
   provider: ethers.providers.JsonRpcProvider,
-  gasMultiplier: number = 1.2
+  gasMultiplier: number
 ): Promise<{ maxPriorityFeePerGas: BigNumber; maxFeePerGas: BigNumber }> => {
   const DEFAULT_MAX_FEE = ethers.utils.parseUnits(defaultPerGasValues.maxFeePerGas, 'gwei');
   const DEFAULT_PRIORITY_FEE = ethers.utils.parseUnits(
@@ -268,6 +268,7 @@ const getPerGasValues = async (
  *          - preVerificationGas: The gas required before verification.
  */
 const getcallDataGasValues = async (
+  opGasValues: OpGasValues,
   userOperation: PackedUserOperation,
   rpcUrl: string,
   entryPointContractAddress: string,
@@ -277,6 +278,12 @@ const getcallDataGasValues = async (
   verificationGasLimit: BigNumber;
   preVerificationGas: BigNumber;
 }> => {
+  const gasResult = {
+    callGasLimit: BigNumber.from(opGasValues.callGasLimit),
+    verificationGasLimit: BigNumber.from(opGasValues.verificationGasLimit),
+    preVerificationGas: BigNumber.from(opGasValues.preVerificationGas)
+  };
+
   const AlchemyUserOp = {
     sender: userOperation.sender,
     nonce: userOperation.nonce.toHexString(),
@@ -299,27 +306,22 @@ const getcallDataGasValues = async (
     })
   });
 
+  let gettingGasValuesfrom = 'bdd';
   const alchemyResult = await response.json();
-
-  const gasResult = {
-    // callGasLimit: ethers.BigNumber.from(alchemyResult.result.callGasLimit),
-    callGasLimit: ethers.BigNumber.from(alchemyResult.result.callGasLimit)
+  if (alchemyResult && alchemyResult.result) {
+    gasResult.callGasLimit = BigNumber.from(alchemyResult.result.callGasLimit)
       .mul(Math.round(gasMultiplier * 100))
-      .div(100),
-    verificationGasLimit: ethers.BigNumber.from(alchemyResult.result.verificationGasLimit),
-    preVerificationGas: ethers.BigNumber.from(alchemyResult.result.preVerificationGas)
-  };
+      .div(100);
+    gasResult.verificationGasLimit = BigNumber.from(alchemyResult.result.verificationGasLimit);
+    gasResult.preVerificationGas = BigNumber.from(alchemyResult.result.preVerificationGas);
+    gettingGasValuesfrom = 'alchemy';
+  }
 
   Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
-  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
-  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
-  Logger.log('getcallDataGasValues', JSON.stringify(userOperation));
   Logger.log(
     'getcallDataGasValues',
-    `Gas Params - callGasLimit: ${userOperation.callGasLimit.toString()}, verificationGasLimit: ${userOperation.verificationGasLimit.toString()}, preVerificationGas: ${userOperation.preVerificationGas.toString()}, maxFeePerGas: ${userOperation.maxFeePerGas.toString()} , maxPriorityFeePerGas: ${userOperation.maxPriorityFeePerGas.toString()}`
+    `Gas Params - callGasLimit: ${userOperation.callGasLimit.toString()}, verificationGasLimit: ${userOperation.verificationGasLimit.toString()}, preVerificationGas: ${userOperation.preVerificationGas.toString()}, maxFeePerGas: ${userOperation.maxFeePerGas.toString()} , maxPriorityFeePerGas: ${userOperation.maxPriorityFeePerGas.toString()}, getted values from: ${gettingGasValuesfrom}`
   );
-  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
-  Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
   Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
 
   return {
