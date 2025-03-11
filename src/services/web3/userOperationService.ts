@@ -28,15 +28,24 @@ export async function createGenericUserOperation(
   sender: string,
   nonce: BigNumber,
   userOpType: 'transfer' | 'swap',
-  gasMultiplier: number = 1.2
+  gasMultiplier: number
 ): Promise<PackedUserOperation> {
   const gasValues = gasConfig.operations[userOpType];
+  const perGasData: { maxPriorityFeePerGas: BigNumber; maxFeePerGas: BigNumber } = {
+    maxPriorityFeePerGas: BigNumber.from(gasValues.maxPriorityFeePerGas),
+    maxFeePerGas: BigNumber.from(gasValues.maxFeePerGas)
+  };
 
-  const perGasData = await gasService.getPerGasValues(
-    gasConfig.operations[userOpType],
-    provider,
-    gasMultiplier
-  );
+  if (!gasConfig.useFixedValues) {
+    const DynamicGasValues = await gasService.getPerGasValues(
+      gasConfig.operations[userOpType],
+      provider,
+      gasMultiplier
+    );
+
+    perGasData.maxPriorityFeePerGas = DynamicGasValues.maxPriorityFeePerGas;
+    perGasData.maxFeePerGas = DynamicGasValues.maxFeePerGas;
+  }
 
   // Create and return userOp with adjusted gas values
   const userOp: PackedUserOperation = {
@@ -239,8 +248,8 @@ export async function prepareAndExecuteUserOperation(
   userOpCallData: string,
   userProxyAddress: string,
   userOpType: 'transfer' | 'swap',
-  perGasMultiplier: number = 1.5,
-  callDataGasMultiplier: number = 1.2
+  perGasMultiplier: number,
+  callDataGasMultiplier: number
 ) {
   try {
     Logger.log(userOpType, 'Getting Nonce');
@@ -282,25 +291,28 @@ export async function prepareAndExecuteUserOperation(
     );
     Logger.info(userOpType, 'User operation signed successfully');
 
-    // Get dynamic callData Gas Values and update userOperation
-    Logger.debug(userOpType, 'Update gas values');
-    const callDataGasValues = await gasService.getcallDataGasValues(
-      userOperation,
-      networkConfig.rpc,
-      entryPointContract.address,
-      callDataGasMultiplier
-    );
-    userOperation.callGasLimit = callDataGasValues.callGasLimit;
-    userOperation.verificationGasLimit = callDataGasValues.verificationGasLimit;
-    userOperation.preVerificationGas = callDataGasValues.preVerificationGas;
+    if (!networkConfig.gas.useFixedValues) {
+      // Get dynamic callData Gas Values and update userOperation
+      Logger.debug(userOpType, 'Update gas values');
+      const callDataGasValues = await gasService.getcallDataGasValues(
+        networkConfig.gas.operations[userOpType],
+        userOperation,
+        networkConfig.rpc,
+        entryPointContract.address,
+        callDataGasMultiplier
+      );
+      userOperation.callGasLimit = callDataGasValues.callGasLimit;
+      userOperation.verificationGasLimit = callDataGasValues.verificationGasLimit;
+      userOperation.preVerificationGas = callDataGasValues.preVerificationGas;
 
-    // Re-sign User Operation (because we changed the gas values!)
-    Logger.debug(userOpType, 'Re-sign user operation');
-    userOperation = await signUserOperation(
-      userOperation,
-      networkConfig.contracts.entryPoint,
-      signer
-    );
+      // Re-sign User Operation (because we changed the gas values!)
+      Logger.debug(userOpType, 'Re-sign user operation');
+      userOperation = await signUserOperation(
+        userOperation,
+        networkConfig.contracts.entryPoint,
+        signer
+      );
+    }
 
     // Send the operation to the bundler and wait for receipt
     Logger.info(userOpType, `Sending operation to bundler: ${networkConfig.bundlerUrl}`);
