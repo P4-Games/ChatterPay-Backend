@@ -59,6 +59,7 @@ const blockchainSchema = new Schema<IBlockchain>({
     routerAddress: { type: String, required: false }
   },
   gas: {
+    useFixedValues: { type: Boolean, required: true },
     operations: {
       transfer: {
         maxFeePerGas: { type: String, required: true },
