@@ -32,18 +32,6 @@ interface GasServiceConfig {
   network: string;
 }
 
-const createGasServiceConfig = (
-  apiKey: string,
-  policyId: string,
-  entryPoint: string,
-  network: string = 'arb-sepolia'
-): GasServiceConfig => ({
-  apiKey,
-  policyId,
-  entryPoint,
-  network
-});
-
 /**
  * Generates a dummy signature for a given UserOperation.
  *
@@ -187,7 +175,6 @@ const applyPaymasterDataToUserOp = async (
 };
 
 export const gasService = {
-  createConfig: createGasServiceConfig,
   getPaymasterAndData,
   applyPaymasterDataToUserOp
 };
