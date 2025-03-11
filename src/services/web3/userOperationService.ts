@@ -2,7 +2,9 @@ import { ethers, BigNumber } from 'ethers';
 
 import { gasService } from './gasService';
 import { Logger } from '../../helpers/loggerHelper';
+import { addPaymasterData } from './paymasterService';
 import { IBlockchain } from '../../models/blockchainModel';
+import { sendUserOperationToBundler } from './bundlerService';
 import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation, UserOperationReceipt } from '../../types/userOperationType';
 
@@ -214,3 +216,123 @@ export async function waitForUserOperationReceipt(
   });
 }
 
+/**
+ * Prepare and Execute User Operation
+ * @param networkConfig
+ * @param provider
+ * @param signer
+ * @param backendSigner
+ * @param entryPointContract
+ * @param userOpCallData
+ * @param userProxyAddress
+ * @param userOpType
+ * @param perGasMultiplier
+ * @param callDataGasMultiplier
+ * @returns
+ */
+export async function prepareAndExecuteUserOperation(
+  networkConfig: IBlockchain,
+  provider: ethers.providers.JsonRpcProvider,
+  signer: ethers.Wallet,
+  backendSigner: ethers.Wallet,
+  entryPointContract: ethers.Contract,
+  userOpCallData: string,
+  userProxyAddress: string,
+  userOpType: 'transfer' | 'swap',
+  perGasMultiplier: number = 1.5,
+  callDataGasMultiplier: number = 1.2
+) {
+  try {
+    Logger.log(userOpType, 'Getting Nonce');
+    const nonce = await entryPointContract.getNonce(userProxyAddress, 0);
+    Logger.info(userOpType, `Current nonce for proxy ${userProxyAddress}: ${nonce.toString()}`);
+
+    // Create and prepare the user operation with the gas multiplier
+    Logger.debug(userOpType, 'Creating generic user operation');
+    let userOperation = await createGenericUserOperation(
+      provider,
+      networkConfig.gas,
+      userOpCallData,
+      userProxyAddress,
+      nonce,
+      userOpType,
+      perGasMultiplier
+    );
+
+    // Add paymaster data using the backend signer
+    Logger.debug(
+      userOpType,
+      `Adding paymaster data with address: ${networkConfig.contracts.paymasterAddress}`
+    );
+    userOperation = await addPaymasterData(
+      userOperation,
+      networkConfig.contracts.paymasterAddress!,
+      backendSigner,
+      networkConfig.contracts.entryPoint,
+      userOpCallData,
+      networkConfig.chainId
+    );
+
+    // Sign the user operation with the user's signer
+    Logger.debug(userOpType, 'Signing user operation');
+    userOperation = await signUserOperation(
+      userOperation,
+      networkConfig.contracts.entryPoint,
+      signer
+    );
+    Logger.info(userOpType, 'User operation signed successfully');
+
+    // Get dynamic callData Gas Values and update userOperation
+    Logger.debug(userOpType, 'Update gas values');
+    const callDataGasValues = await gasService.getcallDataGasValues(
+      userOperation,
+      networkConfig.rpc,
+      entryPointContract.address,
+      callDataGasMultiplier
+    );
+    userOperation.callGasLimit = callDataGasValues.callGasLimit;
+    userOperation.verificationGasLimit = callDataGasValues.verificationGasLimit;
+    userOperation.preVerificationGas = callDataGasValues.preVerificationGas;
+
+    // Re-sign User Operation (because we changed the gas values!)
+    Logger.debug(userOpType, 'Re-sign user operation');
+    userOperation = await signUserOperation(
+      userOperation,
+      networkConfig.contracts.entryPoint,
+      signer
+    );
+
+    // Send the operation to the bundler and wait for receipt
+    Logger.info(userOpType, `Sending operation to bundler: ${networkConfig.bundlerUrl}`);
+    const bundlerResponse = await sendUserOperationToBundler(
+      networkConfig.bundlerUrl!,
+      userOperation,
+      entryPointContract.address
+    );
+    Logger.debug(userOpType, `Bundler response: ${JSON.stringify(bundlerResponse)}`);
+
+    Logger.log(userOpType, 'Waiting for transaction to be mined.');
+    const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
+    Logger.log(userOpType, 'Transaction receipt:', JSON.stringify(receipt));
+
+    if (!receipt?.success) {
+      Logger.error(userOpType, `Operation failed. Receipt: ${JSON.stringify(receipt)}`);
+      throw new Error(
+        `Transaction failed or not found. Receipt: ${receipt.success}, Hash: ${receipt.userOpHash}`
+      );
+    }
+
+    Logger.info(
+      userOpType,
+      `Operation completed successfully. Hash: ${receipt.receipt.transactionHash}, Block: ${receipt.receipt.blockNumber}`
+    );
+
+    Logger.log(userOpType, 'end!');
+
+    return { success: true, transactionHash: receipt.receipt.transactionHash, error: '' };
+  } catch (error) {
+    const errorMessage = JSON.stringify(error);
+    Logger.error(userOpType, `Error executing operation: ${errorMessage}`);
+    return { success: false, transactionHash: '', error: errorMessage };
+  }
+}

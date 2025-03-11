@@ -1,24 +1,20 @@
 import { ethers, ContractInterface } from 'ethers';
 
 import { IToken } from '../models/tokenModel';
-import { gasService } from './web3/gasService';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
-import { sendUserOperationToBundler } from './web3/bundlerService';
+import { getPaymasterEntryPointDepositValue } from './web3/paymasterService';
+import {
+  prepareAndExecuteUserOperation
+} from './web3/userOperationService';
 import { getERC20ABI, getChatterpayABI, getChainlinkPriceFeedABI } from './web3/abiService';
-import { addPaymasterData, getPaymasterEntryPointDepositValue } from './web3/paymasterService';
 import {
   TokenAddresses,
   ExecuteSwapResult,
   SetupContractReturn,
   ExecueTransactionResult
 } from '../types/commonType';
-import {
-  signUserOperation,
-  createGenericUserOperation,
-  waitForUserOperationReceipt
-} from './web3/userOperationService';
 import {
   BINANCE_API_URL,
   SWAP_SLIPPAGE_CONFIG_EXTRA,
@@ -69,6 +65,20 @@ async function sendSwapUserOperation(
     );
     Logger.debug('executeOperation', `Network config: ${JSON.stringify(networkConfig)}`);
 
+    const userOpResult = await prepareAndExecuteUserOperation(
+      networkConfig,
+      provider,
+      signer,
+      backendSigner,
+      entryPointContract,
+      callData,
+      proxyAddress,
+      'swap',
+      1.5,
+      1.2
+    );
+
+    /*
     // Get the current nonce for the proxy account
     Logger.log('executeOperation', 'Getting Nonce');
     const nonce = await entryPointContract.getNonce(proxyAddress, 0);
@@ -160,8 +170,10 @@ async function sendSwapUserOperation(
     );
 
     Logger.log('executeOperation', 'end!');
+    */
 
-    return { success: true, transactionHash: receipt.receipt.transactionHash, error: '' };
+    return userOpResult;
+    // return { success: true, transactionHash: receipt.receipt.transactionHash, error: '' };
   } catch (error) {
     const errorMessage = JSON.stringify(error);
     Logger.error('executeOperation', `Operation failed: ${errorMessage}`);

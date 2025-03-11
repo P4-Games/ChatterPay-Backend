@@ -2,7 +2,6 @@
 import { ethers } from 'ethers';
 
 import { IToken } from '../models/tokenModel';
-import { gasService } from './web3/gasService';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenBalances } from './balanceService';
 import { IBlockchain } from '../models/blockchainModel';
@@ -10,21 +9,18 @@ import { IUser, IUserWallet } from '../models/userModel';
 import { setupERC20 } from './web3/contractSetupService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { checkBlockchainConditions } from './blockchainService';
-import { sendUserOperationToBundler } from './web3/bundlerService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-import { addPaymasterData, getPaymasterEntryPointDepositValue } from './web3/paymasterService';
+import { getPaymasterEntryPointDepositValue } from './web3/paymasterService';
+import {
+  createTransferCallData,
+  prepareAndExecuteUserOperation
+} from './web3/userOperationService';
 import {
   openOperation,
   closeOperation,
   getUserWalletByChainId,
   hasUserAnyOperationInProgress
 } from './userService';
-import {
-  signUserOperation,
-  createTransferCallData,
-  createGenericUserOperation,
-  waitForUserOperationReceipt
-} from './web3/userOperationService';
 import {
   TokenBalance,
   TransactionData,
@@ -95,6 +91,7 @@ export async function sendTransferUserOperation(
       networkConfig.contracts.paymasterAddress!
     );
 
+    /*
     // Get the current nonce for the proxy account
     Logger.log('sendTransferUserOperation', 'Getting Nonce');
     const nonce = await entryPointContract.getNonce(setupContractsResult.proxy.proxyAddress, 0);
@@ -200,6 +197,20 @@ export async function sendTransferUserOperation(
       'sendTransferUserOperation',
       `Operation completed successfully. Hash: ${receipt.receipt.transactionHash}, Block: ${receipt.receipt.blockNumber}`
     );
+    */
+
+    const userOpResult = await prepareAndExecuteUserOperation(
+      networkConfig,
+      setupContractsResult.provider,
+      setupContractsResult.signer,
+      setupContractsResult.backendSigner,
+      entryPointContract,
+      callData,
+      setupContractsResult.proxy.proxyAddress,
+      'transfer',
+      1.5,
+      1.2
+    );
 
     // -------------------------------
     const paymasterDepositValueNow = await getPaymasterEntryPointDepositValue(
@@ -220,7 +231,7 @@ export async function sendTransferUserOperation(
 
     Logger.log('sendTransferUserOperation', 'end!');
 
-    return { success: true, transactionHash: receipt.receipt.transactionHash, error: '' };
+    return userOpResult;
   } catch (error) {
     const errorMessage = JSON.stringify(error);
     Logger.error(
