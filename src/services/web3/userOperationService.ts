@@ -1,14 +1,18 @@
 import { ethers, BigNumber } from 'ethers';
 
+import { gasService } from './gasService';
 import { Logger } from '../../helpers/loggerHelper';
+import { addPaymasterData } from './paymasterService';
 import { IBlockchain } from '../../models/blockchainModel';
+import { sendUserOperationToBundler } from './bundlerService';
 import { getUserOpHash } from '../../helpers/userOperationHelper';
-import { PackedUserOperation } from '../../types/userOperationType';
+import { PackedUserOperation, UserOperationReceipt } from '../../types/userOperationType';
 
 /**
  * Creates a generic user operation for a transaction.
  * Retrieves gas parameters from the blockchain config and applies a multiplier.
  *
+ * @param {ethers.providers.JsonRpcProvider} provider - Blockchain Provider.
  * @param {IBlockchain['gas']} gasConfig - Blockchain gas config with predefined values.
  * @param {string} callData - Encoded function call data.
  * @param {string} sender - Sender address initiating the operation.
@@ -18,67 +22,21 @@ import { PackedUserOperation } from '../../types/userOperationType';
  * @returns {Promise<PackedUserOperation>} The created user operation with adjusted gas limits and fees.
  */
 export async function createGenericUserOperation(
+  provider: ethers.providers.JsonRpcProvider,
   gasConfig: IBlockchain['gas'],
   callData: string,
   sender: string,
   nonce: BigNumber,
   userOpType: 'transfer' | 'swap',
-  gasMultiplier: number = 1.0
+  gasMultiplier: number = 1.2
 ): Promise<PackedUserOperation> {
   const gasValues = gasConfig.operations[userOpType];
 
-  Logger.log('createGenericUserOperation', 'Creating Generic UserOperation.');
-  Logger.log('createGenericUserOperation', 'Sender Address:', sender);
-  Logger.log('createGenericUserOperation', 'Call Data:', callData);
-  Logger.log('createGenericUserOperation', 'Nonce:', nonce.toString());
-  Logger.log('createGenericUserOperation', 'MAX_FEE_PER_GAS', gasValues.maxFeePerGas);
-  Logger.log(
-    'createGenericUserOperation',
-    'MAX_PRIORITY_FEE_PER_GAS',
-    gasValues.maxPriorityFeePerGas
+  const perGasData = await gasService.getPerGasValues(
+    gasConfig.operations[userOpType],
+    provider,
+    gasMultiplier
   );
-  Logger.log(
-    'createGenericUserOperation',
-    'VERIFICATION_GAS_LIMIT',
-    gasValues.verificationGasLimit
-  );
-  Logger.log('createGenericUserOperation', 'CALL_GAS_LIMIT', gasValues.callGasLimit);
-  Logger.log('createGenericUserOperation', 'PRE_VERIFICATION_GAS', gasValues.preVerificationGas);
-
-  // Calculate adjusted gas values
-  const baseMaxFeePerGas = ethers.utils.parseUnits(gasValues.maxFeePerGas, 'gwei');
-  const baseMaxPriorityFeePerGas = ethers.utils.parseUnits(gasValues.maxPriorityFeePerGas, 'gwei');
-
-  // Apply multiplier if different from 1.0
-  let effectiveMaxFeePerGas = baseMaxFeePerGas;
-  let effectiveMaxPriorityFeePerGas = baseMaxPriorityFeePerGas;
-
-  if (gasMultiplier !== 1.0) {
-    // Convert multiplier to basis points (e.g., 1.2 → 120)
-    const multiplierBasisPoints = Math.floor(gasMultiplier * 100);
-
-    // Apply multiplier to base values
-    effectiveMaxFeePerGas = baseMaxFeePerGas.mul(multiplierBasisPoints).div(100);
-    effectiveMaxPriorityFeePerGas = baseMaxPriorityFeePerGas.mul(multiplierBasisPoints).div(100);
-
-    Logger.log(
-      'createGenericUserOperation',
-      `Applying gas multiplier: ${gasMultiplier.toFixed(2)}x`
-    );
-    Logger.log(
-      'createGenericUserOperation',
-      `Original MAX_FEE_PER_GAS: ${gasValues.maxFeePerGas} gwei → ${ethers.utils.formatUnits(effectiveMaxFeePerGas, 'gwei')} gwei`
-    );
-    Logger.log(
-      'createGenericUserOperation',
-      `Original MAX_PRIORITY_FEE_PER_GAS: ${gasValues.maxPriorityFeePerGas} gwei → ${ethers.utils.formatUnits(effectiveMaxPriorityFeePerGas, 'gwei')} gwei`
-    );
-  } else {
-    Logger.log(
-      'createGenericUserOperation',
-      `Using standard gas values: MAX_FEE_PER_GAS: ${gasValues.maxFeePerGas} gwei, MAX_PRIORITY_FEE_PER_GAS: ${gasValues.maxPriorityFeePerGas} gwei`
-    );
-  }
 
   // Create and return userOp with adjusted gas values
   const userOp: PackedUserOperation = {
@@ -89,8 +47,8 @@ export async function createGenericUserOperation(
     verificationGasLimit: BigNumber.from(gasValues.verificationGasLimit),
     callGasLimit: BigNumber.from(gasValues.callGasLimit),
     preVerificationGas: BigNumber.from(gasValues.preVerificationGas),
-    maxFeePerGas: effectiveMaxFeePerGas,
-    maxPriorityFeePerGas: effectiveMaxPriorityFeePerGas,
+    maxFeePerGas: perGasData.maxFeePerGas,
+    maxPriorityFeePerGas: perGasData.maxPriorityFeePerGas,
     paymasterAndData: '0x', // Will be filled by the paymaster service
     signature: '0x' // Empty signature initially
   };
