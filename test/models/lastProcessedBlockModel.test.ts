@@ -37,6 +37,7 @@ describe('Blockchain Model', () => {
         chatterNFTAddress: '0xChatterNFTAddress'
       },
       gas: {
+        useFixedValues: true,
         operations: {
           transfer: {
             maxFeePerGas: '0.5',
@@ -101,6 +102,7 @@ describe('Blockchain Model', () => {
         chatterNFTAddress: ''
       },
       gas: {
+        useFixedValues: true,
         operations: {
           transfer: {
             maxFeePerGas: '0.5',
