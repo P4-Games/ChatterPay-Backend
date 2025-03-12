@@ -16,7 +16,7 @@ export async function createPaymasterAndData(
   backendSigner: Signer,
   entryPointAddress: string,
   callData: string,
-  validityDurationSeconds: number = 3600,
+  validityDurationSeconds: number = 600, // 10 minutes
   chainId?: number
 ): Promise<string> {
   const currentTimestamp = Math.floor(Date.now() / 1000);

@@ -4,10 +4,8 @@ import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
+import { executeUserOperationWithRetry } from './web3/userOperationService';
 import { getPaymasterEntryPointDepositValue } from './web3/paymasterService';
-import {
-  prepareAndExecuteUserOperation
-} from './web3/userOperationService';
 import { getERC20ABI, getChatterpayABI, getChainlinkPriceFeedABI } from './web3/abiService';
 import {
   TokenAddresses,
@@ -30,154 +28,6 @@ const SLIPPAGE_CONFIG = {
   DEFAULT: SWAP_SLIPPAGE_CONFIG_DEFAULT,
   EXTRA: SWAP_SLIPPAGE_CONFIG_EXTRA
 } as const;
-
-/**
- * Executes a user operation with the given callData through the EntryPoint contract.
- * Handles retries for replacement underpriced errors up to 3 times.
- *
- * @param networkConfig - Network configuration containing contract addresses and network details
- * @param callData - Encoded function call data
- * @param signer - Wallet for signing the transaction
- * @param backendSigner - Backend wallet for signing paymaster data
- * @param entryPointContract - EntryPoint contract instance
- * @param proxyAddress - Address of the user's proxy contract
- * @param provider - Ethereum provider instance
- * @param retryCount - Number of retry attempts made (default: 0)
- * @returns Transaction hash of the executed operation
- * @throws Error if the transaction fails or receipt is not found
- */
-async function sendSwapUserOperation(
-  networkConfig: IBlockchain,
-  callData: string,
-  signer: ethers.Wallet,
-  backendSigner: ethers.Wallet,
-  entryPointContract: ethers.Contract,
-  proxyAddress: string,
-  provider: ethers.providers.JsonRpcProvider,
-  retryCount = 0
-): Promise<ExecueTransactionResult> {
-  try {
-    Logger.info(
-      'executeOperation',
-      `Starting operation execution for proxy: ${proxyAddress}, retry: ${retryCount}`
-    );
-    Logger.debug('executeOperation', `Network config: ${JSON.stringify(networkConfig)}`);
-
-    const userOpResult = await prepareAndExecuteUserOperation(
-      networkConfig,
-      provider,
-      signer,
-      backendSigner,
-      entryPointContract,
-      callData,
-      proxyAddress,
-      'swap',
-      1.5,
-      1.2
-    );
-
-    /*
-    // Get the current nonce for the proxy account
-    Logger.log('executeOperation', 'Getting Nonce');
-    const nonce = await entryPointContract.getNonce(proxyAddress, 0);
-    Logger.info('executeOperation', `Current nonce for proxy ${proxyAddress}: ${nonce.toString()}`);
-
-    // Calculate gas multiplier based on retry count
-    // 1.0x for first attempt, 1.3x for first retry, 1.6x for second, 2.0x for third
-    const perGasMultiplier = 1.5; // retryCount === 0 ? 1.0 : 1.0 + retryCount * 0.3;
-    const callDataGasMultiplir = 1.2;
-
-    // Create and prepare the user operation with the gas multiplier
-    Logger.debug('executeOperation', 'Creating generic user operation');
-    let userOperation = await createGenericUserOperation(
-      provider,
-      networkConfig.gas,
-      callData,
-      proxyAddress,
-      nonce,
-      'swap',
-      perGasMultiplier
-    );
-
-    // Add paymaster data using the backend signer
-    Logger.debug(
-      'executeOperation',
-      `Adding paymaster data with address: ${networkConfig.contracts.paymasterAddress}`
-    );
-    userOperation = await addPaymasterData(
-      userOperation,
-      networkConfig.contracts.paymasterAddress!,
-      backendSigner,
-      networkConfig.contracts.entryPoint,
-      callData,
-      networkConfig.chainId
-    );
-
-    // Sign the user operation with the user's signer
-    Logger.debug('executeOperation', 'Signing user operation');
-    userOperation = await signUserOperation(
-      userOperation,
-      networkConfig.contracts.entryPoint,
-      signer
-    );
-    Logger.info('executeOperation', 'User operation signed successfully');
-
-    // Get dynamic callData Gas Values and update userOperation
-    Logger.debug('executeOperation', 'Update gas values');
-    const callDataGasValues = await gasService.getcallDataGasValues(
-      userOperation,
-      networkConfig.rpc,
-      entryPointContract.address,
-      callDataGasMultiplir
-    );
-    userOperation.callGasLimit = callDataGasValues.callGasLimit;
-    userOperation.verificationGasLimit = callDataGasValues.verificationGasLimit;
-    userOperation.preVerificationGas = callDataGasValues.preVerificationGas;
-
-    // re-sign User Operation
-    Logger.debug('executeOperation', 're-sign user operation');
-    userOperation = await signUserOperation(
-      userOperation,
-      networkConfig.contracts.entryPoint,
-      signer
-    );
-
-    // Send the operation to the bundler and wait for receipt
-    Logger.info('executeOperation', `Sending operation to bundler: ${bundlerUrl}`);
-    const bundlerResponse = await sendUserOperationToBundler(
-      bundlerUrl,
-      userOperation,
-      entryPointContract.address
-    );
-    Logger.debug('executeOperation', `Bundler response: ${JSON.stringify(bundlerResponse)}`);
-
-    Logger.log('executeOperation', 'Waiting for transaction to be mined.');
-    const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
-    Logger.log('executeOperation', 'Transaction receipt:', JSON.stringify(receipt));
-
-    if (!receipt?.success) {
-      Logger.error('executeOperation', `Operation failed. Receipt: ${JSON.stringify(receipt)}`);
-      throw new Error(
-        `Transaction failed or not found. Receipt: ${receipt.success}, Hash: ${receipt.userOpHash}`
-      );
-    }
-
-    Logger.info(
-      'executeOperation',
-      `Operation completed successfully. Hash: ${receipt.receipt.transactionHash}, Block: ${receipt.receipt.blockNumber}`
-    );
-
-    Logger.log('executeOperation', 'end!');
-    */
-
-    return userOpResult;
-    // return { success: true, transactionHash: receipt.receipt.transactionHash, error: '' };
-  } catch (error) {
-    const errorMessage = JSON.stringify(error);
-    Logger.error('executeOperation', `Operation failed: ${errorMessage}`);
-    return { success: false, transactionHash: '', error: errorMessage };
-  }
-}
 
 /**
  * Creates the encoded call data for a swap execution
@@ -411,14 +261,18 @@ async function checkAndApproveToken(
 
     // Execute approve operation
     try {
-      const approveTransactionResult: ExecueTransactionResult = await sendSwapUserOperation(
+      const approveTransactionResult: ExecueTransactionResult = await executeUserOperationWithRetry(
         networkConfig,
-        approveCallData,
+        setupContractsResult.provider,
         setupContractsResult.signer,
         setupContractsResult.backendSigner,
         entryPointContract,
+        approveCallData,
         setupContractsResult.proxy.proxyAddress,
-        setupContractsResult.provider
+        'swap',
+        1.5,
+        1.2,
+        5
       );
 
       if (!approveTransactionResult.success) {
@@ -625,14 +479,18 @@ export async function executeSwap(
     );
 
     Logger.info('executeSwap', 'Executing swap operation');
-    const swapTransactionResult: ExecueTransactionResult = await sendSwapUserOperation(
+    const swapTransactionResult: ExecueTransactionResult = await executeUserOperationWithRetry(
       networkConfig,
-      swapCallData,
+      setupContractsResult.provider,
       setupContractsResult.signer,
       setupContractsResult.backendSigner,
       entryPointContract,
+      swapCallData,
       setupContractsResult.proxy.proxyAddress,
-      setupContractsResult.provider
+      'swap',
+      1.5,
+      1.2,
+      5
     );
 
     const paymasterDepositValueNow = await getPaymasterEntryPointDepositValue(
