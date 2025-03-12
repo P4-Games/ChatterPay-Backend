@@ -502,6 +502,10 @@ export async function executeSwap(
       userOpGasConfig.timeoutMsBetweenRetries
     );
 
+    if (!swapTransactionResult.success) {
+      throw new Error(swapTransactionResult.error);
+    }
+
     await logPaymasterEntryPointDeposit(
       entryPointContract,
       networkConfig.contracts.paymasterAddress!,
