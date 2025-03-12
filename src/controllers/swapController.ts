@@ -219,7 +219,7 @@ export const swap = async (
     // Save transactions OUT
     Logger.log('swap', 'Updating swap transactions in database.');
     const transactionOut: TransactionData = {
-      tx: executeSwapResult.approveTransactionHash,
+      tx: executeSwapResult.approveTransactionHash || '0x',
       walletFrom: proxyAddress,
       walletTo: networkConfig.contracts.routerAddress!,
       amount: fromTokensSentInUnits,
@@ -231,7 +231,7 @@ export const swap = async (
 
     // Save transactions IN
     const transactionIn: TransactionData = {
-      tx: executeSwapResult.swapTransactionHash,
+      tx: executeSwapResult.swapTransactionHash || '0x',
       walletFrom: networkConfig.contracts.routerAddress!,
       walletTo: proxyAddress,
       amount: toTokensReceivedInUnits,
