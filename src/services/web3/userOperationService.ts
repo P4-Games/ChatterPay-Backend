@@ -359,9 +359,12 @@ async function prepareAndExecuteUserOperation(
  * @param userOpCallData - Encoded calldata for the user operation
  * @param userProxyAddress - Address of the user proxy contract
  * @param userOpType - Type of user operation ('transfer' or 'swap')
- * @param perGasMultiplier - Initial gas multiplier
- * @param callDataGasMultiplier - Multiplier for callData gas estimation
- * @param maxRetry - Maximum number of retry attempts (default: 5)
+ * @param perGasInitialMultiplier - Initial gas multiplier
+ * @param perGasIncrement - Increment factor for per Gas Fee.
+ * @param callDataGasInitialMultiplier - Multiplier for callData gas estimation
+ * @param timeoutMsBetweenRetries -Time Out (in ms) between retries
+ * @param maxRetries - Maximum number of retry attempts (default: 5)
+ * @param attempt - number of attempt
  * @returns Execution result with success status, transaction hash, and error message
  */
 export async function executeUserOperationWithRetry(
@@ -373,14 +376,16 @@ export async function executeUserOperationWithRetry(
   userOpCallData: string,
   userProxyAddress: string,
   userOpType: 'transfer' | 'swap',
-  perGasMultiplier: number,
-  callDataGasMultiplier: number,
-  maxRetry: number = 5,
+  perGasInitialMultiplier: number,
+  perGasIncrement: number,
+  callDataGasInitialMultiplier: number,
+  timeoutMsBetweenRetries: number,
+  maxRetries: number = 5,
   attempt: number = 0
 ): Promise<{ success: boolean; transactionHash: string; error: string }> {
   Logger.log(
     `executeUserOperationWithRetry-${userOpType}`,
-    `Attempt ${attempt + 1} with perGasMultiplier: ${perGasMultiplier}`
+    `Attempt ${attempt + 1} with perGasMultiplier: ${perGasInitialMultiplier}`
   );
 
   const result = await prepareAndExecuteUserOperation(
@@ -392,8 +397,8 @@ export async function executeUserOperationWithRetry(
     userOpCallData,
     userProxyAddress,
     userOpType,
-    perGasMultiplier,
-    callDataGasMultiplier
+    perGasInitialMultiplier,
+    callDataGasInitialMultiplier
   );
 
   if (result.success) {
@@ -401,12 +406,12 @@ export async function executeUserOperationWithRetry(
   }
 
   // Check if error is "replacement transaction UnderPriced" (case insensitive)
-  if (/replacement transaction underpriced/i.test(result.error) && attempt < maxRetry) {
+  if (/replacement transaction underpriced/i.test(result.error) && attempt < maxRetries) {
     Logger.warn(
       `executeUserOperationWithRetry-${userOpType}`,
-      `Retrying due to underpriced transaction error`
+      `Retrying due to underpriced transaction error (${attempt}/${maxRetries})`
     );
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await new Promise((resolve) => setTimeout(resolve, timeoutMsBetweenRetries));
     return executeUserOperationWithRetry(
       networkConfig,
       provider,
@@ -416,9 +421,9 @@ export async function executeUserOperationWithRetry(
       userOpCallData,
       userProxyAddress,
       userOpType,
-      perGasMultiplier * 1.1, // Increase perGasMultiplier by 10%
-      callDataGasMultiplier,
-      maxRetry,
+      perGasInitialMultiplier * perGasIncrement,
+      callDataGasInitialMultiplier,
+      maxRetries,
       attempt + 1
     );
   }
