@@ -8,17 +8,13 @@ describe('Blockchain Model', () => {
   let mongoServer: MongoMemoryServer;
 
   beforeEach(async () => {
-    // Start in-memory MongoDB server
     mongoServer = await MongoMemoryServer.create();
     const uri = mongoServer.getUri();
-
-    // Connect Mongoose to in-memory server
     await mongoose.disconnect();
     await mongoose.connect(uri, {});
   });
 
   afterEach(async () => {
-    // Disconnect after each test
     await mongoose.disconnect();
     await mongoServer.stop();
   });
@@ -30,12 +26,11 @@ describe('Blockchain Model', () => {
     };
 
     const blockchain = new Blockchain(invalidBlockchain);
-
     await expect(blockchain.save()).rejects.toThrow(mongoose.Error.ValidationError);
   });
 
   it('should create and save a blockchain document successfully', async () => {
-    const validBlockchain: Partial<IBlockchain> = {
+    const validBlockchain: IBlockchain = new Blockchain({
       name: 'Ethereum',
       chainId: 1,
       rpc: 'https://mainnet.infura.io/v3/YOUR-PROJECT-ID',
@@ -47,12 +42,19 @@ describe('Blockchain Model', () => {
         entryPoint: '0xEntryPointAddress',
         factoryAddress: '0xFactoryAddress',
         chatterPayAddress: '0xChatterPayAddress',
-        chatterNFTAddress: '0xChatterNFTAddress'
+        chatterNFTAddress: '0xChatterNFTAddress',
+        paymasterAddress: '0xPaymasterAddress',
+        routerAddress: '0xRouterAddress'
       },
       gas: {
         useFixedValues: true,
         operations: {
           transfer: {
+            perGasInitialMultiplier: 1.5,
+            perGasIncrement: 1.1,
+            callDataInitialMultiplier: 1.2,
+            maxRetries: 5,
+            timeoutMsBetweenRetries: 5000,
             maxFeePerGas: '0.5',
             maxPriorityFeePerGas: '0.05',
             verificationGasLimit: 50000,
@@ -60,6 +62,11 @@ describe('Blockchain Model', () => {
             preVerificationGas: 50000
           },
           swap: {
+            perGasInitialMultiplier: 1.5,
+            perGasIncrement: 1.1,
+            callDataInitialMultiplier: 1.2,
+            maxRetries: 5,
+            timeoutMsBetweenRetries: 5000,
             maxFeePerGas: '0.5',
             maxPriorityFeePerGas: '0.05',
             verificationGasLimit: 80000,
@@ -75,10 +82,9 @@ describe('Blockchain Model', () => {
         userSignerMinBalance: '0.0008',
         userSignerBalanceToTransfer: '0.001'
       }
-    };
+    });
 
-    const blockchain = new Blockchain(validBlockchain);
-    const savedBlockchain = await blockchain.save();
+    const savedBlockchain = await validBlockchain.save();
 
     expect(savedBlockchain._id).toBeDefined();
     expect(savedBlockchain.name).toBe(validBlockchain.name);

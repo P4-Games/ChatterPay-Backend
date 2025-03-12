@@ -4,8 +4,8 @@ import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
+import { executeUserOperationWithRetry } from './web3/userOperationService';
 import { getPaymasterEntryPointDepositValue } from './web3/paymasterService';
-import { prepareAndExecuteUserOperation } from './web3/userOperationService';
 import { getERC20ABI, getChatterpayABI, getChainlinkPriceFeedABI } from './web3/abiService';
 import {
   TokenAddresses,
@@ -28,58 +28,6 @@ const SLIPPAGE_CONFIG = {
   DEFAULT: SWAP_SLIPPAGE_CONFIG_DEFAULT,
   EXTRA: SWAP_SLIPPAGE_CONFIG_EXTRA
 } as const;
-
-/**
- * Executes a user operation with the given callData through the EntryPoint contract.
- * Handles retries for replacement underpriced errors up to 3 times.
- *
- * @param networkConfig - Network configuration containing contract addresses and network details
- * @param callData - Encoded function call data
- * @param signer - Wallet for signing the transaction
- * @param backendSigner - Backend wallet for signing paymaster data
- * @param entryPointContract - EntryPoint contract instance
- * @param proxyAddress - Address of the user's proxy contract
- * @param provider - Ethereum provider instance
- * @param retryCount - Number of retry attempts made (default: 0)
- * @returns Transaction hash of the executed operation
- * @throws Error if the transaction fails or receipt is not found
- */
-async function sendSwapUserOperation(
-  networkConfig: IBlockchain,
-  callData: string,
-  signer: ethers.Wallet,
-  backendSigner: ethers.Wallet,
-  entryPointContract: ethers.Contract,
-  proxyAddress: string,
-  provider: ethers.providers.JsonRpcProvider,
-  retryCount = 0
-): Promise<ExecueTransactionResult> {
-  try {
-    Logger.info(
-      'executeOperation',
-      `Starting operation execution for proxy: ${proxyAddress}, retry: ${retryCount}`
-    );
-
-    const userOpResult = await prepareAndExecuteUserOperation(
-      networkConfig,
-      provider,
-      signer,
-      backendSigner,
-      entryPointContract,
-      callData,
-      proxyAddress,
-      'swap',
-      1.5,
-      1.2
-    );
-
-    return userOpResult;
-  } catch (error) {
-    const errorMessage = JSON.stringify(error);
-    Logger.error('executeOperation', `Operation failed: ${errorMessage}`);
-    return { success: false, transactionHash: '', error: errorMessage };
-  }
-}
 
 /**
  * Creates the encoded call data for a swap execution
@@ -313,14 +261,21 @@ async function checkAndApproveToken(
 
     // Execute approve operation
     try {
-      const approveTransactionResult: ExecueTransactionResult = await sendSwapUserOperation(
+      const userOpGasConfig = networkConfig.gas.operations.swap;
+      const approveTransactionResult: ExecueTransactionResult = await executeUserOperationWithRetry(
         networkConfig,
-        approveCallData,
+        setupContractsResult.provider,
         setupContractsResult.signer,
         setupContractsResult.backendSigner,
         entryPointContract,
+        approveCallData,
         setupContractsResult.proxy.proxyAddress,
-        setupContractsResult.provider
+        'swap',
+        userOpGasConfig.perGasInitialMultiplier,
+        userOpGasConfig.perGasIncrement,
+        userOpGasConfig.callDataInitialMultiplier,
+        userOpGasConfig.maxRetries,
+        userOpGasConfig.timeoutMsBetweenRetries
       );
 
       if (!approveTransactionResult.success) {
@@ -527,14 +482,20 @@ export async function executeSwap(
     );
 
     Logger.info('executeSwap', 'Executing swap operation');
-    const swapTransactionResult: ExecueTransactionResult = await sendSwapUserOperation(
+    const swapTransactionResult: ExecueTransactionResult = await executeUserOperationWithRetry(
       networkConfig,
-      swapCallData,
+      setupContractsResult.provider,
       setupContractsResult.signer,
       setupContractsResult.backendSigner,
       entryPointContract,
+      swapCallData,
       setupContractsResult.proxy.proxyAddress,
-      setupContractsResult.provider
+      'swap',
+      1.5,
+      1.1,
+      1.2,
+      5000,
+      5
     );
 
     const paymasterDepositValueNow = await getPaymasterEntryPointDepositValue(

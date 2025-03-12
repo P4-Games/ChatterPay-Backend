@@ -5,3 +5,4 @@
 - [Account Abstraction Common Errors](https://docs.alchemy.com/reference/account-abstraction-faq)
   - [precheck failed error](https://docs.alchemy.com/reference/account-abstraction-faq#what-are-precheck-failed-errors-and-how-do-i-handle-them)
   - [Replacement Underpriced error](https://docs.alchemy.com/reference/account-abstraction-faq#what-is-a-replacement-underpriced-error-and-how-can-i-resolve-it)
+  - [Retrying an EIP 1559 transaction](https://docs.alchemy.com/docs/retrying-an-eip-1559-transaction)

@@ -227,19 +227,19 @@ export async function waitForUserOperationReceipt(
 
 /**
  * Prepare and Execute User Operation
- * @param networkConfig
- * @param provider
- * @param signer
- * @param backendSigner
- * @param entryPointContract
- * @param userOpCallData
- * @param userProxyAddress
- * @param userOpType
- * @param perGasMultiplier
- * @param callDataGasMultiplier
+ * @param networkConfig - Blockchain network configuration
+ * @param provider - Ethereum provider instance
+ * @param signer - Wallet instance for signing transactions
+ * @param backendSigner - Wallet instance for backend signing
+ * @param entryPointContract - EntryPoint contract instance
+ * @param userOpCallData - Encoded calldata for the user operation
+ * @param userProxyAddress - Address of the user proxy contract
+ * @param userOpType - Type of user operation ('transfer' or 'swap')
+ * @param perGasMultiplier - Initial gas multiplier
+ * @param callDataGasMultiplier - Multiplier for callData gas estimation
  * @returns
  */
-export async function prepareAndExecuteUserOperation(
+async function prepareAndExecuteUserOperation(
   networkConfig: IBlockchain,
   provider: ethers.providers.JsonRpcProvider,
   signer: ethers.Wallet,
@@ -347,4 +347,90 @@ export async function prepareAndExecuteUserOperation(
     Logger.error(userOpType, `Error executing operation: ${errorMessage}`);
     return { success: false, transactionHash: '', error: errorMessage };
   }
+}
+
+/**
+ * Execute User Operation with Retry
+ * @param networkConfig - Blockchain network configuration
+ * @param provider - Ethereum provider instance
+ * @param signer - Wallet instance for signing transactions
+ * @param backendSigner - Wallet instance for backend signing
+ * @param entryPointContract - EntryPoint contract instance
+ * @param userOpCallData - Encoded calldata for the user operation
+ * @param userProxyAddress - Address of the user proxy contract
+ * @param userOpType - Type of user operation ('transfer' or 'swap')
+ * @param perGasInitialMultiplier - Initial gas multiplier
+ * @param perGasIncrement - Increment factor for per Gas Fee.
+ * @param callDataGasInitialMultiplier - Multiplier for callData gas estimation
+ * @param timeoutMsBetweenRetries -Time Out (in ms) between retries
+ * @param maxRetries - Maximum number of retry attempts (default: 5)
+ * @param attempt - number of attempt
+ * @returns Execution result with success status, transaction hash, and error message
+ */
+export async function executeUserOperationWithRetry(
+  networkConfig: IBlockchain,
+  provider: ethers.providers.JsonRpcProvider,
+  signer: ethers.Wallet,
+  backendSigner: ethers.Wallet,
+  entryPointContract: ethers.Contract,
+  userOpCallData: string,
+  userProxyAddress: string,
+  userOpType: 'transfer' | 'swap',
+  perGasInitialMultiplier: number,
+  perGasIncrement: number,
+  callDataGasInitialMultiplier: number,
+  timeoutMsBetweenRetries: number,
+  maxRetries: number = 5,
+  attempt: number = 0
+): Promise<{ success: boolean; transactionHash: string; error: string }> {
+  Logger.log(
+    `executeUserOperationWithRetry-${userOpType}`,
+    `Attempt ${attempt + 1}/${maxRetries} with perGasMultiplier: ${perGasInitialMultiplier}`
+  );
+
+  const result = await prepareAndExecuteUserOperation(
+    networkConfig,
+    provider,
+    signer,
+    backendSigner,
+    entryPointContract,
+    userOpCallData,
+    userProxyAddress,
+    userOpType,
+    perGasInitialMultiplier,
+    callDataGasInitialMultiplier
+  );
+
+  if (result.success) {
+    return result;
+  }
+
+  // Check if error is "replacement transaction UnderPriced" (case insensitive)
+  if (/replacement transaction underpriced/i.test(result.error) && attempt < maxRetries) {
+    Logger.warn(
+      `executeUserOperationWithRetry-${userOpType}`,
+      `Retrying due to underpriced transaction error (${attempt}/${maxRetries})`
+    );
+    await new Promise((resolve) => setTimeout(resolve, timeoutMsBetweenRetries));
+    return executeUserOperationWithRetry(
+      networkConfig,
+      provider,
+      signer,
+      backendSigner,
+      entryPointContract,
+      userOpCallData,
+      userProxyAddress,
+      userOpType,
+      perGasInitialMultiplier * perGasIncrement,
+      callDataGasInitialMultiplier,
+      maxRetries,
+      attempt + 1
+    );
+  }
+
+  Logger.error(
+    `executeUserOperationWithRetry-${userOpType}`,
+    `Max retries reached or a non-retryable error occurred.`
+  );
+  return result;
 }
