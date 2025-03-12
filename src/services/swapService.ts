@@ -5,8 +5,11 @@ import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
 import { executeUserOperationWithRetry } from './web3/userOperationService';
-import { getPaymasterEntryPointDepositValue } from './web3/paymasterService';
 import { getERC20ABI, getChatterpayABI, getChainlinkPriceFeedABI } from './web3/abiService';
+import {
+  logPaymasterEntryPointDeposit,
+  getPaymasterEntryPointDepositValue
+} from './web3/paymasterService';
 import {
   TokenAddresses,
   ExecuteSwapResult,
@@ -498,20 +501,10 @@ export async function executeSwap(
       5
     );
 
-    const paymasterDepositValueNow = await getPaymasterEntryPointDepositValue(
+    await logPaymasterEntryPointDeposit(
       entryPointContract,
-      networkConfig.contracts.paymasterAddress!
-    );
-    const cost = paymasterDepositValuePrev.value.sub(paymasterDepositValueNow.value);
-    const costInEth = (
-      parseFloat(paymasterDepositValuePrev.inEth) - parseFloat(paymasterDepositValueNow.inEth)
-    ).toFixed(6);
-
-    Logger.info(
-      'executeSwap',
-      `Paymaster pre: ${paymasterDepositValuePrev.value.toString()} (${paymasterDepositValuePrev.inEth}), ` +
-        `Paymaster now: ${paymasterDepositValueNow.value.toString()} (${paymasterDepositValueNow.inEth}), ` +
-        `Cost: ${cost.toString()} (${costInEth} ETH)`
+      networkConfig.contracts.paymasterAddress!,
+      paymasterDepositValuePrev
     );
 
     Logger.info(
