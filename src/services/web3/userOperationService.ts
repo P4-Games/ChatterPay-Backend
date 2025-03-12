@@ -385,7 +385,7 @@ export async function executeUserOperationWithRetry(
 ): Promise<{ success: boolean; transactionHash: string; error: string }> {
   Logger.log(
     `executeUserOperationWithRetry-${userOpType}`,
-    `Attempt ${attempt + 1} with perGasMultiplier: ${perGasInitialMultiplier}`
+    `Attempt ${attempt + 1}/${maxRetries} with perGasMultiplier: ${perGasInitialMultiplier}`
   );
 
   const result = await prepareAndExecuteUserOperation(

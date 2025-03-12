@@ -88,6 +88,7 @@ export async function sendTransferUserOperation(
       networkConfig.contracts.paymasterAddress!
     );
 
+    const userOpGasConfig = networkConfig.gas.operations.transfer;
     const userOpResult = await executeUserOperationWithRetry(
       networkConfig,
       setupContractsResult.provider,
@@ -97,9 +98,11 @@ export async function sendTransferUserOperation(
       callData,
       setupContractsResult.proxy.proxyAddress,
       'transfer',
-      1.5,
-      1.2,
-      5
+      userOpGasConfig.perGasInitialMultiplier,
+      userOpGasConfig.perGasIncrement,
+      userOpGasConfig.callDataInitialMultiplier,
+      userOpGasConfig.maxRetries,
+      userOpGasConfig.timeoutMsBetweenRetries
     );
 
     // -------------------------------

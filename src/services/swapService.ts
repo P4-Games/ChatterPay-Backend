@@ -261,6 +261,7 @@ async function checkAndApproveToken(
 
     // Execute approve operation
     try {
+      const userOpGasConfig = networkConfig.gas.operations.swap;
       const approveTransactionResult: ExecueTransactionResult = await executeUserOperationWithRetry(
         networkConfig,
         setupContractsResult.provider,
@@ -270,9 +271,11 @@ async function checkAndApproveToken(
         approveCallData,
         setupContractsResult.proxy.proxyAddress,
         'swap',
-        1.5,
-        1.2,
-        5
+        userOpGasConfig.perGasInitialMultiplier,
+        userOpGasConfig.perGasIncrement,
+        userOpGasConfig.callDataInitialMultiplier,
+        userOpGasConfig.maxRetries,
+        userOpGasConfig.timeoutMsBetweenRetries
       );
 
       if (!approveTransactionResult.success) {
@@ -489,7 +492,9 @@ export async function executeSwap(
       setupContractsResult.proxy.proxyAddress,
       'swap',
       1.5,
+      1.1,
       1.2,
+      5000,
       5
     );
 
