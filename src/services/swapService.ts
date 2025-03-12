@@ -485,6 +485,7 @@ export async function executeSwap(
     );
 
     Logger.info('executeSwap', 'Executing swap operation');
+    const userOpGasConfig = networkConfig.gas.operations.swap;
     const swapTransactionResult: ExecueTransactionResult = await executeUserOperationWithRetry(
       networkConfig,
       setupContractsResult.provider,
@@ -494,11 +495,11 @@ export async function executeSwap(
       swapCallData,
       setupContractsResult.proxy.proxyAddress,
       'swap',
-      1.5,
-      1.1,
-      1.2,
-      5000,
-      5
+      userOpGasConfig.perGasInitialMultiplier,
+      userOpGasConfig.perGasIncrement,
+      userOpGasConfig.callDataInitialMultiplier,
+      userOpGasConfig.maxRetries,
+      userOpGasConfig.timeoutMsBetweenRetries
     );
 
     await logPaymasterEntryPointDeposit(
