@@ -323,16 +323,16 @@ export async function executeSwap(
 
     // In test environments we should not consider token price as we are using test pools
     const { environment } = networkConfig;
-    const isTestEnvironment = environment === 'TEST';
+    const isTestNetwork = environment === 'TEST';
 
     const abisToFetch = [getChatterpayABI(), getERC20ABI()];
 
-    if (!isTestEnvironment) {
+    if (!isTestNetwork) {
       abisToFetch.push(getChainlinkPriceFeedABI());
     }
 
     const [chatterpayABI, erc20ABI, ...otherABIs] = await Promise.all(abisToFetch);
-    const priceFeedABI = isTestEnvironment ? null : otherABIs[0];
+    const priceFeedABI = isTestNetwork ? null : otherABIs[0];
     Logger.debug('executeSwap', 'ABIs fetched successfully');
 
     // Initialize ChatterPay contract
@@ -379,7 +379,7 @@ export async function executeSwap(
       networkConfig.contracts.paymasterAddress!
     );
 
-    if (!isTestEnvironment && priceFeedABI) {
+    if (!isTestNetwork && priceFeedABI) {
       // Get price feeds and current prices
       Logger.debug('executeSwap', 'Fetching price feeds');
       const [tokenInFeed, tokenOutFeed] = await Promise.all([
