@@ -11,10 +11,7 @@ import { mongoUserService } from './mongo/mongoUserService';
 import { checkBlockchainConditions } from './blockchainService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
 import { getPaymasterEntryPointDepositValue } from './web3/paymasterService';
-import {
-  createTransferCallData,
-  prepareAndExecuteUserOperation
-} from './web3/userOperationService';
+import { createTransferCallData, executeUserOperationWithRetry } from './web3/userOperationService';
 import {
   openOperation,
   closeOperation,
@@ -91,7 +88,7 @@ export async function sendTransferUserOperation(
       networkConfig.contracts.paymasterAddress!
     );
 
-    const userOpResult = await prepareAndExecuteUserOperation(
+    const userOpResult = await executeUserOperationWithRetry(
       networkConfig,
       setupContractsResult.provider,
       setupContractsResult.signer,
@@ -101,7 +98,8 @@ export async function sendTransferUserOperation(
       setupContractsResult.proxy.proxyAddress,
       'transfer',
       1.5,
-      1.2
+      1.2,
+      5
     );
 
     // -------------------------------

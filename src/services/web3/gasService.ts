@@ -227,18 +227,11 @@ const getPerGasValues = async (
       );
     }
 
-    Logger.log(
-      'getRecommendedGasFees',
-      `Base Fee: ${latestBaseFee.toString()} (${ethers.utils.formatUnits(
-        latestBaseFee,
-        'gwei'
-      )} gwei), Priority Fee: ${adjustedPriorityFee.toString()} (${ethers.utils.formatUnits(
-        adjustedPriorityFee,
-        'gwei'
-      )} gwei), Max Fee: ${adjustedMaxFee.toString()} (${ethers.utils.formatUnits(
-        adjustedMaxFee,
-        'gwei'
-      )} gwei)`
+    Logger.info(
+      'getPerGasValues',
+      `Base Fee: ${ethers.utils.formatUnits(latestBaseFee, 'gwei')} gwei, ` +
+        `Priority Fee: ${ethers.utils.formatUnits(adjustedPriorityFee, 'gwei')} gwei, ` +
+        `Max Fee: ${ethers.utils.formatUnits(adjustedMaxFee, 'gwei')} gwei`
     );
 
     return {
@@ -318,7 +311,7 @@ const getcallDataGasValues = async (
   }
 
   Logger.log('getcallDataGasValues', '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
-  Logger.log(
+  Logger.info(
     'getcallDataGasValues',
     `Gas Params - callGasLimit: ${userOperation.callGasLimit.toString()}, verificationGasLimit: ${userOperation.verificationGasLimit.toString()}, preVerificationGas: ${userOperation.preVerificationGas.toString()}, maxFeePerGas: ${userOperation.maxFeePerGas.toString()} , maxPriorityFeePerGas: ${userOperation.maxPriorityFeePerGas.toString()}, getted values from: ${gettingGasValuesfrom}`
   );

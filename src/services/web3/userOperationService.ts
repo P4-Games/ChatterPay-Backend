@@ -227,19 +227,19 @@ export async function waitForUserOperationReceipt(
 
 /**
  * Prepare and Execute User Operation
- * @param networkConfig
- * @param provider
- * @param signer
- * @param backendSigner
- * @param entryPointContract
- * @param userOpCallData
- * @param userProxyAddress
- * @param userOpType
- * @param perGasMultiplier
- * @param callDataGasMultiplier
+ * @param networkConfig - Blockchain network configuration
+ * @param provider - Ethereum provider instance
+ * @param signer - Wallet instance for signing transactions
+ * @param backendSigner - Wallet instance for backend signing
+ * @param entryPointContract - EntryPoint contract instance
+ * @param userOpCallData - Encoded calldata for the user operation
+ * @param userProxyAddress - Address of the user proxy contract
+ * @param userOpType - Type of user operation ('transfer' or 'swap')
+ * @param perGasMultiplier - Initial gas multiplier
+ * @param callDataGasMultiplier - Multiplier for callData gas estimation
  * @returns
  */
-export async function prepareAndExecuteUserOperation(
+async function prepareAndExecuteUserOperation(
   networkConfig: IBlockchain,
   provider: ethers.providers.JsonRpcProvider,
   signer: ethers.Wallet,
@@ -347,4 +347,85 @@ export async function prepareAndExecuteUserOperation(
     Logger.error(userOpType, `Error executing operation: ${errorMessage}`);
     return { success: false, transactionHash: '', error: errorMessage };
   }
+}
+
+/**
+ * Execute User Operation with Retry
+ * @param networkConfig - Blockchain network configuration
+ * @param provider - Ethereum provider instance
+ * @param signer - Wallet instance for signing transactions
+ * @param backendSigner - Wallet instance for backend signing
+ * @param entryPointContract - EntryPoint contract instance
+ * @param userOpCallData - Encoded calldata for the user operation
+ * @param userProxyAddress - Address of the user proxy contract
+ * @param userOpType - Type of user operation ('transfer' or 'swap')
+ * @param perGasMultiplier - Initial gas multiplier
+ * @param callDataGasMultiplier - Multiplier for callData gas estimation
+ * @param maxRetry - Maximum number of retry attempts (default: 5)
+ * @returns Execution result with success status, transaction hash, and error message
+ */
+export async function executeUserOperationWithRetry(
+  networkConfig: IBlockchain,
+  provider: ethers.providers.JsonRpcProvider,
+  signer: ethers.Wallet,
+  backendSigner: ethers.Wallet,
+  entryPointContract: ethers.Contract,
+  userOpCallData: string,
+  userProxyAddress: string,
+  userOpType: 'transfer' | 'swap',
+  perGasMultiplier: number,
+  callDataGasMultiplier: number,
+  maxRetry: number = 5,
+  attempt: number = 0
+): Promise<{ success: boolean; transactionHash: string; error: string }> {
+  Logger.log(
+    `executeUserOperationWithRetry-${userOpType}`,
+    `Attempt ${attempt + 1} with perGasMultiplier: ${perGasMultiplier}`
+  );
+
+  const result = await prepareAndExecuteUserOperation(
+    networkConfig,
+    provider,
+    signer,
+    backendSigner,
+    entryPointContract,
+    userOpCallData,
+    userProxyAddress,
+    userOpType,
+    perGasMultiplier,
+    callDataGasMultiplier
+  );
+
+  if (result.success) {
+    return result;
+  }
+
+  // Check if error is "replacement transaction UnderPriced" (case insensitive)
+  if (/replacement transaction underpriced/i.test(result.error) && attempt < maxRetry) {
+    Logger.warn(
+      `executeUserOperationWithRetry-${userOpType}`,
+      `Retrying due to underpriced transaction error`
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    return executeUserOperationWithRetry(
+      networkConfig,
+      provider,
+      signer,
+      backendSigner,
+      entryPointContract,
+      userOpCallData,
+      userProxyAddress,
+      userOpType,
+      perGasMultiplier * 1.1, // Increase perGasMultiplier by 10%
+      callDataGasMultiplier,
+      maxRetry,
+      attempt + 1
+    );
+  }
+
+  Logger.error(
+    `executeUserOperationWithRetry-${userOpType}`,
+    `Max retries reached or a non-retryable error occurred.`
+  );
+  return result;
 }
