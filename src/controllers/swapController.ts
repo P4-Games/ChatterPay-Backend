@@ -191,7 +191,7 @@ export const swap = async (
       proxyAddress
     );
     if (!executeSwapResult.success) {
-      await sendInternalErrorNotification(proxyAddress, channel_user_id);
+      await sendInternalErrorNotification(proxyAddress, channel_user_id, lastBotMsgDelaySeconds);
       await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;
     }
