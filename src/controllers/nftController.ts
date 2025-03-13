@@ -386,6 +386,14 @@ export const generateNftOriginal = async (
     Logger.error('generateNftOriginal', 'Error updating NFT in bdd', (error as Error).message);
   }
   await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
+
+  if (lastBotMsgDelaySeconds > 0) {
+    Logger.log(
+      'generateNftOriginal',
+      `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`
+    );
+    await delaySeconds(lastBotMsgDelaySeconds);
+  }
   await sendMintNotification(userWallet.wallet_proxy, channel_user_id, nftMintedId);
   Logger.log('generateNftOriginal', 'NFT minting end.');
 };

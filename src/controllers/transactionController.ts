@@ -475,7 +475,12 @@ export const makeTransaction = async (
     );
 
     if (!executeTransactionResult.success) {
-      await sendInternalErrorNotification(userWallet.wallet_proxy, channel_user_id, traceHeader);
+      await sendInternalErrorNotification(
+        userWallet.wallet_proxy,
+        channel_user_id,
+        lastBotMsgDelaySeconds,
+        traceHeader
+      );
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       transactionExecutionSpan?.endSpan();
       rootSpan?.endSpan();
