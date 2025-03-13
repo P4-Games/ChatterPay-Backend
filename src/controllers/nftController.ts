@@ -344,23 +344,6 @@ export const generateNftOriginal = async (
     Logger.error('generateNftOriginal', 'Error updating NFT in bdd', (error as Error).message);
   }
 
-  try {
-    if (lastBotMsgDelaySeconds > 0) {
-      Logger.log(
-        'generateNftOriginal',
-        `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`
-      );
-      await delaySeconds(lastBotMsgDelaySeconds);
-    }
-  } catch (error) {
-    Logger.warn(
-      'generateNftOriginal',
-      'Error sending NFT minting notification:',
-      (error as Error).message
-    );
-    // No error is thrown here to continue with the process
-  }
-
   const fileName = `${channel_user_id.toString()}_${Date.now()}.jpg`;
   let ipfsImageUrl = '';
   let icpImageUrl = '';
