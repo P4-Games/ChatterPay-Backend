@@ -201,8 +201,8 @@ function calculateExpectedOutput(
   Logger.debug(
     'calculateExpectedOutput',
     `Calculating expected output. Swap amount: ${swapAmount.toString()}, ` +
-      `Price in: ${priceIn}, Price out: ${priceOut}, ` +
-      `Decimals in: ${decimalsIn}, Decimals out: ${decimalsOut}`
+    `Price in: ${priceIn}, Price out: ${priceOut}, ` +
+    `Decimals in: ${decimalsIn}, Decimals out: ${decimalsOut}`
   );
 
   // Add validation to prevent division by zero
@@ -370,8 +370,8 @@ export async function executeSwap(
     );
     Logger.debug('executeSwap', `Fee in cents: ${feeInCents.toString()}`);
 
-    let effectivePriceIn = 1;
-    let effectivePriceOut = 5;
+    let effectivePriceIn = 0;
+    let effectivePriceOut = 0;
 
     // Keep Paymater Deposit Value
     const paymasterDepositValuePrev = await getPaymasterEntryPointDepositValue(
@@ -428,7 +428,6 @@ export async function executeSwap(
         'Test environment detected - using price ratio with high slippage'
       );
     }
-
     // Calculate fee and amounts
     const feeInTokenIn = calculateFeeInToken(feeInCents, tokenInDecimals, effectivePriceIn);
     Logger.debug('executeSwap', `Fee in input token: ${feeInTokenIn.toString()}`);
@@ -445,6 +444,7 @@ export async function executeSwap(
       tokenInDecimals,
       tokenOutDecimals
     );
+
     Logger.info('executeSwap', `Expected output amount: ${expectedOutput.toString()}`);
 
     const isOutStable = tokenInfo?.type === 'stable';
@@ -480,7 +480,7 @@ export async function executeSwap(
       tokenIn,
       tokenOut,
       amountInBN,
-      amountOutMin,
+      isTestNetwork ? ethers.constants.Zero : amountOutMin,
       recipient
     );
 
