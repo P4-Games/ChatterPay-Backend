@@ -429,7 +429,10 @@ export async function executeSwap(
       );
     }
     // Calculate fee and amounts
-    const feeInTokenIn = calculateFeeInToken(feeInCents, tokenInDecimals, effectivePriceIn);
+    const feeInTokenIn = isTestNetwork
+      ? ethers.constants.Zero
+      : calculateFeeInToken(feeInCents, tokenInDecimals, effectivePriceIn);
+
     Logger.debug('executeSwap', `Fee in input token: ${feeInTokenIn.toString()}`);
 
     const amountInBN = ethers.utils.parseUnits(amount, tokenInDecimals);
@@ -437,13 +440,15 @@ export async function executeSwap(
     Logger.info('executeSwap', `Swap amount after fee: ${swapAmount.toString()}`);
 
     // Calculate expected output with price adjustment
-    const expectedOutput = calculateExpectedOutput(
-      swapAmount,
-      effectivePriceIn,
-      effectivePriceOut,
-      tokenInDecimals,
-      tokenOutDecimals
-    );
+    const expectedOutput = isTestNetwork
+      ? ethers.constants.Zero
+      : calculateExpectedOutput(
+        swapAmount,
+        effectivePriceIn,
+        effectivePriceOut,
+        tokenInDecimals,
+        tokenOutDecimals
+      );
 
     Logger.info('executeSwap', `Expected output amount: ${expectedOutput.toString()}`);
 
@@ -480,7 +485,7 @@ export async function executeSwap(
       tokenIn,
       tokenOut,
       amountInBN,
-      isTestNetwork ? ethers.constants.Zero : amountOutMin,
+      amountOutMin,
       recipient
     );
 
@@ -518,7 +523,7 @@ export async function executeSwap(
     );
     return {
       success: true,
-      approveTransactionHash: approveTrxHash || '',
+      approveTransactionHash: approveTrxHash ?? '',
       swapTransactionHash: swapTransactionResult.transactionHash
     };
   } catch (error) {
