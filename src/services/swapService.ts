@@ -201,8 +201,8 @@ function calculateExpectedOutput(
   Logger.debug(
     'calculateExpectedOutput',
     `Calculating expected output. Swap amount: ${swapAmount.toString()}, ` +
-    `Price in: ${priceIn}, Price out: ${priceOut}, ` +
-    `Decimals in: ${decimalsIn}, Decimals out: ${decimalsOut}`
+      `Price in: ${priceIn}, Price out: ${priceOut}, ` +
+      `Decimals in: ${decimalsIn}, Decimals out: ${decimalsOut}`
   );
 
   // Add validation to prevent division by zero
@@ -443,12 +443,12 @@ export async function executeSwap(
     const expectedOutput = isTestNetwork
       ? ethers.constants.Zero
       : calculateExpectedOutput(
-        swapAmount,
-        effectivePriceIn,
-        effectivePriceOut,
-        tokenInDecimals,
-        tokenOutDecimals
-      );
+          swapAmount,
+          effectivePriceIn,
+          effectivePriceOut,
+          tokenInDecimals,
+          tokenOutDecimals
+        );
 
     Logger.info('executeSwap', `Expected output amount: ${expectedOutput.toString()}`);
 
