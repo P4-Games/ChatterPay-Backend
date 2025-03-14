@@ -14,21 +14,21 @@ import { coingeckoService } from '../../src/services/coingecko/coingeckoService'
 
 // Type definitions
 interface PoolConfig {
-    readonly rpc: string;
-    readonly privateKey: string;
-    readonly usdtAddress: string;
-    readonly wethAddress: string;
-    readonly poolFee: number;
-    readonly swapRouterAddress: string;
-    readonly factoryAddress: string;
-    readonly gasLimit: number;
+  readonly rpc: string;
+  readonly privateKey: string;
+  readonly usdtAddress: string;
+  readonly wethAddress: string;
+  readonly poolFee: number;
+  readonly swapRouterAddress: string;
+  readonly factoryAddress: string;
+  readonly gasLimit: number;
 }
 
 interface TokenBalances {
-    readonly poolBalanceA: ethers.BigNumber;
-    readonly poolBalanceB: ethers.BigNumber;
-    readonly tokenADecimals: number;
-    readonly tokenBDecimals: number;
+  readonly poolBalanceA: ethers.BigNumber;
+  readonly poolBalanceB: ethers.BigNumber;
+  readonly tokenADecimals: number;
+  readonly tokenBDecimals: number;
 }
 
 /**
@@ -36,44 +36,44 @@ interface TokenBalances {
  * Network: Arbitrum Sepolia
  */
 const getConfig = (): PoolConfig => {
-    const requiredEnvVars = ['SIGNING_KEY'];
+  const requiredEnvVars = ['SIGNING_KEY'];
 
-    requiredEnvVars.forEach((envVar) => {
-        if (!process.env[envVar]) {
-            throw new Error(`Missing required environment variable: ${envVar}`);
-        }
-    });
+  requiredEnvVars.forEach((envVar) => {
+    if (!process.env[envVar]) {
+      throw new Error(`Missing required environment variable: ${envVar}`);
+    }
+  });
 
-    return {
-        rpc: `https://arb-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY ?? ''}`,
-        privateKey: process.env.SIGNING_KEY!,
-        usdtAddress: process.env.USDT_ADDRESS ?? '0xe6B817E31421929403040c3e42A6a5C5D2958b4A',
-        wethAddress: process.env.WETH_ADDRESS ?? '0xe9c723d01393a437bac13ce8f925a5bc8e1c335c',
-        poolFee: 3000, // 0.3%
-        swapRouterAddress:
-            process.env.SWAP_ROUTER_ADDRESS ?? '0x101F443B4d1b059569D643917553c771E1b9663E',
-        factoryAddress:
-            process.env.UNISWAP_FACTORY_ADDRESS ?? '0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e',
-        gasLimit: 3000000
-    };
+  return {
+    rpc: `https://arb-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY ?? ''}`,
+    privateKey: process.env.SIGNING_KEY!,
+    usdtAddress: process.env.USDT_ADDRESS ?? '0xe6B817E31421929403040c3e42A6a5C5D2958b4A',
+    wethAddress: process.env.WETH_ADDRESS ?? '0xe9c723d01393a437bac13ce8f925a5bc8e1c335c',
+    poolFee: 3000, // 0.3%
+    swapRouterAddress:
+      process.env.SWAP_ROUTER_ADDRESS ?? '0x101F443B4d1b059569D643917553c771E1b9663E',
+    factoryAddress:
+      process.env.UNISWAP_FACTORY_ADDRESS ?? '0x248AB79Bbb9bC29bB72f7Cd42F17e054Fc40188e',
+    gasLimit: 3000000
+  };
 };
 
 /**
  * Minimal ERC20 ABI for required operations
  */
 const ERC20_ABI: ABI = [
-    'function balanceOf(address owner) view returns (uint256)',
-    'function decimals() view returns (uint8)',
-    'function mint(address to, uint256 amount) returns (bool)',
-    'function approve(address spender, uint256 amount) returns (bool)',
-    'function allowance(address owner, address spender) view returns (uint256)'
+  'function balanceOf(address owner) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function mint(address to, uint256 amount) returns (bool)',
+  'function approve(address spender, uint256 amount) returns (bool)',
+  'function allowance(address owner, address spender) view returns (uint256)'
 ];
 
 /**
  * Minimal Factory ABI for pool retrieval
  */
 const FACTORY_ABI: ABI = [
-    'function getPool(address tokenA, address tokenB, uint24 fee) external view returns (address pool)'
+  'function getPool(address tokenA, address tokenB, uint24 fee) external view returns (address pool)'
 ];
 
 /**
@@ -106,24 +106,24 @@ const FACTORY_ABI: ABI = [
  * @returns The amount of token0 to swap (signed value indicating direction)
  */
 const calculateSwapForTargetPrice = (
-    reserve0: ethers.BigNumber,
-    reserve1: ethers.BigNumber,
-    targetPrice: number
+  reserve0: ethers.BigNumber,
+  reserve1: ethers.BigNumber,
+  targetPrice: number
 ): number => {
-    // Convert BigNumbers to numeric values for mathematical calculations
-    const reserve0Num = parseFloat(ethers.utils.formatUnits(reserve0, 18));
-    const reserve1Num = parseFloat(ethers.utils.formatUnits(reserve1, 18));
+  // Convert BigNumbers to numeric values for mathematical calculations
+  const reserve0Num = parseFloat(ethers.utils.formatUnits(reserve0, 18));
+  const reserve1Num = parseFloat(ethers.utils.formatUnits(reserve1, 18));
 
-    const k = reserve0Num * reserve1Num;
+  const k = reserve0Num * reserve1Num;
 
-    // New reserve of token1 to achieve the target price
-    const newReserve1 = Math.sqrt(k / targetPrice);
+  // New reserve of token1 to achieve the target price
+  const newReserve1 = Math.sqrt(k / targetPrice);
 
-    // New reserve of token0 (since price is targetPrice = newReserve0/newReserve1)
-    const newReserve0 = targetPrice * newReserve1;
+  // New reserve of token0 (since price is targetPrice = newReserve0/newReserve1)
+  const newReserve0 = targetPrice * newReserve1;
 
-    // Token0 amount to swap (can be positive or negative)
-    return newReserve0 - reserve0Num;
+  // Token0 amount to swap (can be positive or negative)
+  return newReserve0 - reserve0Num;
 };
 
 /**
@@ -137,30 +137,30 @@ const calculateSwapForTargetPrice = (
  * @throws Error if the pool doesn't exist
  */
 const getPoolAddress = async (
-    tokenA: string,
-    tokenB: string,
-    config: PoolConfig,
-    provider: ethers.providers.JsonRpcProvider
+  tokenA: string,
+  tokenB: string,
+  config: PoolConfig,
+  provider: ethers.providers.JsonRpcProvider
 ): Promise<string> => {
-    try {
-        const factory = new ethers.Contract(config.factoryAddress, FACTORY_ABI, provider);
+  try {
+    const factory = new ethers.Contract(config.factoryAddress, FACTORY_ABI, provider);
 
-        // Get pool with the configured fee tier
-        const poolAddress = await factory.getPool(tokenA, tokenB, config.poolFee);
+    // Get pool with the configured fee tier
+    const poolAddress = await factory.getPool(tokenA, tokenB, config.poolFee);
 
-        if (poolAddress === ethers.constants.AddressZero) {
-            throw new Error(
-                `Pool not found for tokens ${tokenA} and ${tokenB} with fee ${config.poolFee}`
-            );
-        }
-
-        return poolAddress;
-    } catch (error) {
-        Logger.error(
-            `Error retrieving pool address: ${error instanceof Error ? error.message : String(error)}`
-        );
-        throw error;
+    if (poolAddress === ethers.constants.AddressZero) {
+      throw new Error(
+        `Pool not found for tokens ${tokenA} and ${tokenB} with fee ${config.poolFee}`
+      );
     }
+
+    return poolAddress;
+  } catch (error) {
+    Logger.error(
+      `Error retrieving pool address: ${error instanceof Error ? error.message : String(error)}`
+    );
+    throw error;
+  }
 };
 
 /**
@@ -173,37 +173,37 @@ const getPoolAddress = async (
  * @returns Object with token balances and decimals
  */
 const getPoolBalances = async (
-    tokenA: string,
-    tokenB: string,
-    config: PoolConfig,
-    provider: ethers.providers.JsonRpcProvider
+  tokenA: string,
+  tokenB: string,
+  config: PoolConfig,
+  provider: ethers.providers.JsonRpcProvider
 ): Promise<TokenBalances> => {
-    try {
-        const poolAddress = await getPoolAddress(tokenA, tokenB, config, provider);
+  try {
+    const poolAddress = await getPoolAddress(tokenA, tokenB, config, provider);
 
-        const tokenAContract = new ethers.Contract(tokenA, ERC20_ABI, provider);
-        const tokenBContract = new ethers.Contract(tokenB, ERC20_ABI, provider);
+    const tokenAContract = new ethers.Contract(tokenA, ERC20_ABI, provider);
+    const tokenBContract = new ethers.Contract(tokenB, ERC20_ABI, provider);
 
-        // Run all queries in parallel for optimization
-        const [poolBalanceA, tokenADecimals, poolBalanceB, tokenBDecimals] = await Promise.all([
-            tokenAContract.balanceOf(poolAddress),
-            tokenAContract.decimals(),
-            tokenBContract.balanceOf(poolAddress),
-            tokenBContract.decimals()
-        ]);
+    // Run all queries in parallel for optimization
+    const [poolBalanceA, tokenADecimals, poolBalanceB, tokenBDecimals] = await Promise.all([
+      tokenAContract.balanceOf(poolAddress),
+      tokenAContract.decimals(),
+      tokenBContract.balanceOf(poolAddress),
+      tokenBContract.decimals()
+    ]);
 
-        return {
-            poolBalanceA,
-            poolBalanceB,
-            tokenADecimals,
-            tokenBDecimals
-        };
-    } catch (error) {
-        Logger.error(
-            `Error getting pool balances: ${error instanceof Error ? error.message : String(error)}`
-        );
-        throw error;
-    }
+    return {
+      poolBalanceA,
+      poolBalanceB,
+      tokenADecimals,
+      tokenBDecimals
+    };
+  } catch (error) {
+    Logger.error(
+      `Error getting pool balances: ${error instanceof Error ? error.message : String(error)}`
+    );
+    throw error;
+  }
 };
 
 /**
@@ -217,54 +217,54 @@ const getPoolBalances = async (
  * @returns true if balance is ensured
  */
 const ensureTokenBalance = async (
-    tokenAddress: string,
-    amount: ethers.BigNumber,
-    signer: ethers.Signer,
-    routerAddress: string
+  tokenAddress: string,
+  amount: ethers.BigNumber,
+  signer: ethers.Signer,
+  routerAddress: string
 ): Promise<boolean> => {
-    try {
-        const signerAddress = await signer.getAddress();
-        const token = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
+  try {
+    const signerAddress = await signer.getAddress();
+    const token = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
 
-        // Check current balance
-        const balance = await token.balanceOf(signerAddress);
-        const tokenDecimals = await token.decimals();
+    // Check current balance
+    const balance = await token.balanceOf(signerAddress);
+    const tokenDecimals = await token.decimals();
 
-        if (balance.lt(amount)) {
-            // Calculate 20% extra for safety margin
-            const mintAmount = amount.mul(120).div(100);
+    if (balance.lt(amount)) {
+      // Calculate 20% extra for safety margin
+      const mintAmount = amount.mul(120).div(100);
 
-            Logger.info(
-                `Insufficient balance. Minting ${ethers.utils.formatUnits(mintAmount, tokenDecimals)} tokens...`
-            );
+      Logger.info(
+        `Insufficient balance. Minting ${ethers.utils.formatUnits(mintAmount, tokenDecimals)} tokens...`
+      );
 
-            const mintTx = await token.mint(signerAddress, mintAmount);
-            await mintTx.wait();
+      const mintTx = await token.mint(signerAddress, mintAmount);
+      await mintTx.wait();
 
-            Logger.info(`Tokens successfully minted`);
-        }
-
-        // Check allowance
-        const allowance = await token.allowance(signerAddress, routerAddress);
-
-        if (allowance.lt(amount)) {
-            Logger.info(
-                `Approving ${ethers.utils.formatUnits(amount, tokenDecimals)} tokens for router...`
-            );
-
-            const approveTx = await token.approve(routerAddress, ethers.constants.MaxUint256);
-            await approveTx.wait();
-
-            Logger.info(`Tokens successfully approved`);
-        }
-
-        return true;
-    } catch (error) {
-        Logger.error(
-            `Error ensuring token balance: ${error instanceof Error ? error.message : String(error)}`
-        );
-        throw error;
+      Logger.info(`Tokens successfully minted`);
     }
+
+    // Check allowance
+    const allowance = await token.allowance(signerAddress, routerAddress);
+
+    if (allowance.lt(amount)) {
+      Logger.info(
+        `Approving ${ethers.utils.formatUnits(amount, tokenDecimals)} tokens for router...`
+      );
+
+      const approveTx = await token.approve(routerAddress, ethers.constants.MaxUint256);
+      await approveTx.wait();
+
+      Logger.info(`Tokens successfully approved`);
+    }
+
+    return true;
+  } catch (error) {
+    Logger.error(
+      `Error ensuring token balance: ${error instanceof Error ? error.message : String(error)}`
+    );
+    throw error;
+  }
 };
 
 /**
@@ -276,12 +276,12 @@ const ensureTokenBalance = async (
  * @param config - Pool configuration
  */
 const prepareForSwap = async (
-    signer: ethers.Wallet,
-    tokenAddress: string,
-    amount: ethers.BigNumber,
-    config: PoolConfig
+  signer: ethers.Wallet,
+  tokenAddress: string,
+  amount: ethers.BigNumber,
+  config: PoolConfig
 ): Promise<void> => {
-    await ensureTokenBalance(tokenAddress, amount, signer, config.swapRouterAddress);
+  await ensureTokenBalance(tokenAddress, amount, signer, config.swapRouterAddress);
 };
 
 /**
@@ -292,19 +292,19 @@ const prepareForSwap = async (
  * @returns Equivalent BigNumber
  */
 const toBigNumber = (amount: number, decimals: number): ethers.BigNumber => {
-    // Convert scientific notation to regular string
-    const amountStr = amount.toLocaleString('fullwide', { useGrouping: false });
+  // Convert scientific notation to regular string
+  const amountStr = amount.toLocaleString('fullwide', { useGrouping: false });
 
-    // Determine if the number is an integer or has decimals
-    if (!amountStr.includes('.')) {
-        return ethers.utils.parseUnits(amountStr, decimals);
-    }
+  // Determine if the number is an integer or has decimals
+  if (!amountStr.includes('.')) {
+    return ethers.utils.parseUnits(amountStr, decimals);
+  }
 
-    // Handle numbers with decimals
-    const [integerPart, decimalPart] = amountStr.split('.');
-    const paddedDecimalPart = decimalPart.padEnd(decimals, '0').slice(0, decimals);
+  // Handle numbers with decimals
+  const [integerPart, decimalPart] = amountStr.split('.');
+  const paddedDecimalPart = decimalPart.padEnd(decimals, '0').slice(0, decimals);
 
-    return ethers.BigNumber.from(integerPart + paddedDecimalPart);
+  return ethers.BigNumber.from(integerPart + paddedDecimalPart);
 };
 
 /**
@@ -312,84 +312,84 @@ const toBigNumber = (amount: number, decimals: number): ethers.BigNumber => {
  * Handles both buying and selling scenarios based on the calculated swap amount.
  */
 async function main() {
-    try {
-        Logger.info('Starting pool adjustment script...');
+  try {
+    Logger.info('Starting pool adjustment script...');
 
-        // Get configuration
-        const config = getConfig();
+    // Get configuration
+    const config = getConfig();
 
-        // Get target price from Coingecko
-        const targetPrice = await coingeckoService.getTokenPrice('ethereum');
-        Logger.info(`Target price: ${targetPrice} USDT per ETH`);
+    // Get target price from Coingecko
+    const targetPrice = await coingeckoService.getTokenPrice('ethereum');
+    Logger.info(`Target price: ${targetPrice} USDT per ETH`);
 
-        // Initialize provider and wallet
-        const provider = new ethers.providers.JsonRpcProvider(config.rpc);
-        const wallet = new ethers.Wallet(config.privateKey, provider);
+    // Initialize provider and wallet
+    const provider = new ethers.providers.JsonRpcProvider(config.rpc);
+    const wallet = new ethers.Wallet(config.privateKey, provider);
 
-        // Get pool balances
-        const { poolBalanceA, poolBalanceB, tokenADecimals, tokenBDecimals } = await getPoolBalances(
-            config.usdtAddress,
-            config.wethAddress,
-            config,
-            provider
-        );
+    // Get pool balances
+    const { poolBalanceA, poolBalanceB, tokenADecimals, tokenBDecimals } = await getPoolBalances(
+      config.usdtAddress,
+      config.wethAddress,
+      config,
+      provider
+    );
 
-        // Calculate amount to swap to reach target price
-        const tokensToSwap = calculateSwapForTargetPrice(poolBalanceA, poolBalanceB, targetPrice);
+    // Calculate amount to swap to reach target price
+    const tokensToSwap = calculateSwapForTargetPrice(poolBalanceA, poolBalanceB, targetPrice);
 
-        // Determine swap direction based on the sign of tokensToSwap
-        const isBuyingTokenA = tokensToSwap > 0;
+    // Determine swap direction based on the sign of tokensToSwap
+    const isBuyingTokenA = tokensToSwap > 0;
 
-        // Check if the magnitude is significant enough to warrant a swap
-        if (Math.abs(tokensToSwap) < 1) {
-            Logger.info('Amount to swap is too small to rebalance...');
-            return;
-        }
-
-        // Use absolute value for transaction preparation
-        const absTokensToSwap = Math.abs(tokensToSwap);
-
-        // Determine which token to use as input based on the direction
-        const tokenIn = isBuyingTokenA ? config.wethAddress : config.usdtAddress;
-        const tokenOut = isBuyingTokenA ? config.usdtAddress : config.wethAddress;
-        const tokenDecimals = isBuyingTokenA ? tokenBDecimals : tokenADecimals;
-
-        // For positive tokensToSwap: We need to add USDT to the pool, so we buy USDT with WETH
-        // For negative tokensToSwap: We need to remove USDT from the pool, so we sell USDT for WETH
-
-        // Convert to BigNumber for transactions
-        const swapAmountBN = toBigNumber(absTokensToSwap, tokenDecimals);
-        const swapAmountFormatted = ethers.utils.formatUnits(swapAmountBN, tokenDecimals);
-
-        Logger.info(
-            isBuyingTokenA
-                ? `Swapping ${swapAmountFormatted} WETH for USDT to adjust pool price...`
-                : `Swapping ${swapAmountFormatted} USDT for WETH to adjust pool price...`
-        );
-
-        // Prepare tokens for swap
-        await prepareForSwap(wallet, tokenIn, swapAmountBN, config);
-
-        // Execute swap
-        await executeSwap({
-            config,
-            amountIn: swapAmountFormatted,
-            tokenIn,
-            tokenOut
-        });
-
-        Logger.info('Swap completed successfully.');
-    } catch (error) {
-        Logger.error(`Execution error: ${error instanceof Error ? error.message : String(error)}`);
-        process.exit(1);
+    // Check if the magnitude is significant enough to warrant a swap
+    if (Math.abs(tokensToSwap) < 1) {
+      Logger.info('Amount to swap is too small to rebalance...');
+      return;
     }
+
+    // Use absolute value for transaction preparation
+    const absTokensToSwap = Math.abs(tokensToSwap);
+
+    // Determine which token to use as input based on the direction
+    const tokenIn = isBuyingTokenA ? config.wethAddress : config.usdtAddress;
+    const tokenOut = isBuyingTokenA ? config.usdtAddress : config.wethAddress;
+    const tokenDecimals = isBuyingTokenA ? tokenBDecimals : tokenADecimals;
+
+    // For positive tokensToSwap: We need to add USDT to the pool, so we buy USDT with WETH
+    // For negative tokensToSwap: We need to remove USDT from the pool, so we sell USDT for WETH
+
+    // Convert to BigNumber for transactions
+    const swapAmountBN = toBigNumber(absTokensToSwap, tokenDecimals);
+    const swapAmountFormatted = ethers.utils.formatUnits(swapAmountBN, tokenDecimals);
+
+    Logger.info(
+      isBuyingTokenA
+        ? `Swapping ${swapAmountFormatted} WETH for USDT to adjust pool price...`
+        : `Swapping ${swapAmountFormatted} USDT for WETH to adjust pool price...`
+    );
+
+    // Prepare tokens for swap
+    await prepareForSwap(wallet, tokenIn, swapAmountBN, config);
+
+    // Execute swap
+    await executeSwap({
+      config,
+      amountIn: swapAmountFormatted,
+      tokenIn,
+      tokenOut
+    });
+
+    Logger.info('Swap completed successfully.');
+  } catch (error) {
+    Logger.error(`Execution error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
 }
 
 main()
-    .then(() => process.exit(0))
-    .catch((error) => {
-        Logger.error(`Fatal error: ${error instanceof Error ? error.message : String(error)}`);
-        process.exit(1);
-    });
+  .then(() => process.exit(0))
+  .catch((error) => {
+    Logger.error(`Fatal error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  });
 
 export { executeSwap };
