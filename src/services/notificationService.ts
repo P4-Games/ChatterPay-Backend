@@ -2,6 +2,7 @@ import NodeCache from 'node-cache';
 
 import { Logger } from '../helpers/loggerHelper';
 import { pushService } from './push/pushService';
+import { delaySeconds } from '../helpers/timeHelper';
 import { IBlockchain } from '../models/blockchainModel';
 import { mongoUserService } from './mongo/mongoUserService';
 import { chatizaloService } from './chatizalo/chatizaloService';
@@ -414,9 +415,22 @@ export async function sendNoValidBlockchainConditionsNotification(
 export async function sendInternalErrorNotification(
   address_of_user: string,
   channel_user_id: string,
+  lastBotMsgDelaySeconds: number = 0,
   traceHeader?: string
 ) {
   try {
+    if (lastBotMsgDelaySeconds > 0) {
+      // This is here because the user should receive the "we are processing your operation" message first,
+      // and in case of an error, the error message (this function) afterward. The first message is sent
+      // through a broader channel (which takes longer), while the second one may take less time.
+      // Hence, this delay is needed, which is controlled by a queryParam in chat_functions of Chatizalo.
+      Logger.log(
+        'sendInternalErrorNotification',
+        `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`
+      );
+      await delaySeconds(lastBotMsgDelaySeconds);
+    }
+
     Logger.log(
       'sendInternalErrorNotification',
       `Sending internal error notification to ${address_of_user}`

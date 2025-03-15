@@ -1,6 +1,11 @@
 import { model, Schema, Document } from 'mongoose';
 
 export interface OpGasValues {
+  perGasInitialMultiplier: number;
+  perGasIncrement: number;
+  callDataInitialMultiplier: number;
+  maxRetries: number;
+  timeoutMsBetweenRetries: number;
   maxFeePerGas: string;
   maxPriorityFeePerGas: string;
   verificationGasLimit: number;
@@ -41,6 +46,19 @@ export interface IBlockchain extends Document {
   };
 }
 
+const opGasSchema = new Schema<OpGasValues>({
+  perGasInitialMultiplier: { type: Number, required: true, default: 1.5 },
+  perGasIncrement: { type: Number, required: true, default: 1.1 },
+  callDataInitialMultiplier: { type: Number, required: true, default: 1.2 },
+  maxRetries: { type: Number, required: true, default: 5 },
+  timeoutMsBetweenRetries: { type: Number, required: true, default: 5000 },
+  maxFeePerGas: { type: String, required: true, default: '0.5' },
+  maxPriorityFeePerGas: { type: String, required: true, default: '0.05' },
+  verificationGasLimit: { type: Number, required: true, default: 80000 },
+  callGasLimit: { type: Number, required: true, default: 149456 },
+  preVerificationGas: { type: Number, required: true, default: 80000 }
+});
+
 const blockchainSchema = new Schema<IBlockchain>({
   name: { type: String, required: true },
   chainId: { type: Number, required: true },
@@ -61,20 +79,8 @@ const blockchainSchema = new Schema<IBlockchain>({
   gas: {
     useFixedValues: { type: Boolean, required: true },
     operations: {
-      transfer: {
-        maxFeePerGas: { type: String, required: true },
-        maxPriorityFeePerGas: { type: String, required: true },
-        verificationGasLimit: { type: Number, required: true },
-        callGasLimit: { type: Number, required: true },
-        preVerificationGas: { type: Number, required: true }
-      },
-      swap: {
-        maxFeePerGas: { type: String, required: true },
-        maxPriorityFeePerGas: { type: String, required: true },
-        verificationGasLimit: { type: Number, required: true },
-        callGasLimit: { type: Number, required: true },
-        preVerificationGas: { type: Number, required: true }
-      }
+      transfer: { type: opGasSchema, required: true },
+      swap: { type: opGasSchema, required: true }
     }
   },
   balances: {

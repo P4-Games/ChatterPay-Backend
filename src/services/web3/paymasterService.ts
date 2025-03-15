@@ -118,8 +118,8 @@ export async function ensurePaymasterHasEnoughEth(
  * @param {ethers.Contract} entrypointContract - The EntryPoint contract instance to check the Paymaster's balance.
  * @param {string} paymasterContractAddress - The address of the Paymaster contract.
  * @returns {Promise<{ value: BigNumber; inEth: string }>}
- *          - `value`: The Paymaster's deposit balance as a BigNumber.
- *          - `inEth`: The Paymaster's deposit balance formatted as a string in ETH.
+ *   - `value`: The Paymaster's deposit balance as a BigNumber.
+ *   - `inEth`: The Paymaster's deposit balance formatted as a string in ETH.
  */
 export async function getPaymasterEntryPointDepositValue(
   entrypointContract: ethers.Contract,
@@ -135,4 +135,32 @@ export async function getPaymasterEntryPointDepositValue(
     Logger.error('ensurePaymasterHasEnoughEth', error);
     return { value: BigNumber.from('0'), inEth: '' };
   }
+}
+
+/**
+ * Logs the change in the Paymaster's deposit value in the EntryPoint contract.
+ *
+ * @param entryPointContract - The EntryPoint contract instance used to fetch the current Paymaster deposit value.
+ * @param paymasterContractAddress - The address of the Paymaster contract whose deposit value is being tracked.
+ * @param paymasterDepositValuePrev - The previous Paymaster deposit value, including both raw value and its equivalent in ETH.
+ */
+export async function logPaymasterEntryPointDeposit(
+  entryPointContract: ethers.Contract,
+  paymasterContractAddress: string,
+  paymasterDepositValuePrev: { value: BigNumber; inEth: string }
+) {
+  const paymasterDepositValueNow = await getPaymasterEntryPointDepositValue(
+    entryPointContract,
+    paymasterContractAddress
+  );
+  const cost = paymasterDepositValuePrev.value.sub(paymasterDepositValueNow.value);
+  const costInEth = (
+    parseFloat(paymasterDepositValuePrev.inEth) - parseFloat(paymasterDepositValueNow.inEth)
+  ).toFixed(6);
+  Logger.info(
+    'sendTransferUserOperation',
+    `Paymaster pre: ${paymasterDepositValuePrev.value.toString()} (${paymasterDepositValuePrev.inEth}), ` +
+      `Paymaster now: ${paymasterDepositValueNow.value.toString()} (${paymasterDepositValueNow.inEth}), ` +
+      `Cost: ${cost.toString()} (${costInEth} ETH)`
+  );
 }

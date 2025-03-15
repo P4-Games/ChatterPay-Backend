@@ -6,6 +6,7 @@ import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IUser, IUserWallet } from '../models/userModel';
+import { getChatterpayFee } from '../services/commonService';
 import { verifyWalletBalanceInRpc } from '../services/balanceService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import Transaction, { ITransaction } from '../models/transactionModel';
@@ -36,8 +37,8 @@ import {
 } from '../services/userService';
 import {
   sendInternalErrorNotification,
-  sendReceivedTransferNotification,
   sendOutgoingTransferNotification,
+  sendReceivedTransferNotification,
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
@@ -474,7 +475,12 @@ export const makeTransaction = async (
     );
 
     if (!executeTransactionResult.success) {
-      await sendInternalErrorNotification(userWallet.wallet_proxy, channel_user_id, traceHeader);
+      await sendInternalErrorNotification(
+        userWallet.wallet_proxy,
+        channel_user_id,
+        lastBotMsgDelaySeconds,
+        traceHeader
+      );
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       transactionExecutionSpan?.endSpan();
       rootSpan?.endSpan();
@@ -516,14 +522,12 @@ export const makeTransaction = async (
       Logger.log('makeTransaction', `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`);
       await delaySeconds(lastBotMsgDelaySeconds);
     }
-    await sendReceivedTransferNotification(
-      fromUser.phone_number,
-      fromUser.name,
-      toUser.phone_number,
-      amount,
-      tokenSymbol,
-      traceHeader
+
+    const chatterpayFee = await getChatterpayFee(
+      networkConfig.contracts.chatterPayAddress,
+      checkBlockchainConditionsResult.setupContractsResult!.provider
     );
+    const amountAfterFee = parseFloat(amount) - chatterpayFee;
 
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
@@ -532,6 +536,15 @@ export const makeTransaction = async (
       amount,
       tokenSymbol,
       executeTransactionResult.transactionHash,
+      traceHeader
+    );
+
+    await sendReceivedTransferNotification(
+      fromUser.phone_number,
+      fromUser.name,
+      toUser.phone_number,
+      amountAfterFee.toString(),
+      tokenSymbol,
       traceHeader
     );
 

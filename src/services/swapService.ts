@@ -5,8 +5,11 @@ import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
 import { executeUserOperationWithRetry } from './web3/userOperationService';
-import { getPaymasterEntryPointDepositValue } from './web3/paymasterService';
 import { getERC20ABI, getChatterpayABI, getChainlinkPriceFeedABI } from './web3/abiService';
+import {
+  logPaymasterEntryPointDeposit,
+  getPaymasterEntryPointDepositValue
+} from './web3/paymasterService';
 import {
   TokenAddresses,
   ExecuteSwapResult,
@@ -261,6 +264,7 @@ async function checkAndApproveToken(
 
     // Execute approve operation
     try {
+      const userOpGasConfig = networkConfig.gas.operations.swap;
       const approveTransactionResult: ExecueTransactionResult = await executeUserOperationWithRetry(
         networkConfig,
         setupContractsResult.provider,
@@ -270,9 +274,11 @@ async function checkAndApproveToken(
         approveCallData,
         setupContractsResult.proxy.proxyAddress,
         'swap',
-        1.5,
-        1.2,
-        5
+        userOpGasConfig.perGasInitialMultiplier,
+        userOpGasConfig.perGasIncrement,
+        userOpGasConfig.callDataInitialMultiplier,
+        userOpGasConfig.maxRetries,
+        userOpGasConfig.timeoutMsBetweenRetries
       );
 
       if (!approveTransactionResult.success) {
@@ -317,16 +323,16 @@ export async function executeSwap(
 
     // In test environments we should not consider token price as we are using test pools
     const { environment } = networkConfig;
-    const isTestEnvironment = environment === 'TEST';
+    const isTestNetwork = environment === 'TEST';
 
     const abisToFetch = [getChatterpayABI(), getERC20ABI()];
 
-    if (!isTestEnvironment) {
+    if (!isTestNetwork) {
       abisToFetch.push(getChainlinkPriceFeedABI());
     }
 
     const [chatterpayABI, erc20ABI, ...otherABIs] = await Promise.all(abisToFetch);
-    const priceFeedABI = isTestEnvironment ? null : otherABIs[0];
+    const priceFeedABI = isTestNetwork ? null : otherABIs[0];
     Logger.debug('executeSwap', 'ABIs fetched successfully');
 
     // Initialize ChatterPay contract
@@ -373,7 +379,7 @@ export async function executeSwap(
       networkConfig.contracts.paymasterAddress!
     );
 
-    if (!isTestEnvironment && priceFeedABI) {
+    if (!isTestNetwork && priceFeedABI) {
       // Get price feeds and current prices
       Logger.debug('executeSwap', 'Fetching price feeds');
       const [tokenInFeed, tokenOutFeed] = await Promise.all([
@@ -479,6 +485,7 @@ export async function executeSwap(
     );
 
     Logger.info('executeSwap', 'Executing swap operation');
+    const userOpGasConfig = networkConfig.gas.operations.swap;
     const swapTransactionResult: ExecueTransactionResult = await executeUserOperationWithRetry(
       networkConfig,
       setupContractsResult.provider,
@@ -488,25 +495,21 @@ export async function executeSwap(
       swapCallData,
       setupContractsResult.proxy.proxyAddress,
       'swap',
-      1.5,
-      1.2,
-      5
+      userOpGasConfig.perGasInitialMultiplier,
+      userOpGasConfig.perGasIncrement,
+      userOpGasConfig.callDataInitialMultiplier,
+      userOpGasConfig.maxRetries,
+      userOpGasConfig.timeoutMsBetweenRetries
     );
 
-    const paymasterDepositValueNow = await getPaymasterEntryPointDepositValue(
+    if (!swapTransactionResult.success) {
+      throw new Error(swapTransactionResult.error);
+    }
+
+    await logPaymasterEntryPointDeposit(
       entryPointContract,
-      networkConfig.contracts.paymasterAddress!
-    );
-    const cost = paymasterDepositValuePrev.value.sub(paymasterDepositValueNow.value);
-    const costInEth = (
-      parseFloat(paymasterDepositValuePrev.inEth) - parseFloat(paymasterDepositValueNow.inEth)
-    ).toFixed(6);
-
-    Logger.info(
-      'executeSwap',
-      `Paymaster pre: ${paymasterDepositValuePrev.value.toString()} (${paymasterDepositValuePrev.inEth}), ` +
-        `Paymaster now: ${paymasterDepositValueNow.value.toString()} (${paymasterDepositValueNow.inEth}), ` +
-        `Cost: ${cost.toString()} (${costInEth} ETH)`
+      networkConfig.contracts.paymasterAddress!,
+      paymasterDepositValuePrev
     );
 
     Logger.info(
