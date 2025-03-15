@@ -33,6 +33,22 @@ export async function getCoingeckoConversionRates() {
   }
 }
 
+/**
+ * Fetches data for a single token from the CoinGecko API.
+ * @param tokenId The CoinGecko ID of the token
+ * @returns {Promise<object>} The token data or null in case of failure
+ */
+export async function getCoingeckoTokenData(tokenId: string) {
+  try {
+    const url = `${COINGECKO_API_BASE_URL}?ids=${tokenId}&vs_currencies=${RESULT_CURRENCIES.join(',')}`;
+    const response = await axios.get(url);
+    return response.data;
+  } catch (error) {
+    Logger.warn('getCoingeckoTokenData', `Error fetching data for token ${tokenId}:`, error);
+    return null;
+  }
+}
+
 export const coingeckoService = {
   /**
    * Retrieves conversion rates from cache or fetches from CoinGecko if not cached.
@@ -49,5 +65,27 @@ export const coingeckoService = {
     const result = await getCoingeckoConversionRates();
     cache.set(cacheKey, result);
     return result;
+  },
+
+  /**
+   * Retrieves data for a single token, using cache if available
+   * @param tokenId The CoinGecko ID of the token
+   * @returns {Promise<number>} The token price in USD or 0 if not found
+   */
+  getTokenPrice: async (tokenId: string): Promise<number> => {
+    const cacheKey = `token_${tokenId}`;
+    const fromCache = cache.get(cacheKey);
+
+    if (fromCache) {
+      return fromCache as number;
+    }
+
+    const result = await getCoingeckoTokenData(tokenId);
+    if (result?.[tokenId]?.usd) {
+      const price = result[tokenId].usd;
+      cache.set(cacheKey, price);
+      return price;
+    }
+    return 0;
   }
 };
