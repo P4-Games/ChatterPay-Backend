@@ -1,10 +1,10 @@
-import { ethers } from 'ethers';
 import * as crypto from 'crypto';
+import { ethers, BigNumber } from 'ethers';
 
+import { gasService } from './web3/gasService';
 import { Logger } from '../helpers/loggerHelper';
 import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchainModel';
-import { getDynamicGas } from '../helpers/paymasterHelper';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { getChatterPayWalletFactoryABI } from './web3/abiService';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
@@ -91,7 +91,13 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
       'computeProxyAddressFromPhone',
       `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}.`
     );
-    const gasLimit = await getDynamicGas(factory, 'createProxy', [ownerAddress.publicKey]);
+    const gasLimit = await gasService.getDynamicGas(
+      factory,
+      'createProxy',
+      [ownerAddress.publicKey],
+      20,
+      BigNumber.from('700000')
+    );
     const tx = await factory.createProxy(ownerAddress.publicKey, {
       gasLimit
     });

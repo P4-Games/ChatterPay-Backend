@@ -1,6 +1,6 @@
 import PQueue from 'p-queue';
-import { ethers, BigNumber } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
+import { ethers, Contract, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { QUEUE_GAS_INTERVAL } from '../../config/constants';
@@ -324,9 +324,57 @@ const getcallDataGasValues = async (
   };
 };
 
+/**
+ * Calculates a dynamic gas limit for a contract method, including a buffer percentage.
+ * If estimation fails, it falls back to a default gas limit.
+ *
+ * @param {Contract} contract - The contract instance where the method will be executed.
+ * @param {string} methodName - The name of the contract method to estimate gas for.
+ * @param {unknown[]} args - The arguments to pass to the contract method.
+ * @param {number} [gasBufferPercentage=10] - The buffer percentage to add to the estimated gas.
+ * @param {BigNumber} [defaultGasLimit=BigNumber.from('7000000')] - The fallback gas limit if estimation fails.
+ * @returns {Promise<BigNumber>} - The calculated gas limit.
+ */
+const getDynamicGas = async (
+  contract: Contract,
+  methodName: string,
+  args: unknown[],
+  gasBufferPercentage: number = 20,
+  defaultGasLimit: BigNumber = BigNumber.from('250000')
+): Promise<BigNumber> => {
+  const defaultGasMessage = `Default Estimated gas limit for ${methodName}: ${defaultGasLimit.toString()}`;
+
+  try {
+    if (typeof contract[methodName] !== 'function') {
+      throw new Error(`The method ${methodName} doesn't exist in contract.`);
+    }
+
+    try {
+      await contract.callStatic[methodName](...args);
+    } catch (staticError) {
+      Logger.warn('getDynamicGas', `Static call failed for ${methodName}:`, staticError);
+      Logger.log('getDynamicGas', defaultGasMessage);
+      return defaultGasLimit;
+    }
+
+    const estimatedGas: ethers.BigNumber = await contract.estimateGas[methodName](...args);
+    const gasLimit: BigNumber = estimatedGas
+      .mul(BigNumber.from(100 + gasBufferPercentage))
+      .div(BigNumber.from(100));
+    Logger.log('getDynamicGas', `Estimated gas limit for ${methodName}:`, gasLimit.toString());
+
+    return gasLimit;
+  } catch (error) {
+    Logger.warn('getDynamicGas', `Gas estimation failed for ${methodName}:`, error);
+    Logger.log('getDynamicGas', defaultGasMessage);
+    return defaultGasLimit;
+  }
+};
+
 export const gasService = {
   getPaymasterAndData,
   applyPaymasterDataToUserOp,
   getPerGasValues,
-  getcallDataGasValues
+  getcallDataGasValues,
+  getDynamicGas
 };
