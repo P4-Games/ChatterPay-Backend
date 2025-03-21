@@ -234,7 +234,7 @@ export async function issueTokensCore(
   recipientAddress: string,
   fastify: FastifyInstance
 ): Promise<MintResult[]> {
-  const amount: string = '100';
+  const amount: string = '10000';
   const { networkConfig, tokens } = fastify;
 
   // Create provider using network config from decorator.
