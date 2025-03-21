@@ -26,13 +26,7 @@ export async function createPaymasterAndData(
   // Create message hash using abi.encode for compatibility with Solidity
   const encodedData = ethers.utils.defaultAbiCoder.encode(
     ['address', 'uint64', 'uint256', 'address', 'bytes'],
-    [
-      userProxyAddress,
-      expirationTimestamp,
-      actualChainId,
-      entryPointAddress,
-      callData
-    ]
+    [userProxyAddress, expirationTimestamp, actualChainId, entryPointAddress, callData]
   );
 
   const messageHash = ethers.utils.keccak256(encodedData);
