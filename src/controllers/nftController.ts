@@ -7,7 +7,7 @@ import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { icpService } from '../services/icp/icpService';
 import { IUser, IUserWallet } from '../models/userModel';
-import { getDynamicGas } from '../helpers/paymasterHelper';
+import { gasService } from '../services/web3/gasService';
 import { ipfsService } from '../services/ipfs/ipfsService';
 import { ConcurrentOperationsEnum } from '../types/commonType';
 import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
@@ -110,7 +110,7 @@ const mintNftOriginal = async (
       backendSigner.address
     );
 
-    const gasLimit = await getDynamicGas(nftContract, 'mintOriginal', [
+    const gasLimit = await gasService.getDynamicGas(nftContract, 'mintOriginal', [
       recipientAddress,
       bddIdToUseAsUri
     ]);
@@ -163,7 +163,7 @@ const mintNftCopy = async (
       backendSigner.address
     );
 
-    const gasLimit = await getDynamicGas(nftContract, 'mintCopy', [
+    const gasLimit = await gasService.getDynamicGas(nftContract, 'mintCopy', [
       recipientAddress,
       parseInt(originalTOkenId, 10),
       bddIdToUseAsUri

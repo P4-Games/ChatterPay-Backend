@@ -1,4 +1,4 @@
-import { ethers, Signer, Wallet, Contract, BigNumber } from 'ethers';
+import { ethers, Signer, Wallet } from 'ethers';
 
 import { Logger } from './loggerHelper';
 
@@ -52,42 +52,9 @@ export async function createPaymasterAndData(
     expirationBytes: ${expirationBytes}`
   );
 
-  // 4. Concatenate components
   return ethers.utils.hexConcat([
     paymasterAddress,
     ethers.utils.joinSignature(signature),
     expirationBytes
   ]);
-}
-
-/**
- * Get gas limit for a transaction w/ dynamic gas.
- */
-export async function getDynamicGas(
-  contract: Contract,
-  methodName: string,
-  args: unknown[],
-  gasBufferPercentage: number = 10,
-  defaultGasLimit: BigNumber = BigNumber.from('7000000')
-): Promise<BigNumber> {
-  try {
-    // Check if the method exists in the contract
-    if (typeof contract[methodName] !== 'function') {
-      throw new Error(`The method ${methodName} doesn't exist in contract.`);
-    }
-
-    // Try to estimate the gas required for the transaction
-    const estimatedGas: ethers.BigNumber = await contract.estimateGas[methodName](...args);
-
-    // Apply the buffer to the estimated gas
-    const gasLimit: BigNumber = estimatedGas
-      .mul(BigNumber.from(100 + gasBufferPercentage))
-      .div(BigNumber.from(100));
-    Logger.log('getDynamicGas', `Estimated gas limit for ${methodName}:`, gasLimit.toString());
-    return gasLimit;
-  } catch (error) {
-    Logger.warn('getDynamicGas', `Gas estimation failed for ${methodName}:`, error);
-    // If the estimation fails, use the default gas limit
-    return defaultGasLimit;
-  }
 }

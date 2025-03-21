@@ -2,10 +2,14 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { returnErrorResponse } from '../../helpers/requestHelper';
-import { IS_DEVELOPMENT, CORS_ORIGINS_EXCEPTIONS, CORS_ORIGINS_CHECK_POSTMAN } from '../constants';
+import {
+  CORS_ORIGINS,
+  IS_DEVELOPMENT,
+  CORS_ORIGINS_EXCEPTIONS,
+  CORS_ORIGINS_CHECK_POSTMAN
+} from '../constants';
 
 // Get the list of allowed CORS origins from environment variables or default to an empty string
-const CORS_ORIGINS = process.env.CORS_ORIGINS || '';
 const corsAllowedDomains = CORS_ORIGINS.split(',').map((domain) => domain.trim());
 const corsExceptions = CORS_ORIGINS_EXCEPTIONS.split(',').map((path: string) => path.trim());
 
