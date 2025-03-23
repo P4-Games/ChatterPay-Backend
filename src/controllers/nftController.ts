@@ -439,7 +439,10 @@ export const generateNftCopy = async (
     // Verify that the NFT to copy exists
     const nfts: INFT[] = await NFTModel.find({ id });
     if (!nfts || nfts.length === 0) {
-      return await returnErrorResponse(reply, 400, "The NFT doesn't exist.");
+      const msgError = `NFT with id ${id} not found`;
+      Logger.info('generateNftCopy', `${msgError}`);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, msgError);
     }
     const nftCopyOf = nfts[0];
 
@@ -453,6 +456,7 @@ export const generateNftCopy = async (
         'You have another operation in progress. Please wait until it is finished.'
       );
     }
+
     // optimistic response
     Logger.log('generateNftOriginal', 'sending notification: operation in progress');
     await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
