@@ -378,6 +378,8 @@ export const makeTransaction = async (
         NotificationEnum.daily_limit_reached
       );
       Logger.info('makeTransaction', `${message}`);
+      concurrentOperationSpan?.endSpan();
+      rootSpan?.endSpan();
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, message);
     }
