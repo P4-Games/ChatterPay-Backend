@@ -1,11 +1,13 @@
 import { ethers } from 'ethers';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
+import { IUser } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { executeSwap } from '../services/swapService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { setupERC20 } from '../services/web3/contractSetupService';
+import { mongoUserService } from '../services/mongo/mongoUserService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { SIGNING_KEY, COMMON_REPLY_OPERATION_IN_PROGRESS } from '../config/constants';
@@ -113,8 +115,16 @@ export const swap = async (
       return await returnErrorResponse(reply, 400, validationError);
     }
 
+    const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
+    if (!fromUser) {
+      validationError = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
+      Logger.info('swap', validationError);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, validationError);
+    }
+
     /* ***************************************************** */
-    /* 2. swap: open concurrent operation         */
+    /* 2. swap: open concurrent operation                    */
     /* ***************************************************** */
     const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
     if (userOperations) {
