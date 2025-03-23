@@ -491,3 +491,39 @@ export async function SendConcurrecyOperationNotification(
     throw error;
   }
 }
+
+/**
+ * Sends a notification when the user reaches the daily limit for an operation.
+ *
+ * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
+ */
+export async function sendDailyLimitReachedNotification(
+  channel_user_id: string,
+  traceHeader?: string
+) {
+  try {
+    Logger.log(
+      'sendDailyLimitReachedNotification',
+      `Sending notification: daily limit reached for operation to ${channel_user_id}`
+    );
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.daily_limit_reached
+    );
+
+    const payload: chatizaloOperatorReply = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message
+    };
+
+    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
+    pushService.sendPushNotificaton(title, message, channel_user_id); // intentionally not awaited
+    return data;
+  } catch (error) {
+    Logger.error('sendDailyLimitReachedNotification', error);
+    throw error;
+  }
+}
