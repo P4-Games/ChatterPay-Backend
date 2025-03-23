@@ -13,6 +13,7 @@ import { ConcurrentOperationsEnum } from '../types/commonType';
 import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
 import { getChatterPayNFTABI } from '../services/web3/abiService';
 import { downloadAndProcessImage } from '../services/imageService';
+import { mongoUserService } from '../services/mongo/mongoUserService';
 import { sendMintNotification } from '../services/notificationService';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
@@ -242,15 +243,21 @@ export const generateNftOriginal = async (
     return returnErrorResponse(reply, 400, 'Short Url not allowed');
   }
 
-  const userWallet: IUserWallet | null = await getUserWallet(channel_user_id, DEFAULT_CHAIN_ID);
-  if (!userWallet) {
-    Logger.warn('generateNftOriginal', 'Wallet User doesnt exists.');
-    return returnErrorResponse(reply, 400, 'Wallet User doesnt exists.');
+  const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
+  const userWalletByChainId: IUserWallet | null = await getUserWallet(
+    channel_user_id,
+    DEFAULT_CHAIN_ID
+  );
+  if (!fromUser || !userWalletByChainId) {
+    const validationError = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
+    Logger.info('generateNftOriginal', validationError);
+    // must return 200, so the bot displays the message instead of an error!
+    return returnSuccessResponse(reply, validationError);
   }
 
   const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
   if (userOperations) {
-    const validationError = `Concurrent mint original NFT for wallet ${userWallet.wallet_proxy}, phone: ${channel_user_id}.`;
+    const validationError = `Concurrent mint original NFT for wallet ${userWalletByChainId.wallet_proxy}, phone: ${channel_user_id}.`;
     Logger.log('generateNftOriginal', `generateNftOriginal: ${validationError}`);
     // must return 200, so the bot displays the message instead of an error!
     return returnSuccessResponse(
@@ -284,7 +291,7 @@ export const generateNftOriginal = async (
     Logger.info('generateNftOriginal', 'Saving NFT Data into MongoDB');
     mongoData = await NFTModel.create({
       channel_user_id,
-      wallet: userWallet.wallet_proxy,
+      wallet: userWalletByChainId.wallet_proxy,
       id: '0', // tbc later nftData.tokenId.toString(),
       trxId: '0', // tbc later nftData.receipt.transactionHash,
       timestamp: new Date(),
@@ -317,7 +324,7 @@ export const generateNftOriginal = async (
   let nftMintData: NFTMintData;
   try {
     nftMintData = await mintNftOriginal(
-      userWallet.wallet_proxy,
+      userWalletByChainId.wallet_proxy,
       (mongoData._id as ObjectId).toString()
     );
   } catch (error) {
@@ -394,7 +401,7 @@ export const generateNftOriginal = async (
     );
     await delaySeconds(lastBotMsgDelaySeconds);
   }
-  await sendMintNotification(userWallet.wallet_proxy, channel_user_id, nftMintedId);
+  await sendMintNotification(userWalletByChainId.wallet_proxy, channel_user_id, nftMintedId);
   Logger.log('generateNftOriginal', 'NFT minting end.');
 };
 
