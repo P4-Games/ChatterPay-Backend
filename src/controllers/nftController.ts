@@ -6,13 +6,14 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { icpService } from '../services/icp/icpService';
-import { IUser, IUserWallet } from '../models/userModel';
 import { gasService } from '../services/web3/gasService';
+import { IUser, IUserWallet } from '../models/userModel';
 import { ipfsService } from '../services/ipfs/ipfsService';
 import { ConcurrentOperationsEnum } from '../types/commonType';
 import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
 import { getChatterPayNFTABI } from '../services/web3/abiService';
 import { downloadAndProcessImage } from '../services/imageService';
+import { mongoUserService } from '../services/mongo/mongoUserService';
 import { sendMintNotification } from '../services/notificationService';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
@@ -242,15 +243,21 @@ export const generateNftOriginal = async (
     return returnErrorResponse(reply, 400, 'Short Url not allowed');
   }
 
-  const userWallet: IUserWallet | null = await getUserWallet(channel_user_id, DEFAULT_CHAIN_ID);
-  if (!userWallet) {
-    Logger.warn('generateNftOriginal', 'Wallet User doesnt exists.');
-    return returnErrorResponse(reply, 400, 'Wallet User doesnt exists.');
+  const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
+  const userWalletByChainId: IUserWallet | null = await getUserWallet(
+    channel_user_id,
+    DEFAULT_CHAIN_ID
+  );
+  if (!fromUser || !userWalletByChainId) {
+    const validationError = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
+    Logger.info('generateNftOriginal', validationError);
+    // must return 200, so the bot displays the message instead of an error!
+    return returnSuccessResponse(reply, validationError);
   }
 
   const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
   if (userOperations) {
-    const validationError = `Concurrent mint original NFT for wallet ${userWallet.wallet_proxy}, phone: ${channel_user_id}.`;
+    const validationError = `Concurrent mint original NFT for wallet ${userWalletByChainId.wallet_proxy}, phone: ${channel_user_id}.`;
     Logger.log('generateNftOriginal', `generateNftOriginal: ${validationError}`);
     // must return 200, so the bot displays the message instead of an error!
     return returnSuccessResponse(
@@ -284,7 +291,7 @@ export const generateNftOriginal = async (
     Logger.info('generateNftOriginal', 'Saving NFT Data into MongoDB');
     mongoData = await NFTModel.create({
       channel_user_id,
-      wallet: userWallet.wallet_proxy,
+      wallet: userWalletByChainId.wallet_proxy,
       id: '0', // tbc later nftData.tokenId.toString(),
       trxId: '0', // tbc later nftData.receipt.transactionHash,
       timestamp: new Date(),
@@ -317,7 +324,7 @@ export const generateNftOriginal = async (
   let nftMintData: NFTMintData;
   try {
     nftMintData = await mintNftOriginal(
-      userWallet.wallet_proxy,
+      userWalletByChainId.wallet_proxy,
       (mongoData._id as ObjectId).toString()
     );
   } catch (error) {
@@ -385,6 +392,9 @@ export const generateNftOriginal = async (
   } catch (error) {
     Logger.error('generateNftOriginal', 'Error updating NFT in bdd', (error as Error).message);
   }
+
+  await mongoUserService.updateUserOperationCounter(channel_user_id, 'mint_nft');
+
   await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
 
   if (lastBotMsgDelaySeconds > 0) {
@@ -394,7 +404,7 @@ export const generateNftOriginal = async (
     );
     await delaySeconds(lastBotMsgDelaySeconds);
   }
-  await sendMintNotification(userWallet.wallet_proxy, channel_user_id, nftMintedId);
+  await sendMintNotification(userWalletByChainId.wallet_proxy, channel_user_id, nftMintedId);
   Logger.log('generateNftOriginal', 'NFT minting end.');
 };
 
@@ -439,7 +449,10 @@ export const generateNftCopy = async (
     // Verify that the NFT to copy exists
     const nfts: INFT[] = await NFTModel.find({ id });
     if (!nfts || nfts.length === 0) {
-      return await returnErrorResponse(reply, 400, "The NFT doesn't exist.");
+      const msgError = `NFT with id ${id} not found`;
+      Logger.info('generateNftCopy', `${msgError}`);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, msgError);
     }
     const nftCopyOf = nfts[0];
 
@@ -453,6 +466,7 @@ export const generateNftCopy = async (
         'You have another operation in progress. Please wait until it is finished.'
       );
     }
+
     // optimistic response
     Logger.log('generateNftOriginal', 'sending notification: operation in progress');
     await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
@@ -535,6 +549,8 @@ export const generateNftCopy = async (
         }
       }
     );
+
+    await mongoUserService.updateUserOperationCounter(channel_user_id, 'mint_nft_copy');
 
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
 

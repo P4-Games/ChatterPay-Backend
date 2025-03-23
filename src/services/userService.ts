@@ -80,6 +80,13 @@ export const createUserWithWallet = async (
       mint_nft: 0,
       mint_nft_copy: 0,
       withdraw_all: 0
+    },
+    level: 'L1',
+    operations_counters: {
+      transfer: {},
+      swap: {},
+      mint_nft: {},
+      mint_nft_copy: {}
     }
   });
 

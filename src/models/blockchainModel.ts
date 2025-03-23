@@ -13,6 +13,16 @@ export interface OpGasValues {
   preVerificationGas: number;
 }
 
+export interface LimitDetail {
+  unit: string;
+  qtty: number;
+}
+
+export interface OperationLimits {
+  l1: LimitDetail;
+  l2: LimitDetail;
+}
+
 export interface IBlockchain extends Document {
   name: string;
   chainId: number;
@@ -44,6 +54,12 @@ export interface IBlockchain extends Document {
     userSignerMinBalance: string;
     userSignerBalanceToTransfer: string;
   };
+  limits: {
+    transfer: OperationLimits;
+    swap: OperationLimits;
+    nft: OperationLimits;
+    nftCopy: OperationLimits;
+  };
 }
 
 const opGasSchema = new Schema<OpGasValues>({
@@ -57,6 +73,16 @@ const opGasSchema = new Schema<OpGasValues>({
   verificationGasLimit: { type: Number, required: true, default: 80000 },
   callGasLimit: { type: Number, required: true, default: 149456 },
   preVerificationGas: { type: Number, required: true, default: 80000 }
+});
+
+const limitDetailSchema = new Schema<LimitDetail>({
+  unit: { type: String, required: true },
+  qtty: { type: Number, required: true }
+});
+
+const operationLimitsSchema = new Schema<OperationLimits>({
+  l1: { type: limitDetailSchema, required: true },
+  l2: { type: limitDetailSchema, required: true }
 });
 
 const blockchainSchema = new Schema<IBlockchain>({
@@ -89,6 +115,12 @@ const blockchainSchema = new Schema<IBlockchain>({
     backendSignerMinBalance: { type: String, required: true },
     userSignerMinBalance: { type: String, required: true },
     userSignerBalanceToTransfer: { type: String, required: true }
+  },
+  limits: {
+    transfer: { type: operationLimitsSchema, required: true },
+    swap: { type: operationLimitsSchema, required: true },
+    nft: { type: operationLimitsSchema, required: true },
+    nftCopy: { type: operationLimitsSchema, required: true }
   }
 });
 
