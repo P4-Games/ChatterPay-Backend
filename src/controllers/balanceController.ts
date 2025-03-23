@@ -125,8 +125,9 @@ export const balanceByPhoneNumber = async (
   try {
     const user: IUser | null = await mongoUserService.getUser(phone);
     if (!user) {
-      Logger.warn('balanceByPhoneNumber', `User not found for phone number: ${phone}`);
-      return await returnErrorResponse(reply, 404, `User not found for phone number: ${phone}`);
+      const validationError = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
+      Logger.info('balanceByPhoneNumber', validationError);
+      return await returnSuccessResponse(reply, validationError);
     }
 
     const fastify = request.server;
