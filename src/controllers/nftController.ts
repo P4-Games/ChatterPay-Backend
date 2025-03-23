@@ -14,7 +14,7 @@ import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
 import { getChatterPayNFTABI } from '../services/web3/abiService';
 import { downloadAndProcessImage } from '../services/imageService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
-import { sendMintNotification } from '../services/notificationService';
+import { getNotificationTemplate, sendMintNotification } from '../services/notificationService';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
 import {
@@ -38,6 +38,8 @@ import {
   CHATIZALO_PHONE_NUMBER,
   COMMON_REPLY_OPERATION_IN_PROGRESS
 } from '../config/constants';
+import { userReachedOperationLimit } from '../services/blockchainService';
+import { NotificationEnum } from '../models/templateModel';
 
 export interface NFTInfo {
   description: string;
@@ -265,6 +267,22 @@ export const generateNftOriginal = async (
       'You have another operation in progress. Please wait until it is finished.'
     );
   }
+
+  const userReachedOpLimit = await userReachedOperationLimit(
+    request.server.networkConfig,
+    channel_user_id,
+    'mint_nft'
+  );
+  if (userReachedOpLimit) {
+    const { message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.daily_limit_reached
+    );
+    Logger.info('generateNftOriginal', `${message}`);
+    // must return 200, so the bot displays the message instead of an error!
+    return returnSuccessResponse(reply, message);
+  }
+
   await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
 
   // optimistic response
@@ -459,12 +477,27 @@ export const generateNftCopy = async (
     const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
     if (userOperations) {
       const validationError = `Concurrent mint copy NFT for phone: ${channel_user_id}.`;
-      Logger.log('generateNftCopy', `${validationError}`);
+      Logger.info('generateNftCopy', `${validationError}`);
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(
         reply,
         'You have another operation in progress. Please wait until it is finished.'
       );
+    }
+
+    const userReachedOpLimit = await userReachedOperationLimit(
+      request.server.networkConfig,
+      channel_user_id,
+      'mint_nft_copy'
+    );
+    if (userReachedOpLimit) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.daily_limit_reached
+      );
+      Logger.info('generateNftOriginal', `${message}`);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, message);
     }
 
     // optimistic response

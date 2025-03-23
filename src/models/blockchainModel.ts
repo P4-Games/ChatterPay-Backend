@@ -14,13 +14,12 @@ export interface OpGasValues {
 }
 
 export interface LimitDetail {
-  unit: string;
-  qtty: number;
+  [unit: string]: number;
 }
 
 export interface OperationLimits {
-  l1: LimitDetail;
-  l2: LimitDetail;
+  L1: LimitDetail;
+  L2: LimitDetail;
 }
 
 export interface IBlockchain extends Document {
@@ -57,8 +56,8 @@ export interface IBlockchain extends Document {
   limits: {
     transfer: OperationLimits;
     swap: OperationLimits;
-    nft: OperationLimits;
-    nftCopy: OperationLimits;
+    mint_nft: OperationLimits;
+    mint_nft_copy: OperationLimits;
   };
 }
 
@@ -75,14 +74,11 @@ const opGasSchema = new Schema<OpGasValues>({
   preVerificationGas: { type: Number, required: true, default: 80000 }
 });
 
-const limitDetailSchema = new Schema<LimitDetail>({
-  unit: { type: String, required: true },
-  qtty: { type: Number, required: true }
-});
+const limitDetailSchema = new Schema<LimitDetail>({}, { typeKey: '$type', strict: false });
 
 const operationLimitsSchema = new Schema<OperationLimits>({
-  l1: { type: limitDetailSchema, required: true },
-  l2: { type: limitDetailSchema, required: true }
+  L1: { type: limitDetailSchema, required: true },
+  L2: { type: limitDetailSchema, required: true }
 });
 
 const blockchainSchema = new Schema<IBlockchain>({
@@ -119,8 +115,8 @@ const blockchainSchema = new Schema<IBlockchain>({
   limits: {
     transfer: { type: operationLimitsSchema, required: true },
     swap: { type: operationLimitsSchema, required: true },
-    nft: { type: operationLimitsSchema, required: true },
-    nftCopy: { type: operationLimitsSchema, required: true }
+    mint_nft: { type: operationLimitsSchema, required: true },
+    mint_nft_copy: { type: operationLimitsSchema, required: true }
   }
 });
 

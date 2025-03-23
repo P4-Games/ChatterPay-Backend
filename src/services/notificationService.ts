@@ -32,7 +32,7 @@ const notificationTemplateCache = new NodeCache({ stdTTL: NOTIFICATION_TEMPLATE_
  * @param typeOfNotification - The type of notification to retrieve, defined by `NotificationEnum`.
  * @returns A Promise resolving to an object containing the notification's title and message.
  */
-async function getNotificationTemplate(
+export async function getNotificationTemplate(
   channelUserId: string,
   typeOfNotification: NotificationEnum
 ): Promise<{ title: string; message: string }> {

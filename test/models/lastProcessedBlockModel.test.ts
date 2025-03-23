@@ -74,20 +74,20 @@ describe('Blockchain Model', () => {
       },
       limits: {
         transfer: {
-          l1: { unit: 'D', qtty: 30 },
-          l2: { unit: 'D', qtty: 50 }
+          L1: { D: 30 },
+          L2: { D: 100 }
         },
         swap: {
-          l1: { unit: 'D', qtty: 30 },
-          l2: { unit: 'D', qtty: 50 }
+          L1: { D: 30 },
+          L2: { D: 100 }
         },
-        nft: {
-          l1: { unit: 'D', qtty: 10 },
-          l2: { unit: 'D', qtty: 40 }
+        mint_nft: {
+          L1: { D: 10 },
+          L2: { D: 40 }
         },
-        nftCopy: {
-          l1: { unit: 'D', qtty: 10 },
-          l2: { unit: 'D', qtty: 40 }
+        mint_nft_copy: {
+          L1: { D: 10 },
+          L2: { D: 40 }
         }
       }
     });
@@ -99,8 +99,8 @@ describe('Blockchain Model', () => {
     expect(savedBlockchain.chainId).toBe(validBlockchain.chainId);
     expect(savedBlockchain.gas.operations.transfer.maxFeePerGas).toBe('0.5');
     expect(savedBlockchain.balances.paymasterMinBalance).toBe('0.05');
-    expect(savedBlockchain.limits.transfer.l1.qtty).toBe(30);
-    expect(savedBlockchain.limits.nft.l2.qtty).toBe(40);
+    expect(savedBlockchain.limits.transfer.L1.D).toBe(30);
+    expect(savedBlockchain.limits.mint_nft.L2.D).toBe(40);
   });
 
   it('should fail to save without required fields', async () => {
@@ -168,20 +168,20 @@ describe('Blockchain Model', () => {
       },
       limits: {
         transfer: {
-          l1: { unit: 'D', qtty: 30 },
-          l2: { unit: 'D', qtty: 50 }
+          L1: { D: 30 },
+          L2: { D: 100 }
         },
         swap: {
-          l1: { unit: 'D', qtty: 30 },
-          l2: { unit: 'D', qtty: 50 }
+          L1: { D: 30 },
+          L2: { D: 100 }
         },
-        nft: {
-          l1: { unit: 'D', qtty: 10 },
-          l2: { unit: 'D', qtty: 40 }
+        mint_nft: {
+          L1: { D: 10 },
+          L2: { D: 40 }
         },
-        nftCopy: {
-          l1: { unit: 'D', qtty: 10 },
-          l2: { unit: 'D', qtty: 40 }
+        mint_nft_copy: {
+          L1: { D: 10 },
+          L2: { D: 40 }
         }
       }
     });
@@ -192,6 +192,6 @@ describe('Blockchain Model', () => {
     expect(savedBlockchain.contracts.paymasterAddress).toBe('');
     expect(savedBlockchain.gas.operations.transfer.maxFeePerGas).toBe('0.5');
     expect(savedBlockchain.balances.userSignerMinBalance).toBe('0.0008');
-    expect(savedBlockchain.limits.swap.l2.qtty).toBe(50);
+    expect(savedBlockchain.limits.swap.L2.D).toBe(100);
   });
 });
