@@ -289,13 +289,15 @@ export async function checkBlockchainConditions(
  * @param networkConfig - Blockchain network configuration containing the chainId.
  * @param phoneNumber - User's phone number identifier.
  * @param operationType - Type of operation being performed ('transfer', 'swap', 'mint_nft', 'mint_nft_copy').
+ * @param limitUnit - Limit Unit
  *
  * @returns `true` if the user has reached or exceeded the daily operation limit; otherwise, `false`.
  */
 export async function userReachedOperationLimit(
   networkConfig: IBlockchain,
   phoneNumber: string,
-  operationType: 'transfer' | 'swap' | 'mint_nft' | 'mint_nft_copy'
+  operationType: 'transfer' | 'swap' | 'mint_nft' | 'mint_nft_copy',
+  limitUnit: 'D' = 'D'
 ): Promise<boolean> {
   const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
 
@@ -327,7 +329,7 @@ export async function userReachedOperationLimit(
       return false;
     }
 
-    const userLevel = (user.level || 'l1').toLowerCase() as keyof OperationLimits;
+    const userLevel = (user.level || 'L1').toUpperCase() as keyof OperationLimits;
     const limitForOp = blockchain.limits[operationType]?.[userLevel];
 
     if (!limitForOp) {
@@ -339,13 +341,14 @@ export async function userReachedOperationLimit(
     }
 
     const currentCount = user.operations_counters?.[operationType]?.[currentDate] || 0;
+    const limit = limitForOp[limitUnit];
 
     Logger.info(
       'checkUserOperationLimit',
-      `User: ${phoneNumber}, Operation: ${operationType}, Date: ${currentDate}, Count: ${currentCount}, Limit: ${limitForOp.qtty}`
+      `User: ${phoneNumber}, Operation: ${operationType}, Date: ${currentDate}, Count: ${currentCount}, Limit: ${limit}`
     );
 
-    return currentCount >= limitForOp.qtty;
+    return currentCount >= limit;
   } catch (error) {
     Logger.error(
       'checkUserOperationLimit',

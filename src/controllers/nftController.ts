@@ -9,14 +9,16 @@ import { icpService } from '../services/icp/icpService';
 import { gasService } from '../services/web3/gasService';
 import { IUser, IUserWallet } from '../models/userModel';
 import { ipfsService } from '../services/ipfs/ipfsService';
+import { NotificationEnum } from '../models/templateModel';
 import { ConcurrentOperationsEnum } from '../types/commonType';
 import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
 import { getChatterPayNFTABI } from '../services/web3/abiService';
 import { downloadAndProcessImage } from '../services/imageService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
-import { getNotificationTemplate, sendMintNotification } from '../services/notificationService';
+import { userReachedOperationLimit } from '../services/blockchainService';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
+import { sendMintNotification, getNotificationTemplate } from '../services/notificationService';
 import {
   returnErrorResponse,
   returnSuccessResponse,
@@ -38,8 +40,6 @@ import {
   CHATIZALO_PHONE_NUMBER,
   COMMON_REPLY_OPERATION_IN_PROGRESS
 } from '../config/constants';
-import { userReachedOperationLimit } from '../services/blockchainService';
-import { NotificationEnum } from '../models/templateModel';
 
 export interface NFTInfo {
   description: string;

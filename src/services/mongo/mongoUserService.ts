@@ -216,5 +216,41 @@ export const mongoUserService = {
       );
     }
     return language;
+  },
+
+  /**
+   * Reset the entire operations_counters field for a specific user.
+   *
+   * @param {string} phoneNumber - The user's phone number to identify them.
+   * @returns {Promise<void>}
+   */
+  resetrUserOperationCounters: async (phoneNumber: string): Promise<void> => {
+    try {
+      Logger.info(
+        'resetrUserOperationCounters',
+        `Resetting operations_counters for user ${phoneNumber}`
+      );
+
+      await UserModel.updateOne(
+        { phone_number: phoneNumber },
+        {
+          $set: {
+            operations_counters: {
+              transfer: {},
+              swap: {},
+              mint_nft: {},
+              mint_nft_copy: {}
+            }
+          }
+        }
+      );
+    } catch (error) {
+      // avoid throw error
+      Logger.error(
+        'resetrUserOperationCounters',
+        `Error Resetting operations_counters for user ${phoneNumber}`,
+        (error as Error).message
+      );
+    }
   }
 };

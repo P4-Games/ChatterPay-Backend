@@ -6,6 +6,7 @@ import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IUser, IUserWallet } from '../models/userModel';
+import { NotificationEnum } from '../models/templateModel';
 import { getChatterpayFee } from '../services/commonService';
 import { verifyWalletBalanceInRpc } from '../services/balanceService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
@@ -40,14 +41,13 @@ import {
   hasUserAnyOperationInProgress
 } from '../services/userService';
 import {
+  getNotificationTemplate,
   sendInternalErrorNotification,
   sendOutgoingTransferNotification,
   sendReceivedTransferNotification,
   sendUserInsufficientBalanceNotification,
-  sendNoValidBlockchainConditionsNotification,
-  getNotificationTemplate
+  sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
-import { NotificationEnum } from '../models/templateModel';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {

@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 
 import {
   resetUsersOperations,
+  resetUsersOperationLimits,
   checkUsersWithOpenOperations,
   resetUsersOperationsWithTimeCondition
 } from '../controllers/supportController';
@@ -72,6 +73,16 @@ const supportRoutes = async (fastify: FastifyInstance): Promise<void> => {
     '/support/reset_users_operations_time_condition',
     resetUsersOperationsWithTimeCondition
   );
+
+  /**
+   * Route to clear the operations_counters field for a specific user.
+   * This removes the full `operations_counters` object, resetting all usage tracking.
+   *
+   * @route PUT /support/reset_user_operations_counters
+   * @bodyParam {string} phoneNumber - The user's phone number (sent in the request body or query depending on implementation).
+   * @returns {Object} Confirmation message of successful reset.
+   */
+  fastify.put('/support/reset_user_operations_counters', resetUsersOperationLimits);
 };
 
 export default supportRoutes;

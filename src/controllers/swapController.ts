@@ -5,6 +5,7 @@ import { IUser } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { executeSwap } from '../services/swapService';
+import { NotificationEnum } from '../models/templateModel';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { setupERC20 } from '../services/web3/contractSetupService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
@@ -13,15 +14,15 @@ import { mongoTransactionService } from '../services/mongo/mongoTransactionServi
 import { SIGNING_KEY, COMMON_REPLY_OPERATION_IN_PROGRESS } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import {
-  getTokensAddresses,
-  checkBlockchainConditions,
-  userReachedOperationLimit
-} from '../services/blockchainService';
-import {
   openOperation,
   closeOperation,
   hasPhoneAnyOperationInProgress
 } from '../services/userService';
+import {
+  getTokensAddresses,
+  checkBlockchainConditions,
+  userReachedOperationLimit
+} from '../services/blockchainService';
 import {
   TokenAddresses,
   TransactionData,
@@ -31,12 +32,11 @@ import {
 } from '../types/commonType';
 import {
   sendSwapNotification,
+  getNotificationTemplate,
   sendInternalErrorNotification,
   sendUserInsufficientBalanceNotification,
-  sendNoValidBlockchainConditionsNotification,
-  getNotificationTemplate
+  sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
-import { NotificationEnum } from '../models/templateModel';
 
 interface SwapBody {
   channel_user_id: string;

@@ -2,7 +2,11 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { mongoUserService } from '../services/mongo/mongoUserService';
-import { returnSuccessResponse, returnErrorResponse500 } from '../helpers/requestHelper';
+import {
+  returnErrorResponse,
+  returnSuccessResponse,
+  returnErrorResponse500
+} from '../helpers/requestHelper';
 
 /**
  * Handler to check for users with open operations in progress.
@@ -70,6 +74,34 @@ export const resetUsersOperationsWithTimeCondition = async (
     );
   } catch (error) {
     Logger.error('resetUsersOperationsWithTimeCondition', error);
+    return returnErrorResponse500(reply);
+  }
+};
+
+/**
+ * Handler to clear all operation counters for one user
+ * Sets the `operations_counters` field to an empty object for the user.
+ *
+ * @param {FastifyRequest} request - The incoming Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object for sending the response.
+ * @returns {Promise<FastifyReply>} A response containing the number of users updated.
+ */
+export const resetUsersOperationLimits = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  try {
+    if (!request.body) {
+      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+    }
+
+    const { channel_user_id } = request.body as { channel_user_id: string };
+
+    await mongoUserService.resetrUserOperationCounters(channel_user_id);
+
+    return await returnSuccessResponse(reply, `user operation counters have been cleared.`);
+  } catch (error) {
+    Logger.error('clearUsersOperationLimits', error);
     return returnErrorResponse500(reply);
   }
 };
