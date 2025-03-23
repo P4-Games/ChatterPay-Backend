@@ -316,9 +316,11 @@ export const makeTransaction = async (
 
     const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
     if (!fromUser) {
-      validationError = 'User not found. You must have an account to make a transaction';
+      validationError = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
       rootSpan?.endSpan();
-      return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
+      Logger.info('makeTransaction', validationError);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, validationError);
     }
 
     const userWallet: IUserWallet | null = getUserWalletByChainId(
