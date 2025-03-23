@@ -26,13 +26,13 @@ import {
 const notificationTemplateCache = new NodeCache({ stdTTL: NOTIFICATION_TEMPLATE_CACHE_TTL });
 
 /**
- * Get Notification Template based on channel User Id and Notification Type
+ * Retrieves a notification template based on the user's channel ID and the specified notification type.
  *
- * @param channelUserId
- * @param typeOfNotification
- * @returns
+ * @param channelUserId - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @param typeOfNotification - The type of notification to retrieve, defined by `NotificationEnum`.
+ * @returns A Promise resolving to an object containing the notification's title and message.
  */
-async function getNotificationTemplate(
+export async function getNotificationTemplate(
   channelUserId: string,
   typeOfNotification: NotificationEnum
 ): Promise<{ title: string; message: string }> {
@@ -85,10 +85,11 @@ async function getNotificationTemplate(
 }
 
 /**
- * Sends wallet creation notification.
+ * Sends a notification when a user's wallet is successfully created.
  *
- * @param address_of_user
- * @param channel_user_id
+ * @param address_of_user - The blockchain address of the newly created wallet.
+ * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @returns A Promise resolving to the result of the notification operation.
  */
 export async function sendWalletCreationNotification(
   address_of_user: string,
@@ -114,14 +115,15 @@ export async function sendWalletCreationNotification(
 }
 
 /**
- * Sends a notification for a received transfer
+ * Sends a notification for a received transfer.
  *
- * @param phoneNumberFrom
- * @param nameFrom
- * @param phoneNumberTo
- * @param amount
- * @param token
- * @returns
+ * @param phoneNumberFrom - Sender's phone number.
+ * @param nameFrom - Sender's name.
+ * @param phoneNumberTo - Recipient's phone number.
+ * @param amount - Amount received.
+ * @param token - Token symbol or identifier (e.g., ETH, USDT).
+ * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
+ * @returns A Promise resolving to the result of the notification operation.
  */
 export async function sendReceivedTransferNotification(
   phoneNumberFrom: string,
@@ -177,15 +179,16 @@ export async function sendReceivedTransferNotification(
 }
 
 /**
- * Sends a notification for a swap.
+ * Sends a notification for a completed token swap.
  *
- * @param channel_user_id
- * @param token
- * @param amount
- * @param result
- * @param outputToken
- * @param transactionHash
- * @returns
+ * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @param token - Symbol or identifier of the input token being swapped.
+ * @param amount - Amount of the input token swapped.
+ * @param result - Amount of the output token received.
+ * @param outputToken - Symbol or identifier of the token received after the swap.
+ * @param transactionHash - Blockchain transaction hash of the swap operation.
+ * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
+ * @returns A Promise resolving to the result of the notification operation.
  */
 export async function sendSwapNotification(
   channel_user_id: string,
@@ -230,12 +233,13 @@ export async function sendSwapNotification(
 }
 
 /**
- * Sends a notification for minted certificates and on-chain memories.
+ * Sends a notification when a certificate or on-chain memory has been minted.
  *
- * @param address_of_user
- * @param channel_user_id
- * @param id
- * @returns
+ * @param address_of_user - The blockchain address of the user.
+ * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @param id - The unique identifier of the minted certificate or memory.
+ * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
+ * @returns A Promise resolving to the result of the notification operation.
  */
 export async function sendMintNotification(
   address_of_user: string,
@@ -272,14 +276,14 @@ export async function sendMintNotification(
 /**
  * Sends a notification for an outgoing transfer.
  *
- * @param phoneNumberFrom
- * @param phoneNumberTo
- * @param toName
- * @param amount
- * @param token
- * @param txHash
- * @param traceHeader
- * @returns
+ * @param phoneNumberFrom - Sender's phone number.
+ * @param phoneNumberTo - Recipient's phone number.
+ * @param toName - Recipient's name.
+ * @param amount - Amount transferred.
+ * @param token - Token symbol or identifier (e.g., ETH, USDT).
+ * @param txHash - Blockchain transaction hash of the transfer.
+ * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
+ * @returns A Promise resolving to the result of the notification operation.
  */
 export async function sendOutgoingTransferNotification(
   phoneNumberFrom: string,
@@ -335,8 +339,9 @@ export async function sendOutgoingTransferNotification(
 /**
  * Sends a notification when user balance not enough
  *
- * @param address_of_user
- * @param channel_user_id
+ * @param address_of_user - The blockchain address of the user.
+ * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  */
 export async function sendUserInsufficientBalanceNotification(
   address_of_user: string,
@@ -370,10 +375,11 @@ export async function sendUserInsufficientBalanceNotification(
 }
 
 /**
- * Sends a notification when blockchain condition are invalid
+ * Sends a notification when blockchain conditions are invalid.
  *
- * @param address_of_user
- * @param channel_user_id
+ * @param address_of_user - The blockchain address of the user.
+ * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  */
 export async function sendNoValidBlockchainConditionsNotification(
   address_of_user: string,
@@ -407,10 +413,12 @@ export async function sendNoValidBlockchainConditionsNotification(
 }
 
 /**
- * Sends a notification when internal error
+ * Sends a notification when an internal error occurs.
  *
- * @param address_of_user
- * @param channel_user_id
+ * @param address_of_user - The blockchain address of the user.
+ * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @param lastBotMsgDelaySeconds - (Optional) Delay in seconds since the last bot message was sent. Defaults to 0.
+ * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  */
 export async function sendInternalErrorNotification(
   address_of_user: string,
@@ -459,10 +467,10 @@ export async function sendInternalErrorNotification(
 /**
  * Sends a notification when the user has concurrent operations.
  *
- * @param address_of_user
- * @param channel_user_id
+ * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  */
-export async function SendConcurrecyOperationNotification(
+export async function sendConcurrecyOperationNotification(
   channel_user_id: string,
   traceHeader?: string
 ) {
@@ -488,6 +496,42 @@ export async function SendConcurrecyOperationNotification(
     return data;
   } catch (error) {
     Logger.error('SendConcurrecyOperationNotification', error);
+    throw error;
+  }
+}
+
+/**
+ * Sends a notification when the user reaches the daily limit for an operation.
+ *
+ * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
+ */
+export async function sendDailyLimitReachedNotification(
+  channel_user_id: string,
+  traceHeader?: string
+) {
+  try {
+    Logger.log(
+      'sendDailyLimitReachedNotification',
+      `Sending notification: daily limit reached for operation to ${channel_user_id}`
+    );
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.daily_limit_reached
+    );
+
+    const payload: chatizaloOperatorReply = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message
+    };
+
+    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
+    pushService.sendPushNotificaton(title, message, channel_user_id); // intentionally not awaited
+    return data;
+  } catch (error) {
+    Logger.error('sendDailyLimitReachedNotification', error);
     throw error;
   }
 }

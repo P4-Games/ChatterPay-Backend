@@ -5,6 +5,7 @@ import { IUser } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { executeSwap } from '../services/swapService';
+import { NotificationEnum } from '../models/templateModel';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { setupERC20 } from '../services/web3/contractSetupService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
@@ -12,12 +13,16 @@ import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { SIGNING_KEY, COMMON_REPLY_OPERATION_IN_PROGRESS } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
-import { getTokensAddresses, checkBlockchainConditions } from '../services/blockchainService';
 import {
   openOperation,
   closeOperation,
   hasPhoneAnyOperationInProgress
 } from '../services/userService';
+import {
+  getTokensAddresses,
+  checkBlockchainConditions,
+  userReachedOperationLimit
+} from '../services/blockchainService';
 import {
   TokenAddresses,
   TransactionData,
@@ -27,6 +32,7 @@ import {
 } from '../types/commonType';
 import {
   sendSwapNotification,
+  getNotificationTemplate,
   sendInternalErrorNotification,
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
@@ -115,6 +121,9 @@ export const swap = async (
       return await returnErrorResponse(reply, 400, validationError);
     }
 
+    /* ***************************************************** */
+    /* 2. swap: check user has wallet                        */
+    /* ***************************************************** */
     const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
     if (!fromUser) {
       validationError = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
@@ -124,7 +133,25 @@ export const swap = async (
     }
 
     /* ***************************************************** */
-    /* 2. swap: open concurrent operation                    */
+    /* 3. swap: check operation limit                        */
+    /* ***************************************************** */
+    const userReachedOpLimit = await userReachedOperationLimit(
+      request.server.networkConfig,
+      channel_user_id,
+      'swap'
+    );
+    if (userReachedOpLimit) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.daily_limit_reached
+      );
+      Logger.info('swap', `${message}`);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, message);
+    }
+
+    /* ***************************************************** */
+    /* 4. swap: check concurrent operation                    */
     /* ***************************************************** */
     const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
     if (userOperations) {
@@ -136,19 +163,18 @@ export const swap = async (
         'You have another operation in progress. Please wait until it is finished.'
       );
     }
-    await openOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
 
     /* ***************************************************** */
-    /* 3. swap: send initial response                        */
+    /* 4. swap: send initial response                        */
     /* ***************************************************** */
     // optimistic response
+    await openOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
     Logger.log('swap', 'sending notification: operation in progress');
     await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
 
     /* ***************************************************** */
-    /* 4. swap: check user balance                           */
+    /* 5. swap: check user balance                           */
     /* ***************************************************** */
-
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const { proxyAddress } = await computeProxyAddressFromPhone(channel_user_id);
@@ -176,7 +202,7 @@ export const swap = async (
     }
 
     /* ***************************************************** */
-    /* 5. swap: check blockchain conditions                  */
+    /* 7. swap: check blockchain conditions                  */
     /* ***************************************************** */
     const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
       await checkBlockchainConditions(networkConfig, channel_user_id);
@@ -188,9 +214,8 @@ export const swap = async (
     }
 
     /* ***************************************************** */
-    /* 6. swap: make operation                               */
+    /* 8. swap: make operation                               */
     /* ***************************************************** */
-
     const executeSwapResult: ExecuteSwapResult = await executeSwap(
       networkConfig,
       checkBlockchainConditionsResult.setupContractsResult!,
@@ -207,9 +232,8 @@ export const swap = async (
     }
 
     /* ***************************************************** */
-    /* 7. swap: update database with result                  */
+    /* 9. swap: update database with result                  */
     /* ***************************************************** */
-
     // Get the new balances after the transaction
     const fromTokenNewBalance = await fromTokenContract.balanceOf(proxyAddress);
     const toTokenNewBalance = await toTokenContract.balanceOf(proxyAddress);
@@ -229,7 +253,7 @@ export const swap = async (
     // Save transactions OUT
     Logger.log('swap', 'Updating swap transactions in database.');
     const transactionOut: TransactionData = {
-      tx: executeSwapResult.approveTransactionHash || '0x',
+      tx: executeSwapResult.swapTransactionHash || '0x',
       walletFrom: proxyAddress,
       walletTo: networkConfig.contracts.routerAddress!,
       amount: fromTokensSentInUnits,
@@ -251,9 +275,12 @@ export const swap = async (
     };
     await mongoTransactionService.saveTransaction(transactionIn);
 
+    await mongoUserService.updateUserOperationCounter(channel_user_id, 'swap');
+
     /* ***************************************************** */
-    /* 8. swap: send notification to user                    */
+    /* 10. swap: send notification to user                   */
     /* ***************************************************** */
+
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
 
     if (lastBotMsgDelaySeconds > 0) {

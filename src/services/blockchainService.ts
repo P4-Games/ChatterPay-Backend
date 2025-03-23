@@ -1,13 +1,14 @@
 import { ethers } from 'ethers';
 
 import { IToken } from '../models/tokenModel';
+import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getEntryPointABI } from './web3/abiService';
-import { IBlockchain } from '../models/blockchainModel';
 import { setupContracts } from './web3/contractSetupService';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { ensurePaymasterHasEnoughEth } from './web3/paymasterService';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
+import { IBlockchain, OperationLimits } from '../models/blockchainModel';
 import {
   TokenAddresses,
   SetupContractReturn,
@@ -278,5 +279,82 @@ export async function checkBlockchainConditions(
   } catch (error: unknown) {
     Logger.error('checkBlockchainConditions', `${error}`);
     return { success: false, setupContractsResult: null, entryPointContract: null };
+  }
+}
+
+/**
+ * Checks whether a user has reached or exceeded the allowed daily operation limit
+ * for a specific operation type on the provided blockchain network.
+ *
+ * @param networkConfig - Blockchain network configuration containing the chainId.
+ * @param phoneNumber - User's phone number identifier.
+ * @param operationType - Type of operation being performed ('transfer', 'swap', 'mint_nft', 'mint_nft_copy').
+ * @param limitUnit - Limit Unit
+ *
+ * @returns `true` if the user has reached or exceeded the daily operation limit; otherwise, `false`.
+ */
+export async function userReachedOperationLimit(
+  networkConfig: IBlockchain,
+  phoneNumber: string,
+  operationType: 'transfer' | 'swap' | 'mint_nft' | 'mint_nft_copy',
+  limitUnit: 'D' = 'D'
+): Promise<boolean> {
+  const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
+  try {
+    const blockchain: IBlockchain | null = await mongoBlockchainService.getBlockchain(
+      networkConfig.chainId
+    );
+
+    if (!blockchain) {
+      Logger.error(
+        'checkUserOperationLimit',
+        `blockchain not found for chainId: ${networkConfig.chainId}`
+      );
+      return false;
+    }
+
+    const user = await UserModel.findOne({ phone_number: phoneNumber }).lean();
+
+    if (!user) {
+      Logger.error('checkUserOperationLimit', `User not found: ${phoneNumber}`);
+      return false;
+    }
+
+    if (!blockchain.limits) {
+      Logger.error(
+        'checkUserOperationLimit',
+        `Limits configuration not found for blockchain ${blockchain.name}`
+      );
+      return false;
+    }
+
+    const userLevel = (user.level || 'L1').toUpperCase() as keyof OperationLimits;
+    const limitForOp = blockchain.limits[operationType]?.[userLevel];
+
+    if (!limitForOp) {
+      Logger.error(
+        'checkUserOperationLimit',
+        `Limit configuration missing for ${operationType} at level ${userLevel}`
+      );
+      return false;
+    }
+
+    const currentCount = user.operations_counters?.[operationType]?.[currentDate] || 0;
+    const limit = limitForOp[limitUnit];
+
+    Logger.info(
+      'checkUserOperationLimit',
+      `User: ${phoneNumber}, Operation: ${operationType}, Date: ${currentDate}, Count: ${currentCount}, Limit: ${limit}`
+    );
+
+    return currentCount >= limit;
+  } catch (error) {
+    Logger.error(
+      'checkUserOperationLimit',
+      `Error validating limits for ${operationType}`,
+      (error as Error).message
+    );
+    return false;
   }
 }
