@@ -81,6 +81,24 @@ describe('Blockchain Model', () => {
         backendSignerMinBalance: '0.01',
         userSignerMinBalance: '0.0008',
         userSignerBalanceToTransfer: '0.001'
+      },
+      limits: {
+        transfer: {
+          L1: { D: 30 },
+          L2: { D: 100 }
+        },
+        swap: {
+          L1: { D: 30 },
+          L2: { D: 100 }
+        },
+        mint_nft: {
+          L1: { D: 10 },
+          L2: { D: 40 }
+        },
+        mint_nft_copy: {
+          L1: { D: 10 },
+          L2: { D: 40 }
+        }
       }
     });
 
@@ -91,5 +109,7 @@ describe('Blockchain Model', () => {
     expect(savedBlockchain.chainId).toBe(validBlockchain.chainId);
     expect(savedBlockchain.gas.operations.transfer.maxFeePerGas).toBe('0.5');
     expect(savedBlockchain.balances.paymasterMinBalance).toBe('0.05');
+    expect(savedBlockchain.limits.transfer.L1.D).toBe(30);
+    expect(savedBlockchain.limits.mint_nft.L2.D).toBe(40);
   });
 });
