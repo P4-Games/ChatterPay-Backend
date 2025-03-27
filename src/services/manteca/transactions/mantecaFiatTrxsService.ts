@@ -46,7 +46,7 @@ export const mantecaFiatTrxsService = {
     endDate?: string
   ) => {
     try {
-      const response = await axios.get(`${MANTECA_BASE_URL}/crypto/v1/fiat/deposit/`, {
+      const response = await axios.get(`${MANTECA_BASE_URL}/fiat/deposit/`, {
         params: {
           userId,
           page: page.toString(),
@@ -110,7 +110,7 @@ export const mantecaFiatTrxsService = {
     endDate?: string
   ) => {
     try {
-      const response = await axios.get(`${MANTECA_BASE_URL}/crypto/v1/fiat/withdraw/`, {
+      const response = await axios.get(`${MANTECA_BASE_URL}/fiat/withdraw/`, {
         params: {
           userId,
           page: page.toString(),
@@ -161,7 +161,7 @@ export const mantecaFiatTrxsService = {
   initiateWithdrawal: async (userId: string, coin: string, cbu: string, amount: string) => {
     try {
       const response = await axios.post(
-        `${MANTECA_BASE_URL}/crypto/v1/fiat/withdraw`,
+        `${MANTECA_BASE_URL}/fiat/withdraw`,
         {
           userId,
           coin,
@@ -208,7 +208,7 @@ export const mantecaFiatTrxsService = {
   getWithdrawalById: async (withdrawalId: string): Promise<MantecaTransaction> => {
     try {
       const response = await axios.get(
-        `${MANTECA_BASE_URL}/crypto/v1/fiat/withdraw/${withdrawalId}`,
+        `${MANTECA_BASE_URL}/fiat/withdraw/${withdrawalId}`,
         getMantecaAxiosConfig()
       );
       return response.data;

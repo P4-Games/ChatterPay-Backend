@@ -28,11 +28,7 @@ export const mantecaUserService = {
    */
   async createUser(user: MantecaUserCreate): Promise<MantecaUser> {
     try {
-      const response = await axios.post(
-        `${MANTECA_BASE_URL}/crypto/v1/user/`,
-        user,
-        getMantecaAxiosConfig()
-      );
+      const response = await axios.post(`${MANTECA_BASE_URL}/user/`, user, getMantecaAxiosConfig());
       Logger.log('createUser', response);
       return response.data;
     } catch (error) {
@@ -63,7 +59,7 @@ export const mantecaUserService = {
     sortBy: string = 'CREATION_TIME_DESC'
   ): Promise<{ users: MantecaUser[]; totalCount: number }> {
     try {
-      const response = await axios.get(`${MANTECA_BASE_URL}/crypto/v1/user/all`, {
+      const response = await axios.get(`${MANTECA_BASE_URL}/user/all`, {
         headers: getMantecaAxiosConfig().headers,
         params: { page, limit, sortBy }
       });
@@ -103,7 +99,7 @@ export const mantecaUserService = {
   async getUserById(userAnyId: string): Promise<MantecaUser> {
     try {
       const response = await axios.get(
-        `${MANTECA_BASE_URL}/crypto/v1/user/${userAnyId}`,
+        `${MANTECA_BASE_URL}/user/${userAnyId}`,
         getMantecaAxiosConfig()
       );
       return response.data;
@@ -127,7 +123,7 @@ export const mantecaUserService = {
   async getCryptoAddresses(userId: string): Promise<Record<string, string>> {
     try {
       const response = await axios.get(
-        `${MANTECA_BASE_URL}/crypto/v1/user/${userId}/addresses`,
+        `${MANTECA_BASE_URL}/user/${userId}/addresses`,
         getMantecaAxiosConfig()
       );
       return response.data;
@@ -162,7 +158,7 @@ export const mantecaUserService = {
   async getUserOrders(userId: string): Promise<{ count: number; orders: MantecaOrder[] }> {
     try {
       const response = await axios.get(
-        `${MANTECA_BASE_URL}/crypto/v1/user/${userId}/orders`,
+        `${MANTECA_BASE_URL}/user/${userId}/orders`,
         getMantecaAxiosConfig()
       );
       return response.data;
@@ -196,7 +192,7 @@ export const mantecaUserService = {
   ): Promise<MantecaBankAccount> {
     try {
       const response = await axios.post(
-        `${MANTECA_BASE_URL}/crypto/v1/user/${userId}/bankaccount/${coin}`,
+        `${MANTECA_BASE_URL}/user/${userId}/bankaccount/${coin}`,
         bankData,
         getMantecaAxiosConfig()
       );
@@ -220,7 +216,7 @@ export const mantecaUserService = {
   async deleteBankAccount(userId: string, coin: string, cbu: string): Promise<void> {
     try {
       await axios.delete(
-        `${MANTECA_BASE_URL}/crypto/v1/user/${userId}/bankaccount/${coin}/${cbu}`,
+        `${MANTECA_BASE_URL}/user/${userId}/bankaccount/${coin}/${cbu}`,
         getMantecaAxiosConfig()
       );
     } catch (error) {
