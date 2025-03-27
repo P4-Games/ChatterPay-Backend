@@ -87,7 +87,8 @@ export const createUserWithWallet = async (
       swap: {},
       mint_nft: {},
       mint_nft_copy: {}
-    }
+    },
+    manteca_user_id: ''
   });
 
   await user.save();
