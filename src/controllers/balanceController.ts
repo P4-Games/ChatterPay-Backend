@@ -6,6 +6,7 @@ import { IUser, IUserWallet } from '../models/userModel';
 import { getUserWalletByChainId } from '../services/userService';
 import { getFiatQuotes } from '../services/criptoya/criptoYaService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
+import { COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import {
@@ -125,9 +126,8 @@ export const balanceByPhoneNumber = async (
   try {
     const user: IUser | null = await mongoUserService.getUser(phone);
     if (!user) {
-      const validationError = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
-      Logger.info('balanceByPhoneNumber', validationError);
-      return await returnSuccessResponse(reply, validationError);
+      Logger.info('balanceByPhoneNumber', COMMON_REPLY_WALLET_NOT_CREATED);
+      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
     }
 
     const fastify = request.server;
