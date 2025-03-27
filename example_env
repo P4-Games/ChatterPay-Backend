@@ -42,7 +42,7 @@ PUSH_ENVIRONMENT= dev | staging | prod
 MINOR_LOG_LEVEL= 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
 
 # Ramp (Manteca)
-MANTECA_BASE_URL='https://api.manteca.dev/crypto/v1'
+MANTECA_BASE_URL='https://sandbox.manteca.dev/crypto/v1'
 MANTECA_API_KEY= ''
 
 # Dev Stuffs

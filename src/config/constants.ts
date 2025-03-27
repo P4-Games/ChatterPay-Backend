@@ -30,7 +30,7 @@ const {
   PUSH_NETWORK: pushNetwork = '11155111',
   PUSH_ENVIRONMENT: pushEnvironment = ENV.DEV,
   MINOR_LOG_LEVEL: minorLogLevel = 'debug',
-  MANTECA_BASE_URL = 'https://api.manteca.dev/crypto/v1',
+  MANTECA_BASE_URL='https://sandbox.manteca.dev/crypto/v1',
   MANTECA_API_KEY,
   CORS_ORIGINS = '*',
   BLACKLIST_IPS = '',
