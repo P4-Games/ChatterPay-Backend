@@ -11,13 +11,17 @@ import { setupERC20 } from '../services/web3/contractSetupService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
-import { SIGNING_KEY, COMMON_REPLY_OPERATION_IN_PROGRESS } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import {
   openOperation,
   closeOperation,
   hasPhoneAnyOperationInProgress
 } from '../services/userService';
+import {
+  SIGNING_KEY,
+  COMMON_REPLY_WALLET_NOT_CREATED,
+  COMMON_REPLY_OPERATION_IN_PROGRESS
+} from '../config/constants';
 import {
   getTokensAddresses,
   checkBlockchainConditions,
@@ -126,10 +130,9 @@ export const swap = async (
     /* ***************************************************** */
     const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
     if (!fromUser) {
-      validationError = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
-      Logger.info('swap', validationError);
+      Logger.info('swap', COMMON_REPLY_WALLET_NOT_CREATED);
       // must return 200, so the bot displays the message instead of an error!
-      return await returnSuccessResponse(reply, validationError);
+      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
     }
 
     /* ***************************************************** */

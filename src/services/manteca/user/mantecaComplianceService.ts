@@ -20,7 +20,7 @@ export const mantecaComplianceService = {
   async getDocumentationStatus(userId: string): Promise<{ docType: string; status: string }[]> {
     try {
       const response = await axios.get(
-        `${MANTECA_BASE_URL}/crypto/v1/documentation/status/${userId}`,
+        `${MANTECA_BASE_URL}/documentation/status/${userId}`,
         getMantecaAxiosConfig()
       );
       return response.data;
@@ -48,7 +48,7 @@ export const mantecaComplianceService = {
   ): Promise<{ uploadUrl: string }> {
     try {
       const response = await axios.post(
-        `${MANTECA_BASE_URL}/crypto/v1/documentation/${userId}/uploadUrl`,
+        `${MANTECA_BASE_URL}/documentation/${userId}/uploadUrl`,
         { docType, fileName },
         getMantecaAxiosConfig()
       );
@@ -71,7 +71,7 @@ export const mantecaComplianceService = {
   async isUserValidated(userId: string): Promise<{ validated: boolean }> {
     try {
       const response = await axios.get(
-        `${MANTECA_BASE_URL}/crypto/v1/documentation/isValidated/${userId}`,
+        `${MANTECA_BASE_URL}/documentation/isValidated/${userId}`,
         getMantecaAxiosConfig()
       );
       return response.data;
@@ -93,7 +93,7 @@ export const mantecaComplianceService = {
   async getUserLimits(userId: string): Promise<{ dailyLimit: number; monthlyLimit: number }> {
     try {
       const response = await axios.get(
-        `${MANTECA_BASE_URL}/crypto/v1/documentation/${userId}/limits`,
+        `${MANTECA_BASE_URL}/documentation/${userId}/limits`,
         getMantecaAxiosConfig()
       );
       return response.data;

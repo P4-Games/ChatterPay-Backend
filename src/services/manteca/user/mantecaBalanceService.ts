@@ -41,7 +41,7 @@ export const mantecaBalanceService = {
 
   getUserBalance: async (userId: string): Promise<MantecaUserBalance> => {
     try {
-      const response = await axios.get(`${MANTECA_BASE_URL}/crypto/v1/user/${userId}/balance`, {
+      const response = await axios.get(`${MANTECA_BASE_URL}/user/${userId}/balance`, {
         headers: getMantecaAxiosConfig().headers
       });
       return response.data;
@@ -69,7 +69,7 @@ export const mantecaBalanceService = {
     amount: string
   ): Promise<{ status: string; message: string }> => {
     try {
-      const response = await axios.get(`${MANTECA_BASE_URL}/crypto/v1/user/balance/lock`, {
+      const response = await axios.get(`${MANTECA_BASE_URL}/user/balance/lock`, {
         headers: getMantecaAxiosConfig().headers,
         data: { userAnyId, asset, amount }
       });
@@ -98,7 +98,7 @@ export const mantecaBalanceService = {
     amount: string
   ): Promise<{ status: string; message: string }> => {
     try {
-      const response = await axios.get(`${MANTECA_BASE_URL}/crypto/v1/user/balance/unlock`, {
+      const response = await axios.get(`${MANTECA_BASE_URL}/user/balance/unlock`, {
         headers: getMantecaAxiosConfig().headers,
         data: { userAnyId, asset, amount }
       });

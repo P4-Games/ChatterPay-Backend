@@ -151,6 +151,8 @@ export const PINATA_IPFS_URL = 'https://gateway.pinata.cloud/ipfs';
 export const COMMON_REPLY_OPERATION_IN_PROGRESS =
   'The operation is being processed. We will notify you once it is completed or if any issues arise.';
 
+export const COMMON_REPLY_WALLET_NOT_CREATED = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
+
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
 export const CORS_ORIGINS_EXCEPTIONS: string = '/metadata/opensea,/favicon.ico,/docs';
 

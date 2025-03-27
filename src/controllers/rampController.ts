@@ -1,12 +1,95 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
+import { IUser } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
-import { MantecaUserBalance } from '../types/mantecaType';
-import { MANTECA_MOCK_UPLOAD_DOCUMENTS_URL } from '../config/constants';
+import { mongoUserService } from '../services/mongo/mongoUserService';
 import { mantecaUserService } from '../services/manteca/user/mantecaUserService';
 import { mantecaPriceService } from '../services/manteca/market/mantecaPriceService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { mantecaWidgetService } from '../services/manteca/user/mantecaWidgetService';
 import { mantecaBalanceService } from '../services/manteca/user/mantecaBalanceService';
+import {
+  MantecaUserBalance,
+  MantecaOperationSide,
+  MantecaWidgetOnboarding
+} from '../types/mantecaType';
+import {
+  returnErrorResponse,
+  returnSuccessResponse,
+  returnErrorResponse500
+} from '../helpers/requestHelper';
+import {
+  CHATIZALO_PHONE_NUMBER,
+  COMMON_REPLY_WALLET_NOT_CREATED,
+  MANTECA_MOCK_UPLOAD_DOCUMENTS_URL
+} from '../config/constants';
+
+interface widgetLinkToOperateBody {
+  channel_user_id: string;
+  operation: MantecaOperationSide;
+  asset: string;
+  against: string;
+  assetAmount: number;
+}
+
+export const linkToOperate = async (
+  request: FastifyRequest<{
+    Body: widgetLinkToOperateBody;
+    Querystring?: { lastBotMsgDelaySeconds?: number };
+  }>,
+  reply: FastifyReply
+) => {
+  Logger.log('widgetLinkToOperate', 'Get Ramp Widget Link to operate');
+
+  if (!request.body) {
+    return returnErrorResponse(reply, 400, 'Request body is required');
+  }
+
+  const { channel_user_id, operation, asset, against, assetAmount } = request.body;
+
+  const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
+  if (!fromUser) {
+    Logger.info('widgetLinkToOperate', COMMON_REPLY_WALLET_NOT_CREATED);
+    // must return 200, so the bot displays the message instead of an error!
+    return returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+  }
+
+  const network = 'polygon'; // temporal!
+
+  const userWallet = fromUser.wallets[0].wallet_proxy;
+  const userMantecaid = fromUser.manteca_user_id || `user-${fromUser.id}`;
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+  const sessionId = `session-${date}-${userMantecaid.slice(5)}`;
+  const returnUrlOk = `https://api.whatsapp.com/send/?phone=${CHATIZALO_PHONE_NUMBER}&text=operacion-realizada`;
+  const returnUrlErr = `https://api.whatsapp.com/send/?phone=${CHATIZALO_PHONE_NUMBER}&text=error-con-la-operacion`;
+
+  const widgetOptions: MantecaWidgetOnboarding = {
+    userExternalId: `${userMantecaid}`,
+    sessionId: `${sessionId}`,
+    returnUrl: `${returnUrlOk}`,
+    failureUrl: `${returnUrlErr}`,
+    options: {
+      endOnOperation: false,
+      endOnOperationWaiting: false,
+      side: `${operation}`,
+      asset: `${asset}`,
+      against: `${against}`,
+      assetAmount: `${assetAmount}`,
+      withdrawAddress: `${userWallet}`,
+      withdrawNetwork: `${network}`
+    }
+  };
+
+  try {
+    const link: string = await mantecaWidgetService.getLinkToOperate(widgetOptions);
+    return await returnSuccessResponse(
+      reply,
+      `Click in this link to continue with Manteca: ${link}`
+    );
+  } catch (error) {
+    Logger.error('widgetLinkToOperate', 'Error getting ramp widget link to operate:', error);
+    return returnErrorResponse500(reply);
+  }
+};
 
 /**
  * Handles the full onboarding process for a new user.
