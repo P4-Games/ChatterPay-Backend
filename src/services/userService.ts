@@ -93,6 +93,9 @@ export const createUserWithWallet = async (
 
   await user.save();
 
+  user.manteca_user_id = `user-${user._id}`;
+  await user.save();
+
   Logger.log('createUserWithWallet', 'Push protocol', phoneNumber, predictedWallet.EOAAddress);
   await pushService.subscribeToPushChannel(
     predictedWallet.privateKeyNotHashed,
