@@ -8,6 +8,7 @@ export interface IToken extends Document {
   address: string;
   symbol: string;
   type: string;
+  ramp_enabled: boolean;
 }
 
 const tokenSchema = new Schema<IToken>({
@@ -17,7 +18,8 @@ const tokenSchema = new Schema<IToken>({
   address: { type: String, required: true, unique: true },
   logo: { type: String, required: false },
   symbol: { type: String, required: true },
-  type: { type: String, required: true }
+  type: { type: String, required: true },
+  ramp_enabled: { type: Boolean, required: true }
 });
 
 const Token = model<IToken>('Token', tokenSchema, 'tokens');
