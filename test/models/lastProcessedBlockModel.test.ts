@@ -22,6 +22,7 @@ describe('Blockchain Model', () => {
   it('should create and save a blockchain document successfully', async () => {
     const validBlockchain: IBlockchain = new Blockchain({
       name: 'Ethereum',
+      manteca_name: 'ethereum',
       chainId: 1,
       rpc: 'https://mainnet.infura.io/v3/YOUR-PROJECT-ID',
       logo: 'https://ethereum.org/logo.png',
@@ -116,6 +117,7 @@ describe('Blockchain Model', () => {
   it('should allow optional contract fields to be empty', async () => {
     const blockchainData: IBlockchain = new Blockchain({
       name: 'Polygon',
+      manteca_name: 'polygon',
       chainId: 137,
       rpc: 'https://polygon-rpc.com',
       logo: 'https://polygon.technology/logo.png',
