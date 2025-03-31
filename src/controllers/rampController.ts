@@ -53,8 +53,7 @@ export const linkToOperate = async (
     return returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
   }
 
-  const network = 'polygon'; // temporal!
-
+  const network = request.server.networkConfig.manteca_name;
   const userWallet = fromUser.wallets[0].wallet_proxy;
   const userMantecaid = fromUser.manteca_user_id || `user-${fromUser.id}`;
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
