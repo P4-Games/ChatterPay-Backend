@@ -24,6 +24,7 @@ export interface OperationLimits {
 
 export interface IBlockchain extends Document {
   name: string;
+  manteca_name: string;
   chainId: number;
   rpc: string;
   bundlerUrl?: string;
@@ -83,6 +84,7 @@ const operationLimitsSchema = new Schema<OperationLimits>({
 
 const blockchainSchema = new Schema<IBlockchain>({
   name: { type: String, required: true },
+  manteca_name: { type: String, required: true },
   chainId: { type: Number, required: true },
   rpc: { type: String, required: true },
   bundlerUrl: { type: String, required: false },

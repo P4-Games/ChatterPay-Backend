@@ -30,7 +30,7 @@ const {
   PUSH_NETWORK: pushNetwork = '11155111',
   PUSH_ENVIRONMENT: pushEnvironment = ENV.DEV,
   MINOR_LOG_LEVEL: minorLogLevel = 'debug',
-  MANTECA_BASE_URL = 'https://api.manteca.dev/crypto/v1',
+  MANTECA_BASE_URL = 'https://sandbox.manteca.dev/crypto/v1',
   MANTECA_API_KEY,
   CORS_ORIGINS = '*',
   BLACKLIST_IPS = '',
@@ -150,6 +150,8 @@ export const PINATA_IPFS_URL = 'https://gateway.pinata.cloud/ipfs';
 
 export const COMMON_REPLY_OPERATION_IN_PROGRESS =
   'The operation is being processed. We will notify you once it is completed or if any issues arise.';
+
+export const COMMON_REPLY_WALLET_NOT_CREATED = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
 
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
 export const CORS_ORIGINS_EXCEPTIONS: string = '/metadata/opensea,/favicon.ico,/docs';

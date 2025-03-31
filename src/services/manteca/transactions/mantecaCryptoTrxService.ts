@@ -36,7 +36,7 @@ export const mantecaCryptoTrxsService = {
     endDate: string
   ): Promise<MantecaTransaction[]> => {
     try {
-      const response = await axios.get(`${MANTECA_BASE_URL}/crypto/v1/transaction`, {
+      const response = await axios.get(`${MANTECA_BASE_URL}/transaction`, {
         params: { userId, page, limit, type, startDate, endDate },
         ...getMantecaAxiosConfig()
       });
@@ -76,7 +76,7 @@ export const mantecaCryptoTrxsService = {
   getTransactionById: async (txId: string): Promise<MantecaTransaction> => {
     try {
       const response = await axios.get(
-        `${MANTECA_BASE_URL}/crypto/v1/transaction/${txId}`,
+        `${MANTECA_BASE_URL}/transaction/${txId}`,
         getMantecaAxiosConfig()
       );
       return response.data;
@@ -107,7 +107,7 @@ export const mantecaCryptoTrxsService = {
   ): Promise<MantecaTransactionLock> => {
     try {
       const response = await axios.post(
-        `${MANTECA_BASE_URL}/crypto/v1/transaction/withdraw/lock`,
+        `${MANTECA_BASE_URL}/transaction/withdraw/lock`,
         { coin, userId, chain },
         getMantecaAxiosConfig()
       );
@@ -145,7 +145,7 @@ export const mantecaCryptoTrxsService = {
   ): Promise<MantecaTransactionWithdraw> => {
     try {
       const response = await axios.post(
-        `${MANTECA_BASE_URL}/crypto/v1/transaction/withdraw`,
+        `${MANTECA_BASE_URL}/transaction/withdraw`,
         {
           tx: { coin, amount, to, chain },
           userId,
@@ -173,7 +173,7 @@ export const mantecaCryptoTrxsService = {
   getSupportedAssets: async (): Promise<MantecaSupportedAssets> => {
     try {
       const response = await axios.get(
-        `${MANTECA_BASE_URL}/crypto/v1/transaction/supported-assets`,
+        `${MANTECA_BASE_URL}/transaction/supported-assets`,
         getMantecaAxiosConfig()
       );
       return response.data;

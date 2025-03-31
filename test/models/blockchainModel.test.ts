@@ -32,6 +32,7 @@ describe('Blockchain Model', () => {
   it('should create and save a blockchain document successfully', async () => {
     const validBlockchain: IBlockchain = new Blockchain({
       name: 'Ethereum',
+      manteca_name: 'ethereum',
       chainId: 1,
       rpc: 'https://mainnet.infura.io/v3/YOUR-PROJECT-ID',
       logo: 'https://ethereum.org/logo.png',

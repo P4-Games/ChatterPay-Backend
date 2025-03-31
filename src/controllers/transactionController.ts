@@ -21,17 +21,18 @@ import {
   userReachedOperationLimit
 } from '../services/blockchainService';
 import {
-  INFURA_URL,
-  INFURA_API_KEY,
-  GCP_CLOUD_TRACE_ENABLED,
-  COMMON_REPLY_OPERATION_IN_PROGRESS
-} from '../config/constants';
-import {
   TransactionData,
   ExecueTransactionResult,
   ConcurrentOperationsEnum,
   CheckBalanceConditionsResult
 } from '../types/commonType';
+import {
+  INFURA_URL,
+  INFURA_API_KEY,
+  GCP_CLOUD_TRACE_ENABLED,
+  COMMON_REPLY_WALLET_NOT_CREATED,
+  COMMON_REPLY_OPERATION_IN_PROGRESS
+} from '../config/constants';
 import {
   openOperation,
   closeOperation,
@@ -325,11 +326,10 @@ export const makeTransaction = async (
     /* ***************************************************** */
     const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
     if (!fromUser) {
-      validationError = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
       rootSpan?.endSpan();
-      Logger.info('makeTransaction', validationError);
+      Logger.info('makeTransaction', COMMON_REPLY_WALLET_NOT_CREATED);
       // must return 200, so the bot displays the message instead of an error!
-      return await returnSuccessResponse(reply, validationError);
+      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
     }
 
     const userWallet: IUserWallet | null = getUserWalletByChainId(

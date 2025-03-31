@@ -1,12 +1,148 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
+import { IUser } from '../models/userModel';
+import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
-import { MantecaUserBalance } from '../types/mantecaType';
-import { MANTECA_MOCK_UPLOAD_DOCUMENTS_URL } from '../config/constants';
+import { mongoUserService } from '../services/mongo/mongoUserService';
 import { mantecaUserService } from '../services/manteca/user/mantecaUserService';
 import { mantecaPriceService } from '../services/manteca/market/mantecaPriceService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { mantecaWidgetService } from '../services/manteca/user/mantecaWidgetService';
 import { mantecaBalanceService } from '../services/manteca/user/mantecaBalanceService';
+import {
+  MantecaUserBalance,
+  MantecaOperationSide,
+  MantecaWidgetOnboarding
+} from '../types/mantecaType';
+import {
+  returnErrorResponse,
+  returnSuccessResponse,
+  returnErrorResponse500
+} from '../helpers/requestHelper';
+import {
+  FIAT_CURRENCIES,
+  CHATIZALO_PHONE_NUMBER,
+  COMMON_REPLY_WALLET_NOT_CREATED,
+  MANTECA_MOCK_UPLOAD_DOCUMENTS_URL
+} from '../config/constants';
+
+interface widgetLinkToOperateBody {
+  channel_user_id: string;
+  operation: MantecaOperationSide;
+  asset: string;
+  against: string;
+  assetAmount: number | string;
+}
+
+interface ValidateInputsLinkToOperateParams {
+  fromUser: IUser | null;
+  operation: string;
+  asset: string;
+  against: string;
+  tokens: IToken[];
+  assetAmount: number | string;
+}
+
+async function validateInputsLinkToOperate(
+  params: ValidateInputsLinkToOperateParams
+): Promise<string | null> {
+  const { fromUser, operation, asset, against, tokens, assetAmount } = params;
+
+  if (!fromUser) {
+    return COMMON_REPLY_WALLET_NOT_CREATED;
+  }
+
+  if (!FIAT_CURRENCIES.includes(against)) {
+    return `Invalid currency: "${against}". Must be one of ${FIAT_CURRENCIES.join(', ')}.`;
+  }
+
+  if (!['BUY', 'SELL'].includes(operation.toUpperCase())) {
+    return `Invalid operation: "${operation}". Must be either "BUY" or "SELL".`;
+  }
+
+  const validToken = tokens.find(
+    (token) => token.name.toLowerCase() === asset.toLowerCase() && token.ramp_enabled
+  );
+
+  if (!validToken) {
+    return `Invalid asset: "${asset}". Must be a token with ramp_enabled = true.`;
+  }
+
+  const amount = parseFloat(String(assetAmount).trim());
+  if (Number.isNaN(amount) || amount <= 0) {
+    return `Invalid amount: "${assetAmount}". Must be a number greater than 0.`;
+  }
+
+  return null;
+}
+
+export const linkToOperate = async (
+  request: FastifyRequest<{
+    Body: widgetLinkToOperateBody;
+    Querystring?: { lastBotMsgDelaySeconds?: number };
+  }>,
+  reply: FastifyReply
+) => {
+  Logger.log('widgetLinkToOperate', 'Get Ramp Widget Link to operate');
+
+  if (!request.body) {
+    return returnErrorResponse(reply, 400, 'Request body is required');
+  }
+
+  const { channel_user_id, operation, asset, against, assetAmount } = request.body;
+  const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
+
+  const errorMessage = await validateInputsLinkToOperate({
+    fromUser,
+    operation,
+    asset,
+    against,
+    tokens: request.server.tokens,
+    assetAmount
+  });
+
+  if (errorMessage) {
+    Logger.info('widgetLinkToOperate', errorMessage);
+    // Returns a response with the error message but with a 200 status code
+    return returnSuccessResponse(reply, errorMessage);
+  }
+
+  const network = request.server.networkConfig.manteca_name;
+  const userWallet = fromUser!.wallets[0].wallet_proxy;
+  const userMantecaid = fromUser!.manteca_user_id || `user-${fromUser!.id}`;
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+  const sessionId = `session-${date}-${userMantecaid.slice(5)}`;
+  const returnUrlOk = `https://api.whatsapp.com/send/?phone=${CHATIZALO_PHONE_NUMBER}&text=operacion-realizada`;
+  const returnUrlErr = `https://api.whatsapp.com/send/?phone=${CHATIZALO_PHONE_NUMBER}&text=error-con-la-operacion`;
+
+  const widgetOptions: MantecaWidgetOnboarding = {
+    userExternalId: `${userMantecaid}`,
+    sessionId: `${sessionId}`,
+    returnUrl: `${returnUrlOk}`,
+    failureUrl: `${returnUrlErr}`,
+    options: {
+      endOnOperation: false,
+      endOnOperationWaiting: false,
+      side: `${operation}`,
+      asset: `${asset}`,
+      against: `${against}`,
+      assetAmount: `${assetAmount}`,
+      withdrawAddress: `${userWallet}`,
+      withdrawNetwork: `${network}`
+    }
+  };
+  Logger.log('manteca', widgetOptions);
+
+  try {
+    const link: string = await mantecaWidgetService.getLinkToOperate(widgetOptions);
+    return await returnSuccessResponse(
+      reply,
+      `Click in this link to continue with Manteca: ${link}`
+    );
+  } catch (error) {
+    Logger.error('widgetLinkToOperate', 'Error getting ramp widget link to operate:', error);
+    return returnErrorResponse500(reply);
+  }
+};
 
 /**
  * Handles the full onboarding process for a new user.

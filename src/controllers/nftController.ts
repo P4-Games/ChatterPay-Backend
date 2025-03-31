@@ -38,6 +38,7 @@ import {
   DEFAULT_CHAIN_ID,
   WHATSAPP_API_URL,
   CHATIZALO_PHONE_NUMBER,
+  COMMON_REPLY_WALLET_NOT_CREATED,
   COMMON_REPLY_OPERATION_IN_PROGRESS
 } from '../config/constants';
 
@@ -251,10 +252,9 @@ export const generateNftOriginal = async (
     DEFAULT_CHAIN_ID
   );
   if (!fromUser || !userWalletByChainId) {
-    const validationError = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
-    Logger.info('generateNftOriginal', validationError);
+    Logger.info('generateNftOriginal', COMMON_REPLY_WALLET_NOT_CREATED);
     // must return 200, so the bot displays the message instead of an error!
-    return returnSuccessResponse(reply, validationError);
+    return returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
   }
 
   const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);

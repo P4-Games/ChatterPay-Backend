@@ -87,9 +87,13 @@ export const createUserWithWallet = async (
       swap: {},
       mint_nft: {},
       mint_nft_copy: {}
-    }
+    },
+    manteca_user_id: ''
   });
 
+  await user.save();
+
+  user.manteca_user_id = `user-${user._id}`;
   await user.save();
 
   Logger.log('createUserWithWallet', 'Push protocol', phoneNumber, predictedWallet.EOAAddress);
