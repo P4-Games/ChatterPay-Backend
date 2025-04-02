@@ -14,20 +14,21 @@
 
 # ChatterPay
 
-[ChatterPay](https://chatterpay.net) is a Wallet for WhatsApp that integrates AI and Account Abstraction, enabling any user to use blockchain easily and securely without technical knowledge.
-
-> Built for: [Level Up Hackathon - Ethereum Argentina 2024](https://ethereumargentina.org/) & [Ethereum Uruguay 2024](https://www.ethereumuruguay.org/)
-
-> Built By: [mpefaur](https://github.com/mpefaur), [tomasfrancizco](https://github.com/tomasfrancizco), [TomasDmArg](https://github.com/TomasDmArg), [gonzageraci](https://github.com/gonzageraci), [dappsar](https://github.com/dappsar)
-
-
-## Get started with our Bot 🤖
-
-[![WhatsApp Bot](https://img.shields.io/badge/Start%20on%20WhatsApp-25D366.svg?style=flat&logo=whatsapp&logoColor=white)](https://wa.me/5491164629653)
+[Chatterpay](https://chatterpay.net) is a Wallet for WhatsApp that integrates AI and Account Abstraction, enabling any user to use blockchain easily and securely without technical knowledge.
 
 > Create Wallet, Transfer, Swap, and mint NFTs — directly from WhatsApp!
 
-# Components
+> Built for: [Level Up Hackathon - Ethereum Argentina 2024](https://ethereumargentina.org/) & [Ethereum Uruguay 2024](https://www.ethereumuruguay.org/)
+
+> Build By: [mpefaur](https://github.com/mpefaur), [tomasfrancizco](https://github.com/tomasfrancizco), [TomasDmArg](https://github.com/TomasDmArg), [gonzageraci](https://github.com/gonzageraci), [dappsar](https://github.com/dappsar)
+
+
+**Get started with our Bot 🤖**:
+
+[![WhatsApp Bot](https://img.shields.io/badge/Start%20on%20WhatsApp-25D366.svg?style=flat&logo=whatsapp&logoColor=white)](https://wa.me/5491164629653)
+
+
+**Components**:
 
 -   Landing Page ([product](https://chatterpay.net), [source code](https://github.com/P4-Games/ChatterPay))
 -   User Dashboard Website ([product](https://chatterpay.net/dashboard), [source code](https://github.com/P4-Games/ChatterPay))
@@ -40,7 +41,6 @@
 <p>&nbsp;</p>
 
 ![Componentes Interactions](.doc/technical-overview/chatterpay-architecture-conceptual-view.jpg)
-
 
 
 # About this Repo
@@ -108,7 +108,7 @@ npx vitest --coverage
 
 # Additional Info
 
-## Project Structure
+**Project Structure:**
 
 -   `src/`:
     -   `api/`: Definition of API paths.
@@ -129,12 +129,12 @@ npx vitest --coverage
 -   `README.md`: This File.
 -   `.env.example`: Example Environment File.
 
-## Technical Documentation
+**Technical Documentation**:
 
 If you would like to explore more details about the source code, you can review this [link](.doc/content.md).
 
 
-## Contribution
+**Contribution**:
 
 Thank you for considering helping out with the source code! We welcome contributions from anyone on the internet, and are grateful for even the smallest of fixes!
 
