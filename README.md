@@ -8,7 +8,7 @@
 ![](https://img.shields.io/badge/Web3-informational?style=flat&logo=web3&logoColor=white&color=6aa6f8)
 ![](https://img.shields.io/badge/Ethers.js-informational?style=flat&logo=ethersjs&logoColor=white&color=6aa6f8)
 ![](https://img.shields.io/badge/UniswapV3-informational?style=flat&logo=uniswap&logoColor=white&color=6aa6f8)
-![](https://img.shields.io/badge/Chainlink?style=flat&logo=chainlink&logoColor=white&color=6aa6f8)
+![](https://img.shields.io/badge/Chainlink-informational?style=flat&logo=chainlink&logoColor=white&color=6aa6f8)
 ![](https://img.shields.io/badge/jsdoc-informational?style=flat&logo=jsdoc&logoColor=white&color=6aa6f8)
 ![](https://img.shields.io/badge/userOps.js-informational?style=flat&logo=useropsjs&logoColor=white&color=6aa6f8)
 
@@ -20,7 +20,14 @@ ChatterPay is a Wallet for WhatsApp that integrates AI and Account Abstraction, 
 
 > Built By: [mpefaur](https://github.com/mpefaur), [tomasfrancizco](https://github.com/tomasfrancizco), [TomasDmArg](https://github.com/TomasDmArg), [gonzageraci](https://github.com/gonzageraci), [dappsar](https://github.com/dappsar)
 
-**Components**:
+
+## Get started with our Bot 🤖
+
+[![WhatsApp Bot](https://img.shields.io/badge/Start%20on%20WhatsApp-25D366.svg?style=flat&logo=whatsapp&logoColor=white)](https://wa.me/5491164629653)
+
+> Create Wallet, Transfer, Swap, and mint NFTs — directly from WhatsApp!
+
+# Components
 
 -   Landing Page ([product](https://chatterpay.net), [source code](https://github.com/P4-Games/ChatterPay))
 -   User Dashboard Website ([product](https://chatterpay.net/dashboard), [source code](https://github.com/P4-Games/ChatterPay))
@@ -30,6 +37,12 @@ ChatterPay is a Wallet for WhatsApp that integrates AI and Account Abstraction, 
 -   Bot AI Admin Dashboard Website ([product](https://app.chatizalo.com/))
 -   Bot AI (Chatizalo) ([product](https://chatizalo.com/))
 -   Bot AI Admin Dashboard Website ([product](https://app.chatizalo.com/))
+
+<p>&nbsp;</p>
+
+![Componentes Interactions](.doc/technical-overview/chatterpay-architecture-conceptual-view.jpg)
+
+
 
 # About this Repo
 
@@ -92,7 +105,7 @@ npx vitest
 ```bash
 yarn test:coverage
 npx vitest --coverage
-``
+```
 
 # Additional Info
 
@@ -136,3 +149,13 @@ _Contributors_:
 
 * See more in: <https://github.com/P4-Games/chatterPay-backend/graphs/contributors>
 
+<p>&nbsp;</p>
+
+---
+
+[![X](https://img.shields.io/badge/X-%231DA1F2.svg?style=flat&logo=twitter&logoColor=white)](https://x.com/chatterpay)
+[![Instagram](https://img.shields.io/badge/Instagram-%23E4405F.svg?style=flat&logo=instagram&logoColor=white)](https://www.instagram.com/chatterpayofficial)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-%230077B5.svg?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/company/chatterpay)
+[![Facebook](https://img.shields.io/badge/Facebook-%231877F2.svg?style=flat&logo=facebook&logoColor=white)](https://www.facebook.com/chatterpay)
+[![YouTube](https://img.shields.io/badge/YouTube-%23FF0000.svg?style=flat&logo=youtube&logoColor=white)](https://www.youtube.com/@chatterpay)
+[![WhatsApp Community](https://img.shields.io/badge/WhatsApp%20Community-25D366.svg?style=flat&logo=whatsapp&logoColor=white)](https://chat.whatsapp.com/HZJrBEUYyoF8FtchfJhzmZ)
