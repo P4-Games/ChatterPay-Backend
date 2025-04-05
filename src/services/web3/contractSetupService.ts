@@ -37,17 +37,6 @@ export async function setupContracts(
   privateKey: string,
   fromNumber: string
 ): Promise<SetupContractReturn> {
-  const rpUrl = blockchain.rpc;
-  if (!rpUrl) {
-    throw new Error(`Unsupported chain ID: ${blockchain.chainId}`);
-  }
-
-  Logger.log('setupContracts', `Validating RPC URL: ${rpUrl}`);
-  const isValidBundler = await validateBundlerUrl(rpUrl);
-  if (!isValidBundler) {
-    throw new Error(`Invalid or unreachable RPC URL: ${rpUrl}`);
-  }
-
   const network = await mongoBlockchainService.getNetworkConfig();
   const provider = new ethers.providers.JsonRpcProvider(network.rpc);
   const signer = new ethers.Wallet(privateKey, provider);
