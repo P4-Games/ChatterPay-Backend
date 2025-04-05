@@ -53,7 +53,7 @@ export async function sendUserOperationToBundler(
     };
     Logger.log(
       'sendUserOperationToBundler',
-      `payload: ${JSON.stringify(payload)}, bundlerUrl: ${rpcUrl}`
+      `payload: ${JSON.stringify(payload)}, rpcUrl: ${rpcUrl}`
     );
 
     // Wrapper function in quue to avoid erro 429 (rate-limit)
