@@ -315,9 +315,8 @@ async function prepareAndExecuteUserOperation(
     }
 
     // Send the operation to the bundler and wait for receipt
-    Logger.info(userOpType, `Sending operation to bundler: ${networkConfig.bundlerUrl}`);
+    Logger.info(userOpType, `Sending operation to bundler: ${networkConfig.rpc}`);
     const bundlerResponse = await sendUserOperationToBundler(
-      // networkConfig.bundlerUrl!,
       networkConfig.rpc,
       userOperation,
       entryPointContract.address

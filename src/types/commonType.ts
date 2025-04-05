@@ -75,7 +75,6 @@ export interface SetupContractReturn {
   provider: ethers.providers.JsonRpcProvider;
   signer: ethers.Wallet;
   backendSigner: ethers.Wallet;
-  bundlerUrl: string;
   chatterPay: ethers.Contract;
   proxy: ComputedAddress;
   accountExists: boolean;

@@ -27,7 +27,7 @@ export interface IBlockchain extends Document {
   manteca_name: string;
   chainId: number;
   rpc: string;
-  bundlerUrl?: string;
+  // bundlerUrl?: string;
   logo: string;
   explorer: string;
   marketplaceOpenseaUrl: string;
@@ -87,7 +87,7 @@ const blockchainSchema = new Schema<IBlockchain>({
   manteca_name: { type: String, required: true },
   chainId: { type: Number, required: true },
   rpc: { type: String, required: true },
-  bundlerUrl: { type: String, required: false },
+  // bundlerUrl: { type: String, required: false },
   logo: { type: String, required: true },
   explorer: { type: String, required: true },
   marketplaceOpenseaUrl: { type: String, required: true },

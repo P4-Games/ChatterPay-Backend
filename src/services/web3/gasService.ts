@@ -1,12 +1,11 @@
 import PQueue from 'p-queue';
-import axios, { AxiosResponse } from 'axios';
 import { ethers, Contract, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
+import { OpGasValues } from '../../models/blockchainModel';
 import { QUEUE_GAS_INTERVAL } from '../../config/constants';
 import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation } from '../../types/userOperationType';
-import { IBlockchain, OpGasValues } from '../../models/blockchainModel';
 
 interface AlchemyGasResponse {
   paymasterAndData: string;
@@ -90,6 +89,7 @@ const queue = new PQueue({ interval: QUEUE_GAS_INTERVAL, intervalCap: 1 });
  * @param overrides - Optional gas overrides for customization.
  * @returns The gas service response containing paymaster data and gas limits.
  */
+/*
 export async function getPaymasterAndData(
   networkConfig: IBlockchain,
   config: GasServiceConfig,
@@ -141,6 +141,7 @@ export async function getPaymasterAndData(
     throw error;
   }
 }
+  */
 
 /**
  * Applies the paymaster data to a UserOperation.
@@ -154,6 +155,7 @@ export async function getPaymasterAndData(
  * @param overrides - Optional gas overrides for customization.
  * @returns A new UserOperation with the paymaster data applied.
  */
+/*
 const applyPaymasterDataToUserOp = async (
   networkConfig: IBlockchain,
   config: GasServiceConfig,
@@ -173,6 +175,7 @@ const applyPaymasterDataToUserOp = async (
     maxPriorityFeePerGas: BigNumber.from(gasData.maxPriorityFeePerGas)
   } as PackedUserOperation;
 };
+*/
 
 /**
  * Calculates recommended gas values, prioritizing latest network estimations.
@@ -372,8 +375,8 @@ const getDynamicGas = async (
 };
 
 export const gasService = {
-  getPaymasterAndData,
-  applyPaymasterDataToUserOp,
+  // getPaymasterAndData,
+  // applyPaymasterDataToUserOp,
   getPerGasValues,
   getcallDataGasValues,
   getDynamicGas
