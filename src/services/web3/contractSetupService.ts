@@ -1,28 +1,11 @@
 import { ethers } from 'ethers';
 
-import { Logger } from '../../helpers/loggerHelper';
 import { SIGNING_KEY } from '../../config/constants';
 import { IBlockchain } from '../../models/blockchainModel';
 import { SetupContractReturn } from '../../types/commonType';
 import { getERC20ABI, getChatterpayABI } from './abiService';
 import { computeProxyAddressFromPhone } from '../predictWalletService';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
-
-/**
- * Validate Bundle Url
- * @param url
- * @returns
- */
-async function validateBundlerUrl(url: string): Promise<boolean> {
-  try {
-    const provider = new ethers.providers.JsonRpcProvider(url);
-    await provider.getNetwork();
-    return true;
-  } catch (error) {
-    Logger.error('validateBundlerUrl', `Failed to validate bundler URL ${url}:`, error);
-    return false;
-  }
-}
 
 /**
  * Sets up the necessary contracts and providers for blockchain interaction.
@@ -55,7 +38,6 @@ export async function setupContracts(
     provider,
     signer,
     backendSigner,
-    bundlerUrl: rpUrl,
     chatterPay: chatterPayContract,
     proxy,
     accountExists
