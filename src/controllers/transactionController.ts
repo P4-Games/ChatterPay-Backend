@@ -7,7 +7,7 @@ import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IUser, IUserWallet } from '../models/userModel';
 import { NotificationEnum } from '../models/templateModel';
-import { getChatterpayFee } from '../services/commonService';
+import { getChatterpayTokenFee } from '../services/commonService';
 import { verifyWalletBalanceInRpc } from '../services/balanceService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import Transaction, { ITransaction } from '../models/transactionModel';
@@ -551,9 +551,10 @@ export const makeTransaction = async (
       await delaySeconds(lastBotMsgDelaySeconds);
     }
 
-    const chatterpayFee = await getChatterpayFee(
+    const chatterpayFee = await getChatterpayTokenFee(
       networkConfig.contracts.chatterPayAddress,
-      checkBlockchainConditionsResult.setupContractsResult!.provider
+      checkBlockchainConditionsResult.setupContractsResult!.provider,
+      tokenAddress
     );
     const amountAfterFee = parseFloat(amount) - chatterpayFee;
 
