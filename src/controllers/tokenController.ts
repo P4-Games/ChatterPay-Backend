@@ -246,7 +246,7 @@ export async function issueTokensCore(
   // Get tokens for the current chain from the decorator.
   const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chainId);
   const tokenAddresses: string[] = chainTokens.map((token) => token.address);
-
+ 
   if (tokenAddresses.length === 0) {
     throw new Error(`No tokens found for chain ${networkConfig.chainId}`);
   }
