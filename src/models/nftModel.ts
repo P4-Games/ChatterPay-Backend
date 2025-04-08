@@ -27,6 +27,7 @@ export interface INFT extends Document {
   copy_order_original: number;
   minted_contract_address: string;
   metadata: INFTMetadata;
+  chain_id: number;
 }
 
 const NFTSchema = new Schema<INFT>({
@@ -65,7 +66,8 @@ const NFTSchema = new Schema<INFT>({
       ),
       required: false
     }
-  }
+  },
+  chain_id: { type: Number, required: true }
 });
 
 const NFTModel = model<INFT>('NFTs', NFTSchema, 'nfts');
