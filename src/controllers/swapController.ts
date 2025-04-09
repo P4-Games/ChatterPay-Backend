@@ -262,7 +262,8 @@ export const swap = async (
       amount: fromTokensSentInUnits,
       token: inputCurrency,
       type: 'swap',
-      status: 'completed'
+      status: 'completed',
+      chain_id: request.server.networkConfig.chainId
     };
     await mongoTransactionService.saveTransaction(transactionOut);
 
@@ -274,7 +275,8 @@ export const swap = async (
       amount: toTokensReceivedInUnits,
       token: outputCurrency,
       type: 'swap',
-      status: 'completed'
+      status: 'completed',
+      chain_id: request.server.networkConfig.chainId
     };
     await mongoTransactionService.saveTransaction(transactionIn);
 
