@@ -35,7 +35,8 @@ describe('NFT Model', () => {
       metadata: {
         image_url: { gcp: 'https://example.com/image.jpg' },
         description: 'Test NFT'
-      }
+      },
+      chain_id: 123
     };
 
     const nft = new NFTModel(validNFT);
@@ -73,7 +74,8 @@ describe('NFT Model', () => {
       metadata: {
         image_url: { gcp: 'https://example.com/image.jpg' },
         description: 'Test NFT'
-      }
+      },
+      chain_id: 123
     };
 
     const nft = new NFTModel(validNFT);
@@ -100,7 +102,8 @@ describe('NFT Model', () => {
         image_url: { gcp: 'https://example.com/image.jpg', ipfs: 'ipfs://example' },
         description: 'Test NFT with metadata',
         geolocation: { latitude: '40.7128', longitude: '-74.0060' }
-      }
+      },
+      chain_id: 123
     };
 
     const nft = new NFTModel(validNFT);
