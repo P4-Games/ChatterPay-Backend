@@ -29,7 +29,11 @@ import {
 export const checkExternalDeposits = async (request: FastifyRequest, reply: FastifyReply) => {
   const fastify = request.server;
   const { routerAddress } = fastify.networkConfig.contracts;
-  const depositsStatus = await fetchExternalDeposits('ARBITRUM_SEPOLIA', routerAddress!);
+  const depositsStatus = await fetchExternalDeposits(
+    'ARBITRUM_SEPOLIA',
+    routerAddress!,
+    fastify.networkConfig.chainId
+  );
   return returnSuccessResponse(reply, depositsStatus);
 };
 
