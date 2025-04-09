@@ -6,7 +6,7 @@ import { TransactionData } from '../types/commonType';
 import { LastProcessedBlock } from '../models/lastProcessedBlockModel';
 import { sendReceivedTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-import { DEFAULT_CHAIN_ID, GRAPH_API_USDT_URL, GRAPH_API_WETH_URL } from '../config/constants';
+import { GRAPH_API_USDT_URL, GRAPH_API_WETH_URL } from '../config/constants';
 
 /**
  * The GraphQL API URLs for querying external deposits.
@@ -51,7 +51,11 @@ interface Transfer {
  * @param {Transfer & { token: string }} transfer - The transfer object to process.
  * @param {string} token - The token type (USDT or WETH).
  */
-async function processExternalDeposit(transfer: Transfer & { token: string }, token: string) {
+async function processExternalDeposit(
+  transfer: Transfer & { token: string },
+  token: string,
+  chain_id: number
+) {
   const user = await UserModel.findOne({ wallet: { $regex: new RegExp(`^${transfer.to}$`, 'i') } });
 
   if (user) {
@@ -65,7 +69,8 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
       amount: value,
       token,
       type: 'deposit',
-      status: 'completed'
+      status: 'completed',
+      chain_id
     };
     await mongoTransactionService.saveTransaction(transactionData);
 
@@ -89,7 +94,11 @@ async function processExternalDeposit(transfer: Transfer & { token: string }, to
  * Fetches and processes external deposits for users in the ecosystem.
  * @async
  */
-export async function fetchExternalDeposits(networkName: string, routerAddress: string) {
+export async function fetchExternalDeposits(
+  networkName: string,
+  routerAddress: string,
+  chain_id: number
+) {
   try {
     // Get the last processed block number
     const lastProcessedBlock = await LastProcessedBlock.findOne({
@@ -100,14 +109,17 @@ export async function fetchExternalDeposits(networkName: string, routerAddress: 
     // Fetch all user wallet addresses
     const users = await UserModel.find(
       {
-        'wallets.chain_id': DEFAULT_CHAIN_ID
+        'wallets.chain_id': chain_id
       },
-      'wallets.wallet_proxy'
+      {
+        'wallets.wallet_proxy': 1,
+        'wallets.chain_id': 1
+      }
     );
+    Logger.log('fetchExternalDeposits', users);
+
     const ecosystemAddresses = users.flatMap((user) =>
-      user.wallets
-        .filter((wallet) => wallet.chain_id === DEFAULT_CHAIN_ID)
-        .map((wallet) => wallet.wallet_proxy.toLowerCase())
+      user.wallets.map((wallet) => wallet.wallet_proxy.toLowerCase())
     );
 
     // Prepare variables for the GraphQL query
@@ -115,6 +127,10 @@ export async function fetchExternalDeposits(networkName: string, routerAddress: 
       blockNumber: fromBlock,
       receivers: ecosystemAddresses
     };
+    Logger.log(
+      'fetchExternalDeposits',
+      `Fetching chain_id ${chain_id}, fromBlock: ${fromBlock}, users ${JSON.stringify(users)}, variables: ${JSON.stringify(variables)}`
+    );
 
     // Execute the GraphQL queries for both USDT and WETH
     const [dataUSDT, dataWETH] = await Promise.all([
@@ -135,7 +151,7 @@ export async function fetchExternalDeposits(networkName: string, routerAddress: 
 
     // Process each external deposit
     await Promise.all(
-      externalDeposits.map((transfer) => processExternalDeposit(transfer, transfer.token))
+      externalDeposits.map((transfer) => processExternalDeposit(transfer, transfer.token, chain_id))
     );
 
     // Update the last processed block
@@ -151,6 +167,7 @@ export async function fetchExternalDeposits(networkName: string, routerAddress: 
 
     return `No new deposits found since block ${fromBlock}`;
   } catch (error) {
+    Logger.error('fetchExternalDeposits', `Error fetching external deposits: ${error}`);
     return `Error fetching external deposits: ${error}`;
   }
 }

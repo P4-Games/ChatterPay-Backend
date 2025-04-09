@@ -32,7 +32,8 @@ describe('Transaction Model', () => {
       date: new Date(),
       status: 'completed',
       amount: 100.5,
-      token: 'ETH'
+      token: 'ETH',
+      chain_id: 1
     };
 
     const transaction = new Transaction(validTransaction);
@@ -47,6 +48,7 @@ describe('Transaction Model', () => {
     expect(savedTransaction.status).toBe(validTransaction.status);
     expect(savedTransaction.amount).toBe(validTransaction.amount);
     expect(savedTransaction.token).toBe(validTransaction.token);
+    expect(savedTransaction.chain_id).toBe(validTransaction.chain_id);
   });
 
   it('should fail to save a Transaction without required fields', async () => {
@@ -54,7 +56,7 @@ describe('Transaction Model', () => {
       wallet_from: '0xFromWallet',
       wallet_to: '0xToWallet',
       type: 'transfer'
-      // Missing required fields: trx_hash, date, status, amount, token
+      // Missing required fields: trx_hash, date, status, amount, token, chain_id
     };
 
     const transaction = new Transaction(invalidTransaction);
@@ -71,7 +73,8 @@ describe('Transaction Model', () => {
       date: new Date(),
       status: 'completed',
       amount: 50.0,
-      token: 'ETH'
+      token: 'ETH',
+      chain_id: 1
     };
 
     const duplicateTransactionData: Partial<ITransaction> = {
@@ -82,7 +85,8 @@ describe('Transaction Model', () => {
       date: new Date(),
       status: 'pending',
       amount: 75.0,
-      token: 'BTC'
+      token: 'BTC',
+      chain_id: 1
     };
 
     const transaction1 = new Transaction(transactionData);
@@ -112,7 +116,8 @@ describe('Transaction Model', () => {
       date: new Date(),
       status: 'completed',
       amount: 1000000000.0, // Large amount
-      token: 'USDT'
+      token: 'USDT',
+      chain_id: 1
     };
 
     const transaction = new Transaction(validTransaction);
