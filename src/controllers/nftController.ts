@@ -331,7 +331,8 @@ export const generateNftOriginal = async (
           latitude: latitude || '',
           longitude: longitude || ''
         }
-      }
+      },
+      chain_id: request.server.networkConfig.chainId
     });
   } catch (error) {
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
@@ -550,7 +551,8 @@ export const generateNftCopy = async (
       copy_order_original,
       minted_contract_address: '0x',
       wallet: userWallet.wallet_proxy,
-      metadata: nftCopyOf.metadata ? nftCopyOf.metadata : defaultMetadata
+      metadata: nftCopyOf.metadata ? nftCopyOf.metadata : defaultMetadata,
+      chain_id: fastify.networkConfig.chainId
     });
 
     // update total_of_this in the copied NFT
