@@ -35,10 +35,12 @@ describe('Blockchain Model', () => {
       manteca_name: 'ethereum',
       chainId: 1,
       rpc: 'https://mainnet.infura.io/v3/YOUR-PROJECT-ID',
+      rpcBundler: 'https://mainnet.infura.io/v3/YOUR-PROJECT-ID',
       logo: 'https://ethereum.org/logo.png',
       explorer: 'https://etherscan.io',
       marketplaceOpenseaUrl: 'https://opensea.io',
       environment: 'production',
+      supportsEIP1559: true,
       contracts: {
         entryPoint: '0xEntryPointAddress',
         factoryAddress: '0xFactoryAddress',
