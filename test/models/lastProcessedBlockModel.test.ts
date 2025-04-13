@@ -29,6 +29,7 @@ describe('Blockchain Model', () => {
       explorer: 'https://etherscan.io',
       marketplaceOpenseaUrl: 'https://opensea.io',
       environment: 'production',
+      supportsEIP1559: true,
       contracts: {
         entryPoint: '0xEntryPointAddress',
         factoryAddress: '0xFactoryAddress',
@@ -124,6 +125,7 @@ describe('Blockchain Model', () => {
       explorer: 'https://polygonscan.com',
       marketplaceOpenseaUrl: 'https://opensea.io',
       environment: 'production',
+      supportsEIP1559: true,
       contracts: {
         entryPoint: '0xEntryPointAddress',
         factoryAddress: '',
