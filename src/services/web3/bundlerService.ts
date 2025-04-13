@@ -49,7 +49,7 @@ export async function sendUserOperationToBundler(
       jsonrpc: '2.0',
       method: 'eth_sendUserOperation',
       params: [serializedUserOp, entryPointAddress],
-      id: `ChatterPay.${Date.now().toLocaleString()}`
+      id: Date.now()
     };
     Logger.log(
       'sendUserOperationToBundler',
