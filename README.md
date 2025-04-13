@@ -40,7 +40,7 @@
 
 <p>&nbsp;</p>
 
-![Componentes Interactions](.doc/technical-overview/chatterpay-architecture-conceptual-view.jpg)
+![Components Interaction](.doc/technical-overview/chatterpay-architecture-conceptual-view.jpg)
 
 
 # About this Repo
