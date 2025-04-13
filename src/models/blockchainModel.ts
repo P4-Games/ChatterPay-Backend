@@ -31,6 +31,7 @@ export interface IBlockchain extends Document {
   explorer: string;
   marketplaceOpenseaUrl: string;
   environment: string;
+  supportsEIP1559: boolean;
   contracts: {
     entryPoint: string;
     factoryAddress: string;
@@ -90,6 +91,7 @@ const blockchainSchema = new Schema<IBlockchain>({
   explorer: { type: String, required: true },
   marketplaceOpenseaUrl: { type: String, required: true },
   environment: { type: String, required: true },
+  supportsEIP1559: { type: Boolean, required: true },
   contracts: {
     entryPoint: { type: String, required: false },
     factoryAddress: { type: String, required: false },
