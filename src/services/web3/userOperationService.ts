@@ -14,6 +14,7 @@ import { PackedUserOperation, UserOperationReceipt } from '../../types/userOpera
  *
  * @param {ethers.providers.JsonRpcProvider} provider - Blockchain Provider.
  * @param {IBlockchain['gas']} gasConfig - Blockchain gas config with predefined values.
+ * @param {boolean} supportsEIP1559 - Indicates if the network supports EIP-1559 fee structure.
  * @param {string} callData - Encoded function call data.
  * @param {string} sender - Sender address initiating the operation.
  * @param {BigNumber} nonce - Nonce value to prevent replay attacks.
@@ -24,6 +25,7 @@ import { PackedUserOperation, UserOperationReceipt } from '../../types/userOpera
 export async function createGenericUserOperation(
   provider: ethers.providers.JsonRpcProvider,
   gasConfig: IBlockchain['gas'],
+  supportsEIP1559: boolean,
   callData: string,
   sender: string,
   nonce: BigNumber,
@@ -57,7 +59,9 @@ export async function createGenericUserOperation(
     callGasLimit: BigNumber.from(gasValues.callGasLimit),
     preVerificationGas: BigNumber.from(gasValues.preVerificationGas),
     maxFeePerGas: perGasData.maxFeePerGas,
-    maxPriorityFeePerGas: perGasData.maxPriorityFeePerGas,
+    maxPriorityFeePerGas: supportsEIP1559
+      ? perGasData.maxPriorityFeePerGas
+      : perGasData.maxFeePerGas,
     paymasterAndData: '0x', // Will be filled by the paymaster service
     signature: '0x' // Empty signature initially
   };
@@ -261,6 +265,7 @@ async function prepareAndExecuteUserOperation(
     let userOperation = await createGenericUserOperation(
       provider,
       networkConfig.gas,
+      networkConfig.supportsEIP1559,
       userOpCallData,
       userProxyAddress,
       nonce,
@@ -317,7 +322,7 @@ async function prepareAndExecuteUserOperation(
     // Send the operation to the bundler and wait for receipt
     Logger.info(userOpType, `Sending operation to bundler: ${networkConfig.rpc}`);
     const bundlerResponse = await sendUserOperationToBundler(
-      networkConfig.rpc,
+      networkConfig.rpcBundler,
       userOperation,
       entryPointContract.address
     );

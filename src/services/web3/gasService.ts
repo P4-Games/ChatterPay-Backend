@@ -176,6 +176,7 @@ const getcallDataGasValues = async (
 
   let gettingGasValuesfrom = 'bdd';
   const alchemyResult = await response.json();
+
   if (alchemyResult && alchemyResult.result) {
     gasResult.callGasLimit = BigNumber.from(alchemyResult.result.callGasLimit)
       .mul(Math.round(gasMultiplier * 100))

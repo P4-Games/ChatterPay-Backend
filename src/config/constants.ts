@@ -18,8 +18,8 @@ const {
   BOT_DATA_TOKEN,
   BOT_API_URL,
   BOT_NOTIFICATIONS_ENABLED: botNotificationsEnabled = 'true',
-  NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
-  NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
+  NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp = 'false',
+  NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs = 'false',
   GCP_BUCKET_BASE_URL,
   FRONTEND_TOKEN,
   CHATIZALO_TOKEN,
@@ -98,8 +98,8 @@ export const LOCAL_ABIs: ABIs = {
 };
 
 export const ABIS_READ_FROM = abisReadFrom.toLowerCase();
-export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
-export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' || true;
+export const NFT_UPLOAD_IMAGE_ICP: boolean = envNftUploadImageIcp.toLowerCase() === 'true';
+export const NFT_UPLOAD_IMAGE_IPFS: boolean = envNftUploadImageIpfs.toLowerCase() === 'true';
 export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
 
 export const PUSH_CHANNEL_ADDRESS = !pushChannelAddress.startsWith('0x')
