@@ -124,6 +124,14 @@
 
 - Get Token Rates
 
+## Backend => Alchemy
+
+- RPC Calls
+
+## Backend => Pimlico
+
+- RPC Calls
+
 ## GCP Cloud Scheduler => Backend
 
 - checking_depositos => /check_deposits`

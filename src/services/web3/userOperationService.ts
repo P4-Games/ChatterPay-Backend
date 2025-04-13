@@ -1,12 +1,17 @@
+import PQueue from 'p-queue';
 import { ethers, BigNumber } from 'ethers';
+import axios, { AxiosResponse } from 'axios';
 
 import { gasService } from './gasService';
 import { Logger } from '../../helpers/loggerHelper';
 import { addPaymasterData } from './paymasterService';
 import { IBlockchain } from '../../models/blockchainModel';
 import { sendUserOperationToBundler } from './bundlerService';
+import { QUEUE_BUNDLER_INTERVAL } from '../../config/constants';
 import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation, UserOperationReceipt } from '../../types/userOperationType';
+
+const queue = new PQueue({ interval: QUEUE_BUNDLER_INTERVAL, intervalCap: 1 }); // 1 request each 10 seg
 
 /**
  * Creates a generic user operation for a transaction.
@@ -188,41 +193,63 @@ declare module 'fastify' {
  * @returns {Promise<UserOperationReceipt>} The user operation receipt when available.
  */
 export async function waitForUserOperationReceipt(
-  provider: ethers.providers.JsonRpcProvider,
+  bundlerRpcUrl: string,
   userOpHash: string,
   timeout = 300000, // 5 minutes
   interval = 5000 // 5 seconds
 ): Promise<UserOperationReceipt> {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
-    const checkReceipt = () => {
-      provider
-        .send('eth_getUserOperationReceipt', [userOpHash])
-        .then((receipt: UserOperationReceipt | null) => {
-          if (receipt) {
-            resolve(receipt);
-          } else if (Date.now() - startTime < timeout) {
-            const elapsed = Date.now() - startTime;
-            Logger.log('waitForUserOperationReceipt', `Retrying... ${elapsed} / ${timeout} ms`);
-            setTimeout(checkReceipt, interval);
-          } else {
-            reject(
-              new Error('waitForUserOperationReceipt: Timeout waiting for user operation receipt')
-            );
-          }
-        })
-        .catch((error) => {
-          if (Date.now() - startTime < timeout) {
-            const elapsed = Date.now() - startTime;
-            Logger.log(
-              'waitForUserOperationReceipt',
-              `Retrying after error... ${elapsed} / ${timeout} ms`
-            );
-            setTimeout(checkReceipt, interval);
-          } else {
-            reject(error);
-          }
-        });
+
+    const checkReceipt = async () => {
+      const payload = {
+        jsonrpc: '2.0',
+        method: 'eth_getUserOperationReceipt',
+        params: [userOpHash],
+        id: Date.now()
+      };
+
+      Logger.log('waitForUserOperationReceipt', `payload: ${JSON.stringify(payload)}`);
+
+      try {
+        const response = (await queue.add(async () =>
+          axios.post(bundlerRpcUrl, payload, {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          })
+        )) as AxiosResponse;
+
+        const receipt = response.data.result;
+
+        Logger.log(
+          'waitForUserOperationReceipt',
+          `Received from bundler: ${JSON.stringify(receipt)}`
+        );
+
+        if (receipt) {
+          resolve(receipt);
+        } else if (Date.now() - startTime < timeout) {
+          const elapsed = Date.now() - startTime;
+          Logger.log('waitForUserOperationReceipt', `Retrying... ${elapsed} / ${timeout} ms`);
+          setTimeout(checkReceipt, interval);
+        } else {
+          reject(new Error('Timeout waiting for user operation receipt'));
+        }
+      } catch (error) {
+        Logger.error('waitForUserOperationReceipt', error);
+
+        if (Date.now() - startTime < timeout) {
+          const elapsed = Date.now() - startTime;
+          Logger.log(
+            'waitForUserOperationReceipt',
+            `Retrying after error... ${elapsed} / ${timeout} ms`
+          );
+          setTimeout(checkReceipt, interval);
+        } else {
+          reject(error);
+        }
+      }
     };
 
     checkReceipt();
@@ -320,7 +347,7 @@ async function prepareAndExecuteUserOperation(
     }
 
     // Send the operation to the bundler and wait for receipt
-    Logger.info(userOpType, `Sending operation to bundler: ${networkConfig.rpc}`);
+    Logger.info(userOpType, `Sending operation to bundler: ${networkConfig.rpcBundler}`);
     const bundlerResponse = await sendUserOperationToBundler(
       networkConfig.rpcBundler,
       userOperation,
@@ -329,7 +356,7 @@ async function prepareAndExecuteUserOperation(
     Logger.debug(userOpType, `Bundler response: ${JSON.stringify(bundlerResponse)}`);
 
     Logger.log(userOpType, 'Waiting for transaction to be mined.');
-    const receipt = await waitForUserOperationReceipt(provider, bundlerResponse);
+    const receipt = await waitForUserOperationReceipt(networkConfig.rpcBundler, bundlerResponse);
 
     if (!receipt?.success) {
       Logger.error(userOpType, `Operation failed. Receipt: ${JSON.stringify(receipt)}`);

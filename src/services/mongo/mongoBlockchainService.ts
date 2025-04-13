@@ -1,4 +1,3 @@
-import { Logger } from '../../helpers/loggerHelper';
 import { DEFAULT_CHAIN_ID } from '../../config/constants';
 import Blockchain, { IBlockchain } from '../../models/blockchainModel';
 
@@ -25,7 +24,6 @@ export const mongoBlockchainService = {
    */
   getNetworkConfig: async (chainId: number = DEFAULT_CHAIN_ID): Promise<IBlockchain> => {
     const network = await Blockchain.findOne({ chainId });
-    Logger.log('getNetworkConfig', `Network Config: ${chainId}`);
     if (!network) {
       throw new Error(`Network configuration not found for chain ID ${chainId}`);
     }
