@@ -32,14 +32,14 @@ function serializeUserOperation(userOp: PackedUserOperation): Record<string, str
 /**
  * Sends a user operation to the bundler.
  *
- * @param rpcUrl - The URL of the rpc.
+ * @param bundlerRpcUrl - The URL of the rpc.
  * @param userOperation - The packed user operation to send.
  * @param entryPointAddress - The address of the EntryPoint contract.
  * @returns The bundler's response.
  * @throws Error if the request fails.
  */
 export async function sendUserOperationToBundler(
-  rpcUrl: string,
+  bundlerRpcUrl: string,
   userOperation: PackedUserOperation,
   entryPointAddress: string
 ): Promise<string> {
@@ -53,12 +53,12 @@ export async function sendUserOperationToBundler(
     };
     Logger.log(
       'sendUserOperationToBundler',
-      `payload: ${JSON.stringify(payload)}, rpcUrl: ${rpcUrl}`
+      `payload: ${JSON.stringify(payload)}, bundlerRpcUrl: ${bundlerRpcUrl}`
     );
 
     // Wrapper function in quue to avoid erro 429 (rate-limit)
     const response = (await queue.add(async () =>
-      axios.post(rpcUrl, payload, {
+      axios.post(bundlerRpcUrl, payload, {
         headers: {
           'Content-Type': 'application/json'
         }
