@@ -219,7 +219,8 @@ export async function withdrawWalletAllFunds(
           amount,
           token: symbol,
           type: 'withdraw',
-          status: 'completed'
+          status: 'completed',
+          chain_id: networkConfig.chainId
         });
 
         // Only if it's not the last one

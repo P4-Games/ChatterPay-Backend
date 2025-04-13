@@ -42,7 +42,8 @@ const {
   SWAP_SLIPPAGE_CONFIG_STABLE: slippage_config_stable = 300,
   SWAP_SLIPPAGE_CONFIG_DEFAULT: slippage_config_default = 500,
   SWAP_SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
-  ABIS_READ_FROM: abisReadFrom = 'local'
+  ABIS_READ_FROM: abisReadFrom = 'local',
+  CHATIZALO_PHONE_NUMBER
 } = process.env;
 
 export {
@@ -62,7 +63,8 @@ export {
   CHATIZALO_TOKEN,
   MANTECA_API_KEY,
   MANTECA_BASE_URL,
-  GCP_BUCKET_BASE_URL
+  GCP_BUCKET_BASE_URL,
+  CHATIZALO_PHONE_NUMBER
 };
 
 export const IS_DEVELOPMENT =
@@ -132,7 +134,6 @@ export const FASTIFY_REFRESH_TOKENS_INTERVAL_MS: number = Number(fastifyRefreshN
 export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(fastifyRefreshTokensIntervalMs);
 
 export const WHATSAPP_API_URL = 'https://api.whatsapp.com';
-export const CHATIZALO_PHONE_NUMBER = IS_DEVELOPMENT ? 5491168690963 : 5491164629653;
 
 export const MANTECA_MOCK_UPLOAD_DOCUMENTS_URL = 'https://upload.manteca.dev/file-upload-url';
 export const INFURA_URL = 'https://mainnet.infura.io/v3';

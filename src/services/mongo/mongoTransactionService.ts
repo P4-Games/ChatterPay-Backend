@@ -8,7 +8,7 @@ export const mongoTransactionService = {
    */
   saveTransaction: async (transactionData: TransactionData) => {
     try {
-      const { tx, walletFrom, walletTo, amount, token, type, status } = transactionData;
+      const { tx, walletFrom, walletTo, amount, token, type, status, chain_id } = transactionData;
 
       await Transaction.create({
         trx_hash: tx,
@@ -18,7 +18,8 @@ export const mongoTransactionService = {
         date: new Date(),
         status,
         amount,
-        token
+        token,
+        chain_id
       });
     } catch (error: unknown) {
       // avoid throw error

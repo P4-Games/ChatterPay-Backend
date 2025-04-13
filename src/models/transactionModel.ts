@@ -9,6 +9,7 @@ export interface ITransaction extends Document {
   status: string;
   amount: number;
   token: string;
+  chain_id: number;
 }
 
 const transactionSchema = new Schema<ITransaction>({
@@ -19,7 +20,8 @@ const transactionSchema = new Schema<ITransaction>({
   date: { type: Date, required: true },
   status: { type: String, required: true },
   amount: { type: Number, required: true },
-  token: { type: String, required: true }
+  token: { type: String, required: true },
+  chain_id: { type: Number, required: true }
 });
 
 transactionSchema.index(

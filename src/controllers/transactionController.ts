@@ -530,7 +530,8 @@ export const makeTransaction = async (
       amount: parseFloat(amount),
       token: tokenSymbol,
       type: 'transfer',
-      status: 'completed'
+      status: 'completed',
+      chain_id: request.server.networkConfig.chainId
     };
     await mongoTransactionService.saveTransaction(transactionOut);
     saveTransactionSpan?.endSpan();
