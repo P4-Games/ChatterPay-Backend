@@ -8,8 +8,8 @@ export interface INFTMetadata {
   };
   description: string;
   geolocation?: {
-    latitud: string;
-    longitud: string;
+    latitude: string;
+    longitude: string;
   };
 }
 
@@ -25,7 +25,9 @@ export interface INFT extends Document {
   copy_order: number;
   copy_of_original?: string | null;
   copy_order_original: number;
+  minted_contract_address: string;
   metadata: INFTMetadata;
+  chain_id: number;
 }
 
 const NFTSchema = new Schema<INFT>({
@@ -40,6 +42,7 @@ const NFTSchema = new Schema<INFT>({
   copy_order: { type: Number, required: true },
   copy_of_original: { type: String, required: false },
   copy_order_original: { type: Number, required: true },
+  minted_contract_address: { type: String, required: true },
   metadata: {
     image_url: {
       type: new Schema(
@@ -56,14 +59,15 @@ const NFTSchema = new Schema<INFT>({
     geolocation: {
       type: new Schema(
         {
-          longitud: { type: String, required: false },
-          latitud: { type: String, required: false }
+          longitude: { type: String, required: false },
+          latitude: { type: String, required: false }
         },
         { _id: false }
       ),
       required: false
     }
-  }
+  },
+  chain_id: { type: Number, required: true }
 });
 
 const NFTModel = model<INFT>('NFTs', NFTSchema, 'nfts');

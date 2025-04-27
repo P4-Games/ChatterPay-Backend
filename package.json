@@ -4,7 +4,7 @@
   "private": false,
   "author": "P4-games",
   "version": "1.0.0",
-  "description": "Crypto a un mensaje de distancia!",
+  "description": "Crypto at a message's distance!",
   "module": "src/index.ts",
   "type": "module",
   "scripts": {

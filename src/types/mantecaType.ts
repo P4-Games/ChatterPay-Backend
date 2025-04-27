@@ -263,3 +263,23 @@ export interface MantecaSupportedAssets {
     withdraw: string[];
   };
 }
+
+export type MantecaOperationSide = 'BUY' | 'SELL';
+
+export interface MantecaWidgetOnboarding {
+  userExternalId: string;
+  sessionId: string;
+  returnUrl: string;
+  failureUrl: string;
+  options: {
+    endOnOperation: boolean;
+    endOnOperationWaiting: boolean;
+    side: MantecaOperationSide;
+    asset: string;
+    against: string;
+    assetAmount?: string;
+    againstAmount?: string;
+    withdrawAddress: string;
+    withdrawNetwork: string;
+  };
+}

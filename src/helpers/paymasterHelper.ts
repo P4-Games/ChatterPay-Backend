@@ -1,4 +1,4 @@
-import { ethers, Signer, Wallet, Contract, BigNumber } from 'ethers';
+import { ethers, Signer, Wallet } from 'ethers';
 
 import { Logger } from './loggerHelper';
 
@@ -16,78 +16,45 @@ export async function createPaymasterAndData(
   backendSigner: Signer,
   entryPointAddress: string,
   callData: string,
-  validityDurationSeconds: number = 3600,
+  validityDurationSeconds: number = 600, // 10 minutes
   chainId?: number
 ): Promise<string> {
   const currentTimestamp = Math.floor(Date.now() / 1000);
   const expirationTimestamp = currentTimestamp + validityDurationSeconds;
+  const actualChainId = chainId ?? (await backendSigner.getChainId());
 
-  // 1. Include chainId, entryPoint and callData in hash
-  const messageHash = ethers.utils.solidityKeccak256(
+  // Create message hash using abi.encode for compatibility with Solidity
+  const encodedData = ethers.utils.defaultAbiCoder.encode(
     ['address', 'uint64', 'uint256', 'address', 'bytes'],
-    [
-      userProxyAddress,
-      expirationTimestamp,
-      chainId || (await backendSigner.getChainId()),
-      entryPointAddress,
-      callData // Key to prevent frontrunning!
-    ]
+    [userProxyAddress, expirationTimestamp, actualChainId, entryPointAddress, callData]
   );
 
-  // 2. Sign WITHOUT Ethereum prefix (use signDigest)
+  const messageHash = ethers.utils.keccak256(encodedData);
+
+  // Sign message hash
   const walletSigner = backendSigner as unknown as Wallet;
   const signature = walletSigner._signingKey().signDigest(ethers.utils.arrayify(messageHash));
 
-  // 3. Convert expiration to bytes8
+  // Convert expiration to bytes8
   const expirationBytes = ethers.utils.hexZeroPad(ethers.utils.hexlify(expirationTimestamp), 8);
 
+  // Log debugging information
   Logger.log(
-    'createPaymasterAndData',
+    'Debugging createPaymasterAndData:',
     `
-    paymasterAddress: ${paymasterAddress},
-    messageHash: ${messageHash}, 
-    walletSigner: ${walletSigner.address},
-    signature: ${signature.toString()},
-    join-signature: ${ethers.utils.joinSignature(signature)}
-    expirationBytes: ${expirationBytes}`
+    - userProxyAddress: ${userProxyAddress}
+    - expirationTimestamp: ${expirationTimestamp}
+    - chainId: ${actualChainId}
+    - entryPointAddress: ${entryPointAddress}
+    - callData (first 100 chars): ${callData.substring(0, 100)}
+    - encodedData: ${encodedData}
+    - messageHash: ${messageHash}`
   );
 
-  // 4. Concatenate components
+  // Combine all components
   return ethers.utils.hexConcat([
     paymasterAddress,
     ethers.utils.joinSignature(signature),
     expirationBytes
   ]);
-}
-
-/**
- * Get gas limit for a transaction w/ dynamic gas.
- */
-export async function getDynamicGas(
-  contract: Contract,
-  methodName: string,
-  args: unknown[],
-  gasBufferPercentage: number = 10,
-  defaultGasLimit: BigNumber = BigNumber.from('7000000')
-): Promise<BigNumber> {
-  try {
-    // Check if the method exists in the contract
-    if (typeof contract[methodName] !== 'function') {
-      throw new Error(`The method ${methodName} doesn't exist in contract.`);
-    }
-
-    // Try to estimate the gas required for the transaction
-    const estimatedGas: ethers.BigNumber = await contract.estimateGas[methodName](...args);
-
-    // Apply the buffer to the estimated gas
-    const gasLimit: BigNumber = estimatedGas
-      .mul(BigNumber.from(100 + gasBufferPercentage))
-      .div(BigNumber.from(100));
-    Logger.log('getDynamicGas', `Estimated gas limit for ${methodName}:`, gasLimit.toString());
-    return gasLimit;
-  } catch (error) {
-    Logger.warn('getDynamicGas', `Gas estimation failed for ${methodName}:`, error);
-    // If the estimation fails, use the default gas limit
-    return defaultGasLimit;
-  }
 }

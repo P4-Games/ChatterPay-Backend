@@ -68,13 +68,13 @@ export interface ExecuteSwapResult {
 export interface ExecueTransactionResult {
   success: boolean;
   transactionHash: string;
+  error: string;
 }
 
 export interface SetupContractReturn {
   provider: ethers.providers.JsonRpcProvider;
   signer: ethers.Wallet;
   backendSigner: ethers.Wallet;
-  bundlerUrl: string;
   chatterPay: ethers.Contract;
   proxy: ComputedAddress;
   accountExists: boolean;
@@ -96,6 +96,7 @@ export interface TransactionData {
   token: string;
   type: string;
   status: string;
+  chain_id: number;
 }
 
 export interface ConversionRates {

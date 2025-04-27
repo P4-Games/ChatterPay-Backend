@@ -9,15 +9,12 @@ import { IUser, IUserWallet } from '../models/userModel';
 import { setupERC20 } from './web3/contractSetupService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { checkBlockchainConditions } from './blockchainService';
-import { sendUserOperationToBundler } from './web3/bundlerService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-import { waitForUserOperationReceipt } from './web3/userOpExecutorService';
-import { addPaymasterData, getPaymasterEntryPointDepositValue } from './web3/paymasterService';
+import { createTransferCallData, executeUserOperationWithRetry } from './web3/userOperationService';
 import {
-  signUserOperation,
-  createTransferCallData,
-  createGenericUserOperation
-} from './web3/userOperationService';
+  logPaymasterEntryPointDeposit,
+  getPaymasterEntryPointDepositValue
+} from './web3/paymasterService';
 import {
   openOperation,
   closeOperation,
@@ -88,120 +85,45 @@ export async function sendTransferUserOperation(
     );
     Logger.log('sendTransferUserOperation', 'Created Transfer Call Data OK', callData);
 
-    // Get the nonce
-    Logger.log('sendTransferUserOperation', 'Getting Nonce');
-    const nonce = await entryPointContract.getNonce(setupContractsResult.proxy.proxyAddress, 0);
-    Logger.log('sendTransferUserOperation', 'Getted Nonce OK', nonce);
-
-    // Create the base user operation
-    Logger.log('sendTransferUserOperation', 'Creating Generic User Operation');
-    const userOperation = await createGenericUserOperation(
-      networkConfig.gas,
-      callData,
-      setupContractsResult.proxy.proxyAddress,
-      nonce,
-      'transfer'
-    );
-    Logger.log('sendTransferUserOperation', 'Created Generic User Operation OK', userOperation);
-
-    // Add paymaster data
-    Logger.log('sendTransferUserOperation', 'Adding Paymaster Data');
-    const userOperationWithPaymaster = await addPaymasterData(
-      userOperation,
-      networkConfig.contracts.paymasterAddress!,
-      setupContractsResult.backendSigner,
-      networkConfig.contracts.entryPoint,
-      callData,
-      networkConfig.chainId
-    );
-    Logger.log(
-      'sendTransferUserOperation',
-      'Added Paymaster Data OK (userOp 2)',
-      JSON.stringify(userOperationWithPaymaster)
-    );
-
-    Logger.log('sendTransferUserOperation', 'Signing User Operation');
-    const userOperationSigned = await signUserOperation(
-      userOperationWithPaymaster,
-      networkConfig.contracts.entryPoint,
-      setupContractsResult.signer
-    );
-
-    Logger.log(
-      'sendTransferUserOperation',
-      'Signed User Operation OK (userOp 3)',
-      JSON.stringify(userOperationSigned)
-    );
-    Logger.log(
-      'sendTransferUserOperation',
-      'paymasterAndData length (must be 93 !!!!):',
-      userOperationWithPaymaster.paymasterAndData.length
-    );
-
-    //  return;
-    Logger.log(
-      'sendTransferUserOperation',
-      'Sending user operation to bundler',
-      setupContractsResult.bundlerUrl
-    );
-
     // Keep Paymater Deposit Value
     const paymasterDepositValuePrev = await getPaymasterEntryPointDepositValue(
       entryPointContract,
       networkConfig.contracts.paymasterAddress!
     );
 
-    const bundlerResponse = await sendUserOperationToBundler(
-      setupContractsResult.bundlerUrl,
-      userOperationSigned,
-      entryPointContract.address
-    );
-    Logger.log('sendTransferUserOperation', 'Bundler response:', bundlerResponse);
-    Logger.log('sendTransferUserOperation', 'Sent User Operation to Bundler OK');
-
-    Logger.log('sendTransferUserOperation', 'Waiting for transaction to be mined.');
-    const receipt = await waitForUserOperationReceipt(
+    const userOpGasConfig = networkConfig.gas.operations.transfer;
+    const userOpResult = await executeUserOperationWithRetry(
+      networkConfig,
       setupContractsResult.provider,
-      bundlerResponse
-    );
-    Logger.log('sendTransferUserOperation', 'Transaction receipt:', JSON.stringify(receipt));
-
-    if (!receipt?.success) {
-      throw new Error('sendTransferUserOperation: Transaction failed or not found');
-    }
-
-    const paymasterDepositValueNow = await getPaymasterEntryPointDepositValue(
+      setupContractsResult.signer,
+      setupContractsResult.backendSigner,
       entryPointContract,
-      networkConfig.contracts.paymasterAddress!
-    );
-    const cost = paymasterDepositValuePrev.value.sub(paymasterDepositValueNow.value);
-    const costInEth = (
-      parseFloat(paymasterDepositValuePrev.inEth) - parseFloat(paymasterDepositValueNow.inEth)
-    ).toFixed(6);
-
-    Logger.info(
-      'sendTransferUserOperation',
-      `Paymaster pre: ${paymasterDepositValuePrev.value.toString()} (${paymasterDepositValuePrev.inEth}), ` +
-        `Paymaster now: ${paymasterDepositValueNow.value.toString()} (${paymasterDepositValueNow.inEth}), ` +
-        `Cost: ${cost.toString()} (${costInEth} ETH)`
+      callData,
+      setupContractsResult.proxy.proxyAddress,
+      'transfer',
+      userOpGasConfig.perGasInitialMultiplier,
+      userOpGasConfig.perGasIncrement,
+      userOpGasConfig.callDataInitialMultiplier,
+      userOpGasConfig.maxRetries,
+      userOpGasConfig.timeoutMsBetweenRetries
     );
 
-    Logger.log(
-      'sendTransferUserOperation',
-      'Transaction confirmed in block:',
-      receipt.receipt.blockNumber
+    await logPaymasterEntryPointDeposit(
+      entryPointContract,
+      networkConfig.contracts.paymasterAddress!,
+      paymasterDepositValuePrev
     );
-    Logger.log('sendTransferUserOperation', 'end!');
 
-    return { success: true, transactionHash: receipt.receipt.transactionHash };
+    return userOpResult;
   } catch (error) {
+    const errorMessage = JSON.stringify(error);
     Logger.error(
       'sendTransferUserOperation',
       `Error, from: ${fromAddress}, to: ${toAddress}, ` +
         `token address: ${tokenAddress}, amount: ${amount}, error: `,
-      JSON.stringify(error)
+      errorMessage
     );
-    return { success: false, transactionHash: '' };
+    return { success: false, transactionHash: '', error: errorMessage };
   }
 }
 
@@ -297,7 +219,8 @@ export async function withdrawWalletAllFunds(
           amount,
           token: symbol,
           type: 'withdraw',
-          status: 'completed'
+          status: 'completed',
+          chain_id: networkConfig.chainId
         });
 
         // Only if it's not the last one

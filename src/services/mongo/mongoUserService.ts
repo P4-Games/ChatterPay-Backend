@@ -156,6 +156,38 @@ export const mongoUserService = {
   },
 
   /**
+   * Updates the operation counter for a specific user and operation type.
+   *
+   * @param phoneNumber - User's phone number identifier
+   * @param operationType - Type of operation (transfer, swap, nft, nftCopy)
+   */
+  updateUserOperationCounter: async (
+    phoneNumber: string,
+    operationType: 'transfer' | 'swap' | 'mint_nft' | 'mint_nft_copy'
+  ): Promise<void> => {
+    const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
+    try {
+      Logger.info(
+        'updateUserOperationCounter',
+        `Updating counter for ${operationType} on date ${currentDate} for user ${phoneNumber}`
+      );
+
+      await UserModel.updateOne(
+        { phone_number: phoneNumber },
+        { $inc: { [`operations_counters.${operationType}.${currentDate}`]: 1 } }
+      );
+    } catch (error) {
+      Logger.error(
+        'updateUserOperationCounter',
+        `Error updating counter for ${operationType}`,
+        (error as Error).message
+      );
+      // avoid throw error
+    }
+  },
+
+  /**
    * Gets user language based on the phone number.
    *
    * @param phoneNumber
@@ -184,5 +216,41 @@ export const mongoUserService = {
       );
     }
     return language;
+  },
+
+  /**
+   * Reset the entire operations_counters field for a specific user.
+   *
+   * @param {string} phoneNumber - The user's phone number to identify them.
+   * @returns {Promise<void>}
+   */
+  resetrUserOperationCounters: async (phoneNumber: string): Promise<void> => {
+    try {
+      Logger.info(
+        'resetrUserOperationCounters',
+        `Resetting operations_counters for user ${phoneNumber}`
+      );
+
+      await UserModel.updateOne(
+        { phone_number: phoneNumber },
+        {
+          $set: {
+            operations_counters: {
+              transfer: {},
+              swap: {},
+              mint_nft: {},
+              mint_nft_copy: {}
+            }
+          }
+        }
+      );
+    } catch (error) {
+      // avoid throw error
+      Logger.error(
+        'resetrUserOperationCounters',
+        `Error Resetting operations_counters for user ${phoneNumber}`,
+        (error as Error).message
+      );
+    }
   }
 };

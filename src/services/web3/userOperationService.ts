@@ -1,15 +1,25 @@
+import PQueue from 'p-queue';
 import { ethers, BigNumber } from 'ethers';
+import axios, { AxiosResponse } from 'axios';
 
+import { gasService } from './gasService';
 import { Logger } from '../../helpers/loggerHelper';
+import { addPaymasterData } from './paymasterService';
 import { IBlockchain } from '../../models/blockchainModel';
+import { sendUserOperationToBundler } from './bundlerService';
+import { QUEUE_BUNDLER_INTERVAL } from '../../config/constants';
 import { getUserOpHash } from '../../helpers/userOperationHelper';
-import { PackedUserOperation } from '../../types/userOperationType';
+import { PackedUserOperation, UserOperationReceipt } from '../../types/userOperationType';
+
+const queue = new PQueue({ interval: QUEUE_BUNDLER_INTERVAL, intervalCap: 1 }); // 1 request each 10 seg
 
 /**
  * Creates a generic user operation for a transaction.
  * Retrieves gas parameters from the blockchain config and applies a multiplier.
  *
+ * @param {ethers.providers.JsonRpcProvider} provider - Blockchain Provider.
  * @param {IBlockchain['gas']} gasConfig - Blockchain gas config with predefined values.
+ * @param {boolean} supportsEIP1559 - Indicates if the network supports EIP-1559 fee structure.
  * @param {string} callData - Encoded function call data.
  * @param {string} sender - Sender address initiating the operation.
  * @param {BigNumber} nonce - Nonce value to prevent replay attacks.
@@ -18,66 +28,30 @@ import { PackedUserOperation } from '../../types/userOperationType';
  * @returns {Promise<PackedUserOperation>} The created user operation with adjusted gas limits and fees.
  */
 export async function createGenericUserOperation(
+  provider: ethers.providers.JsonRpcProvider,
   gasConfig: IBlockchain['gas'],
+  supportsEIP1559: boolean,
   callData: string,
   sender: string,
   nonce: BigNumber,
   userOpType: 'transfer' | 'swap',
-  gasMultiplier: number = 1.0
+  gasMultiplier: number
 ): Promise<PackedUserOperation> {
   const gasValues = gasConfig.operations[userOpType];
+  const perGasData: { maxPriorityFeePerGas: BigNumber; maxFeePerGas: BigNumber } = {
+    maxPriorityFeePerGas: ethers.utils.parseUnits(gasValues.maxPriorityFeePerGas, 'gwei'),
+    maxFeePerGas: ethers.utils.parseUnits(gasValues.maxFeePerGas, 'gwei')
+  };
 
-  Logger.log('createGenericUserOperation', 'Creating Generic UserOperation.');
-  Logger.log('createGenericUserOperation', 'Sender Address:', sender);
-  Logger.log('createGenericUserOperation', 'Call Data:', callData);
-  Logger.log('createGenericUserOperation', 'Nonce:', nonce.toString());
-  Logger.log('createGenericUserOperation', 'MAX_FEE_PER_GAS', gasValues.maxFeePerGas);
-  Logger.log(
-    'createGenericUserOperation',
-    'MAX_PRIORITY_FEE_PER_GAS',
-    gasValues.maxPriorityFeePerGas
-  );
-  Logger.log(
-    'createGenericUserOperation',
-    'VERIFICATION_GAS_LIMIT',
-    gasValues.verificationGasLimit
-  );
-  Logger.log('createGenericUserOperation', 'CALL_GAS_LIMIT', gasValues.callGasLimit);
-  Logger.log('createGenericUserOperation', 'PRE_VERIFICATION_GAS', gasValues.preVerificationGas);
-
-  // Calculate adjusted gas values
-  const baseMaxFeePerGas = ethers.utils.parseUnits(gasValues.maxFeePerGas, 'gwei');
-  const baseMaxPriorityFeePerGas = ethers.utils.parseUnits(gasValues.maxPriorityFeePerGas, 'gwei');
-
-  // Apply multiplier if different from 1.0
-  let effectiveMaxFeePerGas = baseMaxFeePerGas;
-  let effectiveMaxPriorityFeePerGas = baseMaxPriorityFeePerGas;
-
-  if (gasMultiplier !== 1.0) {
-    // Convert multiplier to basis points (e.g., 1.2 → 120)
-    const multiplierBasisPoints = Math.floor(gasMultiplier * 100);
-
-    // Apply multiplier to base values
-    effectiveMaxFeePerGas = baseMaxFeePerGas.mul(multiplierBasisPoints).div(100);
-    effectiveMaxPriorityFeePerGas = baseMaxPriorityFeePerGas.mul(multiplierBasisPoints).div(100);
-
-    Logger.log(
-      'createGenericUserOperation',
-      `Applying gas multiplier: ${gasMultiplier.toFixed(2)}x`
+  if (!gasConfig.useFixedValues) {
+    const DynamicGasValues = await gasService.getPerGasValues(
+      gasConfig.operations[userOpType],
+      provider,
+      gasMultiplier
     );
-    Logger.log(
-      'createGenericUserOperation',
-      `Original MAX_FEE_PER_GAS: ${gasValues.maxFeePerGas} gwei → ${ethers.utils.formatUnits(effectiveMaxFeePerGas, 'gwei')} gwei`
-    );
-    Logger.log(
-      'createGenericUserOperation',
-      `Original MAX_PRIORITY_FEE_PER_GAS: ${gasValues.maxPriorityFeePerGas} gwei → ${ethers.utils.formatUnits(effectiveMaxPriorityFeePerGas, 'gwei')} gwei`
-    );
-  } else {
-    Logger.log(
-      'createGenericUserOperation',
-      `Using standard gas values: MAX_FEE_PER_GAS: ${gasValues.maxFeePerGas} gwei, MAX_PRIORITY_FEE_PER_GAS: ${gasValues.maxPriorityFeePerGas} gwei`
-    );
+
+    perGasData.maxPriorityFeePerGas = DynamicGasValues.maxPriorityFeePerGas;
+    perGasData.maxFeePerGas = DynamicGasValues.maxFeePerGas;
   }
 
   // Create and return userOp with adjusted gas values
@@ -89,8 +63,10 @@ export async function createGenericUserOperation(
     verificationGasLimit: BigNumber.from(gasValues.verificationGasLimit),
     callGasLimit: BigNumber.from(gasValues.callGasLimit),
     preVerificationGas: BigNumber.from(gasValues.preVerificationGas),
-    maxFeePerGas: effectiveMaxFeePerGas,
-    maxPriorityFeePerGas: effectiveMaxPriorityFeePerGas,
+    maxFeePerGas: perGasData.maxFeePerGas,
+    maxPriorityFeePerGas: supportsEIP1559
+      ? perGasData.maxPriorityFeePerGas
+      : perGasData.maxFeePerGas,
     paymasterAndData: '0x', // Will be filled by the paymaster service
     signature: '0x' // Empty signature initially
   };
@@ -133,7 +109,7 @@ export async function createTransferCallData(
   try {
     Logger.log(
       'createTransferCallData',
-      '*** [ executeTokenTransfer ] *** ',
+      '[ executeTokenTransfer ]',
       erc20Contract.address,
       to,
       amount_bn
@@ -197,4 +173,295 @@ export async function signUserOperation(
     ...userOperation,
     signature: ethers.utils.joinSignature(signature)
   };
+}
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    backendSigner: ethers.Signer;
+    provider: ethers.providers.JsonRpcProvider;
+  }
+}
+
+/**
+ * Waits for a user operation receipt to be available by polling the provider for the receipt hash.
+ * It retries periodically until the receipt is found or a timeout occurs.
+ *
+ * @param {ethers.providers.JsonRpcProvider} provider - The JSON RPC provider to communicate with the Ethereum network.
+ * @param {string} userOpHash - The hash of the user operation to wait for.
+ * @param {number} timeout - The maximum time to wait for the receipt, in milliseconds. Default is 60000ms.
+ * @param {number} interval - The interval between retries, in milliseconds. Default is 5000ms.
+ * @returns {Promise<UserOperationReceipt>} The user operation receipt when available.
+ */
+export async function waitForUserOperationReceipt(
+  bundlerRpcUrl: string,
+  userOpHash: string,
+  timeout = 300000, // 5 minutes
+  interval = 5000 // 5 seconds
+): Promise<UserOperationReceipt> {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+
+    const checkReceipt = async () => {
+      const payload = {
+        jsonrpc: '2.0',
+        method: 'eth_getUserOperationReceipt',
+        params: [userOpHash],
+        id: Date.now()
+      };
+
+      Logger.log('waitForUserOperationReceipt', `payload: ${JSON.stringify(payload)}`);
+
+      try {
+        const response = (await queue.add(async () =>
+          axios.post(bundlerRpcUrl, payload, {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          })
+        )) as AxiosResponse;
+
+        const receipt = response.data.result;
+
+        Logger.log(
+          'waitForUserOperationReceipt',
+          `Received from bundler: ${JSON.stringify(receipt)}`
+        );
+
+        if (receipt) {
+          resolve(receipt);
+        } else if (Date.now() - startTime < timeout) {
+          const elapsed = Date.now() - startTime;
+          Logger.log('waitForUserOperationReceipt', `Retrying... ${elapsed} / ${timeout} ms`);
+          setTimeout(checkReceipt, interval);
+        } else {
+          reject(new Error('Timeout waiting for user operation receipt'));
+        }
+      } catch (error) {
+        Logger.error('waitForUserOperationReceipt', error);
+
+        if (Date.now() - startTime < timeout) {
+          const elapsed = Date.now() - startTime;
+          Logger.log(
+            'waitForUserOperationReceipt',
+            `Retrying after error... ${elapsed} / ${timeout} ms`
+          );
+          setTimeout(checkReceipt, interval);
+        } else {
+          reject(error);
+        }
+      }
+    };
+
+    checkReceipt();
+  });
+}
+
+/**
+ * Prepare and Execute User Operation
+ * @param networkConfig - Blockchain network configuration
+ * @param provider - Ethereum provider instance
+ * @param signer - Wallet instance for signing transactions
+ * @param backendSigner - Wallet instance for backend signing
+ * @param entryPointContract - EntryPoint contract instance
+ * @param userOpCallData - Encoded calldata for the user operation
+ * @param userProxyAddress - Address of the user proxy contract
+ * @param userOpType - Type of user operation ('transfer' or 'swap')
+ * @param perGasMultiplier - Initial gas multiplier
+ * @param callDataGasMultiplier - Multiplier for callData gas estimation
+ * @returns
+ */
+async function prepareAndExecuteUserOperation(
+  networkConfig: IBlockchain,
+  provider: ethers.providers.JsonRpcProvider,
+  signer: ethers.Wallet,
+  backendSigner: ethers.Wallet,
+  entryPointContract: ethers.Contract,
+  userOpCallData: string,
+  userProxyAddress: string,
+  userOpType: 'transfer' | 'swap',
+  perGasMultiplier: number,
+  callDataGasMultiplier: number
+) {
+  try {
+    Logger.log(userOpType, 'Getting Nonce');
+    const nonce = await entryPointContract.getNonce(userProxyAddress, 0);
+    Logger.info(userOpType, `Current nonce for proxy ${userProxyAddress}: ${nonce.toString()}`);
+
+    // Create and prepare the user operation with the gas multiplier
+    Logger.debug(userOpType, 'Creating generic user operation');
+    let userOperation = await createGenericUserOperation(
+      provider,
+      networkConfig.gas,
+      networkConfig.supportsEIP1559,
+      userOpCallData,
+      userProxyAddress,
+      nonce,
+      userOpType,
+      perGasMultiplier
+    );
+
+    // Add paymaster data using the backend signer
+    Logger.debug(
+      userOpType,
+      `Adding paymaster data with address: ${networkConfig.contracts.paymasterAddress}`
+    );
+    userOperation = await addPaymasterData(
+      userOperation,
+      networkConfig.contracts.paymasterAddress!,
+      backendSigner,
+      networkConfig.contracts.entryPoint,
+      userOpCallData,
+      networkConfig.chainId
+    );
+
+    // Sign the user operation with the user's signer
+    Logger.debug(userOpType, 'Signing user operation');
+    userOperation = await signUserOperation(
+      userOperation,
+      networkConfig.contracts.entryPoint,
+      signer
+    );
+    Logger.info(userOpType, 'User operation signed successfully');
+
+    if (!networkConfig.gas.useFixedValues) {
+      // Get dynamic callData Gas Values and update userOperation
+      Logger.debug(userOpType, 'Update gas values');
+      const callDataGasValues = await gasService.getcallDataGasValues(
+        networkConfig.gas.operations[userOpType],
+        userOperation,
+        networkConfig.rpc,
+        entryPointContract.address,
+        callDataGasMultiplier
+      );
+      userOperation.callGasLimit = callDataGasValues.callGasLimit;
+      userOperation.verificationGasLimit = callDataGasValues.verificationGasLimit;
+      userOperation.preVerificationGas = callDataGasValues.preVerificationGas;
+
+      // Re-sign User Operation (because we changed the gas values!)
+      Logger.debug(userOpType, 'Re-sign user operation');
+      userOperation = await signUserOperation(
+        userOperation,
+        networkConfig.contracts.entryPoint,
+        signer
+      );
+    }
+
+    // Send the operation to the bundler and wait for receipt
+    Logger.info(userOpType, `Sending operation to bundler: ${networkConfig.rpcBundler}`);
+    const bundlerResponse = await sendUserOperationToBundler(
+      networkConfig.rpcBundler,
+      userOperation,
+      entryPointContract.address
+    );
+    Logger.debug(userOpType, `Bundler response: ${JSON.stringify(bundlerResponse)}`);
+
+    Logger.log(userOpType, 'Waiting for transaction to be mined.');
+    const receipt = await waitForUserOperationReceipt(networkConfig.rpcBundler, bundlerResponse);
+
+    if (!receipt?.success) {
+      Logger.error(userOpType, `Operation failed. Receipt: ${JSON.stringify(receipt)}`);
+      throw new Error(
+        `Transaction failed or not found. Receipt: ${receipt.success}, Hash: ${receipt.userOpHash}`
+      );
+    }
+
+    Logger.info(
+      userOpType,
+      `Operation completed successfully. Hash: ${receipt.receipt.transactionHash}, Block: ${receipt.receipt.blockNumber}`
+    );
+
+    Logger.log(userOpType, 'end!');
+
+    return { success: true, transactionHash: receipt.receipt.transactionHash, error: '' };
+  } catch (error) {
+    const errorMessage = (error as Error).message;
+    Logger.error(userOpType, `Error executing operation: ${errorMessage}`);
+    return { success: false, transactionHash: '', error: errorMessage };
+  }
+}
+
+/**
+ * Execute User Operation with Retry
+ * @param networkConfig - Blockchain network configuration
+ * @param provider - Ethereum provider instance
+ * @param signer - Wallet instance for signing transactions
+ * @param backendSigner - Wallet instance for backend signing
+ * @param entryPointContract - EntryPoint contract instance
+ * @param userOpCallData - Encoded calldata for the user operation
+ * @param userProxyAddress - Address of the user proxy contract
+ * @param userOpType - Type of user operation ('transfer' or 'swap')
+ * @param perGasInitialMultiplier - Initial gas multiplier
+ * @param perGasIncrement - Increment factor for per Gas Fee.
+ * @param callDataGasInitialMultiplier - Multiplier for callData gas estimation
+ * @param timeoutMsBetweenRetries -Time Out (in ms) between retries
+ * @param maxRetries - Maximum number of retry attempts (default: 5)
+ * @param attempt - number of attempt
+ * @returns Execution result with success status, transaction hash, and error message
+ */
+export async function executeUserOperationWithRetry(
+  networkConfig: IBlockchain,
+  provider: ethers.providers.JsonRpcProvider,
+  signer: ethers.Wallet,
+  backendSigner: ethers.Wallet,
+  entryPointContract: ethers.Contract,
+  userOpCallData: string,
+  userProxyAddress: string,
+  userOpType: 'transfer' | 'swap',
+  perGasInitialMultiplier: number,
+  perGasIncrement: number,
+  callDataGasInitialMultiplier: number,
+  timeoutMsBetweenRetries: number,
+  maxRetries: number = 5,
+  attempt: number = 0
+): Promise<{ success: boolean; transactionHash: string; error: string }> {
+  Logger.log(
+    `executeUserOperationWithRetry-${userOpType}`,
+    `Attempt ${attempt + 1}/${maxRetries} with perGasMultiplier: ${perGasInitialMultiplier}`
+  );
+
+  const result = await prepareAndExecuteUserOperation(
+    networkConfig,
+    provider,
+    signer,
+    backendSigner,
+    entryPointContract,
+    userOpCallData,
+    userProxyAddress,
+    userOpType,
+    perGasInitialMultiplier,
+    callDataGasInitialMultiplier
+  );
+
+  if (result.success) {
+    return result;
+  }
+
+  // Check if error is "replacement transaction UnderPriced" (case insensitive)
+  if (/replacement transaction underpriced/i.test(result.error) && attempt < maxRetries) {
+    Logger.warn(
+      `executeUserOperationWithRetry-${userOpType}`,
+      `Retrying due to underpriced transaction error (${attempt}/${maxRetries})`
+    );
+    await new Promise((resolve) => setTimeout(resolve, timeoutMsBetweenRetries));
+    return executeUserOperationWithRetry(
+      networkConfig,
+      provider,
+      signer,
+      backendSigner,
+      entryPointContract,
+      userOpCallData,
+      userProxyAddress,
+      userOpType,
+      perGasInitialMultiplier * perGasIncrement,
+      callDataGasInitialMultiplier,
+      maxRetries,
+      attempt + 1
+    );
+  }
+
+  Logger.error(
+    `executeUserOperationWithRetry-${userOpType}`,
+    `Max retries reached or a non-retryable error occurred.`
+  );
+  return result;
 }

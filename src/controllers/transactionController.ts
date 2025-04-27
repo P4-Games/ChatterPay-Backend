@@ -6,6 +6,8 @@ import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IUser, IUserWallet } from '../models/userModel';
+import { NotificationEnum } from '../models/templateModel';
+import { getChatterpayTokenFee } from '../services/commonService';
 import { verifyWalletBalanceInRpc } from '../services/balanceService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import Transaction, { ITransaction } from '../models/transactionModel';
@@ -13,19 +15,24 @@ import { sendTransferUserOperation } from '../services/transferService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
-import { getTokenAddress, checkBlockchainConditions } from '../services/blockchainService';
 import {
-  INFURA_URL,
-  INFURA_API_KEY,
-  GCP_CLOUD_TRACE_ENABLED,
-  COMMON_REPLY_OPERATION_IN_PROGRESS
-} from '../config/constants';
+  getTokenAddress,
+  checkBlockchainConditions,
+  userReachedOperationLimit
+} from '../services/blockchainService';
 import {
   TransactionData,
   ExecueTransactionResult,
   ConcurrentOperationsEnum,
   CheckBalanceConditionsResult
 } from '../types/commonType';
+import {
+  INFURA_URL,
+  INFURA_API_KEY,
+  GCP_CLOUD_TRACE_ENABLED,
+  COMMON_REPLY_WALLET_NOT_CREATED,
+  COMMON_REPLY_OPERATION_IN_PROGRESS
+} from '../config/constants';
 import {
   openOperation,
   closeOperation,
@@ -35,9 +42,10 @@ import {
   hasUserAnyOperationInProgress
 } from '../services/userService';
 import {
+  getNotificationTemplate,
   sendInternalErrorNotification,
-  sendReceivedTransferNotification,
   sendOutgoingTransferNotification,
+  sendReceivedTransferNotification,
   sendUserInsufficientBalanceNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
@@ -313,11 +321,15 @@ export const makeTransaction = async (
       return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
     }
 
+    /* ***************************************************** */
+    /* 2. makeTransaction: check user has wallet             */
+    /* ***************************************************** */
     const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
     if (!fromUser) {
-      validationError = 'User not found. You must have an account to make a transaction';
       rootSpan?.endSpan();
-      return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
+      Logger.info('makeTransaction', COMMON_REPLY_WALLET_NOT_CREATED);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
     }
 
     const userWallet: IUserWallet | null = getUserWalletByChainId(
@@ -327,11 +339,13 @@ export const makeTransaction = async (
     if (!userWallet) {
       validationError = `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chainId}`;
       rootSpan?.endSpan();
-      return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
+      Logger.info('makeTransaction', validationError);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, validationError);
     }
 
     /* ***************************************************** */
-    /* 2. makeTransaction: open concurrent operation         */
+    /* 3. makeTransaction: check concurrent operation        */
     /* ***************************************************** */
     const concurrentOperationSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'checkConcurrentOperation' })
@@ -350,18 +364,37 @@ export const makeTransaction = async (
       );
     }
 
-    await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
-    concurrentOperationSpan?.endSpan();
+    /* ***************************************************** */
+    /* 4. makeTransaction: check operation limit             */
+    /* ***************************************************** */
+    const userReachedOpLimit = await userReachedOperationLimit(
+      request.server.networkConfig,
+      channel_user_id,
+      'transfer'
+    );
+    if (userReachedOpLimit) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.daily_limit_reached
+      );
+      Logger.info('makeTransaction', `${message}`);
+      concurrentOperationSpan?.endSpan();
+      rootSpan?.endSpan();
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, message);
+    }
 
     /* ***************************************************** */
-    /* 3. makeTransaction: send initial response             */
+    /* 5. makeTransaction: send initial response             */
     /* ***************************************************** */
+    await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+    concurrentOperationSpan?.endSpan();
     // optimistic response
     Logger.log('makeTransaction', 'sending notification: operation in progress');
     await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
 
     /* ***************************************************** */
-    /* 4. makeTransaction: check user balance                */
+    /* 6. makeTransaction: check user balance                */
     /* ***************************************************** */
     const balanceCheckSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'checkUserBalance' })
@@ -376,7 +409,7 @@ export const makeTransaction = async (
 
     if (!checkBalanceResult.enoughBalance) {
       validationError = `Insufficient balance, phone: ${fromUser.phone_number}, wallet: ${userWallet.wallet_proxy}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
-      Logger.log('makeTransaction', validationError);
+      Logger.info('makeTransaction', validationError);
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       await sendUserInsufficientBalanceNotification(
         userWallet.wallet_proxy,
@@ -390,7 +423,7 @@ export const makeTransaction = async (
     balanceCheckSpan?.endSpan();
 
     /* ***************************************************** */
-    /* 5. makeTransaction: check blockchain conditions       */
+    /* 7. makeTransaction: check blockchain conditions       */
     /* ***************************************************** */
     const blockchainCheckSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'checkBlockchainConditions' })
@@ -414,7 +447,7 @@ export const makeTransaction = async (
     blockchainCheckSpan?.endSpan();
 
     /* ***************************************************** */
-    /* 6. makeTransaction: get or create user 'to'           */
+    /* 8. makeTransaction: get or create user 'to'           */
     /* ***************************************************** */
     const userCreationSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'getOrCreateUser' })
@@ -451,13 +484,7 @@ export const makeTransaction = async (
     userCreationSpan?.endSpan();
 
     /* ***************************************************** */
-    /* 7. makeTransaction: save trx with pending status      */
-    /* ***************************************************** */
-
-    // TODO: makeTransaction: save transaction with pending status
-
-    /* ***************************************************** */
-    /* 8. makeTransaction: executeTransaction                */
+    /* 9. makeTransaction: executeTransaction                */
     /* ***************************************************** */
     const transactionExecutionSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'executeTransaction' })
@@ -474,7 +501,12 @@ export const makeTransaction = async (
     );
 
     if (!executeTransactionResult.success) {
-      await sendInternalErrorNotification(userWallet.wallet_proxy, channel_user_id, traceHeader);
+      await sendInternalErrorNotification(
+        userWallet.wallet_proxy,
+        channel_user_id,
+        lastBotMsgDelaySeconds,
+        traceHeader
+      );
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       transactionExecutionSpan?.endSpan();
       rootSpan?.endSpan();
@@ -484,7 +516,7 @@ export const makeTransaction = async (
     transactionExecutionSpan?.endSpan();
 
     /* ***************************************************** */
-    /* 9. makeTransaction: update transaction in bdd         */
+    /* 10. makeTransaction: update transaction in bdd        */
     /* ***************************************************** */
     const saveTransactionSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'saveTransactionPending' })
@@ -498,13 +530,16 @@ export const makeTransaction = async (
       amount: parseFloat(amount),
       token: tokenSymbol,
       type: 'transfer',
-      status: 'completed'
+      status: 'completed',
+      chain_id: request.server.networkConfig.chainId
     };
     await mongoTransactionService.saveTransaction(transactionOut);
     saveTransactionSpan?.endSpan();
 
+    await mongoUserService.updateUserOperationCounter(channel_user_id, 'transfer');
+
     /* ***************************************************** */
-    /* 10. makeTransaction: send user notification           */
+    /* 11. makeTransaction: send user notification           */
     /* ***************************************************** */
     const notificationSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'sendUserNotifications' })
@@ -516,14 +551,13 @@ export const makeTransaction = async (
       Logger.log('makeTransaction', `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`);
       await delaySeconds(lastBotMsgDelaySeconds);
     }
-    await sendReceivedTransferNotification(
-      fromUser.phone_number,
-      fromUser.name,
-      toUser.phone_number,
-      amount,
-      tokenSymbol,
-      traceHeader
+
+    const chatterpayFee = await getChatterpayTokenFee(
+      networkConfig.contracts.chatterPayAddress,
+      checkBlockchainConditionsResult.setupContractsResult!.provider,
+      tokenAddress
     );
+    const amountAfterFee = parseFloat(amount) - chatterpayFee;
 
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
@@ -532,6 +566,15 @@ export const makeTransaction = async (
       amount,
       tokenSymbol,
       executeTransactionResult.transactionHash,
+      traceHeader
+    );
+
+    await sendReceivedTransferNotification(
+      fromUser.phone_number,
+      fromUser.name,
+      toUser.phone_number,
+      amountAfterFee.toString(),
+      tokenSymbol,
       traceHeader
     );
 

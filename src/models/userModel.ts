@@ -32,6 +32,14 @@ export interface IUser extends Document {
     mint_nft_copy: number;
     withdraw_all: number;
   };
+  level: string;
+  operations_counters?: {
+    transfer: Record<string, number>;
+    swap: Record<string, number>;
+    mint_nft: Record<string, number>;
+    mint_nft_copy: Record<string, number>;
+  };
+  manteca_user_id?: string;
 }
 
 const walletSchema = new Schema<IUserWallet>({
@@ -67,7 +75,15 @@ const userSchema = new Schema<IUser>({
     mint_nft: { type: Number, required: false, default: 0 },
     mint_nft_copy: { type: Number, required: false, default: 0 },
     withdraw_all: { type: Number, required: false, default: 0 }
-  }
+  },
+  level: { type: String, required: true, default: 'L1' },
+  operations_counters: {
+    transfer: { type: Map, of: Number, default: {} },
+    swap: { type: Map, of: Number, default: {} },
+    mint_nft: { type: Map, of: Number, default: {} },
+    mint_nft_copy: { type: Map, of: Number, default: {} }
+  },
+  manteca_user_id: { type: String, required: false, default: '' }
 });
 
 export const UserModel = model<IUser>('User', userSchema, 'users');

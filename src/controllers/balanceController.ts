@@ -6,6 +6,7 @@ import { IUser, IUserWallet } from '../models/userModel';
 import { getUserWalletByChainId } from '../services/userService';
 import { getFiatQuotes } from '../services/criptoya/criptoYaService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
+import { COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import {
@@ -28,7 +29,11 @@ import {
 export const checkExternalDeposits = async (request: FastifyRequest, reply: FastifyReply) => {
   const fastify = request.server;
   const { routerAddress } = fastify.networkConfig.contracts;
-  const depositsStatus = await fetchExternalDeposits('ARBITRUM_SEPOLIA', routerAddress!);
+  const depositsStatus = await fetchExternalDeposits(
+    'ARBITRUM_SEPOLIA',
+    routerAddress!,
+    fastify.networkConfig.chainId
+  );
   return returnSuccessResponse(reply, depositsStatus);
 };
 
@@ -125,8 +130,8 @@ export const balanceByPhoneNumber = async (
   try {
     const user: IUser | null = await mongoUserService.getUser(phone);
     if (!user) {
-      Logger.warn('balanceByPhoneNumber', `User not found for phone number: ${phone}`);
-      return await returnErrorResponse(reply, 404, `User not found for phone number: ${phone}`);
+      Logger.info('balanceByPhoneNumber', COMMON_REPLY_WALLET_NOT_CREATED);
+      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
     }
 
     const fastify = request.server;

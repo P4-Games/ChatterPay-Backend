@@ -4,6 +4,7 @@ import {
   rampOn,
   rampOff,
   onBoarding,
+  linkToOperate,
   createRampUser,
   getRampUserLimits,
   getRampUserBalance,
@@ -22,6 +23,7 @@ import {
  * @returns {Promise<void>} Resolves once the route is registered
  */
 export const rampRoutes = async (fastify: FastifyInstance): Promise<void> => {
+  fastify.post('/ramp/linkToOperate', linkToOperate);
   fastify.post('/ramp/onboarding', onBoarding);
   fastify.post('/ramp/user', createRampUser);
   fastify.post('/ramp/user/:userId/compliance/documents', uploadRampUserDocuments);

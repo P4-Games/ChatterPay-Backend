@@ -18,8 +18,8 @@ const {
   BOT_DATA_TOKEN,
   BOT_API_URL,
   BOT_NOTIFICATIONS_ENABLED: botNotificationsEnabled = 'true',
-  NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp,
-  NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs,
+  NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp = 'false',
+  NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs = 'false',
   GCP_BUCKET_BASE_URL,
   FRONTEND_TOKEN,
   CHATIZALO_TOKEN,
@@ -30,7 +30,7 @@ const {
   PUSH_NETWORK: pushNetwork = '11155111',
   PUSH_ENVIRONMENT: pushEnvironment = ENV.DEV,
   MINOR_LOG_LEVEL: minorLogLevel = 'debug',
-  MANTECA_BASE_URL = 'https://api.manteca.dev/crypto/v1',
+  MANTECA_BASE_URL = 'https://sandbox.manteca.dev/crypto/v1',
   MANTECA_API_KEY,
   CORS_ORIGINS = '*',
   BLACKLIST_IPS = '',
@@ -42,7 +42,8 @@ const {
   SWAP_SLIPPAGE_CONFIG_STABLE: slippage_config_stable = 300,
   SWAP_SLIPPAGE_CONFIG_DEFAULT: slippage_config_default = 500,
   SWAP_SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
-  ABIS_READ_FROM: abisReadFrom = 'local'
+  ABIS_READ_FROM: abisReadFrom = 'local',
+  CHATIZALO_PHONE_NUMBER
 } = process.env;
 
 export {
@@ -62,7 +63,8 @@ export {
   CHATIZALO_TOKEN,
   MANTECA_API_KEY,
   MANTECA_BASE_URL,
-  GCP_BUCKET_BASE_URL
+  GCP_BUCKET_BASE_URL,
+  CHATIZALO_PHONE_NUMBER
 };
 
 export const IS_DEVELOPMENT =
@@ -96,8 +98,8 @@ export const LOCAL_ABIs: ABIs = {
 };
 
 export const ABIS_READ_FROM = abisReadFrom.toLowerCase();
-export const NFT_UPLOAD_IMAGE_ICP = envNftUploadImageIcp === 'true' || true;
-export const NFT_UPLOAD_IMAGE_IPFS = envNftUploadImageIpfs === 'true' || true;
+export const NFT_UPLOAD_IMAGE_ICP: boolean = envNftUploadImageIcp.toLowerCase() === 'true';
+export const NFT_UPLOAD_IMAGE_IPFS: boolean = envNftUploadImageIpfs.toLowerCase() === 'true';
 export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
 
 export const PUSH_CHANNEL_ADDRESS = !pushChannelAddress.startsWith('0x')
@@ -132,7 +134,6 @@ export const FASTIFY_REFRESH_TOKENS_INTERVAL_MS: number = Number(fastifyRefreshN
 export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(fastifyRefreshTokensIntervalMs);
 
 export const WHATSAPP_API_URL = 'https://api.whatsapp.com';
-export const CHATIZALO_PHONE_NUMBER = IS_DEVELOPMENT ? 5491168690963 : 5491164629653;
 
 export const MANTECA_MOCK_UPLOAD_DOCUMENTS_URL = 'https://upload.manteca.dev/file-upload-url';
 export const INFURA_URL = 'https://mainnet.infura.io/v3';
@@ -150,6 +151,8 @@ export const PINATA_IPFS_URL = 'https://gateway.pinata.cloud/ipfs';
 
 export const COMMON_REPLY_OPERATION_IN_PROGRESS =
   'The operation is being processed. We will notify you once it is completed or if any issues arise.';
+
+export const COMMON_REPLY_WALLET_NOT_CREATED = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
 
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
 export const CORS_ORIGINS_EXCEPTIONS: string = '/metadata/opensea,/favicon.ico,/docs';

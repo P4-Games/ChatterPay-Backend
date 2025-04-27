@@ -117,6 +117,18 @@ describe('Template Model', () => {
             es: 'Otra operación está en progreso.',
             pt: 'Outra operação está em andamento.'
           }
+        },
+        daily_limit_reached: {
+          title: {
+            en: 'ChatterPay: Daily Limit Reached 🌟',
+            es: 'ChatterPay: Límite diario alcanzado 🌟',
+            pt: 'ChatterPay: Limite diário atingido 🌟'
+          },
+          message: {
+            en: "You've reached the maximum number of daily operations allowed for this type of transaction. Please try again tomorrow. 🙌",
+            es: 'Has alcanzado la cantidad máxima diaria permitida para este tipo de operación. Por favor, inténtalo nuevamente mañana. 🙌',
+            pt: 'Você atingiu a quantidade máxima diária permitida para esse tipo de operação. Por favor, tente novamente amanhã. 🙌'
+          }
         }
       }
     };
