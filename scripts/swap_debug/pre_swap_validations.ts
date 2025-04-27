@@ -64,6 +64,7 @@ async function validateSwapPrerequisites(
     const tokenInContract = new ethers.Contract(tokenIn, erc20ABI, provider);
     const tokenOutContract = new ethers.Contract(tokenOut, erc20ABI, provider);
 
+   // Logger.info('validateSwapPrerequisites', `RPC Network: ${(await provider.getNetwork()).name}`);
     Logger.info('validateSwapPrerequisites', `ChatterPay: ${chatterPayAddress}`);
     Logger.info('validateSwapPrerequisites', `Proxy: ${proxyAddress}`);
     Logger.info('validateSwapPrerequisites', `TokenIn: ${tokenIn}`);
@@ -351,7 +352,7 @@ async function main() {
     const rpcUrl = `${RPC_URL ?? 'https://arbitrum-sepolia.infura.io/v3/'}${INFURA_API_KEY}`;
 
     // Configure provider
-    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const provider = await new ethers.providers.JsonRpcProvider(rpcUrl);
 
     // Run validation
     Logger.info('main', 'Starting swap validation...');
