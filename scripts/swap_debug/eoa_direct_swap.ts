@@ -125,15 +125,20 @@ async function executeDirectSwap(
       Logger.info('executeDirectSwap', 'Token approval requested, executing approval...');
 
       try {
+        const txOptions: { gasLimit?: number; gasPrice?: ethers.BigNumber } = {};
+        if (process.env.GAS_LIMIT) txOptions.gasLimit = parseInt(process.env.GAS_LIMIT, 10);
+        if (process.env.GAS_PRICE)
+          txOptions.gasPrice = ethers.utils.parseUnits(process.env.GAS_PRICE, 'gwei');
+
         const approvalTx = await proxyWithSigner.approveToken(
           tokenIn,
-          ethers.constants.MaxUint256 // Approve maximum to avoid future issues
+          ethers.constants.MaxUint256,
+          txOptions
         );
 
         Logger.info('executeDirectSwap', `Approval transaction sent: ${approvalTx.hash}`);
         Logger.info('executeDirectSwap', 'Waiting for confirmation...');
-
-        await approvalTx.wait();
+        await approvalTx.wait(1); // 1 block confirmation
         Logger.info('executeDirectSwap', 'Approval confirmed ✅');
       } catch (error) {
         Logger.error('executeDirectSwap', 'ERROR approving tokens:', error);
