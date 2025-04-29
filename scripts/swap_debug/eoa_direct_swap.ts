@@ -2,6 +2,7 @@
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 
+import { resolveRpcUrl } from './common';
 import { Logger } from '../../src/helpers/loggerHelper';
 
 // Load environment variables
@@ -62,6 +63,7 @@ async function executeDirectSwap(
     Logger.info('executeDirectSwap', `TokenOut: ${tokenOut}`);
 
     // 2. Verify the owner
+    /*
     Logger.info('executeDirectSwap', '\n2. Verifying owner permissions...');
     const proxyOwner = await proxy.owner();
 
@@ -73,6 +75,7 @@ async function executeDirectSwap(
       return false;
     }
     Logger.info('executeDirectSwap', 'Signer is the owner of the proxy ✅');
+    */
 
     // 3. Get token information
     Logger.info('executeDirectSwap', '\n3. Getting token information...');
@@ -122,15 +125,20 @@ async function executeDirectSwap(
       Logger.info('executeDirectSwap', 'Token approval requested, executing approval...');
 
       try {
+        const txOptions: { gasLimit?: number; gasPrice?: ethers.BigNumber } = {};
+        if (process.env.GAS_LIMIT) txOptions.gasLimit = parseInt(process.env.GAS_LIMIT, 10);
+        if (process.env.GAS_PRICE)
+          txOptions.gasPrice = ethers.utils.parseUnits(process.env.GAS_PRICE, 'gwei');
+
         const approvalTx = await proxyWithSigner.approveToken(
           tokenIn,
-          ethers.constants.MaxUint256 // Approve maximum to avoid future issues
+          ethers.constants.MaxUint256,
+          txOptions
         );
 
         Logger.info('executeDirectSwap', `Approval transaction sent: ${approvalTx.hash}`);
         Logger.info('executeDirectSwap', 'Waiting for confirmation...');
-
-        await approvalTx.wait();
+        await approvalTx.wait(1); // 1 block confirmation
         Logger.info('executeDirectSwap', 'Approval confirmed ✅');
       } catch (error) {
         Logger.error('executeDirectSwap', 'ERROR approving tokens:', error);
@@ -256,8 +264,7 @@ async function main() {
     const RECIPIENT = process.env.RECIPIENT || PROXY_ADDRESS; // Default to proxy address
 
     // RPC configuration
-    const { INFURA_API_KEY, RPC_URL } = process.env;
-    const rpcUrl = `${RPC_URL ?? 'https://arbitrum-sepolia.infura.io/v3/'}${INFURA_API_KEY}`;
+    const rpcUrl = resolveRpcUrl();
 
     // Configure provider
     Logger.info('main', `Connecting to ${rpcUrl}...`);
