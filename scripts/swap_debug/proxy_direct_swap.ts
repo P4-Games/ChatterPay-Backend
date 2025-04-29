@@ -64,6 +64,7 @@ async function executeDirectSwap(
     Logger.info('executeDirectSwap', '\n2. Verifying owner permissions...');
     const proxyOwner = await proxy.owner();
 
+    /*
     if (proxyOwner.toLowerCase() !== signer.address.toLowerCase()) {
       Logger.error(
         'executeDirectSwap',
@@ -72,6 +73,7 @@ async function executeDirectSwap(
       return false;
     }
     Logger.info('executeDirectSwap', 'Signer is the owner of the proxy ✅');
+    */
 
     // 3. Get token information
     Logger.info('executeDirectSwap', '\n3. Getting token information...');
@@ -259,8 +261,9 @@ async function main() {
     const RECIPIENT = process.env.RECIPIENT || PROXY_ADDRESS; // Default to proxy address
 
     // RPC configuration
-    const { INFURA_API_KEY, RPC_URL } = process.env;
-    const rpcUrl = `${RPC_URL ?? 'https://arbitrum-sepolia.infura.io/v3/'}${INFURA_API_KEY}`;
+    const { RPC_URL } = process.env;
+    const rpcUrl = `${RPC_URL}`
+
 
     // Configure provider
     Logger.info('main', `Connecting to ${rpcUrl}...`);

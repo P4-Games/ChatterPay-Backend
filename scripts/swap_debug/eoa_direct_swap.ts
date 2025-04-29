@@ -256,8 +256,8 @@ async function main() {
     const RECIPIENT = process.env.RECIPIENT || PROXY_ADDRESS; // Default to proxy address
 
     // RPC configuration
-    const { INFURA_API_KEY, RPC_URL } = process.env;
-    const rpcUrl = `${RPC_URL ?? 'https://arbitrum-sepolia.infura.io/v3/'}${INFURA_API_KEY}`;
+    const { RPC_URL } = process.env;
+    const rpcUrl = `${RPC_URL}`
 
     // Configure provider
     Logger.info('main', `Connecting to ${rpcUrl}...`);

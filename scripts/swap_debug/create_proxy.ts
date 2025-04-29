@@ -159,14 +159,8 @@ async function main() {
       process.env.FACTORY_ADDRESS || '0xeCD34e3CB296Ed7c4a875290d49217f2C7cFf95b';
 
     // RPC configuration
-    const { INFURA_API_KEY, RPC_URL } = process.env;
-    const rpcUrl = `${RPC_URL ?? 'https://arbitrum-sepolia.infura.io/v3/'}${INFURA_API_KEY}`;
-
-    // Verify we have the necessary variables
-    if (!INFURA_API_KEY) {
-      Logger.error('main', 'ERROR: INFURA_API_KEY missing in .env file');
-      process.exit(1);
-    }
+    const { RPC_URL } = process.env;
+    const rpcUrl = `${RPC_URL}`
 
     if (!SIGNING_KEY) {
       Logger.error('main', 'ERROR: SIGNING_KEY or PRIVATE_KEY missing in .env file');
