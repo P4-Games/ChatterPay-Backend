@@ -63,6 +63,8 @@ async function executeDirectSwap(
 
     // 2. Verify the owner
     Logger.info('executeDirectSwap', '\n2. Verifying owner permissions...');
+
+    /*
     const proxyOwner = await proxy.owner();
 
     if (proxyOwner.toLowerCase() !== signer.address.toLowerCase()) {
@@ -73,6 +75,7 @@ async function executeDirectSwap(
       return false;
     }
     Logger.info('executeDirectSwap', 'Signer is the owner of the proxy ✅');
+    */
 
     // 3. Get token information
     Logger.info('executeDirectSwap', '\n3. Getting token information...');
