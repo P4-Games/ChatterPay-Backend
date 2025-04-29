@@ -2,6 +2,7 @@
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 
+import { resolveRpcUrl } from './common';
 import { Logger } from '../../src/helpers/loggerHelper';
 
 // Load environment variables
@@ -256,8 +257,7 @@ async function main() {
     const RECIPIENT = process.env.RECIPIENT || PROXY_ADDRESS; // Default to proxy address
 
     // RPC configuration
-    const { INFURA_API_KEY, RPC_URL } = process.env;
-    const rpcUrl = `${RPC_URL ?? 'https://arbitrum-sepolia.infura.io/v3/'}${INFURA_API_KEY}`;
+    const rpcUrl = resolveRpcUrl();
 
     // Configure provider
     Logger.info('main', `Connecting to ${rpcUrl}...`);
