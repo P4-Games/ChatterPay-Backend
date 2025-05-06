@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 
+import { resolveRpcUrl } from './common';
 import { Logger } from '../../src/helpers/loggerHelper';
 
 // Load environment variables
@@ -159,8 +160,7 @@ async function main() {
       process.env.FACTORY_ADDRESS || '0xeCD34e3CB296Ed7c4a875290d49217f2C7cFf95b';
 
     // RPC configuration
-    const { RPC_URL } = process.env;
-    const rpcUrl = `${RPC_URL}`
+    const rpcUrl = resolveRpcUrl();
 
     if (!SIGNING_KEY) {
       Logger.error('main', 'ERROR: SIGNING_KEY or PRIVATE_KEY missing in .env file');

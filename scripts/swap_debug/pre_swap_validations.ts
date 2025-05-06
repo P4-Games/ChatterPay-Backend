@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 
+import { resolveRpcUrl } from './common';
 import { Logger } from '../../src/helpers/loggerHelper';
 
 // Load environment variables
@@ -16,7 +17,7 @@ async function validateSwapPrerequisites(
   proxyAddress: string,
   tokenIn: string,
   tokenOut: string,
-  amount: string,
+  amount: string
   // recipient: string
 ): Promise<boolean> {
   Logger.info('validateSwapPrerequisites', '=====================================================');
@@ -347,22 +348,20 @@ async function main() {
     // const RECIPIENT = process.env.RECIPIENT ?? '0x1c875fD25BEb9b72011864831a95eeb67ae8f06d';
 
     // RPC configuration
-    const { RPC_URL } = process.env;
-    const rpcUrl = `${RPC_URL}`
-
+    const rpcUrl = resolveRpcUrl();
 
     // Configure provider
     const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
 
     // Run validation
-    Logger.info('main', 'Starting swap validation...', rpcUrl);
+    Logger.info('main', 'Starting swap validation...');
     const result = await validateSwapPrerequisites(
       provider,
       CHATTERPAY_ADDRESS,
       PROXY_ADDRESS,
       TOKEN_IN,
       TOKEN_OUT,
-      AMOUNT,
+      AMOUNT
       // RECIPIENT
     );
 

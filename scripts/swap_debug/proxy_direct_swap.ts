@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 
+import { resolveRpcUrl } from './common';
 import { Logger } from '../../src/helpers/loggerHelper';
 
 // Load environment variables
@@ -62,9 +63,10 @@ async function executeDirectSwap(
 
     // 2. Verify the owner
     Logger.info('executeDirectSwap', '\n2. Verifying owner permissions...');
-    const proxyOwner = await proxy.owner();
 
     /*
+    const proxyOwner = await proxy.owner();
+
     if (proxyOwner.toLowerCase() !== signer.address.toLowerCase()) {
       Logger.error(
         'executeDirectSwap',
@@ -261,9 +263,7 @@ async function main() {
     const RECIPIENT = process.env.RECIPIENT || PROXY_ADDRESS; // Default to proxy address
 
     // RPC configuration
-    const { RPC_URL } = process.env;
-    const rpcUrl = `${RPC_URL}`
-
+    const rpcUrl = resolveRpcUrl();
 
     // Configure provider
     Logger.info('main', `Connecting to ${rpcUrl}...`);
