@@ -8,9 +8,9 @@
 
 import { ethers } from 'ethers';
 
+import { resolveRpcUrl } from './common';
 import { Logger } from '../../src/helpers/loggerHelper';
 import { getERC20ABI } from '../../src/services/web3/abiService';
-import { resolveRpcUrl } from './common';
 
 /**
  * Configuration for the swap execution environment
@@ -96,8 +96,7 @@ const DEFAULT_CONFIG: PoolConfig = {
   usdtAddress: process.env.USDT_ADDRESS ?? '0x6D904bB70Cf0CbD427e5e70BCcE1F4D1348b785d',
   wethAddress: process.env.WETH_ADDRESS ?? '0xd3A5f60cc44b9E51BF7e8D6db882a88260F708BC',
   poolFee: parseInt(process.env.POOL_FEE ?? '3000', 10), // 0.3%
-  swapRouterAddress:
-    process.env.SWAP_ROUTER ?? '0x101F443B4d1b059569D643917553c771E1b9663E',
+  swapRouterAddress: process.env.SWAP_ROUTER ?? '0x101F443B4d1b059569D643917553c771E1b9663E',
   gasLimit: 3000000
 };
 
