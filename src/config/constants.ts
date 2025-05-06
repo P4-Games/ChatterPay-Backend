@@ -121,7 +121,7 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
   : 'error';
 
 export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];
-export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'es';
+export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'en';
 
 export const NOTIFICATION_TEMPLATE_CACHE_TTL = 60800; // 1 week
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
