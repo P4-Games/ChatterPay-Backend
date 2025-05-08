@@ -1,9 +1,9 @@
-import { ethers } from 'ethers';
-import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
+import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import Token, { IToken } from '../models/tokenModel';
-import { SIGNING_KEY, IS_DEVELOPMENT } from '../config/constants';
+import { IS_DEVELOPMENT } from '../config/constants';
+import { issueTokens } from '../services/predictWalletService';
 import { coingeckoService } from '../services/coingecko/coingeckoService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 
@@ -167,108 +167,6 @@ export const deleteToken = async (
   }
 };
 
-// Tokens issuing related functions (to be removed in mainnet).
-
-/**
- * Represents the result of a token minting operation.
- */
-interface MintResult {
-  /** The address of the token contract. */
-  tokenAddress: string;
-  /** The transaction hash of the minting operation. */
-  txHash: string;
-}
-
-/**
- * Mints a specified amount of tokens for a given address.
- *
- * @param signer - The ethers.Wallet instance used to sign the transaction.
- * @param tokenAddress - The address of the token contract.
- * @param recipientAddress - The address to receive the minted tokens.
- * @param amount - The amount of tokens to mint (as a string).
- * @param nonce - The nonce to use for the transaction.
- * @returns A promise that resolves to a MintResult object.
- */
-async function mintToken(
-  signer: ethers.Wallet,
-  tokenAddress: string,
-  recipientAddress: string,
-  amount: string,
-  nonce: number
-): Promise<MintResult> {
-  const erc20Contract: ethers.Contract = new ethers.Contract(
-    tokenAddress,
-    ['function mint(address to, uint256 amount)', 'function decimals() view returns (uint8)'],
-    signer
-  );
-
-  const decimals = await erc20Contract.decimals();
-  const amountBN: ethers.BigNumber = ethers.utils.parseUnits(amount, decimals);
-  const gasLimit: number = 5000000; // Set a reasonable gas limit.
-
-  // Estimate gas price.
-  const gasPrice: ethers.BigNumber = await signer.provider!.getGasPrice();
-
-  // Increase gas price by 20% to ensure the transaction goes through.
-  const adjustedGasPrice: ethers.BigNumber = gasPrice.mul(120).div(100);
-
-  const tx: ethers.ContractTransaction = await erc20Contract.mint(recipientAddress, amountBN, {
-    gasLimit,
-    nonce,
-    gasPrice: adjustedGasPrice
-  });
-
-  return {
-    tokenAddress,
-    txHash: tx.hash
-  };
-}
-
-/**
- * Issues a specified amount of tokens to a given address.
- *
- * @param recipientAddress - The address to receive the minted tokens.
- * @returns A promise that resolves to an array of MintResult objects.
- */
-export async function issueTokensCore(
-  recipientAddress: string,
-  fastify: FastifyInstance
-): Promise<MintResult[]> {
-  const amount: string = '10000';
-  const { networkConfig, tokens } = fastify;
-
-  // Create provider using network config from decorator.
-  const provider: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(
-    networkConfig.rpc
-  );
-  const signer: ethers.Wallet = new ethers.Wallet(SIGNING_KEY!, provider);
-
-  // Get tokens for the current chain from the decorator.
-  const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chainId);
-  const tokenAddresses: string[] = chainTokens.map((token) => token.address);
-
-  if (tokenAddresses.length === 0) {
-    throw new Error(`No tokens found for chain ${networkConfig.chainId}`);
-  }
-
-  // Get the current nonce for the signer.
-  const currentNonce: number = await provider.getTransactionCount(signer.address);
-  Logger.log('issueTokensCore', `Current Nonce: ${currentNonce}`);
-  Logger.log(
-    'issueTokensCore',
-    `Minting tokens on chain ${networkConfig.chainId} for wallet ${recipientAddress} and tokens:`,
-    tokenAddresses
-  );
-
-  const mintPromises: Promise<MintResult>[] = tokenAddresses.map((tokenAddress, index) =>
-    mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index)
-  );
-
-  const mintResults = await Promise.all(mintPromises);
-
-  return mintResults;
-}
-
 /**
  * Fastify route handler for issuing tokens.
  *
@@ -303,10 +201,9 @@ export const issueTokensHandler = async (
       );
     }
 
-    const results = await issueTokensCore(address, request.server);
-
+    const results = await issueTokens(address, request.server.tokens, request.server.networkConfig);
     return await returnSuccessResponse(reply, 'Tokens minted successfully', { results });
-  } catch (error) {
+  } catch (error: unknown) {
     Logger.error('issueTokensHandler', error);
     if (error instanceof Error) {
       return returnErrorResponse(reply, 400, 'Bad Request', error.message);

@@ -71,6 +71,7 @@ CHATIZALO_PHONE_NUMBER=
 # Queue Configuration
 QUEUE_BUNDLER_INTERVAL=5000
 QUEUE_GAS_INTERVAL=5000
+QUEUE_CREATE_PROXY_INTERVAL=5000
 
 # Swap debug scripts (only for local env, optional)
 RPC_URL='https://arbitrum-sepolia.infura.io/v3/'
