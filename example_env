@@ -65,6 +65,13 @@ SWAP_SLIPPAGE_CONFIG_EXTRA=300
 ABIS_VERSION=v1.0.0 | v1.0.1 | v2.0.0
 ABIS_READ_FROM='local' | 'gcp'
 
+# Chatizalo
+CHATIZALO_PHONE_NUMBER=
+
+# Queue Configuration
+QUEUE_BUNDLER_INTERVAL=5000
+QUEUE_GAS_INTERVAL=5000
+
 # Swap debug scripts (only for local env, optional)
 RPC_URL='https://arbitrum-sepolia.infura.io/v3/'
 TOKEN_IN='0xE9C723D01393a437bac13CE8f925A5bc8E1c335c' # WETH Arbitrum Sepolia
@@ -76,6 +83,4 @@ CHATTERPAY_ADDRESS='0xBc5a2FE45C825BB091075664cae88914FB3f73f0'
 PROXY_ADDRESS='0x56b1f585c1a08dad9fcfe38ab2c8f8ee1620bdd4'
 OWNER_ADDRESS='0xe54b48f8caf88a08849dcdde3d3d41cd6d7ab369'
 
-# Chatizalo
-CHATIZALO_PHONE_NUMBER=
 
