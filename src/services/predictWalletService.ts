@@ -1,21 +1,21 @@
+import PQueue from 'p-queue';
 import * as crypto from 'crypto';
 import { ethers, BigNumber } from 'ethers';
 
+import { IToken } from '../models/tokenModel';
 import { gasService } from './web3/gasService';
 import { Logger } from '../helpers/loggerHelper';
-import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchainModel';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { getChatterPayWalletFactoryABI } from './web3/abiService';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
+import { SIGNING_KEY, QUEUE_CREATE_PROXY_INTERVAL } from '../config/constants';
+import { MintResult, ComputedAddress, PhoneNumberToAddress } from '../types/commonType';
 
-export interface PhoneNumberToAddress {
-  hashedPrivateKey: string;
-  privateKey: string;
-  publicKey: string;
-}
+// 1 request each x seg
+const queueCreateProxy = new PQueue({ interval: QUEUE_CREATE_PROXY_INTERVAL, intervalCap: 1 });
 
 /**
  * Generates a deterministic Ethereum address based on a phone number and a chain ID.
@@ -87,21 +87,23 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
 
   const code = await provider.getCode(proxyAddress);
   if (code === '0x') {
-    Logger.log(
-      'computeProxyAddressFromPhone',
-      `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}.`
-    );
-    const gasLimit = await gasService.getDynamicGas(
-      factory,
-      'createProxy',
-      [ownerAddress.publicKey],
-      20,
-      BigNumber.from('700000')
-    );
-    const tx = await factory.createProxy(ownerAddress.publicKey, {
-      gasLimit
+    await queueCreateProxy.add(async () => {
+      Logger.log(
+        'computeProxyAddressFromPhone',
+        `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}.`
+      );
+      const gasLimit = await gasService.getDynamicGas(
+        factory,
+        'createProxy',
+        [ownerAddress.publicKey],
+        20,
+        BigNumber.from('700000')
+      );
+      const tx = await factory.createProxy(ownerAddress.publicKey, {
+        gasLimit
+      });
+      await tx.wait();
     });
-    await tx.wait();
   }
 
   Logger.log(
