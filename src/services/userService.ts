@@ -1,11 +1,11 @@
 import { Logger } from '../helpers/loggerHelper';
 import { pushService } from './push/pushService';
 import { mongoUserService } from './mongo/mongoUserService';
-import { ConcurrentOperationsEnum } from '../types/commonType';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { IUser, UserModel, IUserWallet } from '../models/userModel';
+import { computeProxyAddressFromPhone } from './predictWalletService';
 import { sendWalletCreationNotification } from './notificationService';
-import { ComputedAddress, computeProxyAddressFromPhone } from './predictWalletService';
+import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
 import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
 
 /**

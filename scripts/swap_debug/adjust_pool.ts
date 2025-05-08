@@ -6,11 +6,11 @@
 
 import { ethers } from 'ethers';
 
-import { Logger } from '../../src/helpers/loggerHelper';
-import { coingeckoService } from '../../src/services/coingecko/coingeckoService';
-import { ABI } from '../../src/services/web3/abiService';
 import { resolveRpcUrl } from './common';
 import { executeSwap } from './swap_tokens';
+import { Logger } from '../../src/helpers/loggerHelper';
+import { ABI } from '../../src/services/web3/abiService';
+import { coingeckoService } from '../../src/services/coingecko/coingeckoService';
 
 interface PoolConfig {
   readonly rpc: string;
@@ -31,8 +31,14 @@ interface TokenBalances {
 }
 
 const getConfig = (): PoolConfig => {
-  const requiredEnvVars = ['SIGNING_KEY', 'USDT_ADDRESS', 
-    'WETH_ADDRESS', 'POOL_FEE', 'SWAP_ROUTER', 'UNISWAP_FACTORY'];
+  const requiredEnvVars = [
+    'SIGNING_KEY',
+    'USDT_ADDRESS',
+    'WETH_ADDRESS',
+    'POOL_FEE',
+    'SWAP_ROUTER',
+    'UNISWAP_FACTORY'
+  ];
   requiredEnvVars.forEach((key) => {
     if (!process.env[key]) throw new Error(`Missing env variable: ${key}`);
   });

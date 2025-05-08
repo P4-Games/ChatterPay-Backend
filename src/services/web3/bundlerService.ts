@@ -1,12 +1,12 @@
-import axios, { AxiosResponse } from 'axios';
-import { ethers } from 'ethers';
 import PQueue from 'p-queue';
+import { ethers } from 'ethers';
+import axios, { AxiosResponse } from 'axios';
 
-import { QUEUE_BUNDLER_INTERVAL } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
+import { QUEUE_BUNDLER_INTERVAL } from '../../config/constants';
 import { PackedUserOperation } from '../../types/userOperationType';
 
-const queue = new PQueue({ interval: QUEUE_BUNDLER_INTERVAL, intervalCap: 1 }); // 1 request each 10 seg
+const queue = new PQueue({ interval: QUEUE_BUNDLER_INTERVAL, intervalCap: 1 }); // 1 request each x seg
 
 /**
  * Serialize User Operation

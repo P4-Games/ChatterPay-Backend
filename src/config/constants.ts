@@ -44,8 +44,10 @@ const {
   SWAP_SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
   ABIS_READ_FROM: abisReadFrom = 'local',
   CHATIZALO_PHONE_NUMBER,
-  QUEUE_BUNDLER_INTERVAL = 10000,
-  QUEUE_GAS_INTERVAL = 10000
+  QUEUE_BUNDLER_INTERVAL: queueBundlerInterval = 5000,
+  QUEUE_GAS_INTERVAL: queueGasInterval = 5000,
+  QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 3000,
+  QUEUE_MINT_TOKENS_INTERVAL: queueMintTokensInterval = 3000
 } = process.env;
 
 export {
@@ -65,10 +67,8 @@ export {
   CHATIZALO_TOKEN,
   MANTECA_API_KEY,
   MANTECA_BASE_URL,
-  QUEUE_GAS_INTERVAL,
   GCP_BUCKET_BASE_URL,
-  CHATIZALO_PHONE_NUMBER,
-  QUEUE_BUNDLER_INTERVAL
+  CHATIZALO_PHONE_NUMBER
 };
 
 export const IS_DEVELOPMENT =
@@ -165,3 +165,8 @@ export const RESULT_CURRENCIES = ['usd', 'ars', 'brl', 'uyu'];
 export const SWAP_SLIPPAGE_CONFIG_STABLE = Number(slippage_config_stable);
 export const SWAP_SLIPPAGE_CONFIG_DEFAULT = Number(slippage_config_default);
 export const SWAP_SLIPPAGE_CONFIG_EXTRA = Number(slippage_config_extra);
+
+export const QUEUE_BUNDLER_INTERVAL = Number(queueBundlerInterval);
+export const QUEUE_GAS_INTERVAL = Number(queueGasInterval);
+export const QUEUE_CREATE_PROXY_INTERVAL = Number(queueCreateProxyInterval);
+export const QUEUE_MINT_TOKENS_INTERVAL = Number(queueMintTokensInterval);
