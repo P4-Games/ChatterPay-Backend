@@ -6,7 +6,7 @@ import { Logger } from '../../helpers/loggerHelper';
 import { QUEUE_BUNDLER_INTERVAL } from '../../config/constants';
 import { PackedUserOperation } from '../../types/userOperationType';
 
-const queue = new PQueue({ interval: QUEUE_BUNDLER_INTERVAL, intervalCap: 1 }); // 1 request each 10 seg
+const queue = new PQueue({ interval: QUEUE_BUNDLER_INTERVAL, intervalCap: 1 }); // 1 request each x seg
 
 /**
  * Serialize User Operation
@@ -56,7 +56,7 @@ export async function sendUserOperationToBundler(
       `payload: ${JSON.stringify(payload)}, bundlerRpcUrl: ${bundlerRpcUrl}`
     );
 
-    // Wrapper function in quue to avoid erro 429 (rate-limit)
+    // Wrapper function in quue to avoid 429 error (rate-limit)
     const response = (await queue.add(async () =>
       axios.post(bundlerRpcUrl, payload, {
         headers: {

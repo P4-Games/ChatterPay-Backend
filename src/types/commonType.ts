@@ -1,7 +1,5 @@
 import { ethers } from 'ethers';
 
-import { ComputedAddress } from '../services/predictWalletService';
-
 /**
  * Basic token information including price
  */
@@ -104,4 +102,22 @@ export interface ConversionRates {
   [token: string]: {
     [currency: string]: number;
   };
+}
+
+export interface MintResult {
+  tokenAddress: string;
+  txHash: string;
+}
+
+export interface PhoneNumberToAddress {
+  hashedPrivateKey: string;
+  privateKey: string;
+  publicKey: string;
+}
+
+export interface ComputedAddress {
+  proxyAddress: string;
+  EOAAddress: string;
+  privateKey: string;
+  privateKeyNotHashed: string;
 }
