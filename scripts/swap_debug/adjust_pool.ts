@@ -6,11 +6,11 @@
 
 import { ethers } from 'ethers';
 
+import { Logger } from '../../src/helpers/loggerHelper';
+import { coingeckoService } from '../../src/services/coingecko/coingeckoService';
+import { ABI } from '../../src/services/web3/abiService';
 import { resolveRpcUrl } from './common';
 import { executeSwap } from './swap_tokens';
-import { Logger } from '../../src/helpers/loggerHelper';
-import { ABI } from '../../src/services/web3/abiService';
-import { coingeckoService } from '../../src/services/coingecko/coingeckoService';
 
 interface PoolConfig {
   readonly rpc: string;
@@ -31,7 +31,8 @@ interface TokenBalances {
 }
 
 const getConfig = (): PoolConfig => {
-  const requiredEnvVars = ['SIGNING_KEY'];
+  const requiredEnvVars = ['SIGNING_KEY', 'USDT_ADDRESS', 
+    'WETH_ADDRESS', 'POOL_FEE', 'SWAP_ROUTER', 'UNISWAP_FACTORY'];
   requiredEnvVars.forEach((key) => {
     if (!process.env[key]) throw new Error(`Missing env variable: ${key}`);
   });
@@ -105,7 +106,12 @@ const getPoolBalances = async (
     tokenBContract.decimals()
   ]);
 
-  return { poolBalanceA: balanceA, tokenADecimals: decimalsA, poolBalanceB: balanceB, tokenBDecimals: decimalsB };
+  return {
+    poolBalanceA: balanceA,
+    tokenADecimals: decimalsA,
+    poolBalanceB: balanceB,
+    tokenBDecimals: decimalsB
+  };
 };
 
 const validateSwapPreconditions = async (
@@ -140,10 +146,13 @@ async function main() {
     const provider = new ethers.providers.JsonRpcProvider(config.rpc);
     const wallet = new ethers.Wallet(config.privateKey, provider);
 
-    const { poolBalanceA, poolBalanceB, tokenADecimals, tokenBDecimals } =
-      await getPoolBalances(config.usdtAddress, config.wethAddress, config, provider);
+    const { poolBalanceA, poolBalanceB, tokenADecimals, tokenBDecimals } = await getPoolBalances(
+      config.usdtAddress,
+      config.wethAddress,
+      config,
+      provider
+    );
 
-    const tokensToSwapFloat = Math.abs(calculateSwapForTargetPrice(poolBalanceA, poolBalanceB, targetPrice));
     const isBuy = calculateSwapForTargetPrice(poolBalanceA, poolBalanceB, targetPrice) > 0;
 
     const tokenIn = isBuy ? config.wethAddress : config.usdtAddress;
@@ -157,14 +166,18 @@ async function main() {
     const amount = ethers.utils.parseUnits(maxUsableFloat.toFixed(decimals), decimals);
 
     Logger.info(`Wallet Balance: ${walletBalanceFloat} ${isBuy ? 'WETH' : 'USDT'}`);
-    Logger.info(`Final amount to swap: ${ethers.utils.formatUnits(amount, decimals)} ${isBuy ? 'WETH' : 'USDT'} (capped at 90% of wallet balance)`);
+    Logger.info(
+      `Final amount to swap: ${ethers.utils.formatUnits(amount, decimals)} ${isBuy ? 'WETH' : 'USDT'} (capped at 90% of wallet balance)`
+    );
 
     if (!(await validateSwapPreconditions(wallet, tokenIn, amount, config.swapRouterAddress))) {
       Logger.error('Preconditions for swap failed, aborting.');
       return;
     }
 
-    Logger.info(`Swapping ${ethers.utils.formatUnits(amount, decimals)} ${isBuy ? 'WETH' : 'USDT'} for ${isBuy ? 'USDT' : 'WETH'}`);
+    Logger.info(
+      `Swapping ${ethers.utils.formatUnits(amount, decimals)} ${isBuy ? 'WETH' : 'USDT'} for ${isBuy ? 'USDT' : 'WETH'}`
+    );
 
     await executeSwap({
       config,

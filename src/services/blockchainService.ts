@@ -50,13 +50,11 @@ export function getTokenInfo(
  * @param lookUpTokenSymbol
  * @returns
  */
-export function getTokenAddress(
+export function getTokenData(
   blockchainConfig: IBlockchain,
   blockchainTokens: IToken[],
   lookUpTokenSymbol: string
-): string {
-  if (!blockchainTokens) return '';
-
+): IToken | undefined {
   const chainTokens = blockchainTokens.filter(
     (token) => token.chain_id === blockchainConfig.chainId
   );
@@ -65,7 +63,7 @@ export function getTokenAddress(
     (t) => t.symbol.toLowerCase() === lookUpTokenSymbol.toLowerCase()
   );
 
-  return foundToken?.address ?? '';
+  return foundToken;
 }
 
 /**

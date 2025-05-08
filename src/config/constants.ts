@@ -43,7 +43,9 @@ const {
   SWAP_SLIPPAGE_CONFIG_DEFAULT: slippage_config_default = 500,
   SWAP_SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
   ABIS_READ_FROM: abisReadFrom = 'local',
-  CHATIZALO_PHONE_NUMBER
+  CHATIZALO_PHONE_NUMBER,
+  QUEUE_BUNDLER_INTERVAL = 10000,
+  QUEUE_GAS_INTERVAL = 10000
 } = process.env;
 
 export {
@@ -63,8 +65,10 @@ export {
   CHATIZALO_TOKEN,
   MANTECA_API_KEY,
   MANTECA_BASE_URL,
+  QUEUE_GAS_INTERVAL,
   GCP_BUCKET_BASE_URL,
-  CHATIZALO_PHONE_NUMBER
+  CHATIZALO_PHONE_NUMBER,
+  QUEUE_BUNDLER_INTERVAL
 };
 
 export const IS_DEVELOPMENT =
@@ -121,14 +125,11 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
   : 'error';
 
 export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];
-export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'es';
+export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'en';
 
 export const NOTIFICATION_TEMPLATE_CACHE_TTL = 60800; // 1 week
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
 export const GCP_CLOUD_TRACE_ENABLED: boolean = gcpCloudTraceEnabled.toLowerCase() === 'true';
-
-export const QUEUE_BUNDLER_INTERVAL = 10000; // 10 Seg
-export const QUEUE_GAS_INTERVAL = 10000; // 10 Seg
 
 export const FASTIFY_REFRESH_TOKENS_INTERVAL_MS: number = Number(fastifyRefreshNetworksIntervalMs);
 export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(fastifyRefreshTokensIntervalMs);

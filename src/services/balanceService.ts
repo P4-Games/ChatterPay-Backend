@@ -4,7 +4,7 @@ import NodeCache from 'node-cache';
 import { IToken } from '../models/tokenModel';
 import { getERC20ABI } from './web3/abiService';
 import { Logger } from '../helpers/loggerHelper';
-import { getTokenAddress } from './blockchainService';
+import { getTokenData } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
 import { setupERC20 } from './web3/contractSetupService';
 import { SIGNING_KEY, BINANCE_API_URL } from '../config/constants';
@@ -137,7 +137,8 @@ async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo
     symbol: token.symbol,
     address: token.address,
     type: token.type,
-    rateUSD: prices.get(token.symbol) || 0
+    rateUSD: prices.get(token.symbol) || 0,
+    display_decimals: token.display_decimals
   }));
 }
 
@@ -285,7 +286,12 @@ export async function verifyWalletBalanceByTokenSymbol(
 ): Promise<WalletBalanceInfo> {
   const provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpc);
   const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-  const tokenContractAddress = getTokenAddress(blockchainConfig, blockchainTokens, tokenSymbol);
+  const tokenData: IToken | undefined = getTokenData(
+    blockchainConfig,
+    blockchainTokens,
+    tokenSymbol
+  );
+  const tokenContractAddress = tokenData!.address;
   const tokenContract: ethers.Contract = await setupERC20(tokenContractAddress, backendSigner);
 
   return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);

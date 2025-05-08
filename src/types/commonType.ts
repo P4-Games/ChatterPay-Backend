@@ -10,6 +10,7 @@ export interface TokenInfo {
   address: string;
   type: string;
   rateUSD: number;
+  display_decimals: number;
 }
 
 /**

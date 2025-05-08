@@ -3,6 +3,7 @@ import { get } from '@google-cloud/trace-agent';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 
+import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IUser, IUserWallet } from '../models/userModel';
@@ -16,7 +17,7 @@ import { mongoTransactionService } from '../services/mongo/mongoTransactionServi
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import {
-  getTokenAddress,
+  getTokenData,
   checkBlockchainConditions,
   userReachedOperationLimit
 } from '../services/blockchainService';
@@ -65,7 +66,7 @@ type MakeTransactionInputs = {
 const validateInputs = async (
   inputs: MakeTransactionInputs,
   currentChainId: number,
-  tokenAddress: string
+  tokenData: IToken | undefined
 ): Promise<string> => {
   const { channel_user_id, to, token, amount, chain_id } = inputs;
 
@@ -94,7 +95,7 @@ const validateInputs = async (
     return 'The selected blockchain is currently unavailable';
   }
 
-  if (!tokenAddress) {
+  if (!tokenData) {
     return 'The token is not available on the selected network';
   }
 
@@ -304,7 +305,7 @@ export const makeTransaction = async (
     const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
     const { networkConfig, tokens: tokensConfig } = request.server as FastifyInstance;
 
-    const tokenAddress: string = getTokenAddress(
+    const tokenData: IToken | undefined = getTokenData(
       networkConfig,
       tokensConfig,
       tokenSymbol || '' // could be missing in body
@@ -313,7 +314,7 @@ export const makeTransaction = async (
     let validationError: string = await validateInputs(
       request.body,
       networkConfig.chainId,
-      tokenAddress
+      tokenData
     );
 
     if (validationError) {
@@ -402,7 +403,7 @@ export const makeTransaction = async (
 
     const checkBalanceResult = await verifyWalletBalanceInRpc(
       networkConfig.rpc,
-      tokenAddress,
+      tokenData!.address,
       userWallet.wallet_proxy,
       amount
     );
@@ -496,7 +497,7 @@ export const makeTransaction = async (
       checkBlockchainConditionsResult.entryPointContract!,
       userWallet.wallet_proxy,
       toAddress,
-      tokenAddress,
+      tokenData!.address,
       amount
     );
 
@@ -555,9 +556,11 @@ export const makeTransaction = async (
     const chatterpayFee = await getChatterpayTokenFee(
       networkConfig.contracts.chatterPayAddress,
       checkBlockchainConditionsResult.setupContractsResult!.provider,
-      tokenAddress
+      tokenData!.address
     );
-    const amountAfterFee = parseFloat(amount) - chatterpayFee;
+
+    const amountAfterFeeDecimals = tokenData?.display_decimals;
+    const amountAfterFee = (parseFloat(amount) - chatterpayFee).toFixed(amountAfterFeeDecimals);
 
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
