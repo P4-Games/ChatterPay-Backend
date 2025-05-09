@@ -1,15 +1,11 @@
-import PQueue from 'p-queue';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import Token, { IToken } from '../models/tokenModel';
+import { IS_DEVELOPMENT } from '../config/constants';
 import { issueTokens } from '../services/predictWalletService';
 import { coingeckoService } from '../services/coingecko/coingeckoService';
-import { IS_DEVELOPMENT, QUEUE_MINT_TOKENS_INTERVAL } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
-
-// 1 request each x seconds
-const queueMintTokens = new PQueue({ interval: QUEUE_MINT_TOKENS_INTERVAL, intervalCap: 1 });
 
 /**
  * Creates a new token.
@@ -205,17 +201,8 @@ export const issueTokensHandler = async (
       );
     }
 
-    await queueMintTokens.add(async () => {
-      const results = await issueTokens(
-        address,
-        request.server.tokens,
-        request.server.networkConfig
-      );
-      return returnSuccessResponse(reply, 'Tokens minted successfully', { results });
-    });
-
-    // Return success response immediately to the client, since the task is in the queue
-    return await reply;
+    const results = await issueTokens(address, request.server.tokens, request.server.networkConfig);
+    return await returnSuccessResponse(reply, 'Tokens minted successfully', { results });
   } catch (error: unknown) {
     Logger.error('issueTokensHandler', error);
     if (error instanceof Error) {

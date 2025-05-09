@@ -46,8 +46,7 @@ const {
   CHATIZALO_PHONE_NUMBER,
   QUEUE_BUNDLER_INTERVAL: queueBundlerInterval = 5000,
   QUEUE_GAS_INTERVAL: queueGasInterval = 5000,
-  QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 3000,
-  QUEUE_MINT_TOKENS_INTERVAL: queueMintTokensInterval = 3000
+  QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 3000
 } = process.env;
 
 export {
@@ -169,4 +168,3 @@ export const SWAP_SLIPPAGE_CONFIG_EXTRA = Number(slippage_config_extra);
 export const QUEUE_BUNDLER_INTERVAL = Number(queueBundlerInterval);
 export const QUEUE_GAS_INTERVAL = Number(queueGasInterval);
 export const QUEUE_CREATE_PROXY_INTERVAL = Number(queueCreateProxyInterval);
-export const QUEUE_MINT_TOKENS_INTERVAL = Number(queueMintTokensInterval);
