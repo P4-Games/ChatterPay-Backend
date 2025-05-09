@@ -9,6 +9,7 @@ export interface IToken extends Document {
   symbol: string;
   type: string;
   ramp_enabled: boolean;
+  display_decimals: number;
 }
 
 const tokenSchema = new Schema<IToken>({
@@ -19,7 +20,8 @@ const tokenSchema = new Schema<IToken>({
   logo: { type: String, required: false },
   symbol: { type: String, required: true },
   type: { type: String, required: true },
-  ramp_enabled: { type: Boolean, required: true }
+  ramp_enabled: { type: Boolean, required: true },
+  display_decimals: { type: Number, required: true }
 });
 
 const Token = model<IToken>('Token', tokenSchema, 'tokens');

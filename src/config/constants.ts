@@ -43,7 +43,10 @@ const {
   SWAP_SLIPPAGE_CONFIG_DEFAULT: slippage_config_default = 500,
   SWAP_SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
   ABIS_READ_FROM: abisReadFrom = 'local',
-  CHATIZALO_PHONE_NUMBER
+  CHATIZALO_PHONE_NUMBER,
+  QUEUE_BUNDLER_INTERVAL: queueBundlerInterval = 5000,
+  QUEUE_GAS_INTERVAL: queueGasInterval = 5000,
+  QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 3000
 } = process.env;
 
 export {
@@ -121,14 +124,11 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
   : 'error';
 
 export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];
-export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'es';
+export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'en';
 
 export const NOTIFICATION_TEMPLATE_CACHE_TTL = 60800; // 1 week
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
 export const GCP_CLOUD_TRACE_ENABLED: boolean = gcpCloudTraceEnabled.toLowerCase() === 'true';
-
-export const QUEUE_BUNDLER_INTERVAL = 10000; // 10 Seg
-export const QUEUE_GAS_INTERVAL = 10000; // 10 Seg
 
 export const FASTIFY_REFRESH_TOKENS_INTERVAL_MS: number = Number(fastifyRefreshNetworksIntervalMs);
 export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(fastifyRefreshTokensIntervalMs);
@@ -164,3 +164,7 @@ export const RESULT_CURRENCIES = ['usd', 'ars', 'brl', 'uyu'];
 export const SWAP_SLIPPAGE_CONFIG_STABLE = Number(slippage_config_stable);
 export const SWAP_SLIPPAGE_CONFIG_DEFAULT = Number(slippage_config_default);
 export const SWAP_SLIPPAGE_CONFIG_EXTRA = Number(slippage_config_extra);
+
+export const QUEUE_BUNDLER_INTERVAL = Number(queueBundlerInterval);
+export const QUEUE_GAS_INTERVAL = Number(queueGasInterval);
+export const QUEUE_CREATE_PROXY_INTERVAL = Number(queueCreateProxyInterval);

@@ -8,6 +8,7 @@
 
 import { ethers } from 'ethers';
 
+import { resolveRpcUrl } from './common';
 import { Logger } from '../../src/helpers/loggerHelper';
 import { getERC20ABI } from '../../src/services/web3/abiService';
 
@@ -90,13 +91,12 @@ const SWAP_ROUTER_ABI = [
  * Note: Production code should use environment variables instead of hardcoded values
  */
 const DEFAULT_CONFIG: PoolConfig = {
-  rpc: `https://arb-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY ?? ''}`,
+  rpc: resolveRpcUrl(),
   privateKey: process.env.SIGNING_KEY ?? '',
   usdtAddress: process.env.USDT_ADDRESS ?? '0x6D904bB70Cf0CbD427e5e70BCcE1F4D1348b785d',
   wethAddress: process.env.WETH_ADDRESS ?? '0xd3A5f60cc44b9E51BF7e8D6db882a88260F708BC',
-  poolFee: 3000, // 0.3%
-  swapRouterAddress:
-    process.env.SWAP_ROUTER_ADDRESS ?? '0x101F443B4d1b059569D643917553c771E1b9663E',
+  poolFee: parseInt(process.env.POOL_FEE ?? '3000', 10), // 0.3%
+  swapRouterAddress: process.env.SWAP_ROUTER ?? '0x101F443B4d1b059569D643917553c771E1b9663E',
   gasLimit: 3000000
 };
 
@@ -377,7 +377,7 @@ async function executeSwap(options: SwapOptions = {}): Promise<SwapResult> {
 }
 
 // Execute main function if running directly
-if (require.main === module) {
+if (import.meta.main) {
   executeSwap({
     amountIn: '1',
     tokenIn: DEFAULT_CONFIG.wethAddress,

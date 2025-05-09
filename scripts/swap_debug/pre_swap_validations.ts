@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { ethers } from 'ethers';
 
+import { resolveRpcUrl } from './common';
 import { Logger } from '../../src/helpers/loggerHelper';
 
 // Load environment variables
@@ -16,8 +17,8 @@ async function validateSwapPrerequisites(
   proxyAddress: string,
   tokenIn: string,
   tokenOut: string,
-  amount: string,
-  recipient: string
+  amount: string
+  // recipient: string
 ): Promise<boolean> {
   Logger.info('validateSwapPrerequisites', '=====================================================');
   Logger.info('validateSwapPrerequisites', 'COMPLETE PRE-SWAP VALIDATION');
@@ -306,7 +307,7 @@ async function validateSwapPrerequisites(
     Logger.info('validateSwapPrerequisites', `TokenIn: ${tokenInSymbol} (${tokenIn})`);
     Logger.info('validateSwapPrerequisites', `TokenOut: ${tokenOutSymbol} (${tokenOut})`);
     Logger.info('validateSwapPrerequisites', `Amount: ${amount} ${tokenInSymbol}`);
-    Logger.info('validateSwapPrerequisites', `Recipient: ${recipient}`);
+    // Logger.info('validateSwapPrerequisites', `Recipient: ${recipient}`);
     Logger.info('validateSwapPrerequisites', `TokenIn whitelisted: ${inWhitelisted ? '✅' : '❌'}`);
     Logger.info(
       'validateSwapPrerequisites',
@@ -344,11 +345,10 @@ async function main() {
     const TOKEN_IN = process.env.TOKEN_IN ?? '0xE9C723D01393a437bac13CE8f925A5bc8E1c335c'; // WETH
     const TOKEN_OUT = process.env.TOKEN_OUT ?? '0xe6B817E31421929403040c3e42A6a5C5D2958b4A'; // USDT
     const AMOUNT = process.env.AMOUNT ?? '10';
-    const RECIPIENT = process.env.RECIPIENT ?? '0x1c875fD25BEb9b72011864831a95eeb67ae8f06d';
+    // const RECIPIENT = process.env.RECIPIENT ?? '0x1c875fD25BEb9b72011864831a95eeb67ae8f06d';
 
     // RPC configuration
-    const { INFURA_API_KEY, RPC_URL } = process.env;
-    const rpcUrl = `${RPC_URL ?? 'https://arbitrum-sepolia.infura.io/v3/'}${INFURA_API_KEY}`;
+    const rpcUrl = resolveRpcUrl();
 
     // Configure provider
     const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
@@ -361,8 +361,8 @@ async function main() {
       PROXY_ADDRESS,
       TOKEN_IN,
       TOKEN_OUT,
-      AMOUNT,
-      RECIPIENT
+      AMOUNT
+      // RECIPIENT
     );
 
     Logger.info('main', `\nValidation ${result ? 'successful ✅' : 'failed ❌'}`);
