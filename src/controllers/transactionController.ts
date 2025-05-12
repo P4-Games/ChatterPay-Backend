@@ -17,16 +17,17 @@ import { mongoTransactionService } from '../services/mongo/mongoTransactionServi
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import {
-  getTokenData,
-  checkBlockchainConditions,
-  userReachedOperationLimit
-} from '../services/blockchainService';
-import {
   TransactionData,
   ExecueTransactionResult,
   ConcurrentOperationsEnum,
   CheckBalanceConditionsResult
 } from '../types/commonType';
+import {
+  getTokenData,
+  checkBlockchainConditions,
+  userReachedOperationLimit,
+  userWithinTokenOperationLimits
+} from '../services/blockchainService';
 import {
   INFURA_URL,
   INFURA_API_KEY,
@@ -386,7 +387,32 @@ export const makeTransaction = async (
     }
 
     /* ***************************************************** */
-    /* 5. makeTransaction: send initial response             */
+    /* 5. makeTransaction: check amount limit                */
+    /* ***************************************************** */
+    const limitsResult = await userWithinTokenOperationLimits(
+      channel_user_id,
+      'transfer',
+      tokenSymbol,
+      networkConfig.chainId,
+      parseFloat(amount)
+    );
+    if (!limitsResult.isWithinLimits) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.amount_outside_limits
+      );
+      const formattedMessage = message
+        .replace('[LIMIT_MIN]', limitsResult.min!.toString())
+        .replace('[LIMIT_MAX]', limitsResult.max!.toString());
+      Logger.info('makeTransaction', `${formattedMessage}`);
+      concurrentOperationSpan?.endSpan();
+      rootSpan?.endSpan();
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, formattedMessage);
+    }
+
+    /* ***************************************************** */
+    /* 6. makeTransaction: send initial response             */
     /* ***************************************************** */
     await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
     concurrentOperationSpan?.endSpan();
@@ -395,7 +421,7 @@ export const makeTransaction = async (
     await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
 
     /* ***************************************************** */
-    /* 6. makeTransaction: check user balance                */
+    /* 7. makeTransaction: check user balance                */
     /* ***************************************************** */
     const balanceCheckSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'checkUserBalance' })
@@ -424,7 +450,7 @@ export const makeTransaction = async (
     balanceCheckSpan?.endSpan();
 
     /* ***************************************************** */
-    /* 7. makeTransaction: check blockchain conditions       */
+    /* 8. makeTransaction: check blockchain conditions       */
     /* ***************************************************** */
     const blockchainCheckSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'checkBlockchainConditions' })
@@ -448,7 +474,7 @@ export const makeTransaction = async (
     blockchainCheckSpan?.endSpan();
 
     /* ***************************************************** */
-    /* 8. makeTransaction: get or create user 'to'           */
+    /* 9. makeTransaction: get or create user 'to'           */
     /* ***************************************************** */
     const userCreationSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'getOrCreateUser' })
@@ -485,7 +511,7 @@ export const makeTransaction = async (
     userCreationSpan?.endSpan();
 
     /* ***************************************************** */
-    /* 9. makeTransaction: executeTransaction                */
+    /* 10. makeTransaction: executeTransaction                */
     /* ***************************************************** */
     const transactionExecutionSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'executeTransaction' })
@@ -517,7 +543,7 @@ export const makeTransaction = async (
     transactionExecutionSpan?.endSpan();
 
     /* ***************************************************** */
-    /* 10. makeTransaction: update transaction in bdd        */
+    /* 11. makeTransaction: update transaction in bdd        */
     /* ***************************************************** */
     const saveTransactionSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'saveTransactionPending' })
@@ -540,7 +566,7 @@ export const makeTransaction = async (
     await mongoUserService.updateUserOperationCounter(channel_user_id, 'transfer');
 
     /* ***************************************************** */
-    /* 11. makeTransaction: send user notification           */
+    /* 12. makeTransaction: send user notification           */
     /* ***************************************************** */
     const notificationSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'sendUserNotifications' })

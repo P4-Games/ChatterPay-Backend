@@ -13,7 +13,7 @@ describe('Token Model', () => {
 
     await mongoose.disconnect();
     await mongoose.connect(uri, {});
-    await Token.syncIndexes(); // Ensure unique indexes in the in-memory database
+    await Token.syncIndexes(); // Ensures unique indexes in the in-memory database
   });
 
   afterEach(async () => {
@@ -21,7 +21,7 @@ describe('Token Model', () => {
     await mongoServer.stop();
   });
 
-  it('should create and save a Token document successfully', async () => {
+  it('should create and save a Token document successfully with operations limits', async () => {
     const validToken: Partial<IToken> = {
       name: 'Wrapped Ether',
       chain_id: 1,
@@ -31,7 +31,17 @@ describe('Token Model', () => {
       logo: 'https://etherscan.io/token/images/weth_32.png',
       symbol: 'WETH',
       type: 'variable',
-      ramp_enabled: false
+      ramp_enabled: false,
+      operations_limits: {
+        transfer: {
+          L1: { min: 2, max: 1000 },
+          L2: { min: 2, max: 1000 }
+        },
+        swap: {
+          L1: { min: 2, max: 1000 },
+          L2: { min: 2, max: 1000 }
+        }
+      }
     };
 
     const token = new Token(validToken);
@@ -39,6 +49,10 @@ describe('Token Model', () => {
 
     expect(savedToken._id).toBeDefined();
     expect(savedToken.name).toBe(validToken.name);
+    expect(savedToken.operations_limits.transfer.L1.min).toBe(2);
+    expect(savedToken.operations_limits.transfer.L1.max).toBe(1000);
+    expect(savedToken.operations_limits.swap.L2.min).toBe(2);
+    expect(savedToken.operations_limits.swap.L2.max).toBe(1000);
   });
 
   it('should fail to save without required fields', async () => {
@@ -64,7 +78,17 @@ describe('Token Model', () => {
       address: '0x1234567890abcdef1234567890abcdef12345678',
       symbol: 'NOLOGO',
       type: 'stable',
-      ramp_enabled: true
+      ramp_enabled: true,
+      operations_limits: {
+        transfer: {
+          L1: { min: 2, max: 1000 },
+          L2: { min: 2, max: 1000 }
+        },
+        swap: {
+          L1: { min: 2, max: 1000 },
+          L2: { min: 2, max: 1000 }
+        }
+      }
     };
 
     const token = new Token(validToken);
@@ -84,7 +108,17 @@ describe('Token Model', () => {
       logo: 'https://example.com/logo1.png',
       symbol: 'TOKEN1',
       type: 'variable',
-      ramp_enabled: false
+      ramp_enabled: false,
+      operations_limits: {
+        transfer: {
+          L1: { min: 2, max: 1000 },
+          L2: { min: 2, max: 1000 }
+        },
+        swap: {
+          L1: { min: 2, max: 1000 },
+          L2: { min: 2, max: 1000 }
+        }
+      }
     };
 
     const duplicateTokenData: Partial<IToken> = {
@@ -96,7 +130,17 @@ describe('Token Model', () => {
       logo: 'https://example.com/logo2.png',
       symbol: 'TOKEN2',
       type: 'variable',
-      ramp_enabled: false
+      ramp_enabled: false,
+      operations_limits: {
+        transfer: {
+          L1: { min: 2, max: 1000 },
+          L2: { min: 2, max: 1000 }
+        },
+        swap: {
+          L1: { min: 2, max: 1000 },
+          L2: { min: 2, max: 1000 }
+        }
+      }
     };
 
     const token1 = new Token(tokenData);
