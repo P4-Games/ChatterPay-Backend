@@ -23,17 +23,18 @@ import {
   COMMON_REPLY_OPERATION_IN_PROGRESS
 } from '../config/constants';
 import {
-  getTokensAddresses,
-  checkBlockchainConditions,
-  userReachedOperationLimit
-} from '../services/blockchainService';
-import {
   TokenAddresses,
   TransactionData,
   ExecuteSwapResult,
   ConcurrentOperationsEnum,
   CheckBalanceConditionsResult
 } from '../types/commonType';
+import {
+  getTokensAddresses,
+  checkBlockchainConditions,
+  userReachedOperationLimit,
+  userWithinTokenOperationLimits
+} from '../services/blockchainService';
 import {
   sendSwapNotification,
   getNotificationTemplate,
@@ -154,7 +155,27 @@ export const swap = async (
     }
 
     /* ***************************************************** */
-    /* 4. swap: check concurrent operation                    */
+    /* 4. makeTransaction: check amount limit                */
+    /* ***************************************************** */
+    const amountOutsideLimits = await userWithinTokenOperationLimits(
+      channel_user_id,
+      'swap',
+      inputCurrency,
+      networkConfig.chainId,
+      amount
+    );
+    if (!amountOutsideLimits) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.amount_outside_limits
+      );
+      Logger.info('swap', `${message}`);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, message);
+    }
+
+    /* ***************************************************** */
+    /* 5. swap: check concurrent operation                    */
     /* ***************************************************** */
     const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
     if (userOperations) {
@@ -168,7 +189,7 @@ export const swap = async (
     }
 
     /* ***************************************************** */
-    /* 4. swap: send initial response                        */
+    /* 6. swap: send initial response                        */
     /* ***************************************************** */
     // optimistic response
     await openOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
@@ -176,7 +197,7 @@ export const swap = async (
     await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
 
     /* ***************************************************** */
-    /* 5. swap: check user balance                           */
+    /* 7. swap: check user balance                           */
     /* ***************************************************** */
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
@@ -205,7 +226,7 @@ export const swap = async (
     }
 
     /* ***************************************************** */
-    /* 7. swap: check blockchain conditions                  */
+    /* 8. swap: check blockchain conditions                  */
     /* ***************************************************** */
     const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
       await checkBlockchainConditions(networkConfig, channel_user_id);
@@ -217,7 +238,7 @@ export const swap = async (
     }
 
     /* ***************************************************** */
-    /* 8. swap: make operation                               */
+    /* 9. swap: make operation                               */
     /* ***************************************************** */
     const executeSwapResult: ExecuteSwapResult = await executeSwap(
       networkConfig,
@@ -235,7 +256,7 @@ export const swap = async (
     }
 
     /* ***************************************************** */
-    /* 9. swap: update database with result                  */
+    /* 10. swap: update database with result                  */
     /* ***************************************************** */
     // Get the new balances after the transaction
     const fromTokenNewBalance = await fromTokenContract.balanceOf(proxyAddress);
@@ -283,7 +304,7 @@ export const swap = async (
     await mongoUserService.updateUserOperationCounter(channel_user_id, 'swap');
 
     /* ***************************************************** */
-    /* 10. swap: send notification to user                   */
+    /* 11. swap: send notification to user                   */
     /* ***************************************************** */
 
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
