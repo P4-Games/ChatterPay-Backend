@@ -157,21 +157,25 @@ export const swap = async (
     /* ***************************************************** */
     /* 4. makeTransaction: check amount limit                */
     /* ***************************************************** */
-    const amountOutsideLimits = await userWithinTokenOperationLimits(
+    const limitsResult = await userWithinTokenOperationLimits(
       channel_user_id,
       'swap',
       inputCurrency,
       networkConfig.chainId,
       amount
     );
-    if (!amountOutsideLimits) {
+    if (!limitsResult.isWithinLimits) {
       const { message } = await getNotificationTemplate(
         channel_user_id,
         NotificationEnum.amount_outside_limits
       );
-      Logger.info('swap', `${message}`);
+      const formattedMessage = message
+        .replace('[LIMIT_MIN]', limitsResult.min!.toString())
+        .replace('[LIMIT_MAX]', limitsResult.max!.toString());
+      Logger.info('makeTransaction', `${formattedMessage}`);
+      Logger.info('swap', `${formattedMessage}`);
       // must return 200, so the bot displays the message instead of an error!
-      return await returnSuccessResponse(reply, message);
+      return await returnSuccessResponse(reply, formattedMessage);
     }
 
     /* ***************************************************** */

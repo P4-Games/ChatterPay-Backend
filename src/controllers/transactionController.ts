@@ -389,23 +389,26 @@ export const makeTransaction = async (
     /* ***************************************************** */
     /* 5. makeTransaction: check amount limit                */
     /* ***************************************************** */
-    const amountOutsideLimits = await userWithinTokenOperationLimits(
+    const limitsResult = await userWithinTokenOperationLimits(
       channel_user_id,
       'transfer',
       tokenSymbol,
       networkConfig.chainId,
       parseFloat(amount)
     );
-    if (!amountOutsideLimits) {
+    if (!limitsResult.isWithinLimits) {
       const { message } = await getNotificationTemplate(
         channel_user_id,
         NotificationEnum.amount_outside_limits
       );
-      Logger.info('makeTransaction', `${message}`);
+      const formattedMessage = message
+        .replace('[LIMIT_MIN]', limitsResult.min!.toString())
+        .replace('[LIMIT_MAX]', limitsResult.max!.toString());
+      Logger.info('makeTransaction', `${formattedMessage}`);
       concurrentOperationSpan?.endSpan();
       rootSpan?.endSpan();
       // must return 200, so the bot displays the message instead of an error!
-      return await returnSuccessResponse(reply, message);
+      return await returnSuccessResponse(reply, formattedMessage);
     }
 
     /* ***************************************************** */
