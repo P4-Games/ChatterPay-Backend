@@ -37,6 +37,7 @@ interface SwapOptions {
   readonly tokenIn?: string; // Address of input token (overrides config)
   readonly tokenOut?: string; // Address of output token (overrides config)
   readonly deadline?: number; // Deadline for transaction execution (seconds from now)
+  readonly amountOutMinimum?: string; // Minimum amount of output tokens to receive
 }
 
 /**
@@ -60,27 +61,24 @@ interface SwapResult {
  */
 const SWAP_ROUTER_ABI = [
   {
-    inputs: [
-      {
-        components: [
-          { internalType: 'address', name: 'tokenIn', type: 'address' },
-          { internalType: 'address', name: 'tokenOut', type: 'address' },
-          { internalType: 'uint24', name: 'fee', type: 'uint24' },
-          { internalType: 'address', name: 'recipient', type: 'address' },
-          { internalType: 'uint256', name: 'deadline', type: 'uint256' },
-          { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
-          { internalType: 'uint256', name: 'amountOutMinimum', type: 'uint256' },
-          { internalType: 'uint160', name: 'sqrtPriceLimitX96', type: 'uint160' }
+    "inputs": [{
+        "components": [
+            { "internalType": "address", "name": "tokenIn", "type": "address" },
+            { "internalType": "address", "name": "tokenOut", "type": "address" },
+            { "internalType": "uint24", "name": "fee", "type": "uint24" },
+            { "internalType": "address", "name": "recipient", "type": "address" },
+            { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
+            { "internalType": "uint256", "name": "amountOutMinimum", "type": "uint256" },
+            { "internalType": "uint160", "name": "sqrtPriceLimitX96", "type": "uint160" }
         ],
-        internalType: 'struct ISwapRouter.ExactInputSingleParams',
-        name: 'params',
-        type: 'tuple'
-      }
-    ],
-    name: 'exactInputSingle',
-    outputs: [{ internalType: 'uint256', name: 'amountOut', type: 'uint256' }],
-    stateMutability: 'payable',
-    type: 'function'
+        "internalType": "struct IV3SwapRouter.ExactInputSingleParams",
+        "name": "params",
+        "type": "tuple"
+    }],
+    "name": "exactInputSingle",
+    "outputs": [{ "internalType": "uint256", "name": "amountOut", "type": "uint256" }],
+    "stateMutability": "payable",
+    "type": "function"
   }
 ];
 
@@ -282,9 +280,20 @@ async function executeSwap(options: SwapOptions = {}): Promise<SwapResult> {
     // Calculate deadline for transaction (default: 20 minutes from now)
     const deadline = Math.floor(Date.now() / 1000) + (options.deadline ?? 1200);
 
-    // Apply slippage tolerance (default: 0.5%)
-    const slippageTolerance = options.slippageTolerance ?? 50;
-    const amountOutMinimum = calculateMinimumOutput(amountIn, slippageTolerance);
+    // Apply slippage tolerance (default: 0.5%) or use provided amountOutMinimum
+    let amountOutMinimum: ethers.BigNumber;
+    
+    if (options.amountOutMinimum) {
+      amountOutMinimum = ethers.utils.parseUnits(
+        options.amountOutMinimum,
+        tokenOutInfo.decimals
+      );
+      Logger.info(`Using provided minimum output amount: ${options.amountOutMinimum} ${tokenOutInfo.symbol}`);
+    } else {
+      const slippageTolerance = options.slippageTolerance ?? 50;
+      amountOutMinimum = calculateMinimumOutput(amountIn, slippageTolerance);
+      Logger.info(`Calculated minimum output with ${slippageTolerance/100}% slippage: ${ethers.utils.formatUnits(amountOutMinimum, tokenOutInfo.decimals)} ${tokenOutInfo.symbol}`);
+    }
 
     // Prepare swap parameters
     const params = {
