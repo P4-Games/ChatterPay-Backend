@@ -366,7 +366,7 @@ export async function userReachedOperationLimit(
  * @param chainId - The blockchain network's chainId (e.g., 1 for Ethereum).
  * @param amount - The amount the user wants to transfer or swap.
  *
- * @returns `true` if the user is within the limits; `false` otherwise.
+ * @returns An object containing a boolean `isWithinLimits` and the `min` and `max` limits if available.
  */
 export async function userWithinTokenOperationLimits(
   phoneNumber: string,
@@ -374,7 +374,7 @@ export async function userWithinTokenOperationLimits(
   tokenSymbol: string,
   chainId: number,
   amount: number
-): Promise<boolean> {
+): Promise<{ isWithinLimits: boolean; min?: number; max?: number }> {
   try {
     // Fetch the token configuration based on token symbol and chain_id
     const token = await Token.findOne({
@@ -387,7 +387,7 @@ export async function userWithinTokenOperationLimits(
         'userWithinTokenOperationLimits',
         `Token with symbol ${tokenSymbol} not found for chainId: ${chainId}`
       );
-      return false;
+      return { isWithinLimits: false };
     }
 
     // Get the operation limits for the token
@@ -397,7 +397,7 @@ export async function userWithinTokenOperationLimits(
         'userWithinTokenOperationLimits',
         `No operation limits found for token: ${tokenSymbol}`
       );
-      return false;
+      return { isWithinLimits: false };
     }
 
     // Fetch the user's level dynamically from the UserModel
@@ -407,7 +407,7 @@ export async function userWithinTokenOperationLimits(
         'userWithinTokenOperationLimits',
         `User not found for phone number: ${phoneNumber}`
       );
-      return false;
+      return { isWithinLimits: false };
     }
 
     const userLevel = (user.level || 'L1').toUpperCase() as keyof TokenOperationLimits;
@@ -418,7 +418,7 @@ export async function userWithinTokenOperationLimits(
         'userWithinTokenOperationLimits',
         `No limits found for ${operationType} at user level ${userLevel} for token ${tokenSymbol} and chain ${chainId}`
       );
-      return false;
+      return { isWithinLimits: false };
     }
 
     const { min, max } = limits;
@@ -429,21 +429,21 @@ export async function userWithinTokenOperationLimits(
         'userWithinTokenOperationLimits',
         `Amount ${amount} for token ${tokenSymbol} is out of bounds. Min: ${min}, Max: ${max}`
       );
-      return false;
+      return { isWithinLimits: false, min, max };
     }
 
-    // If the amount is within limits, return true
+    // If the amount is within limits, return true with min and max values
     Logger.info(
       'userWithinTokenOperationLimits',
       `User: ${phoneNumber}, Operation: ${operationType}, Token: ${tokenSymbol}, Amount: ${amount}, Limits: Min: ${min}, Max: ${max}`
     );
-    return true;
+    return { isWithinLimits: true, min, max };
   } catch (error) {
     Logger.error(
       'userWithinTokenOperationLimits',
       `Error validating operation limits for token: ${tokenSymbol}`,
       (error as Error).message
     );
-    return false;
+    return { isWithinLimits: false };
   }
 }
