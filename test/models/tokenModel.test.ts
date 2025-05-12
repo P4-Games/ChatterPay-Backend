@@ -13,7 +13,7 @@ describe('Token Model', () => {
 
     await mongoose.disconnect();
     await mongoose.connect(uri, {});
-    await Token.syncIndexes(); // Ensure unique indexes in the in-memory database
+    await Token.syncIndexes(); // Ensures unique indexes in the in-memory database
   });
 
   afterEach(async () => {
@@ -49,9 +49,9 @@ describe('Token Model', () => {
 
     expect(savedToken._id).toBeDefined();
     expect(savedToken.name).toBe(validToken.name);
-    expect(savedToken.operations_limits.transfer.L1.min).toBe(2); // Updated for correct L1 reference
+    expect(savedToken.operations_limits.transfer.L1.min).toBe(2);
     expect(savedToken.operations_limits.transfer.L1.max).toBe(1000);
-    expect(savedToken.operations_limits.swap.L2.min).toBe(2); // Updated for correct L2 reference
+    expect(savedToken.operations_limits.swap.L2.min).toBe(2);
     expect(savedToken.operations_limits.swap.L2.max).toBe(1000);
   });
 

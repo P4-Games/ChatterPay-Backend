@@ -129,6 +129,18 @@ describe('Template Model', () => {
             es: 'Has alcanzado la cantidad máxima diaria permitida para este tipo de operación. Por favor, inténtalo nuevamente mañana. 🙌',
             pt: 'Você atingiu a quantidade máxima diária permitida para esse tipo de operação. Por favor, tente novamente amanhã. 🙌'
           }
+        },
+        amount_outside_limits: {
+          title: {
+            en: 'ChatterPay - Operation Outside Limits 🚫',
+            es: 'ChatterPay - Operación fuera de los límites 🚫',
+            pt: 'ChatterPay - Operação fora dos limites 🚫'
+          },
+          message: {
+            en: "The amount you're trying to operate is outside the limits of this operation (min: [LIMIT_MIN], max: [LIMIT_MAX]). Please try again with a valid amount. 🙅‍♂️",
+            es: 'El monto que intentas operar está fuera de los límites de esta operación (min: [LIMIT_MIN], max: [LIMIT_MAX]). Por favor, inténtalo nuevamente con un monto válido. 🙅‍♂️',
+            pt: 'O valor que você está tentando operar está fora dos limites desta operação (min: [LIMIT_MIN], max: [LIMIT_MAX]). Tente novamente com um valor válido. 🙅‍♂️'
+          }
         }
       }
     };
