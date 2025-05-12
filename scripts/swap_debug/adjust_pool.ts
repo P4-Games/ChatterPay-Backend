@@ -1,8 +1,8 @@
 /**
- * @file direct_adjust_pool.ts
- * @description Adjusts a Uniswap pool price to target in a single, massive swap.
- * This approach leverages unlimited token minting to achieve the target price
- * in one transaction rather than multiple iterations.
+ * @file adjust_pool.ts
+ * @description Adjusts a Uniswap pool price in testnet to target a specific value,
+ * currently based on Ethereum's price from Coingecko. Supports bidirectional adjustments
+ * (buying or selling) depending on the current pool price.
  */
 
 import { ethers } from 'ethers';
@@ -26,7 +26,7 @@ interface PoolPriceInfo {
 }
 
 /**
- * ABIs for interacting with contracts
+ * Minimal ERC20 ABI for required operations
  */
 const ERC20_ABI: ABI = [
   'function balanceOf(address owner) view returns (uint256)',
@@ -36,6 +36,9 @@ const ERC20_ABI: ABI = [
   'function allowance(address owner, address spender) view returns (uint256)'
 ];
 
+/**
+ * Minimal Factory ABI for pool retrieval
+ */
 const FACTORY_ABI: ABI = [
   'function getPool(address tokenA, address tokenB, uint24 fee) external view returns (address pool)'
 ];
