@@ -14,9 +14,14 @@ const TOTAL_USERS: number = 100;
 // Starting phone number for users
 const START_PHONE_NUMBER: number = 55122222222;
 // List of receiver phone numbers for transactions
-const RECEIVER_PHONES: string[] = process.env.RECEIVER_PHONES 
-  ? process.env.RECEIVER_PHONES.split(',') 
+const RECEIVER_PHONES: string[] = process.env.RECEIVER_PHONES
+  ? process.env.RECEIVER_PHONES.split(',')
   : ['111111111111'];
+
+interface Balance {
+  token: string;
+  balance: number;
+}
 
 // Function to introduce a delay in the execution
 function delay(ms: number): Promise<void> {
@@ -73,7 +78,7 @@ async function issueFunds(address: string, phone: string): Promise<void> {
 }
 
 // Function to get the wallet balance by phone number
-async function getBalanceByPhone(channelUserId: string): Promise<any> {
+async function getBalanceByPhone(channelUserId: string): Promise<unknown> {
   try {
     const response: AxiosResponse = await axios.get(
       `${BASE_URL}/balance_by_phone?channel_user_id=${channelUserId}`,
@@ -101,9 +106,11 @@ async function makeTransaction(channelUserId: string, index: number): Promise<vo
   logToFile(channelUserId, log);
 
   // Check if the user has enough balance
-  /*
   const balances = await getBalanceByPhone(channelUserId);
-  const userBalance = balances.find((balance: { token: string; }) => balance.token === token)?.balance || 0;
+
+  // Type assertion to let TypeScript know that balances is an array of Balance type
+  const userBalance =
+    (balances as Balance[]).find((balance) => balance.token === token)?.balance || 0;
 
   if (userBalance < parseFloat(amount)) {
     log = `User ${channelUserId} does not have enough funds for transaction. Current balance: ${userBalance}`;
@@ -111,7 +118,6 @@ async function makeTransaction(channelUserId: string, index: number): Promise<vo
     logToFile(channelUserId, log);
     return;
   }
-  */
 
   try {
     const response: AxiosResponse = await axios.post(
@@ -137,7 +143,7 @@ async function makeTransaction(channelUserId: string, index: number): Promise<vo
 // Main function to create users, issue funds, and perform transactions sequentially
 async function run(): Promise<void> {
   const indices = Array.from({ length: TOTAL_USERS }, (_, i) => i + 1);
-  
+
   // Create users in parallel
   const users = await Promise.all(
     indices.map(async (i) => {
@@ -165,18 +171,19 @@ async function run(): Promise<void> {
   );
 
   // Filter out any users with invalid addresses (null or undefined)
-  const validUsers = users.filter((user) => user && user.address) as { phone: string, address: string }[];
+  const validUsers = users.filter((user) => user && user.address) as {
+    phone: string;
+    address: string;
+  }[];
 
   // Issue funds sequentially with a delay between each issuance
-  /*
   await validUsers.reduce(async (prevPromise, user) => {
-    if (!user || !user.address) return prevPromise;  
+    if (!user || !user.address) return prevPromise;
     await prevPromise;
     await issueFunds(user.address, user.phone);
-    await delay(1000); 
+    await delay(1000);
     return Promise.resolve();
-  }, Promise.resolve()); 
-  */
+  }, Promise.resolve());
 
   // Make transactions for all valid users in parallel
   const transactionPromises = validUsers.map((user, index) => makeTransaction(user.phone, index));

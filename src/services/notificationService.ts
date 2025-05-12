@@ -535,3 +535,49 @@ export async function sendDailyLimitReachedNotification(
     throw error;
   }
 }
+
+/**
+ * Sends a notification when the user attempts to perform an operation outside the allowed limits.
+ *
+ * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @param tokenSymbol - The symbol of the token the user is attempting to operate with.
+ * @param minLimit - The minimum allowed limit for the operation.
+ * @param maxLimit - The maximum allowed limit for the operation.
+ * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
+ */
+export async function sendOperationOutsideLimitsNotification(
+  channel_user_id: string,
+  tokenSymbol: string,
+  minLimit: number,
+  maxLimit: number,
+  traceHeader?: string
+) {
+  try {
+    Logger.log(
+      'sendOperationOutsideLimitsNotification',
+      `Sending notification: operation outside limits for ${tokenSymbol} to ${channel_user_id}`
+    );
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.amount_outside_limits
+    );
+
+    const formattedMessage = message
+      .replace('[LIMIT_MIN]', minLimit.toString())
+      .replace('[LIMIT_MAX]', maxLimit.toString());
+
+    const payload: chatizaloOperatorReply = {
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message: formattedMessage
+    };
+
+    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
+    pushService.sendPushNotificaton(title, formattedMessage, channel_user_id); // intentionally not awaited
+    return data;
+  } catch (error) {
+    Logger.error('sendOperationOutsideLimitsNotification', error);
+    throw error;
+  }
+}

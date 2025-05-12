@@ -138,7 +138,8 @@ async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo
     address: token.address,
     type: token.type,
     rateUSD: prices.get(token.symbol) || 0,
-    display_decimals: token.display_decimals
+    display_decimals: token.display_decimals,
+    operations_limits: token.operations_limits
   }));
 }
 

@@ -7,7 +7,7 @@ import rateLimit from '@fastify/rate-limit';
  */
 export async function setupRateLimit(server: FastifyInstance): Promise<void> {
   await server.register(rateLimit, {
-    max: 2000,
+    max: 50,
     timeWindow: '1 minute',
     errorResponseBuilder: () => ({
       code: 429,

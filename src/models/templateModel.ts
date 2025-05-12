@@ -16,7 +16,8 @@ export enum NotificationEnum {
   no_valid_blockchain_conditions = 'no_valid_blockchain_conditions',
   internal_error = 'internal_error',
   concurrent_operation = 'concurrent_operation',
-  daily_limit_reached = 'daily_limit_reached'
+  daily_limit_reached = 'daily_limit_reached',
+  amount_outside_limits = 'amount_outside_limits'
 }
 
 export interface LocalizedContentType {
@@ -63,7 +64,8 @@ const templateSchema = new Schema<ITemplateSchema>({
     no_valid_blockchain_conditions: { type: notificationSchema, required: true },
     concurrent_operation: { type: notificationSchema, required: true },
     internal_error: { type: notificationSchema, required: true },
-    daily_limit_reached: { type: notificationSchema, required: true }
+    daily_limit_reached: { type: notificationSchema, required: true },
+    amount_outside_limits: { type: notificationSchema, required: true }
   }
 });
 
