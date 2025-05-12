@@ -1,5 +1,15 @@
 import { model, Schema, Document } from 'mongoose';
 
+export interface TokenLimitDetail {
+  min: number;
+  max: number;
+}
+
+export interface TokenOperationLimits {
+  L1: TokenLimitDetail;
+  L2: TokenLimitDetail;
+}
+
 export interface IToken extends Document {
   name: string;
   chain_id: number;
@@ -10,7 +20,21 @@ export interface IToken extends Document {
   type: string;
   ramp_enabled: boolean;
   display_decimals: number;
+  operations_limits: {
+    transfer: TokenOperationLimits;
+    swap: TokenOperationLimits;
+  };
 }
+
+const limitDetailSchema = new Schema<TokenLimitDetail>({
+  min: { type: Number, required: true },
+  max: { type: Number, required: true }
+});
+
+const operationLimitsSchema = new Schema<TokenOperationLimits>({
+  L1: { type: limitDetailSchema, required: true },
+  L2: { type: limitDetailSchema, required: true }
+});
 
 const tokenSchema = new Schema<IToken>({
   name: { type: String, required: true },
@@ -21,7 +45,11 @@ const tokenSchema = new Schema<IToken>({
   symbol: { type: String, required: true },
   type: { type: String, required: true },
   ramp_enabled: { type: Boolean, required: true },
-  display_decimals: { type: Number, required: true }
+  display_decimals: { type: Number, required: true },
+  operations_limits: {
+    transfer: { type: operationLimitsSchema, required: true },
+    swap: { type: operationLimitsSchema, required: true }
+  }
 });
 
 const Token = model<IToken>('Token', tokenSchema, 'tokens');
