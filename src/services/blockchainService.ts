@@ -1,6 +1,5 @@
 import { ethers } from 'ethers';
 
-import { IToken } from '../models/tokenModel';
 import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getEntryPointABI } from './web3/abiService';
@@ -8,7 +7,8 @@ import { setupContracts } from './web3/contractSetupService';
 import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { ensurePaymasterHasEnoughEth } from './web3/paymasterService';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
-import { IBlockchain, OperationLimits } from '../models/blockchainModel';
+import Token, { IToken, TokenOperationLimits } from '../models/tokenModel';
+import { IBlockchain, BlockchainOperationLimits } from '../models/blockchainModel';
 import {
   TokenAddresses,
   SetupContractReturn,
@@ -327,7 +327,7 @@ export async function userReachedOperationLimit(
       return false;
     }
 
-    const userLevel = (user.level || 'L1').toUpperCase() as keyof OperationLimits;
+    const userLevel = (user.level || 'L1').toUpperCase() as keyof BlockchainOperationLimits;
     const limitForOp = blockchain.limits[operationType]?.[userLevel];
 
     if (!limitForOp) {
@@ -351,6 +351,97 @@ export async function userReachedOperationLimit(
     Logger.error(
       'checkUserOperationLimit',
       `Error validating limits for ${operationType}`,
+      (error as Error).message
+    );
+    return false;
+  }
+}
+
+/**
+ * Checks if a user is within the operation limits for a given token (e.g., 'transfer', 'swap') and chain.
+ *
+ * @param phoneNumber - User's phone number identifier.
+ * @param operationType - Type of operation being performed (e.g., 'transfer', 'swap').
+ * @param tokenSymbol - The token symbol (e.g., 'USDT', 'WETH').
+ * @param chainId - The blockchain network's chainId (e.g., 1 for Ethereum).
+ * @param amount - The amount the user wants to transfer or swap.
+ *
+ * @returns `true` if the user is within the limits; `false` otherwise.
+ */
+export async function userWithinTokenOperationLimits(
+  phoneNumber: string,
+  operationType: 'transfer' | 'swap',
+  tokenSymbol: string,
+  chainId: number,
+  amount: number
+): Promise<boolean> {
+  try {
+    // Fetch the token configuration based on token symbol and chain_id
+    const token = await Token.findOne({
+      symbol: tokenSymbol,
+      chain_id: chainId
+    });
+
+    if (!token) {
+      Logger.error(
+        'userWithinTokenOperationLimits',
+        `Token with symbol ${tokenSymbol} not found for chainId: ${chainId}`
+      );
+      return false;
+    }
+
+    // Get the operation limits for the token
+    const operationLimits = token.operations_limits;
+    if (!operationLimits) {
+      Logger.error(
+        'userWithinTokenOperationLimits',
+        `No operation limits found for token: ${tokenSymbol}`
+      );
+      return false;
+    }
+
+    // Fetch the user's level dynamically from the UserModel
+    const user = await UserModel.findOne({ phone_number: phoneNumber }).lean();
+    if (!user) {
+      Logger.error(
+        'userWithinTokenOperationLimits',
+        `User not found for phone number: ${phoneNumber}`
+      );
+      return false;
+    }
+
+    const userLevel = (user.level || 'L1').toUpperCase() as keyof TokenOperationLimits;
+    const limits = operationLimits[operationType]?.[userLevel];
+
+    if (!limits) {
+      Logger.error(
+        'userWithinTokenOperationLimits',
+        `No limits found for ${operationType} at user level ${userLevel} for token ${tokenSymbol} and chain ${chainId}`
+      );
+      return false;
+    }
+
+    const { min, max } = limits;
+
+    // Check if the amount is within the allowed limits
+    if (amount < min || amount > max) {
+      Logger.error(
+        'userWithinTokenOperationLimits',
+        `Amount ${amount} for token ${tokenSymbol} is out of bounds. Min: ${min}, Max: ${max}`
+      );
+      return false;
+    }
+
+    // If the amount is within limits, return true
+    Logger.info(
+      'userWithinTokenOperationLimits',
+      `User: ${phoneNumber}, Operation: ${operationType}, Token: ${tokenSymbol}, Amount: ${amount}, Limits: Min: ${min}, Max: ${max}`
+    );
+    return true;
+  } catch (error) {
+    Logger.error(
+      'userWithinTokenOperationLimits',
+      `Error validating operation limits for token: ${tokenSymbol}`,
       (error as Error).message
     );
     return false;
