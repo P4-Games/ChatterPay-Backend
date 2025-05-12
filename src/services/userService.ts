@@ -6,7 +6,11 @@ import { IUser, UserModel, IUserWallet } from '../models/userModel';
 import { computeProxyAddressFromPhone } from './predictWalletService';
 import { sendWalletCreationNotification } from './notificationService';
 import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
-import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
+import {
+  PUSH_ENABLED,
+  DEFAULT_CHAIN_ID,
+  SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
+} from '../config/constants';
 
 /**
  * Updates the operation count for the user by the specified increment.
@@ -96,11 +100,19 @@ export const createUserWithWallet = async (
   user.manteca_user_id = `user-${user._id}`;
   await user.save();
 
-  Logger.log('createUserWithWallet', 'Push protocol', phoneNumber, predictedWallet.EOAAddress);
-  await pushService.subscribeToPushChannel(
-    predictedWallet.privateKeyNotHashed,
-    predictedWallet.EOAAddress
-  );
+  if (PUSH_ENABLED) {
+    Logger.log('createUserWithWallet', 'Push protocol', phoneNumber, predictedWallet.EOAAddress);
+    await pushService.subscribeToPushChannel(
+      predictedWallet.privateKeyNotHashed,
+      predictedWallet.EOAAddress
+    );
+  } else {
+    Logger.info(
+      'createUserWithWallet',
+      `Skipped adding new wallet to the push channel because push notifications are disabled.`
+    );
+  }
+
   sendWalletCreationNotification(predictedWallet.EOAAddress, phoneNumber);
 
   return user;
