@@ -177,10 +177,12 @@ export async function ensureUserSignerHasEnoughEth(
           `to User EOA ${userSignerWalletAdddress}.`
       );
 
+      const gasPrice = await provider.getGasPrice();
       const tx = await backendSignerWallet.sendTransaction({
         to: userSignerWalletAdddress,
         value: ethers.utils.parseEther(blockchainBalances.userSignerBalanceToTransfer),
-        gasLimit: 210000
+        gasLimit: 210000,
+        gasPrice
       });
 
       await tx.wait();
@@ -267,7 +269,8 @@ export async function checkBlockchainConditions(
     const ensurePaymasterPrefundResult = await ensurePaymasterHasEnoughEth(
       networkConfig.balances,
       entrypointContract,
-      networkConfig.contracts.paymasterAddress!
+      networkConfig.contracts.paymasterAddress!,
+      setupContractsResult.provider
     );
     if (!ensurePaymasterPrefundResult) {
       throw new Error(`Cannot make the transaction right now. Please try again later.`);

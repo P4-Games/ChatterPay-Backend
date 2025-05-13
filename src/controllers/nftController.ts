@@ -118,8 +118,11 @@ const mintNftOriginal = async (
       recipientAddress,
       bddIdToUseAsUri
     ]);
+
+    const gasPrice = await provider.getGasPrice();
     const tx = await nftContract.mintOriginal(recipientAddress, bddIdToUseAsUri, {
-      gasLimit
+      gasLimit,
+      gasPrice
     });
 
     Logger.log('mintNftOriginal', 'Transaction sent: ', tx.hash);
@@ -172,11 +175,13 @@ const mintNftCopy = async (
       parseInt(originalTOkenId, 10),
       bddIdToUseAsUri
     ]);
+
+    const gasPrice = await provider.getGasPrice();
     const tx = await nftContract.mintCopy(
       recipientAddress,
       parseInt(originalTOkenId, 10),
       bddIdToUseAsUri,
-      { gasLimit }
+      { gasLimit, gasPrice }
     );
 
     Logger.log('mintNftCopy', 'Transaction sent: ', tx.hash);
