@@ -137,9 +137,14 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
         20,
         BigNumber.from('700000')
       );
+
+      const gasPrice = await provider.getGasPrice();
+
       const tx = await factory.createProxy(ownerAddress.publicKey, {
-        gasLimit
+        gasLimit,
+        gasPrice
       });
+
       await tx.wait();
     });
   }
