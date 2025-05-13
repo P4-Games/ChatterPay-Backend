@@ -73,10 +73,7 @@ async function mintToken(
   const amountBN: ethers.BigNumber = ethers.utils.parseUnits(amount, decimals);
   const gasLimit: number = 5000000; // Set a reasonable gas limit.
 
-  // Estimate gas price.
   const gasPrice: ethers.BigNumber = await signer.provider!.getGasPrice();
-
-  // Increase gas price by 20% to ensure the transaction goes through.
   const adjustedGasPrice: ethers.BigNumber = gasPrice.mul(120).div(100);
 
   const tx: ethers.ContractTransaction = await erc20Contract.mint(recipientAddress, amountBN, {
@@ -137,9 +134,14 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
         20,
         BigNumber.from('700000')
       );
+
+      const gasPrice = await provider.getGasPrice();
+
       const tx = await factory.createProxy(ownerAddress.publicKey, {
-        gasLimit
+        gasLimit,
+        gasPrice
       });
+
       await tx.wait();
     });
   }

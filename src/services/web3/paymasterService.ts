@@ -55,7 +55,8 @@ export async function addPaymasterData(
 export async function ensurePaymasterHasEnoughEth(
   blockchainBalances: IBlockchain['balances'],
   entrypointContract: ethers.Contract,
-  paymasterContractAddress: string
+  paymasterContractAddress: string,
+  provider: ethers.providers.JsonRpcProvider
 ): Promise<boolean> {
   try {
     const paymasterBalance = await entrypointContract.balanceOf(paymasterContractAddress);
@@ -89,10 +90,13 @@ export async function ensurePaymasterHasEnoughEth(
       );
 
       // Deposit funds into the paymaster
+      const gasPrice = await provider.getGasPrice();
       const tx = await entrypointContract.depositTo(paymasterContractAddress, {
         value: missingFunds,
-        gasLimit: 500000
+        gasLimit: 500000,
+        gasPrice
       });
+
       await tx.wait();
       Logger.log('ensurePaymasterHasEnoughEth', 'Deposit transaction confirmed.');
 
