@@ -92,6 +92,7 @@ export interface TransactionData {
   walletFrom: string;
   walletTo: string;
   amount: number;
+  fee: number;
   token: string;
   type: string;
   status: string;

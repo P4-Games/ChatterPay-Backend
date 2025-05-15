@@ -217,6 +217,7 @@ export async function withdrawWalletAllFunds(
           walletFrom: userWallet.wallet_proxy,
           walletTo: to_wallet_formatted,
           amount,
+          fee: 0,
           token: symbol,
           type: 'withdraw',
           status: 'completed',
