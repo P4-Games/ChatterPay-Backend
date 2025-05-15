@@ -549,12 +549,19 @@ export const makeTransaction = async (
       ? tracer?.createChildSpan({ name: 'saveTransactionPending' })
       : undefined;
 
+    const chatterpayFee = await getChatterpayTokenFee(
+      networkConfig.contracts.chatterPayAddress,
+      checkBlockchainConditionsResult.setupContractsResult!.provider,
+      tokenData!.address
+    );
+
     Logger.log('makeTransaction', 'Updating transaction in database.');
     const transactionOut: TransactionData = {
       tx: executeTransactionResult.transactionHash,
       walletFrom: userWallet.wallet_proxy,
       walletTo: toAddress,
       amount: parseFloat(amount),
+      fee: chatterpayFee,
       token: tokenSymbol,
       type: 'transfer',
       status: 'completed',
@@ -578,12 +585,6 @@ export const makeTransaction = async (
       Logger.log('makeTransaction', `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`);
       await delaySeconds(lastBotMsgDelaySeconds);
     }
-
-    const chatterpayFee = await getChatterpayTokenFee(
-      networkConfig.contracts.chatterPayAddress,
-      checkBlockchainConditionsResult.setupContractsResult!.provider,
-      tokenData!.address
-    );
 
     const amountAfterFeeDecimals = tokenData?.display_decimals;
     const amountAfterFee = (parseFloat(amount) - chatterpayFee).toFixed(amountAfterFeeDecimals);
