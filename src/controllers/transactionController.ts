@@ -6,6 +6,7 @@ import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
+import { maskAddress } from '../helpers/formatHelper';
 import { IUser, IUserWallet } from '../models/userModel';
 import { NotificationEnum } from '../models/templateModel';
 import { getChatterpayTokenFee } from '../services/commonService';
@@ -29,20 +30,19 @@ import {
   userWithinTokenOperationLimits
 } from '../services/blockchainService';
 import {
+  openOperation,
+  closeOperation,
+  getOrCreateUser,
+  getUserWalletByChainId,
+  hasUserAnyOperationInProgress
+} from '../services/userService';
+import {
   INFURA_URL,
   INFURA_API_KEY,
   GCP_CLOUD_TRACE_ENABLED,
   COMMON_REPLY_WALLET_NOT_CREATED,
   COMMON_REPLY_OPERATION_IN_PROGRESS
 } from '../config/constants';
-import {
-  openOperation,
-  closeOperation,
-  getOrCreateUser,
-  getUserWalletByChainId,
-  getUserByWalletAndChainid,
-  hasUserAnyOperationInProgress
-} from '../services/userService';
 import {
   getNotificationTemplate,
   sendInternalErrorNotification,
@@ -484,25 +484,8 @@ export const makeTransaction = async (
     let toAddress: string;
 
     if (to.startsWith('0x')) {
-      toUser = await getUserByWalletAndChainid(to, networkConfig.chainId);
-      if (!toUser) {
-        Logger.error(
-          'makeTransaction',
-          `Invalid wallet-to ${to} for chainId ${networkConfig.chainId}`
-        );
-        await sendNoValidBlockchainConditionsNotification(
-          userWallet.wallet_proxy,
-          channel_user_id,
-          traceHeader
-        );
-        await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
-        userCreationSpan?.endSpan();
-        rootSpan?.endSpan();
-        return undefined;
-      }
-
-      // we already validate that exists wallet for this chain_id with find in getUserByWalletAndChainid
-      toAddress = getUserWalletByChainId(toUser.wallets, networkConfig.chainId)?.wallet_proxy || '';
+      toAddress = to;
+      toUser = null;
     } else {
       const chatterpayImplementation: string = networkConfig.contracts.chatterPayAddress;
       toUser = await getOrCreateUser(to, chatterpayImplementation);
@@ -591,22 +574,25 @@ export const makeTransaction = async (
 
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
-      toUser.phone_number,
-      toUser.name,
+      toUser?.phone_number ?? maskAddress(toAddress),
+      toUser?.name ?? '',
       amount,
       tokenSymbol,
       executeTransactionResult.transactionHash,
       traceHeader
     );
 
-    await sendReceivedTransferNotification(
-      fromUser.phone_number,
-      fromUser.name,
-      toUser.phone_number,
-      amountAfterFee.toString(),
-      tokenSymbol,
-      traceHeader
-    );
+    // In case the user is not an external wallet, send the received notification
+    if (toUser) {
+      await sendReceivedTransferNotification(
+        fromUser.phone_number,
+        fromUser.name,
+        toUser.phone_number,
+        amountAfterFee.toString(),
+        tokenSymbol,
+        traceHeader
+      );
+    }
 
     notificationSpan?.endSpan();
     rootSpan?.endSpan();

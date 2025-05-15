@@ -30,3 +30,12 @@ export function formatPhoneNumberWithOptionalName(
 
   return name ? `${formattedPhoneNumber} (${name})` : formattedPhoneNumber;
 }
+
+/**
+ * Mask the address with the first 5 and last 4 characters
+ * @param address
+ * @returns
+ */
+export function maskAddress(address: string): string {
+  return `${address.slice(0, 5)}****${address.slice(-4)}`;
+}
