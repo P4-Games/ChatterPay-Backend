@@ -24,13 +24,6 @@ import {
   CheckBalanceConditionsResult
 } from '../types/commonType';
 import {
-  openOperation,
-  closeOperation,
-  getOrCreateUser,
-  getUserWalletByChainId,
-  hasUserAnyOperationInProgress
-} from '../services/userService';
-import {
   getTokenData,
   checkBlockchainConditions,
   userReachedOperationLimit,
@@ -43,6 +36,14 @@ import {
   COMMON_REPLY_WALLET_NOT_CREATED,
   COMMON_REPLY_OPERATION_IN_PROGRESS
 } from '../config/constants';
+import {
+  openOperation,
+  closeOperation,
+  getOrCreateUser,
+  getUserWalletByChainId,
+  getUserByWalletAndChainid,
+  hasUserAnyOperationInProgress
+} from '../services/userService';
 import {
   getNotificationTemplate,
   sendInternalErrorNotification,
@@ -582,7 +583,10 @@ export const makeTransaction = async (
       traceHeader
     );
 
-    // In case the user is not an external wallet, send the received notification
+    // In case the external wallet is a Chatter, update the user's object
+    toUser = await getUserByWalletAndChainid(to, networkConfig.chainId);
+
+    // In case the to user is a Chatter, send the received notification
     if (toUser) {
       await sendReceivedTransferNotification(
         fromUser.phone_number,
