@@ -8,27 +8,31 @@ export function getPhoneNumberFormatted(phone: string): string {
 }
 
 /**
- * Concatenates a phone number with a name if the name is provided.
- * Optionally masks the last 5 digits of the phone number.
+ * Formats an identifier (phone number or address) with an optional name and masking.
  *
- * @param phoneNumber - The phone number to be displayed.
- * @param name - The name to be included with the phone number (optional).
- * @param maskPhoneNumber - If true, masks the last 5 digits of the phone number with "*".
- * @returns A string containing the phone number (masked if applicable), optionally concatenated with the name in parentheses.
+ * @param identifier - The identifier (phone number or address) to be displayed.
+ * @param name - The name to be included with the identifier (optional).
+ * @param maskIdentifier - If true, masks part of the identifier for privacy.
+ * @returns A string containing the identifier (masked if applicable), optionally concatenated with the name in parentheses.
  */
-export function formatPhoneNumberWithOptionalName(
-  phoneNumber: string,
+export function formatIdentifierWithOptionalName(
+  identifier: string,
   name?: string,
-  maskPhoneNumber?: boolean
+  maskIdentifier?: boolean
 ): string {
-  let formattedPhoneNumber = phoneNumber;
+  let formattedIdentifier = identifier;
 
-  // Mask the last 5 digits if maskPhoneNumber is true
-  if (maskPhoneNumber) {
-    formattedPhoneNumber = `${phoneNumber.slice(0, phoneNumber.length - 5)}xxxxx`;
+  // Mask the last 5 digits if maskIdentifier is true
+  if (maskIdentifier) {
+    formattedIdentifier = `${identifier.slice(0, identifier.length - 5)}xxxxx`;
   }
 
-  return name ? `${formattedPhoneNumber} (${name})` : formattedPhoneNumber;
+  // Special handling for blockchain addresses
+  if (formattedIdentifier.startsWith('0x')) {
+    formattedIdentifier = formattedIdentifier.replaceAll('*', 'x');
+  }
+
+  return name ? `${formattedIdentifier} (${name})` : formattedIdentifier;
 }
 
 /**
