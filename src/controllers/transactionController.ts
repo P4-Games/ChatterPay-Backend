@@ -24,18 +24,18 @@ import {
   CheckBalanceConditionsResult
 } from '../types/commonType';
 import {
-  getTokenData,
-  checkBlockchainConditions,
-  userReachedOperationLimit,
-  userWithinTokenOperationLimits
-} from '../services/blockchainService';
-import {
   openOperation,
   closeOperation,
   getOrCreateUser,
   getUserWalletByChainId,
   hasUserAnyOperationInProgress
 } from '../services/userService';
+import {
+  getTokenData,
+  checkBlockchainConditions,
+  userReachedOperationLimit,
+  userWithinTokenOperationLimits
+} from '../services/blockchainService';
 import {
   INFURA_URL,
   INFURA_API_KEY,
