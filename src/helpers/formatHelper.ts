@@ -22,24 +22,15 @@ export function formatIdentifierWithOptionalName(
 ): string {
   let formattedIdentifier = identifier;
 
-  // Mask the last 5 digits if maskIdentifier is true
   if (maskIdentifier) {
-    formattedIdentifier = `${identifier.slice(0, identifier.length - 5)}xxxxx`;
-  }
-
-  // Special handling for blockchain addresses
-  if (formattedIdentifier.startsWith('0x')) {
-    formattedIdentifier = formattedIdentifier.replaceAll('*', 'x');
+    // Special handling for blockchain addresses
+    if (formattedIdentifier.startsWith('0x')) {
+      formattedIdentifier = `${identifier.slice(0, 4)}xxxx${identifier.slice(-4)}`;
+    } else {
+      // Mask the last 5 digits if maskIdentifier is true
+      formattedIdentifier = `${identifier.slice(0, identifier.length - 5)}xxxxx`;
+    }
   }
 
   return name ? `${formattedIdentifier} (${name})` : formattedIdentifier;
-}
-
-/**
- * Mask the address with the first 5 and last 4 characters
- * @param address
- * @returns
- */
-export function maskAddress(address: string): string {
-  return `${address.slice(0, 4)}****${address.slice(-4)}`;
 }

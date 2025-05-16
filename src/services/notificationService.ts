@@ -5,8 +5,8 @@ import { pushService } from './push/pushService';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IBlockchain } from '../models/blockchainModel';
 import { mongoUserService } from './mongo/mongoUserService';
-import { chatizaloService } from './chatizalo/chatizaloService';
 import { chatizaloOperatorReply } from '../types/chatizaloType';
+import { chatizaloService } from './chatizalo/chatizaloService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { formatIdentifierWithOptionalName } from '../helpers/formatHelper';
@@ -314,13 +314,7 @@ export async function sendOutgoingTransferNotification(
         .replaceAll('[TX_HASH]', txHash);
 
     const toNumberAndName = formatIdentifierWithOptionalName(phoneNumberTo, toName, false);
-
-    const maskPhoneNumber = !phoneNumberTo.startsWith('0x');
-    const toNumberAndNameMasked = formatIdentifierWithOptionalName(
-      phoneNumberTo,
-      toName,
-      maskPhoneNumber
-    );
+    const toNumberAndNameMasked = formatIdentifierWithOptionalName(phoneNumberTo, toName, true);
 
     const formattedMessageBot = formatMessage(toNumberAndName);
     const formattedMessagePush = formatMessage(toNumberAndNameMasked);

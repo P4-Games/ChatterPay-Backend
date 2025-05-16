@@ -6,7 +6,6 @@ import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
-import { maskAddress } from '../helpers/formatHelper';
 import { IUser, IUserWallet } from '../models/userModel';
 import { NotificationEnum } from '../models/templateModel';
 import { getChatterpayTokenFee } from '../services/commonService';
@@ -575,7 +574,7 @@ export const makeTransaction = async (
 
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
-      toUser?.phone_number ?? maskAddress(toAddress),
+      toUser?.phone_number ?? toAddress,
       toUser?.name ?? '',
       amount,
       tokenSymbol,
@@ -583,10 +582,10 @@ export const makeTransaction = async (
       traceHeader
     );
 
-    // In case the external wallet is a Chatter, update the user's object
+    // In case the external wallet is a ChatterPay, update the user's object
     toUser = await getUserByWalletAndChainid(to, networkConfig.chainId);
 
-    // In case the to user is a Chatter, send the received notification
+    // In case the to user is a ChatterPay, send the received notification
     if (toUser) {
       await sendReceivedTransferNotification(
         fromUser.phone_number,
