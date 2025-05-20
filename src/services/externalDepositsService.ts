@@ -51,6 +51,22 @@ interface Transfer {
 }
 
 /**
+ * Validates if a token is listed and active in our system
+ * @param {string} tokenAddress - The token address to validate
+ * @param {number} chain_id - The chain ID where the token exists
+ * @returns {Promise<boolean>} True if the token is valid and listed
+ */
+async function isValidToken(tokenAddress: string, chain_id: number): Promise<boolean> {
+  const token = await Token.findOne({ 
+    address: { $regex: new RegExp(`^${tokenAddress}$`, 'i') },
+    chain_id,
+    is_active: true
+  });
+  
+  return !!token;
+}
+
+/**
  * Processes a single external deposit.
  * @async
  * @param {Transfer} transfer - The transfer object to process.
@@ -60,6 +76,16 @@ async function processExternalDeposit(
   transfer: Transfer,
   chain_id: number
 ) {
+  // First validate if the token is listed and active
+  const isTokenValid = await isValidToken(transfer.token, chain_id);
+  if (!isTokenValid) {
+    Logger.warn(
+      'processExternalDeposit',
+      `Transfer rejected: Token ${transfer.token} is not listed or inactive for chain ${chain_id}`
+    );
+    return;
+  }
+
   const user = await UserModel.findOne({ wallet: { $regex: new RegExp(`^${transfer.to}$`, 'i') } });
 
   if (user) {
