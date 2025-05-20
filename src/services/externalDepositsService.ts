@@ -5,15 +5,12 @@ import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
 import { TransactionData } from '../types/commonType';
+import { mongoTokenService } from './mongo/mongoTokenService';
 import { GRAPH_API_EXTERNAL_DEPOSITS_URL } from '../config/constants';
 import { LastProcessedBlock } from '../models/lastProcessedBlockModel';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { sendReceivedTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-
-/**
- * The GraphQL API URLs for querying external deposits.
- */
 
 /**
  * GraphQL query to fetch external deposits.
@@ -51,22 +48,6 @@ interface Transfer {
 }
 
 /**
- * Validates if a token is listed and active in our system
- * @param {string} tokenAddress - The token address to validate
- * @param {number} chain_id - The chain ID where the token exists
- * @returns {Promise<boolean>} True if the token is valid and listed
- */
-async function isValidToken(tokenAddress: string, chain_id: number): Promise<boolean> {
-  const token = await Token.findOne({
-    address: { $regex: new RegExp(`^${tokenAddress}$`, 'i') },
-    chain_id,
-    is_active: true
-  });
-
-  return !!token;
-}
-
-/**
  * Processes a single external deposit.
  * @async
  * @param {Transfer} transfer - The transfer object to process.
@@ -74,7 +55,7 @@ async function isValidToken(tokenAddress: string, chain_id: number): Promise<boo
  */
 async function processExternalDeposit(transfer: Transfer, chain_id: number) {
   // First validate if the token is listed and active
-  const isTokenValid = await isValidToken(transfer.token, chain_id);
+  const isTokenValid = await mongoTokenService.isValidToken(transfer.token, chain_id);
   if (!isTokenValid) {
     Logger.warn(
       'processExternalDeposit',
