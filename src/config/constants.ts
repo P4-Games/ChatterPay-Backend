@@ -138,10 +138,8 @@ export const WHATSAPP_API_URL = 'https://api.whatsapp.com';
 export const MANTECA_MOCK_UPLOAD_DOCUMENTS_URL = 'https://upload.manteca.dev/file-upload-url';
 export const INFURA_URL = 'https://mainnet.infura.io/v3';
 export const BINANCE_API_URL = 'https://api.binance.us/api/v3';
-export const GRAPH_API_USDT_URL =
-  'https://api.studio.thegraph.com/query/91286/balance-sepolia/version/latest';
-export const GRAPH_API_WETH_URL =
-  'https://api.studio.thegraph.com/query/91286/balance-sepolia-weth/version/latest';
+export const GRAPH_API_EXTERNAL_DEPOSITS_URL =
+  'https://api.studio.thegraph.com/query/91286/chatterpay-external-deposits/version/latest';
 
 export const CRIPTO_YA_URL: string = 'https://criptoya.com/api/ripio/USDT';
 export const FIAT_CURRENCIES = ['UYU', 'ARS', 'BRL'];
