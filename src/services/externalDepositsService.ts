@@ -51,19 +51,32 @@ interface Transfer {
 }
 
 /**
- * Validates if a token is listed and active in our system
+ * Validates if a token is listed in our system
  * @param {string} tokenAddress - The token address to validate
  * @param {number} chain_id - The chain ID where the token exists
- * @returns {Promise<boolean>} True if the token is valid and listed
+ * @returns {Promise<boolean>} True if the token is listed
  */
 async function isValidToken(tokenAddress: string, chain_id: number): Promise<boolean> {
-  const token = await Token.findOne({
-    address: { $regex: new RegExp(`^${tokenAddress}$`, 'i') },
-    chain_id,
-    is_active: true
+  // Normalize the token address to lowercase for comparison
+  const normalizedTokenAddress = tokenAddress.toLowerCase();
+  
+  const token = await Token.findOne({ 
+    $or: [
+      { address: normalizedTokenAddress },
+      { address: { $regex: new RegExp(`^${normalizedTokenAddress}$`, 'i') } }
+    ],
+    chain_id
   });
 
-  return !!token;
+  if (!token) {
+    Logger.warn(
+      'isValidToken',
+      `Token not found in database: ${normalizedTokenAddress} for chain ${chain_id}`
+    );
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -73,17 +86,25 @@ async function isValidToken(tokenAddress: string, chain_id: number): Promise<boo
  * @param {number} chain_id - The chain ID where the transfer occurred.
  */
 async function processExternalDeposit(transfer: Transfer, chain_id: number) {
-  // First validate if the token is listed and active
+  // First validate if the token is listed
   const isTokenValid = await isValidToken(transfer.token, chain_id);
   if (!isTokenValid) {
     Logger.warn(
       'processExternalDeposit',
-      `Transfer rejected: Token ${transfer.token} is not listed or inactive for chain ${chain_id}`
+      `Transfer rejected: Token ${transfer.token} is not listed for chain ${chain_id}`
     );
     return;
   }
 
-  const user = await UserModel.findOne({ wallet: { $regex: new RegExp(`^${transfer.to}$`, 'i') } });
+  const normalizedTo = transfer.to.toLowerCase();
+  // Busca usuarios que tengan al menos un wallet_proxy que coincida (case-insensitive)
+  const candidates = await UserModel.find({
+    'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') }
+  });
+  // Filtra en memoria para asegurar coincidencia exacta en lowercase
+  const user = candidates.find(u =>
+    u.wallets.some(w => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
+  );
 
   if (user) {
     const value = Number((Number(transfer.value) / 1e18).toFixed(4));
@@ -92,7 +113,7 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
     const networkConfig = await mongoBlockchainService.getNetworkConfig();
     const blockchainTokens = await Token.find({ chain_id });
     const tokenInfo = getTokenInfo(networkConfig, blockchainTokens, transfer.token);
-
+    
     if (!tokenInfo) {
       Logger.warn('processExternalDeposit', `Token info not found for address: ${transfer.token}`);
       return;
@@ -112,18 +133,29 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
     };
     await mongoTransactionService.saveTransaction(transactionData);
 
-    // Send incoming transfer notification message, and record tx data
-    await sendReceivedTransferNotification(
-      user.phone_number,
-      user.name,
-      transfer.to,
-      value.toString(),
-      tokenInfo.symbol
-    );
+    try {
+      // Send incoming transfer notification message, and record tx data
+      await sendReceivedTransferNotification(
+        user.phone_number,
+        user.name,
+        transfer.to,
+        value.toString(),
+        tokenInfo.symbol
+      );
+      Logger.log(
+        'processExternalDeposit',
+        `Notification sent successfully for transfer ${transfer.id} to user ${user.phone_number}`
+      );
+    } catch (error) {
+      Logger.error(
+        'processExternalDeposit',
+        `Failed to send notification for transfer ${transfer.id}: ${error}`
+      );
+    }
   } else {
-    Logger.log(
+    Logger.warn(
       'processExternalDeposit',
-      `Transfer detected, not processed: ${JSON.stringify(transfer)}`
+      `No user found with wallet: ${transfer.to}. Transfer not processed: ${JSON.stringify(transfer)}`
     );
   }
 }
