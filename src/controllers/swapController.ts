@@ -7,6 +7,7 @@ import { delaySeconds } from '../helpers/timeHelper';
 import { executeSwap } from '../services/swapService';
 import { NotificationEnum } from '../models/templateModel';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { getChatterpayTokenFee } from '../services/commonService';
 import { setupERC20 } from '../services/web3/contractSetupService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import { computeProxyAddressFromPhone } from '../services/predictWalletService';
@@ -278,6 +279,12 @@ export const swap = async (
       ethers.utils.formatUnits(toTokensReceived, toTokenDecimals)
     );
 
+    const chatterpayFee = await getChatterpayTokenFee(
+      networkConfig.contracts.chatterPayAddress,
+      checkBlockchainConditionsResult.setupContractsResult!.provider,
+      tokenAddresses.tokenAddressInput
+    );
+
     // Save transactions OUT
     Logger.log('swap', 'Updating swap transactions in database.');
     const transactionOut: TransactionData = {
@@ -285,6 +292,7 @@ export const swap = async (
       walletFrom: proxyAddress,
       walletTo: networkConfig.contracts.routerAddress!,
       amount: fromTokensSentInUnits,
+      fee: chatterpayFee,
       token: inputCurrency,
       type: 'swap',
       status: 'completed',
@@ -298,6 +306,7 @@ export const swap = async (
       walletFrom: networkConfig.contracts.routerAddress!,
       walletTo: proxyAddress,
       amount: toTokensReceivedInUnits,
+      fee: 0, // no fee in token out
       token: outputCurrency,
       type: 'swap',
       status: 'completed',

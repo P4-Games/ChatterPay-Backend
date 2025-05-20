@@ -67,6 +67,7 @@ async function processExternalDeposit(
       walletFrom: transfer.from,
       walletTo: transfer.to,
       amount: value,
+      fee: 0,
       token,
       type: 'deposit',
       status: 'completed',
