@@ -5,15 +5,12 @@ import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
 import { TransactionData } from '../types/commonType';
+import { mongoTokenService } from './mongo/mongoTokenService';
 import { GRAPH_API_EXTERNAL_DEPOSITS_URL } from '../config/constants';
 import { LastProcessedBlock } from '../models/lastProcessedBlockModel';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { sendReceivedTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-
-/**
- * The GraphQL API URLs for querying external deposits.
- */
 
 /**
  * GraphQL query to fetch external deposits.
@@ -51,43 +48,14 @@ interface Transfer {
 }
 
 /**
- * Validates if a token is listed in our system
- * @param {string} tokenAddress - The token address to validate
- * @param {number} chain_id - The chain ID where the token exists
- * @returns {Promise<boolean>} True if the token is listed
- */
-async function isValidToken(tokenAddress: string, chain_id: number): Promise<boolean> {
-  // Normalize the token address to lowercase for comparison
-  const normalizedTokenAddress = tokenAddress.toLowerCase();
-  
-  const token = await Token.findOne({ 
-    $or: [
-      { address: normalizedTokenAddress },
-      { address: { $regex: new RegExp(`^${normalizedTokenAddress}$`, 'i') } }
-    ],
-    chain_id
-  });
-
-  if (!token) {
-    Logger.warn(
-      'isValidToken',
-      `Token not found in database: ${normalizedTokenAddress} for chain ${chain_id}`
-    );
-    return false;
-  }
-
-  return true;
-}
-
-/**
  * Processes a single external deposit.
  * @async
  * @param {Transfer} transfer - The transfer object to process.
  * @param {number} chain_id - The chain ID where the transfer occurred.
  */
 async function processExternalDeposit(transfer: Transfer, chain_id: number) {
-  // First validate if the token is listed
-  const isTokenValid = await isValidToken(transfer.token, chain_id);
+  // First validate if the token is listed and active
+  const isTokenValid = await mongoTokenService.isValidToken(transfer.token, chain_id);
   if (!isTokenValid) {
     Logger.warn(
       'processExternalDeposit',
