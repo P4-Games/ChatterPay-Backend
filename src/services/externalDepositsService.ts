@@ -70,8 +70,8 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
     'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') }
   });
   // Filtra en memoria para asegurar coincidencia exacta en lowercase
-  const user = candidates.find(u =>
-    u.wallets.some(w => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
+  const user = candidates.find((u) =>
+    u.wallets.some((w) => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
   );
 
   if (user) {
@@ -81,7 +81,7 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
     const networkConfig = await mongoBlockchainService.getNetworkConfig();
     const blockchainTokens = await Token.find({ chain_id });
     const tokenInfo = getTokenInfo(networkConfig, blockchainTokens, transfer.token);
-    
+
     if (!tokenInfo) {
       Logger.warn('processExternalDeposit', `Token info not found for address: ${transfer.token}`);
       return;
