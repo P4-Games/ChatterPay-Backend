@@ -57,12 +57,12 @@ interface Transfer {
  * @returns {Promise<boolean>} True if the token is valid and listed
  */
 async function isValidToken(tokenAddress: string, chain_id: number): Promise<boolean> {
-  const token = await Token.findOne({ 
+  const token = await Token.findOne({
     address: { $regex: new RegExp(`^${tokenAddress}$`, 'i') },
     chain_id,
     is_active: true
   });
-  
+
   return !!token;
 }
 
@@ -72,10 +72,7 @@ async function isValidToken(tokenAddress: string, chain_id: number): Promise<boo
  * @param {Transfer} transfer - The transfer object to process.
  * @param {number} chain_id - The chain ID where the transfer occurred.
  */
-async function processExternalDeposit(
-  transfer: Transfer,
-  chain_id: number
-) {
+async function processExternalDeposit(transfer: Transfer, chain_id: number) {
   // First validate if the token is listed and active
   const isTokenValid = await isValidToken(transfer.token, chain_id);
   if (!isTokenValid) {
@@ -95,7 +92,7 @@ async function processExternalDeposit(
     const networkConfig = await mongoBlockchainService.getNetworkConfig();
     const blockchainTokens = await Token.find({ chain_id });
     const tokenInfo = getTokenInfo(networkConfig, blockchainTokens, transfer.token);
-    
+
     if (!tokenInfo) {
       Logger.warn('processExternalDeposit', `Token info not found for address: ${transfer.token}`);
       return;
@@ -175,7 +172,9 @@ export async function fetchExternalDeposits(
 
     // Update the last processed timestamp
     if (externalDeposits.length > 0) {
-      const maxTimestampProcessed = Math.max(...externalDeposits.map((t) => parseInt(t.blockTimestamp, 10)));
+      const maxTimestampProcessed = Math.max(
+        ...externalDeposits.map((t) => parseInt(t.blockTimestamp, 10))
+      );
       await LastProcessedBlock.findOneAndUpdate(
         { networkName },
         { blockNumber: maxTimestampProcessed },
