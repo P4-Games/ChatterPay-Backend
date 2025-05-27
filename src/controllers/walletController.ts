@@ -3,7 +3,9 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { Logger } from '../helpers/loggerHelper';
 import { IUser, IUserWallet } from '../models/userModel';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { tryIssueTokens } from '../services/predictWalletService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
+import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import {
   addWalletToUser,
@@ -52,6 +54,11 @@ export const createWallet = async (
     const existingUser = await mongoUserService.getUser(channel_user_id);
     let userWallet: IUserWallet | null;
 
+    const issuerTokensEnabled: boolean =
+      fastify.networkConfig.environment.toUpperCase() !== 'PRODUCTION' &&
+      IS_DEVELOPMENT &&
+      ISSUER_TOKENS_ENABLED;
+
     if (existingUser) {
       // Check for existing wallet for the user in the given blockchain
       const { chainId: chain_id } = fastify.networkConfig;
@@ -81,6 +88,15 @@ export const createWallet = async (
       if (result) {
         // Return the new wallet address
         userWallet = result.newWallet;
+
+        if (issuerTokensEnabled) {
+          await tryIssueTokens(
+            userWallet.wallet_proxy,
+            request.server.tokens,
+            request.server.networkConfig
+          );
+        }
+
         return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
           walletAddress: userWallet.wallet_proxy
         });
@@ -98,6 +114,14 @@ export const createWallet = async (
     Logger.log('createWallet', `Creating wallet for phone number ${channel_user_id}`);
     const chatterpayImplementation = fastify.networkConfig.contracts.chatterPayAddress;
     const user: IUser = await createUserWithWallet(channel_user_id, chatterpayImplementation);
+
+    if (issuerTokensEnabled) {
+      await tryIssueTokens(
+        user.wallets[0].wallet_proxy,
+        request.server.tokens,
+        request.server.networkConfig
+      );
+    }
 
     // Return the wallet address of the newly created user
     return await returnSuccessResponse(reply, 'The wallet was created successfully!', {

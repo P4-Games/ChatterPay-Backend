@@ -2,10 +2,14 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import Token, { IToken } from '../models/tokenModel';
-import { IS_DEVELOPMENT } from '../config/constants';
+import { IUser, IUserWallet } from '../models/userModel';
 import { issueTokens } from '../services/predictWalletService';
+import { getUserWalletByChainId } from '../services/userService';
+import { mongoUserService } from '../services/mongo/mongoUserService';
 import { coingeckoService } from '../services/coingecko/coingeckoService';
+import { IS_DEVELOPMENT, COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 
 /**
  * Creates a new token.
@@ -175,9 +179,13 @@ export const deleteToken = async (
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object.
  */
 export const issueTokensHandler = async (
-  request: FastifyRequest<{ Body: { address: string } }>,
+  request: FastifyRequest<{ Body: { identifier: string } }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
+  type RequestBody = {
+    identifier: string;
+  };
+
   try {
     if (!request.body) {
       return await returnErrorResponse(reply, 400, 'You must send a body with this request.');
@@ -192,16 +200,49 @@ export const issueTokensHandler = async (
       );
     }
 
-    const { address }: { address: string } = request.body;
-    if (!address) {
+    const { identifier } = request.body as RequestBody;
+    if (!identifier) {
       return await returnErrorResponse(
         reply,
         400,
-        'Missing parameters in body. You must send: address.'
+        'Missing parameters in body. You must send: an identifier (ddress or phone number).'
       );
     }
 
-    const results = await issueTokens(address, request.server.tokens, request.server.networkConfig);
+    if (!isValidEthereumWallet(identifier) && !isValidPhoneNumber(identifier)) {
+      const validationError: string = `'${identifier}' is invalid. It must be a Wallet or phone number (without spaces or symbols)`;
+      Logger.info('issueTokensHandler', validationError);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, validationError);
+    }
+
+    let finalAddress: string = identifier;
+
+    if (!identifier.toLowerCase().startsWith('0x')) {
+      const fromUser: IUser | null = await mongoUserService.getUser(identifier);
+      if (!fromUser) {
+        Logger.info('issueTokensHandler', COMMON_REPLY_WALLET_NOT_CREATED);
+        // must return 200, so the bot displays the message instead of an error!
+        return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+      }
+      const userWallet: IUserWallet | null = getUserWalletByChainId(
+        fromUser?.wallets,
+        fastify.networkConfig.chainId
+      );
+      if (!userWallet) {
+        const validationError: string = `Wallet not found for user ${identifier} and chain ${fastify.networkConfig.chainId}`;
+        Logger.info('issueTokensHandler', validationError);
+        // must return 200, so the bot displays the message instead of an error!
+        return await returnSuccessResponse(reply, validationError);
+      }
+      finalAddress = userWallet.wallet_proxy;
+    }
+
+    const results = await issueTokens(
+      finalAddress,
+      request.server.tokens,
+      request.server.networkConfig
+    );
     return await returnSuccessResponse(reply, 'Tokens minted successfully', { results });
   } catch (error: unknown) {
     Logger.error('issueTokensHandler', error);
