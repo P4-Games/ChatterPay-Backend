@@ -46,7 +46,8 @@ const {
   CHATIZALO_PHONE_NUMBER,
   QUEUE_BUNDLER_INTERVAL: queueBundlerInterval = 5000,
   QUEUE_GAS_INTERVAL: queueGasInterval = 5000,
-  QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 3000
+  QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 3000,
+  ISSUER_TOKENS_ENABLED: issuerTokensEnabled = 'false'
 } = process.env;
 
 export {
@@ -112,6 +113,8 @@ export const PUSH_CHANNEL_PRIVATE_KEY = !pushChannelPrivateKey.startsWith('0x')
   ? `0x${pushChannelPrivateKey}`
   : pushChannelPrivateKey;
 export const PUSH_ENABLED: boolean = pushEnabled.toLowerCase() === 'true';
+export const ISSUER_TOKENS_ENABLED: boolean = issuerTokensEnabled.toLowerCase() === 'true';
+
 export const BOT_NOTIFICATIONS_ENABLED: boolean = botNotificationsEnabled.toLowerCase() === 'true';
 export const PUSH_NETWORK: string = pushNetwork;
 export const PUSH_ENVIRONMENT: ENV = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;
