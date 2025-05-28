@@ -484,25 +484,8 @@ export const makeTransaction = async (
     let toAddress: string;
 
     if (to.startsWith('0x')) {
-      toUser = await getUserByWalletAndChainid(to, networkConfig.chainId);
-      if (!toUser) {
-        Logger.error(
-          'makeTransaction',
-          `Invalid wallet-to ${to} for chainId ${networkConfig.chainId}`
-        );
-        await sendNoValidBlockchainConditionsNotification(
-          userWallet.wallet_proxy,
-          channel_user_id,
-          traceHeader
-        );
-        await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
-        userCreationSpan?.endSpan();
-        rootSpan?.endSpan();
-        return undefined;
-      }
-
-      // we already validate that exists wallet for this chain_id with find in getUserByWalletAndChainid
-      toAddress = getUserWalletByChainId(toUser.wallets, networkConfig.chainId)?.wallet_proxy || '';
+      toAddress = to;
+      toUser = null;
     } else {
       const chatterpayImplementation: string = networkConfig.contracts.chatterPayAddress;
       toUser = await getOrCreateUser(to, chatterpayImplementation);
@@ -549,12 +532,19 @@ export const makeTransaction = async (
       ? tracer?.createChildSpan({ name: 'saveTransactionPending' })
       : undefined;
 
+    const chatterpayFee = await getChatterpayTokenFee(
+      networkConfig.contracts.chatterPayAddress,
+      checkBlockchainConditionsResult.setupContractsResult!.provider,
+      tokenData!.address
+    );
+
     Logger.log('makeTransaction', 'Updating transaction in database.');
     const transactionOut: TransactionData = {
       tx: executeTransactionResult.transactionHash,
       walletFrom: userWallet.wallet_proxy,
       walletTo: toAddress,
       amount: parseFloat(amount),
+      fee: chatterpayFee,
       token: tokenSymbol,
       type: 'transfer',
       status: 'completed',
@@ -579,33 +569,36 @@ export const makeTransaction = async (
       await delaySeconds(lastBotMsgDelaySeconds);
     }
 
-    const chatterpayFee = await getChatterpayTokenFee(
-      networkConfig.contracts.chatterPayAddress,
-      checkBlockchainConditionsResult.setupContractsResult!.provider,
-      tokenData!.address
-    );
+    const amountAfterFeeDecimals = tokenData?.display_decimals;
+    const amountAfterFee = (parseFloat(amount) - chatterpayFee).toFixed(amountAfterFeeDecimals);
 
     const amountAfterFeeDecimals = tokenData?.display_decimals;
     const amountAfterFee = (parseFloat(amount) - chatterpayFee).toFixed(amountAfterFeeDecimals);
 
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
-      toUser.phone_number,
-      toUser.name,
+      toUser?.phone_number ?? toAddress,
+      toUser?.name ?? '',
       amount,
       tokenSymbol,
       executeTransactionResult.transactionHash,
       traceHeader
     );
 
-    await sendReceivedTransferNotification(
-      fromUser.phone_number,
-      fromUser.name,
-      toUser.phone_number,
-      amountAfterFee.toString(),
-      tokenSymbol,
-      traceHeader
-    );
+    // In case the external wallet is a ChatterPay, update the user's object
+    toUser = await getUserByWalletAndChainid(to, networkConfig.chainId);
+
+    // In case the to user is a ChatterPay, send the received notification
+    if (toUser) {
+      await sendReceivedTransferNotification(
+        fromUser.phone_number,
+        fromUser.name,
+        toUser.phone_number,
+        amountAfterFee.toString(),
+        tokenSymbol,
+        traceHeader
+      );
+    }
 
     notificationSpan?.endSpan();
     rootSpan?.endSpan();

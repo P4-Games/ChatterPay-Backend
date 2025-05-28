@@ -5,11 +5,11 @@ import { pushService } from './push/pushService';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IBlockchain } from '../models/blockchainModel';
 import { mongoUserService } from './mongo/mongoUserService';
-import { chatizaloService } from './chatizalo/chatizaloService';
 import { chatizaloOperatorReply } from '../types/chatizaloType';
+import { chatizaloService } from './chatizalo/chatizaloService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
-import { formatPhoneNumberWithOptionalName } from '../helpers/formatHelper';
+import { formatIdentifierWithOptionalName } from '../helpers/formatHelper';
 import { templateEnum, mongoTemplateService } from './mongo/mongoTemplateService';
 import {
   BOT_DATA_TOKEN,
@@ -151,8 +151,8 @@ export async function sendReceivedTransferNotification(
         .replaceAll('[AMOUNT]', amount)
         .replaceAll('[TOKEN]', token);
 
-    const fromNumberAndName = formatPhoneNumberWithOptionalName(phoneNumberFrom, nameFrom, false);
-    const fromNumberAndNameMasked = formatPhoneNumberWithOptionalName(
+    const fromNumberAndName = formatIdentifierWithOptionalName(phoneNumberFrom, nameFrom, false);
+    const fromNumberAndNameMasked = formatIdentifierWithOptionalName(
       phoneNumberFrom,
       nameFrom,
       true
@@ -313,8 +313,8 @@ export async function sendOutgoingTransferNotification(
         .replaceAll('[EXPLORER]', networkConfig.explorer)
         .replaceAll('[TX_HASH]', txHash);
 
-    const toNumberAndName = formatPhoneNumberWithOptionalName(phoneNumberTo, toName, false);
-    const toNumberAndNameMasked = formatPhoneNumberWithOptionalName(phoneNumberTo, toName, true);
+    const toNumberAndName = formatIdentifierWithOptionalName(phoneNumberTo, toName, false);
+    const toNumberAndNameMasked = formatIdentifierWithOptionalName(phoneNumberTo, toName, true);
 
     const formattedMessageBot = formatMessage(toNumberAndName);
     const formattedMessagePush = formatMessage(toNumberAndNameMasked);

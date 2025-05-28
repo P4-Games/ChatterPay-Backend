@@ -207,3 +207,25 @@ export async function issueTokens(
 
   return mintResults;
 }
+
+/**
+ * Safely issues tokens and returns a boolean indicating success or failure.
+ *
+ * @param recipientAddress - The address to receive the tokens.
+ * @param tokens - The list of tokens.
+ * @param networkConfig - The blockchain network configuration.
+ * @returns Promise<boolean> - true if tokens were issued successfully, false otherwise.
+ */
+export async function tryIssueTokens(
+  recipientAddress: string,
+  tokens: IToken[],
+  networkConfig: IBlockchain
+): Promise<boolean> {
+  try {
+    await issueTokens(recipientAddress, tokens, networkConfig);
+    return true;
+  } catch (error) {
+    Logger.error('tryIssueTokens', `Failed to issue tokens to ${recipientAddress}`, error);
+    return false;
+  }
+}
