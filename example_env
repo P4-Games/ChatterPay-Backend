@@ -34,7 +34,7 @@
   # Push Protocol Notifications
   PUSH_CHANNEL_ADDRESS=
   PUSH_CHANNEL_PRIVATE_KEY=
-  PUSH_ENABLED= true | false
+  PUSH_ENABLED=true | false
   PUSH_NETWORK= 11155111 | 421614 | 42161
   PUSH_ENVIRONMENT= dev | staging | prod
 
@@ -46,7 +46,7 @@
   MANTECA_API_KEY= ''
 
   # Dev Stuffs
-  GCP_CLOUD_TRACE_ENABLED= true | false
+  GCP_CLOUD_TRACE_ENABLED=true | false
 
   # Security
   CORS_ORIGINS='*'
@@ -72,6 +72,9 @@
   QUEUE_BUNDLER_INTERVAL=5000
   QUEUE_GAS_INTERVAL=5000
   QUEUE_CREATE_PROXY_INTERVAL=5000
+
+  # Issuer Tokens in Sandbox Env
+  ISSUER_TOKENS_ENABLED=true | false
 
   # Swap debug scripts (only for local env, optional)
   RPC_URL='https://arbitrum-sepolia.infura.io/v3/'
