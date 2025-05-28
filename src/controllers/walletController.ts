@@ -49,8 +49,13 @@ export const createWallet = async (
       );
     }
 
-    // Check if user already exists
     const fastify = request.server;
+
+    const NETWORK_WARNING = `
+
+⚠️ Important: If you plan to send crypto to this wallet from an external platform (like a wallet or exchange), make sure to use the *${fastify.networkConfig.name} network* and double-check the address.
+ChatterPay can’t reverse transactions made outside of our app, such as when the wrong network is selected or the wallet address is mistyped.`;
+
     const existingUser = await mongoUserService.getUser(channel_user_id);
     let userWallet: IUserWallet | null;
 
@@ -68,7 +73,8 @@ export const createWallet = async (
         // Return the existing wallet address if found
         return await returnSuccessResponse(
           reply,
-          `The user already exists, your wallet is ${userWallet.wallet_proxy}.`
+          `The user already exists, your wallet is ${userWallet.wallet_proxy}. 
+          ${NETWORK_WARNING}`
         );
       }
 
@@ -97,9 +103,14 @@ export const createWallet = async (
           );
         }
 
-        return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
-          walletAddress: userWallet.wallet_proxy
-        });
+        return await returnSuccessResponse(
+          reply,
+          `The wallet was created successfully!. 
+          ${NETWORK_WARNING}`,
+          {
+            walletAddress: userWallet.wallet_proxy
+          }
+        );
       }
 
       // Return an error if wallet creation fails
@@ -124,9 +135,14 @@ export const createWallet = async (
     }
 
     // Return the wallet address of the newly created user
-    return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
-      walletAddress: user.wallets[0].wallet_proxy
-    });
+    return await returnSuccessResponse(
+      reply,
+      `The wallet was created successfully!. 
+          ${NETWORK_WARNING}`,
+      {
+        walletAddress: user.wallets[0].wallet_proxy
+      }
+    );
   } catch (error) {
     // Log and handle errors
     Logger.error('createWallet', error);
