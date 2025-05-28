@@ -8,7 +8,8 @@ export const mongoTransactionService = {
    */
   saveTransaction: async (transactionData: TransactionData) => {
     try {
-      const { tx, walletFrom, walletTo, amount, token, type, status, chain_id } = transactionData;
+      const { tx, walletFrom, walletTo, amount, fee, token, type, status, chain_id } =
+        transactionData;
 
       await Transaction.create({
         trx_hash: tx,
@@ -18,6 +19,7 @@ export const mongoTransactionService = {
         date: new Date(),
         status,
         amount,
+        fee,
         token,
         chain_id
       });

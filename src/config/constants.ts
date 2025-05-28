@@ -46,7 +46,8 @@ const {
   CHATIZALO_PHONE_NUMBER,
   QUEUE_BUNDLER_INTERVAL: queueBundlerInterval = 5000,
   QUEUE_GAS_INTERVAL: queueGasInterval = 5000,
-  QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 3000
+  QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 3000,
+  ISSUER_TOKENS_ENABLED: issuerTokensEnabled = 'false'
 } = process.env;
 
 export {
@@ -112,6 +113,8 @@ export const PUSH_CHANNEL_PRIVATE_KEY = !pushChannelPrivateKey.startsWith('0x')
   ? `0x${pushChannelPrivateKey}`
   : pushChannelPrivateKey;
 export const PUSH_ENABLED: boolean = pushEnabled.toLowerCase() === 'true';
+export const ISSUER_TOKENS_ENABLED: boolean = issuerTokensEnabled.toLowerCase() === 'true';
+
 export const BOT_NOTIFICATIONS_ENABLED: boolean = botNotificationsEnabled.toLowerCase() === 'true';
 export const PUSH_NETWORK: string = pushNetwork;
 export const PUSH_ENVIRONMENT: ENV = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;
@@ -138,10 +141,8 @@ export const WHATSAPP_API_URL = 'https://api.whatsapp.com';
 export const MANTECA_MOCK_UPLOAD_DOCUMENTS_URL = 'https://upload.manteca.dev/file-upload-url';
 export const INFURA_URL = 'https://mainnet.infura.io/v3';
 export const BINANCE_API_URL = 'https://api.binance.us/api/v3';
-export const GRAPH_API_USDT_URL =
-  'https://api.studio.thegraph.com/query/91286/balance-sepolia/version/latest';
-export const GRAPH_API_WETH_URL =
-  'https://api.studio.thegraph.com/query/91286/balance-sepolia-weth/version/latest';
+export const GRAPH_API_EXTERNAL_DEPOSITS_URL =
+  'https://api.studio.thegraph.com/query/91286/chatterpay-external-deposits/version/latest';
 
 export const CRIPTO_YA_URL: string = 'https://criptoya.com/api/ripio/USDT';
 export const FIAT_CURRENCIES = ['UYU', 'ARS', 'BRL'];

@@ -32,6 +32,7 @@ describe('Transaction Model', () => {
       date: new Date(),
       status: 'completed',
       amount: 100.5,
+      fee: 0.5,
       token: 'ETH',
       chain_id: 1
     };
@@ -73,6 +74,7 @@ describe('Transaction Model', () => {
       date: new Date(),
       status: 'completed',
       amount: 50.0,
+      fee: 0.5,
       token: 'ETH',
       chain_id: 1
     };
@@ -85,6 +87,7 @@ describe('Transaction Model', () => {
       date: new Date(),
       status: 'pending',
       amount: 75.0,
+      fee: 0.5,
       token: 'BTC',
       chain_id: 1
     };
@@ -116,6 +119,7 @@ describe('Transaction Model', () => {
       date: new Date(),
       status: 'completed',
       amount: 1000000000.0, // Large amount
+      fee: 0.5,
       token: 'USDT',
       chain_id: 1
     };

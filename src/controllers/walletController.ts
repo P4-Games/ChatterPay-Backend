@@ -3,7 +3,9 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { Logger } from '../helpers/loggerHelper';
 import { IUser, IUserWallet } from '../models/userModel';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { tryIssueTokens } from '../services/predictWalletService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
+import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import {
   addWalletToUser,
@@ -47,10 +49,20 @@ export const createWallet = async (
       );
     }
 
-    // Check if user already exists
     const fastify = request.server;
+
+    const NETWORK_WARNING = `
+
+⚠️ Important: If you plan to send crypto to this wallet from an external platform (like a wallet or exchange), make sure to use the *${fastify.networkConfig.name} network* and double-check the address.
+ChatterPay can’t reverse transactions made outside of our app, such as when the wrong network is selected or the wallet address is mistyped.`;
+
     const existingUser = await mongoUserService.getUser(channel_user_id);
     let userWallet: IUserWallet | null;
+
+    const issuerTokensEnabled: boolean =
+      fastify.networkConfig.environment.toUpperCase() !== 'PRODUCTION' &&
+      IS_DEVELOPMENT &&
+      ISSUER_TOKENS_ENABLED;
 
     if (existingUser) {
       // Check for existing wallet for the user in the given blockchain
@@ -61,7 +73,8 @@ export const createWallet = async (
         // Return the existing wallet address if found
         return await returnSuccessResponse(
           reply,
-          `The user already exists, your wallet is ${userWallet.wallet_proxy}.`
+          `The user already exists, your wallet is ${userWallet.wallet_proxy}. 
+          ${NETWORK_WARNING}`
         );
       }
 
@@ -81,9 +94,23 @@ export const createWallet = async (
       if (result) {
         // Return the new wallet address
         userWallet = result.newWallet;
-        return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
-          walletAddress: userWallet.wallet_proxy
-        });
+
+        if (issuerTokensEnabled) {
+          await tryIssueTokens(
+            userWallet.wallet_proxy,
+            request.server.tokens,
+            request.server.networkConfig
+          );
+        }
+
+        return await returnSuccessResponse(
+          reply,
+          `The wallet was created successfully!. 
+          ${NETWORK_WARNING}`,
+          {
+            walletAddress: userWallet.wallet_proxy
+          }
+        );
       }
 
       // Return an error if wallet creation fails
@@ -99,10 +126,23 @@ export const createWallet = async (
     const chatterpayImplementation = fastify.networkConfig.contracts.chatterPayAddress;
     const user: IUser = await createUserWithWallet(channel_user_id, chatterpayImplementation);
 
+    if (issuerTokensEnabled) {
+      await tryIssueTokens(
+        user.wallets[0].wallet_proxy,
+        request.server.tokens,
+        request.server.networkConfig
+      );
+    }
+
     // Return the wallet address of the newly created user
-    return await returnSuccessResponse(reply, 'The wallet was created successfully!', {
-      walletAddress: user.wallets[0].wallet_proxy
-    });
+    return await returnSuccessResponse(
+      reply,
+      `The wallet was created successfully!. 
+          ${NETWORK_WARNING}`,
+      {
+        walletAddress: user.wallets[0].wallet_proxy
+      }
+    );
   } catch (error) {
     // Log and handle errors
     Logger.error('createWallet', error);
