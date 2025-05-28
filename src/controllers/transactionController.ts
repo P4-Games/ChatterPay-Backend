@@ -572,9 +572,6 @@ export const makeTransaction = async (
     const amountAfterFeeDecimals = tokenData?.display_decimals;
     const amountAfterFee = (parseFloat(amount) - chatterpayFee).toFixed(amountAfterFeeDecimals);
 
-    const amountAfterFeeDecimals = tokenData?.display_decimals;
-    const amountAfterFee = (parseFloat(amount) - chatterpayFee).toFixed(amountAfterFeeDecimals);
-
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
       toUser?.phone_number ?? toAddress,
