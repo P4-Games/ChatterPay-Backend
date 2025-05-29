@@ -40,9 +40,21 @@ import {
   closeOperation,
   getOrCreateUser,
   getUserWalletByChainId,
-  getUserByWalletAndChainid,
   hasUserAnyOperationInProgress
 } from '../services/userService';
+import {
+  getTokenData,
+  checkBlockchainConditions,
+  userReachedOperationLimit,
+  userWithinTokenOperationLimits
+} from '../services/blockchainService';
+import {
+  INFURA_URL,
+  INFURA_API_KEY,
+  GCP_CLOUD_TRACE_ENABLED,
+  COMMON_REPLY_WALLET_NOT_CREATED,
+  COMMON_REPLY_OPERATION_IN_PROGRESS
+} from '../config/constants';
 import {
   getNotificationTemplate,
   sendInternalErrorNotification,
@@ -581,9 +593,6 @@ export const makeTransaction = async (
       executeTransactionResult.transactionHash,
       traceHeader
     );
-
-    // In case the external wallet is a ChatterPay, update the user's object
-    toUser = await getUserByWalletAndChainid(to, networkConfig.chainId);
 
     // In case the to user is a ChatterPay, send the received notification
     if (toUser) {
