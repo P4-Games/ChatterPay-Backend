@@ -23,19 +23,6 @@ import {
   CheckBalanceConditionsResult
 } from '../types/commonType';
 import {
-  getTokenData,
-  checkBlockchainConditions,
-  userReachedOperationLimit,
-  userWithinTokenOperationLimits
-} from '../services/blockchainService';
-import {
-  INFURA_URL,
-  INFURA_API_KEY,
-  GCP_CLOUD_TRACE_ENABLED,
-  COMMON_REPLY_WALLET_NOT_CREATED,
-  COMMON_REPLY_OPERATION_IN_PROGRESS
-} from '../config/constants';
-import {
   openOperation,
   closeOperation,
   getOrCreateUser,
