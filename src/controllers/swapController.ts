@@ -101,6 +101,8 @@ export const swap = async (
   reply: FastifyReply
   // eslint-disable-next-line consistent-return
 ) => {
+  let logKey = `[op:swap:${''}:${''}:${''}:${''}]`;
+
   try {
     /* ***************************************************** */
     /* 1. swap: input params                                 */
@@ -110,7 +112,6 @@ export const swap = async (
     }
 
     const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
-
     const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds ?? 0;
     const { tokens: blockchainTokens, networkConfig } = request.server as FastifyInstance;
 
@@ -130,9 +131,10 @@ export const swap = async (
     /* ***************************************************** */
     /* 2. swap: check user has wallet                        */
     /* ***************************************************** */
+    logKey = `[op:swap:${channel_user_id}:${inputCurrency}:${outputCurrency}:${amount}]`;
     const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
     if (!fromUser) {
-      Logger.info('swap', COMMON_REPLY_WALLET_NOT_CREATED);
+      Logger.info('swap', logKey, COMMON_REPLY_WALLET_NOT_CREATED);
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
     }
@@ -150,7 +152,7 @@ export const swap = async (
         channel_user_id,
         NotificationEnum.daily_limit_reached
       );
-      Logger.info('swap', `${message}`);
+      Logger.info('swap', logKey, `${message}`);
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, message);
     }
@@ -173,8 +175,7 @@ export const swap = async (
       const formattedMessage = message
         .replace('[LIMIT_MIN]', limitsResult.min!.toString())
         .replace('[LIMIT_MAX]', limitsResult.max!.toString());
-      Logger.info('makeTransaction', `${formattedMessage}`);
-      Logger.info('swap', `${formattedMessage}`);
+      Logger.info('swap', logKey, `${formattedMessage}`);
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, formattedMessage);
     }
@@ -185,7 +186,7 @@ export const swap = async (
     const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
     if (userOperations) {
       validationError = `Concurrent swap operation for phone: ${channel_user_id}.`;
-      Logger.log(`swap, ${validationError}`);
+      Logger.log(`swa', ${logKey}, ${validationError}`);
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(
         reply,
@@ -198,7 +199,7 @@ export const swap = async (
     /* ***************************************************** */
     // optimistic response
     await openOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
-    Logger.log('swap', 'sending notification: operation in progress');
+    Logger.log('swap', logKey, 'sending notification: operation in progress');
     await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
 
     /* ***************************************************** */
@@ -224,7 +225,7 @@ export const swap = async (
 
     if (!enoughBalance) {
       validationError = `Insufficient balance, phone: ${channel_user_id}, wallet: ${proxyAddress}. Required: ${toTokenCurrentBalance}, Available: ${fromTokenCurrentBalance}.`;
-      Logger.info('swap', validationError);
+      Logger.info('swap', logKey, validationError);
       await sendUserInsufficientBalanceNotification(proxyAddress, channel_user_id);
       await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;
@@ -252,7 +253,8 @@ export const swap = async (
       tokenAddresses,
       blockchainTokens,
       amount.toString(),
-      proxyAddress
+      proxyAddress,
+      logKey
     );
     if (!executeSwapResult.success) {
       await sendInternalErrorNotification(proxyAddress, channel_user_id, lastBotMsgDelaySeconds);
@@ -286,7 +288,7 @@ export const swap = async (
     );
 
     // Save transactions OUT
-    Logger.log('swap', 'Updating swap transactions in database.');
+    Logger.log('swap', logKey, 'Updating swap transactions in database.');
     const transactionOut: TransactionData = {
       tx: executeSwapResult.swapTransactionHash || '0x',
       walletFrom: proxyAddress,
@@ -323,7 +325,7 @@ export const swap = async (
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
 
     if (lastBotMsgDelaySeconds > 0) {
-      Logger.log('swap', `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`);
+      Logger.log('swap', logKey, `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`);
       await delaySeconds(lastBotMsgDelaySeconds);
     }
     await sendSwapNotification(
@@ -337,9 +339,10 @@ export const swap = async (
 
     Logger.info(
       'swap',
+      logKey,
       `Swap completed successfully approveTransactionHash: ${executeSwapResult.approveTransactionHash}, swapTransactionHash: ${executeSwapResult.swapTransactionHash}.`
     );
   } catch (error) {
-    Logger.error('swap', error);
+    Logger.error('swap', logKey, error);
   }
 };
