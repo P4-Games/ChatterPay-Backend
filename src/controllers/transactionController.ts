@@ -23,6 +23,13 @@ import {
   CheckBalanceConditionsResult
 } from '../types/commonType';
 import {
+  openOperation,
+  closeOperation,
+  getOrCreateUser,
+  getUserWalletByChainId,
+  hasUserAnyOperationInProgress
+} from '../services/userService';
+import {
   getTokenData,
   checkBlockchainConditions,
   userReachedOperationLimit,
@@ -35,14 +42,6 @@ import {
   COMMON_REPLY_WALLET_NOT_CREATED,
   COMMON_REPLY_OPERATION_IN_PROGRESS
 } from '../config/constants';
-import {
-  openOperation,
-  closeOperation,
-  getOrCreateUser,
-  getUserWalletByChainId,
-  getUserByWalletAndChainid,
-  hasUserAnyOperationInProgress
-} from '../services/userService';
 import {
   getNotificationTemplate,
   sendInternalErrorNotification,
@@ -289,6 +288,8 @@ export const makeTransaction = async (
     ? tracer?.createChildSpan({ name: 'makeTransaction' })
     : undefined;
 
+  let logKey = `[op:transfer:${''}:${''}:${''}:${''}]`;
+
   try {
     const traceHeader = isTracingEnabled
       ? (request.headers['x-cloud-trace-context'] as string | undefined)
@@ -326,10 +327,11 @@ export const makeTransaction = async (
     /* ***************************************************** */
     /* 2. makeTransaction: check user has wallet             */
     /* ***************************************************** */
+    logKey = `[op:transfer:${channel_user_id || ''}:${to}:${amount}:${tokenSymbol}]`;
     const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
     if (!fromUser) {
       rootSpan?.endSpan();
-      Logger.info('makeTransaction', COMMON_REPLY_WALLET_NOT_CREATED);
+      Logger.info('makeTransaction', logKey, COMMON_REPLY_WALLET_NOT_CREATED);
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
     }
@@ -341,7 +343,7 @@ export const makeTransaction = async (
     if (!userWallet) {
       validationError = `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chainId}`;
       rootSpan?.endSpan();
-      Logger.info('makeTransaction', validationError);
+      Logger.info('makeTransaction', logKey, validationError);
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, validationError);
     }
@@ -356,7 +358,7 @@ export const makeTransaction = async (
     const userOperations = hasUserAnyOperationInProgress(fromUser);
     if (userOperations) {
       validationError = `Concurrent transfer operation for wallet ${userWallet.wallet_proxy}, phone: ${fromUser.phone_number}.`;
-      Logger.log('makeTransaction', validationError);
+      Logger.log('makeTransaction', logKey, validationError);
       concurrentOperationSpan?.endSpan();
       rootSpan?.endSpan();
       // must return 200, so the bot displays the message instead of an error!
@@ -379,7 +381,7 @@ export const makeTransaction = async (
         channel_user_id,
         NotificationEnum.daily_limit_reached
       );
-      Logger.info('makeTransaction', `${message}`);
+      Logger.info('makeTransaction', logKey, `${message}`);
       concurrentOperationSpan?.endSpan();
       rootSpan?.endSpan();
       // must return 200, so the bot displays the message instead of an error!
@@ -404,7 +406,7 @@ export const makeTransaction = async (
       const formattedMessage = message
         .replace('[LIMIT_MIN]', limitsResult.min!.toString())
         .replace('[LIMIT_MAX]', limitsResult.max!.toString());
-      Logger.info('makeTransaction', `${formattedMessage}`);
+      Logger.info('makeTransaction', logKey, `${formattedMessage}`);
       concurrentOperationSpan?.endSpan();
       rootSpan?.endSpan();
       // must return 200, so the bot displays the message instead of an error!
@@ -417,7 +419,7 @@ export const makeTransaction = async (
     await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
     concurrentOperationSpan?.endSpan();
     // optimistic response
-    Logger.log('makeTransaction', 'sending notification: operation in progress');
+    Logger.log('makeTransaction', logKey, 'sending notification: operation in progress');
     await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
 
     /* ***************************************************** */
@@ -436,7 +438,7 @@ export const makeTransaction = async (
 
     if (!checkBalanceResult.enoughBalance) {
       validationError = `Insufficient balance, phone: ${fromUser.phone_number}, wallet: ${userWallet.wallet_proxy}. Required: ${checkBalanceResult.amountToCheck}, Available: ${checkBalanceResult.walletBalance}.`;
-      Logger.info('makeTransaction', validationError);
+      Logger.info('makeTransaction', logKey, validationError);
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       await sendUserInsufficientBalanceNotification(
         userWallet.wallet_proxy,
@@ -507,7 +509,8 @@ export const makeTransaction = async (
       userWallet.wallet_proxy,
       toAddress,
       tokenData!.address,
-      amount
+      amount,
+      logKey
     );
 
     if (!executeTransactionResult.success) {
@@ -538,7 +541,7 @@ export const makeTransaction = async (
       tokenData!.address
     );
 
-    Logger.log('makeTransaction', 'Updating transaction in database.');
+    Logger.log('makeTransaction', logKey, 'Updating transaction in database.');
     const transactionOut: TransactionData = {
       tx: executeTransactionResult.transactionHash,
       walletFrom: userWallet.wallet_proxy,
@@ -565,7 +568,11 @@ export const makeTransaction = async (
     await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
 
     if (lastBotMsgDelaySeconds > 0) {
-      Logger.log('makeTransaction', `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`);
+      Logger.log(
+        'makeTransaction',
+        logKey,
+        `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`
+      );
       await delaySeconds(lastBotMsgDelaySeconds);
     }
 
@@ -582,9 +589,6 @@ export const makeTransaction = async (
       traceHeader
     );
 
-    // In case the external wallet is a ChatterPay, update the user's object
-    toUser = await getUserByWalletAndChainid(to, networkConfig.chainId);
-
     // In case the to user is a ChatterPay, send the received notification
     if (toUser) {
       await sendReceivedTransferNotification(
@@ -599,10 +603,10 @@ export const makeTransaction = async (
 
     notificationSpan?.endSpan();
     rootSpan?.endSpan();
-    Logger.info('makeTransaction', `Maketransaction completed successfully.`);
+    Logger.info('makeTransaction', logKey, `Maketransaction completed successfully.`);
   } catch (error) {
     rootSpan?.addLabel('error', (error as Error).message);
     rootSpan?.endSpan();
-    Logger.error('makeTransaction', error);
+    Logger.error('makeTransaction', logKey, error);
   }
 };

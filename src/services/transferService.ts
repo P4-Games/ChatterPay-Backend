@@ -49,7 +49,8 @@ export async function sendTransferUserOperation(
   fromAddress: string,
   toAddress: string,
   tokenAddress: string,
-  amount: string
+  amount: string,
+  logKey: string
 ): Promise<ExecueTransactionResult> {
   try {
     Logger.log('sendTransferUserOperation', 'Getting ERC20 Contract');
@@ -101,6 +102,7 @@ export async function sendTransferUserOperation(
       callData,
       setupContractsResult.proxy.proxyAddress,
       'transfer',
+      logKey,
       userOpGasConfig.perGasInitialMultiplier,
       userOpGasConfig.perGasIncrement,
       userOpGasConfig.callDataInitialMultiplier,
@@ -131,7 +133,8 @@ export async function withdrawWalletAllFunds(
   tokens: IToken[],
   networkConfig: IBlockchain,
   channel_user_id: string,
-  to_wallet: string
+  to_wallet: string,
+  logKey: string
 ): Promise<{ result: boolean; message: string }> {
   try {
     const bddUser: IUser | null = await mongoUserService.getUser(channel_user_id);
@@ -208,7 +211,8 @@ export async function withdrawWalletAllFunds(
           userWallet.wallet_proxy,
           to_wallet_formatted,
           address,
-          balance
+          balance,
+          logKey
         );
 
         // Store transaction out data as a generic object

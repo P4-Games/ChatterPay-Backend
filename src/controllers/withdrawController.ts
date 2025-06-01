@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
+import { Logger } from '../helpers/loggerHelper';
 import { withdrawWalletAllFunds } from '../services/transferService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
@@ -19,6 +20,8 @@ export const withdrawAllFunds = async (
   }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
+  let logKey = `[op:withdrawAllFunds:${''}:${''}]`;
+
   try {
     if (!request.body) {
       return await returnErrorResponse(reply, 400, 'Request body is required');
@@ -46,20 +49,24 @@ export const withdrawAllFunds = async (
       return await returnErrorResponse(reply, 400, 'Invalid Ethereum wallet address');
     }
 
+    logKey = `[op:withdrawAllFunds:${channel_user_id}:${dst_address}]`;
     const fastify = request.server;
     const withdrawResult = await withdrawWalletAllFunds(
       fastify.tokens,
       fastify.networkConfig,
       channel_user_id,
-      dst_address
+      dst_address,
+      logKey
     );
 
     if (withdrawResult.result) {
+      Logger.info('withdrawAllFunds', logKey, 'All funds withdrawn successfully');
       return await returnSuccessResponse(reply, 'All funds withdrawn successfully');
     }
 
     return await returnErrorResponse(reply, 400, withdrawResult.message);
   } catch (error) {
+    Logger.error('withdrawAllFunds', logKey, error);
     return returnErrorResponse(reply, 400, 'An error occurred while withdrawing all funds');
   }
 };
