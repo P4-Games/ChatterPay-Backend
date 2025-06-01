@@ -11,7 +11,7 @@ import { QUEUE_BUNDLER_INTERVAL } from '../../config/constants';
 import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation, UserOperationReceipt } from '../../types/userOperationType';
 
-const queue = new PQueue({ interval: QUEUE_BUNDLER_INTERVAL, intervalCap: 1 }); // 1 request each 10 seg
+const queue = new PQueue({ interval: QUEUE_BUNDLER_INTERVAL, intervalCap: 1 }); // 1 request each x seg
 
 /**
  * Creates a generic user operation for a transaction.
@@ -279,16 +279,21 @@ async function prepareAndExecuteUserOperation(
   userOpCallData: string,
   userProxyAddress: string,
   userOpType: 'transfer' | 'swap',
+  logKey: string,
   perGasMultiplier: number,
   callDataGasMultiplier: number
 ) {
   try {
-    Logger.log(userOpType, 'Getting Nonce');
+    Logger.log(userOpType, logKey, 'Getting Nonce');
     const nonce = await entryPointContract.getNonce(userProxyAddress, 0);
-    Logger.info(userOpType, `Current nonce for proxy ${userProxyAddress}: ${nonce.toString()}`);
+    Logger.info(
+      userOpType,
+      logKey,
+      `Current nonce for proxy ${userProxyAddress}: ${nonce.toString()}`
+    );
 
     // Create and prepare the user operation with the gas multiplier
-    Logger.debug(userOpType, 'Creating generic user operation');
+    Logger.debug(userOpType, logKey, 'Creating generic user operation');
     let userOperation = await createGenericUserOperation(
       provider,
       networkConfig.gas,
@@ -303,6 +308,7 @@ async function prepareAndExecuteUserOperation(
     // Add paymaster data using the backend signer
     Logger.debug(
       userOpType,
+      logKey,
       `Adding paymaster data with address: ${networkConfig.contracts.paymasterAddress}`
     );
     userOperation = await addPaymasterData(
@@ -315,17 +321,17 @@ async function prepareAndExecuteUserOperation(
     );
 
     // Sign the user operation with the user's signer
-    Logger.debug(userOpType, 'Signing user operation');
+    Logger.debug(userOpType, logKey, 'Signing user operation');
     userOperation = await signUserOperation(
       userOperation,
       networkConfig.contracts.entryPoint,
       signer
     );
-    Logger.info(userOpType, 'User operation signed successfully');
+    Logger.info(userOpType, logKey, 'User operation signed successfully');
 
     if (!networkConfig.gas.useFixedValues) {
       // Get dynamic callData Gas Values and update userOperation
-      Logger.debug(userOpType, 'Update gas values');
+      Logger.debug(userOpType, logKey, 'Update gas values');
       const callDataGasValues = await gasService.getcallDataGasValues(
         networkConfig.gas.operations[userOpType],
         userOperation,
@@ -338,7 +344,7 @@ async function prepareAndExecuteUserOperation(
       userOperation.preVerificationGas = callDataGasValues.preVerificationGas;
 
       // Re-sign User Operation (because we changed the gas values!)
-      Logger.debug(userOpType, 'Re-sign user operation');
+      Logger.debug(userOpType, logKey, 'Re-sign user operation');
       userOperation = await signUserOperation(
         userOperation,
         networkConfig.contracts.entryPoint,
@@ -347,19 +353,19 @@ async function prepareAndExecuteUserOperation(
     }
 
     // Send the operation to the bundler and wait for receipt
-    Logger.info(userOpType, `Sending operation to bundler: ${networkConfig.rpcBundler}`);
+    Logger.info(userOpType, logKey, `Sending operation to bundler: ${networkConfig.rpcBundler}`);
     const bundlerResponse = await sendUserOperationToBundler(
       networkConfig.rpcBundler,
       userOperation,
       entryPointContract.address
     );
-    Logger.debug(userOpType, `Bundler response: ${JSON.stringify(bundlerResponse)}`);
+    Logger.debug(userOpType, logKey, `Bundler response: ${JSON.stringify(bundlerResponse)}`);
 
-    Logger.log(userOpType, 'Waiting for transaction to be mined.');
+    Logger.log(userOpType, logKey, 'Waiting for transaction to be mined.');
     const receipt = await waitForUserOperationReceipt(networkConfig.rpcBundler, bundlerResponse);
 
     if (!receipt?.success) {
-      Logger.error(userOpType, `Operation failed. Receipt: ${JSON.stringify(receipt)}`);
+      Logger.error(userOpType, logKey, `Operation failed. Receipt: ${JSON.stringify(receipt)}`);
       throw new Error(
         `Transaction failed or not found. Receipt: ${receipt.success}, Hash: ${receipt.userOpHash}`
       );
@@ -367,15 +373,16 @@ async function prepareAndExecuteUserOperation(
 
     Logger.info(
       userOpType,
+      logKey,
       `Operation completed successfully. Hash: ${receipt.receipt.transactionHash}, Block: ${receipt.receipt.blockNumber}`
     );
 
-    Logger.log(userOpType, 'end!');
+    Logger.log(userOpType, logKey, 'end!');
 
     return { success: true, transactionHash: receipt.receipt.transactionHash, error: '' };
   } catch (error) {
     const errorMessage = (error as Error).message;
-    Logger.error(userOpType, `Error executing operation: ${errorMessage}`);
+    Logger.error(userOpType, logKey, `Error executing operation: ${errorMessage}`);
     return { success: false, transactionHash: '', error: errorMessage };
   }
 }
@@ -407,6 +414,7 @@ export async function executeUserOperationWithRetry(
   userOpCallData: string,
   userProxyAddress: string,
   userOpType: 'transfer' | 'swap',
+  logKey: string,
   perGasInitialMultiplier: number,
   perGasIncrement: number,
   callDataGasInitialMultiplier: number,
@@ -428,6 +436,7 @@ export async function executeUserOperationWithRetry(
     userOpCallData,
     userProxyAddress,
     userOpType,
+    logKey,
     perGasInitialMultiplier,
     callDataGasInitialMultiplier
   );
@@ -452,6 +461,7 @@ export async function executeUserOperationWithRetry(
       userOpCallData,
       userProxyAddress,
       userOpType,
+      logKey,
       perGasInitialMultiplier * perGasIncrement,
       callDataGasInitialMultiplier,
       maxRetries,
