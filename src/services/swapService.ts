@@ -236,7 +236,8 @@ async function checkAndApproveToken(
   setupContractsResult: SetupContractReturn,
   erc20ABI: ContractInterface,
   chatterPayContract: ethers.Contract,
-  entryPointContract: ethers.Contract
+  entryPointContract: ethers.Contract,
+  logKey: string
 ): Promise<string | null> {
   const tokenContract = new ethers.Contract(tokenIn, erc20ABI, setupContractsResult.provider);
   const { routerAddress } = networkConfig.contracts;
@@ -274,6 +275,7 @@ async function checkAndApproveToken(
         approveCallData,
         setupContractsResult.proxy.proxyAddress,
         'swap',
+        logKey,
         userOpGasConfig.perGasInitialMultiplier,
         userOpGasConfig.perGasIncrement,
         userOpGasConfig.callDataInitialMultiplier,
@@ -313,7 +315,8 @@ export async function executeSwap(
   tokenAddresses: TokenAddresses,
   blockchainTokens: IToken[],
   amount: string,
-  recipient: string
+  recipient: string,
+  logKey: string
 ): Promise<ExecuteSwapResult> {
   Logger.info('executeSwap', `Starting swap execution. Amount: ${amount}, Recipient: ${recipient}`);
   Logger.debug('executeSwap', `Token addresses: ${JSON.stringify(tokenAddresses)}`);
@@ -475,7 +478,8 @@ export async function executeSwap(
       setupContractsResult,
       erc20ABI,
       chatterPayContract,
-      entryPointContract
+      entryPointContract,
+      logKey
     );
 
     // Execute the swap
@@ -500,6 +504,7 @@ export async function executeSwap(
       swapCallData,
       setupContractsResult.proxy.proxyAddress,
       'swap',
+      logKey,
       userOpGasConfig.perGasInitialMultiplier,
       userOpGasConfig.perGasIncrement,
       userOpGasConfig.callDataInitialMultiplier,
