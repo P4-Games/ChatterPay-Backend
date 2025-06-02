@@ -10,8 +10,7 @@ export const mongoTokenService = {
   async isValidToken(tokenAddress: string, chain_id: number): Promise<boolean> {
     const token = await Token.findOne({
       address: { $regex: new RegExp(`^${tokenAddress}$`, 'i') },
-      chain_id,
-      is_active: true
+      chain_id
     });
 
     return !!token;
