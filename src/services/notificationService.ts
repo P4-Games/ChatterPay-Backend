@@ -118,7 +118,7 @@ export async function sendWalletCreationNotification(
  * Sends a notification for a received transfer.
  *
  * @param phoneNumberFrom - Sender's phone number.
- * @param nameFrom - Sender's name.
+ * @param nameFrom - Sender's name (optional).
  * @param phoneNumberTo - Recipient's phone number.
  * @param amount - Amount received.
  * @param token - Token symbol or identifier (e.g., ETH, USDT).
@@ -127,7 +127,7 @@ export async function sendWalletCreationNotification(
  */
 export async function sendReceivedTransferNotification(
   phoneNumberFrom: string,
-  nameFrom: string,
+  nameFrom: string | null,
   phoneNumberTo: string,
   amount: string,
   token: string,
