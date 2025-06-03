@@ -7,7 +7,7 @@ export enum LanguageEnum {
 }
 
 export enum NotificationEnum {
-  transfer = 'transfer',
+  incoming_transfer = 'incoming_transfer',
   swap = 'swap',
   mint = 'mint',
   outgoing_transfer = 'outgoing_transfer',
@@ -55,7 +55,7 @@ const notificationSchema = new Schema<NotificationTemplateType>({
 
 const templateSchema = new Schema<ITemplateSchema>({
   notifications: {
-    transfer: { type: notificationSchema, required: true },
+    incoming_transfer: { type: notificationSchema, required: true },
     swap: { type: notificationSchema, required: true },
     mint: { type: notificationSchema, required: true },
     outgoing_transfer: { type: notificationSchema, required: true },
