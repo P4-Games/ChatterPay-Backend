@@ -1,19 +1,16 @@
-import Token from '../../models/tokenModel';
+import Token, { IToken } from '../../models/tokenModel';
 
 export const mongoTokenService = {
   /**
-   * Validates if a token is listed and active in our system
-   * @param {string} tokenAddress - The token address to validate
+   * Gets a token from the database if it exists
+   * @param {string} tokenAddress - The token address to find
    * @param {number} chain_id - The chain ID where the token exists
-   * @returns {Promise<boolean>} True if the token is valid and listed
+   * @returns {Promise<Token | null>} The token object if found, null otherwise
    */
-  async isValidToken(tokenAddress: string, chain_id: number): Promise<boolean> {
-    const token = await Token.findOne({
+  async getToken(tokenAddress: string, chain_id: number): Promise<IToken | null> {
+    return Token.findOne({
       address: { $regex: new RegExp(`^${tokenAddress}$`, 'i') },
-      chain_id,
-      is_active: true
+      chain_id
     });
-
-    return !!token;
   }
 };
