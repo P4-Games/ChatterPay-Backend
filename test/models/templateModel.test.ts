@@ -30,7 +30,7 @@ describe('Template Model', () => {
 
     const validTemplate: TestTemplateSchema = {
       notifications: {
-        transfer: {
+        incoming_transfer: {
           title: {
             en: 'Transfer completed',
             es: 'Transferencia completada',
@@ -149,7 +149,7 @@ describe('Template Model', () => {
     const savedTemplate = await template.save();
 
     expect(savedTemplate._id).toBeDefined();
-    expect(savedTemplate.notifications.transfer.title.en).toBe('Transfer completed');
+    expect(savedTemplate.notifications.incoming_transfer.title.en).toBe('Transfer completed');
   });
 
   it('should fail to save without required fields', async () => {
@@ -163,7 +163,7 @@ describe('Template Model', () => {
 
     const invalidTemplate = {
       notifications: {
-        transfer: {
+        incoming_transfer: {
           title: {
             en: 'Transfer completed',
             es: 'Transferencia completada',

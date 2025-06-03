@@ -43,6 +43,7 @@ import {
   COMMON_REPLY_OPERATION_IN_PROGRESS
 } from '../config/constants';
 import {
+  persistNotification,
   getNotificationTemplate,
   sendInternalErrorNotification,
   sendOutgoingTransferNotification,
@@ -357,15 +358,19 @@ export const makeTransaction = async (
 
     const userOperations = hasUserAnyOperationInProgress(fromUser);
     if (userOperations) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.concurrent_operation
+      );
+      await persistNotification(channel_user_id, message, NotificationEnum.concurrent_operation);
+
       validationError = `Concurrent transfer operation for wallet ${userWallet.wallet_proxy}, phone: ${fromUser.phone_number}.`;
       Logger.log('makeTransaction', logKey, validationError);
       concurrentOperationSpan?.endSpan();
       rootSpan?.endSpan();
+
       // must return 200, so the bot displays the message instead of an error!
-      return await returnSuccessResponse(
-        reply,
-        'You have another operation in progress. Please wait until it is finished.'
-      );
+      return await returnSuccessResponse(reply, message);
     }
 
     /* ***************************************************** */
@@ -381,6 +386,9 @@ export const makeTransaction = async (
         channel_user_id,
         NotificationEnum.daily_limit_reached
       );
+
+      await persistNotification(channel_user_id, message, NotificationEnum.daily_limit_reached);
+
       Logger.info('makeTransaction', logKey, `${message}`);
       concurrentOperationSpan?.endSpan();
       rootSpan?.endSpan();
@@ -409,6 +417,13 @@ export const makeTransaction = async (
       Logger.info('makeTransaction', logKey, `${formattedMessage}`);
       concurrentOperationSpan?.endSpan();
       rootSpan?.endSpan();
+
+      await persistNotification(
+        channel_user_id,
+        formattedMessage,
+        NotificationEnum.amount_outside_limits
+      );
+
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, formattedMessage);
     }
