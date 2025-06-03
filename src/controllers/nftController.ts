@@ -18,12 +18,16 @@ import { mongoUserService } from '../services/mongo/mongoUserService';
 import { userReachedOperationLimit } from '../services/blockchainService';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
-import { sendMintNotification, getNotificationTemplate } from '../services/notificationService';
 import {
   returnErrorResponse,
   returnSuccessResponse,
   returnErrorResponse500
 } from '../helpers/requestHelper';
+import {
+  persistNotification,
+  sendMintNotification,
+  getNotificationTemplate
+} from '../services/notificationService';
 import {
   getUserWallet,
   openOperation,
@@ -266,13 +270,17 @@ export const generateNftOriginal = async (
 
   const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
   if (userOperations) {
+    const { message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.concurrent_operation
+    );
+    await persistNotification(channel_user_id, message, NotificationEnum.concurrent_operation);
+
     const validationError = `Concurrent mint original NFT for wallet ${userWalletByChainId.wallet_proxy}, phone: ${channel_user_id}.`;
     Logger.log('generateNftOriginal', logKey, `generateNftOriginal: ${validationError}`);
+
     // must return 200, so the bot displays the message instead of an error!
-    return returnSuccessResponse(
-      reply,
-      'You have another operation in progress. Please wait until it is finished.'
-    );
+    return returnSuccessResponse(reply, message);
   }
 
   const userReachedOpLimit = await userReachedOperationLimit(
@@ -286,6 +294,9 @@ export const generateNftOriginal = async (
       NotificationEnum.daily_limit_reached
     );
     Logger.info('generateNftOriginal', logKey, `${message}`);
+
+    await persistNotification(channel_user_id, message, NotificationEnum.daily_limit_reached);
+
     // must return 200, so the bot displays the message instead of an error!
     return returnSuccessResponse(reply, message);
   }
@@ -506,13 +517,16 @@ export const generateNftCopy = async (
 
     const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
     if (userOperations) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.concurrent_operation
+      );
+      await persistNotification(channel_user_id, message, NotificationEnum.concurrent_operation);
+
       const validationError = `Concurrent mint copy NFT for phone: ${channel_user_id}.`;
       Logger.info('generateNftCopy', logKey, `${validationError}`);
       // must return 200, so the bot displays the message instead of an error!
-      return await returnSuccessResponse(
-        reply,
-        'You have another operation in progress. Please wait until it is finished.'
-      );
+      return await returnSuccessResponse(reply, message);
     }
 
     const userReachedOpLimit = await userReachedOperationLimit(
@@ -525,6 +539,9 @@ export const generateNftCopy = async (
         channel_user_id,
         NotificationEnum.daily_limit_reached
       );
+
+      await persistNotification(channel_user_id, message, NotificationEnum.daily_limit_reached);
+
       Logger.info('generateNftOriginal', logKey, `${message}`);
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, message);
