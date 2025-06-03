@@ -428,7 +428,7 @@ export async function userWithinTokenOperationLimits(
 
     // Check if the amount is within the allowed limits
     if (amount < min || amount > max) {
-      Logger.error(
+      Logger.warn(
         'userWithinTokenOperationLimits',
         `Amount ${amount} for token ${tokenSymbol} is out of bounds. Min: ${min}, Max: ${max}`
       );

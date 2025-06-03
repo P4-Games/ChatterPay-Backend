@@ -130,7 +130,7 @@ export async function sendWalletCreationNotification(
  * Sends a notification for a received transfer.
  *
  * @param phoneNumberFrom - Sender's phone number.
- * @param nameFrom - Sender's name.
+ * @param nameFrom - Sender's name (optional).
  * @param phoneNumberTo - Recipient's phone number.
  * @param amount - Amount received.
  * @param token - Token symbol or identifier (e.g., ETH, USDT).
@@ -139,7 +139,7 @@ export async function sendWalletCreationNotification(
  */
 export async function sendReceivedTransferNotification(
   phoneNumberFrom: string,
-  nameFrom: string,
+  nameFrom: string | null,
   phoneNumberTo: string,
   amount: string,
   token: string,
@@ -705,5 +705,36 @@ export async function persistAndSendNotification({
   } catch (error) {
     Logger.error('sendAndPersistNotification', error);
     throw error;
+  }
+}
+
+/**
+ * Persists a notification in MongoDB with media: 'INTERNAL',
+ * without sending it via bot or push.
+ *
+ * @param {string} to - Recipient identifier (e.g., phone number).
+ * @param {string} message - Message content to store.
+ * @param {string} template - Template identifier.
+ * @returns {Promise<void>}
+ */
+export async function persistNotification(
+  to: string,
+  message: string,
+  template: string
+): Promise<void> {
+  const sent_date = new Date();
+
+  try {
+    await mongoNotificationService.createNotification({
+      to,
+      message,
+      template,
+      media: 'INTERNAL',
+      sent_date,
+      read_date: undefined,
+      deleted_date: undefined
+    });
+  } catch (error) {
+    Logger.error('persistNotification', error);
   }
 }

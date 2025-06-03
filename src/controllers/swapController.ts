@@ -37,6 +37,7 @@ import {
   userWithinTokenOperationLimits
 } from '../services/blockchainService';
 import {
+  persistNotification,
   sendSwapNotification,
   getNotificationTemplate,
   sendInternalErrorNotification,
@@ -152,6 +153,9 @@ export const swap = async (
         channel_user_id,
         NotificationEnum.daily_limit_reached
       );
+
+      await persistNotification(channel_user_id, message, NotificationEnum.daily_limit_reached);
+
       Logger.info('swap', logKey, `${message}`);
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, message);
@@ -176,6 +180,13 @@ export const swap = async (
         .replace('[LIMIT_MIN]', limitsResult.min!.toString())
         .replace('[LIMIT_MAX]', limitsResult.max!.toString());
       Logger.info('swap', logKey, `${formattedMessage}`);
+
+      await persistNotification(
+        channel_user_id,
+        formattedMessage,
+        NotificationEnum.amount_outside_limits
+      );
+
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, formattedMessage);
     }
@@ -185,13 +196,16 @@ export const swap = async (
     /* ***************************************************** */
     const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
     if (userOperations) {
-      validationError = `Concurrent swap operation for phone: ${channel_user_id}.`;
-      Logger.log(`swa', ${logKey}, ${validationError}`);
-      // must return 200, so the bot displays the message instead of an error!
-      return await returnSuccessResponse(
-        reply,
-        'You have another operation in progress. Please wait until it is finished.'
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.concurrent_operation
       );
+      await persistNotification(channel_user_id, message, NotificationEnum.concurrent_operation);
+
+      validationError = `Concurrent swap operation for phone: ${channel_user_id}.`;
+      Logger.log(`swap', ${logKey}, ${validationError}`);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, message);
     }
 
     /* ***************************************************** */

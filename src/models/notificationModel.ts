@@ -22,8 +22,8 @@ const NotificationSchema = new Schema<INotification>({
   },
   template: { type: String, required: true },
   sent_date: { type: Date, required: true },
-  read_date: { type: Date, required: false },
-  deleted_date: { type: Date, required: false }
+  read_date: { type: Date, required: false, default: null },
+  deleted_date: { type: Date, required: false, default: null }
 });
 
 const NotificationModel = model<INotification>(
