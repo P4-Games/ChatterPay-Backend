@@ -17,7 +17,7 @@ export function getPhoneNumberFormatted(phone: string): string {
  */
 export function formatIdentifierWithOptionalName(
   identifier: string,
-  name?: string,
+  name?: string | null,
   maskIdentifier?: boolean
 ): string {
   let formattedIdentifier = identifier;
