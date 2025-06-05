@@ -25,6 +25,11 @@ import {
   returnErrorResponse500
 } from '../helpers/requestHelper';
 import {
+  persistNotification,
+  sendMintNotification,
+  getNotificationTemplate
+} from '../services/notificationService';
+import {
   getUserWallet,
   openOperation,
   closeOperation,
@@ -218,6 +223,7 @@ export const generateNftOriginal = async (
   reply: FastifyReply
   // eslint-disable-next-line consistent-return
 ) => {
+  let logKey = `[op:mintNft:${''}]`;
   if (!request.body) {
     return returnErrorResponse(reply, 400, 'You have to send a body with this request');
   }
@@ -241,13 +247,14 @@ export const generateNftOriginal = async (
     );
   }
 
+  logKey = `[op:mintNft:${channel_user_id}]`;
   if (!isValidUrl(url)) {
-    Logger.warn('generateNftOriginal', 'The provided URL is not valid.');
+    Logger.warn('generateNftOriginal', logKey, 'The provided URL is not valid.');
     return returnErrorResponse(reply, 400, 'The provided URL is not valid.');
   }
 
   if (isShortUrl(url)) {
-    Logger.warn('generateNftOriginal', 'Short Url not allowed');
+    Logger.warn('generateNftOriginal', logKey, 'Short Url not allowed');
     return returnErrorResponse(reply, 400, 'Short Url not allowed');
   }
 
@@ -257,20 +264,24 @@ export const generateNftOriginal = async (
     DEFAULT_CHAIN_ID
   );
   if (!fromUser || !userWalletByChainId) {
-    Logger.info('generateNftOriginal', COMMON_REPLY_WALLET_NOT_CREATED);
+    Logger.info('generateNftOriginal', logKey, COMMON_REPLY_WALLET_NOT_CREATED);
     // must return 200, so the bot displays the message instead of an error!
     return returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
   }
 
   const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
   if (userOperations) {
-    const validationError = `Concurrent mint original NFT for wallet ${userWalletByChainId.wallet_proxy}, phone: ${channel_user_id}.`;
-    Logger.log('generateNftOriginal', `generateNftOriginal: ${validationError}`);
-    // must return 200, so the bot displays the message instead of an error!
-    return returnSuccessResponse(
-      reply,
-      'You have another operation in progress. Please wait until it is finished.'
+    const { message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.concurrent_operation
     );
+    await persistNotification(channel_user_id, message, NotificationEnum.concurrent_operation);
+
+    const validationError = `Concurrent mint original NFT for wallet ${userWalletByChainId.wallet_proxy}, phone: ${channel_user_id}.`;
+    Logger.log('generateNftOriginal', logKey, `generateNftOriginal: ${validationError}`);
+
+    // must return 200, so the bot displays the message instead of an error!
+    return returnSuccessResponse(reply, message);
   }
 
   const userReachedOpLimit = await userReachedOperationLimit(
@@ -283,7 +294,10 @@ export const generateNftOriginal = async (
       channel_user_id,
       NotificationEnum.daily_limit_reached
     );
-    Logger.info('generateNftOriginal', `${message}`);
+    Logger.info('generateNftOriginal', logKey, `${message}`);
+
+    await persistNotification(channel_user_id, message, NotificationEnum.daily_limit_reached);
+
     // must return 200, so the bot displays the message instead of an error!
     return returnSuccessResponse(reply, message);
   }
@@ -291,17 +305,18 @@ export const generateNftOriginal = async (
   await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
 
   // optimistic response
-  Logger.log('generateNftOriginal', 'sending notification: operation in progress');
+  Logger.log('generateNftOriginal', logKey, 'sending notification: operation in progress');
   await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
 
   let processedImage;
   try {
-    Logger.info('generateNftOriginal', 'Fetching NFT image');
+    Logger.info('generateNftOriginal', logKey, 'Fetching NFT image');
     processedImage = await downloadAndProcessImage(url);
   } catch (error) {
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
     Logger.error(
       'generateNftOriginal',
+      logKey,
       'Error downloading the NFT image:',
       (error as Error).message
     );
@@ -311,7 +326,7 @@ export const generateNftOriginal = async (
   // Save the initial NFT details in the database.
   let mongoData;
   try {
-    Logger.info('generateNftOriginal', 'Saving NFT Data into MongoDB');
+    Logger.info('generateNftOriginal', logKey, 'Saving NFT Data into MongoDB');
     mongoData = await NFTModel.create({
       channel_user_id,
       wallet: userWalletByChainId.wallet_proxy,
@@ -341,7 +356,12 @@ export const generateNftOriginal = async (
     });
   } catch (error) {
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
-    Logger.error('generateNftOriginal', 'Error saving NFT data into DB.', (error as Error).message);
+    Logger.error(
+      'generateNftOriginal',
+      logKey,
+      'Error saving NFT data into DB.',
+      (error as Error).message
+    );
     return Promise.resolve(); // If the initial creation fails, it makes no sense to continue.
   }
 
@@ -353,14 +373,14 @@ export const generateNftOriginal = async (
     );
   } catch (error) {
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNft);
-    Logger.error('generateNftOriginal', 'Error minting NFT', error);
+    Logger.error('generateNftOriginal', logKey, 'Error minting NFT', error);
     return Promise.resolve();
   }
   const nftMintedId = nftMintData.tokenId.toString();
 
   // Update in bdd trxId and tokenId
   try {
-    Logger.info('generateNftOriginal', 'Updating tokenId and trxId in the database');
+    Logger.info('generateNftOriginal', logKey, 'Updating tokenId and trxId in the database');
     await NFTModel.updateOne(
       { _id: mongoData._id },
       {
@@ -372,7 +392,12 @@ export const generateNftOriginal = async (
       }
     );
   } catch (error) {
-    Logger.error('generateNftOriginal', 'Error updating NFT in bdd', (error as Error).message);
+    Logger.error(
+      'generateNftOriginal',
+      logKey,
+      'Error updating NFT in bdd',
+      (error as Error).message
+    );
   }
 
   const fileName = `${channel_user_id.toString()}_${Date.now()}.jpg`;
@@ -384,6 +409,7 @@ export const generateNftOriginal = async (
   } catch (error) {
     Logger.warn(
       'generateNftOriginal',
+      logKey,
       'Error uploading the image to IPFS:',
       (error as Error).message
     );
@@ -395,6 +421,7 @@ export const generateNftOriginal = async (
   } catch (error) {
     Logger.warn(
       'generateNftOriginal',
+      logKey,
       'Error uploading the image to ICP:',
       (error as Error).message
     );
@@ -403,7 +430,7 @@ export const generateNftOriginal = async (
 
   // Update IPFS & ICP urls in bdd
   try {
-    Logger.info('generateNftOriginal', 'Updating IPFS and ICP URLs in the database');
+    Logger.info('generateNftOriginal', logKey, 'Updating IPFS and ICP URLs in the database');
     await NFTModel.updateOne(
       { _id: mongoData._id },
       {
@@ -414,7 +441,12 @@ export const generateNftOriginal = async (
       }
     );
   } catch (error) {
-    Logger.error('generateNftOriginal', 'Error updating NFT in bdd', (error as Error).message);
+    Logger.error(
+      'generateNftOriginal',
+      logKey,
+      'Error updating NFT in bdd',
+      (error as Error).message
+    );
   }
 
   await mongoUserService.updateUserOperationCounter(channel_user_id, 'mint_nft');
@@ -424,12 +456,13 @@ export const generateNftOriginal = async (
   if (lastBotMsgDelaySeconds > 0) {
     Logger.log(
       'generateNftOriginal',
+      logKey,
       `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`
     );
     await delaySeconds(lastBotMsgDelaySeconds);
   }
   await sendMintNotification(userWalletByChainId.wallet_proxy, channel_user_id, nftMintedId);
-  Logger.log('generateNftOriginal', 'NFT minting end.');
+  Logger.log('generateNftOriginal', logKey, 'NFT minting end.');
 };
 
 /**
@@ -446,6 +479,7 @@ export const generateNftCopy = async (
   reply: FastifyReply
   // eslint-disable-next-line consistent-return
 ) => {
+  let logKey = `[op:mintNftCopy:${''}]`;
   try {
     if (!request.body) {
       return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
@@ -470,11 +504,13 @@ export const generateNftCopy = async (
       );
     }
 
+    logKey = `[op:mintNftCopy:${channel_user_id}]`;
+
     // Verify that the NFT to copy exists
     const nfts: INFT[] = await NFTModel.find({ id });
     if (!nfts || nfts.length === 0) {
       const msgError = `NFT with id ${id} not found`;
-      Logger.info('generateNftCopy', `${msgError}`);
+      Logger.info('generateNftCopy', logKey, `${msgError}`);
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, msgError);
     }
@@ -482,13 +518,16 @@ export const generateNftCopy = async (
 
     const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
     if (userOperations) {
-      const validationError = `Concurrent mint copy NFT for phone: ${channel_user_id}.`;
-      Logger.info('generateNftCopy', `${validationError}`);
-      // must return 200, so the bot displays the message instead of an error!
-      return await returnSuccessResponse(
-        reply,
-        'You have another operation in progress. Please wait until it is finished.'
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.concurrent_operation
       );
+      await persistNotification(channel_user_id, message, NotificationEnum.concurrent_operation);
+
+      const validationError = `Concurrent mint copy NFT for phone: ${channel_user_id}.`;
+      Logger.info('generateNftCopy', logKey, `${validationError}`);
+      // must return 200, so the bot displays the message instead of an error!
+      return await returnSuccessResponse(reply, message);
     }
 
     const userReachedOpLimit = await userReachedOperationLimit(
@@ -501,13 +540,16 @@ export const generateNftCopy = async (
         channel_user_id,
         NotificationEnum.daily_limit_reached
       );
-      Logger.info('generateNftOriginal', `${message}`);
+
+      await persistNotification(channel_user_id, message, NotificationEnum.daily_limit_reached);
+
+      Logger.info('generateNftOriginal', logKey, `${message}`);
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, message);
     }
 
     // optimistic response
-    Logger.log('generateNftOriginal', 'sending notification: operation in progress');
+    Logger.log('generateNftOriginal', logKey, 'sending notification: operation in progress');
     await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
 
     await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
@@ -518,7 +560,7 @@ export const generateNftCopy = async (
 
     if (!nftCopyOf.original) {
       // If it is being copied from a copy, then the original is sought.
-      Logger.log('generateNftCopy', 'Searching by nft original.');
+      Logger.log('generateNftCopy', logKey, 'Searching by nft original.');
       const nftOriginal: INFT | null = await NFTModel.findOne({
         id: nftCopyOf.copy_of_original
       });
@@ -527,18 +569,18 @@ export const generateNftCopy = async (
         copy_order_original = nftOriginal.total_of_this + 1;
 
         // update total_of_this in the ORIGINAL NFT
-        Logger.log('generateNftCopy', 'Updating original NFT total_of_this field.');
+        Logger.log('generateNftCopy', logKey, 'Updating original NFT total_of_this field.');
         await NFTModel.updateOne({ _id: nftOriginal._id }, { $inc: { total_of_this: 1 } });
       }
     }
 
-    Logger.log('generateNftCopy', 'Saving NFT copy in database');
+    Logger.log('generateNftCopy', logKey, 'Saving NFT copy in database');
     const fastify = request.server;
     const chatterpayImplementation: string = fastify.networkConfig.contracts.chatterPayAddress;
     const user: IUser = await getOrCreateUser(channel_user_id, chatterpayImplementation);
     const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, DEFAULT_CHAIN_ID);
     if (!userWallet) {
-      Logger.warn('generateNftCopy', 'Wallet User doesnt exists.');
+      Logger.warn('generateNftCopy', logKey, 'Wallet User doesnt exists.');
       await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
       return await returnErrorResponse(reply, 400, 'Wallet User doesnt exists.');
     }
@@ -561,7 +603,7 @@ export const generateNftCopy = async (
     });
 
     // update total_of_this in the copied NFT
-    Logger.log('generateNftCopy', 'Updating copied NFT total_of_this field.');
+    Logger.log('generateNftCopy', logKey, 'Updating copied NFT total_of_this field.');
     await NFTModel.updateOne({ _id: nftCopyOf._id }, { $inc: { total_of_this: 1 } });
 
     // mint
@@ -574,7 +616,7 @@ export const generateNftCopy = async (
       );
     } catch (error) {
       await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
-      Logger.error('generateNftCopy', error);
+      Logger.error('generateNftCopy', logKey, error);
       return await Promise.resolve();
     }
 
@@ -595,7 +637,11 @@ export const generateNftCopy = async (
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
 
     if (lastBotMsgDelaySeconds > 0) {
-      Logger.log('generateNftCopy', `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`);
+      Logger.log(
+        'generateNftCopy',
+        logKey,
+        `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`
+      );
       await delaySeconds(lastBotMsgDelaySeconds);
     }
     await sendMintNotification(
@@ -604,9 +650,9 @@ export const generateNftCopy = async (
       nftMintData.tokenId.toString()
     );
 
-    Logger.log('generateNftCopy', 'NFT copy end.');
+    Logger.log('generateNftCopy', logKey, 'NFT copy end.');
   } catch (error) {
-    Logger.error('generateNftCopy', (error as Error).message);
+    Logger.error('generateNftCopy', logKey, (error as Error).message);
   }
 };
 

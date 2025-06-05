@@ -27,20 +27,18 @@ export const createWallet = async (
   }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
+  let logKey = `[op:createWallet:${''}]`;
+
   try {
-    // Check if the request body is present
     if (!request.body) {
       return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
 
     const { channel_user_id } = request.body;
-
-    // Check if channel_user_id is provided
     if (!channel_user_id) {
       return await returnErrorResponse(reply, 400, 'Missing channel_user_id in body');
     }
 
-    // Validate phone number format
     if (!isValidPhoneNumber(channel_user_id)) {
       return await returnErrorResponse(
         reply,
@@ -50,7 +48,9 @@ export const createWallet = async (
     }
 
     const fastify = request.server;
+    logKey = `[op:createWallet:${channel_user_id || ''}]`;
 
+    // Intentionally leave a blank line at the beginning of the message!
     const NETWORK_WARNING = `
 
 ⚠️ Important: If you plan to send crypto to this wallet from an external platform (like a wallet or exchange), make sure to use the *${fastify.networkConfig.name} network* and double-check the address.
@@ -71,16 +71,16 @@ ChatterPay can’t reverse transactions made outside of our app, such as when th
 
       if (userWallet) {
         // Return the existing wallet address if found
-        return await returnSuccessResponse(
-          reply,
-          `The user already exists, your wallet is ${userWallet.wallet_proxy}. 
-          ${NETWORK_WARNING}`
-        );
+        const message = `The user already exists, your wallet is ${userWallet.wallet_proxy}. 
+          ${NETWORK_WARNING}`;
+        Logger.log('createWallet', logKey, message);
+        return await returnSuccessResponse(reply, message);
       }
 
       // Create a new wallet if not found
       Logger.log(
         'createWallet',
+        logKey,
         `Creating wallet for phone number ${channel_user_id} and chain_id ${chain_id}`
       );
       const chatterpayImplementationContract: string =
@@ -92,10 +92,10 @@ ChatterPay can’t reverse transactions made outside of our app, such as when th
       );
 
       if (result) {
-        // Return the new wallet address
         userWallet = result.newWallet;
 
         if (issuerTokensEnabled) {
+          Logger.log('createWallet', logKey, `Issue Tokens for ${userWallet.wallet_proxy}`);
           await tryIssueTokens(
             userWallet.wallet_proxy,
             request.server.tokens,
@@ -103,30 +103,25 @@ ChatterPay can’t reverse transactions made outside of our app, such as when th
           );
         }
 
-        return await returnSuccessResponse(
-          reply,
-          `The wallet was created successfully!. 
-          ${NETWORK_WARNING}`,
-          {
-            walletAddress: userWallet.wallet_proxy
-          }
-        );
+        const returnMsg = `The wallet was created successfully!. 
+            ${NETWORK_WARNING}`;
+        Logger.log('createWallet', logKey, `${returnMsg},${userWallet.wallet_proxy}`);
+        return await returnSuccessResponse(reply, returnMsg, {
+          walletAddress: userWallet.wallet_proxy
+        });
       }
 
-      // Return an error if wallet creation fails
-      return await returnErrorResponse(
-        reply,
-        400,
-        `Error creating wallet for user '${channel_user_id}' and chain ${chain_id}`
-      );
+      const errorMsg = `Error creating wallet for user '${channel_user_id}' and chain ${chain_id}`;
+      Logger.error('createWallet', logKey, errorMsg);
+      return await returnErrorResponse(reply, 400, errorMsg);
     }
 
-    // Create a new user and wallet if the user does not exist
-    Logger.log('createWallet', `Creating wallet for phone number ${channel_user_id}`);
+    Logger.log('createWallet', logKey, `Creating wallet for phone number ${channel_user_id}`);
     const chatterpayImplementation = fastify.networkConfig.contracts.chatterPayAddress;
     const user: IUser = await createUserWithWallet(channel_user_id, chatterpayImplementation);
 
     if (issuerTokensEnabled) {
+      Logger.log('createWallet', logKey, `Issue Tokens for ${user.wallets[0].wallet_proxy}`);
       await tryIssueTokens(
         user.wallets[0].wallet_proxy,
         request.server.tokens,
@@ -134,18 +129,14 @@ ChatterPay can’t reverse transactions made outside of our app, such as when th
       );
     }
 
-    // Return the wallet address of the newly created user
-    return await returnSuccessResponse(
-      reply,
-      `The wallet was created successfully!. 
-          ${NETWORK_WARNING}`,
-      {
-        walletAddress: user.wallets[0].wallet_proxy
-      }
-    );
+    const returnMsg = `The wallet was created successfully!. 
+          ${NETWORK_WARNING}`;
+    Logger.log('createWallet', logKey, `${returnMsg},${user.wallets[0].wallet_proxy}`);
+    return await returnSuccessResponse(reply, returnMsg, {
+      walletAddress: user.wallets[0].wallet_proxy
+    });
   } catch (error) {
-    // Log and handle errors
-    Logger.error('createWallet', error);
+    Logger.error('createWallet', logKey, error);
     return returnErrorResponse(reply, 400, 'An error occurred while creating the wallet');
   }
 };

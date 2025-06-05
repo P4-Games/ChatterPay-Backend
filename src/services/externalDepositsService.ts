@@ -55,8 +55,8 @@ interface Transfer {
  */
 async function processExternalDeposit(transfer: Transfer, chain_id: number) {
   // First validate if the token is listed and active
-  const isTokenValid = await mongoTokenService.isValidToken(transfer.token, chain_id);
-  if (!isTokenValid) {
+  const tokenObject = await mongoTokenService.getToken(transfer.token, chain_id);
+  if (!tokenObject) {
     Logger.warn(
       'processExternalDeposit',
       `Transfer rejected: Token ${transfer.token} is not listed for chain ${chain_id}`
@@ -75,7 +75,17 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
   );
 
   if (user) {
-    const value = Number((Number(transfer.value) / 1e18).toFixed(4));
+    const value = Number((Number(transfer.value) / 10 ** tokenObject.decimals).toFixed(4));
+
+    // Get token info
+    const networkConfig = await mongoBlockchainService.getNetworkConfig();
+    const blockchainTokens = await Token.find({ chain_id });
+    const tokenInfo = getTokenInfo(networkConfig, blockchainTokens, transfer.token);
+
+    if (!tokenInfo) {
+      Logger.warn('processExternalDeposit', `Token info not found for address: ${transfer.token}`);
+      return;
+    }
 
     // Get token info
     const networkConfig = await mongoBlockchainService.getNetworkConfig();
@@ -104,9 +114,9 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
     try {
       // Send incoming transfer notification message, and record tx data
       await sendReceivedTransferNotification(
-        user.phone_number,
-        user.name,
         transfer.to,
+        null,
+        user.phone_number,
         value.toString(),
         tokenInfo.symbol
       );

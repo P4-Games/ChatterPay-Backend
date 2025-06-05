@@ -10,6 +10,7 @@ import { chatizaloService } from './chatizalo/chatizaloService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { formatIdentifierWithOptionalName } from '../helpers/formatHelper';
+import { mongoNotificationService } from './mongo/mongoNotificationServices';
 import { templateEnum, mongoTemplateService } from './mongo/mongoTemplateService';
 import {
   BOT_DATA_TOKEN,
@@ -107,7 +108,18 @@ export async function sendWalletCreationNotification(
     );
     const formattedMessage = message.replace('[PREDICTED_WALLET_EOA_ADDRESS]', address_of_user);
 
-    pushService.sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.wallet_creation,
+      sendPush: true,
+      sendBot: false, // the controller handles this!
+      title,
+      traceHeader: ''
+    };
+
+    await persistAndSendNotification(sendAndPersistParams);
   } catch (error) {
     Logger.error('sendWalletCreationNotification', error);
     throw error;
@@ -118,7 +130,7 @@ export async function sendWalletCreationNotification(
  * Sends a notification for a received transfer.
  *
  * @param phoneNumberFrom - Sender's phone number.
- * @param nameFrom - Sender's name.
+ * @param nameFrom - Sender's name (optional).
  * @param phoneNumberTo - Recipient's phone number.
  * @param amount - Amount received.
  * @param token - Token symbol or identifier (e.g., ETH, USDT).
@@ -127,7 +139,7 @@ export async function sendWalletCreationNotification(
  */
 export async function sendReceivedTransferNotification(
   phoneNumberFrom: string,
-  nameFrom: string,
+  nameFrom: string | null,
   phoneNumberTo: string,
   amount: string,
   token: string,
@@ -142,7 +154,7 @@ export async function sendReceivedTransferNotification(
 
     const { title, message } = await getNotificationTemplate(
       phoneNumberTo,
-      NotificationEnum.transfer
+      NotificationEnum.incoming_transfer
     );
 
     const formatMessage = (fromNumberAndName: string) =>
@@ -161,16 +173,18 @@ export async function sendReceivedTransferNotification(
     const formattedMessageBot = formatMessage(fromNumberAndName);
     const formattedMessagePush = formatMessage(fromNumberAndNameMasked);
 
-    const payload: chatizaloOperatorReply = {
-      data_token: BOT_DATA_TOKEN!,
-      channel_user_id: phoneNumberTo,
-      message: formattedMessageBot
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: phoneNumberTo,
+      messageBot: formattedMessageBot,
+      messagePush: formattedMessagePush,
+      template: NotificationEnum.incoming_transfer,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader
     };
 
-    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-
-    // Send push notification with masked phone number
-    pushService.sendPushNotificaton(title, formattedMessagePush, phoneNumberTo); // avoid await
+    const data = await persistAndSendNotification(sendAndPersistParams);
     return data;
   } catch (error) {
     Logger.error('sendReceivedTransferNotification', error);
@@ -217,14 +231,19 @@ export async function sendSwapNotification(
       .replaceAll('[EXPLORER]', networkConfig.explorer)
       .replaceAll('[TRANSACTION_HASH]', transactionHash);
 
-    const payload: chatizaloOperatorReply = {
-      data_token: BOT_DATA_TOKEN!,
-      channel_user_id,
-      message: formattedMessage
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.swap,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader
     };
 
-    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-    pushService.sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
+    const data = await persistAndSendNotification(sendAndPersistParams);
+
     return data;
   } catch (error) {
     Logger.error('sendSwapNotification', error);
@@ -258,14 +277,18 @@ export async function sendMintNotification(
       .replaceAll('[ID]', id)
       .replaceAll('[NFTS_SHARE_URL]', CHATTERPAY_NFTS_SHARE_URL);
 
-    const payload: chatizaloOperatorReply = {
-      data_token: BOT_DATA_TOKEN!,
-      channel_user_id,
-      message: formattedMessage
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.mint,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader
     };
 
-    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-    pushService.sendPushNotificaton(title, formattedMessage, channel_user_id); // avoid await
+    const data = await persistAndSendNotification(sendAndPersistParams);
     return data;
   } catch (error) {
     Logger.error('sendMintNotification', (error as Error).message);
@@ -319,16 +342,18 @@ export async function sendOutgoingTransferNotification(
     const formattedMessageBot = formatMessage(toNumberAndName);
     const formattedMessagePush = formatMessage(toNumberAndNameMasked);
 
-    const payload: chatizaloOperatorReply = {
-      data_token: BOT_DATA_TOKEN!,
-      channel_user_id: phoneNumberFrom,
-      message: formattedMessageBot
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: phoneNumberFrom,
+      messageBot: formattedMessageBot,
+      messagePush: formattedMessagePush,
+      template: NotificationEnum.outgoing_transfer,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader
     };
 
-    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-
-    // Send push notification with masked phone number
-    pushService.sendPushNotificaton(title, formattedMessagePush, phoneNumberFrom); // avoid await
+    const data = await persistAndSendNotification(sendAndPersistParams);
     return data;
   } catch (error) {
     Logger.error('sendOutgoingTransferNotification', error);
@@ -359,14 +384,18 @@ export async function sendUserInsufficientBalanceNotification(
       NotificationEnum.user_balance_not_enough
     );
 
-    const payload: chatizaloOperatorReply = {
-      data_token: BOT_DATA_TOKEN!,
-      channel_user_id,
-      message
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: message,
+      messagePush: message,
+      template: NotificationEnum.user_balance_not_enough,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader
     };
 
-    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-    pushService.sendPushNotificaton(title, message, channel_user_id); // avoid await
+    const data = await persistAndSendNotification(sendAndPersistParams);
     return data;
   } catch (error) {
     Logger.error('sendUserInsufficientBalanceNotification', error);
@@ -397,14 +426,18 @@ export async function sendNoValidBlockchainConditionsNotification(
       NotificationEnum.no_valid_blockchain_conditions
     );
 
-    const payload: chatizaloOperatorReply = {
-      data_token: BOT_DATA_TOKEN!,
-      channel_user_id,
-      message
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: message,
+      messagePush: message,
+      template: NotificationEnum.no_valid_blockchain_conditions,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader
     };
 
-    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-    pushService.sendPushNotificaton(title, message, channel_user_id); // avoid await
+    const data = await persistAndSendNotification(sendAndPersistParams);
     return data;
   } catch (error) {
     Logger.error('sendNoValidBlockchainConditionsNotification', error);
@@ -449,14 +482,18 @@ export async function sendInternalErrorNotification(
       NotificationEnum.internal_error
     );
 
-    const payload: chatizaloOperatorReply = {
-      data_token: BOT_DATA_TOKEN!,
-      channel_user_id,
-      message
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: message,
+      messagePush: message,
+      template: NotificationEnum.internal_error,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader
     };
 
-    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-    pushService.sendPushNotificaton(title, message, channel_user_id); // avoid await
+    const data = await persistAndSendNotification(sendAndPersistParams);
     return data;
   } catch (error) {
     Logger.error('sendInternalErrorNotification', error);
@@ -485,14 +522,18 @@ export async function sendConcurrecyOperationNotification(
       NotificationEnum.concurrent_operation
     );
 
-    const payload: chatizaloOperatorReply = {
-      data_token: BOT_DATA_TOKEN!,
-      channel_user_id,
-      message
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: message,
+      messagePush: message,
+      template: NotificationEnum.concurrent_operation,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader
     };
 
-    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-    pushService.sendPushNotificaton(title, message, channel_user_id); // avoid await
+    const data = await persistAndSendNotification(sendAndPersistParams);
     return data;
   } catch (error) {
     Logger.error('SendConcurrecyOperationNotification', error);
@@ -521,14 +562,18 @@ export async function sendDailyLimitReachedNotification(
       NotificationEnum.daily_limit_reached
     );
 
-    const payload: chatizaloOperatorReply = {
-      data_token: BOT_DATA_TOKEN!,
-      channel_user_id,
-      message
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: message,
+      messagePush: message,
+      template: NotificationEnum.daily_limit_reached,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader
     };
 
-    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-    pushService.sendPushNotificaton(title, message, channel_user_id); // intentionally not awaited
+    const data = await persistAndSendNotification(sendAndPersistParams);
     return data;
   } catch (error) {
     Logger.error('sendDailyLimitReachedNotification', error);
@@ -567,17 +612,129 @@ export async function sendOperationOutsideLimitsNotification(
       .replace('[LIMIT_MIN]', minLimit.toString())
       .replace('[LIMIT_MAX]', maxLimit.toString());
 
-    const payload: chatizaloOperatorReply = {
-      data_token: BOT_DATA_TOKEN!,
-      channel_user_id,
-      message: formattedMessage
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.amount_outside_limits,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader
     };
 
-    const data = await chatizaloService.sendBotNotification(payload, traceHeader);
-    pushService.sendPushNotificaton(title, formattedMessage, channel_user_id); // intentionally not awaited
+    const data = await persistAndSendNotification(sendAndPersistParams);
     return data;
   } catch (error) {
     Logger.error('sendOperationOutsideLimitsNotification', error);
     throw error;
+  }
+}
+
+/* ----------------------------------------------------------------------------------------- */
+/* ----------------------------------------------------------------------------------------- */
+
+interface SendAndPersistParams {
+  to: string;
+  messageBot: string;
+  messagePush: string;
+  template: string;
+  sendPush?: boolean;
+  sendBot?: boolean;
+  title?: string; // solo para push
+  traceHeader?: string;
+}
+
+/**
+ * Persists a notification in MongoDB (always with media: 'INTERNAL'),
+ * then optionally sends it via WhatsApp (bot) and/or Push.
+ *
+ * @param {string} to - Recipient identifier (e.g., phone number).
+ * @param {string} messageBot - Message content to be sent and stored.
+ * @param {string} messagePush - Message content to be sent and stored.
+ * @param {string} template - Template identifier used for the notification.
+ * @param {boolean} [sendPush=false] - Whether to send the notification via Push.
+ * @param {boolean} [sendBot=false] - Whether to send the notification via WhatsApp bot.
+ * @param {string} [title] - Title for the Push notification (required if sendPush is true).
+ * @param {string} [traceHeader] - Optional trace header for observability.
+ *
+ * @returns {Promise<string | null>} The bot service response if sent via WhatsApp, otherwise null.
+ */
+export async function persistAndSendNotification({
+  to,
+  messageBot,
+  messagePush,
+  template,
+  sendPush = false,
+  sendBot = false,
+  title,
+  traceHeader
+}: SendAndPersistParams): Promise<string | null> {
+  const sent_date = new Date();
+
+  try {
+    let data: string | null = null;
+
+    // 1. Persist always with media INTERNAL
+    await mongoNotificationService.createNotification({
+      to,
+      message: messageBot,
+      template,
+      media: 'INTERNAL',
+      sent_date,
+      read_date: undefined,
+      deleted_date: undefined
+    });
+
+    // 2. Send via Chatizalo if flag is true
+    if (sendBot) {
+      const payload: chatizaloOperatorReply = {
+        data_token: BOT_DATA_TOKEN!,
+        channel_user_id: to,
+        message: messageBot
+      };
+      data = await chatizaloService.sendBotNotification(payload, traceHeader);
+    }
+
+    // 3. Send via PUSH if flag is true
+    if (sendPush && title) {
+      pushService.sendPushNotificaton(title, messagePush, to); // fire & forget (avoid await)
+    }
+
+    return data;
+  } catch (error) {
+    Logger.error('sendAndPersistNotification', error);
+    throw error;
+  }
+}
+
+/**
+ * Persists a notification in MongoDB with media: 'INTERNAL',
+ * without sending it via bot or push.
+ *
+ * @param {string} to - Recipient identifier (e.g., phone number).
+ * @param {string} message - Message content to store.
+ * @param {string} template - Template identifier.
+ * @returns {Promise<void>}
+ */
+export async function persistNotification(
+  to: string,
+  message: string,
+  template: string
+): Promise<void> {
+  const sent_date = new Date();
+
+  try {
+    await mongoNotificationService.createNotification({
+      to,
+      message,
+      template,
+      media: 'INTERNAL',
+      sent_date,
+      read_date: undefined,
+      deleted_date: undefined
+    });
+  } catch (error) {
+    Logger.error('persistNotification', error);
   }
 }
