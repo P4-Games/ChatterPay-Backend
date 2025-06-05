@@ -18,7 +18,6 @@ import { mongoUserService } from '../services/mongo/mongoUserService';
 import { userReachedOperationLimit } from '../services/blockchainService';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
-import { sendMintNotification, getNotificationTemplate } from '../services/notificationService';
 import {
   returnErrorResponse,
   returnSuccessResponse,

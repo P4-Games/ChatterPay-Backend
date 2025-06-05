@@ -87,16 +87,6 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
       return;
     }
 
-    // Get token info
-    const networkConfig = await mongoBlockchainService.getNetworkConfig();
-    const blockchainTokens = await Token.find({ chain_id });
-    const tokenInfo = getTokenInfo(networkConfig, blockchainTokens, transfer.token);
-
-    if (!tokenInfo) {
-      Logger.warn('processExternalDeposit', `Token info not found for address: ${transfer.token}`);
-      return;
-    }
-
     Logger.log('processExternalDeposit', 'Updating swap transactions in database.');
     const transactionData: TransactionData = {
       tx: transfer.id,
