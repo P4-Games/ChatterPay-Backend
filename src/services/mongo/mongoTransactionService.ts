@@ -8,7 +8,7 @@ export const mongoTransactionService = {
    */
   saveTransaction: async (transactionData: TransactionData) => {
     try {
-      const { tx, walletFrom, walletTo, amount, fee, token, type, status, chain_id } =
+      const { tx, walletFrom, walletTo, amount, fee, token, type, status, chain_id, date } =
         transactionData;
 
       await Transaction.create({
@@ -16,7 +16,7 @@ export const mongoTransactionService = {
         wallet_from: walletFrom,
         wallet_to: walletTo,
         type,
-        date: new Date(),
+        date: date || new Date(),
         status,
         amount,
         fee,
