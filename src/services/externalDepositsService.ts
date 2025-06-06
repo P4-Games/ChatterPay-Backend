@@ -4,10 +4,10 @@ import Token from '../models/tokenModel';
 import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
+import Blockchain from '../models/blockchainModel';
 import { TransactionData } from '../types/commonType';
 import { mongoTokenService } from './mongo/mongoTokenService';
 import { GRAPH_API_EXTERNAL_DEPOSITS_URL } from '../config/constants';
-import { LastProcessedBlock } from '../models/lastProcessedBlockModel';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { sendReceivedTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
@@ -56,6 +56,7 @@ interface Transfer {
 async function processExternalDeposit(transfer: Transfer, chain_id: number) {
   // First validate if the token is listed and active
   const tokenObject = await mongoTokenService.getToken(transfer.token, chain_id);
+
   if (!tokenObject) {
     Logger.warn(
       'processExternalDeposit',
@@ -133,13 +134,13 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
 
 /**
  * Fetches and processes external deposits for users in the ecosystem.
+ *
  * @async
+ * @param {string} routerAddress - The address of the Uniswap router (used to filter internal transfers).
+ * @param {number} chain_id - The ID of the blockchain network being processed.
+ * @returns {Promise<string>} A message indicating the result of the processing.
  */
-export async function fetchExternalDeposits(
-  networkName: string,
-  routerAddress: string,
-  chain_id: number
-) {
+export async function fetchExternalDeposits(routerAddress: string, chain_id: number) {
   try {
     // Get the last processed timestamp
     const lastProcessedBlock = await LastProcessedBlock.findOne({
