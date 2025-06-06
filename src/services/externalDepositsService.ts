@@ -65,11 +65,13 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
   }
 
   const normalizedTo = transfer.to.toLowerCase();
-  // Busca usuarios que tengan al menos un wallet_proxy que coincida (case-insensitive)
+
+  // Find users with at least one wallet_proxy that matches (case-insensitive)
   const candidates = await UserModel.find({
     'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') }
   });
-  // Filtra en memoria para asegurar coincidencia exacta en lowercase
+
+  // Filter in memory to ensure exact lowercase match
   const user = candidates.find((u) =>
     u.wallets.some((w) => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
   );
