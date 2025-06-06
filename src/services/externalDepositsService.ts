@@ -97,7 +97,8 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
       token: tokenInfo.symbol,
       type: 'deposit',
       status: 'completed',
-      chain_id
+      chain_id,
+      date: new Date(Number(transfer.blockTimestamp) * 1000)
     };
     await mongoTransactionService.saveTransaction(transactionData);
 
