@@ -142,19 +142,28 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
  */
 export async function fetchExternalDeposits(routerAddress: string, chain_id: number) {
   try {
-    // Get the last processed timestamp
-    const lastProcessedBlock = await LastProcessedBlock.findOne({
-      networkName
-    });
-    const fromTimestamp = lastProcessedBlock ? lastProcessedBlock.blockNumber : 0;
+    const blockchain = await Blockchain.findOne({ chainId: chain_id });
 
-    // Prepare variables for the GraphQL query
+    if (!blockchain) {
+      const message = `No network found for chain_id ${chain_id}`;
+      Logger.error('fetchExternalDeposits', message);
+      return message;
+    }
+
+    if (!blockchain.externalDeposits) {
+      const message = `Missing externalDeposits structure in bdd for network ${chain_id}`;
+      Logger.error('fetchExternalDeposits', message);
+      return message;
+    }
+
+    const fromTimestamp = blockchain.externalDeposits?.lastBlockProcessed || 0;
     const variables = {
       lastTimestamp: fromTimestamp
     };
+
     Logger.log(
       'fetchExternalDeposits',
-      `Fetching chain_id ${chain_id}, fromTimestamp: ${fromTimestamp}, variables: ${JSON.stringify(variables)}`
+      `Fetching network (${chain_id}), fromTimestamp: ${fromTimestamp}, variables: ${JSON.stringify(variables)}`
     );
 
     // Execute the GraphQL query
@@ -179,11 +188,10 @@ export async function fetchExternalDeposits(routerAddress: string, chain_id: num
       const maxTimestampProcessed = Math.max(
         ...externalDeposits.map((t) => parseInt(t.blockTimestamp, 10))
       );
-      await LastProcessedBlock.findOneAndUpdate(
-        { networkName },
-        { blockNumber: maxTimestampProcessed },
-        { upsert: true }
-      );
+
+      blockchain.externalDeposits.lastBlockProcessed = maxTimestampProcessed;
+      blockchain.externalDeposits.updatedAt = new Date();
+      await blockchain.save();
       return `Processed external deposits up to timestamp ${maxTimestampProcessed}`;
     }
 
