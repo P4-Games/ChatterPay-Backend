@@ -4,10 +4,10 @@ import Token from '../models/tokenModel';
 import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
+import Blockchain from '../models/blockchainModel';
 import { TransactionData } from '../types/commonType';
 import { mongoTokenService } from './mongo/mongoTokenService';
 import { GRAPH_API_EXTERNAL_DEPOSITS_URL } from '../config/constants';
-import { LastProcessedBlock } from '../models/lastProcessedBlockModel';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { sendReceivedTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
@@ -56,6 +56,7 @@ interface Transfer {
 async function processExternalDeposit(transfer: Transfer, chain_id: number) {
   // First validate if the token is listed and active
   const tokenObject = await mongoTokenService.getToken(transfer.token, chain_id);
+
   if (!tokenObject) {
     Logger.warn(
       'processExternalDeposit',
@@ -65,11 +66,13 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
   }
 
   const normalizedTo = transfer.to.toLowerCase();
-  // Busca usuarios que tengan al menos un wallet_proxy que coincida (case-insensitive)
+
+  // Find users with at least one wallet_proxy that matches (case-insensitive)
   const candidates = await UserModel.find({
     'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') }
   });
-  // Filtra en memoria para asegurar coincidencia exacta en lowercase
+
+  // Filter in memory to ensure exact lowercase match
   const user = candidates.find((u) =>
     u.wallets.some((w) => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
   );
@@ -97,7 +100,8 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
       token: tokenInfo.symbol,
       type: 'deposit',
       status: 'completed',
-      chain_id
+      chain_id,
+      date: new Date(Number(transfer.blockTimestamp) * 1000)
     };
     await mongoTransactionService.saveTransaction(transactionData);
 
@@ -130,27 +134,36 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
 
 /**
  * Fetches and processes external deposits for users in the ecosystem.
+ *
  * @async
+ * @param {string} routerAddress - The address of the Uniswap router (used to filter internal transfers).
+ * @param {number} chain_id - The ID of the blockchain network being processed.
+ * @returns {Promise<string>} A message indicating the result of the processing.
  */
-export async function fetchExternalDeposits(
-  networkName: string,
-  routerAddress: string,
-  chain_id: number
-) {
+export async function fetchExternalDeposits(routerAddress: string, chain_id: number) {
   try {
-    // Get the last processed timestamp
-    const lastProcessedBlock = await LastProcessedBlock.findOne({
-      networkName
-    });
-    const fromTimestamp = lastProcessedBlock ? lastProcessedBlock.blockNumber : 0;
+    const blockchain = await Blockchain.findOne({ chainId: chain_id });
 
-    // Prepare variables for the GraphQL query
+    if (!blockchain) {
+      const message = `No network found for chain_id ${chain_id}`;
+      Logger.error('fetchExternalDeposits', message);
+      return message;
+    }
+
+    if (!blockchain.externalDeposits) {
+      const message = `Missing externalDeposits structure in bdd for network ${chain_id}`;
+      Logger.error('fetchExternalDeposits', message);
+      return message;
+    }
+
+    const fromTimestamp = blockchain.externalDeposits?.lastBlockProcessed || 0;
     const variables = {
       lastTimestamp: fromTimestamp
     };
+
     Logger.log(
       'fetchExternalDeposits',
-      `Fetching chain_id ${chain_id}, fromTimestamp: ${fromTimestamp}, variables: ${JSON.stringify(variables)}`
+      `Fetching network (${chain_id}), fromTimestamp: ${fromTimestamp}, variables: ${JSON.stringify(variables)}`
     );
 
     // Execute the GraphQL query
@@ -175,11 +188,10 @@ export async function fetchExternalDeposits(
       const maxTimestampProcessed = Math.max(
         ...externalDeposits.map((t) => parseInt(t.blockTimestamp, 10))
       );
-      await LastProcessedBlock.findOneAndUpdate(
-        { networkName },
-        { blockNumber: maxTimestampProcessed },
-        { upsert: true }
-      );
+
+      blockchain.externalDeposits.lastBlockProcessed = maxTimestampProcessed;
+      blockchain.externalDeposits.updatedAt = new Date();
+      await blockchain.save();
       return `Processed external deposits up to timestamp ${maxTimestampProcessed}`;
     }
 

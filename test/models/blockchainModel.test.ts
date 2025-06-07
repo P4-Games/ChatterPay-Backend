@@ -41,6 +41,10 @@ describe('Blockchain Model', () => {
       marketplaceOpenseaUrl: 'https://opensea.io',
       environment: 'production',
       supportsEIP1559: true,
+      externalDeposits: {
+        lastBlockProcessed: 123456,
+        updatedAt: new Date()
+      },
       contracts: {
         entryPoint: '0xEntryPointAddress',
         factoryAddress: '0xFactoryAddress',
@@ -114,5 +118,7 @@ describe('Blockchain Model', () => {
     expect(savedBlockchain.balances.paymasterMinBalance).toBe('0.05');
     expect(savedBlockchain.limits.transfer.L1.D).toBe(30);
     expect(savedBlockchain.limits.mint_nft.L2.D).toBe(40);
+    expect(savedBlockchain.externalDeposits.lastBlockProcessed).toBe(123456);
+    expect(savedBlockchain.externalDeposits.updatedAt).toBeInstanceOf(Date);
   });
 });

@@ -246,6 +246,7 @@ export async function checkBlockchainConditions(
       );
     }
 
+    /*
     const userWalletAddress = await setupContractsResult.signer.getAddress();
     const checkUserEthBalanceResult = await ensureUserSignerHasEnoughEth(
       networkConfig.balances,
@@ -258,6 +259,7 @@ export async function checkBlockchainConditions(
         `User Wallet ${setupContractsResult.proxy.proxyAddress}, insufficient ETH balance.`
       );
     }
+    */
 
     const entrypointABI = await getEntryPointABI();
     const entrypointContract = new ethers.Contract(

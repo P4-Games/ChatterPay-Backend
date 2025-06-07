@@ -22,6 +22,11 @@ export interface BlockchainOperationLimits {
   L2: BlockchainLimitDetail;
 }
 
+export interface ExternalDeposits {
+  lastBlockProcessed: number;
+  updatedAt: Date;
+}
+
 export interface IBlockchain extends Document {
   name: string;
   manteca_name: string;
@@ -33,6 +38,7 @@ export interface IBlockchain extends Document {
   marketplaceOpenseaUrl: string;
   environment: string;
   supportsEIP1559: boolean;
+  externalDeposits: ExternalDeposits;
   contracts: {
     entryPoint: string;
     factoryAddress: string;
@@ -86,6 +92,14 @@ const operationLimitsSchema = new Schema<BlockchainOperationLimits>({
   L2: { type: limitDetailSchema, required: true }
 });
 
+const externalDepositsSchema = new Schema<ExternalDeposits>(
+  {
+    lastBlockProcessed: { type: Number, required: true },
+    updatedAt: { type: Date, default: Date.now }
+  },
+  { _id: false }
+);
+
 const blockchainSchema = new Schema<IBlockchain>({
   name: { type: String, required: true },
   manteca_name: { type: String, required: true },
@@ -97,6 +111,7 @@ const blockchainSchema = new Schema<IBlockchain>({
   marketplaceOpenseaUrl: { type: String, required: true },
   environment: { type: String, required: true },
   supportsEIP1559: { type: Boolean, required: true },
+  externalDeposits: { type: externalDepositsSchema, required: true },
   contracts: {
     entryPoint: { type: String, required: false },
     factoryAddress: { type: String, required: false },
