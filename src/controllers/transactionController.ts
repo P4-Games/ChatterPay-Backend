@@ -506,7 +506,7 @@ export const makeTransaction = async (
     } else {
       const chatterpayProxyAddress: string = networkConfig.contracts.chatterPayAddress;
       const { factoryAddress } = networkConfig.contracts;
-      toUser = await getOrCreateUser(channel_user_id, chatterpayProxyAddress, factoryAddress);
+      toUser = await getOrCreateUser(to, chatterpayProxyAddress, factoryAddress);
       toAddress = toUser.wallets[0].wallet_proxy;
     }
     userCreationSpan?.endSpan();
