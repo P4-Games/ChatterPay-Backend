@@ -45,12 +45,14 @@ const updateOperationCount = async (
  * This function handles user creation, wallet generation, and push notifications.
  *
  * @param {string} phoneNumber - The phone number to create the wallet for.
- * @param {string} chatterpayImplementation - The address of the ChatterPay smart contract.
+ * @param {string} chatterpayProxyAddress - The address of the ChatterPay Proxy smart contract.
+ * @param {string} factoryAddress - The address of the Factory smart contract.
  * @returns {Promise<IUser>} The newly created user with the wallet.
  */
 export const createUserWithWallet = async (
   phoneNumber: string,
-  chatterpayImplementation: string
+  chatterpayProxyAddress: string,
+  factoryAddress: string
 ): Promise<IUser> => {
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
   const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(formattedPhoneNumber);
@@ -62,7 +64,8 @@ export const createUserWithWallet = async (
         wallet_proxy: predictedWallet.proxyAddress,
         wallet_eoa: predictedWallet.EOAAddress,
         sk_hashed: predictedWallet.privateKey,
-        chatterpay_implementation_address: chatterpayImplementation,
+        created_with_chatterpay_proxy_address: chatterpayProxyAddress,
+        created_with_factory_address: factoryAddress,
         chain_id: DEFAULT_CHAIN_ID,
         status: 'active'
       }
@@ -124,13 +127,15 @@ export const createUserWithWallet = async (
  *
  * @param {string} phoneNumber - The phone number of the user to add the wallet to.
  * @param {number} chainId - The chain_id to associate with the new wallet.
- * @param {string} chatterpayImplementationAddress - The address of the ChatterPay smart contract.
+ * @param {string} chatterpayProxyAddress - The address of the ChatterPay Proxy smart contract.
+ * @param {string} factoryAddress - The address of the Factory smart contract.
  * @returns {Promise<{ user: IUser, newWallet: IUserWallet } | null>} The updated user with the new wallet or null if the wallet already exists.
  */
 export const addWalletToUser = async (
   phoneNumber: string,
   chainId: number,
-  chatterpayImplementationAddress: string
+  chatterpayProxyAddress: string,
+  factoryAddress: string
 ): Promise<{ user: IUser; newWallet: IUserWallet } | null> => {
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
   const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(formattedPhoneNumber);
@@ -155,7 +160,8 @@ export const addWalletToUser = async (
     wallet_proxy: predictedWallet.proxyAddress,
     wallet_eoa: predictedWallet.EOAAddress,
     sk_hashed: predictedWallet.privateKey,
-    chatterpay_implementation_address: chatterpayImplementationAddress,
+    created_with_chatterpay_proxy_address: chatterpayProxyAddress,
+    created_with_factory_address: factoryAddress,
     chain_id: chainId,
     status: 'active'
   };
@@ -234,12 +240,14 @@ export const getUserWallet = async (
  * This function checks if the user exists and creates one if necessary.
  *
  * @param {string} phoneNumber - The phone number of the user.
- * @param {string} chatterpayImplementation - The address of the ChatterPay smart contract.
+ * @param {string} chatterpayProxyAddress - The address of the ChatterPay Proxy smart contract.
+ * @param {string} factoryAddress - The address of the Factory smart contract.
  * @returns {Promise<IUser>} The user object, either existing or newly created.
  */
 export const getOrCreateUser = async (
   phoneNumber: string,
-  chatterpayImplementation: string
+  chatterpayProxyAddress: string,
+  factoryAddress: string
 ): Promise<IUser> => {
   const user = await mongoUserService.getUser(phoneNumber);
 
@@ -249,7 +257,11 @@ export const getOrCreateUser = async (
     'addWalletToUser',
     `Phone number ${phoneNumber} not registered in ChatterPay, registering...`
   );
-  const newUser: IUser = await createUserWithWallet(phoneNumber, chatterpayImplementation);
+  const newUser: IUser = await createUserWithWallet(
+    phoneNumber,
+    chatterpayProxyAddress,
+    factoryAddress
+  );
 
   Logger.log(
     'addWalletToUser',

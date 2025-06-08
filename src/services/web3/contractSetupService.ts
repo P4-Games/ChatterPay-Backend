@@ -2,29 +2,36 @@ import { ethers } from 'ethers';
 
 import { SIGNING_KEY } from '../../config/constants';
 import { IBlockchain } from '../../models/blockchainModel';
-import { SetupContractReturn } from '../../types/commonType';
+import { IUser, IUserWallet } from '../../models/userModel';
 import { getERC20ABI, getChatterpayABI } from './abiService';
-import { computeProxyAddressFromPhone } from '../predictWalletService';
+import { generatePrivateKey } from '../../helpers/SecurityHelper';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
+import { ComputedAddress, SetupContractReturn } from '../../types/commonType';
 
 /**
  * Sets up the necessary contracts and providers for blockchain interaction.
  * @param blockchain - The blockchain configuration.
- * @param privateKey - The private key for the signer.
- * @param fromNumber - The phone number to compute the proxy address.
+ * @param user - usser to compute private key and proxy-wallet
  * @returns An object containing the setup contracts and providers.
  * @throws Error if the chain ID is unsupported or the bundler URL is invalid.
  */
 export async function setupContracts(
   blockchain: IBlockchain,
-  privateKey: string,
-  fromNumber: string
+  user: IUser
 ): Promise<SetupContractReturn> {
   const network = await mongoBlockchainService.getNetworkConfig();
   const provider = new ethers.providers.JsonRpcProvider(network.rpc);
+
+  const privateKey = generatePrivateKey(user.phone_number, blockchain.chainId.toString());
   const signer = new ethers.Wallet(privateKey, provider);
   const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-  const proxy = await computeProxyAddressFromPhone(fromNumber);
+  const userWallet: IUserWallet = user.wallets[0];
+  const computedAddress: ComputedAddress = {
+    proxyAddress: userWallet.wallet_proxy,
+    EOAAddress: userWallet.wallet_eoa,
+    privateKey: userWallet.sk_hashed,
+    privateKeyNotHashed: privateKey
+  };
   const accountExists = true;
 
   const chatterpayABI = await getChatterpayABI();
@@ -39,7 +46,7 @@ export async function setupContracts(
     signer,
     backendSigner,
     chatterPay: chatterPayContract,
-    proxy,
+    proxy: computedAddress,
     accountExists
   };
 
