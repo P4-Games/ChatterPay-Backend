@@ -127,13 +127,15 @@ export const createUserWithWallet = async (
  *
  * @param {string} phoneNumber - The phone number of the user to add the wallet to.
  * @param {number} chainId - The chain_id to associate with the new wallet.
- * @param {string} chatterpayImplementationAddress - The address of the ChatterPay smart contract.
+ * @param {string} chatterpayProxyAddress - The address of the ChatterPay Proxy smart contract.
+ * @param {string} factoryAddress - The address of the Factory smart contract.
  * @returns {Promise<{ user: IUser, newWallet: IUserWallet } | null>} The updated user with the new wallet or null if the wallet already exists.
  */
 export const addWalletToUser = async (
   phoneNumber: string,
   chainId: number,
-  chatterpayImplementationAddress: string
+  chatterpayProxyAddress: string,
+  factoryAddress: string
 ): Promise<{ user: IUser; newWallet: IUserWallet } | null> => {
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
   const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(formattedPhoneNumber);
@@ -158,7 +160,8 @@ export const addWalletToUser = async (
     wallet_proxy: predictedWallet.proxyAddress,
     wallet_eoa: predictedWallet.EOAAddress,
     sk_hashed: predictedWallet.privateKey,
-    created_with_chatterpay_proxy_address: chatterpayImplementationAddress,
+    created_with_chatterpay_proxy_address: chatterpayProxyAddress,
+    created_with_factory_address: factoryAddress,
     chain_id: chainId,
     status: 'active'
   };
