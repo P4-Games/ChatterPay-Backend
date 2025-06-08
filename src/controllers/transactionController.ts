@@ -474,7 +474,7 @@ export const makeTransaction = async (
       : undefined;
 
     const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
-      await checkBlockchainConditions(networkConfig, channel_user_id);
+      await checkBlockchainConditions(networkConfig, fromUser);
 
     if (!checkBlockchainConditionsResult.success) {
       await sendNoValidBlockchainConditionsNotification(
