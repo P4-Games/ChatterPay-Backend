@@ -62,7 +62,7 @@ export const createUserWithWallet = async (
         wallet_proxy: predictedWallet.proxyAddress,
         wallet_eoa: predictedWallet.EOAAddress,
         sk_hashed: predictedWallet.privateKey,
-        chatterpay_implementation_address: chatterpayImplementation,
+        created_with_chatterpay_proxy_address: chatterpayImplementation,
         chain_id: DEFAULT_CHAIN_ID,
         status: 'active'
       }
@@ -155,7 +155,7 @@ export const addWalletToUser = async (
     wallet_proxy: predictedWallet.proxyAddress,
     wallet_eoa: predictedWallet.EOAAddress,
     sk_hashed: predictedWallet.privateKey,
-    chatterpay_implementation_address: chatterpayImplementationAddress,
+    created_with_chatterpay_proxy_address: chatterpayImplementationAddress,
     chain_id: chainId,
     status: 'active'
   };
