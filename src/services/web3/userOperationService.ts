@@ -1,6 +1,6 @@
 import PQueue from 'p-queue';
-import { ethers, BigNumber } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
+import { ethers, BigNumber, TypedDataField, TypedDataDomain } from 'ethers';
 
 import { gasService } from './gasService';
 import { Logger } from '../../helpers/loggerHelper';
@@ -175,6 +175,61 @@ export async function signUserOperation(
   };
 }
 
+/**
+ * Signs a UserOperation using EIP-712 typed data signature.
+ * This method provides replay protection across chains and contracts,
+ * and is fully compliant with ERC-4337 standards.
+ *
+ * @param {PackedUserOperation} userOperation - The user operation to be signed.
+ * @param {string} entryPointAddress - Address of the EntryPoint contract.
+ * @param {ethers.Wallet} signer - Signer that will sign the operation (must support _signTypedData).
+ * @param {string} chatterPayAddress - The ChatterPay proxy wallet address (verifyingContract).
+ * @param {number} chainId - The ID of the blockchain network where the signature will be used.
+ * @returns {Promise<PackedUserOperation>} - A user operation object with the EIP-712 signature included.
+ */
+export async function signUserOperationEIP712(
+  userOperation: PackedUserOperation,
+  entryPointAddress: string,
+  signer: ethers.Wallet,
+  chatterPayAddress: string,
+  chainId: number
+): Promise<PackedUserOperation> {
+  const domain: TypedDataDomain = {
+    name: 'ChatterPayWallet',
+    version: '1.0.0',
+    chainId,
+    verifyingContract: chatterPayAddress
+  };
+
+  const types: Record<string, TypedDataField[]> = {
+    UserOperation: [
+      { name: 'sender', type: 'address' },
+      { name: 'nonce', type: 'uint256' },
+      { name: 'initCode', type: 'bytes' },
+      { name: 'callData', type: 'bytes' },
+      { name: 'callGasLimit', type: 'uint256' },
+      { name: 'verificationGasLimit', type: 'uint256' },
+      { name: 'preVerificationGas', type: 'uint256' },
+      { name: 'maxFeePerGas', type: 'uint256' },
+      { name: 'maxPriorityFeePerGas', type: 'uint256' },
+      { name: 'paymasterAndData', type: 'bytes' },
+      { name: 'signature', type: 'bytes' }
+    ]
+  };
+
+  const userOpToSign = {
+    ...userOperation,
+    signature: '0x'
+  };
+
+  const signature = await signer._signTypedData(domain, types, userOpToSign);
+
+  return {
+    ...userOperation,
+    signature
+  };
+}
+
 declare module 'fastify' {
   interface FastifyInstance {
     backendSigner: ethers.Signer;
@@ -327,6 +382,16 @@ async function prepareAndExecuteUserOperation(
       networkConfig.contracts.entryPoint,
       signer
     );
+    /*
+    userOperation = await signUserOperationEIP712(
+      userOperation,
+      networkConfig.contracts.entryPoint,
+      signer,
+      networkConfig.contracts.chatterPayAddress!,
+      networkConfig.chainId
+    );
+    */
+
     Logger.info(userOpType, logKey, 'User operation signed successfully');
 
     if (!networkConfig.gas.useFixedValues) {
@@ -350,6 +415,16 @@ async function prepareAndExecuteUserOperation(
         networkConfig.contracts.entryPoint,
         signer
       );
+
+      /*
+      userOperation = await signUserOperationEIP712(
+        userOperation,
+        networkConfig.contracts.entryPoint,
+        signer,
+        networkConfig.contracts.chatterPayAddress!,
+        networkConfig.chainId
+      );
+      */
     }
 
     // Send the operation to the bundler and wait for receipt
