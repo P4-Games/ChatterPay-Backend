@@ -7,6 +7,7 @@ export interface IUserWallet {
   wallet_eoa: string;
   sk_hashed: string;
   created_with_chatterpay_proxy_address: string;
+  created_with_factory_address: string;
   chain_id: number;
   status: string;
 }
@@ -47,6 +48,11 @@ const walletSchema = new Schema<IUserWallet>({
   wallet_eoa: { type: String, required: true, default: '' },
   sk_hashed: { type: String, required: true, default: '' },
   created_with_chatterpay_proxy_address: {
+    type: String,
+    required: false,
+    default: ''
+  },
+  created_with_factory_address: {
     type: String,
     required: false,
     default: ''
