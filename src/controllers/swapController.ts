@@ -10,7 +10,6 @@ import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { getChatterpayTokenFee } from '../services/commonService';
 import { setupERC20 } from '../services/web3/contractSetupService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
-import { computeProxyAddressFromPhone } from '../services/predictWalletService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import {
@@ -221,7 +220,8 @@ export const swap = async (
     /* ***************************************************** */
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-    const { proxyAddress } = await computeProxyAddressFromPhone(channel_user_id);
+    const proxyAddress = fromUser.wallets[0].wallet_proxy;
+    // const { proxyAddress } = await computeProxyAddressFromPhone(channel_user_id);
 
     // Get the contracts and decimals for the tokens
     const fromTokenContract = await setupERC20(tokenAddresses.tokenAddressInput, backendSigner);
@@ -249,7 +249,7 @@ export const swap = async (
     /* 8. swap: check blockchain conditions                  */
     /* ***************************************************** */
     const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
-      await checkBlockchainConditions(networkConfig, channel_user_id);
+      await checkBlockchainConditions(networkConfig, fromUser);
 
     if (!checkBlockchainConditionsResult.success) {
       await sendNoValidBlockchainConditionsNotification(proxyAddress, channel_user_id);

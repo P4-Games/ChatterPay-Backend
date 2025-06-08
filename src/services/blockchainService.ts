@@ -1,10 +1,9 @@
 import { ethers } from 'ethers';
 
-import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getEntryPointABI } from './web3/abiService';
+import { IUser, UserModel } from '../models/userModel';
 import { setupContracts } from './web3/contractSetupService';
-import { generatePrivateKey } from '../helpers/SecurityHelper';
 import { ensurePaymasterHasEnoughEth } from './web3/paymasterService';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import Token, { IToken, TokenOperationLimits } from '../models/tokenModel';
@@ -201,15 +200,16 @@ export async function ensureUserSignerHasEnoughEth(
 }
 
 /**
- * Check Blockchain Conditions
+ * Checks blockchain-related conditions for a given user.
+ * Validates balance, deployment status, and readiness of associated contracts.
  *
- * @param networkConfig
- * @param fromNumber
- * @returns
+ * @param networkConfig - The blockchain network configuration (RPC, contracts, etc.)
+ * @param user - The user object to check (including phone, wallet, etc.)
+ * @returns A promise that resolves with the result of all blockchain condition checks.
  */
 export async function checkBlockchainConditions(
   networkConfig: IBlockchain,
-  fromNumber: string
+  user: IUser
 ): Promise<CheckBalanceConditionsResult> {
   try {
     const blockchain: IBlockchain | null = await mongoBlockchainService.getBlockchain(
@@ -220,12 +220,7 @@ export async function checkBlockchainConditions(
       throw new Error(`Blockchain with chain_id ${networkConfig.chainId} not found`);
     }
 
-    const privateKey = generatePrivateKey(fromNumber, networkConfig.chainId.toString());
-    const setupContractsResult: SetupContractReturn = await setupContracts(
-      blockchain,
-      privateKey,
-      fromNumber
-    );
+    const setupContractsResult: SetupContractReturn = await setupContracts(blockchain, user);
 
     Logger.log('checkBlockchainConditions', 'Validating account');
     if (!setupContractsResult.accountExists) {

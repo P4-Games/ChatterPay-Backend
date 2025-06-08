@@ -175,7 +175,7 @@ export async function withdrawWalletAllFunds(
 
     // Check Blockchain Conditions
     const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
-      await checkBlockchainConditions(networkConfig, channel_user_id);
+      await checkBlockchainConditions(networkConfig, bddUser);
 
     if (!checkBlockchainConditionsResult.success) {
       return { result: false, message: 'Invalid Blockchain Conditions to make transaction' };
