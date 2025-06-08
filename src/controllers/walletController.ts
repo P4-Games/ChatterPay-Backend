@@ -83,12 +83,13 @@ ChatterPay can’t reverse transactions made outside of our app, such as when th
         logKey,
         `Creating wallet for phone number ${channel_user_id} and chain_id ${chain_id}`
       );
-      const chatterpayImplementationContract: string =
-        fastify.networkConfig.contracts.chatterPayAddress;
+      const chatterpayProxyAddress: string = fastify.networkConfig.contracts.chatterPayAddress;
+      const { factoryAddress } = fastify.networkConfig.contracts;
       const result: { user: IUser; newWallet: IUserWallet } | null = await addWalletToUser(
         channel_user_id,
         chain_id,
-        chatterpayImplementationContract
+        chatterpayProxyAddress,
+        factoryAddress
       );
 
       if (result) {
