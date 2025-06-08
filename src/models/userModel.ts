@@ -43,23 +43,26 @@ export interface IUser extends Document {
   manteca_user_id?: string;
 }
 
-const walletSchema = new Schema<IUserWallet>({
-  wallet_proxy: { type: String, required: true, default: '' },
-  wallet_eoa: { type: String, required: true, default: '' },
-  sk_hashed: { type: String, required: true, default: '' },
-  created_with_chatterpay_proxy_address: {
-    type: String,
-    required: false,
-    default: ''
+const walletSchema = new Schema<IUserWallet>(
+  {
+    wallet_proxy: { type: String, required: true, default: '' },
+    wallet_eoa: { type: String, required: true, default: '' },
+    sk_hashed: { type: String, required: true, default: '' },
+    created_with_chatterpay_proxy_address: {
+      type: String,
+      required: false,
+      default: ''
+    },
+    created_with_factory_address: {
+      type: String,
+      required: false,
+      default: ''
+    },
+    chain_id: { type: Number, required: true, default: DEFAULT_CHAIN_ID },
+    status: { type: String, required: true, default: 'active' }
   },
-  created_with_factory_address: {
-    type: String,
-    required: false,
-    default: ''
-  },
-  chain_id: { type: Number, required: true, default: DEFAULT_CHAIN_ID },
-  status: { type: String, required: true, default: 'active' }
-});
+  { _id: false }
+);
 
 const userSchema = new Schema<IUser>({
   name: { type: String, required: false },
