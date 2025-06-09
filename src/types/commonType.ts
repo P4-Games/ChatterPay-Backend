@@ -97,6 +97,7 @@ export interface TransactionData {
   type: string;
   status: string;
   chain_id: number;
+  date?: Date;
 }
 
 export interface ConversionRates {
