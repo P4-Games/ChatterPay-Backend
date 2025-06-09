@@ -474,7 +474,7 @@ export const makeTransaction = async (
       : undefined;
 
     const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
-      await checkBlockchainConditions(networkConfig, channel_user_id);
+      await checkBlockchainConditions(networkConfig, fromUser);
 
     if (!checkBlockchainConditionsResult.success) {
       await sendNoValidBlockchainConditionsNotification(
@@ -504,8 +504,9 @@ export const makeTransaction = async (
       toAddress = to;
       toUser = null;
     } else {
-      const chatterpayImplementation: string = networkConfig.contracts.chatterPayAddress;
-      toUser = await getOrCreateUser(to, chatterpayImplementation);
+      const chatterpayProxyAddress: string = networkConfig.contracts.chatterPayAddress;
+      const { factoryAddress } = networkConfig.contracts;
+      toUser = await getOrCreateUser(to, chatterpayProxyAddress, factoryAddress);
       toAddress = toUser.wallets[0].wallet_proxy;
     }
     userCreationSpan?.endSpan();
