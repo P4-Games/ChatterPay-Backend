@@ -171,12 +171,6 @@ steps:
   - name: "bash"
     script: |
       #!/usr/bin/env bash
-      echo "CHATIZALO_TOKEN en cloudbuild.yaml 1: $CHATIZALO_TOKEN"
-      echo "FRONTEND_TOKEN en cloudbuild.yaml 2: $FRONTEND_TOKEN"
-      echo "PRIVATE_KEY en cloudbuild.yaml 3: $PRIVATE_KEY"
-      echo "SIGNING_KEY en cloudbuild.yaml 4: $SIGNING_KEY"
-      echo "PUSH_CHANNEL_PRIVATE_KEY en cloudbuild.yaml 5: $PUSH_CHANNEL_PRIVATE_KEY"
-      echo "MANTECA_API_KEY en cloudbuild.yaml 6: $MANTECA_API_KEY"
     secretEnv: [
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
