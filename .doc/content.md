@@ -6,6 +6,7 @@
 
 ## Development
 
+- [Sequence Diagrams](./development/sequence-diagrams.md)
 - [Coding Guidelines](./development/coding-guidelines.md)
 
 ## Deployment

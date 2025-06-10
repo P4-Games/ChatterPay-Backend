@@ -88,23 +88,29 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
       );
     }
 
+    const unwrapToken = (symbol: string): string =>
+      symbol.replace(/^WETH$/, 'ETH').replace(/^WBTC$/, 'BTC');
+
+    const wrapToken = (symbol: string): string =>
+      symbol.replace(/^ETH$/, 'WETH').replace(/^BTC$/, 'WBTC');
+
     // Get prices for all symbols against USDT
     const promises = symbolsToFetch.map(async (symbol) => {
       try {
-        const symbolReplaced = symbol.replace('WETH', 'ETH');
-        const response = await fetch(
-          `${BINANCE_API_URL}/ticker/price?symbol=${symbolReplaced}USDT`
-        );
+        const unwrapped = unwrapToken(symbol);
+        const response = await fetch(`${BINANCE_API_URL}/ticker/price?symbol=${unwrapped}USDT`);
         const data = await response.json();
+
+        const wrapped = wrapToken(unwrapped);
+
         if (data.price) {
-          Logger.log('getTokenPrices', `Price for ${symbolReplaced}: ${data.price} USDT`);
           const price = parseFloat(data.price);
-          priceMap.set(symbolReplaced.replace('ETH', 'WETH'), price);
-          // Cache the price for 5 minutes
-          priceCache.set(symbolReplaced.replace('ETH', 'WETH'), price);
+          Logger.log('getTokenPrices', `Price for ${symbol}: ${price} USDT`);
+          priceMap.set(wrapped, price);
+          priceCache.set(wrapped, price);
         } else {
-          Logger.warn('getTokenPrices', `No price found for ${symbolReplaced}USDT`);
-          priceMap.set(symbolReplaced.replace('ETH', 'WETH'), 0);
+          Logger.warn('getTokenPrices', `No price found for ${unwrapped}USDT`);
+          priceMap.set(wrapped, 0);
         }
       } catch (error) {
         Logger.error('getTokenPrices', `Error fetching price for ${symbol}:`, error);
