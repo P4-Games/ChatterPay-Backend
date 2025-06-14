@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 
-import { getPhoneNumberFormatted } from './formatHelper';
 import { BUN_ENV, PRIVATE_KEY } from '../config/constants';
+import { getPhoneNumberFormatted } from './formatHelper';
 
 /**
  * Generates a private key based on a seed private key, a phone number, and a chain ID.
@@ -15,7 +15,7 @@ import { BUN_ENV, PRIVATE_KEY } from '../config/constants';
  *
  * @throws Error if the seed private key is not found in the environment variables.
  */
-export function generatePrivateKey(phoneNumber: string, chanId: string): string {
+export function generateWalletSeed(phoneNumber: string, chanId: string): string {
   if (!PRIVATE_KEY) {
     throw new Error('Seed private key not found in environment variables');
   }
