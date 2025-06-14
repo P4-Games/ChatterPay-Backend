@@ -17,7 +17,7 @@ import { BUN_ENV, SEED_INTERNAL_SALT } from '../config/constants';
  */
 export function generateWalletSeed(phoneNumber: string, chanId: string): string {
   if (!SEED_INTERNAL_SALT) {
-    throw new Error('Seed private key not found in environment variables');
+    throw new Error('Internal salt not found in environment variables');
   }
 
   const seed = `${SEED_INTERNAL_SALT}${chanId}${BUN_ENV}${getPhoneNumberFormatted(phoneNumber)}`;
