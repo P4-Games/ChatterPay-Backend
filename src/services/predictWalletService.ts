@@ -6,7 +6,7 @@ import { IToken } from '../models/tokenModel';
 import { gasService } from './web3/gasService';
 import { Logger } from '../helpers/loggerHelper';
 import { IBlockchain } from '../models/blockchainModel';
-import { generatePrivateKey } from '../helpers/SecurityHelper';
+import { generateWalletSeed } from '../helpers/SecurityHelper';
 import { getChatterPayWalletFactoryABI } from './web3/abiService';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
@@ -34,7 +34,7 @@ const queueCreateProxy = new PQueue({ interval: QUEUE_CREATE_PROXY_INTERVAL, int
  * @throws {Error} If the seed private key is not found in environment variables.
  */
 function phoneNumberToAddress(phoneNumber: string, chainId: string): PhoneNumberToAddress {
-  const privateKey = generatePrivateKey(getPhoneNumberFormatted(phoneNumber), chainId);
+  const privateKey = generateWalletSeed(getPhoneNumberFormatted(phoneNumber), chainId);
   const wallet = new ethers.Wallet(privateKey);
   const publicKey = wallet.address;
   const hashedPrivateKey = crypto.createHash('sha256').update(privateKey).digest('hex');

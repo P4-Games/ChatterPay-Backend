@@ -155,7 +155,7 @@ function findProxyAddressFromLogs(logs: ethers.providers.Log[], ownerAddress: st
 async function main() {
   try {
     // Get environment variables
-    const SIGNING_KEY = process.env.SIGNING_KEY || process.env.PRIVATE_KEY;
+    const SIGNING_KEY = process.env.SIGNING_KEY || process.env.SEED_INTERNAL_SALT;
     const FACTORY_ADDRESS =
       process.env.FACTORY_ADDRESS || '0xeCD34e3CB296Ed7c4a875290d49217f2C7cFf95b';
 
@@ -163,7 +163,7 @@ async function main() {
     const rpcUrl = resolveRpcUrl();
 
     if (!SIGNING_KEY) {
-      Logger.error('main', 'ERROR: SIGNING_KEY or PRIVATE_KEY missing in .env file');
+      Logger.error('main', 'ERROR: SIGNING_KEY or SEED_INTERNAL_SALT missing in .env file');
       process.exit(1);
     }
 

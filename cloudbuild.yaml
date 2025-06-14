@@ -39,7 +39,7 @@ steps:
     secretEnv: [
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
-      'PRIVATE_KEY', 
+      'SEED_INTERNAL_SALT', 
       'SIGNING_KEY',
       'PUSH_CHANNEL_PRIVATE_KEY',
       'MANTECA_API_KEY'
@@ -61,7 +61,7 @@ steps:
       '--build-arg',
       'MONGO_URI=${_MONGO_URI}',
       '--build-arg',
-      'PRIVATE_KEY=$$PRIVATE_KEY',
+      'SEED_INTERNAL_SALT=$$SEED_INTERNAL_SALT',
       '--build-arg',
       'SIGNING_KEY=$$SIGNING_KEY',
       '--build-arg',
@@ -136,7 +136,7 @@ steps:
     secretEnv: [
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
-      'PRIVATE_KEY', 
+      'SEED_INTERNAL_SALT', 
       'SIGNING_KEY',
       'PUSH_CHANNEL_PRIVATE_KEY',
       'MANTECA_API_KEY'
@@ -174,7 +174,7 @@ steps:
     secretEnv: [
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
-      'PRIVATE_KEY', 
+      'SEED_INTERNAL_SALT', 
       'SIGNING_KEY',
       'PUSH_CHANNEL_PRIVATE_KEY',
       'MANTECA_API_KEY'
@@ -186,8 +186,8 @@ availableSecrets:
       env: 'CHATIZALO_TOKEN'
     - versionName: projects/$PROJECT_ID/secrets/${_FRONTEND_TOKEN_SECRET_NAME}/versions/latest
       env: 'FRONTEND_TOKEN'
-    - versionName: projects/$PROJECT_ID/secrets/${_PRIVATE_KEY_SECRET_NAME}/versions/latest
-      env: 'PRIVATE_KEY'
+    - versionName: projects/$PROJECT_ID/secrets/${_SEED_INTERNAL_SALT_SECRET_NAME}/versions/latest
+      env: 'SEED_INTERNAL_SALT'
     - versionName: projects/$PROJECT_ID/secrets/${_SIGNING_KEY_SECRET_NAME}/versions/latest
       env: 'SIGNING_KEY'
     - versionName: projects/$PROJECT_ID/secrets/${_PUSH_CHANNEL_PRIVATE_KEY_NAME}/versions/latest

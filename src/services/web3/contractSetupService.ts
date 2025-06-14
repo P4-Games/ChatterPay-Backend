@@ -4,7 +4,7 @@ import { SIGNING_KEY } from '../../config/constants';
 import { IBlockchain } from '../../models/blockchainModel';
 import { IUser, IUserWallet } from '../../models/userModel';
 import { getERC20ABI, getChatterpayABI } from './abiService';
-import { generatePrivateKey } from '../../helpers/SecurityHelper';
+import { generateWalletSeed } from '../../helpers/SecurityHelper';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
 import { ComputedAddress, SetupContractReturn } from '../../types/commonType';
 
@@ -22,7 +22,7 @@ export async function setupContracts(
   const network = await mongoBlockchainService.getNetworkConfig();
   const provider = new ethers.providers.JsonRpcProvider(network.rpc);
 
-  const privateKey = generatePrivateKey(user.phone_number, blockchain.chainId.toString());
+  const privateKey = generateWalletSeed(user.phone_number, blockchain.chainId.toString());
   const signer = new ethers.Wallet(privateKey, provider);
   const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
   const userWallet: IUserWallet = user.wallets[0];
