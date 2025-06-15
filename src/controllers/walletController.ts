@@ -56,6 +56,7 @@ export const createWallet = async (
 ⚠️ Important: If you plan to send crypto to this wallet from an external platform (like a wallet or exchange), make sure to use the *${fastify.networkConfig.name} network* and double-check the address.
 ChatterPay can’t reverse transactions made outside of our app, such as when the wrong network is selected or the wallet address is mistyped.`;
 
+    Logger.log('createWallet', logKey, `Searching wallet for user ${channel_user_id}`);
     const existingUser = await mongoUserService.getUser(channel_user_id);
     let userWallet: IUserWallet | null;
 
