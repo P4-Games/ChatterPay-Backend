@@ -116,7 +116,7 @@ export const createUserWithWallet = async (
     );
   }
 
-  sendWalletCreationNotification(predictedWallet.EOAAddress, phoneNumber);
+  sendWalletCreationNotification(predictedWallet.proxyAddress, phoneNumber);
 
   return user;
 };
