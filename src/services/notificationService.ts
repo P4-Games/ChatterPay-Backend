@@ -88,25 +88,25 @@ export async function getNotificationTemplate(
 /**
  * Sends a notification when a user's wallet is successfully created.
  *
- * @param address_of_user - The blockchain address of the newly created wallet.
+ * @param user_wallet_proxy - The blockchain address of the newly created wallet (Proxy).
  * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
  * @returns A Promise resolving to the result of the notification operation.
  */
 export async function sendWalletCreationNotification(
-  address_of_user: string,
+  user_wallet_proxy: string,
   channel_user_id: string
 ) {
   try {
     Logger.log(
       'sendWalletCreationNotification',
-      `Sending wallet creation notification to ${address_of_user}`
+      `Sending wallet creation notification to ${channel_user_id} ,${user_wallet_proxy}`
     );
 
     const { title, message } = await getNotificationTemplate(
       channel_user_id,
       NotificationEnum.wallet_creation
     );
-    const formattedMessage = message.replace('[PREDICTED_WALLET_EOA_ADDRESS]', address_of_user);
+    const formattedMessage = message.replace('[PREDICTED_WALLET_EOA_ADDRESS]', user_wallet_proxy);
 
     const sendAndPersistParams: SendAndPersistParams = {
       to: channel_user_id,
@@ -267,7 +267,7 @@ export async function sendMintNotification(
   traceHeader?: string
 ): Promise<unknown> {
   try {
-    Logger.log('sendMintNotification', 'Sending mint notification');
+    Logger.log('sendMintNotification', `Sending mint notification to ${channel_user_id}`);
 
     const { title, message } = await getNotificationTemplate(
       channel_user_id,
