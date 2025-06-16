@@ -1,5 +1,4 @@
 import { ethers } from 'ethers';
-import NodeCache from 'node-cache';
 import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -10,12 +9,13 @@ import { gasService } from '../services/web3/gasService';
 import { IUser, IUserWallet } from '../models/userModel';
 import { ipfsService } from '../services/ipfs/ipfsService';
 import { NotificationEnum } from '../models/templateModel';
-import { ConcurrentOperationsEnum } from '../types/commonType';
+import { cacheService } from '../services/cache/cacheService';
 import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
 import { getChatterPayNFTABI } from '../services/web3/abiService';
 import { downloadAndProcessImage } from '../services/imageService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import { userReachedOperationLimit } from '../services/blockchainService';
+import { CacheNames, ConcurrentOperationsEnum } from '../types/commonType';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
 import {
@@ -83,8 +83,6 @@ type generateNftCopyInputs = {
   channel_user_id: string;
   id: string;
 };
-
-const cache = new NodeCache();
 
 /**
  * Mints an NFT on the Ethereum network.
@@ -860,7 +858,8 @@ export const getNftMetadataRequiredByOpenSea = async (
   // mintNftOriginal(address_of_user!, (mongoData._id as ObjectId).toString())
   const { id: bddId } = request.params;
 
-  const cachedData = cache.get(`metadata-opensea-${bddId}`);
+  const cachedData = cacheService.get<string>(CacheNames.OPENSEA, `metadata-opensea-${bddId}`);
+
   if (cachedData) {
     return reply.status(200).send(cachedData);
   }
@@ -1007,7 +1006,7 @@ export const getNftMetadataRequiredByOpenSea = async (
       ]
     };
 
-    cache.set(`metadata-opensea-${bddId}`, response);
+    cacheService.set(CacheNames.OPENSEA, `metadata-opensea-${bddId}`, response);
 
     // Use standard reply.status in place of the returnSuccessResponse function, as it is called from
     // OpenSea which requires this format.

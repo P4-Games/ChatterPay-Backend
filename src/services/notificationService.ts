@@ -1,7 +1,7 @@
-import NodeCache from 'node-cache';
-
 import { Logger } from '../helpers/loggerHelper';
 import { pushService } from './push/pushService';
+import { CacheNames } from '../types/commonType';
+import { cacheService } from './cache/cacheService';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IBlockchain } from '../models/blockchainModel';
 import { mongoUserService } from './mongo/mongoUserService';
@@ -11,20 +11,14 @@ import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { formatIdentifierWithOptionalName } from '../helpers/formatHelper';
 import { mongoNotificationService } from './mongo/mongoNotificationServices';
+import { BOT_DATA_TOKEN, CHATTERPAY_NFTS_SHARE_URL } from '../config/constants';
 import { templateEnum, mongoTemplateService } from './mongo/mongoTemplateService';
-import {
-  BOT_DATA_TOKEN,
-  CHATTERPAY_NFTS_SHARE_URL,
-  NOTIFICATION_TEMPLATE_CACHE_TTL
-} from '../config/constants';
 import {
   LanguageEnum,
   ITemplateSchema,
   NotificationEnum,
   NotificationTemplatesTypes
 } from '../models/templateModel';
-
-const notificationTemplateCache = new NodeCache({ stdTTL: NOTIFICATION_TEMPLATE_CACHE_TTL });
 
 /**
  * Retrieves a notification template based on the user's channel ID and the specified notification type.
@@ -39,7 +33,7 @@ export async function getNotificationTemplate(
 ): Promise<{ title: string; message: string }> {
   const defaultNotification = { title: 'Chatterpay Message', message: '' };
   try {
-    const cachedTemplate = notificationTemplateCache.get(`${typeOfNotification}`);
+    const cachedTemplate = cacheService.get(CacheNames.NOTIFICATION, `${typeOfNotification}`);
     if (cachedTemplate) {
       Logger.log('getNotificationTemplate', `getting ${typeOfNotification} from cache`);
       return cachedTemplate as { title: string; message: string };
@@ -72,7 +66,7 @@ export async function getNotificationTemplate(
       title: template.title[userLanguage],
       message: template.message[userLanguage]
     };
-    notificationTemplateCache.set(`${typeOfNotification}`, result);
+    cacheService.set(CacheNames.NOTIFICATION, `${typeOfNotification}`, result);
 
     return result;
   } catch (error: unknown) {
@@ -99,7 +93,7 @@ export async function sendWalletCreationNotification(
   try {
     Logger.log(
       'sendWalletCreationNotification',
-      `Sending wallet creation notification to ${channel_user_id} ,${user_wallet_proxy}`
+      `Sending wallet creation notification to ${channel_user_id}, ${user_wallet_proxy}`
     );
 
     const { title, message } = await getNotificationTemplate(
