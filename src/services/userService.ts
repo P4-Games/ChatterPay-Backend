@@ -272,6 +272,17 @@ export const getOrCreateUser = async (
 };
 
 /**
+ * Checks if a user exists based on their phone number.
+ *
+ * @param {string} phoneNumber - The phone number to check.
+ * @returns {Promise<boolean>} True if the user exists, false otherwise.
+ */
+export const getUser = async (phoneNumber: string): Promise<IUser | null> => {
+  const user: IUser | null = await mongoUserService.getUser(phoneNumber);
+  return user;
+};
+
+/**
  * Checks if a user has any operation in progress.
  * Verifies if any field in the `operations_in_progress` object has a value greater than 0.
  *
