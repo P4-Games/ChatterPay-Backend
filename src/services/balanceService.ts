@@ -1,10 +1,10 @@
 import { ethers } from 'ethers';
-import NodeCache from 'node-cache';
 
 import { IToken } from '../models/tokenModel';
 import { getERC20ABI } from './web3/abiService';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenData } from './blockchainService';
+import { cacheService } from './cache/cacheService';
 import { IBlockchain } from '../models/blockchainModel';
 import { setupERC20 } from './web3/contractSetupService';
 import { SIGNING_KEY, BINANCE_API_URL } from '../config/constants';
@@ -12,13 +12,11 @@ import {
   Currency,
   FiatQuote,
   TokenInfo,
+  CacheNames,
   BalanceInfo,
   TokenBalance,
   WalletBalanceInfo
 } from '../types/commonType';
-
-// Initialize the cache with a 5-minute TTL (Time To Live)
-const priceCache = new NodeCache({ stdTTL: 300, checkperiod: 320 });
 
 /**
  * Fetches the balance of a specific token for a given address
@@ -60,15 +58,19 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
 
     // USDT is always 1 USD
     priceMap.set('USDT', 1);
+    priceMap.set('USDC', 1);
 
     // Filter out USDT as we already set its price
-    const symbolsToFetch = symbols.filter((s) => s !== 'USDT');
+    const symbolsToFetch = symbols.filter((s) => s !== 'USDT' && s !== 'USDC');
 
     if (symbolsToFetch.length === 0) return priceMap;
 
     try {
       // Check cache for existing prices
-      const cachedPrices = priceCache.mget(symbolsToFetch);
+      const cachedPrices = Object.fromEntries(
+        symbolsToFetch.map((symbol) => [symbol, cacheService.get(CacheNames.PRICE, symbol)])
+      );
+
       const symbolsToFetchFromApi = symbolsToFetch.filter((symbol) => !cachedPrices[symbol]);
 
       // Set cached prices to the priceMap
@@ -107,7 +109,7 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
           const price = parseFloat(data.price);
           Logger.log('getTokenPrices', `Price for ${symbol}: ${price} USDT`);
           priceMap.set(wrapped, price);
-          priceCache.set(wrapped, price);
+          cacheService.set(CacheNames.PRICE, wrapped, price);
         } else {
           Logger.warn('getTokenPrices', `No price found for ${unwrapped}USDT`);
           priceMap.set(wrapped, 0);
