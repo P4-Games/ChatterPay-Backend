@@ -47,7 +47,8 @@ const {
   QUEUE_BUNDLER_INTERVAL: queueBundlerInterval = 150,
   QUEUE_GAS_INTERVAL: queueGasInterval = 250,
   QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 150,
-  ISSUER_TOKENS_ENABLED: issuerTokensEnabled = 'false'
+  ISSUER_TOKENS_ENABLED: issuerTokensEnabled = 'false',
+  MAX_REQUESTS_PER_MINUTE: maxRequestsPerMinute = 50
 } = process.env;
 
 export {
@@ -169,3 +170,4 @@ export const SWAP_SLIPPAGE_CONFIG_EXTRA = Number(slippage_config_extra);
 export const QUEUE_BUNDLER_INTERVAL = Number(queueBundlerInterval);
 export const QUEUE_GAS_INTERVAL = Number(queueGasInterval);
 export const QUEUE_CREATE_PROXY_INTERVAL = Number(queueCreateProxyInterval);
+export const MAX_REQUESTS_PER_MINUTE = Number(maxRequestsPerMinute);
