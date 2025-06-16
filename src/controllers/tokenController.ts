@@ -2,8 +2,8 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import Token, { IToken } from '../models/tokenModel';
-import { IUser, IUserWallet } from '../models/userModel';
 import { issueTokens } from '../services/walletService';
+import { IUser, IUserWallet } from '../models/userModel';
 import { getUserWalletByChainId } from '../services/userService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import { coingeckoService } from '../services/coingecko/coingeckoService';
