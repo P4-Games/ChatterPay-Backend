@@ -1,17 +1,15 @@
-import PQueue from 'p-queue';
 import axios, { AxiosResponse } from 'axios';
 import { ethers, BigNumber, TypedDataField, TypedDataDomain } from 'ethers';
 
 import { gasService } from './gasService';
+import { wrapRpc } from './rpc/rpcService';
 import { Logger } from '../../helpers/loggerHelper';
 import { addPaymasterData } from './paymasterService';
+import { rpcProviders } from '../../types/commonType';
 import { IBlockchain } from '../../models/blockchainModel';
 import { sendUserOperationToBundler } from './bundlerService';
-import { QUEUE_BUNDLER_INTERVAL } from '../../config/constants';
 import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation, UserOperationReceipt } from '../../types/userOperationType';
-
-const queue = new PQueue({ interval: QUEUE_BUNDLER_INTERVAL, intervalCap: 1 }); // 1 request each x seg
 
 /**
  * Creates a generic user operation for a transaction.
@@ -267,12 +265,14 @@ export async function waitForUserOperationReceipt(
       Logger.log('waitForUserOperationReceipt', `payload: ${JSON.stringify(payload)}`);
 
       try {
-        const response = (await queue.add(async () =>
-          axios.post(bundlerRpcUrl, payload, {
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          })
+        const response = (await wrapRpc(
+          async () =>
+            axios.post(bundlerRpcUrl, payload, {
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            }),
+          rpcProviders.PIMLICO
         )) as AxiosResponse;
 
         const receipt = response.data.result;

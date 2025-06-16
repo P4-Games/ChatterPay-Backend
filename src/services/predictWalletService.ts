@@ -1,21 +1,23 @@
-import PQueue from 'p-queue';
 import * as crypto from 'crypto';
 import { ethers, BigNumber } from 'ethers';
 
 import { IToken } from '../models/tokenModel';
 import { gasService } from './web3/gasService';
+import { wrapRpc } from './web3/rpc/rpcService';
 import { Logger } from '../helpers/loggerHelper';
+import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchainModel';
-import { generatePrivateKey } from '../helpers/SecurityHelper';
-import { getChatterPayWalletFactoryABI } from './web3/abiService';
+import { generateWalletSeed } from '../helpers/SecurityHelper';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
+import { getChatterPayWalletFactoryABI } from './web3/abiService';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
-import { SIGNING_KEY, QUEUE_CREATE_PROXY_INTERVAL } from '../config/constants';
-import { MintResult, ComputedAddress, PhoneNumberToAddress } from '../types/commonType';
-
-// 1 request each x seg
-const queueCreateProxy = new PQueue({ interval: QUEUE_CREATE_PROXY_INTERVAL, intervalCap: 1 });
+import {
+  MintResult,
+  rpcProviders,
+  ComputedAddress,
+  PhoneNumberToAddress
+} from '../types/commonType';
 
 /**
  * Generates a deterministic Ethereum address based on a phone number and a chain ID.
@@ -34,7 +36,7 @@ const queueCreateProxy = new PQueue({ interval: QUEUE_CREATE_PROXY_INTERVAL, int
  * @throws {Error} If the seed private key is not found in environment variables.
  */
 function phoneNumberToAddress(phoneNumber: string, chainId: string): PhoneNumberToAddress {
-  const privateKey = generatePrivateKey(getPhoneNumberFormatted(phoneNumber), chainId);
+  const privateKey = generateWalletSeed(getPhoneNumberFormatted(phoneNumber), chainId);
   const wallet = new ethers.Wallet(privateKey);
   const publicKey = wallet.address;
   const hashedPrivateKey = crypto.createHash('sha256').update(privateKey).digest('hex');
@@ -96,70 +98,88 @@ async function mintToken(
  * @throws {Error} If there's an error in the computation process.
  */
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
-  const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
-  const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
-    name: networkConfig.name,
-    chainId: networkConfig.chainId
-  });
-
-  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-  const chatterpayWalletFactoryABI = await getChatterPayWalletFactoryABI();
-  const factory = ChatterPayWalletFactory__factory.connect(
-    networkConfig.contracts.factoryAddress,
-    chatterpayWalletFactoryABI,
-    backendSigner
-  );
-
-  const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(
-    phoneNumber,
-    networkConfig.chainId.toString()
-  );
-
-  const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
-    gasLimit: 1000000
-  });
-  Logger.log('computeProxyAddressFromPhone', `Computed proxy address: ${proxyAddress}`);
-
-  const code = await provider.getCode(proxyAddress);
-  if (code === '0x') {
-    await queueCreateProxy.add(async () => {
-      Logger.log(
-        'computeProxyAddressFromPhone',
-        `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}.`
-      );
-      const gasLimit = await gasService.getDynamicGas(
-        factory,
-        'createProxy',
-        [ownerAddress.publicKey],
-        20,
-        BigNumber.from('700000')
-      );
-
-      const gasPrice = await provider.getGasPrice();
-
-      const tx = await factory.createProxy(ownerAddress.publicKey, {
-        gasLimit,
-        gasPrice
-      });
-
-      await tx.wait();
+  try {
+    const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+    const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
+      name: networkConfig.name,
+      chainId: networkConfig.chainId
     });
-  }
 
-  Logger.log(
-    'computeProxyAddressFromPhone',
-    JSON.stringify({
+    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    const chatterpayWalletFactoryABI = await getChatterPayWalletFactoryABI();
+    const factory = ChatterPayWalletFactory__factory.connect(
+      networkConfig.contracts.factoryAddress,
+      chatterpayWalletFactoryABI,
+      backendSigner
+    );
+
+    const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(
+      phoneNumber,
+      networkConfig.chainId.toString()
+    );
+
+    const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
+      gasLimit: 1000000
+    });
+    Logger.log('computeProxyAddressFromPhone', `Computed proxy address: ${proxyAddress}`);
+
+    const code = await provider.getCode(proxyAddress);
+    if (code === '0x') {
+      await wrapRpc(async () => {
+        Logger.log(
+          'computeProxyAddressFromPhone',
+          `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}.`
+        );
+        const gasLimit = await gasService.getDynamicGas(
+          factory,
+          'createProxy',
+          [ownerAddress.publicKey],
+          20,
+          BigNumber.from('700000')
+        );
+
+        let gasPrice: ethers.BigNumber;
+
+        try {
+          gasPrice = await provider.getGasPrice();
+        } catch (error) {
+          // Default to 5 Gwei if the call fails
+          Logger.warn(
+            'computeProxyAddressFromPhone',
+            'Fallback gas price used due to getGasPrice() failure:',
+            error
+          );
+          gasPrice = ethers.utils.parseUnits('5', 'gwei');
+        }
+
+        const tx = await factory.createProxy(ownerAddress.publicKey, {
+          gasLimit,
+          gasPrice
+        });
+        Logger.log('computeProxyAddressFromPhone', `tx: ${tx.hash}`);
+
+        return tx.wait().then(() => true);
+      }, rpcProviders.ALCHEMY);
+    }
+
+    Logger.log(
+      'computeProxyAddressFromPhone',
+      JSON.stringify({
+        proxyAddress,
+        EOAAddress: ownerAddress.publicKey
+      })
+    );
+
+    return {
       proxyAddress,
-      EOAAddress: ownerAddress.publicKey
-    })
-  );
-
-  return {
-    proxyAddress,
-    EOAAddress: ownerAddress.publicKey,
-    privateKey: ownerAddress.hashedPrivateKey,
-    privateKeyNotHashed: ownerAddress.privateKey
-  };
+      EOAAddress: ownerAddress.publicKey,
+      privateKey: ownerAddress.hashedPrivateKey,
+      privateKeyNotHashed: ownerAddress.privateKey
+    };
+  } catch (error) {
+    Logger.error('computeProxyAddressFromPhone', error);
+    throw error;
+  }
 }
 
 /**

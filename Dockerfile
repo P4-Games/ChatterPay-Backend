@@ -1,4 +1,3 @@
-# Use Node.js 20.13.1 as base
 FROM node:20.13.1-bullseye AS base
 
 RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.1.21" && \
@@ -11,20 +10,14 @@ RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.1.21" && \
 ENV BUN_INSTALL="/root/.bun"
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
 
-# Verify Node.js and Bun versions before starting
 RUN node -v && bun -v
-
-# Establece el directorio de trabajo en el contenedor
-WORKDIR /app
-
-# Set the working directory in the container
 WORKDIR /app
 
 # Copy environment variables as build arguments
 ARG BUN_ENV
 ARG INFURA_API_KEY
 ARG MONGO_URI
-ARG PRIVATE_KEY
+ARG SEED_INTERNAL_SALT
 ARG SIGNING_KEY
 ARG PINATA_JWT
 ARG ICP_CANISTER_ID
@@ -64,7 +57,7 @@ ARG ISSUER_TOKENS_ENABLED
 ENV BUN_ENV $BUN_ENV
 ENV INFURA_API_KEY $INFURA_API_KEY
 ENV MONGO_URI $MONGO_URI
-ENV PRIVATE_KEY $PRIVATE_KEY
+ENV SEED_INTERNAL_SALT $SEED_INTERNAL_SALT
 ENV SIGNING_KEY $SIGNING_KEY
 ENV PINATA_JWT $PINATA_JWT
 ENV ICP_CANISTER_ID $ICP_CANISTER_ID

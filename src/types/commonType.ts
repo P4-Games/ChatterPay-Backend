@@ -123,3 +123,10 @@ export interface ComputedAddress {
   privateKey: string;
   privateKeyNotHashed: string;
 }
+
+export const rpcProviders = {
+  ALCHEMY: 'alchemy',
+  PIMLICO: 'pimlico'
+} as const;
+
+export type RpcProvider = (typeof rpcProviders)[keyof typeof rpcProviders];

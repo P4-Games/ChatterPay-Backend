@@ -14,7 +14,7 @@ docker build \
   --build-arg BUN_ENV="$BUN_ENV" \
   --build-arg INFURA_API_KEY="$INFURA_API_KEY" \
   --build-arg MONGO_URI="$MONGO_URI" \
-  --build-arg PRIVATE_KEY="$PRIVATE_KEY" \
+  --build-arg SEED_INTERNAL_SALT="$SEED_INTERNAL_SALT" \
   --build-arg SIGNING_KEY="$SIGNING_KEY" \
   --build-arg PINATA_JWT="$PINATA_JWT" \
   --build-arg ICP_CANISTER_ID="$ICP_CANISTER_ID" \

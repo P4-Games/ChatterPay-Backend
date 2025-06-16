@@ -56,6 +56,7 @@ export const createWallet = async (
 ⚠️ Important: If you plan to send crypto to this wallet from an external platform (like a wallet or exchange), make sure to use the *${fastify.networkConfig.name} network* and double-check the address.
 ChatterPay can’t reverse transactions made outside of our app, such as when the wrong network is selected or the wallet address is mistyped.`;
 
+    Logger.log('createWallet', logKey, `Searching wallet for user ${channel_user_id}`);
     const existingUser = await mongoUserService.getUser(channel_user_id);
     let userWallet: IUserWallet | null;
 
@@ -63,10 +64,10 @@ ChatterPay can’t reverse transactions made outside of our app, such as when th
       fastify.networkConfig.environment.toUpperCase() !== 'PRODUCTION' &&
       IS_DEVELOPMENT &&
       ISSUER_TOKENS_ENABLED;
+    const { chainId: chain_id } = fastify.networkConfig;
 
     if (existingUser) {
       // Check for existing wallet for the user in the given blockchain
-      const { chainId: chain_id } = fastify.networkConfig;
       userWallet = getUserWalletByChainId(existingUser.wallets, chain_id);
 
       if (userWallet) {
@@ -117,7 +118,11 @@ ChatterPay can’t reverse transactions made outside of our app, such as when th
       return await returnErrorResponse(reply, 400, errorMsg);
     }
 
-    Logger.log('createWallet', logKey, `Creating wallet for phone number ${channel_user_id}`);
+    Logger.log(
+      'createWallet',
+      logKey,
+      `Creating wallet for user '${channel_user_id}' and chain ${chain_id}`
+    );
     const chatterpayProxyAddress = fastify.networkConfig.contracts.chatterPayAddress;
     const { factoryAddress } = fastify.networkConfig.contracts;
     const user: IUser = await createUserWithWallet(

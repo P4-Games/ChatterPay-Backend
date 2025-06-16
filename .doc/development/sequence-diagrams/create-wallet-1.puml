@@ -41,7 +41,7 @@ alt PUSH_ENABLED
     UserService -> PushService: subscribeToPushChannel(privateKey, eoaAddress)
 end
 
-UserService -> Notifier: sendWalletCreationNotification(eoaAddress, phone)
+UserService -> Notifier: sendWalletCreationNotification(proxyAddress, phone)
 
 UserService --> Controller: user with wallet
 

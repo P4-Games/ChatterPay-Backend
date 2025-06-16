@@ -1,25 +1,25 @@
 import * as crypto from 'crypto';
 
 import { getPhoneNumberFormatted } from './formatHelper';
-import { BUN_ENV, PRIVATE_KEY } from '../config/constants';
+import { BUN_ENV, SEED_INTERNAL_SALT } from '../config/constants';
 
 /**
- * Generates a private key based on a seed private key, a phone number, and a chain ID.
+ * Generates a wallet seed based on a phone number and a chain ID.
  *
- * This function combines the environment-defined seed private key, the provided phone number,
- * and the chain ID to generate a unique and secure private key.
+ * This function combines the environment-defined seed (`SEED_INTERNAL_SALT`), the formatted phone number,
+ * and the chain ID to derive a deterministic and secure wallet seed.
  *
- * @param phoneNumber - The phone number to incorporate into the key generation.
- * @param chanId - The chain ID to include in the seed.
+ * @param phoneNumber - The phone number to be used in the seed generation.
+ * @param chanId - The chain ID to be included in the seed.
  * @returns A string representing the generated private key, prefixed with '0x'.
  *
- * @throws Error if the seed private key is not found in the environment variables.
+ * @throws Error if the seed private key is not defined in the environment variables.
  */
-export function generatePrivateKey(phoneNumber: string, chanId: string): string {
-  if (!PRIVATE_KEY) {
-    throw new Error('Seed private key not found in environment variables');
+export function generateWalletSeed(phoneNumber: string, chanId: string): string {
+  if (!SEED_INTERNAL_SALT) {
+    throw new Error('Internal salt not found in environment variables');
   }
 
-  const seed = `${PRIVATE_KEY}${chanId}${BUN_ENV}${getPhoneNumberFormatted(phoneNumber)}`;
+  const seed = `${SEED_INTERNAL_SALT}${chanId}${BUN_ENV}${getPhoneNumberFormatted(phoneNumber)}`;
   return `0x${crypto.createHash('sha256').update(seed).digest('hex')}`;
 }

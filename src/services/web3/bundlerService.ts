@@ -1,12 +1,10 @@
-import PQueue from 'p-queue';
 import { ethers } from 'ethers';
 import axios, { AxiosResponse } from 'axios';
 
+import { wrapRpc } from './rpc/rpcService';
 import { Logger } from '../../helpers/loggerHelper';
-import { QUEUE_BUNDLER_INTERVAL } from '../../config/constants';
+import { rpcProviders } from '../../types/commonType';
 import { PackedUserOperation } from '../../types/userOperationType';
-
-const queue = new PQueue({ interval: QUEUE_BUNDLER_INTERVAL, intervalCap: 1 }); // 1 request each x seg
 
 /**
  * Serialize User Operation
@@ -56,13 +54,14 @@ export async function sendUserOperationToBundler(
       `payload: ${JSON.stringify(payload)}, bundlerRpcUrl: ${bundlerRpcUrl}`
     );
 
-    // Wrapper function in quue to avoid 429 error (rate-limit)
-    const response = (await queue.add(async () =>
-      axios.post(bundlerRpcUrl, payload, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
+    const response = (await wrapRpc(
+      async () =>
+        axios.post(bundlerRpcUrl, payload, {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }),
+      rpcProviders.PIMLICO
     )) as AxiosResponse;
 
     if (response.data.error) {
