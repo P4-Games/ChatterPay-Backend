@@ -1,21 +1,23 @@
-import PQueue from 'p-queue';
 import * as crypto from 'crypto';
 import { ethers, BigNumber } from 'ethers';
 
 import { IToken } from '../models/tokenModel';
 import { gasService } from './web3/gasService';
+import { wrapRpc } from './web3/rpc/rpcService';
 import { Logger } from '../helpers/loggerHelper';
+import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchainModel';
 import { generateWalletSeed } from '../helpers/SecurityHelper';
-import { getChatterPayWalletFactoryABI } from './web3/abiService';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
+import { getChatterPayWalletFactoryABI } from './web3/abiService';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { ChatterPayWalletFactory__factory } from '../types/ethers-contracts';
-import { SIGNING_KEY, QUEUE_CREATE_PROXY_INTERVAL } from '../config/constants';
-import { MintResult, ComputedAddress, PhoneNumberToAddress } from '../types/commonType';
-
-// 1 request each x seg
-const queueCreateProxy = new PQueue({ interval: QUEUE_CREATE_PROXY_INTERVAL, intervalCap: 1 });
+import {
+  MintResult,
+  rpcProviders,
+  ComputedAddress,
+  PhoneNumberToAddress
+} from '../types/commonType';
 
 /**
  * Generates a deterministic Ethereum address based on a phone number and a chain ID.
@@ -96,78 +98,98 @@ async function mintToken(
  * @throws {Error} If there's an error in the computation process.
  */
 export async function computeProxyAddressFromPhone(phoneNumber: string): Promise<ComputedAddress> {
-  const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
-  const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
-    name: networkConfig.name,
-    chainId: networkConfig.chainId
-  });
-
-  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-  const chatterpayWalletFactoryABI = await getChatterPayWalletFactoryABI();
-  const factory = ChatterPayWalletFactory__factory.connect(
-    networkConfig.contracts.factoryAddress,
-    chatterpayWalletFactoryABI,
-    backendSigner
-  );
-
-  const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(
-    phoneNumber,
-    networkConfig.chainId.toString()
-  );
-
-  const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
-    gasLimit: 1000000
-  });
-  Logger.log('computeProxyAddressFromPhone', `Computed proxy address: ${proxyAddress}`);
-
-  const code = await provider.getCode(proxyAddress);
-  if (code === '0x') {
-    await queueCreateProxy.add(async () => {
-      Logger.log(
-        'computeProxyAddressFromPhone',
-        `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}.`
-      );
-      const gasLimit = await gasService.getDynamicGas(
-        factory,
-        'createProxy',
-        [ownerAddress.publicKey],
-        20,
-        BigNumber.from('700000')
-      );
-
-      const gasPrice = await provider.getGasPrice();
-
-      const tx = await factory.createProxy(ownerAddress.publicKey, {
-        gasLimit,
-        gasPrice
-      });
-
-      await tx.wait();
+  try {
+    const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+    const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
+      name: networkConfig.name,
+      chainId: networkConfig.chainId
     });
-  }
 
-  Logger.log(
-    'computeProxyAddressFromPhone',
-    JSON.stringify({
+    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    const chatterpayWalletFactoryABI = await getChatterPayWalletFactoryABI();
+    const factory = ChatterPayWalletFactory__factory.connect(
+      networkConfig.contracts.factoryAddress,
+      chatterpayWalletFactoryABI,
+      backendSigner
+    );
+
+    const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(
+      phoneNumber,
+      networkConfig.chainId.toString()
+    );
+
+    const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
+      gasLimit: 1000000
+    });
+    Logger.log('computeProxyAddressFromPhone', `Computed proxy address: ${proxyAddress}`);
+
+    const code = await provider.getCode(proxyAddress);
+    if (code === '0x') {
+      await wrapRpc(async () => {
+        Logger.log(
+          'computeProxyAddressFromPhone',
+          `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}.`
+        );
+        const gasLimit = await gasService.getDynamicGas(
+          factory,
+          'createProxy',
+          [ownerAddress.publicKey],
+          20,
+          BigNumber.from('700000')
+        );
+
+        let gasPrice: ethers.BigNumber;
+
+        try {
+          gasPrice = await provider.getGasPrice();
+        } catch (error) {
+          // Default to 5 Gwei if the call fails
+          Logger.warn(
+            'computeProxyAddressFromPhone',
+            'Fallback gas price used due to getGasPrice() failure:',
+            error
+          );
+          gasPrice = ethers.utils.parseUnits('5', 'gwei');
+        }
+
+        const tx = await factory.createProxy(ownerAddress.publicKey, {
+          gasLimit,
+          gasPrice
+        });
+        Logger.log('computeProxyAddressFromPhone', `tx: ${tx.hash}`);
+
+        return tx.wait().then(() => true);
+      }, rpcProviders.ALCHEMY);
+    }
+
+    Logger.log(
+      'computeProxyAddressFromPhone',
+      JSON.stringify({
+        proxyAddress,
+        EOAAddress: ownerAddress.publicKey
+      })
+    );
+
+    return {
       proxyAddress,
-      EOAAddress: ownerAddress.publicKey
-    })
-  );
-
-  return {
-    proxyAddress,
-    EOAAddress: ownerAddress.publicKey,
-    privateKey: ownerAddress.hashedPrivateKey,
-    privateKeyNotHashed: ownerAddress.privateKey
-  };
+      EOAAddress: ownerAddress.publicKey,
+      privateKey: ownerAddress.hashedPrivateKey,
+      privateKeyNotHashed: ownerAddress.privateKey
+    };
+  } catch (error) {
+    Logger.error('computeProxyAddressFromPhone', error);
+    throw error;
+  }
 }
 
 /**
- * Issues a specified amount of tokens to a given address, using the queue for rate limiting.
+ * Issues a specified amount of tokens to a given address, using the RPC queue for rate limiting.
  *
  * @param recipientAddress - The address to receive the minted tokens.
- * @param fastify - The Fastify instance containing network configuration and tokens.
+ * @param tokens - The list of IToken to mint.
+ * @param networkConfig - The blockchain network configuration.
  * @returns A promise that resolves to an array of MintResult objects.
+ * @throws Will throw if no tokens are found for the specified chain.
  */
 export async function issueTokens(
   recipientAddress: string,
@@ -182,7 +204,7 @@ export async function issueTokens(
   );
   const signer: ethers.Wallet = new ethers.Wallet(SIGNING_KEY!, provider);
 
-  // Get tokens for the current chain from the decorator.
+  // Filter tokens for the current chain
   const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chainId);
   const tokenAddresses: string[] = chainTokens.map((token) => token.address);
 
@@ -190,19 +212,27 @@ export async function issueTokens(
     throw new Error(`No tokens found for chain ${networkConfig.chainId}`);
   }
 
-  // Get the current nonce for the signer.
-  const currentNonce: number = await provider.getTransactionCount(signer.address);
+  // Fetch nonce using rate-limited queue
+  const currentNonce = (await wrapRpc(
+    () => provider.getTransactionCount(signer.address),
+    rpcProviders.ALCHEMY
+  )) as number;
+
   Logger.log('issueTokensCore', `Current Nonce: ${currentNonce}`);
   Logger.log(
     'issueTokensCore',
-    `Minting tokens on chain ${networkConfig.chainId} for wallet ${recipientAddress} and tokens:`,
+    `Minting tokens on chain ${networkConfig.chainId} for wallet ${recipientAddress}`,
     tokenAddresses
   );
 
-  const mintPromises: Promise<MintResult>[] = tokenAddresses.map((tokenAddress, index) =>
-    mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index)
+  // Wrap each mint in the Alchemy RPC queue
+  const mintPromises: Promise<MintResult>[] = tokenAddresses.map(
+    (tokenAddress, index): Promise<MintResult> =>
+      wrapRpc<MintResult>(
+        () => mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index),
+        rpcProviders.ALCHEMY
+      ) as Promise<MintResult>
   );
-
   const mintResults = await Promise.all(mintPromises);
 
   return mintResults;
