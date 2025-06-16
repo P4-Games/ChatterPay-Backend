@@ -1,5 +1,21 @@
+import { Logger } from '../../../helpers/loggerHelper';
 import { rpcQueueAlchemy, rpcQueuePimlico } from './rpcQueue';
 import { RpcProvider, rpcProviders } from '../../../types/commonType';
+
+type Serializable =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | Serializable[]
+  | { [key: string]: Serializable };
+
+type RpcCallWrapper<T> = {
+  fn: () => Promise<T>;
+  name?: string;
+  args?: Serializable[];
+};
 
 /**
  * Executes an asynchronous RPC function using a rate-limited queue specific to the selected provider.
@@ -18,18 +34,30 @@ import { RpcProvider, rpcProviders } from '../../../types/commonType';
  * @throws Will throw an error if the queue type is unknown.
  */
 export async function wrapRpc<T>(
-  fn: () => Promise<T>,
+  { fn, name, args = [] }: RpcCallWrapper<T>,
   queueType: RpcProvider
-): Promise<NonNullable<T> | void> {
+): Promise<NonNullable<T>> {
+  let queueName: string;
   let queue;
 
   if (queueType === rpcProviders.ALCHEMY) {
     queue = rpcQueueAlchemy;
+    queueName = rpcProviders.ALCHEMY.toString();
   } else if (queueType === rpcProviders.PIMLICO) {
     queue = rpcQueuePimlico;
+    queueName = rpcProviders.PIMLICO.toString();
   } else {
     throw new Error(`Unknown queue type: ${queueType}`);
   }
+
+  const positionInQueue = queue.pending + 1;
+  const fnName = name || fn.name || '<anonymous>';
+  const argsStr = args.map((a) => JSON.stringify(a)).join(', ');
+
+  Logger.log(
+    'wrapRpc',
+    `Queue: ${queueName} | Pos: ${positionInQueue} | Fn: ${fnName}(${argsStr})`
+  );
 
   const result = await queue.add(fn);
 

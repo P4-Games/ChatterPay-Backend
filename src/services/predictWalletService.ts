@@ -125,41 +125,45 @@ export async function computeProxyAddressFromPhone(phoneNumber: string): Promise
 
     const code = await provider.getCode(proxyAddress);
     if (code === '0x') {
-      await wrapRpc(async () => {
-        Logger.log(
-          'computeProxyAddressFromPhone',
-          `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}.`
-        );
-        const gasLimit = await gasService.getDynamicGas(
-          factory,
-          'createProxy',
-          [ownerAddress.publicKey],
-          20,
-          BigNumber.from('700000')
-        );
+      await wrapRpc(
+        {
+          fn: async () => {
+            Logger.log(
+              'computeProxyAddressFromPhone',
+              `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}.`
+            );
+            const gasLimit = await gasService.getDynamicGas(
+              factory,
+              'createProxy',
+              [ownerAddress.publicKey],
+              20,
+              BigNumber.from('700000')
+            );
 
-        let gasPrice: ethers.BigNumber;
+            let gasPrice: ethers.BigNumber;
+            try {
+              gasPrice = await provider.getGasPrice();
+            } catch (error) {
+              Logger.warn(
+                'computeProxyAddressFromPhone',
+                'Fallback gas price used due to getGasPrice() failure:',
+                error
+              );
+              gasPrice = ethers.utils.parseUnits('5', 'gwei');
+            }
 
-        try {
-          gasPrice = await provider.getGasPrice();
-        } catch (error) {
-          // Default to 5 Gwei if the call fails
-          Logger.warn(
-            'computeProxyAddressFromPhone',
-            'Fallback gas price used due to getGasPrice() failure:',
-            error
-          );
-          gasPrice = ethers.utils.parseUnits('5', 'gwei');
-        }
-
-        const tx = await factory.createProxy(ownerAddress.publicKey, {
-          gasLimit,
-          gasPrice
-        });
-        Logger.log('computeProxyAddressFromPhone', `tx: ${tx.hash}`);
-
-        return tx.wait().then(() => true);
-      }, rpcProviders.ALCHEMY);
+            const tx = await factory.createProxy(ownerAddress.publicKey, {
+              gasLimit,
+              gasPrice
+            });
+            Logger.log('computeProxyAddressFromPhone', `tx: ${tx.hash}`);
+            return tx.wait().then(() => true);
+          },
+          name: 'createProxy',
+          args: [ownerAddress.publicKey]
+        },
+        rpcProviders.ALCHEMY
+      );
     }
 
     Logger.log(
@@ -214,7 +218,11 @@ export async function issueTokens(
 
   // Fetch nonce using rate-limited queue
   const currentNonce = (await wrapRpc(
-    () => provider.getTransactionCount(signer.address),
+    {
+      fn: () => provider.getTransactionCount(signer.address),
+      name: 'getTransactionCount',
+      args: [signer.address]
+    },
     rpcProviders.ALCHEMY
   )) as number;
 
@@ -229,10 +237,21 @@ export async function issueTokens(
   const mintPromises: Promise<MintResult>[] = tokenAddresses.map(
     (tokenAddress, index): Promise<MintResult> =>
       wrapRpc<MintResult>(
-        () => mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index),
+        {
+          fn: () => mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index),
+          name: 'mintToken',
+          args: [
+            signer.address,
+            tokenAddress,
+            recipientAddress,
+            amount.toString(),
+            currentNonce + index
+          ]
+        },
         rpcProviders.ALCHEMY
-      ) as Promise<MintResult>
+      ).then((res) => res as MintResult)
   );
+
   const mintResults = await Promise.all(mintPromises);
 
   return mintResults;

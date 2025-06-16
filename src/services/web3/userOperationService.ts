@@ -265,15 +265,19 @@ export async function waitForUserOperationReceipt(
       Logger.log('waitForUserOperationReceipt', `payload: ${JSON.stringify(payload)}`);
 
       try {
-        const response = (await wrapRpc(
-          async () =>
-            axios.post(bundlerRpcUrl, payload, {
-              headers: {
-                'Content-Type': 'application/json'
-              }
-            }),
+        const response = await wrapRpc<AxiosResponse>(
+          {
+            fn: async () =>
+              axios.post(bundlerRpcUrl, payload, {
+                headers: {
+                  'Content-Type': 'application/json'
+                }
+              }),
+            name: 'axios.post',
+            args: [bundlerRpcUrl, payload]
+          },
           rpcProviders.PIMLICO
-        )) as AxiosResponse;
+        );
 
         const receipt = response.data.result;
 
