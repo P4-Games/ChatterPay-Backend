@@ -7,12 +7,12 @@ participant "validationHelper" as Validator
 participant "mongoUserService" as MongoService
 participant "userService" as UserService
 participant "formatHelper" as Formatter
-participant "predictWalletService" as WalletPredictor
+participant "walletService" as WalletService
 participant "userModel" as UserModel
 participant "pushService" as PushService
 participant "notificationHelper" as Notifier
 participant "requestHelper" as Response
-participant "predictWalletService (dev only)" as TokenIssuer
+participant "walletService (dev only)" as TokenIssuer
 
 User -> FE: Starts wallet creation
 FE -> Route: POST /create_wallet { channel_user_id }

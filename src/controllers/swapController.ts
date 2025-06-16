@@ -221,7 +221,6 @@ export const swap = async (
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
     const proxyAddress = fromUser.wallets[0].wallet_proxy;
-    // const { proxyAddress } = await computeProxyAddressFromPhone(channel_user_id);
 
     // Get the contracts and decimals for the tokens
     const fromTokenContract = await setupERC20(tokenAddresses.tokenAddressInput, backendSigner);

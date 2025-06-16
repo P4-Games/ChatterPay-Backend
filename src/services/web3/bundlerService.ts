@@ -54,33 +54,39 @@ export async function sendUserOperationToBundler(
       `payload: ${JSON.stringify(payload)}, bundlerRpcUrl: ${bundlerRpcUrl}`
     );
 
-    const response = (await wrapRpc(
-      async () =>
-        axios.post(bundlerRpcUrl, payload, {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }),
+    const response = await wrapRpc<AxiosResponse>(
+      {
+        fn: async () =>
+          axios.post(bundlerRpcUrl, payload, {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }),
+        name: 'axios.post',
+        args: [bundlerRpcUrl, payload]
+      },
       rpcProviders.PIMLICO
-    )) as AxiosResponse;
+    );
 
-    if (response.data.error) {
-      Logger.error('sendUserOperationToBundler', response.data.error);
-      if (response.data.error.data) {
-        Logger.error('sendUserOperationToBundler', response.data.error.data);
+    const { data } = response;
+
+    if (data.error) {
+      Logger.error('sendUserOperationToBundler', data.error);
+      if (data.error.data) {
+        Logger.error('sendUserOperationToBundler', data.error.data);
       }
-      throw new Error(`Bundler Error: ${response.data.error.message}`);
+      throw new Error(`Bundler Error: ${data.error.message}`);
     }
 
-    if (!response.data.result) {
+    if (!data.result) {
       throw new Error('Bundler did not return a result');
     }
 
-    return response.data.result as string;
+    return data.result as string;
   } catch (error: unknown) {
     Logger.error(
       'sendUserOperationToBundler',
-      error instanceof Error ? error.message : 'Unknown error'
+      error instanceof Error ? error.message : JSON.stringify(error)
     );
     throw error;
   }

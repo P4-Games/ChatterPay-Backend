@@ -3,7 +3,7 @@ import { pushService } from './push/pushService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { IUser, UserModel, IUserWallet } from '../models/userModel';
-import { computeProxyAddressFromPhone } from './predictWalletService';
+import { computeWallet } from './web3/rpc/rpcService';
 import { sendWalletCreationNotification } from './notificationService';
 import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
 import {
@@ -55,7 +55,7 @@ export const createUserWithWallet = async (
   factoryAddress: string
 ): Promise<IUser> => {
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
-  const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(formattedPhoneNumber);
+  const predictedWallet: ComputedAddress = await computeWallet(formattedPhoneNumber);
 
   const user = new UserModel({
     phone_number: formattedPhoneNumber,
@@ -138,7 +138,7 @@ export const addWalletToUser = async (
   factoryAddress: string
 ): Promise<{ user: IUser; newWallet: IUserWallet } | null> => {
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
-  const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(formattedPhoneNumber);
+  const predictedWallet: ComputedAddress = await computeWallet(formattedPhoneNumber);
 
   const user = await UserModel.findOne({ phone_number: formattedPhoneNumber });
 
