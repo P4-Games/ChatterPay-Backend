@@ -122,28 +122,3 @@ export const updateBlockchain = async (
     return returnErrorResponse(reply, 400, 'Failed to update blockchain');
   }
 };
-
-/**
- * Deletes a specific blockchain entry by its ID.
- * @param {FastifyRequest} request - The FastifyRequest object containing the blockchain ID.
- * @param {FastifyReply} reply - The FastifyReply object used to send the response.
- * @returns {Promise<FastifyReply>} A promise resolving to the FastifyReply object confirming the deletion.
- */
-export const deleteBlockchain = async (
-  request: FastifyRequest<{ Params: BlockchainParams }>,
-  reply: FastifyReply
-): Promise<FastifyReply> => {
-  const { id } = request.params;
-  try {
-    const deletedBlockchain = await Blockchain.findByIdAndDelete(id);
-    if (!deletedBlockchain) {
-      Logger.warn('deleteBlockchain', 'Blockchain not found');
-      return await returnErrorResponse(reply, 404, 'Blockchain not found');
-    }
-    return await returnSuccessResponse(reply, 'Blockchain deleted successfully');
-  } catch (error) {
-    Logger.error('deleteBlockchain', 'Error deleting blockchain');
-    Logger.error('deleteBlockchain', 'Error details: ', error);
-    return returnErrorResponse(reply, 400, 'Failed to delete blockchain');
-  }
-};

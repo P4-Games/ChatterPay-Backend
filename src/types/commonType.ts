@@ -130,3 +130,12 @@ export const rpcProviders = {
 } as const;
 
 export type RpcProvider = (typeof rpcProviders)[keyof typeof rpcProviders];
+
+export enum CacheNames {
+  OPENSEA = 'openSea',
+  PRICE = 'priceCache',
+  ABI = 'abiCache',
+  NOTIFICATION = 'notificationTemplateCache',
+  TOR = 'torCache',
+  COINGECKO = 'coingeckoCache'
+}

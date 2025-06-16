@@ -6,10 +6,7 @@ import { Logger } from '../helpers/loggerHelper';
 import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchainModel';
 import { mongoUserService } from './mongo/mongoUserService';
-import {
-  MintResult,
-  rpcProviders
-} from '../types/commonType';
+import { MintResult, rpcProviders } from '../types/commonType';
 import { addWalletToUser, createUserWithWallet, getUserWalletByChainId } from './userService';
 
 /**

@@ -23,18 +23,19 @@ import {
   CheckBalanceConditionsResult
 } from '../types/commonType';
 import {
+  getTokenData,
+  checkBlockchainConditions,
+  userReachedOperationLimit,
+  userWithinTokenOperationLimits
+} from '../services/blockchainService';
+import {
+  getUser,
   openOperation,
   closeOperation,
   getOrCreateUser,
   getUserWalletByChainId,
   hasUserAnyOperationInProgress
 } from '../services/userService';
-import {
-  getTokenData,
-  checkBlockchainConditions,
-  userReachedOperationLimit,
-  userWithinTokenOperationLimits
-} from '../services/blockchainService';
 import {
   INFURA_URL,
   INFURA_API_KEY,
@@ -329,7 +330,7 @@ export const makeTransaction = async (
     /* 2. makeTransaction: check user has wallet             */
     /* ***************************************************** */
     logKey = `[op:transfer:${channel_user_id || ''}:${to}:${amount}:${tokenSymbol}]`;
-    const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
+    const fromUser: IUser | null = await getUser(channel_user_id);
     if (!fromUser) {
       rootSpan?.endSpan();
       Logger.info('makeTransaction', logKey, COMMON_REPLY_WALLET_NOT_CREATED);

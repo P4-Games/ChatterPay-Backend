@@ -117,7 +117,7 @@ export async function wrapRpc<T>(
  * Computes the Wallet for a given phone number.
  *
  * @param {string} phoneNumber - The phone number to compute the proxy address for.
- * @returns {Promise<ComputedAddress>} A promise that resolves to an object containing the proxy address, 
+ * @returns {Promise<ComputedAddress>} A promise that resolves to an object containing the proxy address,
  * EOA address, and private key.
  * @throws {Error} If there's an error in the computation process.
  */

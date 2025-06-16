@@ -1,12 +1,9 @@
 import axios from 'axios';
-import NodeCache from 'node-cache';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { ConversionRates } from '../../types/commonType';
+import { cacheService } from '../cache/cacheService';
+import { CacheNames, ConversionRates } from '../../types/commonType';
 import { TOKEN_IDS, RESULT_CURRENCIES, COINGECKO_API_BASE_URL } from '../../config/constants';
-
-// Initialize the cache
-const cache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
 
 /**
  * Generates a fallback response with zero values for all tokens and currencies.
@@ -56,14 +53,14 @@ export const coingeckoService = {
    */
   getConversationRates: async (): Promise<ConversionRates> => {
     const cacheKey = `getConversationRates`;
-    const fromCache = cache.get(cacheKey);
+    const fromCache = cacheService.get(CacheNames.COINGECKO, cacheKey);
 
     if (fromCache) {
       return fromCache as ConversionRates;
     }
 
     const result = await getCoingeckoConversionRates();
-    cache.set(cacheKey, result);
+    cacheService.set(CacheNames.COINGECKO, cacheKey, result);
     return result;
   },
 
@@ -74,7 +71,7 @@ export const coingeckoService = {
    */
   getTokenPrice: async (tokenId: string): Promise<number> => {
     const cacheKey = `token_${tokenId}`;
-    const fromCache = cache.get(cacheKey);
+    const fromCache = cacheService.get(CacheNames.COINGECKO, cacheKey);
 
     if (fromCache) {
       return fromCache as number;
@@ -83,7 +80,7 @@ export const coingeckoService = {
     const result = await getCoingeckoTokenData(tokenId);
     if (result?.[tokenId]?.usd) {
       const price = result[tokenId].usd;
-      cache.set(cacheKey, price);
+      cacheService.set(CacheNames.COINGECKO, cacheKey, price);
       return price;
     }
     return 0;

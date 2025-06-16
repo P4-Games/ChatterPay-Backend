@@ -1,6 +1,8 @@
 import { FastifyInstance } from 'fastify';
 
 import {
+  clearAllCaches,
+  clearCacheByName,
   resetUsersOperations,
   resetUsersOperationLimits,
   checkUsersWithOpenOperations,
@@ -83,6 +85,40 @@ const supportRoutes = async (fastify: FastifyInstance): Promise<void> => {
    * @returns {Object} Confirmation message of successful reset.
    */
   fastify.put('/support/reset_user_operations_counters', resetUsersOperationLimits);
+
+  /**
+   * Route to clear all application-level caches.
+   * Useful for maintenance or during testing to force cache repopulation.
+   *
+   * @route POST /support/clear_all_caches
+   * @returns {Object} Success message
+   * @example
+   * {
+   *   "success": true,
+   *   "message": "All caches have been cleared."
+   * }
+   */
+  fastify.post('/support/clear_all_caches', clearAllCaches);
+
+  /**
+   * Route to clear a specific named cache.
+   *
+   * @route POST /support/clear_cache_by_name
+   * @bodyParam {string} cacheName - The name of the cache to clear. Must be one of the CacheNames enum values.
+   * @returns {Object} Success or error message
+   * @example
+   * // Request body:
+   * {
+   *   "cacheName": "priceCache"
+   * }
+   *
+   * // Response:
+   * {
+   *   "success": true,
+   *   "message": "Cache \"priceCache\" has been cleared."
+   * }
+   */
+  fastify.post('/support/clear_cache_by_name', clearCacheByName);
 };
 
 export default supportRoutes;

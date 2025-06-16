@@ -1,7 +1,8 @@
 import axios from 'axios';
-import NodeCache from 'node-cache';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
+import { CacheNames } from '../../types/commonType';
+import { cacheService } from '../../services/cache/cacheService';
 import { returnErrorResponse } from '../../helpers/requestHelper';
 
 /**
@@ -12,7 +13,9 @@ import { returnErrorResponse } from '../../helpers/requestHelper';
  */
 async function getTorExitIPs(): Promise<string[]> {
   // Check if Tor exit IPs are already cached
-  const cachedIPs = torCache.get<string[]>('torExitIPs');
+
+  const cachedIPs = cacheService.get<string[]>(CacheNames.TOR, 'torExitIPs');
+
   if (cachedIPs) {
     return cachedIPs;
   }
@@ -26,16 +29,13 @@ async function getTorExitIPs(): Promise<string[]> {
       .map((line: string) => line.split(' ')[1]);
 
     // Cache the exit IPs for subsequent requests
-    torCache.set('torExitIPs', exitIps);
+    cacheService.set<string[]>(CacheNames.TOR, 'torExitIPs', exitIps);
     return exitIps;
   } catch (error) {
     console.error('Error fetching Tor exit IPs', error);
     return [];
   }
 }
-
-// Initialize the cache for Tor exit IPs with a TTL (Time-To-Live) of 1 hour
-const torCache = new NodeCache({ stdTTL: 3600 });
 
 /**
  * Middleware function to block requests coming from Tor exit nodes.

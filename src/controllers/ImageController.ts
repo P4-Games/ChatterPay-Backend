@@ -1,11 +1,11 @@
 import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
+import { getUser } from '../services/userService';
 import { icpService } from '../services/icp/icpService';
 import { isShortUrl } from '../helpers/validationHelper';
 import { ipfsService } from '../services/ipfs/ipfsService';
 import { downloadAndProcessImage } from '../services/imageService';
-import { mongoUserService } from '../services/mongo/mongoUserService';
 import {
   returnErrorResponse,
   returnSuccessResponse,
@@ -86,7 +86,7 @@ export const uploadImage: RouteHandlerMethod = async (
       return await returnErrorResponse(reply, 400, 'Short Url not allowed');
     }
 
-    const user = await mongoUserService.getUser(phone_number);
+    const user = await getUser(phone_number);
     if (!user) {
       Logger.warn('uploadImage', `User not found: ${phone_number}`);
       return await returnErrorResponse(reply, 404, 'User not found');

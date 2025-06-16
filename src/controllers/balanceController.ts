@@ -3,10 +3,9 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
 import { IUser, IUserWallet } from '../models/userModel';
-import { getUserWalletByChainId } from '../services/userService';
 import { getFiatQuotes } from '../services/criptoya/criptoYaService';
-import { mongoUserService } from '../services/mongo/mongoUserService';
 import { COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
+import { getUser, getUserWalletByChainId } from '../services/userService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import {
@@ -124,7 +123,7 @@ export const balanceByPhoneNumber = async (
   }
 
   try {
-    const user: IUser | null = await mongoUserService.getUser(phone);
+    const user: IUser | null = await getUser(phone);
     if (!user) {
       Logger.info('balanceByPhoneNumber', COMMON_REPLY_WALLET_NOT_CREATED);
       return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);

@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { IUser } from '../models/userModel';
 import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
-import { mongoUserService } from '../services/mongo/mongoUserService';
+import { getUser } from '../services/userService';
 import { mantecaUserService } from '../services/manteca/user/mantecaUserService';
 import { mantecaPriceService } from '../services/manteca/market/mantecaPriceService';
 import { mantecaWidgetService } from '../services/manteca/user/mantecaWidgetService';
@@ -89,7 +89,7 @@ export const linkToOperate = async (
   }
 
   const { channel_user_id, operation, asset, against, assetAmount } = request.body;
-  const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
+  const fromUser: IUser | null = await getUser(channel_user_id);
 
   const errorMessage = await validateInputsLinkToOperate({
     fromUser,

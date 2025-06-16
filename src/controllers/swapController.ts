@@ -13,6 +13,7 @@ import { mongoUserService } from '../services/mongo/mongoUserService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import {
+  getUser,
   openOperation,
   closeOperation,
   hasPhoneAnyOperationInProgress
@@ -132,7 +133,7 @@ export const swap = async (
     /* 2. swap: check user has wallet                        */
     /* ***************************************************** */
     logKey = `[op:swap:${channel_user_id}:${inputCurrency}:${outputCurrency}:${amount}]`;
-    const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
+    const fromUser: IUser | null = await getUser(channel_user_id);
     if (!fromUser) {
       Logger.info('swap', logKey, COMMON_REPLY_WALLET_NOT_CREATED);
       // must return 200, so the bot displays the message instead of an error!
