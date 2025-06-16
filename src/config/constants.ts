@@ -44,9 +44,9 @@ const {
   SWAP_SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
   ABIS_READ_FROM: abisReadFrom = 'local',
   CHATIZALO_PHONE_NUMBER,
-  QUEUE_BUNDLER_INTERVAL: queueBundlerInterval = 5000,
-  QUEUE_GAS_INTERVAL: queueGasInterval = 5000,
-  QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 3000,
+  QUEUE_BUNDLER_INTERVAL: queueBundlerInterval = 150,
+  QUEUE_GAS_INTERVAL: queueGasInterval = 250,
+  QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 150,
   ISSUER_TOKENS_ENABLED: issuerTokensEnabled = 'false'
 } = process.env;
 

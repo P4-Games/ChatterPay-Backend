@@ -1,4 +1,3 @@
-# Use Node.js 20.13.1 as base
 FROM node:20.13.1-bullseye AS base
 
 RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.1.21" && \
@@ -11,13 +10,7 @@ RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.1.21" && \
 ENV BUN_INSTALL="/root/.bun"
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
 
-# Verify Node.js and Bun versions before starting
 RUN node -v && bun -v
-
-# Establece el directorio de trabajo en el contenedor
-WORKDIR /app
-
-# Set the working directory in the container
 WORKDIR /app
 
 # Copy environment variables as build arguments

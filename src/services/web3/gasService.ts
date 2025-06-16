@@ -2,52 +2,7 @@ import { ethers, Contract, BigNumber } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { OpGasValues } from '../../models/blockchainModel';
-import { getUserOpHash } from '../../helpers/userOperationHelper';
 import { PackedUserOperation } from '../../types/userOperationType';
-
-/**
- * Generates a dummy signature for a given UserOperation.
- *
- * This function creates a dummy version of the UserOperation, computes its hash,
- * and then signs it using a random private key to generate a dummy signature.
- *
- * @param userOperation - The user operation for which a dummy signature will be generated.
- * @param entryPointAddress - The entry point address for the operation.
- * @param chainId - The chain ID for the operation.
- * @returns The generated dummy signature.
- */
-export async function generateDummySignature(
-  userOperation: Partial<PackedUserOperation>,
-  entryPointAddress: string,
-  chainId: number
-): Promise<string> {
-  // Create a "dummy" version of the UserOperation
-  const dummyUserOp: PackedUserOperation = {
-    sender: userOperation.sender ?? ethers.constants.AddressZero,
-    nonce: userOperation.nonce || ethers.constants.Zero,
-    initCode: userOperation.initCode ?? '0x',
-    callData: userOperation.callData ?? '0x',
-    callGasLimit: userOperation.callGasLimit || ethers.constants.Zero,
-    verificationGasLimit: userOperation.verificationGasLimit || ethers.constants.Zero,
-    preVerificationGas: userOperation.preVerificationGas || ethers.constants.Zero,
-    maxFeePerGas: userOperation.maxFeePerGas || ethers.constants.Zero,
-    maxPriorityFeePerGas: userOperation.maxPriorityFeePerGas || ethers.constants.Zero,
-    paymasterAndData: userOperation.paymasterAndData ?? '0x',
-    signature: '0x'
-  };
-
-  // Compute the hash of the dummy operation
-  const userOpHash = getUserOpHash(dummyUserOp, entryPointAddress, chainId);
-
-  // Generate a dummy signature
-  // We use a random private key for this
-  const dummyWallet = ethers.Wallet.createRandom();
-  const dummySignature = await dummyWallet.signMessage(ethers.utils.arrayify(userOpHash));
-
-  Logger.log('generateDummySignature', dummySignature);
-
-  return dummySignature;
-}
 
 /**
  * Calculates recommended gas values, prioritizing latest network estimations.
