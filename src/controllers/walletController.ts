@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { Logger } from '../helpers/loggerHelper';
 import { IUser, IUserWallet } from '../models/userModel';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
-import { tryIssueTokens } from '../services/predictWalletService';
+import { tryIssueTokens } from '../services/walletService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';

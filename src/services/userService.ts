@@ -3,7 +3,7 @@ import { pushService } from './push/pushService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { IUser, UserModel, IUserWallet } from '../models/userModel';
-import { computeProxyAddressFromPhone } from './predictWalletService';
+import { computeProxyAddressFromPhone } from './walletService';
 import { sendWalletCreationNotification } from './notificationService';
 import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
 import {
