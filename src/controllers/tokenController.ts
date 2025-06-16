@@ -4,8 +4,7 @@ import { Logger } from '../helpers/loggerHelper';
 import Token, { IToken } from '../models/tokenModel';
 import { issueTokens } from '../services/walletService';
 import { IUser, IUserWallet } from '../models/userModel';
-import { getUserWalletByChainId } from '../services/userService';
-import { mongoUserService } from '../services/mongo/mongoUserService';
+import { getUser, getUserWalletByChainId } from '../services/userService';
 import { coingeckoService } from '../services/coingecko/coingeckoService';
 import { IS_DEVELOPMENT, COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
@@ -219,7 +218,7 @@ export const issueTokensHandler = async (
     let finalAddress: string = identifier;
 
     if (!identifier.toLowerCase().startsWith('0x')) {
-      const fromUser: IUser | null = await mongoUserService.getUser(identifier);
+      const fromUser: IUser | null = await getUser(identifier);
       if (!fromUser) {
         Logger.info('issueTokensHandler', COMMON_REPLY_WALLET_NOT_CREATED);
         // must return 200, so the bot displays the message instead of an error!

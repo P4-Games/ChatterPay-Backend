@@ -29,6 +29,7 @@ import {
   getNotificationTemplate
 } from '../services/notificationService';
 import {
+  getUser,
   getUserWallet,
   openOperation,
   closeOperation,
@@ -257,7 +258,7 @@ export const generateNftOriginal = async (
     return returnErrorResponse(reply, 400, 'Short Url not allowed');
   }
 
-  const fromUser: IUser | null = await mongoUserService.getUser(channel_user_id);
+  const fromUser: IUser | null = await getUser(channel_user_id);
   const userWalletByChainId: IUserWallet | null = await getUserWallet(
     channel_user_id,
     DEFAULT_CHAIN_ID
