@@ -153,13 +153,15 @@ async function processExternalDeposit(
  * @async
  * @param {string} routerAddress - The address of the Uniswap V2 router (used to filter internal transfers).
  * @param {string} poolAddress - The address of the Uniswap v3 Pool (used to filter internal transfers)
- * @param {number} chain_id - The ID of the blockchain network being processed.
+ * @param {number} chainId - The ID of the blockchain network being processed.
+ * @param {boolean} sendNotification - Enable / Disable send external deposit notification
  * @returns {Promise<string>} A message indicating the result of the processing.
  */
 export async function fetchExternalDeposits(
   routerAddress: string,
   poolAddress: string,
-  chain_id: number
+  chainId: number,
+  sendNotification: boolean
 ) {
   try {
     const blockchain = await Blockchain.findOne({ chainId: chain_id });
@@ -202,7 +204,9 @@ export async function fetchExternalDeposits(
 
     // Process each external deposit
     await Promise.all(
-      externalDeposits.map((transfer) => processExternalDeposit(transfer, chain_id))
+      externalDeposits.map((transfer) =>
+        processExternalDeposit(transfer, chainId, sendNotification)
+      )
     );
 
     // Update the last processed timestamp
