@@ -27,8 +27,12 @@ import {
  */
 export const checkExternalDeposits = async (request: FastifyRequest, reply: FastifyReply) => {
   const fastify = request.server;
-  const { routerAddress } = fastify.networkConfig.contracts;
-  const depositsStatus = await fetchExternalDeposits(routerAddress!, fastify.networkConfig.chainId);
+  const { routerAddress, poolAddress } = fastify.networkConfig.contracts;
+  const depositsStatus = await fetchExternalDeposits(
+    routerAddress!,
+    poolAddress!,
+    fastify.networkConfig.chainId
+  );
   return returnSuccessResponse(reply, depositsStatus);
 };
 
