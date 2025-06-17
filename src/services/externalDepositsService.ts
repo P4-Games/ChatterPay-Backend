@@ -1,12 +1,12 @@
 import { gql, request } from 'graphql-request';
 
-import Token from '../models/tokenModel';
 import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
-import Blockchain from '../models/blockchainModel';
+import Token, { IToken } from '../models/tokenModel';
 import { TransactionData } from '../types/commonType';
 import { mongoTokenService } from './mongo/mongoTokenService';
+import Blockchain, { IBlockchain } from '../models/blockchainModel';
 import { GRAPH_API_EXTERNAL_DEPOSITS_URL } from '../config/constants';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { sendReceivedTransferNotification } from './notificationService';
@@ -51,9 +51,14 @@ interface Transfer {
  * Processes a single external deposit.
  * @async
  * @param {Transfer} transfer - The transfer object to process.
- * @param {number} chain_id - The chain ID where the transfer occurred.
+ * @param {number} chanId - The chain ID where the transfer occurred.
+ * @param {boolean} sendNotification - Enable / Disable send external deposit notification
  */
-async function processExternalDeposit(transfer: Transfer, chain_id: number) {
+async function processExternalDeposit(
+  transfer: Transfer,
+  chanId: number,
+  sendNotification: boolean
+) {
   // First validate if the token is listed and active
   const tokenObject = await mongoTokenService.getToken(transfer.token, chain_id);
 
@@ -112,30 +117,25 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
       };
       await mongoTransactionService.saveTransaction(transactionData);
 
-    try {
-      // Send incoming transfer notification message, and record tx data
-      await sendReceivedTransferNotification(
-        transfer.to,
-        null,
-        user.phone_number,
-        value.toString(),
-        tokenInfo.symbol
-      );
-      Logger.log(
+      if (sendNotification) {
+        await sendReceivedTransferNotification(
+          transfer.to,
+          null,
+          user.phone_number,
+          value.toString(),
+          tokenInfo.symbol
+        );
+        Logger.debug(
+          'processExternalDeposit',
+          `Notification sent successfully for transfer ${transfer.id} to user ${user.phone_number}`
+        );
+      }
+    } else {
+      Logger.warn(
         'processExternalDeposit',
-        `Notification sent successfully for transfer ${transfer.id} to user ${user.phone_number}`
-      );
-    } catch (error) {
-      Logger.error(
-        'processExternalDeposit',
-        `Failed to send notification for transfer ${transfer.id}: ${error}`
+        `No user found with wallet: ${transfer.to}. Transfer not processed: ${JSON.stringify(transfer)}`
       );
     }
-  } else {
-    Logger.warn(
-      'processExternalDeposit',
-      `No user found with wallet: ${transfer.to}. Transfer not processed: ${JSON.stringify(transfer)}`
-    );
   }
 }
 
