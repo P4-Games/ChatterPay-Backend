@@ -1,12 +1,12 @@
 import { gql, request } from 'graphql-request';
 
-import Token from '../models/tokenModel';
 import { UserModel } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
-import Blockchain from '../models/blockchainModel';
+import Token, { IToken } from '../models/tokenModel';
 import { TransactionData } from '../types/commonType';
 import { mongoTokenService } from './mongo/mongoTokenService';
+import Blockchain, { IBlockchain } from '../models/blockchainModel';
 import { GRAPH_API_EXTERNAL_DEPOSITS_URL } from '../config/constants';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { sendReceivedTransferNotification } from './notificationService';
@@ -51,84 +51,99 @@ interface Transfer {
  * Processes a single external deposit.
  * @async
  * @param {Transfer} transfer - The transfer object to process.
- * @param {number} chain_id - The chain ID where the transfer occurred.
+ * @param {number} chanId - The chain ID where the transfer occurred.
+ * @param {boolean} sendNotification - Enable / Disable send external deposit notification
  */
-async function processExternalDeposit(transfer: Transfer, chain_id: number) {
-  // First validate if the token is listed and active
-  const tokenObject = await mongoTokenService.getToken(transfer.token, chain_id);
+async function processExternalDeposit(
+  transfer: Transfer,
+  chanId: number,
+  sendNotification: boolean
+) {
+  try {
+    // First validate if the token is listed and active
+    const tokenObject = await mongoTokenService.getToken(transfer.token, chanId);
 
-  if (!tokenObject) {
-    Logger.warn(
-      'processExternalDeposit',
-      `Transfer rejected: Token ${transfer.token} is not listed for chain ${chain_id}`
-    );
-    return;
-  }
-
-  const normalizedTo = transfer.to.toLowerCase();
-
-  // Find users with at least one wallet_proxy that matches (case-insensitive)
-  const candidates = await UserModel.find({
-    'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') }
-  });
-
-  // Filter in memory to ensure exact lowercase match
-  const user = candidates.find((u) =>
-    u.wallets.some((w) => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
-  );
-
-  if (user) {
-    const value = Number((Number(transfer.value) / 10 ** tokenObject.decimals).toFixed(4));
-
-    // Get token info
-    const networkConfig = await mongoBlockchainService.getNetworkConfig();
-    const blockchainTokens = await Token.find({ chain_id });
-    const tokenInfo = getTokenInfo(networkConfig, blockchainTokens, transfer.token);
-
-    if (!tokenInfo) {
-      Logger.warn('processExternalDeposit', `Token info not found for address: ${transfer.token}`);
+    if (!tokenObject) {
+      Logger.warn(
+        'processExternalDeposit',
+        `External Deposit transaction rejected: Token ${transfer.token} is not listed for chain ${chanId}`
+      );
       return;
     }
 
-    Logger.log('processExternalDeposit', 'Updating swap transactions in database.');
-    const transactionData: TransactionData = {
-      tx: transfer.id,
-      walletFrom: transfer.from,
-      walletTo: transfer.to,
-      amount: value,
-      fee: 0,
-      token: tokenInfo.symbol,
-      type: 'deposit',
-      status: 'completed',
-      chain_id,
-      date: new Date(Number(transfer.blockTimestamp) * 1000)
-    };
-    await mongoTransactionService.saveTransaction(transactionData);
+    const normalizedTo = transfer.to.toLowerCase();
 
-    try {
-      // Send incoming transfer notification message, and record tx data
-      await sendReceivedTransferNotification(
-        transfer.to,
-        null,
-        user.phone_number,
-        value.toString(),
-        tokenInfo.symbol
-      );
-      Logger.log(
+    // Find users with at least one wallet_proxy that matches (case-insensitive)
+    const candidates = await UserModel.find({
+      'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') }
+    });
+
+    // Filter in memory to ensure exact lowercase match
+    const user = candidates.find((u) =>
+      u.wallets.some((w) => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
+    );
+
+    if (user) {
+      Logger.debug(
         'processExternalDeposit',
-        `Notification sent successfully for transfer ${transfer.id} to user ${user.phone_number}`
+        `Processing external deposit for user user: ${transfer.to}. Transfer: ${JSON.stringify(transfer)}`
       );
-    } catch (error) {
-      Logger.error(
+      const value = Number((Number(transfer.value) / 10 ** tokenObject.decimals).toFixed(4));
+
+      // Get token info
+      const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+      const blockchainTokens = await Token.find({ chain_id: chanId });
+      const tokenInfo: IToken | undefined = getTokenInfo(
+        networkConfig,
+        blockchainTokens,
+        transfer.token
+      );
+
+      if (!tokenInfo) {
+        Logger.warn(
+          'processExternalDeposit',
+          `Token info not found for address: ${transfer.token}`
+        );
+        return;
+      }
+
+      Logger.debug('processExternalDeposit', 'Saving external deposit transaction in database.');
+      const transactionData: TransactionData = {
+        tx: transfer.id,
+        walletFrom: transfer.from,
+        walletTo: transfer.to,
+        amount: value,
+        fee: 0,
+        token: tokenInfo.symbol,
+        type: 'deposit',
+        status: 'completed',
+        chain_id: chanId,
+        date: new Date(Number(transfer.blockTimestamp) * 1000)
+      };
+      await mongoTransactionService.saveTransaction(transactionData);
+
+      if (sendNotification) {
+        await sendReceivedTransferNotification(
+          transfer.to,
+          null,
+          user.phone_number,
+          value.toString(),
+          tokenInfo.symbol
+        );
+        Logger.debug(
+          'processExternalDeposit',
+          `Notification sent successfully for transfer ${transfer.id} to user ${user.phone_number}`
+        );
+      }
+    } else {
+      Logger.warn(
         'processExternalDeposit',
-        `Failed to send notification for transfer ${transfer.id}: ${error}`
+        `No user found with wallet: ${transfer.to}. Transfer not processed: ${JSON.stringify(transfer)}`
       );
     }
-  } else {
-    Logger.warn(
-      'processExternalDeposit',
-      `No user found with wallet: ${transfer.to}. Transfer not processed: ${JSON.stringify(transfer)}`
-    );
+  } catch (error) {
+    Logger.error('processExternalDeposit', `transfer: ${JSON.stringify(transfer)}`, error);
+    // avoid throw
   }
 }
 
@@ -138,25 +153,27 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
  * @async
  * @param {string} routerAddress - The address of the Uniswap V2 router (used to filter internal transfers).
  * @param {string} poolAddress - The address of the Uniswap v3 Pool (used to filter internal transfers)
- * @param {number} chain_id - The ID of the blockchain network being processed.
+ * @param {number} chainId - The ID of the blockchain network being processed.
+ * @param {boolean} sendNotification - Enable / Disable send external deposit notification
  * @returns {Promise<string>} A message indicating the result of the processing.
  */
 export async function fetchExternalDeposits(
   routerAddress: string,
   poolAddress: string,
-  chain_id: number
+  chainId: number,
+  sendNotification: boolean
 ) {
   try {
-    const blockchain = await Blockchain.findOne({ chainId: chain_id });
+    const blockchain = await Blockchain.findOne({ chainId });
 
     if (!blockchain) {
-      const message = `No network found for chain_id ${chain_id}`;
+      const message = `No network found for chain_id ${chainId}`;
       Logger.error('fetchExternalDeposits', message);
       return message;
     }
 
     if (!blockchain.externalDeposits) {
-      const message = `Missing externalDeposits structure in bdd for network ${chain_id}`;
+      const message = `Missing externalDeposits structure in bdd for network ${chainId}`;
       Logger.error('fetchExternalDeposits', message);
       return message;
     }
@@ -168,7 +185,7 @@ export async function fetchExternalDeposits(
 
     Logger.log(
       'fetchExternalDeposits',
-      `Fetching network (${chain_id}), fromTimestamp: ${fromTimestamp}, variables: ${JSON.stringify(variables)}`
+      `Fetching network (${chainId}), fromTimestamp: ${fromTimestamp}, variables: ${JSON.stringify(variables)}`
     );
 
     // Execute the GraphQL query
@@ -178,7 +195,7 @@ export async function fetchExternalDeposits(
       variables
     );
 
-    // Filter out Uniswap V2 router transfers & Uniswap V3 pool transfers.
+    // Filter out Uniswap V2 router transfers & Uniswap V3 Pool transfers.
     const externalDeposits = data.chatterPayTransfers.filter(
       (transfer) =>
         transfer.from.toLowerCase() !== routerAddress.toLowerCase() &&
@@ -187,10 +204,13 @@ export async function fetchExternalDeposits(
 
     // Process each external deposit
     await Promise.all(
-      externalDeposits.map((transfer) => processExternalDeposit(transfer, chain_id))
+      externalDeposits.map((transfer) =>
+        processExternalDeposit(transfer, chainId, sendNotification)
+      )
     );
 
-    // Update the last processed timestamp
+    // Update the last processed Block in BDD
+    let finalMsg = `No new deposits found since Block ${fromTimestamp}`;
     if (externalDeposits.length > 0) {
       const maxTimestampProcessed = Math.max(
         ...externalDeposits.map((t) => parseInt(t.blockTimestamp, 10))
@@ -199,10 +219,13 @@ export async function fetchExternalDeposits(
       blockchain.externalDeposits.lastBlockProcessed = maxTimestampProcessed;
       blockchain.externalDeposits.updatedAt = new Date();
       await blockchain.save();
-      return `Processed external deposits up to timestamp ${maxTimestampProcessed}`;
+      finalMsg = `Processed external deposits up to Block ${maxTimestampProcessed}`;
+      Logger.info('fetchExternalDeposits', finalMsg);
+      return finalMsg;
     }
 
-    return `No new deposits found since timestamp ${fromTimestamp}`;
+    Logger.info('fetchExternalDeposits', finalMsg);
+    return finalMsg;
   } catch (error) {
     Logger.error('fetchExternalDeposits', `Error fetching external deposits: ${error}`);
     return `Error fetching external deposits: ${error}`;
