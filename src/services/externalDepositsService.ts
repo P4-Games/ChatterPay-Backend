@@ -90,10 +90,14 @@ async function processExternalDeposit(
       );
       const value = Number((Number(transfer.value) / 10 ** tokenObject.decimals).toFixed(4));
 
-    // Get token info
-    const networkConfig = await mongoBlockchainService.getNetworkConfig();
-    const blockchainTokens = await Token.find({ chain_id });
-    const tokenInfo = getTokenInfo(networkConfig, blockchainTokens, transfer.token);
+      // Get token info
+      const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+      const blockchainTokens = await Token.find({ chain_id: chanId });
+      const tokenInfo: IToken | undefined = getTokenInfo(
+        networkConfig,
+        blockchainTokens,
+        transfer.token
+      );
 
       if (!tokenInfo) {
         Logger.warn(
