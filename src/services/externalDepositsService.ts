@@ -164,16 +164,16 @@ export async function fetchExternalDeposits(
   sendNotification: boolean
 ) {
   try {
-    const blockchain = await Blockchain.findOne({ chainId: chain_id });
+    const blockchain = await Blockchain.findOne({ chainId });
 
     if (!blockchain) {
-      const message = `No network found for chain_id ${chain_id}`;
+      const message = `No network found for chain_id ${chainId}`;
       Logger.error('fetchExternalDeposits', message);
       return message;
     }
 
     if (!blockchain.externalDeposits) {
-      const message = `Missing externalDeposits structure in bdd for network ${chain_id}`;
+      const message = `Missing externalDeposits structure in bdd for network ${chainId}`;
       Logger.error('fetchExternalDeposits', message);
       return message;
     }
@@ -185,7 +185,7 @@ export async function fetchExternalDeposits(
 
     Logger.log(
       'fetchExternalDeposits',
-      `Fetching network (${chain_id}), fromTimestamp: ${fromTimestamp}, variables: ${JSON.stringify(variables)}`
+      `Fetching network (${chainId}), fromTimestamp: ${fromTimestamp}, variables: ${JSON.stringify(variables)}`
     );
 
     // Execute the GraphQL query
@@ -195,7 +195,7 @@ export async function fetchExternalDeposits(
       variables
     );
 
-    // Filter out Uniswap V2 router transfers & Uniswap V3 pool transfers.
+    // Filter out Uniswap V2 router transfers & Uniswap V3 Pool transfers.
     const externalDeposits = data.chatterPayTransfers.filter(
       (transfer) =>
         transfer.from.toLowerCase() !== routerAddress.toLowerCase() &&
