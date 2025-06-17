@@ -58,9 +58,10 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
 
     // USDT is always 1 USD
     priceMap.set('USDT', 1);
+    priceMap.set('USDC', 1);
 
     // Filter out USDT as we already set its price
-    const symbolsToFetch = symbols.filter((s) => s !== 'USDT');
+    const symbolsToFetch = symbols.filter((s) => s !== 'USDT' && s !== 'USDC');
 
     if (symbolsToFetch.length === 0) return priceMap;
 

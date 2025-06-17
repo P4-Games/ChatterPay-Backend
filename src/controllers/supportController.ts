@@ -164,7 +164,7 @@ export const clearCacheByName = async (
 
     cacheService.clearCache(cacheName as CacheNames);
 
-    return await returnSuccessResponse(reply, `Cache "${cacheName}" has been cleared.`);
+    return await returnSuccessResponse(reply, `Cache '${cacheName}' has been cleared.`);
   } catch (error) {
     Logger.error('clearCacheByName', error);
     return returnErrorResponse500(reply);

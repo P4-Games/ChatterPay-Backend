@@ -93,7 +93,7 @@ export async function sendWalletCreationNotification(
   try {
     Logger.log(
       'sendWalletCreationNotification',
-      `Sending wallet creation notification to ${channel_user_id} ,${user_wallet_proxy}`
+      `Sending wallet creation notification to ${channel_user_id}, ${user_wallet_proxy}`
     );
 
     const { title, message } = await getNotificationTemplate(
