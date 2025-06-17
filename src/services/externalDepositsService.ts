@@ -209,7 +209,8 @@ export async function fetchExternalDeposits(
       )
     );
 
-    // Update the last processed timestamp
+    // Update the last processed Block in BDD
+    let finalMsg = `No new deposits found since Block ${fromTimestamp}`;
     if (externalDeposits.length > 0) {
       const maxTimestampProcessed = Math.max(
         ...externalDeposits.map((t) => parseInt(t.blockTimestamp, 10))
@@ -218,10 +219,13 @@ export async function fetchExternalDeposits(
       blockchain.externalDeposits.lastBlockProcessed = maxTimestampProcessed;
       blockchain.externalDeposits.updatedAt = new Date();
       await blockchain.save();
-      return `Processed external deposits up to timestamp ${maxTimestampProcessed}`;
+      finalMsg = `Processed external deposits up to Block ${maxTimestampProcessed}`;
+      Logger.info('fetchExternalDeposits', finalMsg);
+      return finalMsg;
     }
 
-    return `No new deposits found since timestamp ${fromTimestamp}`;
+    Logger.info('fetchExternalDeposits', finalMsg);
+    return finalMsg;
   } catch (error) {
     Logger.error('fetchExternalDeposits', `Error fetching external deposits: ${error}`);
     return `Error fetching external deposits: ${error}`;
