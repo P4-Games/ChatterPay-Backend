@@ -59,28 +59,29 @@ async function processExternalDeposit(
   chanId: number,
   sendNotification: boolean
 ) {
-  // First validate if the token is listed and active
-  const tokenObject = await mongoTokenService.getToken(transfer.token, chain_id);
+  try {
+    // First validate if the token is listed and active
+    const tokenObject = await mongoTokenService.getToken(transfer.token, chanId);
 
-  if (!tokenObject) {
-    Logger.warn(
-      'processExternalDeposit',
-      `Transfer rejected: Token ${transfer.token} is not listed for chain ${chain_id}`
+    if (!tokenObject) {
+      Logger.warn(
+        'processExternalDeposit',
+        `External Deposit transaction rejected: Token ${transfer.token} is not listed for chain ${chanId}`
+      );
+      return;
+    }
+
+    const normalizedTo = transfer.to.toLowerCase();
+
+    // Find users with at least one wallet_proxy that matches (case-insensitive)
+    const candidates = await UserModel.find({
+      'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') }
+    });
+
+    // Filter in memory to ensure exact lowercase match
+    const user = candidates.find((u) =>
+      u.wallets.some((w) => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
     );
-    return;
-  }
-
-  const normalizedTo = transfer.to.toLowerCase();
-
-  // Find users with at least one wallet_proxy that matches (case-insensitive)
-  const candidates = await UserModel.find({
-    'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') }
-  });
-
-  // Filter in memory to ensure exact lowercase match
-  const user = candidates.find((u) =>
-    u.wallets.some((w) => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
-  );
 
     if (user) {
       Logger.debug(
@@ -136,6 +137,9 @@ async function processExternalDeposit(
         `No user found with wallet: ${transfer.to}. Transfer not processed: ${JSON.stringify(transfer)}`
       );
     }
+  } catch (error) {
+    Logger.error('processExternalDeposit', `transfer: ${JSON.stringify(transfer)}`, error);
+    // avoid throw
   }
 }
 
