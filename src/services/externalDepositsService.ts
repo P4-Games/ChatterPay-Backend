@@ -77,33 +77,40 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
     u.wallets.some((w) => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
   );
 
-  if (user) {
-    const value = Number((Number(transfer.value) / 10 ** tokenObject.decimals).toFixed(4));
+    if (user) {
+      Logger.debug(
+        'processExternalDeposit',
+        `Processing external deposit for user user: ${transfer.to}. Transfer: ${JSON.stringify(transfer)}`
+      );
+      const value = Number((Number(transfer.value) / 10 ** tokenObject.decimals).toFixed(4));
 
     // Get token info
     const networkConfig = await mongoBlockchainService.getNetworkConfig();
     const blockchainTokens = await Token.find({ chain_id });
     const tokenInfo = getTokenInfo(networkConfig, blockchainTokens, transfer.token);
 
-    if (!tokenInfo) {
-      Logger.warn('processExternalDeposit', `Token info not found for address: ${transfer.token}`);
-      return;
-    }
+      if (!tokenInfo) {
+        Logger.warn(
+          'processExternalDeposit',
+          `Token info not found for address: ${transfer.token}`
+        );
+        return;
+      }
 
-    Logger.log('processExternalDeposit', 'Updating swap transactions in database.');
-    const transactionData: TransactionData = {
-      tx: transfer.id,
-      walletFrom: transfer.from,
-      walletTo: transfer.to,
-      amount: value,
-      fee: 0,
-      token: tokenInfo.symbol,
-      type: 'deposit',
-      status: 'completed',
-      chain_id,
-      date: new Date(Number(transfer.blockTimestamp) * 1000)
-    };
-    await mongoTransactionService.saveTransaction(transactionData);
+      Logger.debug('processExternalDeposit', 'Saving external deposit transaction in database.');
+      const transactionData: TransactionData = {
+        tx: transfer.id,
+        walletFrom: transfer.from,
+        walletTo: transfer.to,
+        amount: value,
+        fee: 0,
+        token: tokenInfo.symbol,
+        type: 'deposit',
+        status: 'completed',
+        chain_id: chanId,
+        date: new Date(Number(transfer.blockTimestamp) * 1000)
+      };
+      await mongoTransactionService.saveTransaction(transactionData);
 
     try {
       // Send incoming transfer notification message, and record tx data
