@@ -136,11 +136,16 @@ async function processExternalDeposit(transfer: Transfer, chain_id: number) {
  * Fetches and processes external deposits for users in the ecosystem.
  *
  * @async
- * @param {string} routerAddress - The address of the Uniswap router (used to filter internal transfers).
+ * @param {string} routerAddress - The address of the Uniswap V2 router (used to filter internal transfers).
+ * @param {string} poolAddress - The address of the Uniswap v3 Pool (used to filter internal transfers)
  * @param {number} chain_id - The ID of the blockchain network being processed.
  * @returns {Promise<string>} A message indicating the result of the processing.
  */
-export async function fetchExternalDeposits(routerAddress: string, chain_id: number) {
+export async function fetchExternalDeposits(
+  routerAddress: string,
+  poolAddress: string,
+  chain_id: number
+) {
   try {
     const blockchain = await Blockchain.findOne({ chainId: chain_id });
 
@@ -173,9 +178,11 @@ export async function fetchExternalDeposits(routerAddress: string, chain_id: num
       variables
     );
 
-    // Filter out Uniswap V3 router transfers
+    // Filter out Uniswap V2 router transfers & Uniswap V3 pool transfers.
     const externalDeposits = data.chatterPayTransfers.filter(
-      (transfer) => transfer.from.toLowerCase() !== routerAddress.toLowerCase()
+      (transfer) =>
+        transfer.from.toLowerCase() !== routerAddress.toLowerCase() &&
+        transfer.from.toLowerCase() !== poolAddress.toLowerCase()
     );
 
     // Process each external deposit
