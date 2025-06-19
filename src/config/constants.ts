@@ -1,9 +1,7 @@
-import dotenv from 'dotenv';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
 import { LogLevel, validLogLevels } from '../types/loggerType';
-
-dotenv.config();
+import { NotificationLanguage, notificationLanguages } from '../types/commonType';
 
 const {
   BUN_ENV = 'localhost',
@@ -127,8 +125,8 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
   ? (minorLogLevel.toLowerCase() as LogLevel)
   : 'error';
 
-export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];
-export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'en';
+export const validLanguages: NotificationLanguage[] = [...notificationLanguages];
+export const SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT: NotificationLanguage = 'en';
 
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
 export const GCP_CLOUD_TRACE_ENABLED: boolean = gcpCloudTraceEnabled.toLowerCase() === 'true';

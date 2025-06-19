@@ -139,3 +139,6 @@ export enum CacheNames {
   TOR = 'torCache',
   COINGECKO = 'coingeckoCache'
 }
+
+export const notificationLanguages = ['en', 'es', 'pt'] as const;
+export type NotificationLanguage = (typeof notificationLanguages)[number];

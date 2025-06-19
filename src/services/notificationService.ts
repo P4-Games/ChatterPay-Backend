@@ -1,6 +1,5 @@
 import { Logger } from '../helpers/loggerHelper';
 import { pushService } from './push/pushService';
-import { CacheNames } from '../types/commonType';
 import { cacheService } from './cache/cacheService';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IBlockchain } from '../models/blockchainModel';
@@ -8,13 +7,13 @@ import { mongoUserService } from './mongo/mongoUserService';
 import { chatizaloOperatorReply } from '../types/chatizaloType';
 import { chatizaloService } from './chatizalo/chatizaloService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { CacheNames, NotificationLanguage } from '../types/commonType';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { formatIdentifierWithOptionalName } from '../helpers/formatHelper';
 import { mongoNotificationService } from './mongo/mongoNotificationServices';
 import { BOT_DATA_TOKEN, CHATTERPAY_NFTS_SHARE_URL } from '../config/constants';
 import { templateEnum, mongoTemplateService } from './mongo/mongoTemplateService';
 import {
-  LanguageEnum,
   ITemplateSchema,
   NotificationEnum,
   NotificationTemplatesTypes
@@ -39,7 +38,7 @@ export async function getNotificationTemplate(
       return cachedTemplate as { title: string; message: string };
     }
 
-    const userLanguage: LanguageEnum =
+    const userLanguage: NotificationLanguage =
       await mongoUserService.getUserSettingsLanguage(channelUserId);
 
     const notificationTemplates: NotificationTemplatesTypes | null =
