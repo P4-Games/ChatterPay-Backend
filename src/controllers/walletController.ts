@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
+import { delaySeconds } from '../helpers/timeHelper';
 import { withdrawWalletAllFunds } from '../services/transferService';
 import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../config/constants';
 import { tryIssueTokens, createOrReturnWallet } from '../services/walletService';
@@ -71,7 +72,10 @@ export const createWallet = async (
 };
 
 export const createWallet2 = async (
-  request: FastifyRequest<{ Body: { channel_user_id: string } }>,
+  request: FastifyRequest<{
+    Body: { channel_user_id: string };
+    Querystring?: { lastBotMsgDelaySeconds?: number };
+  }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   // Immediate response to the user
@@ -86,19 +90,16 @@ export const createWallet2 = async (
   // Async processing after the reply
   (async () => {
     let logKey = '[op:createWallet:unknown]';
+    const delaySecondsValue = request.query?.lastBotMsgDelaySeconds || 0;
+    const startTime = Date.now();
 
     try {
-      if (!request.body) {
-        throw new Error('Missing request body');
-      }
+      if (!request.body) throw new Error('Missing request body');
 
       const { channel_user_id } = request.body;
       logKey = `[op:createWallet:${channel_user_id}]`;
 
-      if (!channel_user_id) {
-        throw new Error('Missing channel_user_id in body');
-      }
-
+      if (!channel_user_id) throw new Error('Missing channel_user_id in body');
       if (!isValidPhoneNumber(channel_user_id)) {
         throw new Error(`Invalid phone number: '${channel_user_id}'`);
       }
@@ -111,6 +112,22 @@ export const createWallet2 = async (
         logKey
       );
 
+      const processingTimeMs = Date.now() - startTime;
+      const delayMs = delaySecondsValue * 1000;
+      if (delayMs > 0) {
+        const remainingDelay = delayMs - processingTimeMs;
+
+        if (remainingDelay > 0) {
+          Logger.log('createWallet2', logKey, `Waiting ${remainingDelay}ms for bot notification`);
+          await delaySeconds(remainingDelay / 1000);
+        } else {
+          Logger.log(
+            'createWallet2',
+            logKey,
+            `Skipping bot notification delay due to overrun (${processingTimeMs}ms > ${delayMs}ms)`
+          );
+        }
+      }
       if (wasWalletCreated) {
         await sendWalletCreationNotification(walletAddress, channel_user_id);
       } else {
