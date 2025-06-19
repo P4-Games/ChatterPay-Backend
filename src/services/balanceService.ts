@@ -188,11 +188,11 @@ export function calculateBalances(
   fiatQuotes: FiatQuote[],
   networkName: string
 ): BalanceInfo[] {
-  return tokenBalances.map(({ display_symbol, balance, rateUSD }) => {
+  return tokenBalances.map(({ symbol, balance, rateUSD }) => {
     const balanceUSD = parseFloat(balance) * rateUSD;
     return {
       network: networkName,
-      token: display_symbol,
+      token: symbol,
       balance: parseFloat(balance),
       balance_conv: {
         USD: balanceUSD,
