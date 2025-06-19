@@ -43,7 +43,7 @@ export const chatizaloService = {
       });
       Logger.log(
         'sendBotNotification',
-        'API Response:',
+        'Chatizalo Response:',
         payload.channel_user_id,
         payload.message,
         response.data

@@ -707,7 +707,7 @@ export async function persistAndSendNotification({
   const sent_date = new Date();
 
   try {
-    let data: string | null = null;
+    const data: string | null = null;
 
     // 1. Persist always with media INTERNAL
     await mongoNotificationService.createNotification({
@@ -727,11 +727,7 @@ export async function persistAndSendNotification({
         channel_user_id: to,
         message: messageBot
       };
-      data = await chatizaloService.sendBotNotification(payload, traceHeader);
-      Logger.log(
-        'persistAndSendNotification',
-        `Chatizalo notification response: ${JSON.stringify(data)}`
-      );
+      await chatizaloService.sendBotNotification(payload, traceHeader);
     }
 
     // 3. Send via PUSH if flag is true
