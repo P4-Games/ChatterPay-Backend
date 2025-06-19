@@ -3,14 +3,11 @@ import { pushService } from './push/pushService';
 import { computeWallet } from './web3/rpc/rpcService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
+import { mongoCountryService } from './mongo/mongoCountryService';
 import { IUser, UserModel, IUserWallet } from '../models/userModel';
+import { PUSH_ENABLED, DEFAULT_CHAIN_ID } from '../config/constants';
 import { sendWalletCreationNotification } from './notificationService';
 import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
-import {
-  PUSH_ENABLED,
-  DEFAULT_CHAIN_ID,
-  SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
-} from '../config/constants';
 
 /**
  * Updates the operation count for the user by the specified increment.
@@ -56,6 +53,8 @@ export const createUserWithWallet = async (
 ): Promise<IUser> => {
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
   const predictedWallet: ComputedAddress = await computeWallet(formattedPhoneNumber);
+  const detectedNotificationLng =
+    await mongoCountryService.getNotificationLanguageByPhoneNumber(formattedPhoneNumber);
 
   const user = new UserModel({
     phone_number: formattedPhoneNumber,
@@ -77,7 +76,7 @@ export const createUserWithWallet = async (
     name: null,
     settings: {
       notifications: {
-        language: SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
+        language: detectedNotificationLng
       }
     },
     lastOperationDate: null,
