@@ -96,7 +96,7 @@ export function getSwapTokensData(
     tokenInputSymbol: lookUpTokenSymbolInput,
     tokenInputDisplaySymbol: foundTokenInput?.display_symbol ?? lookUpTokenSymbolInput,
     tokenOutputAddress: foundTokenOutput?.address ?? '',
-    tokenOutputSymbol: lookUpTokenSymbolInput,
+    tokenOutputSymbol: lookUpTokenSymbolOutput,
     tokenOutputDisplaySymbol: foundTokenOutput?.display_symbol ?? lookUpTokenSymbolOutput
   };
 }
