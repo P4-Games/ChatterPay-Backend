@@ -1,10 +1,11 @@
 import { Logger } from '../../helpers/loggerHelper';
 import { IUser, UserModel } from '../../models/userModel';
-import { LanguageEnum } from '../../models/templateModel';
+import { mongoCountryService } from './mongoCountryService';
 import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
+import { NotificationLanguage, notificationLanguages } from '../../types/commonType';
 import {
-  SETTINGS_NOTIFICATION_LANGUAGE_DFAULT,
-  RESET_USER_OPERATION_THRESHOLD_MINUTES
+  RESET_USER_OPERATION_THRESHOLD_MINUTES,
+  SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT
 } from '../../config/constants';
 
 export const mongoUserService = {
@@ -188,34 +189,32 @@ export const mongoUserService = {
   },
 
   /**
-   * Gets user language based on the phone number.
+   * Gets user's notification language, falling back to detection by phone prefix if needed.
    *
-   * @param phoneNumber
-   * @returns
+   * @param {string} phoneNumber - Full international phone number
+   * @returns {NotificationLanguage} - The notification language in lowercase ('en' | 'es' | 'pt')
    */
-  getUserSettingsLanguage: async (phoneNumber: string): Promise<LanguageEnum> => {
-    let language: LanguageEnum = SETTINGS_NOTIFICATION_LANGUAGE_DFAULT as LanguageEnum;
+  getUserSettingsLanguage: async (phoneNumber: string): Promise<NotificationLanguage> => {
     try {
       const user: IUser | null = await mongoUserService.getUser(phoneNumber);
-      if (user && user.settings) {
-        const userLanguage = user.settings.notifications.language;
-        if (Object.values(LanguageEnum).includes(userLanguage as LanguageEnum)) {
-          language = userLanguage as LanguageEnum;
-        } else {
-          Logger.warn(
-            'getUserSettingsLanguage',
-            `Invalid language detected for user ${phoneNumber}, defaulting to ${SETTINGS_NOTIFICATION_LANGUAGE_DFAULT}`
-          );
-        }
+      const rawLang = user?.settings?.notifications?.language?.toLowerCase();
+      if (rawLang && notificationLanguages.includes(rawLang as NotificationLanguage)) {
+        return rawLang as NotificationLanguage;
       }
+
+      const detected = await mongoCountryService.getNotificationLanguageByPhoneNumber(phoneNumber);
+      Logger.warn(
+        'getUserSettingsLanguage',
+        `No valid user language for ${phoneNumber}, falling back to detected: ${detected}`
+      );
+      return detected;
     } catch (error: unknown) {
-      // avoid throw error
-      Logger.error(
+      Logger.warn(
         'getUserSettingsLanguage',
         `Error getting user settings language for ${phoneNumber}, error: ${(error as Error).message}`
       );
+      return SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT;
     }
-    return language;
   },
 
   /**
