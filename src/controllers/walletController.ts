@@ -66,6 +66,69 @@ export const createWallet = async (
   }
 };
 
+export const createWallet2 = async (
+  request: FastifyRequest<{ Body: { channel_user_id: string } }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  // Immediate response to the user
+  reply.send({
+    status: 'success',
+    data: {
+      message: 'We are processing your request. You will be notified shortly.'
+    },
+    timestamp: new Date().toISOString()
+  });
+
+  // Async processing after the reply
+   // Async processing after the reply
+  (async () => {
+    let logKey = '[op:createWallet:unknown]';
+
+
+    try {
+      if (!request.body) {
+        throw new Error('Missing request body');
+      }
+
+      const { channel_user_id } = request.body;
+      logKey = `[op:createWallet:${channel_user_id}]`;
+
+      if (!channel_user_id) {
+        throw new Error('Missing channel_user_id in body');
+      }
+
+      if (!isValidPhoneNumber(channel_user_id)) {
+        throw new Error(`Invalid phone number: '${channel_user_id}'`);
+      }
+
+      const { networkConfig, tokens } = request.server;
+
+      const { message, walletAddress, wasWalletCreated } = await createOrReturnWallet(
+        channel_user_id,
+        networkConfig,
+        logKey
+      );
+
+      if (
+        wasWalletCreated &&
+        networkConfig.environment.toUpperCase() !== 'PRODUCTION' &&
+        IS_DEVELOPMENT &&
+        ISSUER_TOKENS_ENABLED
+      ) {
+        Logger.log('createWallet', logKey, `Issuing tokens for ${walletAddress}`);
+        await tryIssueTokens(walletAddress, tokens, networkConfig);
+      }
+
+      Logger.log('createWallet', logKey, `${message}, ${walletAddress}`);
+    } catch (error) {
+      const err = error as Error;
+      Logger.error('createWallet', logKey, err.message || err);
+    }
+  })();
+
+  return reply;
+};
+
 /**
  * Handles the withdrawal of all funds.
  * @param {FastifyRequest<{ Body: { channel_user_id: string, dst_address: string } }>} request - The Fastify request object.

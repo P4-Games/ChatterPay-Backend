@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 
-import { createWallet, withdrawAllFunds } from '../controllers/walletController';
+import { createWallet, createWallet2, withdrawAllFunds } from '../controllers/walletController';
 
 /**
  * Configures routes related to wallets.
@@ -14,6 +14,7 @@ export const walletRouter = async (fastify: FastifyInstance): Promise<void> => {
    * @returns {Object} The details of the created wallet
    */
   fastify.post('/create_wallet/', createWallet);
+  fastify.post('/create_wallet2/', createWallet2);
 
   /**
    * Route to withdraw all funds from the user's wallet to another wallet provided by the user
