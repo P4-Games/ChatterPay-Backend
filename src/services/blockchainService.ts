@@ -9,7 +9,7 @@ import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import Token, { IToken, TokenOperationLimits } from '../models/tokenModel';
 import { IBlockchain, BlockchainOperationLimits } from '../models/blockchainModel';
 import {
-  TokenAddresses,
+  swapTokensData,
   SetupContractReturn,
   CheckBalanceConditionsResult
 } from '../types/commonType';
@@ -79,7 +79,7 @@ export function getTokensAddresses(
   blockchainTokens: IToken[],
   lookUpTokenSymbolInput: string,
   lookUpTokenSymbolOutput: string
-): TokenAddresses {
+): swapTokensData {
   const chainTokens = blockchainTokens.filter(
     (token) => token.chain_id === blockchainConfig.chainId
   );

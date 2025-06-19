@@ -54,9 +54,13 @@ export interface CheckBalanceConditionsResult {
   entryPointContract: ethers.Contract | null;
 }
 
-export interface TokenAddresses {
-  tokenAddressInput: string;
-  tokenAddressOutput: string;
+export interface swapTokensData {
+  tokenInputAddress: string;
+  tokenInputSymbol: string;
+  tokenInputDisplaySymbol: string;
+  tokenOutputAddress: string;
+  tokenOutputSymbol: string;
+  tokenOutputDisplaySymbol: string;
 }
 
 export interface ExecuteSwapResult {
