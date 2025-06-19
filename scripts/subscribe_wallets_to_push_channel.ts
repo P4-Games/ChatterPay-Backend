@@ -8,7 +8,7 @@ import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 import { IUser } from '../src/models/userModel';
 import { Logger } from '../src/helpers/loggerHelper';
 import { DEFAULT_CHAIN_ID } from '../src/config/constants';
-import { generatePrivateKey } from '../src/helpers/SecurityHelper';
+import { generateWalletSeed } from '../src/helpers/SecurityHelper';
 
 dotenv.config();
 
@@ -76,7 +76,7 @@ async function getUsers(): Promise<IUser[]> {
  * @returns Object containing pk and sk
  */
 function getUserWalletData(phoneNumber: string): { pk: string; sk: string } {
-  const sk = generatePrivateKey(phoneNumber, DEFAULT_CHAIN_ID.toString());
+  const sk = generateWalletSeed(phoneNumber, DEFAULT_CHAIN_ID.toString());
   const wallet = new ethers.Wallet(sk);
 
   return {

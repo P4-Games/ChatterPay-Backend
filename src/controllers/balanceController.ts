@@ -3,10 +3,9 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
 import { IUser, IUserWallet } from '../models/userModel';
-import { getUserWalletByChainId } from '../services/userService';
 import { getFiatQuotes } from '../services/criptoya/criptoYaService';
-import { mongoUserService } from '../services/mongo/mongoUserService';
 import { COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
+import { getUser, getUserWalletByChainId } from '../services/userService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import {
@@ -20,16 +19,36 @@ import {
   returnErrorResponse500
 } from '../helpers/requestHelper';
 
+type CheckExternalDepositsQuery = {
+  sendNotification?: string;
+};
+
 /**
- * Route handler for checking external deposits
- * @param request - Fastify request object
+ * Handles the request to check external deposits.
+ *
+ * Reads the `sendNotification` flag from the query parameters and fetches
+ * external deposits filtered by router and pool addresses.
+ *
+ * @param request - Fastify request with optional `sendNotification` query param
  * @param reply - Fastify reply object
- * @returns Promise resolving to deposits status
+ * @returns A response with the deposit status
  */
-export const checkExternalDeposits = async (request: FastifyRequest, reply: FastifyReply) => {
+export const checkExternalDeposits = async (
+  request: FastifyRequest<{ Querystring: CheckExternalDepositsQuery }>,
+  reply: FastifyReply
+) => {
   const fastify = request.server;
-  const { routerAddress } = fastify.networkConfig.contracts;
-  const depositsStatus = await fetchExternalDeposits(routerAddress!, fastify.networkConfig.chainId);
+  const { routerAddress, poolAddress } = fastify.networkConfig.contracts;
+
+  // Read sendNotification from query params and convert to boolean
+  const sendNotification = request.query?.sendNotification === 'true';
+
+  const depositsStatus = await fetchExternalDeposits(
+    routerAddress!,
+    poolAddress!,
+    fastify.networkConfig.chainId,
+    sendNotification
+  );
   return returnSuccessResponse(reply, depositsStatus);
 };
 
@@ -124,7 +143,7 @@ export const balanceByPhoneNumber = async (
   }
 
   try {
-    const user: IUser | null = await mongoUserService.getUser(phone);
+    const user: IUser | null = await getUser(phone);
     if (!user) {
       Logger.info('balanceByPhoneNumber', COMMON_REPLY_WALLET_NOT_CREATED);
       return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);

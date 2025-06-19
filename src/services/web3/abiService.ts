@@ -1,15 +1,15 @@
 import path from 'path';
 import * as fs from 'fs-extra';
 import { ethers } from 'ethers';
-import NodeCache from 'node-cache';
 
 import { getGcpFile } from '../gcp/gcpService';
 import { Logger } from '../../helpers/loggerHelper';
+import { CacheNames } from '../../types/commonType';
+import { cacheService } from '../cache/cacheService';
 import { GCP_ABIs, LOCAL_ABIs, ABIS_READ_FROM } from '../../config/constants';
 
 export type ABI = ethers.ContractInterface;
 
-const cache = new NodeCache({ stdTTL: 86400 });
 const abisReadFromLocal = ABIS_READ_FROM === 'local';
 
 /**
@@ -44,14 +44,14 @@ export const getLocalABIFile = async (urlFile: string): Promise<ABI> => {
  */
 export const getFile = async (contractKeyName: string): Promise<ABI> => {
   const filePath = abisReadFromLocal ? LOCAL_ABIs[contractKeyName] : GCP_ABIs[contractKeyName];
-  let abi = cache.get<ABI>(filePath);
+  let abi = cacheService.get<ABI>(CacheNames.ABI, filePath);
 
   if (!abi) {
     // Select the appropriate function based on the source (local or GCP)
     abi = abisReadFromLocal
       ? await getLocalABIFile(filePath)
       : ((await getGcpFile(filePath)) as ethers.ContractInterface);
-    cache.set(filePath, abi);
+    cacheService.set(CacheNames.ABI, filePath, abi);
   }
 
   return abi;

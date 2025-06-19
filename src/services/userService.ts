@@ -1,16 +1,13 @@
 import { Logger } from '../helpers/loggerHelper';
 import { pushService } from './push/pushService';
+import { computeWallet } from './web3/rpc/rpcService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { getPhoneNumberFormatted } from '../helpers/formatHelper';
+import { mongoCountryService } from './mongo/mongoCountryService';
 import { IUser, UserModel, IUserWallet } from '../models/userModel';
-import { computeProxyAddressFromPhone } from './predictWalletService';
+import { PUSH_ENABLED, DEFAULT_CHAIN_ID } from '../config/constants';
 import { sendWalletCreationNotification } from './notificationService';
 import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
-import {
-  PUSH_ENABLED,
-  DEFAULT_CHAIN_ID,
-  SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
-} from '../config/constants';
 
 /**
  * Updates the operation count for the user by the specified increment.
@@ -55,7 +52,14 @@ export const createUserWithWallet = async (
   factoryAddress: string
 ): Promise<IUser> => {
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
-  const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(formattedPhoneNumber);
+  const predictedWallet: ComputedAddress = await computeWallet(formattedPhoneNumber);
+  const detectedNotificationLng =
+    await mongoCountryService.getNotificationLanguageByPhoneNumber(formattedPhoneNumber);
+
+  Logger.log(
+    'createUserWithWallet',
+    `Creating user with wallet for ${phoneNumber}, wallet: ${predictedWallet.proxyAddress}, lng: ${detectedNotificationLng}`
+  );
 
   const user = new UserModel({
     phone_number: formattedPhoneNumber,
@@ -77,7 +81,7 @@ export const createUserWithWallet = async (
     name: null,
     settings: {
       notifications: {
-        language: SETTINGS_NOTIFICATION_LANGUAGE_DFAULT
+        language: detectedNotificationLng
       }
     },
     lastOperationDate: null,
@@ -116,7 +120,7 @@ export const createUserWithWallet = async (
     );
   }
 
-  sendWalletCreationNotification(predictedWallet.EOAAddress, phoneNumber);
+  sendWalletCreationNotification(predictedWallet.proxyAddress, phoneNumber);
 
   return user;
 };
@@ -138,7 +142,7 @@ export const addWalletToUser = async (
   factoryAddress: string
 ): Promise<{ user: IUser; newWallet: IUserWallet } | null> => {
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
-  const predictedWallet: ComputedAddress = await computeProxyAddressFromPhone(formattedPhoneNumber);
+  const predictedWallet: ComputedAddress = await computeWallet(formattedPhoneNumber);
 
   const user = await UserModel.findOne({ phone_number: formattedPhoneNumber });
 
@@ -269,6 +273,17 @@ export const getOrCreateUser = async (
   );
 
   return newUser;
+};
+
+/**
+ * Checks if a user exists based on their phone number.
+ *
+ * @param {string} phoneNumber - The phone number to check.
+ * @returns {Promise<boolean>} True if the user exists, false otherwise.
+ */
+export const getUser = async (phoneNumber: string): Promise<IUser | null> => {
+  const user: IUser | null = await mongoUserService.getUser(phoneNumber);
+  return user;
 };
 
 /**

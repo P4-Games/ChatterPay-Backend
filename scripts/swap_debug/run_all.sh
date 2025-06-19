@@ -33,7 +33,7 @@ usage() {
     echo "Environment Variables:"
     echo "  Configure in $ENV_FILE:"
     echo "  - INFURA_API_KEY"
-    echo "  - SIGNING_KEY or PRIVATE_KEY"
+    echo "  - SIGNING_KEY or SEED_INTERNAL_SALT"
     exit 1
 }
 

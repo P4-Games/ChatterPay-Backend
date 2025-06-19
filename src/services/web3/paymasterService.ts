@@ -162,7 +162,7 @@ export async function logPaymasterEntryPointDeposit(
     parseFloat(paymasterDepositValuePrev.inEth) - parseFloat(paymasterDepositValueNow.inEth)
   ).toFixed(6);
   Logger.info(
-    'sendTransferUserOperation',
+    'logPaymasterEntryPointDeposit',
     `Paymaster pre: ${paymasterDepositValuePrev.value.toString()} (${paymasterDepositValuePrev.inEth}), ` +
       `Paymaster now: ${paymasterDepositValueNow.value.toString()} (${paymasterDepositValueNow.inEth}), ` +
       `Cost: ${cost.toString()} (${costInEth} ETH)`

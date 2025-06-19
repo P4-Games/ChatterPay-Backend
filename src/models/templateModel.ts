@@ -1,11 +1,5 @@
 import { model, Schema, Document } from 'mongoose';
 
-export enum LanguageEnum {
-  en = 'en',
-  es = 'es',
-  pt = 'pt'
-}
-
 export enum NotificationEnum {
   incoming_transfer = 'incoming_transfer',
   swap = 'swap',

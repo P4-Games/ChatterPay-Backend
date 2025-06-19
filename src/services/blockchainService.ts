@@ -9,7 +9,7 @@ import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import Token, { IToken, TokenOperationLimits } from '../models/tokenModel';
 import { IBlockchain, BlockchainOperationLimits } from '../models/blockchainModel';
 import {
-  TokenAddresses,
+  swapTokensData,
   SetupContractReturn,
   CheckBalanceConditionsResult
 } from '../types/commonType';
@@ -74,12 +74,12 @@ export function getTokenData(
  * @param lookUpTokenSymbolOutput
  * @returns
  */
-export function getTokensAddresses(
+export function getSwapTokensData(
   blockchainConfig: IBlockchain,
   blockchainTokens: IToken[],
   lookUpTokenSymbolInput: string,
   lookUpTokenSymbolOutput: string
-): TokenAddresses {
+): swapTokensData {
   const chainTokens = blockchainTokens.filter(
     (token) => token.chain_id === blockchainConfig.chainId
   );
@@ -92,8 +92,12 @@ export function getTokensAddresses(
   );
 
   return {
-    tokenAddressInput: foundTokenInput?.address ?? '',
-    tokenAddressOutput: foundTokenOutput?.address ?? ''
+    tokenInputAddress: foundTokenInput?.address ?? '',
+    tokenInputSymbol: lookUpTokenSymbolInput,
+    tokenInputDisplaySymbol: foundTokenInput?.display_symbol ?? lookUpTokenSymbolInput,
+    tokenOutputAddress: foundTokenOutput?.address ?? '',
+    tokenOutputSymbol: lookUpTokenSymbolOutput,
+    tokenOutputDisplaySymbol: foundTokenOutput?.display_symbol ?? lookUpTokenSymbolOutput
   };
 }
 

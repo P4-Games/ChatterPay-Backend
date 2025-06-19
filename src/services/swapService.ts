@@ -11,7 +11,7 @@ import {
   getPaymasterEntryPointDepositValue
 } from './web3/paymasterService';
 import {
-  TokenAddresses,
+  swapTokensData,
   ExecuteSwapResult,
   SetupContractReturn,
   ExecueTransactionResult
@@ -312,7 +312,7 @@ export async function executeSwap(
   networkConfig: IBlockchain,
   setupContractsResult: SetupContractReturn,
   entryPointContract: ethers.Contract,
-  tokenAddresses: TokenAddresses,
+  tokenAddresses: swapTokensData,
   blockchainTokens: IToken[],
   amount: string,
   recipient: string,
@@ -349,7 +349,7 @@ export async function executeSwap(
       `ChatterPay contract initialized at ${networkConfig.contracts.chatterPayAddress}`
     );
 
-    const { tokenAddressInput: tokenIn, tokenAddressOutput: tokenOut } = tokenAddresses;
+    const { tokenInputAddress: tokenIn, tokenOutputAddress: tokenOut } = tokenAddresses;
 
     Logger.debug('executeSwap', 'Fetching token details');
     Logger.debug(

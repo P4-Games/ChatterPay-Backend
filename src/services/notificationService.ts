@@ -1,30 +1,23 @@
-import NodeCache from 'node-cache';
-
 import { Logger } from '../helpers/loggerHelper';
 import { pushService } from './push/pushService';
+import { cacheService } from './cache/cacheService';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IBlockchain } from '../models/blockchainModel';
 import { mongoUserService } from './mongo/mongoUserService';
 import { chatizaloOperatorReply } from '../types/chatizaloType';
 import { chatizaloService } from './chatizalo/chatizaloService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { CacheNames, NotificationLanguage } from '../types/commonType';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { formatIdentifierWithOptionalName } from '../helpers/formatHelper';
 import { mongoNotificationService } from './mongo/mongoNotificationServices';
+import { BOT_DATA_TOKEN, CHATTERPAY_NFTS_SHARE_URL } from '../config/constants';
 import { templateEnum, mongoTemplateService } from './mongo/mongoTemplateService';
 import {
-  BOT_DATA_TOKEN,
-  CHATTERPAY_NFTS_SHARE_URL,
-  NOTIFICATION_TEMPLATE_CACHE_TTL
-} from '../config/constants';
-import {
-  LanguageEnum,
   ITemplateSchema,
   NotificationEnum,
   NotificationTemplatesTypes
 } from '../models/templateModel';
-
-const notificationTemplateCache = new NodeCache({ stdTTL: NOTIFICATION_TEMPLATE_CACHE_TTL });
 
 /**
  * Retrieves a notification template based on the user's channel ID and the specified notification type.
@@ -39,13 +32,13 @@ export async function getNotificationTemplate(
 ): Promise<{ title: string; message: string }> {
   const defaultNotification = { title: 'Chatterpay Message', message: '' };
   try {
-    const cachedTemplate = notificationTemplateCache.get(`${typeOfNotification}`);
+    const cachedTemplate = cacheService.get(CacheNames.NOTIFICATION, `${typeOfNotification}`);
     if (cachedTemplate) {
       Logger.log('getNotificationTemplate', `getting ${typeOfNotification} from cache`);
       return cachedTemplate as { title: string; message: string };
     }
 
-    const userLanguage: LanguageEnum =
+    const userLanguage: NotificationLanguage =
       await mongoUserService.getUserSettingsLanguage(channelUserId);
 
     const notificationTemplates: NotificationTemplatesTypes | null =
@@ -72,7 +65,7 @@ export async function getNotificationTemplate(
       title: template.title[userLanguage],
       message: template.message[userLanguage]
     };
-    notificationTemplateCache.set(`${typeOfNotification}`, result);
+    cacheService.set(CacheNames.NOTIFICATION, `${typeOfNotification}`, result);
 
     return result;
   } catch (error: unknown) {
@@ -88,25 +81,25 @@ export async function getNotificationTemplate(
 /**
  * Sends a notification when a user's wallet is successfully created.
  *
- * @param address_of_user - The blockchain address of the newly created wallet.
+ * @param user_wallet_proxy - The blockchain address of the newly created wallet (Proxy).
  * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
  * @returns A Promise resolving to the result of the notification operation.
  */
 export async function sendWalletCreationNotification(
-  address_of_user: string,
+  user_wallet_proxy: string,
   channel_user_id: string
 ) {
   try {
     Logger.log(
       'sendWalletCreationNotification',
-      `Sending wallet creation notification to ${address_of_user}`
+      `Sending wallet creation notification to ${channel_user_id}, ${user_wallet_proxy}`
     );
 
     const { title, message } = await getNotificationTemplate(
       channel_user_id,
       NotificationEnum.wallet_creation
     );
-    const formattedMessage = message.replace('[PREDICTED_WALLET_EOA_ADDRESS]', address_of_user);
+    const formattedMessage = message.replace('[PREDICTED_WALLET_EOA_ADDRESS]', user_wallet_proxy);
 
     const sendAndPersistParams: SendAndPersistParams = {
       to: channel_user_id,
@@ -267,7 +260,7 @@ export async function sendMintNotification(
   traceHeader?: string
 ): Promise<unknown> {
   try {
-    Logger.log('sendMintNotification', 'Sending mint notification');
+    Logger.log('sendMintNotification', `Sending mint notification to ${channel_user_id}`);
 
     const { title, message } = await getNotificationTemplate(
       channel_user_id,

@@ -3,7 +3,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { it, expect, describe, afterEach, beforeEach } from 'vitest';
 
 import { IUser, UserModel, IUserWallet } from '../../src/models/userModel';
-import { SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../../src/config/constants';
+import { SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT } from '../../src/config/constants';
 
 describe('User Model', () => {
   let mongoServer: MongoMemoryServer;
@@ -86,7 +86,7 @@ describe('User Model', () => {
     const savedUser = await user.save();
 
     expect(savedUser.wallets.length).toBe(0); // Default value for wallets
-    expect(savedUser.settings?.notifications.language).toBe(SETTINGS_NOTIFICATION_LANGUAGE_DFAULT); // Default language
+    expect(savedUser.settings?.notifications.language).toBe(SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT); // Default language
     expect(savedUser.operations_in_progress?.transfer).toBe(0); // Default operation values
     expect(savedUser.operations_in_progress?.swap).toBe(0);
     expect(savedUser.operations_in_progress?.mint_nft).toBe(0);

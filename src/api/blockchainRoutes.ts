@@ -3,7 +3,6 @@ import { FastifyInstance } from 'fastify';
 import {
   createBlockchain,
   updateBlockchain,
-  deleteBlockchain,
   getAllBlockchains,
   getBlockchainById
 } from '../controllers/blockchainController';
@@ -43,14 +42,6 @@ const blockchainRoutes = async (fastify: FastifyInstance): Promise<void> => {
    * @returns {Object} Updated details of the blockchain
    */
   fastify.put('/blockchains/:id', updateBlockchain);
-
-  /**
-   * Route to delete a blockchain by its ID.
-   * @route DELETE /blockchains/:id
-   * @param {string} id - The unique identifier of the blockchain to delete
-   * @returns {Object} Confirmation of deletion
-   */
-  fastify.delete('/blockchains/:id', deleteBlockchain);
 };
 
 export default blockchainRoutes;

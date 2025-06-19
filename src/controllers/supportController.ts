@@ -1,6 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
+import { CacheNames } from '../types/commonType';
+import { cacheService } from '../services/cache/cacheService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import {
   returnErrorResponse,
@@ -102,6 +104,69 @@ export const resetUsersOperationLimits = async (
     return await returnSuccessResponse(reply, `user operation counters have been cleared.`);
   } catch (error) {
     Logger.error('clearUsersOperationLimits', error);
+    return returnErrorResponse500(reply);
+  }
+};
+
+/**
+ * Handler to clear all defined caches.
+ *
+ * @param {FastifyRequest} request - The incoming Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object for sending the response.
+ * @returns {Promise<FastifyReply>} A response indicating the caches were cleared.
+ */
+export const clearAllCaches = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  try {
+    cacheService.clearAllCaches();
+    return await returnSuccessResponse(reply, 'All caches have been cleared.');
+  } catch (error) {
+    Logger.error('clearAllCaches', error);
+    return returnErrorResponse500(reply);
+  }
+};
+
+/**
+ * Handler to clear a specific cache by name.
+ *
+ * @param {FastifyRequest} request - The incoming Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object for sending the response.
+ * @returns {Promise<FastifyReply>} A response indicating the named cache was cleared.
+ */
+export const clearCacheByName = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  try {
+    if (!request.body) {
+      return await returnErrorResponse(reply, 400, 'You must send a body with cacheName');
+    }
+
+    const { cacheName } = request.body as { cacheName: string };
+
+    if (!cacheService.isValidCacheName(cacheName)) {
+      return await returnErrorResponse(
+        reply,
+        400,
+        `Invalid cache name. Must be one of: ${Object.values(CacheNames).join(', ')}`
+      );
+    }
+
+    if (!Object.values(CacheNames).includes(cacheName)) {
+      return await returnErrorResponse(
+        reply,
+        400,
+        `Invalid cache name. Must be one of: ${Object.values(CacheNames).join(', ')}`
+      );
+    }
+
+    cacheService.clearCache(cacheName as CacheNames);
+
+    return await returnSuccessResponse(reply, `Cache '${cacheName}' has been cleared.`);
+  } catch (error) {
+    Logger.error('clearCacheByName', error);
     return returnErrorResponse500(reply);
   }
 };

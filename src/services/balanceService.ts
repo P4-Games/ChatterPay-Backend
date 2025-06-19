@@ -1,10 +1,10 @@
 import { ethers } from 'ethers';
-import NodeCache from 'node-cache';
 
 import { IToken } from '../models/tokenModel';
 import { getERC20ABI } from './web3/abiService';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenData } from './blockchainService';
+import { cacheService } from './cache/cacheService';
 import { IBlockchain } from '../models/blockchainModel';
 import { setupERC20 } from './web3/contractSetupService';
 import { SIGNING_KEY, BINANCE_API_URL } from '../config/constants';
@@ -12,13 +12,11 @@ import {
   Currency,
   FiatQuote,
   TokenInfo,
+  CacheNames,
   BalanceInfo,
   TokenBalance,
   WalletBalanceInfo
 } from '../types/commonType';
-
-// Initialize the cache with a 5-minute TTL (Time To Live)
-const priceCache = new NodeCache({ stdTTL: 300, checkperiod: 320 });
 
 /**
  * Fetches the balance of a specific token for a given address
@@ -60,15 +58,19 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
 
     // USDT is always 1 USD
     priceMap.set('USDT', 1);
+    priceMap.set('USDC', 1);
 
     // Filter out USDT as we already set its price
-    const symbolsToFetch = symbols.filter((s) => s !== 'USDT');
+    const symbolsToFetch = symbols.filter((s) => s !== 'USDT' && s !== 'USDC');
 
     if (symbolsToFetch.length === 0) return priceMap;
 
     try {
       // Check cache for existing prices
-      const cachedPrices = priceCache.mget(symbolsToFetch);
+      const cachedPrices = Object.fromEntries(
+        symbolsToFetch.map((symbol) => [symbol, cacheService.get(CacheNames.PRICE, symbol)])
+      );
+
       const symbolsToFetchFromApi = symbolsToFetch.filter((symbol) => !cachedPrices[symbol]);
 
       // Set cached prices to the priceMap
@@ -88,23 +90,29 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
       );
     }
 
+    const unwrapToken = (symbol: string): string =>
+      symbol.replace(/^WETH$/, 'ETH').replace(/^WBTC$/, 'BTC');
+
+    const wrapToken = (symbol: string): string =>
+      symbol.replace(/^ETH$/, 'WETH').replace(/^BTC$/, 'WBTC');
+
     // Get prices for all symbols against USDT
     const promises = symbolsToFetch.map(async (symbol) => {
       try {
-        const symbolReplaced = symbol.replace('WETH', 'ETH');
-        const response = await fetch(
-          `${BINANCE_API_URL}/ticker/price?symbol=${symbolReplaced}USDT`
-        );
+        const unwrapped = unwrapToken(symbol);
+        const response = await fetch(`${BINANCE_API_URL}/ticker/price?symbol=${unwrapped}USDT`);
         const data = await response.json();
+
+        const wrapped = wrapToken(unwrapped);
+
         if (data.price) {
-          Logger.log('getTokenPrices', `Price for ${symbolReplaced}: ${data.price} USDT`);
           const price = parseFloat(data.price);
-          priceMap.set(symbolReplaced.replace('ETH', 'WETH'), price);
-          // Cache the price for 5 minutes
-          priceCache.set(symbolReplaced.replace('ETH', 'WETH'), price);
+          Logger.log('getTokenPrices', `Price for ${symbol}: ${price} USDT`);
+          priceMap.set(wrapped, price);
+          cacheService.set(CacheNames.PRICE, wrapped, price);
         } else {
-          Logger.warn('getTokenPrices', `No price found for ${symbolReplaced}USDT`);
-          priceMap.set(symbolReplaced.replace('ETH', 'WETH'), 0);
+          Logger.warn('getTokenPrices', `No price found for ${unwrapped}USDT`);
+          priceMap.set(wrapped, 0);
         }
       } catch (error) {
         Logger.error('getTokenPrices', `Error fetching price for ${symbol}:`, error);
@@ -139,6 +147,7 @@ async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo
     type: token.type,
     rateUSD: prices.get(token.symbol) || 0,
     display_decimals: token.display_decimals,
+    display_symbol: token.display_symbol,
     operations_limits: token.operations_limits
   }));
 }
