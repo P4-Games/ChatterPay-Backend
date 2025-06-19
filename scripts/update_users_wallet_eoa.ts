@@ -9,7 +9,7 @@ import mongoose from 'mongoose';
 import { Logger } from '../src/helpers/loggerHelper';
 import { DEFAULT_CHAIN_ID } from '../src/config/constants';
 import { IUser, IUserWallet } from '../src/models/userModel';
-import { generatePrivateKey } from '../src/helpers/SecurityHelper';
+import { generateWalletSeed } from '../src/helpers/SecurityHelper';
 import { getUserWalletByChainId } from '../src/services/userService';
 
 dotenv.config();
@@ -62,7 +62,7 @@ async function getUsers(): Promise<IUser[]> {
 }
 
 function getUserData(phoneNumber: string): { pk: string; sk: string } {
-  const sk = generatePrivateKey(phoneNumber, DEFAULT_CHAIN_ID.toString());
+  const sk = generateWalletSeed(phoneNumber, DEFAULT_CHAIN_ID.toString());
   const wallet = new ethers.Wallet(sk);
 
   return {

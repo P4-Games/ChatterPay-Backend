@@ -1,20 +1,16 @@
 #!/bin/bash
 
-# Mover al directorio raíz del proyecto
 cd "$(dirname "$0")/.."
 
-# Exportar variables de entorno desde el archivo .env
 export $(grep -v '^#' .env | xargs)
 
-# Volver al directorio scripts
 cd scripts
 
-# Ejecutar docker build con las variables de entorno como argumentos de compilación
 docker build \
   --build-arg BUN_ENV="$BUN_ENV" \
   --build-arg INFURA_API_KEY="$INFURA_API_KEY" \
   --build-arg MONGO_URI="$MONGO_URI" \
-  --build-arg PRIVATE_KEY="$PRIVATE_KEY" \
+  --build-arg SEED_INTERNAL_SALT="$SEED_INTERNAL_SALT" \
   --build-arg SIGNING_KEY="$SIGNING_KEY" \
   --build-arg PINATA_JWT="$PINATA_JWT" \
   --build-arg ICP_CANISTER_ID="$ICP_CANISTER_ID" \
@@ -49,4 +45,5 @@ docker build \
   --build-arg CHATIZALO_PHONE_NUMBER="$CHATIZALO_PHONE_NUMBER" \
   --build-arg SWAP_SLIPPAGE_CONFIG_EXTRA="$QUEUE_BUNDLER_INTERVAL" \
   --build-arg QUEUE_GAS_INTERVAL="$QUEUE_GAS_INTERVAL" \
+  --build-arg MAX_REQUESTS_PER_MINUTE="$MAX_REQUESTS_PER_MINUTE" \
   -t chatterpay-back-app ..

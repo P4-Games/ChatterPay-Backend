@@ -35,11 +35,12 @@ steps:
       - QUEUE_GAS_INTERVAL=${_QUEUE_GAS_INTERVAL}
       - QUEUE_CREATE_PROXY_INTERVAL=${_QUEUE_CREATE_PROXY_INTERVAL}
       - ISSUER_TOKENS_ENABLED=${_ISSUER_TOKENS_ENABLED}
+      - MAX_REQUESTS_PER_MINUTE=${_MAX_REQUESTS_PER_MINUTE}
 
     secretEnv: [
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
-      'PRIVATE_KEY', 
+      'SEED_INTERNAL_SALT', 
       'SIGNING_KEY',
       'PUSH_CHANNEL_PRIVATE_KEY',
       'MANTECA_API_KEY'
@@ -61,7 +62,7 @@ steps:
       '--build-arg',
       'MONGO_URI=${_MONGO_URI}',
       '--build-arg',
-      'PRIVATE_KEY=$$PRIVATE_KEY',
+      'SEED_INTERNAL_SALT=$$SEED_INTERNAL_SALT',
       '--build-arg',
       'SIGNING_KEY=$$SIGNING_KEY',
       '--build-arg',
@@ -130,13 +131,14 @@ steps:
       'QUEUE_CREATE_PROXY_INTERVAL=${_QUEUE_CREATE_PROXY_INTERVAL}',
       '--build-arg',
       'ISSUER_TOKENS_ENABLED=${_ISSUER_TOKENS_ENABLED}',
+      '--build-arg',
+      'MAX_REQUESTS_PER_MINUTE=${_MAX_REQUESTS_PER_MINUTE}',
       '.'
-
     ]
     secretEnv: [
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
-      'PRIVATE_KEY', 
+      'SEED_INTERNAL_SALT', 
       'SIGNING_KEY',
       'PUSH_CHANNEL_PRIVATE_KEY',
       'MANTECA_API_KEY'
@@ -171,16 +173,10 @@ steps:
   - name: "bash"
     script: |
       #!/usr/bin/env bash
-      echo "CHATIZALO_TOKEN en cloudbuild.yaml 1: $CHATIZALO_TOKEN"
-      echo "FRONTEND_TOKEN en cloudbuild.yaml 2: $FRONTEND_TOKEN"
-      echo "PRIVATE_KEY en cloudbuild.yaml 3: $PRIVATE_KEY"
-      echo "SIGNING_KEY en cloudbuild.yaml 4: $SIGNING_KEY"
-      echo "PUSH_CHANNEL_PRIVATE_KEY en cloudbuild.yaml 5: $PUSH_CHANNEL_PRIVATE_KEY"
-      echo "MANTECA_API_KEY en cloudbuild.yaml 6: $MANTECA_API_KEY"
     secretEnv: [
       'CHATIZALO_TOKEN', 
       'FRONTEND_TOKEN', 
-      'PRIVATE_KEY', 
+      'SEED_INTERNAL_SALT', 
       'SIGNING_KEY',
       'PUSH_CHANNEL_PRIVATE_KEY',
       'MANTECA_API_KEY'
@@ -192,8 +188,8 @@ availableSecrets:
       env: 'CHATIZALO_TOKEN'
     - versionName: projects/$PROJECT_ID/secrets/${_FRONTEND_TOKEN_SECRET_NAME}/versions/latest
       env: 'FRONTEND_TOKEN'
-    - versionName: projects/$PROJECT_ID/secrets/${_PRIVATE_KEY_SECRET_NAME}/versions/latest
-      env: 'PRIVATE_KEY'
+    - versionName: projects/$PROJECT_ID/secrets/${_SEED_INTERNAL_SALT_SECRET_NAME}/versions/latest
+      env: 'SEED_INTERNAL_SALT'
     - versionName: projects/$PROJECT_ID/secrets/${_SIGNING_KEY_SECRET_NAME}/versions/latest
       env: 'SIGNING_KEY'
     - versionName: projects/$PROJECT_ID/secrets/${_PUSH_CHANNEL_PRIVATE_KEY_NAME}/versions/latest

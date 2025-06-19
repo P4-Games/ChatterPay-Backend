@@ -1,13 +1,15 @@
 import { FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 
+import { MAX_REQUESTS_PER_MINUTE } from '../constants';
+
 /**
  * Configures rate limiting for the Fastify server.
  * @param server - The Fastify server instance.
  */
 export async function setupRateLimit(server: FastifyInstance): Promise<void> {
   await server.register(rateLimit, {
-    max: 50,
+    max: MAX_REQUESTS_PER_MINUTE,
     timeWindow: '1 minute',
     errorResponseBuilder: () => ({
       code: 429,

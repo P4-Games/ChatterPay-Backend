@@ -1,15 +1,13 @@
-import dotenv from 'dotenv';
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
 import { LogLevel, validLogLevels } from '../types/loggerType';
-
-dotenv.config();
+import { NotificationLanguage, notificationLanguages } from '../types/commonType';
 
 const {
   BUN_ENV = 'localhost',
   PORT: envPort,
   MONGO_URI: envMongoUri,
-  PRIVATE_KEY,
+  SEED_INTERNAL_SALT,
   SIGNING_KEY,
   PINATA_JWT,
   ICP_CANISTER_ID,
@@ -44,16 +42,16 @@ const {
   SWAP_SLIPPAGE_CONFIG_EXTRA: slippage_config_extra = 300,
   ABIS_READ_FROM: abisReadFrom = 'local',
   CHATIZALO_PHONE_NUMBER,
-  QUEUE_BUNDLER_INTERVAL: queueBundlerInterval = 5000,
-  QUEUE_GAS_INTERVAL: queueGasInterval = 5000,
-  QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 3000,
-  ISSUER_TOKENS_ENABLED: issuerTokensEnabled = 'false'
+  QUEUE_BUNDLER_INTERVAL: queueBundlerInterval = 150,
+  QUEUE_GAS_INTERVAL: queueGasInterval = 250,
+  QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 150,
+  ISSUER_TOKENS_ENABLED: issuerTokensEnabled = 'false',
+  MAX_REQUESTS_PER_MINUTE: maxRequestsPerMinute = 50
 } = process.env;
 
 export {
   BUN_ENV,
   PINATA_JWT,
-  PRIVATE_KEY,
   SIGNING_KEY,
   BOT_API_URL,
   ICP_MNEMONIC,
@@ -67,6 +65,7 @@ export {
   CHATIZALO_TOKEN,
   MANTECA_API_KEY,
   MANTECA_BASE_URL,
+  SEED_INTERNAL_SALT,
   GCP_BUCKET_BASE_URL,
   CHATIZALO_PHONE_NUMBER
 };
@@ -126,10 +125,9 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
   ? (minorLogLevel.toLowerCase() as LogLevel)
   : 'error';
 
-export const validLanguages: Array<'en' | 'es' | 'pt'> = ['en', 'es', 'pt'];
-export const SETTINGS_NOTIFICATION_LANGUAGE_DFAULT: string = 'en';
+export const validLanguages: NotificationLanguage[] = [...notificationLanguages];
+export const SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT: NotificationLanguage = 'en';
 
-export const NOTIFICATION_TEMPLATE_CACHE_TTL = 60800; // 1 week
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
 export const GCP_CLOUD_TRACE_ENABLED: boolean = gcpCloudTraceEnabled.toLowerCase() === 'true';
 
@@ -169,3 +167,22 @@ export const SWAP_SLIPPAGE_CONFIG_EXTRA = Number(slippage_config_extra);
 export const QUEUE_BUNDLER_INTERVAL = Number(queueBundlerInterval);
 export const QUEUE_GAS_INTERVAL = Number(queueGasInterval);
 export const QUEUE_CREATE_PROXY_INTERVAL = Number(queueCreateProxyInterval);
+export const MAX_REQUESTS_PER_MINUTE = Number(maxRequestsPerMinute);
+
+export const CACHE_OPENSEA_TTL = 300; // 5 min
+export const CACHE_OPENSEA_CHECK_PERIOD = 600; // 10 min
+
+export const CACHE_PRICE_TTL = 300; // 5 min
+export const CACHE_PRICE_CHECK_PERIOD = 360; // 6 min
+
+export const CACHE_ABI_TTL = 432000; // 5 days
+export const CACHE_ABI_CHECK_PERIOD = 518400; // 6 days
+
+export const CACHE_NOTIFICATION_TTL = 432000; // 5 days
+export const CACHE_NOTIFICATION_CHECK_PERIOD = 518400; // 6 days
+
+export const CACHE_TOR_TTL = 3600; // 1 hora
+export const CACHE_TOR_CHECK_PERIOD = 3700; // 62 min
+
+export const CACHE_COINGECKO_TTL = 60; // 1 min
+export const CACHE_COINGECKO_CHECK_PERIOD = 120; // 2 min

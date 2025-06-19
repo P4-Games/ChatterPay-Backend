@@ -13,7 +13,7 @@ const CHATTERPAY_DB_NAME = process.env.CHATTERPAY_DB_NAME!;
 const CHATIZALO_DB_NAME = process.env.CHATIZALO_DB_NAME!;
 const CHATTERPAY_COLLECTION_NAME = 'users';
 const CHATIZALO_COLLECTION_NAME = 'contacts';
-const ONLY_TEST = true;
+const ONLY_TEST = false;
 
 interface User extends Document {
   name?: string | null;
