@@ -74,7 +74,7 @@ export function getTokenData(
  * @param lookUpTokenSymbolOutput
  * @returns
  */
-export function getTokensAddresses(
+export function getSwapTokensData(
   blockchainConfig: IBlockchain,
   blockchainTokens: IToken[],
   lookUpTokenSymbolInput: string,
@@ -92,8 +92,12 @@ export function getTokensAddresses(
   );
 
   return {
-    tokenAddressInput: foundTokenInput?.address ?? '',
-    tokenAddressOutput: foundTokenOutput?.address ?? ''
+    tokenInputAddress: foundTokenInput?.address ?? '',
+    tokenInputSymbol: lookUpTokenSymbolInput,
+    tokenInputDisplaySymbol: foundTokenInput?.display_symbol ?? lookUpTokenSymbolInput,
+    tokenOutputAddress: foundTokenOutput?.address ?? '',
+    tokenOutputSymbol: lookUpTokenSymbolInput,
+    tokenOutputDisplaySymbol: foundTokenOutput?.display_symbol ?? lookUpTokenSymbolOutput
   };
 }
 
