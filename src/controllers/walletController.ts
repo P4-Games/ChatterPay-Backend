@@ -129,9 +129,13 @@ export const createWallet2 = async (
         }
       }
       if (wasWalletCreated) {
-        await sendWalletCreationNotification(walletAddress, channel_user_id);
+        await sendWalletCreationNotification(walletAddress, channel_user_id, networkConfig.name);
       } else {
-        await sendWalletAlreadyExistsNotification(walletAddress, channel_user_id);
+        await sendWalletAlreadyExistsNotification(
+          walletAddress,
+          channel_user_id,
+          networkConfig.name
+        );
       }
 
       if (
