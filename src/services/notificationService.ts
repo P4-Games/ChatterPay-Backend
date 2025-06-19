@@ -107,7 +107,7 @@ export async function sendWalletCreationNotification(
       messagePush: formattedMessage,
       template: NotificationEnum.wallet_creation,
       sendPush: true,
-      sendBot: false, // the controller handles this!
+      sendBot: true,
       title,
       traceHeader: ''
     };
@@ -115,6 +115,47 @@ export async function sendWalletCreationNotification(
     await persistAndSendNotification(sendAndPersistParams);
   } catch (error) {
     Logger.error('sendWalletCreationNotification', error);
+    throw error;
+  }
+}
+
+/**
+ * Sends a notification when a user's wallet already exists.
+ *
+ * @param user_wallet_proxy - The blockchain address of the already existing wallet (Proxy).
+ * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @returns A Promise resolving to the result of the notification operation.
+ */
+export async function sendWalletAlreadyExistsNotification(
+  user_wallet_proxy: string,
+  channel_user_id: string
+) {
+  try {
+    Logger.log(
+      'sendWalletAlreadyExistsNotification',
+      `Sending wallet already exists notification to ${channel_user_id}, ${user_wallet_proxy}`
+    );
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.wallet_already_exists
+    );
+    const formattedMessage = message.replace('[PREDICTED_WALLET_EOA_ADDRESS]', user_wallet_proxy);
+
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.wallet_already_exists,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader: ''
+    };
+
+    await persistAndSendNotification(sendAndPersistParams);
+  } catch (error) {
+    Logger.error('sendWalletAlreadyExistsNotification', error);
     throw error;
   }
 }
@@ -687,6 +728,10 @@ export async function persistAndSendNotification({
         message: messageBot
       };
       data = await chatizaloService.sendBotNotification(payload, traceHeader);
+      Logger.log(
+        'persistAndSendNotification',
+        `Chatizalo notification response: ${JSON.stringify(data)}`
+      );
     }
 
     // 3. Send via PUSH if flag is true

@@ -78,6 +78,14 @@ describe('Template Model', () => {
             pt: 'Sua carteira foi criada com sucesso.'
           }
         },
+        wallet_already_exists: {
+          title: { en: 'Wallet Created', es: 'Billetera Creada', pt: 'Carteira Criada' },
+          message: {
+            en: 'Your wallet has been created successfully.',
+            es: 'Tu billetera ha sido creada con éxito.',
+            pt: 'Sua carteira foi criada com sucesso.'
+          }
+        },
         user_balance_not_enough: {
           title: { en: 'Insufficient Balance', es: 'Saldo Insuficiente', pt: 'Saldo Insuficiente' },
           message: {

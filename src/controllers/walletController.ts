@@ -6,6 +6,10 @@ import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../config/constants';
 import { tryIssueTokens, createOrReturnWallet } from '../services/walletService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
+import {
+  sendWalletCreationNotification,
+  sendWalletAlreadyExistsNotification
+} from '../services/notificationService';
 
 /**
  * Handles the creation of a new wallet for the user.
@@ -80,10 +84,8 @@ export const createWallet2 = async (
   });
 
   // Async processing after the reply
-   // Async processing after the reply
   (async () => {
     let logKey = '[op:createWallet:unknown]';
-
 
     try {
       if (!request.body) {
@@ -108,6 +110,12 @@ export const createWallet2 = async (
         networkConfig,
         logKey
       );
+
+      if (wasWalletCreated) {
+        await sendWalletCreationNotification(walletAddress, channel_user_id);
+      } else {
+        await sendWalletAlreadyExistsNotification(walletAddress, channel_user_id);
+      }
 
       if (
         wasWalletCreated &&

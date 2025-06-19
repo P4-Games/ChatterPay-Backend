@@ -6,7 +6,6 @@ import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { mongoCountryService } from './mongo/mongoCountryService';
 import { IUser, UserModel, IUserWallet } from '../models/userModel';
 import { PUSH_ENABLED, DEFAULT_CHAIN_ID } from '../config/constants';
-import { sendWalletCreationNotification } from './notificationService';
 import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
 
 /**
@@ -119,8 +118,6 @@ export const createUserWithWallet = async (
       `Skipped adding new wallet to the push channel because push notifications are disabled.`
     );
   }
-
-  sendWalletCreationNotification(predictedWallet.proxyAddress, phoneNumber);
 
   return user;
 };
