@@ -56,6 +56,11 @@ export const createUserWithWallet = async (
   const detectedNotificationLng =
     await mongoCountryService.getNotificationLanguageByPhoneNumber(formattedPhoneNumber);
 
+  Logger.log(
+    'createUserWithWallet',
+    `Creating user with wallet for ${phoneNumber}, wallet: ${predictedWallet.proxyAddress}, lng: ${detectedNotificationLng}`
+  );
+
   const user = new UserModel({
     phone_number: formattedPhoneNumber,
     wallets: [
