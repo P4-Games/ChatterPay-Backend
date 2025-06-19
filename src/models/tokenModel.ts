@@ -20,6 +20,7 @@ export interface IToken extends Document {
   type: string;
   ramp_enabled: boolean;
   display_decimals: number;
+  display_symbol: string;
   operations_limits: {
     transfer: TokenOperationLimits;
     swap: TokenOperationLimits;
@@ -46,6 +47,7 @@ const tokenSchema = new Schema<IToken>({
   type: { type: String, required: true },
   ramp_enabled: { type: Boolean, required: true },
   display_decimals: { type: Number, required: true },
+  display_symbol: { type: String, required: true },
   operations_limits: {
     transfer: { type: operationLimitsSchema, required: true },
     swap: { type: operationLimitsSchema, required: true }

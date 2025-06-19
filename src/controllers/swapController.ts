@@ -24,14 +24,14 @@ import {
   COMMON_REPLY_OPERATION_IN_PROGRESS
 } from '../config/constants';
 import {
-  TokenAddresses,
+  swapTokensData,
   TransactionData,
   ExecuteSwapResult,
   ConcurrentOperationsEnum,
   CheckBalanceConditionsResult
 } from '../types/commonType';
 import {
-  getTokensAddresses,
+  getSwapTokensData,
   checkBlockchainConditions,
   userReachedOperationLimit,
   userWithinTokenOperationLimits
@@ -62,7 +62,7 @@ interface SwapBody {
  */
 const validateInputs = async (
   inputs: SwapBody,
-  tokenAddresses: TokenAddresses
+  tokenAddresses: swapTokensData
 ): Promise<string> => {
   const { channel_user_id, inputCurrency, outputCurrency, amount } = inputs;
 
@@ -82,7 +82,7 @@ const validateInputs = async (
     return 'Amount must be provided and greater than 0';
   }
 
-  if (!tokenAddresses.tokenAddressInput || !tokenAddresses.tokenAddressOutput) {
+  if (!tokenAddresses.tokenInputAddress || !tokenAddresses.tokenOutputAddress) {
     return 'Invalid token symbols for the current network';
   }
 
@@ -116,14 +116,14 @@ export const swap = async (
     const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds ?? 0;
     const { tokens: blockchainTokens, networkConfig } = request.server as FastifyInstance;
 
-    const tokenAddresses: TokenAddresses = getTokensAddresses(
+    const tokensData: swapTokensData = getSwapTokensData(
       networkConfig,
       blockchainTokens,
       inputCurrency,
       outputCurrency
     );
 
-    let validationError: string = await validateInputs(request.body, tokenAddresses);
+    let validationError: string = await validateInputs(request.body, tokensData);
 
     if (validationError) {
       return await returnErrorResponse(reply, 400, validationError);
@@ -224,10 +224,10 @@ export const swap = async (
     const proxyAddress = fromUser.wallets[0].wallet_proxy;
 
     // Get the contracts and decimals for the tokens
-    const fromTokenContract = await setupERC20(tokenAddresses.tokenAddressInput, backendSigner);
+    const fromTokenContract = await setupERC20(tokensData.tokenInputAddress, backendSigner);
     const fromTokenDecimals = await fromTokenContract.decimals();
 
-    const toTokenContract = await setupERC20(tokenAddresses.tokenAddressOutput, backendSigner);
+    const toTokenContract = await setupERC20(tokensData.tokenOutputAddress, backendSigner);
     const toTokenDecimals = await toTokenContract.decimals();
 
     // Get the current balances before the transaction
@@ -264,7 +264,7 @@ export const swap = async (
       networkConfig,
       checkBlockchainConditionsResult.setupContractsResult!,
       checkBlockchainConditionsResult.entryPointContract!,
-      tokenAddresses,
+      tokensData,
       blockchainTokens,
       amount.toString(),
       proxyAddress,
@@ -298,7 +298,7 @@ export const swap = async (
     const chatterpayFee = await getChatterpayTokenFee(
       networkConfig.contracts.chatterPayAddress,
       checkBlockchainConditionsResult.setupContractsResult!.provider,
-      tokenAddresses.tokenAddressInput
+      tokensData.tokenInputAddress
     );
 
     // Save transactions OUT
@@ -344,10 +344,10 @@ export const swap = async (
     }
     await sendSwapNotification(
       channel_user_id,
-      inputCurrency,
+      tokensData.tokenInputSymbol,
       fromTokensSentInUnits.toString(),
       toTokensReceivedInUnits.toString(),
-      outputCurrency,
+      tokensData.tokenOutputSymbol,
       executeSwapResult.swapTransactionHash
     );
 

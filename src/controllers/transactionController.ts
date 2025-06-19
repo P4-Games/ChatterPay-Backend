@@ -601,7 +601,7 @@ export const makeTransaction = async (
       toUser?.phone_number ?? toAddress,
       toUser?.name ?? '',
       amount,
-      tokenSymbol,
+      tokenData!.symbol,
       executeTransactionResult.transactionHash,
       traceHeader
     );
@@ -613,7 +613,7 @@ export const makeTransaction = async (
         fromUser.name,
         toUser.phone_number,
         amountAfterFee.toString(),
-        tokenSymbol,
+        tokenData!.symbol,
         traceHeader
       );
     }

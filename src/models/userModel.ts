@@ -1,6 +1,6 @@
 import { model, Schema, Document } from 'mongoose';
 
-import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DFAULT } from '../config/constants';
+import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT } from '../config/constants';
 
 export interface IUserWallet {
   wallet_proxy: string;
@@ -74,7 +74,7 @@ const userSchema = new Schema<IUser>({
   wallets: { type: [walletSchema], default: [] },
   settings: {
     notifications: {
-      language: { type: String, required: true, default: SETTINGS_NOTIFICATION_LANGUAGE_DFAULT }
+      language: { type: String, required: true, default: SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT }
     }
   },
   lastOperationDate: { type: Date, required: false },

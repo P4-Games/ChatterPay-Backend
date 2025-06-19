@@ -9,6 +9,7 @@ export interface TokenInfo {
   type: string;
   rateUSD: number;
   display_decimals: number;
+  display_symbol: string;
 }
 
 /**
@@ -53,9 +54,13 @@ export interface CheckBalanceConditionsResult {
   entryPointContract: ethers.Contract | null;
 }
 
-export interface TokenAddresses {
-  tokenAddressInput: string;
-  tokenAddressOutput: string;
+export interface swapTokensData {
+  tokenInputAddress: string;
+  tokenInputSymbol: string;
+  tokenInputDisplaySymbol: string;
+  tokenOutputAddress: string;
+  tokenOutputSymbol: string;
+  tokenOutputDisplaySymbol: string;
 }
 
 export interface ExecuteSwapResult {
@@ -139,3 +144,6 @@ export enum CacheNames {
   TOR = 'torCache',
   COINGECKO = 'coingeckoCache'
 }
+
+export const notificationLanguages = ['en', 'es', 'pt'] as const;
+export type NotificationLanguage = (typeof notificationLanguages)[number];
