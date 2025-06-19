@@ -9,6 +9,7 @@ export interface TokenInfo {
   type: string;
   rateUSD: number;
   display_decimals: number;
+  display_symbol: string;
 }
 
 /**

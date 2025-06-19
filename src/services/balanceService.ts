@@ -147,6 +147,7 @@ async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo
     type: token.type,
     rateUSD: prices.get(token.symbol) || 0,
     display_decimals: token.display_decimals,
+    display_symbol: token.display_symbol,
     operations_limits: token.operations_limits
   }));
 }
@@ -187,11 +188,11 @@ export function calculateBalances(
   fiatQuotes: FiatQuote[],
   networkName: string
 ): BalanceInfo[] {
-  return tokenBalances.map(({ symbol, balance, rateUSD }) => {
+  return tokenBalances.map(({ display_symbol, balance, rateUSD }) => {
     const balanceUSD = parseFloat(balance) * rateUSD;
     return {
       network: networkName,
-      token: symbol,
+      token: display_symbol,
       balance: parseFloat(balance),
       balance_conv: {
         USD: balanceUSD,
