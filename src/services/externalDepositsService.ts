@@ -1,3 +1,4 @@
+import { getAddress } from 'ethers/lib/utils';
 import { gql, request } from 'graphql-request';
 
 import { UserModel } from '../models/userModel';
@@ -115,8 +116,8 @@ async function processExternalDeposit(
 
       const transactionData: TransactionData = {
         tx: txHash,
-        walletFrom: transfer.from,
-        walletTo: transfer.to,
+        walletFrom: getAddress(transfer.from),
+        walletTo: getAddress(transfer.to),
         amount: value,
         fee: 0,
         token: tokenInfo.symbol,
