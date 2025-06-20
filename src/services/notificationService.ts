@@ -83,11 +83,13 @@ export async function getNotificationTemplate(
  *
  * @param user_wallet_proxy - The blockchain address of the newly created wallet (Proxy).
  * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @param network_name - The network name.
  * @returns A Promise resolving to the result of the notification operation.
  */
 export async function sendWalletCreationNotification(
   user_wallet_proxy: string,
-  channel_user_id: string
+  channel_user_id: string,
+  network_name: string
 ) {
   try {
     Logger.log(
@@ -99,7 +101,9 @@ export async function sendWalletCreationNotification(
       channel_user_id,
       NotificationEnum.wallet_creation
     );
-    const formattedMessage = message.replace('[PREDICTED_WALLET_EOA_ADDRESS]', user_wallet_proxy);
+    const formattedMessage = message
+      .replace('[WALLET_ADDRESS]', user_wallet_proxy)
+      .replace('[NETWORK_NAME]', network_name);
 
     const sendAndPersistParams: SendAndPersistParams = {
       to: channel_user_id,
@@ -107,7 +111,7 @@ export async function sendWalletCreationNotification(
       messagePush: formattedMessage,
       template: NotificationEnum.wallet_creation,
       sendPush: true,
-      sendBot: false, // the controller handles this!
+      sendBot: true,
       title,
       traceHeader: ''
     };
@@ -115,6 +119,9 @@ export async function sendWalletCreationNotification(
     await persistAndSendNotification(sendAndPersistParams);
   } catch (error) {
     Logger.error('sendWalletCreationNotification', error);
+    throw error;
+  }
+}
 
 /**
  * Sends a notification when a user's wallet already exists.
