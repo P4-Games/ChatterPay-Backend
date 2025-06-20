@@ -1,3 +1,4 @@
+import { getAddress } from 'ethers/lib/utils';
 import { gql, request } from 'graphql-request';
 
 import { UserModel } from '../models/userModel';
@@ -108,10 +109,15 @@ async function processExternalDeposit(
       }
 
       Logger.debug('processExternalDeposit', 'Saving external deposit transaction in database.');
+
+      // Some subgraphs use `id` as a composite of `txHash + logIndex`.
+      // We extract only the first 66 characters to get the actual transaction hash (0x + 64 hex digits).
+      const txHash = transfer.id.slice(0, 66);
+
       const transactionData: TransactionData = {
-        tx: transfer.id,
-        walletFrom: transfer.from,
-        walletTo: transfer.to,
+        tx: txHash,
+        walletFrom: getAddress(transfer.from),
+        walletTo: getAddress(transfer.to),
         amount: value,
         fee: 0,
         token: tokenInfo.symbol,
@@ -132,7 +138,7 @@ async function processExternalDeposit(
         );
         Logger.debug(
           'processExternalDeposit',
-          `Notification sent successfully for transfer ${transfer.id} to user ${user.phone_number}`
+          `Notification sent successfully for transfer ${txHash} to user ${user.phone_number}`
         );
       }
     } else {
