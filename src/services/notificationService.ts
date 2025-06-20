@@ -115,6 +115,48 @@ export async function sendWalletCreationNotification(
     await persistAndSendNotification(sendAndPersistParams);
   } catch (error) {
     Logger.error('sendWalletCreationNotification', error);
+
+/**
+ * Sends a notification when a user's wallet already exists.
+ *
+ * @param user_wallet_proxy - The blockchain address of the already existing wallet (Proxy).
+ * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
+ * @param network_name - The network name.
+ * @returns A Promise resolving to the result of the notification operation.
+ */
+export async function sendWalletAlreadyExistsNotification(
+  user_wallet_proxy: string,
+  channel_user_id: string,
+  network_name: string
+) {
+  try {
+    Logger.log(
+      'sendWalletAlreadyExistsNotification',
+      `Sending wallet already exists notification to ${channel_user_id}, ${user_wallet_proxy}`
+    );
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.wallet_already_exists
+    );
+    const formattedMessage = message
+      .replace('[WALLET_ADDRESS]', user_wallet_proxy)
+      .replace('[NETWORK_NAME]', network_name);
+
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.wallet_already_exists,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader: ''
+    };
+
+    await persistAndSendNotification(sendAndPersistParams);
+  } catch (error) {
+    Logger.error('sendWalletAlreadyExistsNotification', error);
     throw error;
   }
 }
@@ -666,7 +708,7 @@ export async function persistAndSendNotification({
   const sent_date = new Date();
 
   try {
-    let data: string | null = null;
+    const data: string | null = null;
 
     // 1. Persist always with media INTERNAL
     await mongoNotificationService.createNotification({
@@ -686,7 +728,7 @@ export async function persistAndSendNotification({
         channel_user_id: to,
         message: messageBot
       };
-      data = await chatizaloService.sendBotNotification(payload, traceHeader);
+      await chatizaloService.sendBotNotification(payload, traceHeader);
     }
 
     // 3. Send via PUSH if flag is true
