@@ -108,8 +108,13 @@ async function processExternalDeposit(
       }
 
       Logger.debug('processExternalDeposit', 'Saving external deposit transaction in database.');
+
+      // Some subgraphs use `id` as a composite of `txHash + logIndex`.
+      // We extract only the first 66 characters to get the actual transaction hash (0x + 64 hex digits).
+      const txHash = transfer.id.slice(0, 66);
+
       const transactionData: TransactionData = {
-        tx: transfer.id,
+        tx: txHash,
         walletFrom: transfer.from,
         walletTo: transfer.to,
         amount: value,
@@ -132,7 +137,7 @@ async function processExternalDeposit(
         );
         Logger.debug(
           'processExternalDeposit',
-          `Notification sent successfully for transfer ${transfer.id} to user ${user.phone_number}`
+          `Notification sent successfully for transfer ${txHash} to user ${user.phone_number}`
         );
       }
     } else {
