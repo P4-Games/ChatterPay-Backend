@@ -1,11 +1,16 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
+import { delaySeconds } from '../helpers/timeHelper';
 import { withdrawWalletAllFunds } from '../services/transferService';
 import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../config/constants';
 import { tryIssueTokens, createOrReturnWallet } from '../services/walletService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
+import {
+  sendWalletCreationNotification,
+  sendWalletAlreadyExistsNotification
+} from '../services/notificationService';
 
 /**
  * Handles the creation of a new wallet for the user.
@@ -14,56 +19,90 @@ import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validation
  * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the result.
  */
 export const createWallet = async (
-  request: FastifyRequest<{ Body: { channel_user_id: string } }>,
+  request: FastifyRequest<{
+    Body: { channel_user_id: string };
+    Querystring?: { lastBotMsgDelaySeconds?: number };
+  }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
-  let logKey = `[op:createWallet:${''}]`;
+  // Immediate response to the user
+  reply.send({
+    status: 'success',
+    data: {
+      message: 'We are processing your request. You will be notified shortly.'
+    },
+    timestamp: new Date().toISOString()
+  });
 
-  try {
-    if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
-    }
+  // Async processing after the reply
+  (async () => {
+    let logKey = '[op:createWallet:unknown]';
+    const delaySecondsValue = request.query?.lastBotMsgDelaySeconds || 0;
+    const startTime = Date.now();
 
-    const { channel_user_id } = request.body;
+    try {
+      if (!request.body) throw new Error('Missing request body');
 
-    if (!channel_user_id) {
-      return await returnErrorResponse(reply, 400, 'Missing channel_user_id in body');
-    }
+      const { channel_user_id } = request.body;
+      logKey = `[op:createWallet:${channel_user_id}]`;
 
-    if (!isValidPhoneNumber(channel_user_id)) {
-      return await returnErrorResponse(
-        reply,
-        400,
-        `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`
+      if (!channel_user_id) throw new Error('Missing channel_user_id in body');
+      if (!isValidPhoneNumber(channel_user_id)) {
+        throw new Error(`Invalid phone number: '${channel_user_id}'`);
+      }
+
+      const { networkConfig, tokens } = request.server;
+
+      const { message, walletAddress, wasWalletCreated } = await createOrReturnWallet(
+        channel_user_id,
+        networkConfig,
+        logKey
       );
+
+      const processingTimeMs = Date.now() - startTime;
+      const delayMs = delaySecondsValue * 1000;
+      if (delayMs > 0) {
+        const remainingDelay = delayMs - processingTimeMs;
+
+        if (remainingDelay > 0) {
+          Logger.log('createWallet2', logKey, `Waiting ${remainingDelay}ms for bot notification`);
+          await delaySeconds(remainingDelay / 1000);
+        } else {
+          Logger.log(
+            'createWallet2',
+            logKey,
+            `Skipping bot notification delay due to overrun (${processingTimeMs}ms > ${delayMs}ms)`
+          );
+        }
+      }
+      if (wasWalletCreated) {
+        await sendWalletCreationNotification(walletAddress, channel_user_id, networkConfig.name);
+      } else {
+        await sendWalletAlreadyExistsNotification(
+          walletAddress,
+          channel_user_id,
+          networkConfig.name
+        );
+      }
+
+      if (
+        wasWalletCreated &&
+        networkConfig.environment.toUpperCase() !== 'PRODUCTION' &&
+        IS_DEVELOPMENT &&
+        ISSUER_TOKENS_ENABLED
+      ) {
+        Logger.log('createWallet', logKey, `Issuing tokens for ${walletAddress}`);
+        await tryIssueTokens(walletAddress, tokens, networkConfig);
+      }
+
+      Logger.log('createWallet', logKey, `${message}, ${walletAddress}`);
+    } catch (error) {
+      const err = error as Error;
+      Logger.error('createWallet', logKey, err.message || err);
     }
+  })();
 
-    logKey = `[op:createWallet:${channel_user_id}]`;
-
-    const { networkConfig, tokens } = request.server;
-
-    const { message, walletAddress, wasWalletCreated } = await createOrReturnWallet(
-      channel_user_id,
-      networkConfig,
-      logKey
-    );
-
-    if (
-      wasWalletCreated &&
-      networkConfig.environment.toUpperCase() !== 'PRODUCTION' &&
-      IS_DEVELOPMENT &&
-      ISSUER_TOKENS_ENABLED
-    ) {
-      Logger.log('createWallet', logKey, `Issuing tokens for ${walletAddress}`);
-      await tryIssueTokens(walletAddress, tokens, networkConfig);
-    }
-
-    Logger.log('createWallet', logKey, `${message}, ${walletAddress}`);
-    return await returnSuccessResponse(reply, message, { walletAddress });
-  } catch (error) {
-    Logger.error('createWallet', logKey, error);
-    return returnErrorResponse(reply, 400, 'An error occurred while creating the wallet');
-  }
+  return reply;
 };
 
 /**
