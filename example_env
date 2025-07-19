@@ -46,7 +46,7 @@
   MANTECA_API_KEY= ''
 
   # Graph API (The Graph)
-  GRAPH_API_URL='https://api.studio.thegraph.com/query/91286/chatterpay-external-deposits/version/latest'
+  GRAPH_API_URL='https://gateway.thegraph.com/api/subgraphs/id/4dn83RCWNtG1NKm5NZPxFGaf1JdrgfzcgrwiTNP3ayGR'
   GRAPH_API_KEY=''
 
   # Dev Stuffs
