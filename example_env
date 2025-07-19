@@ -45,6 +45,10 @@
   MANTECA_BASE_URL='https://sandbox.manteca.dev/crypto/v1'
   MANTECA_API_KEY= ''
 
+  # Graph API (The Graph)
+  GRAPH_API_URL='https://api.studio.thegraph.com/query/91286/chatterpay-external-deposits/version/latest'
+  GRAPH_API_KEY=''
+
   # Dev Stuffs
   GCP_CLOUD_TRACE_ENABLED=true | false
 

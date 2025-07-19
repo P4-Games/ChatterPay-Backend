@@ -8,7 +8,7 @@ import Token, { IToken } from '../models/tokenModel';
 import { TransactionData } from '../types/commonType';
 import { mongoTokenService } from './mongo/mongoTokenService';
 import Blockchain, { IBlockchain } from '../models/blockchainModel';
-import { GRAPH_API_EXTERNAL_DEPOSITS_URL } from '../config/constants';
+import { GRAPH_API_EXTERNAL_DEPOSITS_URL, GRAPH_API_KEY } from '../config/constants';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { sendReceivedTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
@@ -195,10 +195,19 @@ export async function fetchExternalDeposits(
     );
 
     // Execute the GraphQL query
+    let requestOptions: Record<string, string> | undefined;
+
+    if (GRAPH_API_KEY) {
+      requestOptions = {
+        'Authorization': `Bearer ${GRAPH_API_KEY}`
+      };
+    }
+
     const data = await request<{ chatterPayTransfers: Transfer[] }>(
       GRAPH_API_EXTERNAL_DEPOSITS_URL,
       QUERY_EXTERNAL_DEPOSITS,
-      variables
+      variables,
+      requestOptions
     );
 
     // Filter out Uniswap V2 router transfers & Uniswap V3 Pool transfers.
