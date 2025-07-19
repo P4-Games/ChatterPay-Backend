@@ -8,10 +8,10 @@ import Token, { IToken } from '../models/tokenModel';
 import { TransactionData } from '../types/commonType';
 import { mongoTokenService } from './mongo/mongoTokenService';
 import Blockchain, { IBlockchain } from '../models/blockchainModel';
-import { GRAPH_API_EXTERNAL_DEPOSITS_URL, GRAPH_API_KEY } from '../config/constants';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { sendReceivedTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
+import { GRAPH_API_KEY, GRAPH_API_EXTERNAL_DEPOSITS_URL } from '../config/constants';
 
 /**
  * GraphQL query to fetch external deposits.
@@ -199,7 +199,7 @@ export async function fetchExternalDeposits(
 
     if (GRAPH_API_KEY) {
       requestOptions = {
-        'Authorization': `Bearer ${GRAPH_API_KEY}`
+        Authorization: `Bearer ${GRAPH_API_KEY}`
       };
     }
 
