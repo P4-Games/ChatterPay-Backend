@@ -296,7 +296,7 @@ export const swap = async (
     );
 
     const chatterpayFee = await getChatterpayTokenFee(
-      networkConfig.contracts.chatterPayAddress,
+      proxyAddress,
       checkBlockchainConditionsResult.setupContractsResult!.provider,
       tokensData.tokenInputAddress
     );

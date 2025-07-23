@@ -553,7 +553,7 @@ export const makeTransaction = async (
       : undefined;
 
     const chatterpayFee = await getChatterpayTokenFee(
-      networkConfig.contracts.chatterPayAddress,
+      userWallet.wallet_proxy,
       checkBlockchainConditionsResult.setupContractsResult!.provider,
       tokenData!.address
     );
