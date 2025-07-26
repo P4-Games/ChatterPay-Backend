@@ -73,6 +73,7 @@
 ## Backend => Smart Contracts
 
 - Create Wallet (/create_wallet)
+
   - ChatterPayWalletFactory.computeProxyAddress
   - ChatterPayWalletFactory.createProxy
 
@@ -81,6 +82,7 @@
 - NFT: Mint Copy (/mint_existing) => ChatterPayNFT.mintCopy
 
 - Make Transaction (/make_transaction)
+
   - ChatterPayWalletFactory.computeProxyAddress
   - Chatterpay.execute
   - Chatterpay.balanceOf
