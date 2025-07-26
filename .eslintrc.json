@@ -29,7 +29,14 @@
       "@typescript-eslint/parser": [".ts", ".tsx"]
     }
   },
-  "ignorePatterns": [".github/**", ".husky/**", "coverage/**", "dist/**", "node_modules/**"],
+  "ignorePatterns": [
+    ".github/**",
+    ".husky/**",
+    "coverage/**",
+    "dist/**",
+    "node_modules/**",
+    "**/*.md"
+  ],
   "rules": {
     "no-console": [
       "error",
@@ -128,7 +135,12 @@
     {
       "files": ["vitest.config.ts"],
       "rules": {
-        "import/no-extraneous-dependencies": ["error", { "devDependencies": true }]
+        "import/no-extraneous-dependencies": [
+          "error",
+          {
+            "devDependencies": true
+          }
+        ]
       }
     }
   ]

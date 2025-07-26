@@ -48,7 +48,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Run Prettier
-        run: bun x prettier --check .
+        run: bun x prettier --check . --ignore-path .prettierignore
 
       - name: Check for uncommitted changes
         run: git diff --exit-code

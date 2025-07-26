@@ -30,6 +30,8 @@ const {
   MINOR_LOG_LEVEL: minorLogLevel = 'debug',
   MANTECA_BASE_URL = 'https://sandbox.manteca.dev/crypto/v1',
   MANTECA_API_KEY,
+  THE_GRAPH_API_KEY,
+  THE_GRAPH_EXTERNAL_DEPOSITS_URL = '',
   CORS_ORIGINS = '*',
   BLACKLIST_IPS = '',
   DEFAULT_CHAIN_ID: defaultChainId = 421614, // Arbitrum Sepolia
@@ -65,9 +67,11 @@ export {
   CHATIZALO_TOKEN,
   MANTECA_API_KEY,
   MANTECA_BASE_URL,
+  THE_GRAPH_API_KEY,
   SEED_INTERNAL_SALT,
   GCP_BUCKET_BASE_URL,
-  CHATIZALO_PHONE_NUMBER
+  CHATIZALO_PHONE_NUMBER,
+  THE_GRAPH_EXTERNAL_DEPOSITS_URL
 };
 
 export const IS_DEVELOPMENT =
@@ -139,8 +143,6 @@ export const WHATSAPP_API_URL = 'https://api.whatsapp.com';
 export const MANTECA_MOCK_UPLOAD_DOCUMENTS_URL = 'https://upload.manteca.dev/file-upload-url';
 export const INFURA_URL = 'https://mainnet.infura.io/v3';
 export const BINANCE_API_URL = 'https://api.binance.us/api/v3';
-export const GRAPH_API_EXTERNAL_DEPOSITS_URL =
-  'https://api.studio.thegraph.com/query/91286/chatterpay-external-deposits/version/latest';
 
 export const CRIPTO_YA_URL: string = 'https://criptoya.com/api/ripio/USDT';
 export const FIAT_CURRENCIES = ['UYU', 'ARS', 'BRL'];
