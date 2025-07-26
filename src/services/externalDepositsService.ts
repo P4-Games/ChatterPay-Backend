@@ -11,12 +11,12 @@ import Blockchain, { IBlockchain } from '../models/blockchainModel';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { sendReceivedTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-import { GRAPH_API_KEY, GRAPH_API_EXTERNAL_DEPOSITS_URL } from '../config/constants';
+import { THE_GRAPH_API_KEY, THE_GRAPH_EXTERNAL_DEPOSITS_URL } from '../config/constants';
 
 /**
  * GraphQL query to fetch external deposits.
  */
-const QUERY_EXTERNAL_DEPOSITS = gql`
+const THE_GRAPH_QUERY_EXTERNAL_DEPOSITS = gql`
   query getExternalDeposits($lastTimestamp: Int!) {
     chatterPayTransfers(
       where: { blockTimestamp_gt: $lastTimestamp }
@@ -197,15 +197,15 @@ export async function fetchExternalDeposits(
     // Execute the GraphQL query
     let requestOptions: Record<string, string> | undefined;
 
-    if (GRAPH_API_KEY) {
+    if (THE_GRAPH_API_KEY) {
       requestOptions = {
-        Authorization: `Bearer ${GRAPH_API_KEY}`
+        Authorization: `Bearer ${THE_GRAPH_API_KEY}`
       };
     }
 
     const data = await request<{ chatterPayTransfers: Transfer[] }>(
-      GRAPH_API_EXTERNAL_DEPOSITS_URL,
-      QUERY_EXTERNAL_DEPOSITS,
+      THE_GRAPH_EXTERNAL_DEPOSITS_URL,
+      THE_GRAPH_QUERY_EXTERNAL_DEPOSITS,
       variables,
       requestOptions
     );
