@@ -1,0 +1,56 @@
+@startuml
+actor User
+participant "Bot\n(Whatsapp/LLM/Chatizalo)" as FE
+participant "Route\n/create_wallet" as Route
+participant "walletController" as Controller
+participant "validationHelper" as Validator
+participant "mongoUserService" as MongoService
+participant "userService" as UserService
+participant "formatHelper" as Formatter
+participant "walletService" as WalletService
+participant "userModel" as UserModel
+participant "pushService" as PushService
+participant "notificationHelper" as Notifier
+participant "requestHelper" as Response
+participant "walletService (dev only)" as TokenIssuer
+
+User -> FE: Starts wallet creation
+FE -> Route: POST /create_wallet { channel_user_id }
+Route -> Controller: createWallet(req, res)
+
+Controller -> Validator: isValidPhoneNumber(channel_user_id)
+alt Invalid phone number
+    Controller -> Response: returnErrorResponse(400)
+    Response --> Route
+    Route --> FE: HTTP 400 Bad Request
+    return
+end
+
+Controller -> UserService: createUserWithWallet(channel_user_id, proxyAddress, factoryAddress)
+
+UserService -> Formatter: getPhoneNumberFormatted(channel_user_id)
+UserService -> WalletPredictor: computeProxyAddressFromPhone(phone)
+WalletPredictor --> UserService: proxyAddress, eoaAddress, privateKey
+
+UserService -> UserModel: new UserModel({ ... })
+UserModel -> UserModel: save()
+UserModel -> UserModel: update(manteca_user_id)
+UserModel -> UserModel: save()
+
+alt PUSH_ENABLED
+    UserService -> PushService: subscribeToPushChannel(privateKey, eoaAddress)
+end
+
+UserService -> Notifier: sendWalletCreationNotification(proxyAddress, phone)
+
+UserService --> Controller: user with wallet
+
+alt IS_DEVELOPMENT && ISSUER_TOKENS_ENABLED
+    Controller -> TokenIssuer: tryIssueTokens(user)
+    TokenIssuer --> Controller: result
+end
+
+Controller -> Response: returnSuccessResponse()
+Response --> Route
+Route --> FE: HTTP 200 OK (wallet created)
+@enduml

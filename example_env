@@ -45,6 +45,10 @@
   MANTECA_BASE_URL='https://sandbox.manteca.dev/crypto/v1'
   MANTECA_API_KEY= ''
 
+  # The Graph API
+  THE_GRAPH_EXTERNAL_DEPOSITS_URL='https://gateway.thegraph.com/api/subgraphs/id/....some_id....'
+  THE_GRAPH_API_KEY=''
+
   # Dev Stuffs
   GCP_CLOUD_TRACE_ENABLED=true | false
 
