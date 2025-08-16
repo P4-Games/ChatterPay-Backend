@@ -8,15 +8,15 @@ import Token, { IToken } from '../models/tokenModel';
 import { TransactionData } from '../types/commonType';
 import { mongoTokenService } from './mongo/mongoTokenService';
 import Blockchain, { IBlockchain } from '../models/blockchainModel';
-import { GRAPH_API_EXTERNAL_DEPOSITS_URL } from '../config/constants';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { sendReceivedTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
+import { THE_GRAPH_API_KEY, THE_GRAPH_EXTERNAL_DEPOSITS_URL } from '../config/constants';
 
 /**
  * GraphQL query to fetch external deposits.
  */
-const QUERY_EXTERNAL_DEPOSITS = gql`
+const THE_GRAPH_QUERY_EXTERNAL_DEPOSITS = gql`
   query getExternalDeposits($lastTimestamp: Int!) {
     chatterPayTransfers(
       where: { blockTimestamp_gt: $lastTimestamp }
@@ -195,10 +195,19 @@ export async function fetchExternalDeposits(
     );
 
     // Execute the GraphQL query
+    let requestOptions: Record<string, string> | undefined;
+
+    if (THE_GRAPH_API_KEY) {
+      requestOptions = {
+        Authorization: `Bearer ${THE_GRAPH_API_KEY}`
+      };
+    }
+
     const data = await request<{ chatterPayTransfers: Transfer[] }>(
-      GRAPH_API_EXTERNAL_DEPOSITS_URL,
-      QUERY_EXTERNAL_DEPOSITS,
-      variables
+      THE_GRAPH_EXTERNAL_DEPOSITS_URL,
+      THE_GRAPH_QUERY_EXTERNAL_DEPOSITS,
+      variables,
+      requestOptions
     );
 
     // Filter out Uniswap V2 router transfers & Uniswap V3 Pool transfers.
