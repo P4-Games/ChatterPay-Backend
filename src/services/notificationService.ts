@@ -32,24 +32,25 @@ export async function getNotificationTemplate(
 ): Promise<{ title: string; message: string }> {
   const defaultNotification = { title: 'Chatterpay Message', message: '' };
   try {
-    const cachedTemplate = cacheService.get(CacheNames.NOTIFICATION, `${typeOfNotification}`);
-    if (cachedTemplate) {
-      Logger.log('getNotificationTemplate', `getting ${typeOfNotification} from cache`);
-      return cachedTemplate as { title: string; message: string };
+    if (!Object.values(NotificationEnum).includes(typeOfNotification)) {
+      Logger.warn('getNotificationTemplate', `Invalid notification type: ${typeOfNotification}`);
+      return defaultNotification;
     }
 
     const userLanguage: NotificationLanguage =
       await mongoUserService.getUserSettingsLanguage(channelUserId);
 
+    const cacheKey = `${typeOfNotification}:${userLanguage}`;
+    const cachedTemplate = cacheService.get(CacheNames.NOTIFICATION, `${cacheKey}`);
+    if (cachedTemplate) {
+      Logger.log('getNotificationTemplate', `getting ${cacheKey} from cache`);
+      return cachedTemplate as { title: string; message: string };
+    }
+
     const notificationTemplates: NotificationTemplatesTypes | null =
       await mongoTemplateService.getTemplate<ITemplateSchema>(templateEnum.NOTIFICATIONS);
     if (!notificationTemplates) {
       Logger.warn('getNotificationTemplate', 'Notifications Templates not found');
-      return defaultNotification;
-    }
-
-    if (!Object.values(NotificationEnum).includes(typeOfNotification)) {
-      Logger.warn('getNotificationTemplate', `Invalid notification type: ${typeOfNotification}`);
       return defaultNotification;
     }
 
@@ -61,11 +62,17 @@ export async function getNotificationTemplate(
       return defaultNotification;
     }
 
+    const availableTitle = template.title?.[userLanguage];
+    const availableMessage = template.message?.[userLanguage];
+    const fallbackLanguage =
+      (Object.keys(template.title ?? {})[0] as NotificationLanguage | undefined) ?? userLanguage;
+
     const result = {
-      title: template.title[userLanguage],
-      message: template.message[userLanguage]
+      title: availableTitle ?? template.title?.[fallbackLanguage] ?? defaultNotification.title,
+      message:
+        availableMessage ?? template.message?.[fallbackLanguage] ?? defaultNotification.message
     };
-    cacheService.set(CacheNames.NOTIFICATION, `${typeOfNotification}`, result);
+    cacheService.set(CacheNames.NOTIFICATION, `${cacheKey}`, result);
 
     return result;
   } catch (error: unknown) {
