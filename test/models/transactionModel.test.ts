@@ -34,7 +34,8 @@ describe('Transaction Model', () => {
       amount: 100.5,
       fee: 0.5,
       token: 'ETH',
-      chain_id: 1
+      chain_id: 1,
+      user_notes: 'Test transaction'
     };
 
     const transaction = new Transaction(validTransaction);
@@ -76,7 +77,8 @@ describe('Transaction Model', () => {
       amount: 50.0,
       fee: 0.5,
       token: 'ETH',
-      chain_id: 1
+      chain_id: 1,
+      user_notes: 'Test transaction'
     };
 
     const duplicateTransactionData: Partial<ITransaction> = {
@@ -89,7 +91,8 @@ describe('Transaction Model', () => {
       amount: 75.0,
       fee: 0.5,
       token: 'BTC',
-      chain_id: 1
+      chain_id: 1,
+      user_notes: 'Test transaction'
     };
 
     const transaction1 = new Transaction(transactionData);
@@ -121,7 +124,8 @@ describe('Transaction Model', () => {
       amount: 1000000000.0, // Large amount
       fee: 0.5,
       token: 'USDT',
-      chain_id: 1
+      chain_id: 1,
+      user_notes: 'Test transaction'
     };
 
     const transaction = new Transaction(validTransaction);

@@ -183,6 +183,7 @@ export async function sendWalletAlreadyExistsNotification(
  * @param phoneNumberTo - Recipient's phone number.
  * @param amount - Amount received.
  * @param token - Token symbol or identifier (e.g., ETH, USDT).
+ * @param user_notes - User notes associated with the transaction.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  * @returns A Promise resolving to the result of the notification operation.
  */
@@ -192,6 +193,7 @@ export async function sendReceivedTransferNotification(
   phoneNumberTo: string,
   amount: string,
   token: string,
+  user_notes: string,
   traceHeader?: string
 ): Promise<unknown> {
   try {
@@ -210,7 +212,8 @@ export async function sendReceivedTransferNotification(
       message
         .replaceAll('[FROM]', fromNumberAndName)
         .replaceAll('[AMOUNT]', amount)
-        .replaceAll('[TOKEN]', token);
+        .replaceAll('[TOKEN]', token)
+        .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
 
     const fromNumberAndName = formatIdentifierWithOptionalName(phoneNumberFrom, nameFrom, false);
     const fromNumberAndNameMasked = formatIdentifierWithOptionalName(
@@ -353,6 +356,7 @@ export async function sendMintNotification(
  * @param toName - Recipient's name.
  * @param amount - Amount transferred.
  * @param token - Token symbol or identifier (e.g., ETH, USDT).
+ * @param user_notes - User notes associated with the transaction.
  * @param txHash - Blockchain transaction hash of the transfer.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  * @returns A Promise resolving to the result of the notification operation.
@@ -363,6 +367,7 @@ export async function sendOutgoingTransferNotification(
   toName: string,
   amount: string,
   token: string,
+  user_notes: string,
   txHash: string,
   traceHeader?: string
 ): Promise<unknown> {
@@ -383,7 +388,8 @@ export async function sendOutgoingTransferNotification(
         .replaceAll('[TOKEN]', token)
         .replaceAll('[TO]', toNumberAndName)
         .replaceAll('[EXPLORER]', networkConfig.explorer)
-        .replaceAll('[TX_HASH]', txHash);
+        .replaceAll('[TX_HASH]', txHash)
+        .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
 
     const toNumberAndName = formatIdentifierWithOptionalName(phoneNumberTo, toName, false);
     const toNumberAndNameMasked = formatIdentifierWithOptionalName(phoneNumberTo, toName, true);
