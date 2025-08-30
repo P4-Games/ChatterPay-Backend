@@ -32,24 +32,25 @@ export async function getNotificationTemplate(
 ): Promise<{ title: string; message: string }> {
   const defaultNotification = { title: 'Chatterpay Message', message: '' };
   try {
-    const cachedTemplate = cacheService.get(CacheNames.NOTIFICATION, `${typeOfNotification}`);
-    if (cachedTemplate) {
-      Logger.log('getNotificationTemplate', `getting ${typeOfNotification} from cache`);
-      return cachedTemplate as { title: string; message: string };
+    if (!Object.values(NotificationEnum).includes(typeOfNotification)) {
+      Logger.warn('getNotificationTemplate', `Invalid notification type: ${typeOfNotification}`);
+      return defaultNotification;
     }
 
     const userLanguage: NotificationLanguage =
       await mongoUserService.getUserSettingsLanguage(channelUserId);
 
+    const cacheKey = `${typeOfNotification}:${userLanguage}`;
+    const cachedTemplate = cacheService.get(CacheNames.NOTIFICATION, `${cacheKey}`);
+    if (cachedTemplate) {
+      Logger.log('getNotificationTemplate', `getting ${cacheKey} from cache`);
+      return cachedTemplate as { title: string; message: string };
+    }
+
     const notificationTemplates: NotificationTemplatesTypes | null =
       await mongoTemplateService.getTemplate<ITemplateSchema>(templateEnum.NOTIFICATIONS);
     if (!notificationTemplates) {
       Logger.warn('getNotificationTemplate', 'Notifications Templates not found');
-      return defaultNotification;
-    }
-
-    if (!Object.values(NotificationEnum).includes(typeOfNotification)) {
-      Logger.warn('getNotificationTemplate', `Invalid notification type: ${typeOfNotification}`);
       return defaultNotification;
     }
 
@@ -61,11 +62,17 @@ export async function getNotificationTemplate(
       return defaultNotification;
     }
 
+    const availableTitle = template.title?.[userLanguage];
+    const availableMessage = template.message?.[userLanguage];
+    const fallbackLanguage =
+      (Object.keys(template.title ?? {})[0] as NotificationLanguage | undefined) ?? userLanguage;
+
     const result = {
-      title: template.title[userLanguage],
-      message: template.message[userLanguage]
+      title: availableTitle ?? template.title?.[fallbackLanguage] ?? defaultNotification.title,
+      message:
+        availableMessage ?? template.message?.[fallbackLanguage] ?? defaultNotification.message
     };
-    cacheService.set(CacheNames.NOTIFICATION, `${typeOfNotification}`, result);
+    cacheService.set(CacheNames.NOTIFICATION, `${cacheKey}`, result);
 
     return result;
   } catch (error: unknown) {
@@ -176,6 +183,7 @@ export async function sendWalletAlreadyExistsNotification(
  * @param phoneNumberTo - Recipient's phone number.
  * @param amount - Amount received.
  * @param token - Token symbol or identifier (e.g., ETH, USDT).
+ * @param user_notes - User notes associated with the transaction.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  * @returns A Promise resolving to the result of the notification operation.
  */
@@ -185,6 +193,7 @@ export async function sendReceivedTransferNotification(
   phoneNumberTo: string,
   amount: string,
   token: string,
+  user_notes: string,
   traceHeader?: string
 ): Promise<unknown> {
   try {
@@ -203,7 +212,8 @@ export async function sendReceivedTransferNotification(
       message
         .replaceAll('[FROM]', fromNumberAndName)
         .replaceAll('[AMOUNT]', amount)
-        .replaceAll('[TOKEN]', token);
+        .replaceAll('[TOKEN]', token)
+        .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
 
     const fromNumberAndName = formatIdentifierWithOptionalName(phoneNumberFrom, nameFrom, false);
     const fromNumberAndNameMasked = formatIdentifierWithOptionalName(
@@ -346,6 +356,7 @@ export async function sendMintNotification(
  * @param toName - Recipient's name.
  * @param amount - Amount transferred.
  * @param token - Token symbol or identifier (e.g., ETH, USDT).
+ * @param user_notes - User notes associated with the transaction.
  * @param txHash - Blockchain transaction hash of the transfer.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  * @returns A Promise resolving to the result of the notification operation.
@@ -356,6 +367,7 @@ export async function sendOutgoingTransferNotification(
   toName: string,
   amount: string,
   token: string,
+  user_notes: string,
   txHash: string,
   traceHeader?: string
 ): Promise<unknown> {
@@ -376,7 +388,8 @@ export async function sendOutgoingTransferNotification(
         .replaceAll('[TOKEN]', token)
         .replaceAll('[TO]', toNumberAndName)
         .replaceAll('[EXPLORER]', networkConfig.explorer)
-        .replaceAll('[TX_HASH]', txHash);
+        .replaceAll('[TX_HASH]', txHash)
+        .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
 
     const toNumberAndName = formatIdentifierWithOptionalName(phoneNumberTo, toName, false);
     const toNumberAndNameMasked = formatIdentifierWithOptionalName(phoneNumberTo, toName, true);

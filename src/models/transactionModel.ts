@@ -11,6 +11,7 @@ export interface ITransaction extends Document {
   fee: number;
   token: string;
   chain_id: number;
+  user_notes: string;
 }
 
 const transactionSchema = new Schema<ITransaction>({
@@ -23,7 +24,8 @@ const transactionSchema = new Schema<ITransaction>({
   amount: { type: Number, required: true },
   fee: { type: Number, required: true },
   token: { type: String, required: true },
-  chain_id: { type: Number, required: true }
+  chain_id: { type: Number, required: true },
+  user_notes: { type: String, required: false }
 });
 
 transactionSchema.index(
