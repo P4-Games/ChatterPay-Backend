@@ -134,6 +134,7 @@ async function processExternalDeposit(
           null,
           user.phone_number,
           value.toString(),
+          '',
           tokenInfo.symbol
         );
         Logger.debug(
