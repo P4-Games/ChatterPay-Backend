@@ -60,6 +60,7 @@ type MakeTransactionInputs = {
   token: string;
   amount: string;
   chain_id?: string;
+  user_notes?: string;
 };
 
 /**
@@ -270,6 +271,60 @@ export const deleteTransaction = async (
 };
 
 /**
+ * Sanitize user notes for WhatsApp text channels.
+ * - Allows: letters (all langs), marks, numbers, punctuation, symbols (incl. emojis), spaces/newlines.
+ * - Removes: controls, surrogates, most invisibles (keeps ZWJ U+200D and VS16 U+FE0F for emoji ligatures).
+ * - Optional: preserve WhatsApp formatting (* _ ~), strip backticks to avoid code formatting.
+ * - Normalizes (NFKC), collapses whitespace, caps length.
+ */
+export function sanitizeUserNotesWhatsApp(
+  input: string,
+  options: { maxLen?: number; preserveWaFormatting?: boolean } = {}
+): string {
+  const { maxLen = 500, preserveWaFormatting = true } = options;
+  if (!input) return '';
+
+  // 1) Normalize
+  let s = input.normalize('NFKC');
+
+  // 2) Remove control (Cc) and surrogate (Cs) chars
+  s = s.replace(/[\p{Cc}\p{Cs}]/gu, '');
+
+  // 3) Remove most format (Cf) except ZWJ (200D) and VS16 (FE0F)
+  s = Array.from(s)
+    .filter((ch) => {
+      const cp = ch.codePointAt(0)!;
+      if (/\p{Cf}/u.test(ch)) return cp === 0x200d || cp === 0xfe0f;
+      return true;
+    })
+    .join('');
+
+  // 4) Keep only L/M/N/P/Z/S categories (covers letters, digits, punctuation, symbols/emojis, spaces)
+  s = s.replace(/[^\p{L}\p{M}\p{N}\p{P}\p{Z}\p{S}]/gu, '');
+
+  // 5) WhatsApp formatting policy
+  if (preserveWaFormatting) {
+    // Strip backticks to avoid code formatting (inline or triple)
+    s = s.replace(/`+/g, '');
+    // Keep *, _, ~ as-is for WA formatting
+  } else {
+    // Remove all formatting markers
+    s = s.replace(/[*_~`]+/g, '');
+  }
+
+  // 6) Normalize line breaks & collapse whitespace
+  s = s.replace(/\r\n?/g, '\n'); // CRLF/CR -> LF
+  s = s.replace(/[ \t\f\v]+/g, ' '); // collapse spaces/tabs
+  s = s.replace(/\n{3,}/g, '\n\n'); // max two consecutive newlines
+  s = s.trim();
+
+  // 7) Length guard
+  if (s.length > maxLen) s = s.slice(0, maxLen);
+
+  return s;
+}
+
+/**
  * Handles the make transaction request.
  *
  * @param request
@@ -305,9 +360,13 @@ export const makeTransaction = async (
       return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
     }
 
-    const { channel_user_id, to, token: tokenSymbol, amount } = request.body;
+    const { channel_user_id, to, token: tokenSymbol, amount, user_notes } = request.body;
     const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
     const { networkConfig, tokens: tokensConfig } = request.server as FastifyInstance;
+    const santizedUserNotes = sanitizeUserNotesWhatsApp(user_notes || '', {
+      maxLen: 500,
+      preserveWaFormatting: true
+    });
 
     const tokenData: IToken | undefined = getTokenData(
       networkConfig,
@@ -568,7 +627,8 @@ export const makeTransaction = async (
       token: tokenSymbol,
       type: 'transfer',
       status: 'completed',
-      chain_id: request.server.networkConfig.chainId
+      chain_id: request.server.networkConfig.chainId,
+      user_notes: santizedUserNotes
     };
     await mongoTransactionService.saveTransaction(transactionOut);
     saveTransactionSpan?.endSpan();
