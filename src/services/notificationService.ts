@@ -503,8 +503,8 @@ export async function sendAAVERemoveSuplyNotification(
 
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
 
-    const title = 'AAVE remove Supply Successful';
-    const message = `You have successfully removed ${amount} ${token} from your interest account.\n\nYou can view the transaction at ${networkConfig.explorer}/tx/${txHash}`;
+    const title = '✅ Retiro de ahorro completado';
+    const message = `Has retirado correctamente ${amount} ${token} de tu cuenta con intereses. 🎉 \nPodés ver los detalles de la transacción aquí: \n${networkConfig.explorer}/tx/${txHash}`;
 
     const sendAndPersistParams: SendAndPersistParams = {
       to: phoneNumber,
