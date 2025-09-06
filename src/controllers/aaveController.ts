@@ -4,10 +4,13 @@ import { Logger } from '../helpers/loggerHelper';
 import { IUser, IUserWallet } from '../models/userModel';
 import { aaveService } from '../services/aave/aaveService';
 import { CheckBalanceConditionsResult } from '../types/commonType';
-import { COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
 import { checkBlockchainConditions } from '../services/blockchainService';
 import { getUser, getUserWalletByChainId } from '../services/userService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import {
+  COMMON_REPLY_WALLET_NOT_CREATED,
+  COMMON_REPLY_OPERATION_IN_PROGRESS
+} from '../config/constants';
 import {
   sendAAVESuplyNotification,
   sendInternalErrorNotification,
@@ -80,6 +83,9 @@ export const aaveCreateSupply = async (
       );
       return undefined;
     }
+
+    Logger.log(keyName, logKey, 'sending notification: operation in progress');
+    await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
 
     const result = await aaveService.supplyERC20(
       checkBlockchainConditionsResult.setupContractsResult!,
