@@ -204,6 +204,7 @@ export const aaveRemoveSupply = async (
         throw new Error(validationError);
       }
 
+      /*
       const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
         await checkBlockchainConditions(networkConfig, fromUser);
       if (!checkBlockchainConditionsResult.success) {
@@ -214,6 +215,7 @@ export const aaveRemoveSupply = async (
         );
         return undefined;
       }
+      */
 
       // TODO: Remove supply
       const result = { success: true, error: '', txHash: '0xMOCKEDHASHFORREMOVESUPPLY' };
@@ -235,11 +237,13 @@ export const aaveRemoveSupply = async (
         }
       }
 
+      /*
       if (!result.success) {
         Logger.info(keyName, logKey, `Supply failed: ${result.error}`);
         await sendInternalErrorNotification(userWallet.wallet_eoa, channel_user_id, 0, '');
         return undefined;
       }
+      */
 
       await sendAAVERemoveSuplyNotification(fromUser.phone_number, amount, token, result.txHash);
       Logger.info(keyName, logKey, `AAVE Supply completed successfully., ${result.txHash}`);
