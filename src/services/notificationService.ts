@@ -431,7 +431,7 @@ export async function sendAaveSupplyInfoNotification(
 
     if (supplyInfo) {
       message += `📊 Estado actual de tu ahorro:\n`;
-      message += `• Monto depositado: ${supplyInfo.aTokenBalance} ${supplyInfo.aTokenSymbol}\n`;
+      message += `• Monto depositado: ${supplyInfo.aTokenBalance} ${supplyInfo.aTokenSymbol}\n\n`;
       message += `• Tasa de interés anual (APY): ${supplyInfo.supplyAPY}%\n\n`;
       message += `✨ Tu dinero sigue generando intereses automáticamente.`;
     } else {
@@ -469,8 +469,8 @@ export async function sendAAVECreateSuplyNotification(
 
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
 
-    const title = 'AAVE create Supply Successful';
-    const message = `You have successfully put to get interes ${amount} ${token}!.\n\n You could see the transactiosn in ${networkConfig.explorer}/tx/${txHash}`;
+    const title = '✅ Ahorro creado con éxito';
+    const message = `¡Has depositado correctamente ${amount} ${token} para empezar a generar intereses! 🎉\n\nPodés ver los detalles de la transacción aquí:\n${networkConfig.explorer}/tx/${txHash}`;
 
     const sendAndPersistParams: SendAndPersistParams = {
       to: phoneNumber,
@@ -504,7 +504,7 @@ export async function sendAAVERemoveSuplyNotification(
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
 
     const title = '✅ Retiro de ahorro completado';
-    const message = `Has retirado correctamente ${amount} ${token} de tu cuenta con intereses. 🎉 \nPodés ver los detalles de la transacción aquí: \n${networkConfig.explorer}/tx/${txHash}`;
+    const message = `Has retirado correctamente ${amount} ${token} de tu cuenta con intereses. 🎉 \n\nPodés ver los detalles de la transacción aquí: \n\n${networkConfig.explorer}/tx/${txHash}`;
 
     const sendAndPersistParams: SendAndPersistParams = {
       to: phoneNumber,
