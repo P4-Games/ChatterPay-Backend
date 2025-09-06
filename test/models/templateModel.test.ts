@@ -149,6 +149,18 @@ describe('Template Model', () => {
             es: 'El monto que intentas operar está fuera de los límites de esta operación (min: [LIMIT_MIN], max: [LIMIT_MAX]). Por favor, inténtalo nuevamente con un monto válido. 🙅‍♂️',
             pt: 'O valor que você está tentando operar está fora dos limites desta operação (min: [LIMIT_MIN], max: [LIMIT_MAX]). Tente novamente com um valor válido. 🙅‍♂️'
           }
+        },
+        aave_supply: {
+          title: {
+            en: 'ChatterPay - Aave Supply Success ✅',
+            es: 'ChatterPay - Depósito en Aave exitoso ✅',
+            pt: 'ChatterPay - Depósito no Aave concluído ✅'
+          },
+          message: {
+            en: "Your [AMOUNT] [TOKEN] are now supplied to Aave on [NETWORK] — they're already earning yield via [ATOKEN]! 📈 Tx: [TX_HASH].",
+            es: '¡Tus [AMOUNT] [TOKEN] ya fueron depositados en Aave en [NETWORK] y están generando rendimiento vía [ATOKEN]! 📈 Tx: [TX_HASH].',
+            pt: 'Seus [AMOUNT] [TOKEN] foram depositados no Aave em [NETWORK] e já estão rendendo via [ATOKEN]! 📈 Tx: [TX_HASH].'
+          }
         }
       }
     };

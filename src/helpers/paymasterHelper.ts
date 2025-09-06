@@ -41,14 +41,7 @@ export async function createPaymasterAndData(
   // Log debugging information
   Logger.log(
     'Debugging createPaymasterAndData:',
-    `
-    - userProxyAddress: ${userProxyAddress}
-    - expirationTimestamp: ${expirationTimestamp}
-    - chainId: ${actualChainId}
-    - entryPointAddress: ${entryPointAddress}
-    - callData (first 100 chars): ${callData.substring(0, 100)}
-    - encodedData: ${encodedData}
-    - messageHash: ${messageHash}`
+    `userProxyAddress: ${userProxyAddress},expirationTimestamp: ${expirationTimestamp}, chainId: ${actualChainId}, entryPointAddress: ${entryPointAddress}, callData (first 100 chars): ${callData.substring(0, 100)}, encodedData: ${encodedData}, messageHash: ${messageHash}`
   );
 
   // Combine all components

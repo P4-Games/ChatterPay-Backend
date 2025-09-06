@@ -269,7 +269,7 @@ export async function sendSwapNotification(
     Logger.log('sendSwapNotification', 'Sending swap notification');
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
 
-    const resultString: string = `${Math.round(parseFloat(result) * 1e4) / 1e4}`;
+    const resultString: string = `${Math.round(parseFloat(result) * 1e6) / 1e6}`;
     const { title, message } = await getNotificationTemplate(
       channel_user_id,
       NotificationEnum.swap
@@ -406,6 +406,40 @@ export async function sendOutgoingTransferNotification(
       sendBot: true,
       title,
       traceHeader
+    };
+
+    const data = await persistAndSendNotification(sendAndPersistParams);
+    return data;
+  } catch (error) {
+    Logger.error('sendOutgoingTransferNotification', error);
+    throw error;
+  }
+}
+
+export async function sendAAVESuplyNotification(
+  phoneNumber: string,
+  amount: string,
+  token: string,
+  txHash: string
+): Promise<unknown> {
+  try {
+    Logger.log('sendAAVENotification', 'Sending AAVE Suply notification');
+    if (!isValidPhoneNumber(phoneNumber)) return '';
+
+    const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+
+    const title = 'AAVE Supply Successful';
+    const message = `You have successfully put to get interes ${amount} ${token}!.\n\n You could see the transactiosn in ${networkConfig.explorer}/tx/${txHash}`;
+
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: phoneNumber,
+      messageBot: message,
+      messagePush: message,
+      template: NotificationEnum.aave_supply,
+      sendPush: false,
+      sendBot: true,
+      title,
+      traceHeader: ''
     };
 
     const data = await persistAndSendNotification(sendAndPersistParams);

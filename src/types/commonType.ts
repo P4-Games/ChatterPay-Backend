@@ -38,6 +38,7 @@ export interface TokenBalance extends TokenInfo {
 export interface BalanceInfo {
   network: string;
   token: string;
+  tokenAddress?: string;
   balance: number;
   balance_conv: Record<Currency, number>;
 }

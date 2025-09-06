@@ -59,9 +59,14 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
     // USDT is always 1 USD
     priceMap.set('USDT', 1);
     priceMap.set('USDC', 1);
+    priceMap.set('DAI', 1);
+    priceMap.set('AUSDC', 1);
+    priceMap.set('AUSDT', 1);
 
     // Filter out USDT as we already set its price
-    const symbolsToFetch = symbols.filter((s) => s !== 'USDT' && s !== 'USDC');
+    const symbolsToFetch = symbols.filter(
+      (s) => s !== 'USDT' && s !== 'USDC' && s !== 'DAI' && s !== 'AUSDC' && s !== 'AUSDT'
+    );
 
     if (symbolsToFetch.length === 0) return priceMap;
 
@@ -137,7 +142,7 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
  */
 async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo[]> {
   const chainTokens = tokens.filter((token) => token.chain_id === chanId);
-  const symbols = [...new Set(chainTokens.map((token) => token.symbol))];
+  const symbols = [...new Set(chainTokens.map((token) => token.symbol.toUpperCase()))];
 
   const prices = await getTokenPrices(symbols);
 
@@ -188,11 +193,12 @@ export function calculateBalances(
   fiatQuotes: FiatQuote[],
   networkName: string
 ): BalanceInfo[] {
-  return tokenBalances.map(({ symbol, balance, rateUSD }) => {
+  return tokenBalances.map(({ symbol, address, balance, rateUSD }) => {
     const balanceUSD = parseFloat(balance) * rateUSD;
     return {
       network: networkName,
       token: symbol,
+      tokenAddress: address,
       balance: parseFloat(balance),
       balance_conv: {
         USD: balanceUSD,

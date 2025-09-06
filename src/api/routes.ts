@@ -3,6 +3,7 @@ import { FastifyInstance } from 'fastify';
 import nftRoutes from './nftRoutes';
 import swapRoutes from './swapRoutes';
 import userRoutes from './userRoutes';
+import aaveRoutes from './aaveRoutes';
 import tokenRoutes from './tokenRoutes';
 import { pingRoutes } from './pingRoutes';
 import { rampRoutes } from './rampRoutes';
@@ -31,4 +32,5 @@ export async function setupRoutes(server: FastifyInstance): Promise<void> {
   server.register(uploadRoutes);
   server.register(rampRoutes);
   server.register(supportRoutes);
+  server.register(aaveRoutes);
 }

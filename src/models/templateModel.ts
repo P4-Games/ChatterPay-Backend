@@ -12,7 +12,8 @@ export enum NotificationEnum {
   internal_error = 'internal_error',
   concurrent_operation = 'concurrent_operation',
   daily_limit_reached = 'daily_limit_reached',
-  amount_outside_limits = 'amount_outside_limits'
+  amount_outside_limits = 'amount_outside_limits',
+  aave_supply = 'aave_supply'
 }
 
 export interface LocalizedContentType {
@@ -61,7 +62,8 @@ const templateSchema = new Schema<ITemplateSchema>({
     concurrent_operation: { type: notificationSchema, required: true },
     internal_error: { type: notificationSchema, required: true },
     daily_limit_reached: { type: notificationSchema, required: true },
-    amount_outside_limits: { type: notificationSchema, required: true }
+    amount_outside_limits: { type: notificationSchema, required: true },
+    aave_suply: { type: notificationSchema, required: false }
   }
 });
 
