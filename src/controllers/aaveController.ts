@@ -1,19 +1,21 @@
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
+import { delaySeconds } from '../helpers/timeHelper';
 import { IUser, IUserWallet } from '../models/userModel';
 import { aaveService } from '../services/aave/aaveService';
+import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { CheckBalanceConditionsResult } from '../types/commonType';
 import { checkBlockchainConditions } from '../services/blockchainService';
 import { getUser, getUserWalletByChainId } from '../services/userService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import {
   COMMON_REPLY_WALLET_NOT_CREATED,
   COMMON_REPLY_OPERATION_IN_PROGRESS
 } from '../config/constants';
 import {
-  sendAAVESuplyNotification,
   sendInternalErrorNotification,
+  sendAaveSupplyInfoNotification,
+  sendAAVECreateSuplyNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
 
@@ -23,166 +25,325 @@ type SupplyBody = {
   token: string;
 };
 
-export const aaveCreateSupply = async (
-  request: FastifyRequest<{ Body: SupplyBody }>,
-  reply: FastifyReply
-  // eslint-disable-next-line consistent-return
-) => {
-  const keyName: string = 'aave-supply';
-  let logKey = `[op:${keyName}:${''}:${''}:${''}]`;
-
-  try {
-    if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
-    }
-
-    const { channel_user_id, amount, token } = request.body;
-    const { networkConfig } = request.server as FastifyInstance;
-
-    logKey = `[op:${keyName}:${channel_user_id || ''}:${token}:${amount}]`;
-
-    // Validaciones mínimas siguiendo el estilo del ejemplo
-    if (!channel_user_id || typeof channel_user_id !== 'string') {
-      return await returnErrorResponse(reply, 400, 'channel_user_id is required (string)');
-    }
-    if (!amount || typeof amount !== 'string') {
-      return await returnErrorResponse(reply, 400, 'amount is required (string)');
-    }
-    if (!token || token.toUpperCase() !== 'USDC') {
-      return await returnErrorResponse(reply, 400, 'Only USDC is supported');
-    }
-
-    const fromUser: IUser | null = await getUser(channel_user_id);
-    if (!fromUser) {
-      Logger.info(keyName, logKey, COMMON_REPLY_WALLET_NOT_CREATED);
-      // must return 200, so the bot displays the message instead of an error!
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
-    }
-
-    const userWallet: IUserWallet | null = getUserWalletByChainId(
-      fromUser?.wallets,
-      networkConfig.chainId
-    );
-
-    let validationError: string;
-    if (!userWallet) {
-      validationError = `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chainId}`;
-      Logger.info(keyName, logKey, validationError);
-      // must return 200, so the bot displays the message instead of an error!
-      return await returnSuccessResponse(reply, validationError);
-    }
-
-    const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
-      await checkBlockchainConditions(networkConfig, fromUser);
-
-    if (!checkBlockchainConditionsResult.success) {
-      await sendNoValidBlockchainConditionsNotification(
-        userWallet.wallet_proxy,
-        channel_user_id,
-        ''
-      );
-      return undefined;
-    }
-
-    Logger.log(keyName, logKey, 'sending notification: operation in progress');
-    await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
-
-    const result = await aaveService.supplyERC20(
-      checkBlockchainConditionsResult.setupContractsResult!,
-      amount,
-      userWallet.wallet_eoa,
-      logKey
-    );
-
-    if (!result.success) {
-      Logger.info(keyName, logKey, `Supply failed: ${result.error}`);
-      await sendInternalErrorNotification(userWallet.wallet_eoa, channel_user_id, 0, '');
-      return undefined;
-    }
-
-    await sendAAVESuplyNotification(fromUser.phone_number, amount, token, result.txHash);
-    Logger.info(keyName, logKey, `AAVE Supply completed successfully., ${result.txHash}`);
-  } catch (error) {
-    Logger.error(keyName, logKey, error);
-  }
+type AaveSupplyInfoQuery = {
+  lastBotMsgDelaySeconds?: number;
+  channel_user_id: string;
 };
 
-export const aaveGetSupplyInfo = async (request: FastifyRequest, reply: FastifyReply) => {
-  const keyName: string = 'aave-supply-info';
-  let logKey = `[op:${keyName}:${''}]`;
+type AaveCommonQuery = {
+  lastBotMsgDelaySeconds?: number;
+};
 
-  try {
-    const { channel_user_id } = request.query as { channel_user_id?: string };
+export const aaveCreateSupply = async (
+  request: FastifyRequest<{ Body: SupplyBody; Querystring?: AaveCommonQuery }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  // Immediate response to the user
+  reply.send({
+    status: 'success',
+    data: {
+      message: COMMON_REPLY_OPERATION_IN_PROGRESS
+    },
+    timestamp: new Date().toISOString()
+  });
 
-    if (!channel_user_id) {
-      Logger.warn('balanceByPhoneNumber', 'Phone number is required');
-      return await returnErrorResponse(reply, 400, 'Phone number is required');
-    }
+  // Async processing after the reply
+  // eslint-disable-next-line consistent-return
+  (async () => {
+    const keyName: string = 'aave-create-supply';
+    let logKey = `[op:${keyName}:${''}:${''}:${''}]`;
 
-    const { networkConfig } = request.server as FastifyInstance;
+    try {
+      if (!request.body) throw new Error('Missing request body');
 
-    logKey = `[op:${keyName}:${channel_user_id || ''}`;
+      const { channel_user_id, amount, token } = request.body;
+      const { networkConfig } = request.server as FastifyInstance;
+      const { lastBotMsgDelaySeconds = 0 } = request.query as AaveCommonQuery;
+      const startTime = Date.now();
+      logKey = `[op:${keyName}:${channel_user_id || ''}:${token}:${amount}]`;
 
-    const fromUser: IUser | null = await getUser(channel_user_id);
-    if (!fromUser) {
-      Logger.info(keyName, logKey, COMMON_REPLY_WALLET_NOT_CREATED);
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
-    }
+      if (!channel_user_id) throw new Error('Missing channel_user_id in body');
+      if (!isValidPhoneNumber(channel_user_id)) {
+        throw new Error(`Invalid phone number: '${channel_user_id}'`);
+      }
 
-    const userWallet: IUserWallet | null = getUserWalletByChainId(
-      fromUser.wallets,
-      networkConfig.chainId
-    );
+      if (!amount || typeof amount !== 'string') {
+        throw new Error(`Invalid amount: '${amount}'`);
+      }
 
-    if (!userWallet) {
-      const validationError = `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chainId}`;
-      Logger.info(keyName, logKey, validationError);
-      return await returnSuccessResponse(reply, validationError);
-    }
+      if (!token || token.toUpperCase() !== 'USDC') {
+        throw new Error(`Invalid token, Only USDC is supported`);
+      }
 
-    const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
-      await checkBlockchainConditions(networkConfig, fromUser);
+      const fromUser: IUser | null = await getUser(channel_user_id);
+      if (!fromUser) {
+        Logger.info(keyName, logKey, COMMON_REPLY_WALLET_NOT_CREATED);
+        throw new Error(COMMON_REPLY_WALLET_NOT_CREATED);
+      }
 
-    if (!checkBlockchainConditionsResult.success) {
-      await sendNoValidBlockchainConditionsNotification(
-        userWallet.wallet_proxy,
-        channel_user_id,
-        ''
+      const userWallet: IUserWallet | null = getUserWalletByChainId(
+        fromUser?.wallets,
+        networkConfig.chainId
       );
-      return undefined;
-    }
 
-    const result = await aaveService.getSupplyInfo(
-      checkBlockchainConditionsResult.setupContractsResult!,
-      userWallet.wallet_eoa,
-      logKey
-    );
+      let validationError: string;
+      if (!userWallet) {
+        // TODO: Pasar a una notificación
+        validationError = `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chainId}`;
+        throw new Error(validationError);
+      }
 
-    if (!result.success) {
-      Logger.info(keyName, logKey, `Token info retrieval failed: ${result.error}`);
-      return await returnErrorResponse(
-        reply,
-        500,
-        `Failed to retrieve token information: ${result.error}`
+      const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
+        await checkBlockchainConditions(networkConfig, fromUser);
+      if (!checkBlockchainConditionsResult.success) {
+        await sendNoValidBlockchainConditionsNotification(
+          userWallet.wallet_proxy,
+          channel_user_id,
+          ''
+        );
+        return undefined;
+      }
+
+      const result = await aaveService.supplyERC20(
+        checkBlockchainConditionsResult.setupContractsResult!,
+        amount,
+        userWallet.wallet_eoa,
+        logKey
       );
+
+      const processingTimeMs = Date.now() - startTime;
+      const delayMs = lastBotMsgDelaySeconds * 1000;
+      if (delayMs > 0) {
+        const remainingDelay = delayMs - processingTimeMs;
+
+        if (remainingDelay > 0) {
+          Logger.log(keyName, logKey, `Waiting ${remainingDelay}ms for bot notification`);
+          await delaySeconds(remainingDelay / 1000);
+        } else {
+          Logger.log(
+            keyName,
+            logKey,
+            `Skipping bot notification delay due to overrun (${processingTimeMs}ms > ${delayMs}ms)`
+          );
+        }
+      }
+
+      if (!result.success) {
+        Logger.info(keyName, logKey, `Supply failed: ${result.error}`);
+        await sendInternalErrorNotification(userWallet.wallet_eoa, channel_user_id, 0, '');
+        return undefined;
+      }
+
+      await sendAAVECreateSuplyNotification(fromUser.phone_number, amount, token, result.txHash);
+      Logger.info(keyName, logKey, `AAVE Supply completed successfully., ${result.txHash}`);
+    } catch (error) {
+      const err = error as Error;
+      Logger.error(keyName, logKey, err.message || err);
     }
+  })();
+  return reply;
+};
 
-    // Format response with only APY and aToken balance
-    let responseMessage = `💰 Wallet Balance: ${result.tokenBalance?.balance} ${result.tokenBalance?.symbol}\n\n`;
+export const aaveRemoveSupply = async (
+  request: FastifyRequest<{ Body: SupplyBody; Querystring?: AaveCommonQuery }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  // Immediate response to the user
+  reply.send({
+    status: 'success',
+    data: {
+      message: COMMON_REPLY_OPERATION_IN_PROGRESS
+    },
+    timestamp: new Date().toISOString()
+  });
 
-    if (result.supplyInfo) {
-      responseMessage += `📊 AAVE Supply:\n`;
-      responseMessage += `• Supplied: ${result.supplyInfo.aTokenBalance} ${result.supplyInfo.aTokenSymbol}\n`;
-      responseMessage += `• APY: ${result.supplyInfo.supplyAPY}%\n`;
-    } else {
-      responseMessage += `ℹ️ AAVE supply data not available\n`;
+  // Async processing after the reply
+  // eslint-disable-next-line consistent-return
+  (async () => {
+    const keyName: string = 'aave-delete-supply';
+    let logKey = `[op:${keyName}:${''}:${''}:${''}]`;
+
+    try {
+      if (!request.body) throw new Error('Missing request body');
+
+      const { channel_user_id, amount, token } = request.body;
+      const { networkConfig } = request.server as FastifyInstance;
+      const { lastBotMsgDelaySeconds = 0 } = request.query as AaveCommonQuery;
+      const startTime = Date.now();
+      logKey = `[op:${keyName}:${channel_user_id || ''}:${token}:${amount}]`;
+
+      if (!channel_user_id) throw new Error('Missing channel_user_id in body');
+      if (!isValidPhoneNumber(channel_user_id)) {
+        throw new Error(`Invalid phone number: '${channel_user_id}'`);
+      }
+
+      if (!amount || typeof amount !== 'string') {
+        throw new Error(`Invalid amount: '${amount}'`);
+      }
+
+      if (!token || token.toUpperCase() !== 'USDC') {
+        throw new Error(`Invalid token, Only USDC is supported`);
+      }
+
+      const fromUser: IUser | null = await getUser(channel_user_id);
+      if (!fromUser) {
+        Logger.info(keyName, logKey, COMMON_REPLY_WALLET_NOT_CREATED);
+        throw new Error(COMMON_REPLY_WALLET_NOT_CREATED);
+      }
+
+      const userWallet: IUserWallet | null = getUserWalletByChainId(
+        fromUser?.wallets,
+        networkConfig.chainId
+      );
+
+      let validationError: string;
+      if (!userWallet) {
+        // TODO: Pasar a una notificación
+        validationError = `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chainId}`;
+        throw new Error(validationError);
+      }
+
+      const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
+        await checkBlockchainConditions(networkConfig, fromUser);
+      if (!checkBlockchainConditionsResult.success) {
+        await sendNoValidBlockchainConditionsNotification(
+          userWallet.wallet_proxy,
+          channel_user_id,
+          ''
+        );
+        return undefined;
+      }
+
+      // TODO: Remove supply
+      const result = { success: true, error: '', txHash: '0xMOCKEDHASHFORREMOVESUPPLY' };
+
+      const processingTimeMs = Date.now() - startTime;
+      const delayMs = lastBotMsgDelaySeconds * 1000;
+      if (delayMs > 0) {
+        const remainingDelay = delayMs - processingTimeMs;
+
+        if (remainingDelay > 0) {
+          Logger.log(keyName, logKey, `Waiting ${remainingDelay}ms for bot notification`);
+          await delaySeconds(remainingDelay / 1000);
+        } else {
+          Logger.log(
+            keyName,
+            logKey,
+            `Skipping bot notification delay due to overrun (${processingTimeMs}ms > ${delayMs}ms)`
+          );
+        }
+      }
+
+      if (!result.success) {
+        Logger.info(keyName, logKey, `Supply failed: ${result.error}`);
+        await sendInternalErrorNotification(userWallet.wallet_eoa, channel_user_id, 0, '');
+        return undefined;
+      }
+
+      await sendAAVECreateSuplyNotification(fromUser.phone_number, amount, token, result.txHash);
+      Logger.info(keyName, logKey, `AAVE Supply completed successfully., ${result.txHash}`);
+    } catch (error) {
+      const err = error as Error;
+      Logger.error(keyName, logKey, err.message || err);
     }
+  })();
+  return reply;
+};
 
-    Logger.info(keyName, logKey, `Token information retrieved successfully`);
-    return await returnSuccessResponse(reply, responseMessage);
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    Logger.error(keyName, logKey, `Unexpected error: ${errorMessage}`);
-    return await returnErrorResponse(reply, 500, 'Internal server error');
-  }
+export const aaveGetSupplyInfo = async (
+  request: FastifyRequest<{ Querystring: AaveSupplyInfoQuery }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  // Immediate response to the user
+  reply.send({
+    status: 'success',
+    data: {
+      message: COMMON_REPLY_OPERATION_IN_PROGRESS
+    },
+    timestamp: new Date().toISOString()
+  });
+
+  // Async processing after the reply
+  // eslint-disable-next-line consistent-return
+  (async () => {
+    const keyName: string = 'aave-supply-info';
+    let logKey = `[op:${keyName}:${''}]`;
+
+    try {
+      const { channel_user_id, lastBotMsgDelaySeconds = 0 } = request.query as AaveSupplyInfoQuery;
+      if (!channel_user_id) throw new Error('Missing channel_user_id in body');
+      if (!isValidPhoneNumber(channel_user_id)) {
+        throw new Error(`Invalid phone number: '${channel_user_id}'`);
+      }
+      const startTime = Date.now();
+      const { networkConfig } = request.server as FastifyInstance;
+
+      logKey = `[op:${keyName}:${channel_user_id || ''}`;
+
+      const fromUser: IUser | null = await getUser(channel_user_id);
+      if (!fromUser) {
+        Logger.info(keyName, logKey, COMMON_REPLY_WALLET_NOT_CREATED);
+        throw new Error(COMMON_REPLY_WALLET_NOT_CREATED);
+      }
+      const userWallet: IUserWallet | null = getUserWalletByChainId(
+        fromUser?.wallets,
+        networkConfig.chainId
+      );
+
+      let validationError: string;
+      if (!userWallet) {
+        // TODO: Pasar a una notificación
+        validationError = `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chainId}`;
+        throw new Error(validationError);
+      }
+
+      const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
+        await checkBlockchainConditions(networkConfig, fromUser);
+
+      if (!checkBlockchainConditionsResult.success) {
+        await sendNoValidBlockchainConditionsNotification(
+          userWallet.wallet_proxy,
+          channel_user_id,
+          ''
+        );
+        return undefined;
+      }
+
+      const result = await aaveService.getSupplyInfo(
+        checkBlockchainConditionsResult.setupContractsResult!,
+        userWallet.wallet_eoa,
+        logKey
+      );
+
+      const processingTimeMs = Date.now() - startTime;
+      const delayMs = lastBotMsgDelaySeconds * 1000;
+      if (delayMs > 0) {
+        const remainingDelay = delayMs - processingTimeMs;
+
+        if (remainingDelay > 0) {
+          Logger.log(keyName, logKey, `Waiting ${remainingDelay}ms for bot notification`);
+          await delaySeconds(remainingDelay / 1000);
+        } else {
+          Logger.log(
+            keyName,
+            logKey,
+            `Skipping bot notification delay due to overrun (${processingTimeMs}ms > ${delayMs}ms)`
+          );
+        }
+      }
+
+      if (!result.success) {
+        Logger.info(keyName, logKey, `Token info retrieval failed: ${result.error}`);
+        await sendInternalErrorNotification(userWallet.wallet_eoa, channel_user_id, 0, '');
+        return undefined;
+      }
+
+      await sendAaveSupplyInfoNotification(fromUser.phone_number, result.supplyInfo!);
+      Logger.info(keyName, logKey, `Token information retrieved successfully`);
+    } catch (error) {
+      const err = error as Error;
+      Logger.error(keyName, logKey, err.message || err);
+    }
+  })();
+  return reply;
 };

@@ -1,5 +1,6 @@
 import { Logger } from '../helpers/loggerHelper';
 import { pushService } from './push/pushService';
+import { AaveSupplyInfo } from '../types/aaveType';
 import { cacheService } from './cache/cacheService';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IBlockchain } from '../models/blockchainModel';
@@ -416,19 +417,58 @@ export async function sendOutgoingTransferNotification(
   }
 }
 
-export async function sendAAVESuplyNotification(
+export async function sendAaveSupplyInfoNotification(
+  phoneNumber: string,
+  supplyInfo: AaveSupplyInfo
+): Promise<unknown> {
+  try {
+    Logger.log('sendAaveSupplyInfoNotification', 'Sending AAVE Suply Info notification');
+    if (!isValidPhoneNumber(phoneNumber)) return '';
+
+    const title = 'AAVE Supply Info';
+
+    let message = '';
+
+    if (supplyInfo) {
+      message += `📊 AAVE Supply:\n`;
+      message += `• Supplied: ${supplyInfo.aTokenBalance} ${supplyInfo.aTokenSymbol}\n`;
+      message += `• APY: ${supplyInfo.supplyAPY}%\n`;
+    } else {
+      message += `ℹ️ AAVE supply data not available\n`;
+    }
+
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: phoneNumber,
+      messageBot: message,
+      messagePush: message,
+      template: NotificationEnum.aave_supply,
+      sendPush: false,
+      sendBot: true,
+      title,
+      traceHeader: ''
+    };
+
+    const data = await persistAndSendNotification(sendAndPersistParams);
+    return data;
+  } catch (error) {
+    Logger.error('sendAaveSupplyInfoNotification', error);
+    throw error;
+  }
+}
+
+export async function sendAAVECreateSuplyNotification(
   phoneNumber: string,
   amount: string,
   token: string,
   txHash: string
 ): Promise<unknown> {
   try {
-    Logger.log('sendAAVENotification', 'Sending AAVE Suply notification');
+    Logger.log('sendAAVECreateSuplyNotification', 'Sending AAVE create Suply notification');
     if (!isValidPhoneNumber(phoneNumber)) return '';
 
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
 
-    const title = 'AAVE Supply Successful';
+    const title = 'AAVE create Supply Successful';
     const message = `You have successfully put to get interes ${amount} ${token}!.\n\n You could see the transactiosn in ${networkConfig.explorer}/tx/${txHash}`;
 
     const sendAndPersistParams: SendAndPersistParams = {
@@ -445,7 +485,41 @@ export async function sendAAVESuplyNotification(
     const data = await persistAndSendNotification(sendAndPersistParams);
     return data;
   } catch (error) {
-    Logger.error('sendOutgoingTransferNotification', error);
+    Logger.error('sendAAVECreateSuplyNotification', error);
+    throw error;
+  }
+}
+
+export async function sendAAVERemoveSuplyNotification(
+  phoneNumber: string,
+  amount: string,
+  token: string,
+  txHash: string
+): Promise<unknown> {
+  try {
+    Logger.log('sendAAVERemoveSuplyNotification', 'Sending AAVE remove Suply notification');
+    if (!isValidPhoneNumber(phoneNumber)) return '';
+
+    const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+
+    const title = 'AAVE remove Supply Successful';
+    const message = `You have successfully removed ${amount} ${token} from your interest account.\n\nYou can view the transaction at ${networkConfig.explorer}/tx/${txHash}`;
+
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: phoneNumber,
+      messageBot: message,
+      messagePush: message,
+      template: NotificationEnum.aave_supply,
+      sendPush: false,
+      sendBot: true,
+      title,
+      traceHeader: ''
+    };
+
+    const data = await persistAndSendNotification(sendAndPersistParams);
+    return data;
+  } catch (error) {
+    Logger.error('sendAAVESuplyNotification', error);
     throw error;
   }
 }

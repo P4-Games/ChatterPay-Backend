@@ -3,6 +3,12 @@ import { ethers, ContractInterface } from 'ethers';
 import { getERC20ABI } from '../web3/abiService';
 import { Logger } from '../../helpers/loggerHelper';
 import { SetupContractReturn } from '../../types/commonType';
+import {
+  AaveTokenInfo,
+  AaveSupplyInfo,
+  AaveTokenBalanceInfo,
+  AaveReserveValidationResult
+} from '../../types/aaveType';
 
 // ====== HARD-CODED (Scroll Sepolia) ======
 const USDC_ADDRESS = '0x2c9678042d52b97d27f2bd2947f7111d93f3dd0d';
@@ -33,33 +39,6 @@ type Ok = { success: true; txHash: string; aTokenAddress: string };
 type Err = { success: false; error: string };
 export type Result = Ok | Err;
 
-// ====== Internal Types ======
-type ReserveValidationResult = {
-  supported: boolean;
-  aTokenAddress?: string;
-};
-
-// ====== Nuevos tipos ======
-type TokenBalanceInfo = {
-  balance: string;
-  rawBalance: ethers.BigNumber;
-  decimals: number;
-  symbol: string;
-};
-
-type AaveSupplyInfo = {
-  supplyAPY: string;
-  aTokenBalance: string;
-  aTokenSymbol: string;
-};
-
-type TokenInfoResponse = {
-  success: boolean;
-  tokenBalance?: TokenBalanceInfo;
-  supplyInfo?: AaveSupplyInfo;
-  error?: string;
-};
-
 // ====== Internal Utilities ======
 function getPoolAddress(): string {
   return POOL_ADDRESS;
@@ -71,7 +50,7 @@ function getPoolAddress(): string {
 async function validateReserveOnAave(
   asset: string,
   signer: ethers.Signer
-): Promise<ReserveValidationResult> {
+): Promise<AaveReserveValidationResult> {
   try {
     const pool = new ethers.Contract(POOL_ADDRESS, AAVE_POOL_ABI, signer);
     const reserveData = await pool.getReserveData(asset);
@@ -222,7 +201,7 @@ async function getTokenInfo(
   tokenAddress: string,
   aTokenAddress: string,
   signer: ethers.Signer
-): Promise<TokenInfoResponse> {
+): Promise<AaveTokenInfo> {
   try {
     Logger.info('getTokenInfo', 'Fetching token information', {
       walletAddress,
@@ -248,7 +227,7 @@ async function getTokenInfo(
       token.symbol().catch(() => 'Token')
     ]);
 
-    const tokenBalanceInfo: TokenBalanceInfo = {
+    const tokenBalanceInfo: AaveTokenBalanceInfo = {
       balance: ethers.utils.formatUnits(tokenBalance, tokenDecimals),
       rawBalance: tokenBalance,
       decimals: tokenDecimals,
@@ -357,7 +336,7 @@ export const aaveService = {
     setupContractsResult: SetupContractReturn,
     walletAddress: string,
     logKey: string
-  ): Promise<TokenInfoResponse> => {
+  ): Promise<AaveTokenInfo> => {
     try {
       Logger.info(
         'getTokenInfo',
