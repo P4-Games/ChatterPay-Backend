@@ -425,16 +425,17 @@ export async function sendAaveSupplyInfoNotification(
     Logger.log('sendAaveSupplyInfoNotification', 'Sending AAVE Suply Info notification');
     if (!isValidPhoneNumber(phoneNumber)) return '';
 
-    const title = 'AAVE Supply Info';
+    const title = '💰 Información de tu Ahorro';
 
     let message = '';
 
     if (supplyInfo) {
-      message += `📊 AAVE Supply:\n`;
-      message += `• Supplied: ${supplyInfo.aTokenBalance} ${supplyInfo.aTokenSymbol}\n`;
-      message += `• APY: ${supplyInfo.supplyAPY}%\n`;
+      message += `📊 Estado actual de tu ahorro:\n`;
+      message += `• Monto depositado: ${supplyInfo.aTokenBalance} ${supplyInfo.aTokenSymbol}\n`;
+      message += `• Tasa de interés anual (APY): ${supplyInfo.supplyAPY}%\n\n`;
+      message += `✨ Tu dinero sigue generando intereses automáticamente.`;
     } else {
-      message += `ℹ️ AAVE supply data not available\n`;
+      message += `ℹ️ No encontramos información de tu ahorro en este momento.`;
     }
 
     const sendAndPersistParams: SendAndPersistParams = {
