@@ -16,7 +16,8 @@ import {
   sendInternalErrorNotification,
   sendAaveSupplyInfoNotification,
   sendAAVECreateSuplyNotification,
-  sendNoValidBlockchainConditionsNotification
+  sendNoValidBlockchainConditionsNotification,
+  sendAAVERemoveSuplyNotification
 } from '../services/notificationService';
 
 type SupplyBody = {
@@ -240,7 +241,7 @@ export const aaveRemoveSupply = async (
         return undefined;
       }
 
-      await sendAAVECreateSuplyNotification(fromUser.phone_number, amount, token, result.txHash);
+      await sendAAVERemoveSuplyNotification(fromUser.phone_number, amount, token, result.txHash);
       Logger.info(keyName, logKey, `AAVE Supply completed successfully., ${result.txHash}`);
     } catch (error) {
       const err = error as Error;
