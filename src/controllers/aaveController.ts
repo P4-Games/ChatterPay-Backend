@@ -16,8 +16,8 @@ import {
   sendInternalErrorNotification,
   sendAaveSupplyInfoNotification,
   sendAAVECreateSuplyNotification,
-  sendNoValidBlockchainConditionsNotification,
-  sendAAVERemoveSuplyNotification
+  sendAAVERemoveSuplyNotification,
+  sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
 
 type SupplyBody = {
