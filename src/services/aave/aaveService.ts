@@ -245,12 +245,9 @@ async function getTokenInfo(
       const currentLiquidityRate: ethers.BigNumber = reserveData[2];
 
       // Calculate APY from liquidity rate (Aave uses RAY units - 10^27)
-      const RAY = ethers.BigNumber.from(10).pow(27);
-      const liquidityRateDecimal = Number(currentLiquidityRate.toString()) / Number(RAY.toString());
-      const secondsPerYear = 31536000;
-      const apyValue = liquidityRateDecimal * secondsPerYear * 100;
-
-      supplyAPY = apyValue.toFixed(2);
+      const aprDecimal = Number(ethers.utils.formatUnits(currentLiquidityRate, 27)); // ej: 0.60
+      const aprPercent = (aprDecimal * 100).toFixed(2); // "60.00"
+      supplyAPY = aprPercent;
 
       Logger.debug('getTokenInfo', 'APY calculated', {
         liquidityRate: currentLiquidityRate.toString(),
