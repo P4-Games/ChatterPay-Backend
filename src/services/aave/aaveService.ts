@@ -6,6 +6,7 @@ import { SetupContractReturn } from '../../types/commonType';
 import {
   AaveTokenInfo,
   AaveSupplyInfo,
+  AaveWithdrawResult,
   AaveTokenBalanceInfo,
   AaveReserveValidationResult
 } from '../../types/aaveType';
@@ -34,6 +35,13 @@ const AAVE_POOL_EXTENDED_ABI: ContractInterface = [
   'function getReserveConfigurationData(address asset) view returns ((uint256, uint256, uint256, uint256, uint256, bool, bool, bool, bool, bool))',
   'function getReservesList() view returns (address[])'
 ];
+
+const AAVE_POOL_WITHDRAW_ABI: ContractInterface = [
+  ...AAVE_POOL_EXTENDED_ABI,
+  'function withdraw(address asset, uint256 amount, address to) returns (uint256)',
+  'function getUserAccountData(address user) view returns (uint256 totalCollateralBase, uint256 totalDebtBase, uint256 availableBorrowsBase, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)'
+];
+
 // ====== Result Types ======
 type Ok = { success: true; txHash: string; aTokenAddress: string };
 type Err = { success: false; error: string };
@@ -290,6 +298,275 @@ async function getTokenInfo(
     };
   }
 }
+
+// ====== Internal Withdrawal Functions ======
+/**
+ * Withdraws a specific amount of an asset from Aave
+ */
+async function withdrawAmountInternal(
+  asset: string,
+  amountHuman: string,
+  signer: ethers.Signer,
+  logKey: string
+): Promise<AaveWithdrawResult> {
+  try {
+    Logger.info('withdrawAmountInternal', logKey, `Withdrawing ${amountHuman} from Aave`, {
+      asset
+    });
+
+    // Get pool address and instantiate contract
+    const poolAddress = getPoolAddress();
+    const pool = new ethers.Contract(poolAddress, AAVE_POOL_WITHDRAW_ABI, signer);
+
+    // Validate asset is supported on Aave
+    const { supported, aTokenAddress } = await validateReserveOnAave(asset, signer);
+    if (!supported) {
+      throw new Error(`Asset ${asset} is not supported on Aave v3`);
+    }
+
+    if (!aTokenAddress) {
+      throw new Error(`Could not retrieve aToken address for asset ${asset}`);
+    }
+
+    // Get token data and parse amount
+    const erc20Abi = await getERC20ABI();
+    const token = new ethers.Contract(asset, erc20Abi, signer);
+    const decimals = await token.decimals();
+    const amount = ethers.utils.parseUnits(amountHuman, decimals);
+
+    // Check for outstanding debt
+    const walletAddress = await signer.getAddress();
+    const userAccountData = await pool.getUserAccountData(walletAddress);
+    const { totalDebtBase } = userAccountData;
+
+    if (totalDebtBase.gt(0)) {
+      Logger.warn('withdrawAmountInternal', logKey, 'User has outstanding debt on Aave', {
+        totalDebt: totalDebtBase.toString()
+      });
+    }
+
+    // Get current aToken balance
+    const aToken = new ethers.Contract(aTokenAddress, erc20Abi, signer);
+    const aTokenBalance = await aToken.balanceOf(walletAddress);
+
+    if (aTokenBalance.lt(amount)) {
+      throw new Error(
+        `Insufficient balance in Aave: have ${ethers.utils.formatUnits(aTokenBalance, decimals)}, trying to withdraw ${amountHuman}`
+      );
+    }
+
+    Logger.info('withdrawAmountInternal', logKey, 'Balance check passed', {
+      aTokenBalance: ethers.utils.formatUnits(aTokenBalance, decimals),
+      amountToWithdraw: amountHuman
+    });
+
+    // Estimate gas with fallback
+    let gasLimit: ethers.BigNumber;
+    try {
+      gasLimit = await pool.estimateGas.withdraw(asset, amount, walletAddress);
+      Logger.debug('withdrawAmountInternal', logKey, `Estimated gas: ${gasLimit.toString()}`);
+    } catch (error) {
+      Logger.info(
+        'withdrawAmountInternal',
+        logKey,
+        'Gas estimation failed, using manual gas limit of 300000'
+      );
+      gasLimit = ethers.BigNumber.from(300000);
+    }
+
+    // Execute withdrawal
+    Logger.info('withdrawAmountInternal', logKey, 'Executing withdrawal...');
+    const tx = await pool.withdraw(asset, amount, walletAddress, { gasLimit });
+    Logger.info('withdrawAmountInternal', logKey, `Withdrawal transaction: ${tx.hash}`);
+
+    const receipt = await tx.wait();
+    Logger.info(
+      'withdrawAmountInternal',
+      logKey,
+      `Withdrawal confirmed in block: ${receipt.blockNumber}`
+    );
+
+    // Verify new balance
+    const newATokenBalance = await aToken.balanceOf(walletAddress);
+    Logger.info('withdrawAmountInternal', logKey, 'Balance after withdrawal', {
+      newBalance: ethers.utils.formatUnits(newATokenBalance, decimals)
+    });
+
+    Logger.info('withdrawAmountInternal', logKey, 'Withdrawal successful');
+
+    return {
+      success: true,
+      txHash: tx.hash,
+      amountWithdrawn: amountHuman
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    Logger.error('withdrawAmountInternal', logKey, 'Error withdrawing from Aave', {
+      asset,
+      amount: amountHuman,
+      error: errorMessage
+    });
+
+    return {
+      success: false,
+      error: errorMessage
+    };
+  }
+}
+
+/**
+ * Withdraws 100% of available balance of an asset from Aave
+ */
+async function withdrawMaxInternal(
+  asset: string,
+  signer: ethers.Signer,
+  logKey: string
+): Promise<AaveWithdrawResult> {
+  try {
+    Logger.info('withdrawMaxInternal', logKey, 'Withdrawing maximum available from Aave', {
+      asset
+    });
+
+    // Get pool address and instantiate contract
+    const poolAddress = getPoolAddress();
+    const pool = new ethers.Contract(poolAddress, AAVE_POOL_WITHDRAW_ABI, signer);
+
+    // Validate asset is supported on Aave
+    const { supported, aTokenAddress } = await validateReserveOnAave(asset, signer);
+    if (!supported) {
+      throw new Error(`Asset ${asset} is not supported on Aave v3`);
+    }
+
+    if (!aTokenAddress) {
+      throw new Error(`Could not retrieve aToken address for asset ${asset}`);
+    }
+
+    // Get aToken balance
+    const erc20Abi = await getERC20ABI();
+    const aToken = new ethers.Contract(aTokenAddress, erc20Abi, signer);
+    const walletAddress = await signer.getAddress();
+    const aTokenBalance = await aToken.balanceOf(walletAddress);
+
+    // Get decimals for formatting
+    const token = new ethers.Contract(asset, erc20Abi, signer);
+    const decimals = await token.decimals();
+
+    if (aTokenBalance.eq(0)) {
+      throw new Error('No balance available to withdraw');
+    }
+
+    const amountHuman = ethers.utils.formatUnits(aTokenBalance, decimals);
+    Logger.info('withdrawMaxInternal', logKey, 'Current aToken balance', {
+      balance: amountHuman
+    });
+
+    // Check for outstanding debt
+    const userAccountData = await pool.getUserAccountData(walletAddress);
+    const { totalDebtBase } = userAccountData;
+
+    let tx: ethers.ContractTransaction;
+    let actualWithdrawnHuman: string;
+
+    if (totalDebtBase.gt(0)) {
+      Logger.warn(
+        'withdrawMaxInternal',
+        logKey,
+        'User has outstanding debt, using max withdrawal method',
+        {
+          totalDebt: totalDebtBase.toString()
+        }
+      );
+
+      // Use MAX_UINT256 for maximum withdrawal when there's debt
+      const maxAmount = ethers.constants.MaxUint256;
+
+      // Estimate gas with fallback
+      let gasLimit: ethers.BigNumber;
+      try {
+        gasLimit = await pool.estimateGas.withdraw(asset, maxAmount, walletAddress);
+        Logger.debug('withdrawMaxInternal', logKey, `Estimated gas: ${gasLimit.toString()}`);
+      } catch (error) {
+        Logger.info(
+          'withdrawMaxInternal',
+          logKey,
+          'Gas estimation failed, using manual gas limit of 300000'
+        );
+        gasLimit = ethers.BigNumber.from(300000);
+      }
+
+      // Execute withdrawal with max amount
+      Logger.info('withdrawMaxInternal', logKey, 'Executing max withdrawal with debt...');
+      tx = await pool.withdraw(asset, maxAmount, walletAddress, { gasLimit });
+
+      // Calculate actual amount withdrawn
+      const newATokenBalance = await aToken.balanceOf(walletAddress);
+      const actualWithdrawn = aTokenBalance.sub(newATokenBalance);
+      actualWithdrawnHuman = ethers.utils.formatUnits(actualWithdrawn, decimals);
+
+      Logger.info('withdrawMaxInternal', logKey, 'Actual amount withdrawn with debt', {
+        amount: actualWithdrawnHuman,
+        remainingBalance: ethers.utils.formatUnits(newATokenBalance, decimals)
+      });
+    } else {
+      // Withdraw full balance when no debt
+      // Estimate gas with fallback
+      let gasLimit: ethers.BigNumber;
+      try {
+        gasLimit = await pool.estimateGas.withdraw(asset, aTokenBalance, walletAddress);
+        Logger.debug('withdrawMaxInternal', logKey, `Estimated gas: ${gasLimit.toString()}`);
+      } catch (error) {
+        Logger.info(
+          'withdrawMaxInternal',
+          logKey,
+          'Gas estimation failed, using manual gas limit of 300000'
+        );
+        gasLimit = ethers.BigNumber.from(300000);
+      }
+
+      // Execute full withdrawal
+      Logger.info('withdrawMaxInternal', logKey, 'Executing full withdrawal...');
+      tx = await pool.withdraw(asset, aTokenBalance, walletAddress, { gasLimit });
+      actualWithdrawnHuman = amountHuman;
+
+      // Verify balance is zero
+      const newATokenBalance = await aToken.balanceOf(walletAddress);
+      if (!newATokenBalance.eq(0)) {
+        Logger.warn('withdrawMaxInternal', logKey, 'Residual balance after withdrawal', {
+          residual: ethers.utils.formatUnits(newATokenBalance, decimals)
+        });
+      }
+    }
+
+    Logger.info('withdrawMaxInternal', logKey, `Withdrawal transaction: ${tx.hash}`);
+
+    const receipt = await tx.wait();
+    Logger.info(
+      'withdrawMaxInternal',
+      logKey,
+      `Withdrawal confirmed in block: ${receipt.blockNumber}`
+    );
+
+    Logger.info('withdrawMaxInternal', logKey, 'Max withdrawal successful');
+
+    return {
+      success: true,
+      txHash: tx.hash,
+      amountWithdrawn: actualWithdrawnHuman
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    Logger.error('withdrawMaxInternal', logKey, 'Error withdrawing max from Aave', {
+      asset,
+      error: errorMessage
+    });
+
+    return {
+      success: false,
+      error: errorMessage
+    };
+  }
+}
+
 // ====== Public Service ======
 export const aaveService = {
   /**
@@ -363,6 +640,89 @@ export const aaveService = {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       Logger.error('getTokenInfo', logKey, 'Unexpected error in getTokenInfo', {
+        error: errorMessage
+      });
+
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+  },
+
+  /**
+   * Withdraws a specific amount of an asset from Aave
+   */
+  withdrawAmount: async (
+    setupContractsResult: SetupContractReturn,
+    amount: string,
+    logKey: string
+  ): Promise<AaveWithdrawResult> => {
+    try {
+      Logger.info('withdrawAmount', logKey, `Attempting to withdraw ${amount} from Aave`, {
+        USDC_ADDRESS
+      });
+
+      const signer = setupContractsResult.signer as ethers.Signer;
+
+      const result = await withdrawAmountInternal(USDC_ADDRESS, amount, signer, logKey);
+
+      if (result.success) {
+        Logger.info(
+          'withdrawAmount',
+          logKey,
+          `Withdrawal successful. Transaction: ${result.txHash}`
+        );
+      } else {
+        Logger.error('withdrawAmount', logKey, `Withdrawal failed: ${result.error}`);
+      }
+
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      Logger.error('withdrawAmount', logKey, 'Unexpected error in withdrawal', {
+        USDC_ADDRESS,
+        amount,
+        error: errorMessage
+      });
+
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+  },
+
+  /**
+   * Withdraws 100% of available balance of an asset from Aave
+   */
+  withdrawMax: async (
+    setupContractsResult: SetupContractReturn,
+    logKey: string
+  ): Promise<AaveWithdrawResult> => {
+    const asset = USDC_ADDRESS;
+    try {
+      Logger.info('withdrawMax', logKey, 'Attempting to withdraw maximum from Aave', { asset });
+
+      const signer = setupContractsResult.signer as ethers.Signer;
+
+      const result = await withdrawMaxInternal(asset, signer, logKey);
+
+      if (result.success) {
+        Logger.info(
+          'withdrawMax',
+          logKey,
+          `Max withdrawal successful. Transaction: ${result.txHash}`
+        );
+      } else {
+        Logger.error('withdrawMax', logKey, `Max withdrawal failed: ${result.error}`);
+      }
+
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      Logger.error('withdrawMax', logKey, 'Unexpected error in max withdrawal', {
+        asset,
         error: errorMessage
       });
 

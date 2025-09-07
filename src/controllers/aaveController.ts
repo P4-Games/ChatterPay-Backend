@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
+import { AaveWithdrawResult } from '../types/aaveType';
 import { IUser, IUserWallet } from '../models/userModel';
 import { aaveService } from '../services/aave/aaveService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
@@ -23,6 +24,11 @@ import {
 type SupplyBody = {
   channel_user_id: string;
   amount: string;
+  token: string;
+};
+
+type RemoveBody = {
+  channel_user_id: string;
   token: string;
 };
 
@@ -145,7 +151,7 @@ export const aaveCreateSupply = async (
   return reply;
 };
 
-export const aaveRemoveSupply = async (
+export const aaveUpdateSupply = async (
   request: FastifyRequest<{ Body: SupplyBody; Querystring?: AaveCommonQuery }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
@@ -161,7 +167,7 @@ export const aaveRemoveSupply = async (
   // Async processing after the reply
   // eslint-disable-next-line consistent-return
   (async () => {
-    const keyName: string = 'aave-delete-supply';
+    const keyName: string = 'aave-update-supply';
     let logKey = `[op:${keyName}:${''}:${''}:${''}]`;
 
     try {
@@ -204,7 +210,6 @@ export const aaveRemoveSupply = async (
         throw new Error(validationError);
       }
 
-      /*
       const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
         await checkBlockchainConditions(networkConfig, fromUser);
       if (!checkBlockchainConditionsResult.success) {
@@ -215,10 +220,12 @@ export const aaveRemoveSupply = async (
         );
         return undefined;
       }
-      */
 
-      // TODO: Remove supply
-      const result = { success: true, error: '', txHash: '0xMOCKEDHASHFORREMOVESUPPLY' };
+      const result: AaveWithdrawResult = await aaveService.withdrawAmount(
+        checkBlockchainConditionsResult.setupContractsResult!,
+        amount,
+        logKey
+      );
 
       const processingTimeMs = Date.now() - startTime;
       const delayMs = lastBotMsgDelaySeconds * 1000;
@@ -237,15 +244,122 @@ export const aaveRemoveSupply = async (
         }
       }
 
-      /*
+      if (!result.success) {
+        Logger.info(keyName, logKey, `Update failed: ${result.error}`);
+        await sendInternalErrorNotification(userWallet.wallet_eoa, channel_user_id, 0, '');
+        return undefined;
+      }
+
+      await sendAAVERemoveSuplyNotification(fromUser.phone_number, amount, token, result.txHash!);
+      Logger.info(keyName, logKey, `AAVE Supply completed successfully., ${result.txHash}`);
+    } catch (error) {
+      const err = error as Error;
+      Logger.error(keyName, logKey, err.message || err);
+    }
+  })();
+  return reply;
+};
+
+export const aaveRemoveSupply = async (
+  request: FastifyRequest<{ Body: RemoveBody; Querystring?: AaveCommonQuery }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  // Immediate response to the user
+  reply.send({
+    status: 'success',
+    data: {
+      message: COMMON_REPLY_OPERATION_IN_PROGRESS
+    },
+    timestamp: new Date().toISOString()
+  });
+
+  // Async processing after the reply
+  // eslint-disable-next-line consistent-return
+  (async () => {
+    const keyName: string = 'aave-remove-supply';
+    let logKey = `[op:${keyName}:${''}:${''}:${''}]`;
+
+    try {
+      if (!request.body) throw new Error('Missing request body');
+
+      const { channel_user_id, token } = request.body;
+      const { networkConfig } = request.server as FastifyInstance;
+      const { lastBotMsgDelaySeconds = 0 } = request.query as AaveCommonQuery;
+      const startTime = Date.now();
+      logKey = `[op:${keyName}:${channel_user_id || ''}:${token}:amount: all]`;
+
+      if (!channel_user_id) throw new Error('Missing channel_user_id in body');
+      if (!isValidPhoneNumber(channel_user_id)) {
+        throw new Error(`Invalid phone number: '${channel_user_id}'`);
+      }
+
+      if (!token || token.toUpperCase() !== 'USDC') {
+        throw new Error(`Invalid token, Only USDC is supported`);
+      }
+
+      const fromUser: IUser | null = await getUser(channel_user_id);
+      if (!fromUser) {
+        Logger.info(keyName, logKey, COMMON_REPLY_WALLET_NOT_CREATED);
+        throw new Error(COMMON_REPLY_WALLET_NOT_CREATED);
+      }
+
+      const userWallet: IUserWallet | null = getUserWalletByChainId(
+        fromUser?.wallets,
+        networkConfig.chainId
+      );
+
+      let validationError: string;
+      if (!userWallet) {
+        // TODO: Pasar a una notificación
+        validationError = `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chainId}`;
+        throw new Error(validationError);
+      }
+
+      const checkBlockchainConditionsResult: CheckBalanceConditionsResult =
+        await checkBlockchainConditions(networkConfig, fromUser);
+      if (!checkBlockchainConditionsResult.success) {
+        await sendNoValidBlockchainConditionsNotification(
+          userWallet.wallet_proxy,
+          channel_user_id,
+          ''
+        );
+        return undefined;
+      }
+
+      const result: AaveWithdrawResult = await aaveService.withdrawMax(
+        checkBlockchainConditionsResult.setupContractsResult!,
+        logKey
+      );
+
+      const processingTimeMs = Date.now() - startTime;
+      const delayMs = lastBotMsgDelaySeconds * 1000;
+      if (delayMs > 0) {
+        const remainingDelay = delayMs - processingTimeMs;
+
+        if (remainingDelay > 0) {
+          Logger.log(keyName, logKey, `Waiting ${remainingDelay}ms for bot notification`);
+          await delaySeconds(remainingDelay / 1000);
+        } else {
+          Logger.log(
+            keyName,
+            logKey,
+            `Skipping bot notification delay due to overrun (${processingTimeMs}ms > ${delayMs}ms)`
+          );
+        }
+      }
+
       if (!result.success) {
         Logger.info(keyName, logKey, `Supply failed: ${result.error}`);
         await sendInternalErrorNotification(userWallet.wallet_eoa, channel_user_id, 0, '');
         return undefined;
       }
-      */
 
-      await sendAAVERemoveSuplyNotification(fromUser.phone_number, amount, token, result.txHash);
+      await sendAAVERemoveSuplyNotification(
+        fromUser.phone_number,
+        result.amountWithdrawn!,
+        token,
+        result.txHash!
+      );
       Logger.info(keyName, logKey, `AAVE Supply completed successfully., ${result.txHash}`);
     } catch (error) {
       const err = error as Error;

@@ -24,3 +24,10 @@ export interface AaveTokenInfo {
   supplyInfo?: AaveSupplyInfo;
   error?: string;
 }
+
+export type AaveWithdrawResult = {
+  success: boolean;
+  txHash?: string;
+  amountWithdrawn?: string;
+  error?: string;
+};
