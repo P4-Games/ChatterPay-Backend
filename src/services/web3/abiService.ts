@@ -43,16 +43,31 @@ export const getLocalABIFile = async (urlFile: string): Promise<ABI> => {
  * @returns {Promise<ABI>} The retrieved ABI object.
  */
 export const getFile = async (contractKeyName: string): Promise<ABI> => {
+  const source = abisReadFromLocal ? 'LOCAL' : 'GCP';
   const filePath = abisReadFromLocal ? LOCAL_ABIs[contractKeyName] : GCP_ABIs[contractKeyName];
-  let abi = cacheService.get<ABI>(CacheNames.ABI, filePath);
 
-  if (!abi) {
-    // Select the appropriate function based on the source (local or GCP)
-    abi = abisReadFromLocal
-      ? await getLocalABIFile(filePath)
-      : ((await getGcpFile(filePath)) as ethers.ContractInterface);
-    cacheService.set(CacheNames.ABI, filePath, abi);
+  if (!filePath) {
+    throw new Error(`ABI path not found for key "${contractKeyName}" in ${source}_ABIs`);
   }
+
+  const cacheKey = filePath;
+
+  // First try a direct cache HIT (short log). If it's a MISS, getOrLoad will log the MISS itself.
+  const hit = cacheService.get<ABI>(CacheNames.ABI, cacheKey);
+  if (hit) {
+    Logger.log('ABI:getFile', `CACHE HIT key=${cacheKey}`);
+    return hit;
+  }
+
+  const abi = await cacheService.getOrLoad<ABI>(CacheNames.ABI, cacheKey, async () => {
+    Logger.log('ABI:getFile', `CACHE MISS key=${cacheKey} — loading from ${source}...`);
+    const loaded = (
+      abisReadFromLocal
+        ? await getLocalABIFile(filePath)
+        : ((await getGcpFile(filePath)) as ethers.ContractInterface)
+    ) as ABI;
+    return loaded;
+  });
 
   return abi;
 };
