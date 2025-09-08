@@ -1,7 +1,11 @@
-import { ethers, BigNumber } from 'ethers';
+import { ethers, BigNumber, ContractInterface } from 'ethers';
 
 import { Logger } from '../helpers/loggerHelper';
+import { CacheNames } from '../types/commonType';
+import { cacheService } from './cache/cacheService';
 import { getERC20ABI, getChatterpayABI } from './web3/abiService';
+
+const norm = (addr: string) => addr.toLowerCase();
 
 /**
  * Retrieves the fee amount for a given token from the ChatterPay contract.
@@ -41,4 +45,50 @@ export async function getChatterpayTokenFee(
     Logger.error('getChatterpayTokenFee', 'Error getting ChatterPay fee:', error);
     return 0;
   }
+}
+
+export async function getTokenDecimals(
+  tokenAddress: string,
+  erc20ABI: ContractInterface,
+  provider: ethers.providers.Provider,
+  logKey: string
+): Promise<number> {
+  const cacheKey = `ERC20:decimals:${norm(tokenAddress)}`;
+  const fromCache = cacheService.get<number>(CacheNames.ERC20, cacheKey);
+
+  if (fromCache) {
+    Logger.debug('getTokenDecimals', logKey, `cache hit: ${tokenAddress} -> ${fromCache}`);
+    return fromCache;
+  }
+
+  Logger.debug('getTokenDecimals', logKey, `cache miss: ${tokenAddress}, fetching on-chain`);
+  const token = new ethers.Contract(tokenAddress, erc20ABI, provider);
+  const decimals: number = await token.decimals();
+
+  cacheService.set<number>(CacheNames.ERC20, cacheKey, decimals);
+  Logger.debug('getTokenDecimals', logKey, `fetched & cached: ${tokenAddress} -> ${decimals}`);
+  return decimals;
+}
+
+export async function getTokenSymbol(
+  tokenAddress: string,
+  erc20ABI: ContractInterface,
+  provider: ethers.providers.Provider,
+  logKey: string
+): Promise<string> {
+  const cacheKey = `ERC20:symbol:${norm(tokenAddress)}`;
+  const fromCache = cacheService.get<string>(CacheNames.ERC20, cacheKey);
+
+  if (fromCache) {
+    Logger.debug('getTokenSymbol', logKey, `cache hit: ${tokenAddress} -> ${fromCache}`);
+    return fromCache;
+  }
+
+  Logger.debug('getTokenSymbol', logKey, `cache miss: ${tokenAddress}, fetching on-chain`);
+  const token = new ethers.Contract(tokenAddress, erc20ABI, provider);
+  const symbol: string = await token.symbol();
+
+  cacheService.set<string>(CacheNames.ERC20, cacheKey, symbol);
+  Logger.debug('getTokenSymbol', logKey, `fetched & cached: ${tokenAddress} -> ${symbol}`);
+  return symbol;
 }
