@@ -47,6 +47,7 @@ export interface IBlockchain extends Document {
     paymasterAddress?: string;
     routerAddress?: string;
     poolAddress?: string;
+    quoterAddress: string;
   };
   gas: {
     useFixedValues: boolean;
@@ -120,7 +121,8 @@ const blockchainSchema = new Schema<IBlockchain>({
     chatterNFTAddress: { type: String, required: false },
     paymasterAddress: { type: String, required: false },
     routerAddress: { type: String, required: false },
-    poolAddress: { type: String, required: false }
+    poolAddress: { type: String, required: false },
+    quoterAddress: { type: String, required: false }
   },
   gas: {
     useFixedValues: { type: Boolean, required: true },

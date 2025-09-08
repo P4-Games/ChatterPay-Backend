@@ -431,7 +431,7 @@ export async function sendAaveSupplyInfoNotification(
 
     if (supplyInfo) {
       message += `📊 Estado actual de tu ahorro:\n`;
-      message += `• Monto depositado: ${supplyInfo.aTokenBalance} ${supplyInfo.aTokenSymbol}\n\n`;
+      message += `• Monto depositado: ${supplyInfo.aTokenBalance} ${supplyInfo.aTokenSymbol}\n`;
       message += `• Tasa de interés anual (APY): ${supplyInfo.supplyAPY}%\n\n`;
       message += `✨ Tu dinero sigue generando intereses automáticamente.`;
     } else {

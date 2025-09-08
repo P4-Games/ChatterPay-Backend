@@ -180,24 +180,41 @@ const getDynamicGas = async (
       throw new Error(`The method ${methodName} doesn't exist in contract.`);
     }
 
+    // First try estimateGas directly, without static call
     try {
-      await contract.callStatic[methodName](...args);
-    } catch (staticError) {
-      Logger.warn('getDynamicGas', `Static call failed for ${methodName}:`, staticError);
-      Logger.log('getDynamicGas', defaultGasMessage);
-      return defaultGasLimit;
+      const estimatedGas: ethers.BigNumber = await contract.estimateGas[methodName](...args);
+      const gasLimit: BigNumber = estimatedGas
+        .mul(BigNumber.from(100 + gasBufferPercentage))
+        .div(BigNumber.from(100));
+
+      Logger.debug('getDynamicGas', `Estimated gas limit for ${methodName}:`, gasLimit.toString());
+      return gasLimit;
+    } catch (estimateError) {
+      Logger.warn('getDynamicGas', `Gas estimation failed for ${methodName}:`, estimateError);
+
+      // If estimateGas fails, try with static call as fallback
+      try {
+        await contract.callStatic[methodName](...args);
+        // If static call works, use default gas with buffer
+        const gasWithBuffer = defaultGasLimit
+          .mul(BigNumber.from(100 + gasBufferPercentage))
+          .div(BigNumber.from(100));
+
+        Logger.debug(
+          'getDynamicGas',
+          `Using default gas with buffer for ${methodName}:`,
+          gasWithBuffer.toString()
+        );
+        return gasWithBuffer;
+      } catch (staticError) {
+        Logger.warn('getDynamicGas', `Static call also failed for ${methodName}:`, staticError);
+        Logger.debug('getDynamicGas', defaultGasMessage);
+        return defaultGasLimit;
+      }
     }
-
-    const estimatedGas: ethers.BigNumber = await contract.estimateGas[methodName](...args);
-    const gasLimit: BigNumber = estimatedGas
-      .mul(BigNumber.from(100 + gasBufferPercentage))
-      .div(BigNumber.from(100));
-    Logger.log('getDynamicGas', `Estimated gas limit for ${methodName}:`, gasLimit.toString());
-
-    return gasLimit;
   } catch (error) {
-    Logger.warn('getDynamicGas', `Gas estimation failed for ${methodName}:`, error);
-    Logger.log('getDynamicGas', defaultGasMessage);
+    Logger.warn('getDynamicGas', `Gas estimation completely failed for ${methodName}:`, error);
+    Logger.debug('getDynamicGas', defaultGasMessage);
     return defaultGasLimit;
   }
 };
