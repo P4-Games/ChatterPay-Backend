@@ -3,6 +3,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
 import { IUser, IUserWallet } from '../models/userModel';
+import { Currency, BalanceInfo } from '../types/commonType';
 import { getFiatQuotes } from '../services/criptoya/criptoYaService';
 import { COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
 import { getUser, getUserWalletByChainId } from '../services/userService';
@@ -23,6 +24,46 @@ type CheckExternalDepositsQuery = {
   sendNotification?: string;
 };
 
+/**
+ * Merge balances that represent the same asset (on the same network).
+ * Uses tokenAddress when present; otherwise falls back to token+network.
+ * Sums both the raw balance and each fiat conversion key.
+ *
+ * @param items List of BalanceInfo entries (potentially with duplicates)
+ * @returns Deduplicated list with summed balances
+ */
+export function mergeSameTokenBalances(items: BalanceInfo[]): BalanceInfo[] {
+  const agg = items.reduce<Record<string, BalanceInfo>>((acc, it) => {
+    const key = `${it.network.toLowerCase()}::${(it.tokenAddress ?? it.token).toLowerCase()}`;
+    const prev = acc[key];
+
+    if (!prev) {
+      // Clone to avoid mutating external references
+      acc[key] = { ...it, balance_conv: { ...it.balance_conv } };
+      return acc;
+    }
+
+    // Sum raw amount
+    const nextBalance = prev.balance + it.balance;
+
+    // Sum fiat conversions using only array iterations
+    const nextBalanceConv = Object.keys(it.balance_conv).reduce<Record<Currency, number>>(
+      (conv, k) => {
+        const fiat = k as Currency;
+        const prevV = prev.balance_conv[fiat] ?? 0;
+        const curV = it.balance_conv[fiat] ?? 0;
+        conv[fiat] = prevV + curV;
+        return conv;
+      },
+      { ...prev.balance_conv }
+    );
+
+    acc[key] = { ...prev, balance: nextBalance, balance_conv: nextBalanceConv };
+    return acc;
+  }, {});
+
+  return Object.values(agg);
+}
 /**
  * Handles the request to check external deposits.
  *
@@ -54,39 +95,62 @@ export const checkExternalDeposits = async (
 
 /**
  * Fetches and calculates balance information for a given address
- * @param address - Address to get balance for
+ * @param proxyAddress - Address to get balance for
+ * @param eoaAddress - Externally Owned Account address
  * @param reply - Fastify reply object
  * @param fastify - Fastify instance containing global state
  * @returns Fastify reply with balance information
  */
 async function getAddressBalanceWithNfts(
   phoneNumber: string | null,
-  address: string,
+  proxyAddress: string,
+  eoaAddress: string,
   reply: FastifyReply,
   fastify: FastifyInstance
 ): Promise<FastifyReply> {
   const { networkConfig } = fastify;
 
+  const eoaProvided =
+    !!eoaAddress &&
+    eoaAddress.trim().length > 0 &&
+    eoaAddress.toLowerCase() !== proxyAddress.toLowerCase();
+
   Logger.log(
     'getAddressBalanceWithNfts',
-    `Fetching balance for address: ${address} on network ${networkConfig.name}`
+    `Fetching balances for proxy ${proxyAddress}${eoaProvided ? ` + eoa ${eoaAddress}` : ''} on network ${networkConfig.name}`
   );
 
   try {
-    const [fiatQuotes, tokenBalances, NFTs] = await Promise.all([
+    const [fiatQuotes, proxyTokenBalances, eoaTokenBalances, NFTs] = await Promise.all([
       getFiatQuotes(),
-      getTokenBalances(address, fastify.tokens, networkConfig),
-      phoneNumber ? getPhoneNFTs(phoneNumber) : { nfts: [] }
+      getTokenBalances(proxyAddress, fastify.tokens, networkConfig),
+      eoaProvided
+        ? getTokenBalances(eoaAddress, fastify.tokens, networkConfig)
+        : Promise.resolve([]),
+      phoneNumber ? getPhoneNFTs(phoneNumber) : Promise.resolve({ nfts: [] })
     ]);
 
-    const balances = calculateBalances(tokenBalances, fiatQuotes, networkConfig.name);
-    const totals = calculateBalancesTotals(balances);
+    // Combine raw token balances from both wallets if applicable
+    const combinedTokenBalances = eoaProvided
+      ? [...proxyTokenBalances, ...eoaTokenBalances]
+      : proxyTokenBalances;
+
+    // Price & normalize
+    const balancesRaw: BalanceInfo[] = calculateBalances(
+      combinedTokenBalances,
+      fiatQuotes,
+      networkConfig.name
+    );
+
+    // Merge duplicates (same asset) and 3) totalize from merged list
+    const balances: BalanceInfo[] = mergeSameTokenBalances(balancesRaw);
+    const totals: Record<Currency, number> = calculateBalancesTotals(balances);
 
     const response = {
       balances,
       totals,
       certificates: NFTs.nfts,
-      wallet: address
+      wallets: eoaProvided ? [proxyAddress, eoaAddress] : [proxyAddress]
     };
 
     return await returnSuccessResponse(reply, 'Wallet balance fetched successfully', response);
@@ -116,7 +180,7 @@ export const walletBalance = async (
     return returnErrorResponse(reply, 400, 'Wallet must be a valid ethereum wallet address');
   }
 
-  return getAddressBalanceWithNfts('', wallet, reply, request.server);
+  return getAddressBalanceWithNfts('', wallet, '', reply, request.server);
 };
 
 /**
@@ -164,6 +228,7 @@ export const balanceByPhoneNumber = async (
     return await getAddressBalanceWithNfts(
       user.phone_number,
       userWallet.wallet_proxy,
+      userWallet.wallet_eoa,
       reply,
       request.server
     );

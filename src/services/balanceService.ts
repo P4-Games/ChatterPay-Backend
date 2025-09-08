@@ -53,79 +53,69 @@ async function getContractBalance(
  * @returns {Promise<Map<string, number>>} Map of token symbols to their USD prices
  */
 async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
+  const norm = (s: string) => String(s).trim().toUpperCase();
+  const priceMap = new Map<string, number>();
+
+  const STABLES: Set<string> = new Set(['USDT', 'USDC', 'DAI', 'AUSDC', 'AUSDT']);
+  STABLES.forEach((s) => priceMap.set(s, 1));
+
+  const symbolsToFetch = Array.from(new Set(symbols.map(norm))).filter((s) => !STABLES.has(s));
+  if (symbolsToFetch.length === 0) return priceMap;
+
   try {
-    const priceMap = new Map<string, number>();
+    const cachedPrices = Object.fromEntries(
+      symbolsToFetch.map((symbol) => [symbol, cacheService.get(CacheNames.PRICE, symbol)])
+    );
+    const symbolsToFetchFromApi = symbolsToFetch.filter((symbol) => !cachedPrices[symbol]);
 
-    // USDT is always 1 USD
-    priceMap.set('USDT', 1);
-    priceMap.set('USDC', 1);
+    Object.entries(cachedPrices).forEach(([symbol, price]) => {
+      if (typeof price === 'number') priceMap.set(symbol, price);
+    });
 
-    // Filter out USDT as we already set its price
-    const symbolsToFetch = symbols.filter((s) => s !== 'USDT' && s !== 'USDC');
-
-    if (symbolsToFetch.length === 0) return priceMap;
-
-    try {
-      // Check cache for existing prices
-      const cachedPrices = Object.fromEntries(
-        symbolsToFetch.map((symbol) => [symbol, cacheService.get(CacheNames.PRICE, symbol)])
-      );
-
-      const symbolsToFetchFromApi = symbolsToFetch.filter((symbol) => !cachedPrices[symbol]);
-
-      // Set cached prices to the priceMap
-      Object.entries(cachedPrices).forEach(([symbol, price]) => {
-        priceMap.set(symbol, price as number);
-      });
-
-      if (symbolsToFetchFromApi.length === 0) {
-        Logger.log('getTokenPrices', 'getting prices from cache!');
-        return priceMap;
-      }
-    } catch (error) {
-      // Avoid throwing error
-      Logger.error(
-        'getTokenPrices',
-        `Error getting prices from cache: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+    if (symbolsToFetchFromApi.length === 0) {
+      Logger.log('getTokenPrices', 'getting prices from cache!');
+      return priceMap;
     }
 
+    // Wrap/unwrap helpers
     const unwrapToken = (symbol: string): string =>
       symbol.replace(/^WETH$/, 'ETH').replace(/^WBTC$/, 'BTC');
-
     const wrapToken = (symbol: string): string =>
       symbol.replace(/^ETH$/, 'WETH').replace(/^BTC$/, 'WBTC');
 
-    // Get prices for all symbols against USDT
-    const promises = symbolsToFetch.map(async (symbol) => {
-      try {
-        const unwrapped = unwrapToken(symbol);
-        const response = await fetch(`${BINANCE_API_URL}/ticker/price?symbol=${unwrapped}USDT`);
-        const data = await response.json();
+    // Fetch to Binance
+    await Promise.all(
+      symbolsToFetchFromApi.map(async (symbol) => {
+        try {
+          const unwrapped = unwrapToken(symbol);
+          const res = await fetch(`${BINANCE_API_URL}/ticker/price?symbol=${unwrapped}USDT`);
+          const data = await res.json();
+          const wrapped = wrapToken(unwrapped);
 
-        const wrapped = wrapToken(unwrapped);
-
-        if (data.price) {
-          const price = parseFloat(data.price);
-          Logger.log('getTokenPrices', `Price for ${symbol}: ${price} USDT`);
-          priceMap.set(wrapped, price);
-          cacheService.set(CacheNames.PRICE, wrapped, price);
-        } else {
-          Logger.warn('getTokenPrices', `No price found for ${unwrapped}USDT`);
-          priceMap.set(wrapped, 0);
+          if (data?.price) {
+            const price = parseFloat(data.price);
+            Logger.log('getTokenPrices', `Price for ${symbol}: ${price} USDT`);
+            priceMap.set(wrapped, price);
+            cacheService.set(CacheNames.PRICE, wrapped, price);
+          } else {
+            Logger.warn('getTokenPrices', `No price found for ${unwrapped}USDT`);
+            priceMap.set(wrapped, 0);
+          }
+        } catch (err) {
+          Logger.error('getTokenPrices', `Error fetching price for ${symbol}:`, err);
+          priceMap.set(symbol, 0);
         }
-      } catch (error) {
-        Logger.error('getTokenPrices', `Error fetching price for ${symbol}:`, error);
-        priceMap.set(symbol, 0);
-      }
-    });
+      })
+    );
 
-    await Promise.all(promises);
     return priceMap;
   } catch (error) {
     Logger.error('getTokenPrices', 'Error fetching token prices from Binance:', error);
-    // Return a map with 0 prices in case of error, except USDT which is always 1
-    return new Map(symbols.map((symbol) => [symbol, symbol === 'USDT' ? 1 : 0]));
+    // Consistent fallback: keep stables = 1, the rest = 0, everything normalized
+    const out = new Map<string, number>();
+    const all = Array.from(new Set(symbols.map(norm)));
+    all.forEach((s) => out.set(s, STABLES.has(s) ? 1 : 0));
+    return out;
   }
 }
 
@@ -136,16 +126,16 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
  * @returns {Promise<TokenInfo[]>} Array of tokens with current price information
  */
 async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo[]> {
+  const norm = (s: string) => String(s).trim().toUpperCase();
   const chainTokens = tokens.filter((token) => token.chain_id === chanId);
-  const symbols = [...new Set(chainTokens.map((token) => token.symbol))];
-
+  const symbols = [...new Set(chainTokens.map((token) => norm(token.symbol)))];
   const prices = await getTokenPrices(symbols);
 
   return chainTokens.map((token) => ({
     symbol: token.symbol,
     address: token.address,
     type: token.type,
-    rateUSD: prices.get(token.symbol) || 0,
+    rateUSD: prices.get(norm(token.symbol)) ?? 0,
     display_decimals: token.display_decimals,
     display_symbol: token.display_symbol,
     operations_limits: token.operations_limits
@@ -188,11 +178,12 @@ export function calculateBalances(
   fiatQuotes: FiatQuote[],
   networkName: string
 ): BalanceInfo[] {
-  return tokenBalances.map(({ symbol, balance, rateUSD }) => {
+  return tokenBalances.map(({ symbol, address, balance, rateUSD }) => {
     const balanceUSD = parseFloat(balance) * rateUSD;
     return {
       network: networkName,
       token: symbol,
+      tokenAddress: address,
       balance: parseFloat(balance),
       balance_conv: {
         USD: balanceUSD,

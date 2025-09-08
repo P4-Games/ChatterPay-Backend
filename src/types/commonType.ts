@@ -38,6 +38,7 @@ export interface TokenBalance extends TokenInfo {
 export interface BalanceInfo {
   network: string;
   token: string;
+  tokenAddress?: string;
   balance: number;
   balance_conv: Record<Currency, number>;
 }
@@ -143,7 +144,8 @@ export enum CacheNames {
   ABI = 'abiCache',
   NOTIFICATION = 'notificationTemplateCache',
   TOR = 'torCache',
-  COINGECKO = 'coingeckoCache'
+  COINGECKO = 'coingeckoCache',
+  ERC20 = 'erc20'
 }
 
 export const notificationLanguages = ['en', 'es', 'pt'] as const;
