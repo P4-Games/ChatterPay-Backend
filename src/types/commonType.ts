@@ -143,7 +143,8 @@ export enum CacheNames {
   ABI = 'abiCache',
   NOTIFICATION = 'notificationTemplateCache',
   TOR = 'torCache',
-  COINGECKO = 'coingeckoCache'
+  COINGECKO = 'coingeckoCache',
+  ERC20 = 'erc20'
 }
 
 export const notificationLanguages = ['en', 'es', 'pt'] as const;
