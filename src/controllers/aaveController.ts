@@ -1,3 +1,5 @@
+import { once as onceEvent } from 'events';
+import { ServerResponse, IncomingMessage } from 'http';
 import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
@@ -53,6 +55,14 @@ export const aaveCreateSupply = async (
     },
     timestamp: new Date().toISOString()
   });
+
+  const res = reply.raw as ServerResponse<IncomingMessage>;
+  if (!res.writableFinished) {
+    await Promise.race([
+      onceEvent(res, 'finish'), // response successfully sent
+      onceEvent(res, 'close') // client closed connection earlier; we still continue
+    ]);
+  }
 
   // Async processing after the reply
   // eslint-disable-next-line consistent-return
@@ -164,6 +174,14 @@ export const aaveUpdateSupply = async (
     timestamp: new Date().toISOString()
   });
 
+  const res = reply.raw as ServerResponse<IncomingMessage>;
+  if (!res.writableFinished) {
+    await Promise.race([
+      onceEvent(res, 'finish'), // response successfully sent
+      onceEvent(res, 'close') // client closed connection earlier; we still continue
+    ]);
+  }
+
   // Async processing after the reply
   // eslint-disable-next-line consistent-return
   (async () => {
@@ -273,6 +291,14 @@ export const aaveRemoveSupply = async (
     timestamp: new Date().toISOString()
   });
 
+  const res = reply.raw as ServerResponse<IncomingMessage>;
+  if (!res.writableFinished) {
+    await Promise.race([
+      onceEvent(res, 'finish'), // response successfully sent
+      onceEvent(res, 'close') // client closed connection earlier; we still continue
+    ]);
+  }
+
   // Async processing after the reply
   // eslint-disable-next-line consistent-return
   (async () => {
@@ -381,6 +407,14 @@ export const aaveGetSupplyInfo = async (
     },
     timestamp: new Date().toISOString()
   });
+
+  const res = reply.raw as ServerResponse<IncomingMessage>;
+  if (!res.writableFinished) {
+    await Promise.race([
+      onceEvent(res, 'finish'), // response successfully sent
+      onceEvent(res, 'close') // client closed connection earlier; we still continue
+    ]);
+  }
 
   // Async processing after the reply
   // eslint-disable-next-line consistent-return

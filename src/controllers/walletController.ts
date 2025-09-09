@@ -1,4 +1,6 @@
+import { once as onceEvent } from 'events';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { ServerResponse, IncomingMessage } from 'http';
 
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
@@ -33,6 +35,14 @@ export const createWallet = async (
     },
     timestamp: new Date().toISOString()
   });
+
+  const res = reply.raw as ServerResponse<IncomingMessage>;
+  if (!res.writableFinished) {
+    await Promise.race([
+      onceEvent(res, 'finish'), // response successfully sent
+      onceEvent(res, 'close') // client closed connection earlier; we still continue
+    ]);
+  }
 
   // Async processing after the reply
   (async () => {
