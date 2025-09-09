@@ -417,66 +417,34 @@ export async function sendOutgoingTransferNotification(
   }
 }
 
-export async function sendAaveSupplyInfoNotification(
-  phoneNumber: string,
-  supplyInfo: AaveSupplyInfo
-): Promise<unknown> {
-  try {
-    Logger.log('sendAaveSupplyInfoNotification', 'Sending AAVE Suply Info notification');
-    if (!isValidPhoneNumber(phoneNumber)) return '';
-
-    const title = '💰 Información de tu Ahorro';
-
-    let message = '';
-
-    if (supplyInfo) {
-      message += `📊 Estado actual de tu ahorro:\n`;
-      message += `• Monto depositado: ${supplyInfo.aTokenBalance} ${supplyInfo.aTokenSymbol}\n`;
-      message += `• Tasa de interés anual (APY): ${supplyInfo.supplyAPY}%\n\n`;
-      message += `✨ Tu dinero sigue generando intereses automáticamente.`;
-    } else {
-      message += `ℹ️ No encontramos información de tu ahorro en este momento.`;
-    }
-
-    const sendAndPersistParams: SendAndPersistParams = {
-      to: phoneNumber,
-      messageBot: message,
-      messagePush: message,
-      template: NotificationEnum.aave_supply,
-      sendPush: false,
-      sendBot: true,
-      title,
-      traceHeader: ''
-    };
-
-    const data = await persistAndSendNotification(sendAndPersistParams);
-    return data;
-  } catch (error) {
-    Logger.error('sendAaveSupplyInfoNotification', error);
-    throw error;
-  }
-}
-
 export async function sendAAVECreateSuplyNotification(
-  phoneNumber: string,
+  channel_user_id: string,
   amount: string,
   token: string,
   txHash: string
 ): Promise<unknown> {
   try {
     Logger.log('sendAAVECreateSuplyNotification', 'Sending AAVE create Suply notification');
-    if (!isValidPhoneNumber(phoneNumber)) return '';
+    if (!isValidPhoneNumber(channel_user_id)) return '';
 
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
 
-    const title = '✅ Ahorro creado con éxito';
-    const message = `¡Has depositado correctamente ${amount} ${token} para empezar a generar intereses! 🎉\n\nPodés ver los detalles de la transacción aquí:\n${networkConfig.explorer}/tx/${txHash}`;
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.aave_supply_created
+    );
+
+    const formattedMessage = message
+      .replace('[AMOUNT]', amount.toString())
+      .replace('[TOKEN]', token.toString())
+      .replace('[EXPLORER]', networkConfig.explorer)
+      .replace('[TX_HASH]', txHash);
 
     const sendAndPersistParams: SendAndPersistParams = {
-      to: phoneNumber,
-      messageBot: message,
-      messagePush: message,
-      template: NotificationEnum.aave_supply,
+      to: channel_user_id,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.aave_supply_created,
       sendPush: false,
       sendBot: true,
       title,
@@ -492,25 +460,33 @@ export async function sendAAVECreateSuplyNotification(
 }
 
 export async function sendAAVERemoveSuplyNotification(
-  phoneNumber: string,
+  channel_user_id: string,
   amount: string,
   token: string,
   txHash: string
 ): Promise<unknown> {
   try {
     Logger.log('sendAAVERemoveSuplyNotification', 'Sending AAVE remove Suply notification');
-    if (!isValidPhoneNumber(phoneNumber)) return '';
+    if (!isValidPhoneNumber(channel_user_id)) return '';
 
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
 
-    const title = '✅ Retiro de ahorro completado';
-    const message = `Has retirado correctamente ${amount} ${token} de tu cuenta con intereses. 🎉 \n\nPodés ver los detalles de la transacción aquí: \n\n${networkConfig.explorer}/tx/${txHash}`;
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.aave_supply_modified
+    );
+
+    const formattedMessage = message
+      .replace('[AMOUNT]', amount.toString())
+      .replace('[TOKEN]', token.toString())
+      .replace('[EXPLORER]', networkConfig.explorer)
+      .replace('[TX_HASH]', txHash);
 
     const sendAndPersistParams: SendAndPersistParams = {
-      to: phoneNumber,
-      messageBot: message,
-      messagePush: message,
-      template: NotificationEnum.aave_supply,
+      to: channel_user_id,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.aave_supply_modified,
       sendPush: false,
       sendBot: true,
       title,
@@ -521,6 +497,57 @@ export async function sendAAVERemoveSuplyNotification(
     return data;
   } catch (error) {
     Logger.error('sendAAVESuplyNotification', error);
+    throw error;
+  }
+}
+
+export async function sendAaveSupplyInfoNotification(
+  channel_user_id: string,
+  supplyInfo: AaveSupplyInfo
+): Promise<unknown> {
+  try {
+    Logger.log('sendAaveSupplyInfoNotification', 'Sending AAVE Suply Info notification');
+    if (!isValidPhoneNumber(channel_user_id)) return '';
+
+    let title = '';
+    let formattedMessage = '';
+
+    if (supplyInfo) {
+      const { title: tplTitle, message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.aave_supply_info
+      );
+
+      title = tplTitle;
+      formattedMessage = message
+        .replace('[ATOKEN_BALANCE]', supplyInfo.aTokenBalance.toString())
+        .replace('[ATOKEN_SYMBOL]', supplyInfo.aTokenSymbol.toString())
+        .replace('[SUPPLY_APY]', supplyInfo.supplyAPY.toString());
+    } else {
+      const { title: tplTitle, message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.aave_supply_info_no_data
+      );
+
+      title = tplTitle;
+      formattedMessage = message;
+    }
+
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.aave_supply_info,
+      sendPush: false,
+      sendBot: true,
+      title,
+      traceHeader: ''
+    };
+
+    const data = await persistAndSendNotification(sendAndPersistParams);
+    return data;
+  } catch (error) {
+    Logger.error('sendAaveSupplyInfoNotification', error);
     throw error;
   }
 }
