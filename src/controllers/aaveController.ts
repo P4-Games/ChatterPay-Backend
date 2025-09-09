@@ -73,10 +73,10 @@ export const aaveCreateSupply = async (
     try {
       if (!request.body) throw new Error('Missing request body');
 
+      const startTime = Date.now();
+      const delaySecondsValue = request.query?.lastBotMsgDelaySeconds || 0;
       const { channel_user_id, amount, token } = request.body;
       const { networkConfig } = request.server as FastifyInstance;
-      const { lastBotMsgDelaySeconds = 0 } = request.query as AaveCommonQuery;
-      const startTime = Date.now();
       logKey = `[op:${keyName}:${channel_user_id || ''}:${token}:${amount}]`;
 
       if (!channel_user_id) throw new Error('Missing channel_user_id in body');
@@ -129,7 +129,7 @@ export const aaveCreateSupply = async (
       );
 
       const processingTimeMs = Date.now() - startTime;
-      const delayMs = lastBotMsgDelaySeconds * 1000;
+      const delayMs = delaySecondsValue * 1000;
       if (delayMs > 0) {
         const remainingDelay = delayMs - processingTimeMs;
 
