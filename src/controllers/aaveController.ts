@@ -23,19 +23,18 @@ import {
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
 
-type SupplyBody = {
+type AaveSupplyBody = {
   channel_user_id: string;
   amount: string;
   token: string;
 };
 
-type RemoveBody = {
+type AaveRemoveBody = {
   channel_user_id: string;
   token: string;
 };
 
-type AaveSupplyInfoQuery = {
-  lastBotMsgDelaySeconds?: number;
+type AaaveInfoBody = {
   channel_user_id: string;
 };
 
@@ -44,7 +43,7 @@ type AaveCommonQuery = {
 };
 
 export const aaveCreateSupply = async (
-  request: FastifyRequest<{ Body: SupplyBody; Querystring?: AaveCommonQuery }>,
+  request: FastifyRequest<{ Body: AaveSupplyBody; Querystring?: AaveCommonQuery }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   // Immediate response to the user
@@ -162,7 +161,7 @@ export const aaveCreateSupply = async (
 };
 
 export const aaveUpdateSupply = async (
-  request: FastifyRequest<{ Body: SupplyBody; Querystring?: AaveCommonQuery }>,
+  request: FastifyRequest<{ Body: AaveSupplyBody; Querystring?: AaveCommonQuery }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   // Immediate response to the user
@@ -279,7 +278,7 @@ export const aaveUpdateSupply = async (
 };
 
 export const aaveRemoveSupply = async (
-  request: FastifyRequest<{ Body: RemoveBody; Querystring?: AaveCommonQuery }>,
+  request: FastifyRequest<{ Body: AaveRemoveBody; Querystring?: AaveCommonQuery }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   // Immediate response to the user
@@ -396,7 +395,7 @@ export const aaveRemoveSupply = async (
 };
 
 export const aaveGetSupplyInfo = async (
-  request: FastifyRequest<{ Querystring: AaveSupplyInfoQuery }>,
+  request: FastifyRequest<{ Body: AaaveInfoBody; Querystring?: AaveCommonQuery }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   // Immediate response to the user
@@ -423,7 +422,10 @@ export const aaveGetSupplyInfo = async (
     let logKey = `[op:${keyName}:${''}]`;
 
     try {
-      const { channel_user_id, lastBotMsgDelaySeconds = 0 } = request.query as AaveSupplyInfoQuery;
+      if (!request.body) throw new Error('Missing request body');
+
+      const { channel_user_id } = request.body;
+      const { lastBotMsgDelaySeconds = 0 } = request.query as AaveCommonQuery;
       if (!channel_user_id) throw new Error('Missing channel_user_id in body');
       if (!isValidPhoneNumber(channel_user_id)) {
         throw new Error(`Invalid phone number: '${channel_user_id}'`);
