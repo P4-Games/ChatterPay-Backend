@@ -146,7 +146,7 @@ export const aaveCreateSupply = async (
 
       if (!result.success) {
         Logger.info(keyName, logKey, `Supply failed: ${result.error}`);
-        await sendInternalErrorNotification(userWallet.wallet_eoa, channel_user_id, 0, '');
+        await sendInternalErrorNotification(channel_user_id, 0, '');
         return undefined;
       }
 
@@ -263,7 +263,7 @@ export const aaveUpdateSupply = async (
 
       if (!result.success) {
         Logger.info(keyName, logKey, `Update failed: ${result.error}`);
-        await sendInternalErrorNotification(userWallet.wallet_eoa, channel_user_id, 0, '');
+        await sendInternalErrorNotification(channel_user_id, 0, '');
         return undefined;
       }
 
@@ -375,7 +375,7 @@ export const aaveRemoveSupply = async (
 
       if (!result.success) {
         Logger.info(keyName, logKey, `Supply failed: ${result.error}`);
-        await sendInternalErrorNotification(userWallet.wallet_eoa, channel_user_id, 0, '');
+        await sendInternalErrorNotification(channel_user_id, 0, '');
         return undefined;
       }
 
@@ -489,7 +489,7 @@ export const aaveGetSupplyInfo = async (
 
       if (!result.success) {
         Logger.info(keyName, logKey, `Token info retrieval failed: ${result.error}`);
-        await sendInternalErrorNotification(userWallet.wallet_eoa, channel_user_id, 0, '');
+        await sendInternalErrorNotification(channel_user_id, 0, '');
         return undefined;
       }
 

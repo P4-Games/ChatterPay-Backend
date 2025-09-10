@@ -27,7 +27,7 @@ export const checkUsersWithOpenOperations = async (
     return await returnSuccessResponse(reply, '', { users });
   } catch (error) {
     Logger.error('checkUsersWithOpenOperations', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('checkUsersWithOpenOperations', '', reply);
   }
 };
 
@@ -51,7 +51,7 @@ export const resetUsersOperations = async (
     );
   } catch (error) {
     Logger.error('resetUsersOperations', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('resetUsersOperations', '', reply);
   }
 };
 
@@ -76,7 +76,7 @@ export const resetUsersOperationsWithTimeCondition = async (
     );
   } catch (error) {
     Logger.error('resetUsersOperationsWithTimeCondition', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('resetUsersOperationsWithTimeCondition', '', reply);
   }
 };
 
@@ -94,7 +94,13 @@ export const resetUsersOperationLimits = async (
 ): Promise<FastifyReply> => {
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(
+        'resetUsersOperationLimits',
+        '',
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
     }
 
     const { channel_user_id } = request.body as { channel_user_id: string };
@@ -104,7 +110,7 @@ export const resetUsersOperationLimits = async (
     return await returnSuccessResponse(reply, `user operation counters have been cleared.`);
   } catch (error) {
     Logger.error('clearUsersOperationLimits', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('resetUsersOperationLimits', '', reply);
   }
 };
 
@@ -124,7 +130,7 @@ export const clearAllCaches = async (
     return await returnSuccessResponse(reply, 'All caches have been cleared.');
   } catch (error) {
     Logger.error('clearAllCaches', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('clearAllCaches', '', reply);
   }
 };
 
@@ -141,13 +147,21 @@ export const clearCacheByName = async (
 ): Promise<FastifyReply> => {
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You must send a body with cacheName');
+      return await returnErrorResponse(
+        'clearCacheByName',
+        '',
+        reply,
+        400,
+        'You must send a body with cacheName'
+      );
     }
 
     const { cacheName } = request.body as { cacheName: string };
 
     if (!cacheService.isValidCacheName(cacheName)) {
       return await returnErrorResponse(
+        'clearCacheByName',
+        '',
         reply,
         400,
         `Invalid cache name. Must be one of: ${Object.values(CacheNames).join(', ')}`
@@ -156,6 +170,8 @@ export const clearCacheByName = async (
 
     if (!Object.values(CacheNames).includes(cacheName)) {
       return await returnErrorResponse(
+        'clearCacheByName',
+        '',
         reply,
         400,
         `Invalid cache name. Must be one of: ${Object.values(CacheNames).join(', ')}`
@@ -167,6 +183,6 @@ export const clearCacheByName = async (
     return await returnSuccessResponse(reply, `Cache '${cacheName}' has been cleared.`);
   } catch (error) {
     Logger.error('clearCacheByName', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('clearCacheByName', '', reply);
   }
 };

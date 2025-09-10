@@ -56,6 +56,12 @@ export async function torMiddleware(request: FastifyRequest, reply: FastifyReply
   // Check if the request's IP is one of the Tor exit IPs
   if (torExitIPs.includes(clientIp)) {
     // Reject requests from Tor nodes with a 403 Forbidden response
-    returnErrorResponse(reply, 403, `Access forbidden by CORS. Requests from Tor are not allowed.`);
+    returnErrorResponse(
+      'torMiddleware',
+      '',
+      reply,
+      403,
+      `Access forbidden by CORS. Requests from Tor are not allowed.`
+    );
   }
 }

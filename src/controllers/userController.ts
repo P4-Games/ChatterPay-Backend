@@ -16,14 +16,13 @@ export const createUser = async (
 ): Promise<FastifyReply> => {
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'Request body is required');
+      return await returnErrorResponse('createUser', '', reply, 400, 'Request body is required');
     }
     const newUser = new UserModel(request.body);
     await newUser.save();
     return await returnSuccessResponse(reply, 'User created successfully', { user: newUser });
   } catch (error) {
-    Logger.error('createUser', 'Error creating user:', error);
-    return returnErrorResponse(reply, 400, 'Bad Request');
+    return returnErrorResponse('createUser', '', reply, 400, 'Bad Request');
   }
 };
 
@@ -41,8 +40,7 @@ export const getAllUsers = async (
     const users = await UserModel.find();
     return await returnSuccessResponse(reply, 'Users fetched successfully', { users });
   } catch (error) {
-    Logger.error('getAllUsers', 'Error fetching users:', error);
-    return returnErrorResponse(reply, 400, 'Failed to fetch users');
+    return returnErrorResponse('getAllUsers', '', reply, 400, 'Failed to fetch users');
   }
 };
 
@@ -62,14 +60,12 @@ export const getUserById = async (
     const user = await UserModel.findById(id);
 
     if (!user) {
-      Logger.warn('getUserById', 'User not found');
-      return await returnErrorResponse(reply, 404, 'User not found');
+      return await returnErrorResponse('getUserById', '', reply, 404, 'User not found');
     }
 
     return await returnSuccessResponse(reply, 'User fetched successfully', user.toJSON());
   } catch (error) {
-    Logger.error('getUserById', 'Error fetching user:', error);
-    return returnErrorResponse(reply, 400, 'Failed to fetch user');
+    return returnErrorResponse('getUserById', '', reply, 400, 'Failed to fetch user');
   }
 };
 
@@ -87,20 +83,18 @@ export const updateUser = async (
 
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'Request body is required');
+      return await returnErrorResponse('updateUser', '', reply, 400, 'Request body is required');
     }
 
     const updatedUser = await UserModel.findByIdAndUpdate(id, request.body, { new: true });
 
     if (!updatedUser) {
-      Logger.warn('updateUser', 'User not found');
-      return await returnErrorResponse(reply, 404, 'User not found');
+      return await returnErrorResponse('updateUser', '', reply, 404, 'User not found');
     }
 
     return await returnSuccessResponse(reply, 'User updated successfully', updatedUser.toJSON());
   } catch (error) {
-    Logger.error('updateUser', 'Error updating user:', error);
-    return returnErrorResponse(reply, 400, 'Bad Request');
+    return returnErrorResponse('updateUser', '', reply, 400, 'Bad Request');
   }
 };
 
@@ -120,12 +114,12 @@ export const deleteUser = async (
     const deletedUser = await UserModel.findByIdAndDelete(id);
 
     if (!deletedUser) {
-      return await returnErrorResponse(reply, 404, 'User not found');
+      return await returnErrorResponse('deleteUser', '', reply, 404, 'User not found');
     }
 
     return await returnSuccessResponse(reply, 'User deleted successfully');
   } catch (error) {
     Logger.error('deleteUser', 'Error deleting user:', error);
-    return returnErrorResponse(reply, 400, 'Bad Request');
+    return returnErrorResponse('deleteUser', '', reply, 400, 'Bad Request');
   }
 };
