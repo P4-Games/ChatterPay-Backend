@@ -438,13 +438,21 @@ export const chatterpointsService = {
         won = true;
       }
 
-      const prettyResult = result.replace(/G/g, '🟩').replace(/Y/g, '🟨').replace(/_/g, '⬜');
+      const prettyResult = result
+        .replace(/G/g, '🟩') // green
+        .replace(/Y/g, '🟨') // yellow
+        .replace(/_/g, '⬛'); // gray
 
       displayInfo = {
         guess: `${guess} → ${prettyResult}`,
         attempts: `${(user?.attempts ?? 0) + 1}/${wordleCfg.settings.attemptsPerUserPerPeriod}`,
         partialPoints: points,
-        message: won ? 'You won!' : 'Keep trying.'
+        message: won ? 'You won!' : 'Keep trying.',
+        reference:
+          `Reference:\n` +
+          `* 🟩: The letter(s) is in the word and in the correct position.\n` +
+          `* 🟨: The letter(s) is in the word, but not in the correct position.\n` +
+          `* ⬛: The letter(s) is not in the word.`
       };
 
       await mongoChatterpointsService.pushPlayEntry(cycleId, periodId, req.userId, {
@@ -594,7 +602,7 @@ export const chatterpointsService = {
       trophy: trophyFor(idx + 1),
       user: byId.get(r.userId) ?? r.userId,
       points: r.points,
-      prize: r.prize // 👈 NEW
+      prize: r.prize
     }));
   }
 };
