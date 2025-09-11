@@ -2,11 +2,11 @@ import { Logger } from '../helpers/loggerHelper';
 import { pushService } from './push/pushService';
 import { computeWallet } from './web3/rpc/rpcService';
 import { mongoUserService } from './mongo/mongoUserService';
-import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { mongoCountryService } from './mongo/mongoCountryService';
 import { IUser, UserModel, IUserWallet } from '../models/userModel';
 import { PUSH_ENABLED, DEFAULT_CHAIN_ID } from '../config/constants';
 import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
+import { getPhoneNumberFormatted, formatIdentifierWithOptionalName } from '../helpers/formatHelper';
 
 /**
  * Updates the operation count for the user by the specified increment.
@@ -331,3 +331,22 @@ export const closeOperation = (
   phoneNumber: string,
   operation: ConcurrentOperationsEnum
 ): Promise<void> => updateOperationCount(phoneNumber, operation, -1);
+
+/**
+ *
+ * @param {string} phoneNumber - The phone number of the user.
+ * @returns
+ */
+export const getDisplayUserLabel = async (phoneNumber: string): Promise<string> => {
+  const user: IUser | null = await UserModel.findOne({
+    phone_number: getPhoneNumberFormatted(phoneNumber)
+  });
+  if (!user) return phoneNumber;
+
+  const wallet: IUserWallet | null = await getUserWallet(phoneNumber, DEFAULT_CHAIN_ID);
+  return formatIdentifierWithOptionalName(
+    wallet?.wallet_proxy || '0x0000000000000000000000000000000000000000',
+    user.name,
+    true
+  );
+};
