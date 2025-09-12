@@ -1,22 +1,22 @@
 import crypto from 'crypto';
 
 import { Logger } from '../helpers/loggerHelper';
-import { getDisplayUserLabel } from './userService';
-import { mongoUserService } from './mongo/mongoUserService';
+import {
+  GameConfig,
+  GamePeriod,
+  GameSettings,
+  GameType,
+  IChatterpointsDocument,
+  PeriodStatus,
+  TimeWindow
+} from '../models/chatterpointsModel';
 import {
   LeaderboardItem,
   LeaderboardResponse,
   mongoChatterpointsService
 } from './mongo/mongoChatterpointsService';
-import {
-  GameType,
-  GameConfig,
-  GamePeriod,
-  TimeWindow,
-  PeriodStatus,
-  GameSettings,
-  IChatterpointsDocument
-} from '../models/chatterpointsModel';
+import { mongoUserService } from './mongo/mongoUserService';
+import { getDisplayUserLabel } from './userService';
 
 /**
  * Business logic layer for Chatterpoints.
@@ -240,6 +240,19 @@ export const chatterpointsService = {
           }
         } as unknown as typeof base.config
       };
+
+      // Business validation: WORDLE wordLength must be an integer in [5, 15]
+      const settings = (merged.config as { settings?: { wordLength?: unknown } } | undefined)
+        ?.settings;
+      const wl = settings?.wordLength as number | undefined;
+      if (wl !== undefined) {
+        if (!Number.isInteger(wl) || wl < 5 || wl > 15) {
+          throw new Error(
+            `Invalid WORDLE settings.wordLength: ${wl}. Must be an integer between 5 and 15.`
+          );
+        }
+      }
+
       return merged;
     });
 
