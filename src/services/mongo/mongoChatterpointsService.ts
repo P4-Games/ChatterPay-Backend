@@ -26,6 +26,21 @@ export interface SocialRegInput {
   at: Date;
 }
 
+export interface LeaderboardItem {
+  userId: string;
+  points: number;
+  prize: number;
+}
+
+export interface LeaderboardResponse {
+  cycle: {
+    cycleId: string;
+    startAt: Date;
+    endAt: Date;
+  };
+  items: LeaderboardItem[];
+}
+
 // Helpers
 function pad2(n: number): string {
   return n.toString().padStart(2, '0');
@@ -224,24 +239,46 @@ export const mongoChatterpointsService = {
   /** Read helpers */
   getCycleById: async (id: string): Promise<IChatterpointsDocument | null> =>
     ChatterpointsModel.findOne({ cycleId: id }).lean<IChatterpointsDocument>().exec(),
-
+  // Returns leaderboard items with cycle metadata
   getLeaderboardTop: async (
     cycleId: string,
     limit: number
-  ): Promise<Array<{ userId: string; points: number; prize: number }>> => {
-    const doc = await ChatterpointsModel.findOne({ cycleId }, { totalsByUser: 1, podiumPrizes: 1 })
-      .lean<IChatterpointsDocument>()
+  ): Promise<LeaderboardResponse | null> => {
+    const doc = await ChatterpointsModel.findOne(
+      { cycleId },
+      { cycleId: 1, startAt: 1, endAt: 1, totalsByUser: 1, podiumPrizes: 1 }
+    )
+      .lean<
+        Pick<
+          IChatterpointsDocument,
+          'cycleId' | 'startAt' | 'endAt' | 'totalsByUser' | 'podiumPrizes'
+        >
+      >()
       .exec();
-    if (!doc) return [];
 
-    const sorted = [...doc.totalsByUser].sort((a, b) => b.points - a.points).slice(0, limit);
+    if (!doc) return null;
 
-    const podiumPrizes = doc.podiumPrizes ?? [0, 0, 0];
+    const totals = Array.isArray(doc.totalsByUser) ? doc.totalsByUser : [];
+    const sorted = totals
+      .slice()
+      .sort((a, b) => b.points - a.points)
+      .slice(0, limit);
 
-    return sorted.map((u, idx) => ({
+    const podiumPrizes: number[] = Array.isArray(doc.podiumPrizes) ? doc.podiumPrizes : [0, 0, 0];
+
+    const items: LeaderboardItem[] = sorted.map<LeaderboardItem>((u, idx) => ({
       userId: u.userId,
       points: u.points,
       prize: podiumPrizes[idx] ?? 0
     }));
+
+    return {
+      cycle: {
+        cycleId: doc.cycleId,
+        startAt: doc.startAt,
+        endAt: doc.endAt
+      },
+      items
+    };
   }
 };

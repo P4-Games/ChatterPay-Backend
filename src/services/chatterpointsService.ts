@@ -3,7 +3,11 @@ import crypto from 'crypto';
 import { Logger } from '../helpers/loggerHelper';
 import { getDisplayUserLabel } from './userService';
 import { mongoUserService } from './mongo/mongoUserService';
-import { mongoChatterpointsService } from './mongo/mongoChatterpointsService';
+import {
+  LeaderboardItem,
+  LeaderboardResponse,
+  mongoChatterpointsService
+} from './mongo/mongoChatterpointsService';
 import {
   GameType,
   GameConfig,
@@ -54,6 +58,20 @@ export interface LeaderboardRequest {
   cycleId: string | undefined;
   top?: number;
 }
+
+type LeaderboardRow = {
+  position: number;
+  trophy?: string;
+  user: string;
+  points: number;
+  prize: number;
+};
+
+type LeaderboardResult = {
+  cycleId: string;
+  cycleRange: string; // "startAt - endAt" for user display
+  entries: LeaderboardRow[];
+};
 
 const DEFAULTS = {
   cycleDurationMinutes: 7 * 24 * 60, // weekly
@@ -388,6 +406,28 @@ export const chatterpointsService = {
       }
     }
 
+    // 5b) 🔒 Duplicate guess guard (same period, same user, same word) — do NOT consume attempt
+    const normalizedGuess = req.guess.trim().toLowerCase();
+    const alreadyTriedSameWord =
+      user?.entries?.some((e) => e.guess.trim().toLowerCase() === normalizedGuess) ?? false;
+
+    if (alreadyTriedSameWord) {
+      Logger.debug(
+        '[play] duplicate guess in the same period userId=%s guess=%s',
+        req.userId,
+        normalizedGuess
+      );
+      return {
+        status: 'error',
+        periodClosed: false,
+        won: false,
+        points: 0,
+        display_info: {
+          message: 'You already tried that word in this period. Try a different one.'
+        }
+      };
+    }
+
     // 6) Scoring
     let won = false;
     let points = 0;
@@ -447,12 +487,7 @@ export const chatterpointsService = {
         guess: `${guess} → ${prettyResult}`,
         attempts: `${(user?.attempts ?? 0) + 1}/${wordleCfg.settings.attemptsPerUserPerPeriod}`,
         partialPoints: points,
-        message: won ? 'You won!' : 'Keep trying.',
-        reference:
-          `Reference:\n` +
-          `* 🟩: The letter(s) is in the word and in the correct position.\n` +
-          `* 🟨: The letter(s) is in the word, but not in the correct position.\n` +
-          `* ⬛: The letter(s) is not in the word.`
+        message: won ? 'You won!' : 'Keep trying.'
       };
 
       await mongoChatterpointsService.pushPlayEntry(cycleId, periodId, req.userId, {
@@ -528,32 +563,56 @@ export const chatterpointsService = {
     return { granted };
   },
 
+  // Returns user stats for a cycle, including current/most-recent period range ("startAt - endAt")
   getStats: async (
     req: StatsRequest
   ): Promise<{
+    cycleId: string;
+    periodId: string;
+    periodRange: string;
     userId: string;
     userProfile: string;
-    cycleId: string;
     totalPoints: number;
     periodsPlayed: number;
     wins: number;
   }> => {
-    // Resolve cycleId (optional) → last cycle, open or closed
+    // Minimal shapes expected from mongo (narrowed locally to satisfy typing & linter)
+    type PeriodPlay = { userId: string; won: boolean };
+    type Period = {
+      periodId: string;
+      startAt: Date;
+      endAt: Date;
+      status: 'OPEN' | 'CLOSED';
+      plays: PeriodPlay[];
+    };
+    type TotalsByUser = { userId: string; points: number };
+    type CycleDoc = {
+      cycleId: string;
+      startAt: Date;
+      endAt: Date;
+      periods: Period[];
+      totalsByUser: TotalsByUser[];
+    };
+
+    // 1) Resolve cycleId (optional) → fall back to last cycle
     let { cycleId } = req;
     if (!cycleId) {
-      const last = await mongoChatterpointsService.getLastCycle();
+      const last: { cycleId: string } | null = await mongoChatterpointsService.getLastCycle();
       if (!last) throw new Error('No cycles found');
-      ({ cycleId } = last); // destructuring assignment
+      ({ cycleId } = last);
     }
 
-    const cycle = await mongoChatterpointsService.getCycleById(cycleId);
+    // 2) Load cycle document
+    const cycle: CycleDoc | null = await mongoChatterpointsService.getCycleById(cycleId);
     if (!cycle) throw new Error('Cycle not found');
 
-    const totalPoints = cycle.totalsByUser.find((t) => t.userId === req.userId)?.points ?? 0;
+    // 3) Compute user totals
+    const totalPoints: number =
+      cycle.totalsByUser.find((t: TotalsByUser) => t.userId === req.userId)?.points ?? 0;
 
-    const { periodsPlayed, wins } = cycle.periods.reduce(
-      (acc, p) => {
-        const u = p.plays.find((x) => x.userId === req.userId);
+    const agg = cycle.periods.reduce<{ periodsPlayed: number; wins: number }>(
+      (acc, p: Period) => {
+        const u: PeriodPlay | undefined = p.plays.find((x: PeriodPlay) => x.userId === req.userId);
         if (u) {
           acc.periodsPlayed += 1;
           acc.wins += u.won ? 1 : 0;
@@ -563,46 +622,112 @@ export const chatterpointsService = {
       { periodsPlayed: 0, wins: 0 }
     );
 
-    const userProfile = await getDisplayUserLabel(req.userId);
-    return { userId: req.userId, userProfile, cycleId, totalPoints, periodsPlayed, wins };
+    // 4) Determine period range to display:
+    //    prefer the active (OPEN) period that contains "now"; otherwise, the most recent by endAt.
+    const now: number = Date.now();
+    const active: Period | undefined = cycle.periods.find(
+      (p: Period) =>
+        p.status === 'OPEN' &&
+        p.startAt instanceof Date &&
+        p.endAt instanceof Date &&
+        p.startAt.getTime() <= now &&
+        now < p.endAt.getTime()
+    );
+
+    // Pick most recent (by endAt) if there is no active period
+    const mostRecent: Period | undefined =
+      active ??
+      cycle.periods
+        .slice()
+        .sort((a: Period, b: Period) => b.endAt.getTime() - a.endAt.getTime())[0];
+
+    const formatRange = (start: Date, end: Date): string =>
+      `${start.toISOString()} - ${end.toISOString()}`;
+
+    const periodRange: string =
+      mostRecent && mostRecent.startAt instanceof Date && mostRecent.endAt instanceof Date
+        ? formatRange(mostRecent.startAt, mostRecent.endAt)
+        : '';
+
+    // 5) Resolve display label
+    const userProfile: string = await getDisplayUserLabel(req.userId);
+
+    // 6) Return payload
+    return {
+      cycleId,
+      periodId: mostRecent.periodId,
+      periodRange,
+      userId: req.userId,
+      userProfile,
+      totalPoints,
+      periodsPlayed: agg.periodsPlayed,
+      wins: agg.wins
+    };
   },
 
-  getLeaderboard: async (
-    req: LeaderboardRequest
-  ): Promise<
-    Array<{ position: number; trophy?: string; user: string; points: number; prize: number }>
-  > => {
-    const top = req.top ?? 3;
+  // Returns cycle metadata and a ranked list of users (consumes mongo types: LeaderboardResponse, LeaderboardItem)
+  getLeaderboard: async (req: LeaderboardRequest): Promise<LeaderboardResult> => {
+    // 1) Resolve target cycle safely (default top = 3)
+    const top: number = typeof req.top === 'number' && req.top > 0 ? req.top : 3;
 
-    let { cycleId } = req;
-    if (!cycleId) {
-      const last = await mongoChatterpointsService.getLastCycle();
-      ({ cycleId } = last ?? {});
-      if (!cycleId) return [];
+    let targetCycleId: string | undefined = req.cycleId;
+    if (!targetCycleId) {
+      const last: { cycleId: string } | null = await mongoChatterpointsService.getLastCycle();
+      targetCycleId = last?.cycleId;
+      if (!targetCycleId) {
+        return { cycleId: '', cycleRange: '', entries: [] };
+      }
     }
 
-    const rows = await mongoChatterpointsService.getLeaderboardTop(cycleId, top);
-    if (!rows.length) return [];
+    // 2) Fetch leaderboard from mongo (shape: { cycle: {cycleId, startAt, endAt}, items: LeaderboardItem[] })
+    const leaderboard: LeaderboardResponse | null =
+      await mongoChatterpointsService.getLeaderboardTop(targetCycleId, top);
 
-    const uniqueIds = [...new Set(rows.map((r) => r.userId))];
-    const labels = await Promise.all(uniqueIds.map((id) => getDisplayUserLabel(id)));
-    const byId = new Map<string, string>(uniqueIds.map((id, i) => [id, labels[i]]));
+    if (!leaderboard) {
+      return { cycleId: targetCycleId, cycleRange: '', entries: [] };
+    }
 
+    const {
+      cycle: { cycleId, startAt, endAt },
+      items
+    } = leaderboard;
+
+    // 3) Build user labels map with strict typing
+    const uniqueIds: string[] = Array.from(new Set(items.map((r: LeaderboardItem) => r.userId)));
+
+    const idLabelPairs: Array<[string, string]> = await Promise.all(
+      uniqueIds.map<Promise<[string, string]>>(async (id: string) => [
+        id,
+        await getDisplayUserLabel(id)
+      ])
+    );
+
+    const byId: Map<string, string> = new Map<string, string>(idLabelPairs);
+    const displayUser = (id: string): string => byId.get(id) ?? id;
+
+    // 4) Trophy mapping
     const trophyFor = (pos: number): string | undefined => {
-      const trophies: Record<number, string> = {
-        1: '🥇',
-        2: '🥈',
-        3: '🥉'
-      };
+      const trophies: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
       return trophies[pos];
     };
 
-    return rows.map((r, idx) => ({
+    // 5) Cycle range for user display
+    const cycleRange: string = `${startAt.toISOString()} - ${endAt.toISOString()}`;
+
+    // 6) Map mongo items to view rows
+    const rows: LeaderboardRow[] = items.map<LeaderboardRow>((r: LeaderboardItem, idx: number) => ({
       position: idx + 1,
       trophy: trophyFor(idx + 1),
-      user: byId.get(r.userId) ?? r.userId,
+      user: displayUser(r.userId),
       points: r.points,
       prize: r.prize
     }));
+
+    // 7) Final payload
+    return {
+      cycleId,
+      cycleRange,
+      entries: rows
+    };
   }
 };
