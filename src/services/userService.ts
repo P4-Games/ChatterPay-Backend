@@ -6,6 +6,7 @@ import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { mongoCountryService } from './mongo/mongoCountryService';
 import { IUser, UserModel, IUserWallet } from '../models/userModel';
 import { PUSH_ENABLED, DEFAULT_CHAIN_ID } from '../config/constants';
+import { walletProvisioningHook } from './alchemy/walletProvisioningHook';
 import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
 
 /**
@@ -119,6 +120,9 @@ export const createUserWithWallet = async (
     );
   }
 
+  // Register wallet with Alchemy webhook system
+  await walletProvisioningHook.onWalletCreated(predictedWallet.proxyAddress, DEFAULT_CHAIN_ID);
+
   return user;
 };
 
@@ -169,6 +173,9 @@ export const addWalletToUser = async (
 
   user.wallets.push(newWallet);
   await user.save();
+
+  // Register wallet with Alchemy webhook system
+  await walletProvisioningHook.onWalletCreated(predictedWallet.proxyAddress, chainId);
 
   Logger.log(
     'addWalletToUser',

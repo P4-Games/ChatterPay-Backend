@@ -11,7 +11,7 @@ import Blockchain, { IBlockchain } from '../models/blockchainModel';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { sendReceivedTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-import { THE_GRAPH_API_KEY, THE_GRAPH_EXTERNAL_DEPOSITS_URL } from '../config/constants';
+import { THE_GRAPH_API_KEY, THE_GRAPH_EXTERNAL_DEPOSITS_URL, DEPOSITS_PROVIDER } from '../config/constants';
 
 /**
  * GraphQL query to fetch external deposits.
@@ -156,6 +156,9 @@ async function processExternalDeposit(
 
 /**
  * Fetches and processes external deposits for users in the ecosystem.
+ * 
+ * @deprecated This function is deprecated in favor of Alchemy webhooks. 
+ * Only used for analytics when DEPOSITS_PROVIDER=thegraph.
  *
  * @async
  * @param {string} routerAddress - The address of the Uniswap V2 router (used to filter internal transfers).
@@ -170,6 +173,14 @@ export async function fetchExternalDeposits(
   chainId: number,
   sendNotification: boolean
 ) {
+  // Guard: Only process if The Graph is the active provider
+  if (DEPOSITS_PROVIDER !== 'thegraph') {
+    const message = `External deposits processing skipped - provider is ${DEPOSITS_PROVIDER}`;
+    Logger.info('fetchExternalDeposits', message);
+    return message;
+  }
+
+  Logger.warn('fetchExternalDeposits', 'Using deprecated The Graph external deposits. Consider migrating to Alchemy webhooks.');
   try {
     const blockchain = await Blockchain.findOne({ chainId });
 

@@ -3,6 +3,13 @@ import { FastifyError, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../../helpers/loggerHelper';
 
+// Extend FastifyRequest to include rawBody for webhook verification
+declare module 'fastify' {
+  interface FastifyRequest {
+    rawBody?: string | Buffer;
+  }
+}
+
 /**
  * Parses the request body based on its format (JSON, URL-encoded, or key-value pair).
  *
@@ -39,8 +46,9 @@ function parseBody(body: string): unknown {
  * @param {FastifyInstance} server - The Fastify server instance
  */
 export async function setupBodyParserMiddleware(server: FastifyInstance): Promise<void> {
+  // Raw body parser for webhook signature verification
   server.addContentTypeParser(
-    ['application/json', 'application/x-www-form-urlencoded', 'text/plain'],
+    'application/json',
     { parseAs: 'string' },
     (
       req: FastifyRequest,
@@ -48,11 +56,46 @@ export async function setupBodyParserMiddleware(server: FastifyInstance): Promis
       done: (err: FastifyError | null, body?: unknown) => void
     ) => {
       try {
+        // Store raw body for webhook signature verification
+        req.rawBody = body;
+        
+        // For webhook routes, we might want to keep the raw body
+        if (req.url?.startsWith('/webhooks/')) {
+          Logger.debug('parseBody', 'Preserving raw body for webhook verification');
+          done(null, JSON.parse(body));
+          return;
+        }
+
         const parsedBody = parseBody(body);
-        Logger.log('parseBody', 'Successfully parsed body:', body);
+        Logger.log('parseBody', 'Successfully parsed JSON body');
         done(null, parsedBody);
       } catch (error: unknown) {
-        Logger.error('parseBody', 'Failed to parse body:', body);
+        Logger.error('parseBody', 'Failed to parse JSON body');
+        const messageError = error instanceof Error ? error.message : 'Unknown error';
+        done(
+          new Error(`parseBody: Invalid JSON format, error: ${messageError}`) as FastifyError,
+          undefined
+        );
+      }
+    }
+  );
+
+  // Other content types
+  server.addContentTypeParser(
+    ['application/x-www-form-urlencoded', 'text/plain'],
+    { parseAs: 'string' },
+    (
+      req: FastifyRequest,
+      body: string,
+      done: (err: FastifyError | null, body?: unknown) => void
+    ) => {
+      try {
+        req.rawBody = body;
+        const parsedBody = parseBody(body);
+        Logger.log('parseBody', 'Successfully parsed body');
+        done(null, parsedBody);
+      } catch (error: unknown) {
+        Logger.error('parseBody', 'Failed to parse body');
         const messageError = error instanceof Error ? error.message : 'Unknown error';
         done(
           new Error(`parseBody: Invalid body format, error: ${messageError}`) as FastifyError,
