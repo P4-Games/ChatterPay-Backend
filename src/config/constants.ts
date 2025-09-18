@@ -1,7 +1,15 @@
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
 
 import { LogLevel, validLogLevels } from '../types/loggerType';
-import { NotificationLanguage, notificationLanguages } from '../types/commonType';
+import { gamesLanguage, NotificationLanguage, notificationLanguages } from '../types/commonType';
+
+interface ABIs {
+  [key: string]: string;
+}
+
+interface CHATTERPOINTS {
+  [key: string]: string;
+}
 
 const {
   BUN_ENV = 'localhost',
@@ -48,7 +56,13 @@ const {
   QUEUE_GAS_INTERVAL: queueGasInterval = 250,
   QUEUE_CREATE_PROXY_INTERVAL: queueCreateProxyInterval = 150,
   ISSUER_TOKENS_ENABLED: issuerTokensEnabled = 'false',
-  MAX_REQUESTS_PER_MINUTE: maxRequestsPerMinute = 50
+  MAX_REQUESTS_PER_MINUTE: maxRequestsPerMinute = 50,
+  SWAP_ZERO_FEE_MODE: swapZeroFeeMode = 'false',
+  SWAP_EXECUTE_SIMPLE: swapExecuteSimple = 'true',
+  SWAP_USE_QUOTER: swapUseQuoter = 'false',
+  SWAP_QUOTE_VS_PRICES_FEEDS_THRESHOLD_PERCENT: swapQuoteVsPricesFeedsThresholdPercent = 5,
+  CHATTERPOINTS_WORDS_SEED = 'default',
+  CHATTERPOINTS_WORDS_READ_FROM: chatterpointsWordsReadFrom = 'local'
 } = process.env;
 
 export {
@@ -71,6 +85,7 @@ export {
   SEED_INTERNAL_SALT,
   GCP_BUCKET_BASE_URL,
   CHATIZALO_PHONE_NUMBER,
+  CHATTERPOINTS_WORDS_SEED,
   THE_GRAPH_EXTERNAL_DEPOSITS_URL
 };
 
@@ -80,10 +95,6 @@ export const PORT = Number(envPort) || 3000;
 export const MONGO_URI: string = envMongoUri ?? 'mongodb://localhost:27017/chatterpay';
 export const DEFAULT_CHAIN_ID = Number(defaultChainId);
 
-interface ABIs {
-  [key: string]: string;
-}
-
 export const GCP_ABIs: ABIs = {
   ChatterPay: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPay.sol/ChatterPay.json`,
   ChatterPayWalletProxy: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayWalletProxy.sol/ChatterPayWalletProxy.json`,
@@ -91,7 +102,9 @@ export const GCP_ABIs: ABIs = {
   ChatterPayNFT: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChatterPayNFT.sol/ChatterPayNFT.json`,
   EntryPoint: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/EntryPoint.sol/EntryPoint.json`,
   ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.sol/ERC20.json`,
-  ChainlinkPriceFeed: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`
+  ChainlinkPriceFeed: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`,
+  UniswapQuoterV2: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/Uniswap.sol/QuoterV2.json`,
+  UniswapRouter02: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/Uniswap.sol/Router02.json`
 };
 
 export const LOCAL_ABIs: ABIs = {
@@ -101,10 +114,21 @@ export const LOCAL_ABIs: ABIs = {
   ChatterPayNFT: `ChatterPayNFT.sol/ChatterPayNFT.json`,
   EntryPoint: `EntryPoint.sol/EntryPoint.json`,
   ERC20: `ERC20.sol/ERC20.json`,
-  ChainlinkPriceFeed: `ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`
+  ChainlinkPriceFeed: `ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`,
+  UniswapQuoterV2: `Uniswap.sol/QuoterV2.json`,
+  UniswapRouter02: `Uniswap.sol/Router02.json`
+};
+
+export const GCP_CHATTERPOINTS: CHATTERPOINTS = {
+  Words: `${GCP_BUCKET_BASE_URL}/chatterpoints/words.json`
+};
+
+export const LOCAL_CHATTERPOINTS: CHATTERPOINTS = {
+  Words: `words.json`
 };
 
 export const ABIS_READ_FROM = abisReadFrom.toLowerCase();
+export const CHATTERPOINTS_WORDS_READ_FROM = chatterpointsWordsReadFrom.toLowerCase();
 export const NFT_UPLOAD_IMAGE_ICP: boolean = envNftUploadImageIcp.toLowerCase() === 'true';
 export const NFT_UPLOAD_IMAGE_IPFS: boolean = envNftUploadImageIpfs.toLowerCase() === 'true';
 export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
@@ -131,6 +155,8 @@ export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
 
 export const validLanguages: NotificationLanguage[] = [...notificationLanguages];
 export const SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT: NotificationLanguage = 'en';
+
+export const GAMES_LANGUAGE_DEFAULT: gamesLanguage = 'en';
 
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
 export const GCP_CLOUD_TRACE_ENABLED: boolean = gcpCloudTraceEnabled.toLowerCase() === 'true';
@@ -165,6 +191,10 @@ export const RESULT_CURRENCIES = ['usd', 'ars', 'brl', 'uyu'];
 export const SWAP_SLIPPAGE_CONFIG_STABLE = Number(slippage_config_stable);
 export const SWAP_SLIPPAGE_CONFIG_DEFAULT = Number(slippage_config_default);
 export const SWAP_SLIPPAGE_CONFIG_EXTRA = Number(slippage_config_extra);
+export const SWAP_ZERO_FEE_MODE: boolean = swapZeroFeeMode.toLowerCase() === 'true';
+export const SWAP_EXECUTE_SIMPLE: boolean = swapExecuteSimple.toLowerCase() === 'true';
+export const SWAP_USE_QUOTER: boolean = swapUseQuoter.toLowerCase() === 'true';
+export const SWAP_PRICE_THRESHOLD_PERCENT: number = Number(swapQuoteVsPricesFeedsThresholdPercent); // %
 
 export const QUEUE_BUNDLER_INTERVAL = Number(queueBundlerInterval);
 export const QUEUE_GAS_INTERVAL = Number(queueGasInterval);
@@ -191,3 +221,6 @@ export const CACHE_COINGECKO_CHECK_PERIOD = 120; // 2 min
 
 export const CACHE_ERC20_DATA_TTL = 432000; // 5 days
 export const CACHE_ERC20_DATA_CHECK_PERIOD = 518400; // 6 days
+
+export const CACHE_CHATTERPOINTS_WORDS_TTL = 2592000; // 30 days
+export const CACHE_CHATTERPOINTS_WORDS_CHECK_PERIOD = 2599200; // 30 days + 2 hours

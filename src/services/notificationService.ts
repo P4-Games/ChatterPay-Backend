@@ -1,5 +1,6 @@
 import { Logger } from '../helpers/loggerHelper';
 import { pushService } from './push/pushService';
+import { AaveSupplyInfo } from '../types/aaveType';
 import { cacheService } from './cache/cacheService';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IBlockchain } from '../models/blockchainModel';
@@ -636,13 +637,11 @@ export async function sendNoValidBlockchainConditionsNotification(
 /**
  * Sends a notification when an internal error occurs.
  *
- * @param address_of_user - The blockchain address of the user.
  * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
  * @param lastBotMsgDelaySeconds - (Optional) Delay in seconds since the last bot message was sent. Defaults to 0.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  */
 export async function sendInternalErrorNotification(
-  address_of_user: string,
   channel_user_id: string,
   lastBotMsgDelaySeconds: number = 0,
   traceHeader?: string
@@ -662,7 +661,7 @@ export async function sendInternalErrorNotification(
 
     Logger.log(
       'sendInternalErrorNotification',
-      `Sending internal error notification to ${address_of_user}`
+      `Sending internal error notification to ${channel_user_id}`
     );
 
     const { title, message } = await getNotificationTemplate(
