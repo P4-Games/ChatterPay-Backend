@@ -13,8 +13,7 @@ export const getGcpFile = async (urlFile: string): Promise<unknown> => {
   try {
     Logger.log('getGcpFile', `Getting file ${urlFile} from GCP bucket`);
     const response = await axios.get(urlFile);
-    const { abi } = response.data;
-    return abi;
+    return response.data;
   } catch (error) {
     Logger.error('getGcpFile', urlFile, (error as Error).message);
     throw new Error(`Error getting file ${urlFile} from GCP bucket`);

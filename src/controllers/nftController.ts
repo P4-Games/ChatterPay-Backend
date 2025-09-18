@@ -223,7 +223,13 @@ export const generateNftOriginal = async (
 ) => {
   let logKey = `[op:mintNft:${''}]`;
   if (!request.body) {
-    return returnErrorResponse(reply, 400, 'You have to send a body with this request');
+    return returnErrorResponse(
+      'generateNftOriginal',
+      logKey,
+      reply,
+      400,
+      'You have to send a body with this request'
+    );
   }
 
   const { channel_user_id, url, description, latitude, longitude } = request.body;
@@ -231,6 +237,8 @@ export const generateNftOriginal = async (
 
   if (!channel_user_id || !url || !description) {
     return returnErrorResponse(
+      'generateNftOriginal',
+      logKey,
       reply,
       400,
       'Missing parameters in body. You have to send: channel_user_id, url, description, latitude, longitude'
@@ -239,6 +247,8 @@ export const generateNftOriginal = async (
 
   if (!isValidPhoneNumber(channel_user_id)) {
     return returnErrorResponse(
+      'generateNftOriginal',
+      logKey,
       reply,
       400,
       `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`
@@ -247,13 +257,17 @@ export const generateNftOriginal = async (
 
   logKey = `[op:mintNft:${channel_user_id}]`;
   if (!isValidUrl(url)) {
-    Logger.warn('generateNftOriginal', logKey, 'The provided URL is not valid.');
-    return returnErrorResponse(reply, 400, 'The provided URL is not valid.');
+    return returnErrorResponse(
+      'generateNftOriginal',
+      logKey,
+      reply,
+      400,
+      'The provided URL is not valid.'
+    );
   }
 
   if (isShortUrl(url)) {
-    Logger.warn('generateNftOriginal', logKey, 'Short Url not allowed');
-    return returnErrorResponse(reply, 400, 'Short Url not allowed');
+    return returnErrorResponse('generateNftOriginal', logKey, reply, 400, 'Short Url not allowed');
   }
 
   const fromUser: IUser | null = await getUser(channel_user_id);
@@ -480,7 +494,13 @@ export const generateNftCopy = async (
   let logKey = `[op:mintNftCopy:${''}]`;
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(
+        'generateNftCopy',
+        logKey,
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
     }
 
     const { channel_user_id, id } = request.body;
@@ -488,6 +508,8 @@ export const generateNftCopy = async (
 
     if (!channel_user_id) {
       return await returnErrorResponse(
+        'generateNftCopy',
+        logKey,
         reply,
         400,
         'Missing parameters in body. You have to send: channel_user_id'
@@ -496,6 +518,8 @@ export const generateNftCopy = async (
 
     if (!isValidPhoneNumber(channel_user_id)) {
       return await returnErrorResponse(
+        'generateNftCopy',
+        logKey,
         reply,
         400,
         `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`
@@ -583,9 +607,14 @@ export const generateNftCopy = async (
     );
     const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, DEFAULT_CHAIN_ID);
     if (!userWallet) {
-      Logger.warn('generateNftCopy', logKey, 'Wallet User doesnt exists.');
       await closeOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
-      return await returnErrorResponse(reply, 400, 'Wallet User doesnt exists.');
+      return await returnErrorResponse(
+        'generateNftCopy',
+        logKey,
+        reply,
+        400,
+        'Wallet User doesnt exists.'
+      );
     }
 
     const mongoData = await NFTModel.create({
@@ -684,10 +713,10 @@ export const getNftById = async (
         description: nft.metadata.description
       });
     }
-    return await returnErrorResponse(reply, 404, 'NFT not found');
+    return await returnErrorResponse('getNftById', '', reply, 404, 'NFT not found');
   } catch (error) {
     Logger.error('getNftById', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('getNftById', '', reply);
   }
 };
 
@@ -712,6 +741,8 @@ export const getLastNFT = async (
 
     if (!channel_user_id) {
       return await returnErrorResponse(
+        'getLastNFT',
+        '',
         reply,
         400,
         'Missing parameters in body. You have to send: channel_user_id'
@@ -720,6 +751,8 @@ export const getLastNFT = async (
 
     if (!isValidPhoneNumber(channel_user_id)) {
       return await returnErrorResponse(
+        'getLastNFT',
+        '',
         reply,
         400,
         `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`
@@ -729,7 +762,7 @@ export const getLastNFT = async (
     const nft = (await NFTModel.find({ channel_user_id })).sort((a, b) => b.id - a.id)?.[0];
 
     if (!nft) {
-      return await returnErrorResponse(reply, 404, 'NFT not found');
+      return await returnErrorResponse('getLastNFT', '', reply, 404, 'NFT not found');
     }
 
     // Check postman requests
@@ -744,7 +777,7 @@ export const getLastNFT = async (
     reply.redirect(returnUrl);
   } catch (error) {
     Logger.error('getLastNFT', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('getLastNFT', '', reply);
   }
 };
 
@@ -788,6 +821,8 @@ export const getAllNFTs = async (
 
   if (!isValidPhoneNumber(phone_number)) {
     return returnErrorResponse(
+      'getAllNFTs',
+      '',
       reply,
       400,
       `'${phone_number}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`
@@ -818,7 +853,7 @@ export const getNftList = async (
     const nfts = await NFTModel.find({ id: tokenId });
 
     if (nfts.length === 0) {
-      return await returnErrorResponse(reply, 400, 'NFT not found');
+      return await returnErrorResponse('getNftList', '', reply, 400, 'NFT not found');
     }
 
     const nft = nfts[0];
@@ -836,7 +871,7 @@ export const getNftList = async (
     });
   } catch (error) {
     Logger.error('getNftList', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('getNftList', '', reply);
   }
 };
 

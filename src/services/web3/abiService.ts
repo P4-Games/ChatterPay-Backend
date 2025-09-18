@@ -60,13 +60,16 @@ export const getFile = async (contractKeyName: string): Promise<ABI> => {
   }
 
   const abi = await cacheService.getOrLoad<ABI>(CacheNames.ABI, cacheKey, async () => {
-    Logger.log('ABI:getFile', `CACHE MISS key=${cacheKey} — loading from ${source}...`);
-    const loaded = (
-      abisReadFromLocal
-        ? await getLocalABIFile(filePath)
-        : ((await getGcpFile(filePath)) as ethers.ContractInterface)
-    ) as ABI;
-    return loaded;
+    Logger.log('ABI:getFile', `CACHE MISS key=${cacheKey} â€” loading from ${source}...`);
+    if (abisReadFromLocal) {
+      return getLocalABIFile(filePath);
+    }
+
+    const remote = (await getGcpFile(filePath)) as { abi: ABI };
+    if (!remote || !remote.abi) {
+      throw new Error(`Invalid ABI file format at ${filePath}`);
+    }
+    return remote.abi;
   });
 
   return abi;
@@ -122,3 +125,17 @@ export const getChatterpayABI = async (): Promise<ABI> => getFile('ChatterPay');
  * @returns {Promise<ABI>} The Chailink Price Feed ABI object.
  */
 export const getChainlinkPriceFeedABI = async (): Promise<ABI> => getFile('ChainlinkPriceFeed');
+
+/**
+ * Retrieves the Uniswap Quoter V2 ABI.
+ *
+ * @returns {Promise<ABI>} The Uniswap Quoter V2 ABI object.
+ */
+export const getUniswapQuoterV2ABI = async (): Promise<ABI> => getFile('UniswapQuoterV2');
+
+/**
+ * Retrieves the Uniswap Router 02 ABI.
+ *
+ * @returns {Promise<ABI>} The Uniswap Router 02 ABI object.
+ */
+export const getUniswapRouter02ABI = async (): Promise<ABI> => getFile('UniswapRouter02');

@@ -10,60 +10,21 @@ import { getUser, getUserWalletByChainId } from '../services/userService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import {
-  getTokenBalances,
-  calculateBalances,
-  calculateBalancesTotals
-} from '../services/balanceService';
-import {
   returnErrorResponse,
   returnSuccessResponse,
   returnErrorResponse500
 } from '../helpers/requestHelper';
+import {
+  getTokenBalances,
+  calculateBalances,
+  mergeSameTokenBalances,
+  calculateBalancesTotals
+} from '../services/balanceService';
 
 type CheckExternalDepositsQuery = {
   sendNotification?: string;
 };
 
-/**
- * Merge balances that represent the same asset (on the same network).
- * Uses tokenAddress when present; otherwise falls back to token+network.
- * Sums both the raw balance and each fiat conversion key.
- *
- * @param items List of BalanceInfo entries (potentially with duplicates)
- * @returns Deduplicated list with summed balances
- */
-export function mergeSameTokenBalances(items: BalanceInfo[]): BalanceInfo[] {
-  const agg = items.reduce<Record<string, BalanceInfo>>((acc, it) => {
-    const key = `${it.network.toLowerCase()}::${(it.tokenAddress ?? it.token).toLowerCase()}`;
-    const prev = acc[key];
-
-    if (!prev) {
-      // Clone to avoid mutating external references
-      acc[key] = { ...it, balance_conv: { ...it.balance_conv } };
-      return acc;
-    }
-
-    // Sum raw amount
-    const nextBalance = prev.balance + it.balance;
-
-    // Sum fiat conversions using only array iterations
-    const nextBalanceConv = Object.keys(it.balance_conv).reduce<Record<Currency, number>>(
-      (conv, k) => {
-        const fiat = k as Currency;
-        const prevV = prev.balance_conv[fiat] ?? 0;
-        const curV = it.balance_conv[fiat] ?? 0;
-        conv[fiat] = prevV + curV;
-        return conv;
-      },
-      { ...prev.balance_conv }
-    );
-
-    acc[key] = { ...prev, balance: nextBalance, balance_conv: nextBalanceConv };
-    return acc;
-  }, {});
-
-  return Object.values(agg);
-}
 /**
  * Handles the request to check external deposits.
  *
@@ -130,20 +91,22 @@ async function getAddressBalanceWithNfts(
       phoneNumber ? getPhoneNFTs(phoneNumber) : Promise.resolve({ nfts: [] })
     ]);
 
-    // Combine raw token balances from both wallets if applicable
+    //  Combine raw token balances
     const combinedTokenBalances = eoaProvided
       ? [...proxyTokenBalances, ...eoaTokenBalances]
       : proxyTokenBalances;
 
-    // Price & normalize
-    const balancesRaw: BalanceInfo[] = calculateBalances(
-      combinedTokenBalances,
+    //  Merge duplicates BEFORE calculating balances
+    const mergedTokenBalances = mergeSameTokenBalances(combinedTokenBalances);
+
+    //  Now calculate balances with fiat conversions
+    const balances: BalanceInfo[] = calculateBalances(
+      mergedTokenBalances,
       fiatQuotes,
       networkConfig.name
     );
 
-    // Merge duplicates (same asset) and 3) totalize from merged list
-    const balances: BalanceInfo[] = mergeSameTokenBalances(balancesRaw);
+    // Totals
     const totals: Record<Currency, number> = calculateBalancesTotals(balances);
 
     const response = {
@@ -155,8 +118,7 @@ async function getAddressBalanceWithNfts(
 
     return await returnSuccessResponse(reply, 'Wallet balance fetched successfully', response);
   } catch (error) {
-    Logger.error('getAddressBalanceWithNfts', 'Error fetching wallet balance:', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('getAddressBalanceWithNfts', '', reply);
   }
 }
 
@@ -173,11 +135,17 @@ export const walletBalance = async (
   const { wallet } = request.params;
 
   if (!wallet) {
-    return returnErrorResponse(reply, 400, 'Wallet address is required');
+    return returnErrorResponse('walletBalance', '', reply, 400, 'Wallet address is required');
   }
 
   if (!isValidEthereumWallet(wallet)) {
-    return returnErrorResponse(reply, 400, 'Wallet must be a valid ethereum wallet address');
+    return returnErrorResponse(
+      'walletBalance',
+      '',
+      reply,
+      400,
+      'Wallet must be a valid ethereum wallet address'
+    );
   }
 
   return getAddressBalanceWithNfts('', wallet, '', reply, request.server);
@@ -196,14 +164,12 @@ export const balanceByPhoneNumber = async (
   const { channel_user_id: phone } = request.query as { channel_user_id?: string };
 
   if (!phone) {
-    Logger.warn('balanceByPhoneNumber', 'Phone number is required');
-    return returnErrorResponse(reply, 400, 'Phone number is required');
+    return returnErrorResponse('balanceByPhoneNumber', '', reply, 400, 'Phone number is required');
   }
 
   if (!isValidPhoneNumber(phone)) {
-    Logger.warn('balanceByPhoneNumber', `Phone number ${phone} is invalid`);
     const msgError = `'${phone}' is invalid. 'phone' parameter must be a phone number (without spaces or symbols)`;
-    return returnErrorResponse(reply, 400, msgError);
+    return returnErrorResponse('balanceByPhoneNumber', '', reply, 400, msgError);
   }
 
   try {
@@ -218,11 +184,7 @@ export const balanceByPhoneNumber = async (
     const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, chain_id);
 
     if (!userWallet) {
-      Logger.warn(
-        'balanceByPhoneNumber',
-        `Wallet not found for phone number: ${phone} and chainId ${chain_id}`
-      );
-      return await returnErrorResponse(reply, 404, 'Wallet not found');
+      return await returnErrorResponse('balanceByPhoneNumber', '', reply, 404, 'Wallet not found');
     }
 
     return await getAddressBalanceWithNfts(
@@ -233,7 +195,6 @@ export const balanceByPhoneNumber = async (
       request.server
     );
   } catch (error) {
-    Logger.error('balanceByPhoneNumber', 'Error fetching user balance:', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('balanceByPhoneNumber', '', reply);
   }
 };

@@ -17,7 +17,9 @@ import {
   CACHE_OPENSEA_CHECK_PERIOD,
   CACHE_COINGECKO_CHECK_PERIOD,
   CACHE_ERC20_DATA_CHECK_PERIOD,
-  CACHE_NOTIFICATION_CHECK_PERIOD
+  CACHE_CHATTERPOINTS_WORDS_TTL,
+  CACHE_NOTIFICATION_CHECK_PERIOD,
+  CACHE_CHATTERPOINTS_WORDS_CHECK_PERIOD
 } from '../../config/constants';
 
 /** TTL and checkperiod (seconds) */
@@ -34,7 +36,11 @@ const TTL_CONFIG = {
     stdTTL: CACHE_COINGECKO_TTL,
     checkperiod: CACHE_COINGECKO_CHECK_PERIOD
   },
-  [CacheNames.ERC20]: { stdTTL: CACHE_ERC20_DATA_TTL, checkperiod: CACHE_ERC20_DATA_CHECK_PERIOD }
+  [CacheNames.ERC20]: { stdTTL: CACHE_ERC20_DATA_TTL, checkperiod: CACHE_ERC20_DATA_CHECK_PERIOD },
+  [CacheNames.CHATTERPOINTS_WORDS]: {
+    stdTTL: CACHE_CHATTERPOINTS_WORDS_TTL,
+    checkperiod: CACHE_CHATTERPOINTS_WORDS_CHECK_PERIOD
+  }
 };
 
 const caches: Record<CacheNames, NodeCache> = {
@@ -44,7 +50,8 @@ const caches: Record<CacheNames, NodeCache> = {
   [CacheNames.NOTIFICATION]: new NodeCache(TTL_CONFIG[CacheNames.NOTIFICATION]),
   [CacheNames.TOR]: new NodeCache(TTL_CONFIG[CacheNames.TOR]),
   [CacheNames.COINGECKO]: new NodeCache(TTL_CONFIG[CacheNames.COINGECKO]),
-  [CacheNames.ERC20]: new NodeCache(TTL_CONFIG[CacheNames.ERC20])
+  [CacheNames.ERC20]: new NodeCache(TTL_CONFIG[CacheNames.ERC20]),
+  [CacheNames.CHATTERPOINTS_WORDS]: new NodeCache(TTL_CONFIG[CacheNames.CHATTERPOINTS_WORDS])
 };
 
 // De-duplication of concurrent loads (global, cross-cache)

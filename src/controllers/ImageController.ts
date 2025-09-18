@@ -66,30 +66,32 @@ export const uploadImage: RouteHandlerMethod = async (
 ): Promise<FastifyReply> => {
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(
+        'uploadImage',
+        '',
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
     }
 
     const { phone_number, image_url } = request.body as UploadBody;
 
     if (!phone_number) {
-      Logger.warn('uploadImage', 'Phone number not provided');
-      return await returnErrorResponse(reply, 400, 'Phone number not provided');
+      return await returnErrorResponse('uploadImage', '', reply, 400, 'Phone number not provided');
     }
 
     if (!image_url) {
-      Logger.warn('uploadImage', 'Image URL not provided');
-      return await returnErrorResponse(reply, 400, 'Image URL not provided');
+      return await returnErrorResponse('uploadImage', '', reply, 400, 'Image URL not provided');
     }
 
     if (isShortUrl(image_url)) {
-      Logger.warn('generateNftOriginal', 'Short Url not allowed');
-      return await returnErrorResponse(reply, 400, 'Short Url not allowed');
+      return await returnErrorResponse('uploadImage', '', reply, 400, 'Short Url not allowed');
     }
 
     const user = await getUser(phone_number);
     if (!user) {
-      Logger.warn('uploadImage', `User not found: ${phone_number}`);
-      return await returnErrorResponse(reply, 404, 'User not found');
+      return await returnErrorResponse('uploadImage', '', reply, 400, 'User not found');
     }
 
     const fileName = `profile_${phone_number}_${Date.now()}.jpg`;
@@ -106,10 +108,15 @@ export const uploadImage: RouteHandlerMethod = async (
       });
     }
 
-    Logger.error('uploadImage', uploadResult.error);
-    return await returnErrorResponse(reply, 500, 'Error uploading image', uploadResult.error);
+    return await returnErrorResponse(
+      'uploadImage',
+      '',
+      reply,
+      400,
+      'Error uploading image',
+      uploadResult.error
+    );
   } catch (error) {
-    Logger.error('uploadImage', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('uploadImage', '', reply);
   }
 };

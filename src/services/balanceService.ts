@@ -3,10 +3,8 @@ import { ethers } from 'ethers';
 import { IToken } from '../models/tokenModel';
 import { getERC20ABI } from './web3/abiService';
 import { Logger } from '../helpers/loggerHelper';
-import { getTokenData } from './blockchainService';
 import { cacheService } from './cache/cacheService';
 import { IBlockchain } from '../models/blockchainModel';
-import { setupERC20 } from './web3/contractSetupService';
 import { SIGNING_KEY, BINANCE_API_URL } from '../config/constants';
 import {
   Currency,
@@ -160,8 +158,12 @@ export async function getTokenBalances(
 
   return Promise.all(
     tokenInfo.map(async (token) => {
-      const balance = await getContractBalance(token.address, signer, address);
-      return { ...token, balance };
+      const rawBalance = await getContractBalance(token.address, signer, address);
+
+      // Apply display_decimals here, keep as string
+      const formattedBalance = parseFloat(rawBalance).toFixed(token.display_decimals);
+
+      return { ...token, balance: formattedBalance };
     })
   );
 }
@@ -178,13 +180,21 @@ export function calculateBalances(
   fiatQuotes: FiatQuote[],
   networkName: string
 ): BalanceInfo[] {
-  return tokenBalances.map(({ symbol, address, balance, rateUSD }) => {
-    const balanceUSD = parseFloat(balance) * rateUSD;
+  return tokenBalances.map(({ symbol, address, balance, rateUSD, display_decimals }) => {
+    // Cast once for math
+    const balanceNum = parseFloat(balance);
+
+    // Round again explicitly with display_decimals before returning
+    const roundedBalance = parseFloat(balanceNum.toFixed(display_decimals));
+    Logger.debug('calculateBalances', symbol, balance, display_decimals, roundedBalance);
+
+    const balanceUSD = roundedBalance * rateUSD;
+
     return {
       network: networkName,
       token: symbol,
       tokenAddress: address,
-      balance: parseFloat(balance),
+      balance: roundedBalance,
       balance_conv: {
         USD: balanceUSD,
         UYU: balanceUSD * (fiatQuotes.find((q) => q.currency === 'UYU')?.rate ?? 1),
@@ -210,6 +220,36 @@ export function calculateBalancesTotals(balances: BalanceInfo[]): Record<Currenc
     },
     {} as Record<Currency, number>
   );
+}
+
+/**
+ * Merge balances that represent the same asset (on the same network).
+ * Uses tokenAddress when present; otherwise falls back to token+network.
+ * Sums both the raw balance and each fiat conversion key.
+ *
+ * @param items List of BalanceInfo entries (potentially with duplicates)
+ * @returns Deduplicated list with summed balances
+ */
+export function mergeSameTokenBalances(items: TokenBalance[]): TokenBalance[] {
+  const agg = items.reduce<Record<string, TokenBalance>>((acc, it) => {
+    const key = `${it.symbol.toLowerCase()}::${it.address.toLowerCase()}`;
+    const prev = acc[key];
+
+    if (!prev) {
+      acc[key] = { ...it };
+      return acc;
+    }
+
+    // sum balances (string → number → string otra vez)
+    const nextBalance = (parseFloat(prev.balance) + parseFloat(it.balance)).toFixed(
+      it.display_decimals
+    );
+
+    acc[key] = { ...prev, balance: nextBalance };
+    return acc;
+  }, {});
+
+  return Object.values(agg);
 }
 
 /**
@@ -247,55 +287,6 @@ export async function verifyWalletBalance(
   };
 
   return result;
-}
-
-/**
- * Helper function to verify balance in wallet by token address
- * @param {IBlockchain} blockchainConfig - Blockchain configuration object
- * @param {string} tokenContractAddress - Token contract address
- * @param {string} walletAddress - Wallet address to check
- * @param {string} amountToCheck - Amount to check in wallet
- * @returns {Promise<WalletBalanceInfo>} Wallet balance information
- */
-export async function verifyWalletBalanceByTokenAddress(
-  blockchainConfig: IBlockchain,
-  tokenContractAddress: string,
-  walletAddress: string,
-  amountToCheck: string
-): Promise<WalletBalanceInfo> {
-  const provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpc);
-  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-  const tokenContract: ethers.Contract = await setupERC20(tokenContractAddress, backendSigner);
-  return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
-}
-
-/**
- * Helper function to verify balance in wallet by token symbol
- * @param {IBlockchain} blockchainConfig - Blockchain configuration object
- * @param {IToken[]} blockchainTokens - Array of blockchain tokens
- * @param {string} tokenSymbol - Symbol of the token
- * @param {string} walletAddress - Wallet address to check
- * @param {string} amountToCheck - Amount to check in wallet
- * @returns {Promise<WalletBalanceInfo>} Wallet balance information
- */
-export async function verifyWalletBalanceByTokenSymbol(
-  blockchainConfig: IBlockchain,
-  blockchainTokens: IToken[],
-  tokenSymbol: string,
-  walletAddress: string,
-  amountToCheck: string
-): Promise<WalletBalanceInfo> {
-  const provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpc);
-  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-  const tokenData: IToken | undefined = getTokenData(
-    blockchainConfig,
-    blockchainTokens,
-    tokenSymbol
-  );
-  const tokenContractAddress = tokenData!.address;
-  const tokenContract: ethers.Contract = await setupERC20(tokenContractAddress, backendSigner);
-
-  return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
 }
 
 /**

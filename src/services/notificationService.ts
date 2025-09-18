@@ -1,5 +1,6 @@
 import { Logger } from '../helpers/loggerHelper';
 import { pushService } from './push/pushService';
+import { AaveSupplyInfo } from '../types/aaveType';
 import { cacheService } from './cache/cacheService';
 import { delaySeconds } from '../helpers/timeHelper';
 import { IBlockchain } from '../models/blockchainModel';
@@ -268,8 +269,6 @@ export async function sendSwapNotification(
   try {
     Logger.log('sendSwapNotification', 'Sending swap notification');
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
-
-    const resultString: string = `${Math.round(parseFloat(result) * 1e4) / 1e4}`;
     const { title, message } = await getNotificationTemplate(
       channel_user_id,
       NotificationEnum.swap
@@ -278,7 +277,7 @@ export async function sendSwapNotification(
     const formattedMessage = message
       .replaceAll('[AMOUNT]', amount)
       .replaceAll('[TOKEN]', token)
-      .replaceAll('[RESULT]', resultString)
+      .replaceAll('[RESULT]', result)
       .replaceAll('[OUTPUT_TOKEN]', outputToken)
       .replaceAll('[EXPLORER]', networkConfig.explorer)
       .replaceAll('[TRANSACTION_HASH]', transactionHash);
@@ -416,6 +415,141 @@ export async function sendOutgoingTransferNotification(
   }
 }
 
+export async function sendAAVECreateSuplyNotification(
+  channel_user_id: string,
+  amount: string,
+  token: string,
+  txHash: string
+): Promise<unknown> {
+  try {
+    Logger.log('sendAAVECreateSuplyNotification', 'Sending AAVE create Suply notification');
+    if (!isValidPhoneNumber(channel_user_id)) return '';
+
+    const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.aave_supply_created
+    );
+
+    const formattedMessage = message
+      .replace('[AMOUNT]', amount.toString())
+      .replace('[TOKEN]', token.toString())
+      .replace('[EXPLORER]', networkConfig.explorer)
+      .replace('[TX_HASH]', txHash);
+
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.aave_supply_created,
+      sendPush: false,
+      sendBot: true,
+      title,
+      traceHeader: ''
+    };
+
+    const data = await persistAndSendNotification(sendAndPersistParams);
+    return data;
+  } catch (error) {
+    Logger.error('sendAAVECreateSuplyNotification', error);
+    throw error;
+  }
+}
+
+export async function sendAAVERemoveSuplyNotification(
+  channel_user_id: string,
+  amount: string,
+  token: string,
+  txHash: string
+): Promise<unknown> {
+  try {
+    Logger.log('sendAAVERemoveSuplyNotification', 'Sending AAVE remove Suply notification');
+    if (!isValidPhoneNumber(channel_user_id)) return '';
+
+    const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+
+    const { title, message } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.aave_supply_modified
+    );
+
+    const formattedMessage = message
+      .replace('[AMOUNT]', amount.toString())
+      .replace('[TOKEN]', token.toString())
+      .replace('[EXPLORER]', networkConfig.explorer)
+      .replace('[TX_HASH]', txHash);
+
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.aave_supply_modified,
+      sendPush: false,
+      sendBot: true,
+      title,
+      traceHeader: ''
+    };
+
+    const data = await persistAndSendNotification(sendAndPersistParams);
+    return data;
+  } catch (error) {
+    Logger.error('sendAAVESuplyNotification', error);
+    throw error;
+  }
+}
+
+export async function sendAaveSupplyInfoNotification(
+  channel_user_id: string,
+  supplyInfo: AaveSupplyInfo
+): Promise<unknown> {
+  try {
+    Logger.log('sendAaveSupplyInfoNotification', 'Sending AAVE Suply Info notification');
+    if (!isValidPhoneNumber(channel_user_id)) return '';
+
+    let title = '';
+    let formattedMessage = '';
+
+    if (supplyInfo) {
+      const { title: tplTitle, message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.aave_supply_info
+      );
+
+      title = tplTitle;
+      formattedMessage = message
+        .replace('[ATOKEN_BALANCE]', supplyInfo.aTokenBalance.toString())
+        .replace('[ATOKEN_SYMBOL]', supplyInfo.aTokenSymbol.toString())
+        .replace('[SUPPLY_APY]', supplyInfo.supplyAPY.toString());
+    } else {
+      const { title: tplTitle, message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.aave_supply_info_no_data
+      );
+
+      title = tplTitle;
+      formattedMessage = message;
+    }
+
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: channel_user_id,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.aave_supply_info,
+      sendPush: false,
+      sendBot: true,
+      title,
+      traceHeader: ''
+    };
+
+    const data = await persistAndSendNotification(sendAndPersistParams);
+    return data;
+  } catch (error) {
+    Logger.error('sendAaveSupplyInfoNotification', error);
+    throw error;
+  }
+}
+
 /**
  * Sends a notification when user balance not enough
  *
@@ -503,13 +637,11 @@ export async function sendNoValidBlockchainConditionsNotification(
 /**
  * Sends a notification when an internal error occurs.
  *
- * @param address_of_user - The blockchain address of the user.
  * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
  * @param lastBotMsgDelaySeconds - (Optional) Delay in seconds since the last bot message was sent. Defaults to 0.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  */
 export async function sendInternalErrorNotification(
-  address_of_user: string,
   channel_user_id: string,
   lastBotMsgDelaySeconds: number = 0,
   traceHeader?: string
@@ -529,7 +661,7 @@ export async function sendInternalErrorNotification(
 
     Logger.log(
       'sendInternalErrorNotification',
-      `Sending internal error notification to ${address_of_user}`
+      `Sending internal error notification to ${channel_user_id}`
     );
 
     const { title, message } = await getNotificationTemplate(

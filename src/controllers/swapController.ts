@@ -109,7 +109,13 @@ export const swap = async (
     /* 1. swap: input params                                 */
     /* ***************************************************** */
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(
+        'swap',
+        '',
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
     }
 
     const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
@@ -126,7 +132,7 @@ export const swap = async (
     let validationError: string = await validateInputs(request.body, tokensData);
 
     if (validationError) {
-      return await returnErrorResponse(reply, 400, validationError);
+      return await returnErrorResponse('swap', '', reply, 400, validationError);
     }
 
     /* ***************************************************** */
@@ -271,7 +277,7 @@ export const swap = async (
       logKey
     );
     if (!executeSwapResult.success) {
-      await sendInternalErrorNotification(proxyAddress, channel_user_id, lastBotMsgDelaySeconds);
+      await sendInternalErrorNotification(channel_user_id, lastBotMsgDelaySeconds);
       await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;
     }
@@ -287,12 +293,24 @@ export const swap = async (
     const fromTokensSent = fromTokenCurrentBalance.sub(fromTokenNewBalance);
     const toTokensReceived = toTokenNewBalance.sub(toTokenCurrentBalance);
 
-    // Ensure the values are in the correct units (converted to 'number' for saveTransaction)
+    // Normalize balances to human units
+    const fromTokensSentNormalized = ethers.utils.formatUnits(fromTokensSent, fromTokenDecimals);
+    const toTokensReceivedNormalized = ethers.utils.formatUnits(toTokensReceived, toTokenDecimals);
+
+    // Apply display_decimals for DB (numbers) and notifications (strings)
     const fromTokensSentInUnits = parseFloat(
-      ethers.utils.formatUnits(fromTokensSent, fromTokenDecimals)
+      parseFloat(fromTokensSentNormalized).toFixed(tokensData.tokenInputDisplayDecimals)
     );
     const toTokensReceivedInUnits = parseFloat(
-      ethers.utils.formatUnits(toTokensReceived, toTokenDecimals)
+      parseFloat(toTokensReceivedNormalized).toFixed(tokensData.tokenOutputDisplayDecimals)
+    );
+
+    // String versions for notifications (preserve trailing zeros)
+    const fromTokensSentDisplay = parseFloat(fromTokensSentNormalized).toFixed(
+      tokensData.tokenInputDisplayDecimals
+    );
+    const toTokensReceivedDisplay = parseFloat(toTokensReceivedNormalized).toFixed(
+      tokensData.tokenOutputDisplayDecimals
     );
 
     const chatterpayFee = await getChatterpayTokenFee(
@@ -345,8 +363,8 @@ export const swap = async (
     await sendSwapNotification(
       channel_user_id,
       tokensData.tokenInputSymbol,
-      fromTokensSentInUnits.toString(),
-      toTokensReceivedInUnits.toString(),
+      fromTokensSentDisplay,
+      toTokensReceivedDisplay,
       tokensData.tokenOutputSymbol,
       executeSwapResult.swapTransactionHash
     );
