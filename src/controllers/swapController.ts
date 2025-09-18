@@ -109,7 +109,13 @@ export const swap = async (
     /* 1. swap: input params                                 */
     /* ***************************************************** */
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(
+        'swap',
+        '',
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
     }
 
     const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
@@ -126,7 +132,7 @@ export const swap = async (
     let validationError: string = await validateInputs(request.body, tokensData);
 
     if (validationError) {
-      return await returnErrorResponse(reply, 400, validationError);
+      return await returnErrorResponse('swap', '', reply, 400, validationError);
     }
 
     /* ***************************************************** */
@@ -271,7 +277,7 @@ export const swap = async (
       logKey
     );
     if (!executeSwapResult.success) {
-      await sendInternalErrorNotification(proxyAddress, channel_user_id, lastBotMsgDelaySeconds);
+      await sendInternalErrorNotification(channel_user_id, lastBotMsgDelaySeconds);
       await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;
     }

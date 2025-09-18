@@ -124,21 +124,41 @@ export const withdrawAllFunds = async (
 
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'Request body is required');
+      return await returnErrorResponse(
+        'withdrawAllFunds',
+        logKey,
+        reply,
+        400,
+        'Request body is required'
+      );
     }
 
     const { channel_user_id, dst_address } = request.body;
 
     if (!channel_user_id) {
-      return await returnErrorResponse(reply, 400, 'Missing "channel_user_id" in the request body');
+      return await returnErrorResponse(
+        'withdrawAllFunds',
+        logKey,
+        reply,
+        400,
+        'Missing "channel_user_id" in the request body'
+      );
     }
 
     if (!dst_address) {
-      return await returnErrorResponse(reply, 400, 'Missing "dst_address" in the request body');
+      return await returnErrorResponse(
+        'withdrawAllFunds',
+        logKey,
+        reply,
+        400,
+        'Missing "dst_address" in the request body'
+      );
     }
 
     if (!isValidPhoneNumber(channel_user_id)) {
       return await returnErrorResponse(
+        'withdrawAllFunds',
+        logKey,
         reply,
         400,
         `'${channel_user_id}' is invalid. "channel_user_id" must be a valid phone number (without spaces or symbols)`
@@ -146,7 +166,13 @@ export const withdrawAllFunds = async (
     }
 
     if (!isValidEthereumWallet(dst_address)) {
-      return await returnErrorResponse(reply, 400, 'Invalid Ethereum wallet address');
+      return await returnErrorResponse(
+        'withdrawAllFunds',
+        logKey,
+        reply,
+        400,
+        'Invalid Ethereum wallet address'
+      );
     }
 
     logKey = `[op:withdrawAllFunds:${channel_user_id}:${dst_address}]`;
@@ -164,9 +190,14 @@ export const withdrawAllFunds = async (
       return await returnSuccessResponse(reply, 'All funds withdrawn successfully');
     }
 
-    return await returnErrorResponse(reply, 400, withdrawResult.message);
+    return await returnErrorResponse('withdrawAllFunds', '', reply, 400, withdrawResult.message);
   } catch (error) {
-    Logger.error('withdrawAllFunds', logKey, error);
-    return returnErrorResponse(reply, 400, 'An error occurred while withdrawing all funds');
+    return returnErrorResponse(
+      'withdrawAllFunds',
+      logKey,
+      reply,
+      400,
+      'An error occurred while withdrawing all funds'
+    );
   }
 };

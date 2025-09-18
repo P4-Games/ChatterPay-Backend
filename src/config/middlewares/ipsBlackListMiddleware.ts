@@ -23,7 +23,13 @@ export function ipBlacklistMiddleware(
   Logger.log('ipBlacklistMiddleware', `url: ${request.url}, Detected IP: ${clientIp}`);
 
   if (blacklistedIps.includes(clientIp)) {
-    returnErrorResponse(reply, 403, `Access forbidden: your IP ${clientIp} is blacklisted`);
+    returnErrorResponse(
+      'ipBlacklistMiddleware',
+      '',
+      reply,
+      403,
+      `Access forbidden: your IP ${clientIp} is blacklisted`
+    );
     return;
   }
 

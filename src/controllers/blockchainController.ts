@@ -19,7 +19,13 @@ export const createBlockchain = async (
 ): Promise<FastifyReply> => {
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(
+        'createBlockchain',
+        '',
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
     }
 
     const newBlockchain = new Blockchain(request.body);
@@ -31,9 +37,7 @@ export const createBlockchain = async (
       newBlockchain.toJSON()
     );
   } catch (error) {
-    Logger.error('createBlockchain', 'Error creating blockchain');
-    Logger.error('createBlockchain', 'Error details: ', error);
-    return returnErrorResponse(reply, 400, 'Failed to create blockchain');
+    return returnErrorResponse('createBlockchain', '', reply, 400, 'Failed to create blockchain');
   }
 };
 
@@ -53,9 +57,7 @@ export const getAllBlockchains = async (
       blockchains
     });
   } catch (error) {
-    Logger.error('getAllBlockchains', 'Error fetching blockchains');
-    Logger.error('getAllBlockchains', 'Error details: ', error);
-    return returnErrorResponse(reply, 400, 'Failed to fetch blockchains');
+    return returnErrorResponse('getAllBlockchains', '', reply, 400, 'Failed to fetch blockchains');
   }
 };
 
@@ -73,8 +75,7 @@ export const getBlockchainById = async (
   try {
     const blockchain = await Blockchain.findById(id);
     if (!blockchain) {
-      Logger.warn('getBlockchainById', 'Blockchain not found');
-      return await returnErrorResponse(reply, 404, 'Blockchain not found');
+      return await returnErrorResponse('getBlockchainById', '', reply, 404, 'Blockchain not found');
     }
     return await returnSuccessResponse(
       reply,
@@ -82,9 +83,7 @@ export const getBlockchainById = async (
       blockchain.toJSON()
     );
   } catch (error) {
-    Logger.error('getBlockchainById', 'Error fetching blockchain');
-    Logger.error('getBlockchainById', 'Error details: ', error);
-    return returnErrorResponse(reply, 400, 'Failed to fetch blockchain');
+    return returnErrorResponse('getBlockchainById', '', reply, 400, 'Failed to fetch blockchain');
   }
 };
 
@@ -101,15 +100,20 @@ export const updateBlockchain = async (
   const { id } = request.params;
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(
+        'updateBlockchain',
+        '',
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
     }
 
     const updatedBlockchain = await Blockchain.findByIdAndUpdate(id, request.body, {
       new: true
     });
     if (!updatedBlockchain) {
-      Logger.warn('updateBlockchain', 'Blockchain not found');
-      return await returnErrorResponse(reply, 404, 'Blockchain not found');
+      return await returnErrorResponse('updateBlockchain', '', reply, 404, 'Blockchain not found');
     }
     return await returnSuccessResponse(
       reply,
@@ -117,8 +121,6 @@ export const updateBlockchain = async (
       updatedBlockchain.toJSON()
     );
   } catch (error) {
-    Logger.error('updateBlockchain', 'Error updating blockchain');
-    Logger.error('updateBlockchain', 'Error details: ', error);
-    return returnErrorResponse(reply, 400, 'Failed to update blockchain');
+    return returnErrorResponse('updateBlockchain', '', reply, 400, 'Failed to update blockchain');
   }
 };

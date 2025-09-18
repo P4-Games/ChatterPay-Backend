@@ -22,12 +22,20 @@ export const createToken = async (
 ): Promise<FastifyReply> => {
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You must send a body with this request.');
+      return await returnErrorResponse(
+        'createToken',
+        '',
+        reply,
+        400,
+        'You must send a body with this request.'
+      );
     }
 
     const newToken = new Token(request.body);
     if (!newToken) {
       return await returnErrorResponse(
+        'createToken',
+        '',
         reply,
         400,
         'Missing parameters in body. You must send: newToken.'
@@ -37,8 +45,14 @@ export const createToken = async (
     await newToken.save();
     return await returnSuccessResponse(reply, 'Token created successfully', newToken.toJSON());
   } catch (error) {
-    Logger.error('createToken', error);
-    return returnErrorResponse(reply, 400, 'Error creating token', (error as Error).message);
+    return returnErrorResponse(
+      'createToken',
+      '',
+      reply,
+      400,
+      'Error creating token',
+      (error as Error).message
+    );
   }
 };
 
@@ -57,8 +71,7 @@ export const getAllTokens = async (
     const { tokens } = request.server;
     return await returnSuccessResponse(reply, 'Tokens fetched successfully', { tokens });
   } catch (error) {
-    Logger.error('getAllTokens', error);
-    return returnErrorResponse(reply, 400, 'Failed to fetch tokens');
+    return returnErrorResponse('getAllTokens', '', reply, 400, 'Failed to fetch tokens');
   }
 };
 
@@ -79,8 +92,13 @@ export const getAllTokenConvertionRates = async (
       rates
     });
   } catch (error) {
-    Logger.error('getAllTokenConvertionRates', error);
-    return returnErrorResponse(reply, 400, 'Failed to fetch tokens conversion rates');
+    return returnErrorResponse(
+      'getAllTokenConvertionRates',
+      '',
+      reply,
+      400,
+      'Failed to fetch tokens conversion rates'
+    );
   }
 };
 
@@ -104,13 +122,12 @@ export const getTokenById = async (
     const token = tokens.find((tokenItem: IToken) => tokenItem.id.toString() === id);
 
     if (!token) {
-      return await returnErrorResponse(reply, 404, 'Token not found');
+      return await returnErrorResponse('getTokenById', '', reply, 404, 'Token not found');
     }
 
     return await returnSuccessResponse(reply, 'Token fetched successfully', token.toJSON());
   } catch (error) {
-    Logger.error('getTokenById', error);
-    return returnErrorResponse(reply, 400, 'Failed to fetch token');
+    return returnErrorResponse('getTokenById', '', reply, 400, 'Failed to fetch token');
   }
 };
 
@@ -128,19 +145,24 @@ export const updateToken = async (
 
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You must send a body with this request.');
+      return await returnErrorResponse(
+        'updateToken',
+        '',
+        reply,
+        400,
+        'You must send a body with this request.'
+      );
     }
 
     const updatedToken = await Token.findByIdAndUpdate(id, request.body, { new: true });
 
     if (!updatedToken) {
-      return await returnErrorResponse(reply, 404, 'Token not found');
+      return await returnErrorResponse('updateToken', '', reply, 404, 'Token not found');
     }
 
     return await returnSuccessResponse(reply, 'Token updated successfully', updatedToken.toJSON());
   } catch (error) {
-    Logger.error('updateToken', error);
-    return returnErrorResponse(reply, 400, 'Failed to update token');
+    return returnErrorResponse('updateToken', '', reply, 400, 'Failed to update token');
   }
 };
 
@@ -160,13 +182,12 @@ export const deleteToken = async (
     const deletedToken = await Token.findByIdAndDelete(id);
 
     if (!deletedToken) {
-      return await returnErrorResponse(reply, 404, 'Token not found');
+      return await returnErrorResponse('deleteToken', '', reply, 404, 'Token not found');
     }
 
     return await returnSuccessResponse(reply, 'Token deleted successfully');
   } catch (error) {
-    Logger.error('deleteToken', error);
-    return returnErrorResponse(reply, 400, 'Failed to delete token');
+    return returnErrorResponse('deleteToken', '', reply, 400, 'Failed to delete token');
   }
 };
 
@@ -187,12 +208,20 @@ export const issueTokensHandler = async (
 
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You must send a body with this request.');
+      return await returnErrorResponse(
+        'issueTokensHandler',
+        '',
+        reply,
+        400,
+        'You must send a body with this request.'
+      );
     }
 
     const fastify = request.server;
     if (fastify.networkConfig.environment.toUpperCase() === 'PRODUCTION' || !IS_DEVELOPMENT) {
       return await returnErrorResponse(
+        'issueTokensHandler',
+        '',
         reply,
         401,
         'This endpoint is disabled on the production blockchains.'
@@ -202,6 +231,8 @@ export const issueTokensHandler = async (
     const { identifier } = request.body as RequestBody;
     if (!identifier) {
       return await returnErrorResponse(
+        'issueTokensHandler',
+        '',
         reply,
         400,
         'Missing parameters in body. You must send: an identifier (ddress or phone number).'
@@ -244,10 +275,16 @@ export const issueTokensHandler = async (
     );
     return await returnSuccessResponse(reply, 'Tokens minted successfully', { results });
   } catch (error: unknown) {
-    Logger.error('issueTokensHandler', error);
     if (error instanceof Error) {
-      return returnErrorResponse(reply, 400, 'Bad Request', error.message);
+      return returnErrorResponse(
+        'issueTokensHandler',
+        '',
+        reply,
+        400,
+        'Bad Request',
+        error.message
+      );
     }
-    return returnErrorResponse(reply, 400, 'Bad Request');
+    return returnErrorResponse('issueTokensHandler', '', reply, 400, 'Bad Request');
   }
 };
