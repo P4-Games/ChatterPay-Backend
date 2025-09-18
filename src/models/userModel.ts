@@ -41,6 +41,7 @@ export interface IUser extends Document {
     mint_nft_copy: Record<string, number>;
   };
   manteca_user_id?: string;
+  games_admin?: boolean;
 }
 
 const walletSchema = new Schema<IUserWallet>(
@@ -92,7 +93,8 @@ const userSchema = new Schema<IUser>({
     mint_nft: { type: Map, of: Number, default: {} },
     mint_nft_copy: { type: Map, of: Number, default: {} }
   },
-  manteca_user_id: { type: String, required: false, default: '' }
+  manteca_user_id: { type: String, required: false, default: '' },
+  games_admin: { type: Boolean, required: false, default: false }
 });
 
 export const UserModel = model<IUser>('User', userSchema, 'users');
