@@ -59,9 +59,11 @@ export interface swapTokensData {
   tokenInputAddress: string;
   tokenInputSymbol: string;
   tokenInputDisplaySymbol: string;
+  tokenInputDisplayDecimals: number;
   tokenOutputAddress: string;
   tokenOutputSymbol: string;
   tokenOutputDisplaySymbol: string;
+  tokenOutputDisplayDecimals: number;
 }
 
 export interface ExecuteSwapResult {
