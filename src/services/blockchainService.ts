@@ -95,9 +95,11 @@ export function getSwapTokensData(
     tokenInputAddress: foundTokenInput?.address ?? '',
     tokenInputSymbol: lookUpTokenSymbolInput,
     tokenInputDisplaySymbol: foundTokenInput?.display_symbol ?? lookUpTokenSymbolInput,
+    tokenInputDisplayDecimals: foundTokenInput?.display_decimals ?? 2,
     tokenOutputAddress: foundTokenOutput?.address ?? '',
     tokenOutputSymbol: lookUpTokenSymbolOutput,
-    tokenOutputDisplaySymbol: foundTokenOutput?.display_symbol ?? lookUpTokenSymbolOutput
+    tokenOutputDisplaySymbol: foundTokenOutput?.display_symbol ?? lookUpTokenSymbolOutput,
+    tokenOutputDisplayDecimals: foundTokenOutput?.display_decimals ?? 2
   };
 }
 
