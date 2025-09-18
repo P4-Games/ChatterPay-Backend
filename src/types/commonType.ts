@@ -145,8 +145,14 @@ export enum CacheNames {
   NOTIFICATION = 'notificationTemplateCache',
   TOR = 'torCache',
   COINGECKO = 'coingeckoCache',
-  ERC20 = 'erc20'
+  ERC20 = 'erc20',
+  CHATTERPOINTS_WORDS = 'chatterpoints_words'
 }
 
-export const notificationLanguages = ['en', 'es', 'pt'] as const;
+const systemLanguages = ['en', 'es', 'pt'] as const;
+
+export const notificationLanguages = systemLanguages;
 export type NotificationLanguage = (typeof notificationLanguages)[number];
+
+export const gamesLanguages = systemLanguages;
+export type gamesLanguage = (typeof gamesLanguages)[number];
