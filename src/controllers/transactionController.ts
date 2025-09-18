@@ -726,14 +726,19 @@ export const makeTransaction = async (
       await delaySeconds(lastBotMsgDelaySeconds);
     }
 
-    const amountAfterFeeDecimals = tokenData?.display_decimals;
-    const amountAfterFee = (parseFloat(amount) - chatterpayFee).toFixed(amountAfterFeeDecimals);
+    const displayDecimals = tokenData!.display_decimals;
+    // Normalizar valores a number antes de formatear
+    const parsedAmount = Number(amount);
+    const parsedAmountAfterFee = parsedAmount - chatterpayFee;
+
+    const formattedAmount = parsedAmount.toFixed(displayDecimals);
+    const formattedAmountAfterFee = parsedAmountAfterFee.toFixed(displayDecimals);
 
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
       toUser?.phone_number ?? toAddress,
       toUser?.name ?? '',
-      amount,
+      formattedAmount,
       tokenData!.symbol,
       santizedUserNotes,
       executeTransactionResult.transactionHash,
@@ -746,7 +751,7 @@ export const makeTransaction = async (
         fromUser.phone_number,
         fromUser.name,
         toUser.phone_number,
-        amountAfterFee.toString(),
+        formattedAmountAfterFee,
         tokenData!.symbol,
         santizedUserNotes,
         traceHeader
