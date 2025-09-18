@@ -51,7 +51,8 @@ describe('Blockchain Model', () => {
         chatterPayAddress: '0xChatterPayAddress',
         chatterNFTAddress: '0xChatterNFTAddress',
         paymasterAddress: '0xPaymasterAddress',
-        routerAddress: '0xRouterAddress'
+        routerAddress: '0xRouterAddress',
+        quoterAddress: '0xQuoterAddress'
       },
       gas: {
         useFixedValues: true,
