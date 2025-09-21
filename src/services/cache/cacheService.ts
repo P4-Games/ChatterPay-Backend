@@ -22,7 +22,8 @@ import {
   CACHE_CHATTERPOINTS_WORDS_CHECK_PERIOD
 } from '../../config/constants';
 
-/** TTL and checkperiod (seconds) */
+const MAX_TTL_SECONDS = Math.floor(2_147_483_647 / 1000);
+
 const TTL_CONFIG = {
   [CacheNames.OPENSEA]: { stdTTL: CACHE_OPENSEA_TTL, checkperiod: CACHE_OPENSEA_CHECK_PERIOD },
   [CacheNames.PRICE]: { stdTTL: CACHE_PRICE_TTL, checkperiod: CACHE_PRICE_CHECK_PERIOD },
@@ -58,6 +59,8 @@ const caches: Record<CacheNames, NodeCache> = {
 const inflightGlobal = new Map<string, Promise<unknown>>();
 
 const inflightKey = (cacheName: CacheNames, key: string) => `${cacheName}:${key}`;
+
+const safeTTL = (ttl?: number): number | undefined => ttl !== undefined ? Math.min(ttl, MAX_TTL_SECONDS) : undefined;
 
 // --- Overloads ---
 function cacheGet<T>(cacheName: CacheNames, key: string): T | undefined;
@@ -101,7 +104,7 @@ function cacheGet(
     try {
       const value = await loader();
       if (ttl !== undefined) {
-        caches[cacheName].set(key, value, ttl);
+        caches[cacheName].set(key, value, safeTTL(ttl)!);
       } else {
         caches[cacheName].set(key, value);
       }
