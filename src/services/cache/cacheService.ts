@@ -60,7 +60,8 @@ const inflightGlobal = new Map<string, Promise<unknown>>();
 
 const inflightKey = (cacheName: CacheNames, key: string) => `${cacheName}:${key}`;
 
-const safeTTL = (ttl?: number): number | undefined => ttl !== undefined ? Math.min(ttl, MAX_TTL_SECONDS) : undefined;
+const safeTTL = (ttl?: number): number | undefined =>
+  ttl !== undefined ? Math.min(ttl, MAX_TTL_SECONDS) : undefined;
 
 // --- Overloads ---
 function cacheGet<T>(cacheName: CacheNames, key: string): T | undefined;
@@ -103,8 +104,9 @@ function cacheGet(
   const p = (async () => {
     try {
       const value = await loader();
-      if (ttl !== undefined) {
-        caches[cacheName].set(key, value, safeTTL(ttl)!);
+      const safe = safeTTL(ttl);
+      if (safe !== undefined) {
+        caches[cacheName].set(key, value, safe);
       } else {
         caches[cacheName].set(key, value);
       }
@@ -123,7 +125,8 @@ export const cacheService = {
   get: cacheGet,
 
   set: <T>(cacheName: CacheNames, key: string, value: T, ttl?: number): void => {
-    if (ttl !== undefined) caches[cacheName].set<T>(key, value, ttl);
+    const safe = safeTTL(ttl);
+    if (safe !== undefined) caches[cacheName].set<T>(key, value, safe);
     else caches[cacheName].set<T>(key, value);
   },
 
@@ -176,8 +179,9 @@ export const cacheService = {
     const p = (async () => {
       try {
         const value = await loader();
-        if (ttl !== undefined) {
-          caches[cacheName].set<T>(key, value, ttl);
+        const safe = safeTTL(ttl);
+        if (safe !== undefined) {
+          caches[cacheName].set<T>(key, value, safe);
         } else {
           caches[cacheName].set<T>(key, value);
         }
