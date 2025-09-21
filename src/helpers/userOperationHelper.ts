@@ -69,17 +69,18 @@ function hashUserOp(userOp: PackedUserOperation): string {
 }
 
 /**
- * Computes the userOpHash for signing, replicating the contract's getUserOpHash function.
+ * Computes the userOpHash by replicating the contract's getUserOpHash function.
  *
- * This function combines the user operation hash, the EntryPoint contract address, and the chain ID
- * into a final hash that can be used for signing by the user. This mimics the functionality of the
- * `getUserOpHash` function in the contract.
+ * This function derives a deterministic hash by combining the user operation data,
+ * the EntryPoint contract address, and the chain ID. The resulting hash is consistent
+ * with what the contract expects and can be used for downstream operations.
  *
- * @param userOp - The UserOperation object containing the fields to be used in the final hash.
- * @param entryPointAddress - The address of the EntryPoint contract used in the user operation.
- * @param chainId - The chain ID of the network where the operation will take place.
- * @returns The userOpHash as a hex string, which is used for signing.
+ * @param userOp - The UserOperation object containing the fields to be encoded.
+ * @param entryPointAddress - The address of the EntryPoint contract included in the operation.
+ * @param chainId - The chain ID of the network where the operation will be executed.
+ * @returns The userOpHash as a hex string, aligned with the contract logic.
  */
+
 export function getUserOpHash(
   userOp: PackedUserOperation,
   entryPointAddress: string,
