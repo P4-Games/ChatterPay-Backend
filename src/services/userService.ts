@@ -66,7 +66,6 @@ export const createUserWithWallet = async (
       {
         wallet_proxy: predictedWallet.proxyAddress,
         wallet_eoa: predictedWallet.EOAAddress,
-        sk_hashed: predictedWallet.privateKey,
         created_with_chatterpay_proxy_address: chatterpayProxyAddress,
         created_with_factory_address: factoryAddress,
         chain_id: DEFAULT_CHAIN_ID,
@@ -108,10 +107,7 @@ export const createUserWithWallet = async (
 
   if (PUSH_ENABLED) {
     Logger.log('createUserWithWallet', 'Push protocol', phoneNumber, predictedWallet.EOAAddress);
-    await pushService.subscribeToPushChannel(
-      predictedWallet.privateKeyNotHashed,
-      predictedWallet.EOAAddress
-    );
+    await pushService.subscribeToPushChannel(predictedWallet.data, predictedWallet.EOAAddress);
   } else {
     Logger.info(
       'createUserWithWallet',
@@ -160,7 +156,6 @@ export const addWalletToUser = async (
   const newWallet = {
     wallet_proxy: predictedWallet.proxyAddress,
     wallet_eoa: predictedWallet.EOAAddress,
-    sk_hashed: predictedWallet.privateKey,
     created_with_chatterpay_proxy_address: chatterpayProxyAddress,
     created_with_factory_address: factoryAddress,
     chain_id: chainId,
