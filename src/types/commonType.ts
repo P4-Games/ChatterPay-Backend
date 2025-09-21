@@ -80,8 +80,8 @@ export interface ExecueTransactionResult {
 
 export interface SetupContractReturn {
   provider: ethers.providers.JsonRpcProvider;
-  signer: ethers.Wallet;
-  backendSigner: ethers.Wallet;
+  userPrincipal: ethers.Wallet;
+  backPrincipal: ethers.Wallet;
   chatterPay: ethers.Contract;
   proxy: ComputedAddress;
   accountExists: boolean;
@@ -120,17 +120,13 @@ export interface MintResult {
   txHash: string;
 }
 
-export interface PhoneNumberToAddress {
-  hashedPrivateKey: string;
-  privateKey: string;
-  publicKey: string;
+export interface UserPrincipal {
+  data: string;
+  EOAAddress: string;
 }
 
-export interface ComputedAddress {
+export interface ComputedAddress extends UserPrincipal {
   proxyAddress: string;
-  EOAAddress: string;
-  privateKey: string;
-  privateKeyNotHashed: string;
 }
 
 export const rpcProviders = {

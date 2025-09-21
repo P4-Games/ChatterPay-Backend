@@ -3,6 +3,7 @@ import mongoose, { ObjectId } from 'mongoose';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
+import { secService } from '../services/secService';
 import { delaySeconds } from '../helpers/timeHelper';
 import { icpService } from '../services/icp/icpService';
 import { gasService } from '../services/web3/gasService';
@@ -38,7 +39,6 @@ import {
   hasPhoneAnyOperationInProgress
 } from '../services/userService';
 import {
-  SIGNING_KEY,
   defaultNftImage,
   DEFAULT_CHAIN_ID,
   WHATSAPP_API_URL,
@@ -101,12 +101,12 @@ const mintNftOriginal = async (
   try {
     const networkConfig = await mongoBlockchainService.getNetworkConfig(DEFAULT_CHAIN_ID);
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    const bs = secService.get_bs(provider);
     const contractABI: ethers.ContractInterface = await getChatterPayNFTABI();
     const nftContract = new ethers.Contract(
       networkConfig.contracts.chatterNFTAddress,
       contractABI,
-      backendSigner
+      bs
     );
 
     Logger.log(
@@ -114,7 +114,7 @@ const mintNftOriginal = async (
       recipientAddress,
       networkConfig.contracts.chatterNFTAddress,
       networkConfig.rpc,
-      backendSigner.address
+      bs.address
     );
 
     const gasLimit = await gasService.getDynamicGas(nftContract, 'mintOriginal', [
@@ -157,12 +157,12 @@ const mintNftCopy = async (
   try {
     const networkConfig = await mongoBlockchainService.getNetworkConfig(DEFAULT_CHAIN_ID);
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    const bs = secService.get_bs(provider);
     const contractABI: ethers.ContractInterface = await getChatterPayNFTABI();
     const nftContract = new ethers.Contract(
       networkConfig.contracts.chatterNFTAddress,
       contractABI,
-      backendSigner
+      bs
     );
 
     Logger.log(
@@ -170,7 +170,7 @@ const mintNftCopy = async (
       recipientAddress,
       networkConfig.contracts.chatterNFTAddress,
       networkConfig.rpc,
-      backendSigner.address
+      bs.address
     );
 
     const gasLimit = await gasService.getDynamicGas(nftContract, 'mintCopy', [

@@ -1,24 +1,23 @@
 import { BigNumber } from 'ethers';
 
 /**
- * Represents a packed user operation for Ethereum transactions.
+ * Represents a packed user operation for Ethereum execution.
  *
- * sender: The account making the operation.
- * nonce: Anti-replay parameter (see �Semi-abstracted Nonce Support�).
- * initCode: The initCode of the account, needed only if the account is not
- * yet on-chain and needs to be created.
- * callData: The data to pass to the sender during the main execution call.
- * callGasLimit: The amount of gas allocated for the main execution call.
- * verificationGasLimit: The amount of gas allocated for the verification step.
- * preVerificationGas: The gas paid to compensate the bundler for
- * pre-verification execution and calldata.
- * maxFeePerGas: Maximum fee per gas (similar to EIP-1559 max_fee_per_gas).
- * maxPriorityFeePerGas: Maximum priority fee per gas (similar to
+ * sender: The account initiating the operation.
+ * nonce: Anti-replay parameter (see Semi-abstracted Nonce Support).
+ * initCode: Initialization code for the account, required only if the account
+ * is not yet deployed on-chain.
+ * callData: Encoded data passed to the account during execution.
+ * callGasLimit: Gas allocated for the main execution call.
+ * verificationGasLimit: Gas allocated for the verification process.
+ * preVerificationGas: Gas paid to compensate the bundler for
+ * pre-verification steps and calldata.
+ * maxFeePerGas: Maximum gas fee (aligned with EIP-1559 max_fee_per_gas).
+ * maxPriorityFeePerGas: Maximum priority gas fee (aligned with
  * EIP-1559 max_priority_fee_per_gas).
- * paymasterAndData: Address of paymaster sponsoring the transaction, followed
- * by extra data sent to the paymaster (empty for self-sponsored transactions).
- * signature: Data passed into the account along with the nonce during the
- * verification step.
+ * paymasterAndData: Paymaster address sponsoring the operation, followed by
+ * optional additional data (empty for self-sponsored operations).
+ * authData: Extra authorization data included with the operation.
  */
 export interface PackedUserOperation {
   sender: string;

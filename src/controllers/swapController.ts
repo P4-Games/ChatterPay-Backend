@@ -3,6 +3,7 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { IUser } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
+import { secService } from '../services/secService';
 import { delaySeconds } from '../helpers/timeHelper';
 import { executeSwap } from '../services/swapService';
 import { NotificationEnum } from '../models/templateModel';
@@ -13,16 +14,15 @@ import { mongoUserService } from '../services/mongo/mongoUserService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import {
+  COMMON_REPLY_WALLET_NOT_CREATED,
+  COMMON_REPLY_OPERATION_IN_PROGRESS
+} from '../config/constants';
+import {
   getUser,
   openOperation,
   closeOperation,
   hasPhoneAnyOperationInProgress
 } from '../services/userService';
-import {
-  SIGNING_KEY,
-  COMMON_REPLY_WALLET_NOT_CREATED,
-  COMMON_REPLY_OPERATION_IN_PROGRESS
-} from '../config/constants';
 import {
   swapTokensData,
   TransactionData,
@@ -226,14 +226,14 @@ export const swap = async (
     /* 7. swap: check user balance                           */
     /* ***************************************************** */
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    const bs = secService.get_bs(provider);
     const proxyAddress = fromUser.wallets[0].wallet_proxy;
 
     // Get the contracts and decimals for the tokens
-    const fromTokenContract = await setupERC20(tokensData.tokenInputAddress, backendSigner);
+    const fromTokenContract = await setupERC20(tokensData.tokenInputAddress, bs);
     const fromTokenDecimals = await fromTokenContract.decimals();
 
-    const toTokenContract = await setupERC20(tokensData.tokenOutputAddress, backendSigner);
+    const toTokenContract = await setupERC20(tokensData.tokenOutputAddress, bs);
     const toTokenDecimals = await toTokenContract.decimals();
 
     // Get the current balances before the transaction
