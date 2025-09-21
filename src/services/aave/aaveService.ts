@@ -585,7 +585,7 @@ export const aaveService = {
         `Attempting to supply ${amount} USDC to Aave v3 on behalf of ${recipient}`
       );
 
-      const signer = setupContractsResult.signer as ethers.Signer;
+      const signer = setupContractsResult.userPrincipal as ethers.Signer;
 
       // Supply USDC
       const result = await supplyUSDC(signer, amount, recipient, logKey);
@@ -618,7 +618,7 @@ export const aaveService = {
         `Fetching info for token ${USDC_ADDRESS} for wallet ${walletAddress}`
       );
 
-      const signer = setupContractsResult.signer as ethers.Signer;
+      const signer = setupContractsResult.userPrincipal as ethers.Signer;
 
       const result = await getTokenInfo(walletAddress, USDC_ADDRESS, AUSDC_ADDRESS, signer);
 
@@ -663,7 +663,7 @@ export const aaveService = {
         USDC_ADDRESS
       });
 
-      const signer = setupContractsResult.signer as ethers.Signer;
+      const signer = setupContractsResult.userPrincipal as ethers.Signer;
 
       const result = await withdrawAmountInternal(USDC_ADDRESS, amount, signer, logKey);
 
@@ -704,7 +704,7 @@ export const aaveService = {
     try {
       Logger.info('withdrawMax', logKey, 'Attempting to withdraw maximum from Aave', { asset });
 
-      const signer = setupContractsResult.signer as ethers.Signer;
+      const signer = setupContractsResult.userPrincipal as ethers.Signer;
 
       const result = await withdrawMaxInternal(asset, signer, logKey);
 

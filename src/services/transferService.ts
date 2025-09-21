@@ -4,6 +4,7 @@ import { ethers } from 'ethers';
 import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenBalances } from './balanceService';
+import { delaySeconds } from '../helpers/timeHelper';
 import { IBlockchain } from '../models/blockchainModel';
 import { IUser, IUserWallet } from '../models/userModel';
 import { setupERC20 } from './web3/contractSetupService';
@@ -54,7 +55,7 @@ export async function sendTransferUserOperation(
 ): Promise<ExecueTransactionResult> {
   try {
     Logger.log('sendTransferUserOperation', 'Getting ERC20 Contract');
-    const erc20 = await setupERC20(tokenAddress, setupContractsResult.signer);
+    const erc20 = await setupERC20(tokenAddress, setupContractsResult.userPrincipal);
     Logger.log('sendTransferUserOperation', 'Getted ERC20 Contract OK');
 
     Logger.log('sendTransferUserOperation', 'Validating sender contract init-code');
@@ -96,8 +97,7 @@ export async function sendTransferUserOperation(
     const userOpResult = await executeUserOperationWithRetry(
       networkConfig,
       setupContractsResult.provider,
-      setupContractsResult.signer,
-      setupContractsResult.backendSigner,
+      setupContractsResult.userPrincipal,
       entryPointContract,
       callData,
       setupContractsResult.proxy.proxyAddress,

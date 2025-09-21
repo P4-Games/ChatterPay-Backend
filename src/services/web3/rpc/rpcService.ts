@@ -1,20 +1,17 @@
-import * as crypto from 'crypto';
 import { ethers, BigNumber } from 'ethers';
 
 import { gasService } from '../gasService';
+import { secService } from '../../secService';
 import { Logger } from '../../../helpers/loggerHelper';
-import { SIGNING_KEY } from '../../../config/constants';
 import { rpcQueueAlchemy, rpcQueuePimlico } from './rpcQueue';
 import { IBlockchain } from '../../../models/blockchainModel';
 import { getChatterPayWalletFactoryABI } from '../abiService';
-import { generateWalletSeed } from '../../../helpers/SecurityHelper';
-import { getPhoneNumberFormatted } from '../../../helpers/formatHelper';
 import { mongoBlockchainService } from '../../mongo/mongoBlockchainService';
 import {
   RpcProvider,
   rpcProviders,
-  ComputedAddress,
-  PhoneNumberToAddress
+  UserPrincipal,
+  ComputedAddress
 } from '../../../types/commonType';
 import { ChatterPayWalletFactory__factory } from '../../../types/ethers-contracts/factories/ChatterPayWalletFactory__factory';
 
@@ -32,35 +29,6 @@ type RpcCallWrapper<T> = {
   name?: string;
   args?: Serializable[];
 };
-
-/**
- * Generates a deterministic Ethereum address based on a phone number and a chain ID.
- *
- * This function derives an Ethereum address by combining the phone number and chain ID
- * with the environment-defined seed private key. The result includes the hashed private key,
- * the private key, and the public key (Ethereum address).
- *
- * @param {string} phoneNumber - The phone number to generate the address from.
- * @param {string} chainId - The chain ID to include in the address generation.
- * @returns {PhoneNumberToAddress} An object containing:
- *   - `hashedPrivateKey`: A SHA-256 hash of the generated private key.
- *   - `privateKey`: The deterministic private key.
- *   - `publicKey`: The Ethereum address corresponding to the private key.
- *
- * @throws {Error} If the seed private key is not found in environment variables.
- */
-function phoneNumberToAddress(phoneNumber: string, chainId: string): PhoneNumberToAddress {
-  const privateKey = generateWalletSeed(getPhoneNumberFormatted(phoneNumber), chainId);
-  const wallet = new ethers.Wallet(privateKey);
-  const publicKey = wallet.address;
-  const hashedPrivateKey = crypto.createHash('sha256').update(privateKey).digest('hex');
-
-  return {
-    hashedPrivateKey,
-    privateKey,
-    publicKey
-  };
-}
 
 /**
  * Executes an asynchronous RPC function using a rate-limited queue specific to the selected provider.
@@ -116,12 +84,12 @@ export async function wrapRpc<T>(
 /**
  * Computes the Wallet for a given phone number.
  *
- * @param {string} phoneNumber - The phone number to compute the proxy address for.
+ * @param {string} pn - The phone number to compute the proxy address for.
  * @returns {Promise<ComputedAddress>} A promise that resolves to an object containing the proxy address,
  * EOA address, and private key.
  * @throws {Error} If there's an error in the computation process.
  */
-export async function computeWallet(phoneNumber: string): Promise<ComputedAddress> {
+export async function computeWallet(pn: string): Promise<ComputedAddress> {
   try {
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc, {
@@ -129,20 +97,17 @@ export async function computeWallet(phoneNumber: string): Promise<ComputedAddres
       chainId: networkConfig.chainId
     });
 
-    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    const bs = secService.get_bs(provider);
     const chatterpayWalletFactoryABI = await getChatterPayWalletFactoryABI();
     const factory = ChatterPayWalletFactory__factory.connect(
       networkConfig.contracts.factoryAddress,
       chatterpayWalletFactoryABI,
-      backendSigner
+      bs
     );
 
-    const ownerAddress: PhoneNumberToAddress = phoneNumberToAddress(
-      phoneNumber,
-      networkConfig.chainId.toString()
-    );
+    const userPrincipal: UserPrincipal = secService.get_us(pn, networkConfig.chainId.toString());
 
-    const proxyAddress = await factory.computeProxyAddress(ownerAddress.publicKey, {
+    const proxyAddress = await factory.computeProxyAddress(userPrincipal.EOAAddress, {
       gasLimit: 1000000
     });
     Logger.log('computeWallet', `Computed proxy address: ${proxyAddress}`);
@@ -154,12 +119,12 @@ export async function computeWallet(phoneNumber: string): Promise<ComputedAddres
           fn: async () => {
             Logger.log(
               'computeWallet',
-              `Creating new wallet for EOA: ${ownerAddress.publicKey}, will result in: ${proxyAddress}.`
+              `Creating new wallet for EOA: ${userPrincipal.EOAAddress}, will result in: ${proxyAddress}.`
             );
             const gasLimit = await gasService.getDynamicGas(
               factory,
               'createProxy',
-              [ownerAddress.publicKey],
+              [userPrincipal.EOAAddress],
               20,
               BigNumber.from('700000')
             );
@@ -176,7 +141,7 @@ export async function computeWallet(phoneNumber: string): Promise<ComputedAddres
               gasPrice = ethers.utils.parseUnits('5', 'gwei');
             }
 
-            const tx = await factory.createProxy(ownerAddress.publicKey, {
+            const tx = await factory.createProxy(userPrincipal.EOAAddress, {
               gasLimit,
               gasPrice
             });
@@ -184,7 +149,7 @@ export async function computeWallet(phoneNumber: string): Promise<ComputedAddres
             return tx.wait().then(() => true);
           },
           name: 'createProxy',
-          args: [ownerAddress.publicKey]
+          args: [userPrincipal.EOAAddress]
         },
         rpcProviders.ALCHEMY
       );
@@ -194,15 +159,14 @@ export async function computeWallet(phoneNumber: string): Promise<ComputedAddres
       'computeWallet',
       JSON.stringify({
         proxyAddress,
-        EOAAddress: ownerAddress.publicKey
+        EOAAddress: userPrincipal.EOAAddress
       })
     );
 
     return {
       proxyAddress,
-      EOAAddress: ownerAddress.publicKey,
-      privateKey: ownerAddress.hashedPrivateKey,
-      privateKeyNotHashed: ownerAddress.privateKey
+      EOAAddress: userPrincipal.EOAAddress,
+      data: userPrincipal.data
     };
   } catch (error) {
     Logger.error('computeWallet', error);

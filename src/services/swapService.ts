@@ -618,7 +618,7 @@ async function handleTokenApproval(
   chatterPayContract: ethers.Contract,
   logKey: string
 ): Promise<string> {
-  const { provider, signer, backendSigner } = setupContractsResult;
+  const { provider, userPrincipal: signer, backPrincipal: backendSigner } = setupContractsResult;
   const { erc20ABI } = await fetchRequiredABIs();
   const { routerAddress } = networkConfig.contracts;
 
@@ -769,8 +769,7 @@ async function checkAndApproveToken(
       const approveTransactionResult: ExecueTransactionResult = await executeUserOperationWithRetry(
         networkConfig,
         setupContractsResult.provider,
-        setupContractsResult.signer,
-        setupContractsResult.backendSigner,
+        setupContractsResult.userPrincipal,
         entryPointContract,
         approveCallData,
         setupContractsResult.proxy.proxyAddress,
@@ -1404,7 +1403,7 @@ export async function validateSwap(
 
     // 1) ABIs & contratos mínimos
     const { chatterpayABI, erc20ABI } = await fetchRequiredABIs();
-    const { provider, signer } = setupContractsResult; // provider/signer disponibles
+    const { provider, userPrincipal: signer } = setupContractsResult; // provider/signer disponibles
     const resultBase: ValidateSwapResult = {
       result: false,
       abis: { chatterpayABI, erc20ABI },
@@ -1695,8 +1694,7 @@ export async function executeSwapStandard(
     const swapTransactionResult = await executeUserOperationWithRetry(
       networkConfig,
       setupContractsResult.provider,
-      setupContractsResult.signer,
-      setupContractsResult.backendSigner,
+      setupContractsResult.userPrincipal,
       entryPointContract,
       swapCallData,
       setupContractsResult.proxy.proxyAddress,
@@ -1803,7 +1801,7 @@ export async function executeSwapSimple(
 
     // 1) ABIs & contracts
     const { chatterpayABI } = validationResult.abis;
-    const { signer, backendSigner } = setupContractsResult;
+    const { userPrincipal: signer, backPrincipal: backendSigner } = setupContractsResult;
     const { provider } = setupContractsResult;
     const chatterPayContract = new ethers.Contract(recipient, chatterpayABI, signer);
 

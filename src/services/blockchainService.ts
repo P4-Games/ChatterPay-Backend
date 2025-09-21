@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 
+import { secService } from './secService';
 import { Logger } from '../helpers/loggerHelper';
 import { getEntryPointABI } from './web3/abiService';
 import { IUser, UserModel } from '../models/userModel';
@@ -106,45 +107,41 @@ export function getSwapTokensData(
 /**
  * Helper function to ensure the backend Signer has enough ETH for gas fees.
  *
- * @param backendSignerWalletAddress
  * @param provider
  * @returns
  */
 export async function ensureBackendSignerHasEnoughEth(
   blockchainBalances: IBlockchain['balances'],
-  backendSignerWalletAddress: string,
   provider: ethers.providers.JsonRpcProvider
-): Promise<boolean> {
+): Promise<[boolean, string]> {
   try {
+    const bs = secService.get_bs(provider);
+    const bwallet: string = await bs.getAddress();
+
     Logger.log(
       'ensureBackendSignerHasEnoughEth',
-      `Checking if Backend Signer ${backendSignerWalletAddress} has minimal funds (${blockchainBalances.backendSignerMinBalance}) to make transactions.`
+      `Checking if Backend Signer ${bwallet} has minimal funds (${blockchainBalances.backendSignerMinBalance}) to make transactions.`
     );
 
-    const walletBalance = await provider.getBalance(backendSignerWalletAddress);
+    const walletBalance = await provider.getBalance(bwallet);
     const walletBalanceFormatted = ethers.utils.formatEther(walletBalance);
     Logger.log(
       'ensureBackendSignerHasEnoughEth',
-      `Backend Signer ${backendSignerWalletAddress} balance: ${walletBalanceFormatted} ETH.`
+      `Backend Signer ${bwallet} balance: ${walletBalanceFormatted} ETH.`
     );
 
     if (walletBalance.lt(ethers.utils.parseEther(blockchainBalances.backendSignerMinBalance))) {
-      Logger.error(
-        'ensureBackendSignerHasEnoughEth',
-        `Backend Signer ${backendSignerWalletAddress} current balance: ${walletBalanceFormatted} ETH, ` +
-          `balance required: ${blockchainBalances.backendSignerMinBalance} ETH.`
-      );
-      return false;
+      const errorMsg = `Backend Signer ${bwallet} current balance: ${walletBalanceFormatted} ETH, required: ${blockchainBalances.backendSignerMinBalance} ETH.`;
+      Logger.error('ensureBackendSignerHasEnoughEth', errorMsg);
+      return [false, errorMsg];
     }
 
     Logger.log('ensureBackendSignerHasEnoughEth', 'Backend Signer has enough ETH.');
-    return true;
+    return [true, ''];
   } catch (error: unknown) {
-    Logger.error(
-      'ensureBackendSignerHasEnoughEth',
-      `Error checking if Backend Signer has minimal funds to make transactions. Error: ${(error as Error).message}`
-    );
-    return false;
+    const errorMsg = `Error checking if Backend Signer has minimal funds: ${(error as Error).message}`;
+    Logger.error('ensureBackendSignerHasEnoughEth', errorMsg);
+    return [false, errorMsg];
   }
 }
 
@@ -235,38 +232,20 @@ export async function checkBlockchainConditions(
       );
     }
 
-    const backendSignerWalletAddress = await setupContractsResult.backendSigner.getAddress();
-    const checkBackendSignerBalanceresult = await ensureBackendSignerHasEnoughEth(
+    const [hasEnoughBalance, balanceError] = await ensureBackendSignerHasEnoughEth(
       networkConfig.balances,
-      backendSignerWalletAddress,
       setupContractsResult.provider
     );
-    if (!checkBackendSignerBalanceresult) {
-      throw new Error(
-        `Backend Signer Wallet ${backendSignerWalletAddress}, insufficient ETH balance.`
-      );
-    }
 
-    /*
-    const userWalletAddress = await setupContractsResult.signer.getAddress();
-    const checkUserEthBalanceResult = await ensureUserSignerHasEnoughEth(
-      networkConfig.balances,
-      userWalletAddress,
-      setupContractsResult.backendSigner,
-      setupContractsResult.provider
-    );
-    if (!checkUserEthBalanceResult) {
-      throw new Error(
-        `User Wallet ${setupContractsResult.proxy.proxyAddress}, insufficient ETH balance.`
-      );
+    if (!hasEnoughBalance) {
+      throw new Error(balanceError);
     }
-    */
 
     const entrypointABI = await getEntryPointABI();
     const entrypointContract = new ethers.Contract(
       networkConfig.contracts.entryPoint,
       entrypointABI,
-      setupContractsResult.backendSigner
+      setupContractsResult.backPrincipal
     );
 
     const ensurePaymasterPrefundResult = await ensurePaymasterHasEnoughEth(

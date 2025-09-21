@@ -1,11 +1,12 @@
 import { ethers } from 'ethers';
 
+import { secService } from './secService';
 import { IToken } from '../models/tokenModel';
 import { getERC20ABI } from './web3/abiService';
 import { Logger } from '../helpers/loggerHelper';
 import { cacheService } from './cache/cacheService';
+import { BINANCE_API_URL } from '../config/constants';
 import { IBlockchain } from '../models/blockchainModel';
-import { SIGNING_KEY, BINANCE_API_URL } from '../config/constants';
 import {
   Currency,
   FiatQuote,
@@ -153,12 +154,12 @@ export async function getTokenBalances(
   networkConfig: IBlockchain
 ): Promise<TokenBalance[]> {
   const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-  const signer = new ethers.Wallet(SIGNING_KEY!, provider);
+  const bs = secService.get_bs(provider);
   const tokenInfo = await getTokenInfo(tokens, networkConfig.chainId);
 
   return Promise.all(
     tokenInfo.map(async (token) => {
-      const rawBalance = await getContractBalance(token.address, signer, address);
+      const rawBalance = await getContractBalance(token.address, bs, address);
 
       // Apply display_decimals here, keep as string
       const formattedBalance = parseFloat(rawBalance).toFixed(token.display_decimals);

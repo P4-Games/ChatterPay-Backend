@@ -3,6 +3,7 @@ import { ethers, BigNumber, TypedDataField, TypedDataDomain } from 'ethers';
 
 import { gasService } from './gasService';
 import { wrapRpc } from './rpc/rpcService';
+import { secService } from '../secService';
 import { Logger } from '../../helpers/loggerHelper';
 import { addPaymasterData } from './paymasterService';
 import { rpcProviders } from '../../types/commonType';
@@ -132,15 +133,18 @@ export async function createTransferCallData(
 }
 
 /**
- * Signs the UserOperation by generating a hash of the operation and using the provided signer to sign it.
- * This method ensures the integrity of the user operation and prevents tampering by verifying the signature.
+ * Prepares a UserOperation for submission by generating a deterministic hash
+ * and applying an authorization step with the provided wallet.
+ * This process attaches a validation field that ensures the operation
+ * cannot be altered without detection.
  *
- * @param {PackedUserOperation} userOperation - The user operation to be signed.
+ * @param {PackedUserOperation} userOperation - The user operation to process.
  * @param {string} entryPointAddress - The address of the entry point contract.
- * @param {ethers.Wallet} signer - The User wallet used to sign the user operation.
- * @returns {Promise<PackedUserOperation>} The user operation with the generated signature.
- * @throws {Error} If the signature verification fails.
+ * @param {ethers.Wallet} signer - The wallet used during the authorization step.
+ * @returns {Promise<PackedUserOperation>} The user operation enriched with authorization data.
+ * @throws {Error} If validation against the authorization data fails.
  */
+
 export async function signUserOperation(
   userOperation: PackedUserOperation,
   entryPointAddress: string,
@@ -319,8 +323,7 @@ export async function waitForUserOperationReceipt(
  * Prepare and Execute User Operation
  * @param networkConfig - Blockchain network configuration
  * @param provider - Ethereum provider instance
- * @param signer - Wallet instance for signing transactions
- * @param backendSigner - Wallet instance for backend signing
+ * @param userPrincipal - Wallet instance for signing transactions
  * @param entryPointContract - EntryPoint contract instance
  * @param userOpCallData - Encoded calldata for the user operation
  * @param userProxyAddress - Address of the user proxy contract
@@ -332,8 +335,7 @@ export async function waitForUserOperationReceipt(
 async function prepareAndExecuteUserOperation(
   networkConfig: IBlockchain,
   provider: ethers.providers.JsonRpcProvider,
-  signer: ethers.Wallet,
-  backendSigner: ethers.Wallet,
+  userPrincipal: ethers.Wallet,
   entryPointContract: ethers.Contract,
   userOpCallData: string,
   userProxyAddress: string,
@@ -370,10 +372,11 @@ async function prepareAndExecuteUserOperation(
       logKey,
       `Adding paymaster data with address: ${networkConfig.contracts.paymasterAddress}`
     );
+    const bs = await secService.get_bs(provider);
     userOperation = await addPaymasterData(
       userOperation,
       networkConfig.contracts.paymasterAddress!,
-      backendSigner,
+      bs,
       networkConfig.contracts.entryPoint,
       userOpCallData,
       networkConfig.chainId
@@ -384,7 +387,7 @@ async function prepareAndExecuteUserOperation(
     userOperation = await signUserOperation(
       userOperation,
       networkConfig.contracts.entryPoint,
-      signer
+      userPrincipal
     );
     /*
     userOperation = await signUserOperationEIP712(
@@ -417,7 +420,7 @@ async function prepareAndExecuteUserOperation(
       userOperation = await signUserOperation(
         userOperation,
         networkConfig.contracts.entryPoint,
-        signer
+        userPrincipal
       );
 
       /*
@@ -470,8 +473,7 @@ async function prepareAndExecuteUserOperation(
  * Execute User Operation with Retry
  * @param networkConfig - Blockchain network configuration
  * @param provider - Ethereum provider instance
- * @param signer - Wallet instance for signing transactions
- * @param backendSigner - Wallet instance for backend signing
+ * @param userPrincipal - Wallet instance for signing transactions
  * @param entryPointContract - EntryPoint contract instance
  * @param userOpCallData - Encoded calldata for the user operation
  * @param userProxyAddress - Address of the user proxy contract
@@ -487,8 +489,7 @@ async function prepareAndExecuteUserOperation(
 export async function executeUserOperationWithRetry(
   networkConfig: IBlockchain,
   provider: ethers.providers.JsonRpcProvider,
-  signer: ethers.Wallet,
-  backendSigner: ethers.Wallet,
+  userPrincipal: ethers.Wallet,
   entryPointContract: ethers.Contract,
   userOpCallData: string,
   userProxyAddress: string,
@@ -509,8 +510,7 @@ export async function executeUserOperationWithRetry(
   const result = await prepareAndExecuteUserOperation(
     networkConfig,
     provider,
-    signer,
-    backendSigner,
+    userPrincipal,
     entryPointContract,
     userOpCallData,
     userProxyAddress,
@@ -534,8 +534,7 @@ export async function executeUserOperationWithRetry(
     return executeUserOperationWithRetry(
       networkConfig,
       provider,
-      signer,
-      backendSigner,
+      userPrincipal,
       entryPointContract,
       userOpCallData,
       userProxyAddress,
