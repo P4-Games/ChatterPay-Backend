@@ -53,9 +53,9 @@ steps:
       - CDP2=${_CDP2}
 
     secretEnv: [
-      'CHATIZALO_TOKEN', 
-      'FRONTEND_TOKEN', 
-      'SEED_INTERNAL_SALT', 
+      'CHATIZALO_TOKEN',
+      'FRONTEND_TOKEN',
+      'SEED_INTERNAL_SALT',
       'SIGNING_KEY',
       'PUSH_CHANNEL_PRIVATE_KEY',
       'MANTECA_API_KEY',
@@ -64,72 +64,74 @@ steps:
 
   - name: 'gcr.io/cloud-builders/docker'
     id: Build
-    args:
-      - >
-        build --no-cache
-        -t $_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-        -f Dockerfile
-        --build-arg BUN_ENV=${_BUN_ENV}
-        --build-arg INFURA_API_KEY=${_INFURA_API_KEY}
-        --build-arg MONGO_URI=${_MONGO_URI}
-        --build-arg SEED_INTERNAL_SALT=$$SEED_INTERNAL_SALT
-        --build-arg SIGNING_KEY=$$SIGNING_KEY
-        --build-arg PINATA_JWT=${_PINATA_JWT}
-        --build-arg ICP_CANISTER_ID=${_ICP_CANISTER_ID}
-        --build-arg ICP_MNEMONIC=${_ICP_MNEMONIC}
-        --build-arg BOT_API_URL=${_BOT_API_URL}
-        --build-arg BOT_DATA_TOKEN=${_BOT_DATA_TOKEN}
-        --build-arg NFT_UPLOAD_IMAGE_ICP=${_NFT_UPLOAD_IMAGE_ICP}
-        --build-arg NFT_UPLOAD_IMAGE_IPFS=${_NFT_UPLOAD_IMAGE_IPFS}
-        --build-arg GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}
-        --build-arg CHATIZALO_TOKEN=$$CHATIZALO_TOKEN
-        --build-arg FRONTEND_TOKEN=$$FRONTEND_TOKEN
-        --build-arg PUSH_ENABLED=${_PUSH_ENABLED}
-        --build-arg PUSH_NETWORK=${_PUSH_NETWORK}
-        --build-arg PUSH_ENVIRONMENT=${_PUSH_ENVIRONMENT}
-        --build-arg PUSH_CHANNEL_ADDRESS=${_PUSH_CHANNEL_ADDRESS}
-        --build-arg MINOR_LOG_LEVEL=${_MINOR_LOG_LEVEL}
-        --build-arg PUSH_CHANNEL_PRIVATE_KEY=$$PUSH_CHANNEL_PRIVATE_KEY
-        --build-arg MANTECA_API_KEY=$$MANTECA_API_KEY
-        --build-arg MANTECA_BASE_URL=${_MANTECA_BASE_URL}
-        --build-arg GCP_CLOUD_TRACE_ENABLED=${_GCP_CLOUD_TRACE_ENABLED}
-        --build-arg CORS_ORIGINS=${_CORS_ORIGINS}
-        --build-arg BLACKLIST_IPS=${_BLACKLIST_IPS}
-        --build-arg DEFAULT_CHAIN_ID=${_DEFAULT_CHAIN_ID}
-        --build-arg ABIS_VERSION=${_ABIS_VERSION}
-        --build-arg CORS_ORIGINS_CHECK_POSTMAN=${_CORS_ORIGINS_CHECK_POSTMAN}
-        --build-arg SWAP_SLIPPAGE_CONFIG_STABLE=${_SWAP_SLIPPAGE_CONFIG_STABLE}
-        --build-arg SWAP_SLIPPAGE_CONFIG_DEFAULT=${_SWAP_SLIPPAGE_CONFIG_DEFAULT}
-        --build-arg SWAP_SLIPPAGE_CONFIG_EXTRA=${_SWAP_SLIPPAGE_CONFIG_EXTRA}
-        --build-arg SWAP_ZERO_FEE_MODE=${_SWAP_ZERO_FEE_MODE}
-        --build-arg SWAP_EXECUTE_SIMPLE=${_SWAP_EXECUTE_SIMPLE}
-        --build-arg SWAP_USE_QUOTER=${_SWAP_USE_QUOTER}
-        --build-arg ABIS_READ_FROM=${_ABIS_READ_FROM}
-        --build-arg CHATIZALO_PHONE_NUMBER=${_CHATIZALO_PHONE_NUMBER}
-        --build-arg QUEUE_BUNDLER_INTERVAL=${_QUEUE_BUNDLER_INTERVAL}
-        --build-arg QUEUE_GAS_INTERVAL=${_QUEUE_GAS_INTERVAL}
-        --build-arg QUEUE_CREATE_PROXY_INTERVAL=${_QUEUE_CREATE_PROXY_INTERVAL}
-        --build-arg ISSUER_TOKENS_ENABLED=${_ISSUER_TOKENS_ENABLED}
-        --build-arg MAX_REQUESTS_PER_MINUTE=${_MAX_REQUESTS_PER_MINUTE}
-        --build-arg THE_GRAPH_EXTERNAL_DEPOSITS_URL=${_THE_GRAPH_EXTERNAL_DEPOSITS_URL}
-        --build-arg THE_GRAPH_API_KEY=$$THE_GRAPH_API_KEY
-        --build-arg CHATTERPOINTS_WORDS_SEED=${_CHATTERPOINTS_WORDS_SEED}
-        --build-arg CHATTERPOINTS_WORDS_READ_FROM=${_CHATTERPOINTS_WORDS_READ_FROM}
-        --build-arg CDS1=${_CDS1}
-        --build-arg CDS2=${_CDS2}
-        --build-arg CDS3=${_CDS3}
-        --build-arg CDO1=${_CDO1}
-        --build-arg CDO2=${_CDO2}
-        --build-arg CDO3=${_CDO3}
-        --build-arg CDO4=${_CDO4}
-        --build-arg CDP1=${_CDP1}
-        --build-arg CDP2=${_CDP2}
-        .
-
+    args: [
+      'build',
+      '--no-cache',
+      '-t',
+      '$_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA',
+      '-f',
+      'Dockerfile',
+      '--build-arg=BUN_ENV=${_BUN_ENV}',
+      '--build-arg=INFURA_API_KEY=${_INFURA_API_KEY}',
+      '--build-arg=MONGO_URI=${_MONGO_URI}',
+      '--build-arg=SEED_INTERNAL_SALT=$$SEED_INTERNAL_SALT',
+      '--build-arg=SIGNING_KEY=$$SIGNING_KEY',
+      '--build-arg=PINATA_JWT=${_PINATA_JWT}',
+      '--build-arg=ICP_CANISTER_ID=${_ICP_CANISTER_ID}',
+      '--build-arg=ICP_MNEMONIC=${_ICP_MNEMONIC}',
+      '--build-arg=BOT_API_URL=${_BOT_API_URL}',
+      '--build-arg=BOT_DATA_TOKEN=${_BOT_DATA_TOKEN}',
+      '--build-arg=NFT_UPLOAD_IMAGE_ICP=${_NFT_UPLOAD_IMAGE_ICP}',
+      '--build-arg=NFT_UPLOAD_IMAGE_IPFS=${_NFT_UPLOAD_IMAGE_IPFS}',
+      '--build-arg=GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}',
+      '--build-arg=CHATIZALO_TOKEN=$$CHATIZALO_TOKEN',
+      '--build-arg=FRONTEND_TOKEN=$$FRONTEND_TOKEN',
+      '--build-arg=PUSH_ENABLED=${_PUSH_ENABLED}',
+      '--build-arg=PUSH_NETWORK=${_PUSH_NETWORK}',
+      '--build-arg=PUSH_ENVIRONMENT=${_PUSH_ENVIRONMENT}',
+      '--build-arg=PUSH_CHANNEL_ADDRESS=${_PUSH_CHANNEL_ADDRESS}',
+      '--build-arg=MINOR_LOG_LEVEL=${_MINOR_LOG_LEVEL}',
+      '--build-arg=PUSH_CHANNEL_PRIVATE_KEY=$$PUSH_CHANNEL_PRIVATE_KEY',
+      '--build-arg=MANTECA_API_KEY=$$MANTECA_API_KEY',
+      '--build-arg=MANTECA_BASE_URL=${_MANTECA_BASE_URL}',
+      '--build-arg=GCP_CLOUD_TRACE_ENABLED=${_GCP_CLOUD_TRACE_ENABLED}',
+      '--build-arg=CORS_ORIGINS=${_CORS_ORIGINS}',
+      '--build-arg=BLACKLIST_IPS=${_BLACKLIST_IPS}',
+      '--build-arg=DEFAULT_CHAIN_ID=${_DEFAULT_CHAIN_ID}',
+      '--build-arg=ABIS_VERSION=${_ABIS_VERSION}',
+      '--build-arg=CORS_ORIGINS_CHECK_POSTMAN=${_CORS_ORIGINS_CHECK_POSTMAN}',
+      '--build-arg=SWAP_SLIPPAGE_CONFIG_STABLE=${_SWAP_SLIPPAGE_CONFIG_STABLE}',
+      '--build-arg=SWAP_SLIPPAGE_CONFIG_DEFAULT=${_SWAP_SLIPPAGE_CONFIG_DEFAULT}',
+      '--build-arg=SWAP_SLIPPAGE_CONFIG_EXTRA=${_SWAP_SLIPPAGE_CONFIG_EXTRA}',
+      '--build-arg=SWAP_ZERO_FEE_MODE=${_SWAP_ZERO_FEE_MODE}',
+      '--build-arg=SWAP_EXECUTE_SIMPLE=${_SWAP_EXECUTE_SIMPLE}',
+      '--build-arg=SWAP_USE_QUOTER=${_SWAP_USE_QUOTER}',
+      '--build-arg=ABIS_READ_FROM=${_ABIS_READ_FROM}',
+      '--build-arg=CHATIZALO_PHONE_NUMBER=${_CHATIZALO_PHONE_NUMBER}',
+      '--build-arg=QUEUE_BUNDLER_INTERVAL=${_QUEUE_BUNDLER_INTERVAL}',
+      '--build-arg=QUEUE_GAS_INTERVAL=${_QUEUE_GAS_INTERVAL}',
+      '--build-arg=QUEUE_CREATE_PROXY_INTERVAL=${_QUEUE_CREATE_PROXY_INTERVAL}',
+      '--build-arg=ISSUER_TOKENS_ENABLED=${_ISSUER_TOKENS_ENABLED}',
+      '--build-arg=MAX_REQUESTS_PER_MINUTE=${_MAX_REQUESTS_PER_MINUTE}',
+      '--build-arg=THE_GRAPH_EXTERNAL_DEPOSITS_URL=${_THE_GRAPH_EXTERNAL_DEPOSITS_URL}',
+      '--build-arg=THE_GRAPH_API_KEY=$$THE_GRAPH_API_KEY',
+      '--build-arg=CHATTERPOINTS_WORDS_SEED=${_CHATTERPOINTS_WORDS_SEED}',
+      '--build-arg=CHATTERPOINTS_WORDS_READ_FROM=${_CHATTERPOINTS_WORDS_READ_FROM}',
+      '--build-arg=CDS1=${_CDS1}',
+      '--build-arg=CDS2=${_CDS2}',
+      '--build-arg=CDS3=${_CDS3}',
+      '--build-arg=CDO1=${_CDO1}',
+      '--build-arg=CDO2=${_CDO2}',
+      '--build-arg=CDO3=${_CDO3}',
+      '--build-arg=CDO4=${_CDO4}',
+      '--build-arg=CDP1=${_CDP1}',
+      '--build-arg=CDP2=${_CDP2}',
+      '.'
+    ]
     secretEnv: [
-      'CHATIZALO_TOKEN', 
-      'FRONTEND_TOKEN', 
-      'SEED_INTERNAL_SALT', 
+      'CHATIZALO_TOKEN',
+      'FRONTEND_TOKEN',
+      'SEED_INTERNAL_SALT',
       'SIGNING_KEY',
       'PUSH_CHANNEL_PRIVATE_KEY',
       'MANTECA_API_KEY',
