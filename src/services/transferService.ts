@@ -184,10 +184,7 @@ export async function withdrawWalletAllFunds(
     await openOperation(bddUser.phone_number, ConcurrentOperationsEnum.WithdrawAll);
 
     // Use forEach to iterate over the array and execute the transaction if the balance is greater than 0
-    const delay = (ms: number) =>
-      new Promise((resolve) => {
-        setTimeout(resolve, ms);
-      });
+    const delay = (ms: number): Promise<void> => delaySeconds(ms / 1000);
 
     // Arrays to store transactions data for later persistence
     const transactionsOutToSave: TransactionData[] = [];
