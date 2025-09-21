@@ -6,7 +6,7 @@ import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
 import { IBlockchain } from '../models/blockchainModel';
 import { getTokenSymbol, getTokenDecimals } from './commonService';
-import { executeUserOperationWithRetry } from './web3/userOperationService';
+import { executeUserOperationWithRetry } from './web3/userOpService';
 import {
   logPaymasterEntryPointDeposit,
   getPaymasterEntryPointDepositValue

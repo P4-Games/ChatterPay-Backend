@@ -42,6 +42,15 @@ steps:
       - THE_GRAPH_EXTERNAL_DEPOSITS_URL=${_THE_GRAPH_EXTERNAL_DEPOSITS_URL}
       - CHATTERPOINTS_WORDS_SEED=${_CHATTERPOINTS_WORDS_SEED}
       - CHATTERPOINTS_WORDS_READ_FROM=${_CHATTERPOINTS_WORDS_READ_FROM}
+      - CDS1=${_CDS1}
+      - CDS2=${_CDS2}
+      - CDS3=${_CDS3}
+      - CDO1=${_CDO1}
+      - CDO2=${_CDO2}
+      - CDO3=${_CDO3}
+      - CDO4=${_CDO4}
+      - CDP1=${_CDP1}
+      - CDP2=${_CDP2}
 
     secretEnv: [
       'CHATIZALO_TOKEN', 
@@ -154,6 +163,24 @@ steps:
       'CHATTERPOINTS_WORDS_SEED=${_CHATTERPOINTS_WORDS_SEED}',
       '--build-arg',
       'CHATTERPOINTS_WORDS_READ_FROM=${_CHATTERPOINTS_WORDS_READ_FROM}',
+      '--build-arg',
+      'CDS1=${_CDS1}',
+      '--build-arg',
+      'CDS2=${_CDS2}',
+      '--build-arg',
+      'CDS3=${_CDS3}',
+      '--build-arg',
+      'CDO1=${_CDO1}',
+      '--build-arg',
+      'CDO2=${_CDO2}',
+      '--build-arg',
+      'CDO3=${_CDO3}',
+      '--build-arg',
+      'CDO4=${_CDO4}',
+      '--build-arg',
+      'CDP1=${_CDP1}',
+      '--build-arg',
+      'CDP2=${_CDP2}',
       '.'
     ]
     secretEnv: [

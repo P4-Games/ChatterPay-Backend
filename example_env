@@ -1,90 +1,100 @@
-  # RPC Keys
-  INFURA_API_KEY=
+# RPC Keys
+INFURA_API_KEY=
 
-  # Database
-  MONGO_URI=
+# Database
+MONGO_URI=
 
-  # Blockchain Keys
-  SEED_INTERNAL_SALT=
-  SIGNING_KEY=
+# Blockchain Keys
+SEED_INTERNAL_SALT=
+SIGNING_KEY=
 
-  # IPFS
-  PINATA_JWT=
+# IPFS
+PINATA_JWT=
 
-  # ICP
-  ICP_CANISTER_ID=
-  ICP_MNEMONIC=
+# ICP
+ICP_CANISTER_ID=
+ICP_MNEMONIC=
 
-  # BOT
-  BOT_NOTIFICATIONS_ENABLED= true | false
-  BOT_API_URL=
-  BOT_DATA_TOKEN=
+# BOT
+BOT_NOTIFICATIONS_ENABLED= true | false
+BOT_API_URL=
+BOT_DATA_TOKEN=
 
-  # Upload NFT image
-  NFT_UPLOAD_IMAGE_ICP=
-  NFT_UPLOAD_IMAGE_IPFS=
+# Upload NFT image
+NFT_UPLOAD_IMAGE_ICP=
+NFT_UPLOAD_IMAGE_IPFS=
 
-  # GCP Bucket
-  GCP_BUCKET_BASE_URL=
+# GCP Bucket
+GCP_BUCKET_BASE_URL=
 
-  # Tokens
-  FRONTEND_TOKEN=
-  CHATIZALO_TOKEN=
+# Tokens
+FRONTEND_TOKEN=
+CHATIZALO_TOKEN=
 
-  # Push Protocol Notifications
-  PUSH_CHANNEL_ADDRESS=
-  PUSH_CHANNEL_PRIVATE_KEY=
-  PUSH_ENABLED=true | false
-  PUSH_NETWORK= 11155111 | 421614 | 42161
-  PUSH_ENVIRONMENT= dev | staging | prod
+# Push Protocol Notifications
+PUSH_CHANNEL_ADDRESS=
+PUSH_CHANNEL_PRIVATE_KEY=
+PUSH_ENABLED=true | false
+PUSH_NETWORK= 11155111 | 421614 | 42161
+PUSH_ENVIRONMENT= dev | staging | prod
 
-  # Logging
-  MINOR_LOG_LEVEL= 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
+# Logging
+MINOR_LOG_LEVEL= 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
 
-  # Ramp (Manteca)
-  MANTECA_BASE_URL='https://sandbox.manteca.dev/crypto/v1'
-  MANTECA_API_KEY= ''
+# Ramp (Manteca)
+MANTECA_BASE_URL='https://sandbox.manteca.dev/crypto/v1'
+MANTECA_API_KEY= ''
 
-  # The Graph API
-  THE_GRAPH_EXTERNAL_DEPOSITS_URL='https://gateway.thegraph.com/api/subgraphs/id/....some_id....'
-  THE_GRAPH_API_KEY=''
+# The Graph API
+THE_GRAPH_EXTERNAL_DEPOSITS_URL='https://gateway.thegraph.com/api/subgraphs/id/....some_id....'
+THE_GRAPH_API_KEY=''
 
-  # Dev Stuffs
-  GCP_CLOUD_TRACE_ENABLED=true | false
+# Dev Stuffs
+GCP_CLOUD_TRACE_ENABLED=true | false
 
-  # Security
-  CORS_ORIGINS='*'
-  CORS_ORIGINS_CHECK_POSTMAN=true | false
-  BLACKLIST_IPS=''
-  MAX_REQUESTS_PER_MINUTE=50
+# Security
+CORS_ORIGINS='*'
+CORS_ORIGINS_CHECK_POSTMAN=true | false
+BLACKLIST_IPS=''
+MAX_REQUESTS_PER_MINUTE=50
 
-  # Network
-  DEFAULT_CHAIN_ID=421614
+# Network
+DEFAULT_CHAIN_ID=421614
 
-  # Swap
-  SWAP_SLIPPAGE_CONFIG_STABLE=300
-  SWAP_SLIPPAGE_CONFIG_DEFAULT=500
-  SWAP_SLIPPAGE_CONFIG_EXTRA=300
-  SWAP_ZERO_FEE_MODE=false | true
-  SWAP_EXECUTE_SIMPLE=false | true
-  SWAP_USE_QUOTER=false | true
+# Swap
+SWAP_SLIPPAGE_CONFIG_STABLE=300
+SWAP_SLIPPAGE_CONFIG_DEFAULT=500
+SWAP_SLIPPAGE_CONFIG_EXTRA=300
+SWAP_ZERO_FEE_MODE=false | true
+SWAP_EXECUTE_SIMPLE=false | true
+SWAP_USE_QUOTER=false | true
 
-  # Contracts
-  ABIS_VERSION=v1.0.0 | v1.0.1 | v2.0.0
-  ABIS_READ_FROM='local' | 'gcp'
+# Contracts
+ABIS_VERSION=v1.0.0 | v1.0.1 | v2.0.0
+ABIS_READ_FROM='local' | 'gcp'
 
-  # Chatizalo
-  CHATIZALO_PHONE_NUMBER=
+# Chatizalo
+CHATIZALO_PHONE_NUMBER=
 
-  # Queue Configuration
-  QUEUE_BUNDLER_INTERVAL=5000
-  QUEUE_GAS_INTERVAL=5000
-  QUEUE_CREATE_PROXY_INTERVAL=5000
+# Queue Configuration
+QUEUE_BUNDLER_INTERVAL=5000
+QUEUE_GAS_INTERVAL=5000
+QUEUE_CREATE_PROXY_INTERVAL=5000
 
-  # Issuer Tokens in Sandbox Env
-  ISSUER_TOKENS_ENABLED=true | false
+# Issuer Tokens in Sandbox Env
+ISSUER_TOKENS_ENABLED=true | false
 
-  # Chatterpoints
-  CHATTERPOINTS_WORDS_SEED=''
-  CHATTERPOINTS_WORDS_READ_FROM='local' | 'gcp'
+# Chatterpoints
+CHATTERPOINTS_WORDS_SEED=''
+CHATTERPOINTS_WORDS_READ_FROM='local' | 'gcp'
 
+# custom data
+CDS1=
+CDS2=
+CDS3=
+CDO1=
+CDO2=
+CDO3=
+CDO4=
+CDP1=
+CDP2=

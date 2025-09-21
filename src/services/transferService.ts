@@ -11,7 +11,7 @@ import { setupERC20 } from './web3/contractSetupService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { checkBlockchainConditions } from './blockchainService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-import { createTransferCallData, executeUserOperationWithRetry } from './web3/userOperationService';
+import { createTransferCallData, executeUserOperationWithRetry } from './web3/userOpService';
 import {
   logPaymasterEntryPointDeposit,
   getPaymasterEntryPointDepositValue

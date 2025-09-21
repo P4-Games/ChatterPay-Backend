@@ -50,4 +50,13 @@ docker build \
   --build-arg MAX_REQUESTS_PER_MINUTE="$MAX_REQUESTS_PER_MINUTE" \
   --build-arg CHATTERPOINTS_WORDS_SEED="$CHATTERPOINTS_WORDS_SEED" \
   --build-arg CHATTERPOINTS_WORDS_READ_FROM="$CHATTERPOINTS_WORDS_READ_FROM" \
+  --build-arg CDS1="$CDS1" \
+  --build-arg CDS2="$CDS2" \
+  --build-arg CDS3="$CDS3" \
+  --build-arg CDO1="$CDO1" \
+  --build-arg CDO2="$CDO2" \
+  --build-arg CDO3="$CDO3" \
+  --build-arg CDO4="$CDO4" \
+  --build-arg CDP1="$CDP1" \
+  --build-arg CDP2="$CDP2" \
   -t chatterpay-back-app ..
