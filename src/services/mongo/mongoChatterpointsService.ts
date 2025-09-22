@@ -2,10 +2,12 @@ import { FilterQuery, UpdateQuery } from 'mongoose';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { newDateUTC } from '../../helpers/timeHelper';
+import { ConcurrentOperationsEnum } from '../../types/commonType';
 import {
   GamePeriod,
   PeriodWord,
   IChatterpoints,
+  OperationEntry,
   ChatterpointsModel,
   IChatterpointsDocument
 } from '../../models/chatterpointsModel';
@@ -19,6 +21,7 @@ export interface CreateCycleInput {
   startAt: Date;
   endAt: Date;
   games: IChatterpoints['games'];
+  operations?: IChatterpoints['operations'];
   periods: Array<Omit<GamePeriod, 'periodId'> & { word: PeriodWord }>;
   podiumPrizes?: number[];
 }
@@ -42,6 +45,40 @@ export interface LeaderboardResponse {
     endAt: Date;
   };
   items: LeaderboardItem[];
+}
+
+function buildDefaultOperationsConfig() {
+  const userLevels = ['L1', 'L2'] as const;
+
+  const excluded = new Set([
+    ConcurrentOperationsEnum.MintNft,
+    ConcurrentOperationsEnum.MintNftCopy,
+    ConcurrentOperationsEnum.WithdrawAll
+  ]);
+
+  const operations = Object.values(ConcurrentOperationsEnum).filter((op) => !excluded.has(op));
+
+  const ranges = [
+    { min: 0, max: 100, points: 5 },
+    { min: 101, max: 500, points: 7 },
+    { min: 501, max: 1000, points: 10 },
+    { min: 1001, max: 5000, points: 20 },
+    { min: 5000, max: 9999999999, points: 50 }
+  ];
+
+  const config = userLevels.flatMap((level) =>
+    operations.flatMap((op) =>
+      ranges.map((r) => ({
+        type: op,
+        userLevel: level,
+        minAmount: r.min,
+        maxAmount: r.max,
+        points: r.points
+      }))
+    )
+  );
+
+  return { config, entries: [] };
 }
 
 /**
@@ -121,8 +158,9 @@ export const mongoChatterpointsService = {
       endAt: input.endAt,
       podiumPrizes: input.podiumPrizes ?? [0, 0, 0],
       games: input.games,
+      operations: input.operations ?? buildDefaultOperationsConfig(),
       periods,
-      socialRegistrations: [],
+      socialActions: [],
       totalsByUser: []
     });
     return doc.toObject() as unknown as IChatterpointsDocument;
@@ -149,7 +187,7 @@ export const mongoChatterpointsService = {
   addSocialRegistration: async (cycleId: string, reg: SocialRegInput): Promise<boolean> => {
     const res = await ChatterpointsModel.updateOne(
       { cycleId, 'socialRegistrations.userId': { $ne: reg.userId }, status: 'OPEN' },
-      { $push: { socialRegistrations: reg } }
+      { $push: { socialActions: reg } }
     ).exec();
     return res.modifiedCount > 0;
   },
@@ -702,5 +740,29 @@ export const mongoChatterpointsService = {
     );
 
     return { openedPeriods: periodsToOpen.length };
+  },
+
+  addOperationEntry: async (cycleId: string, entry: OperationEntry): Promise<void> => {
+    // Try update totals if user already exists
+    const updated = await ChatterpointsModel.updateOne(
+      { cycleId, 'totalsByUser.userId': entry.userId },
+      {
+        $push: { 'operations.entries': entry },
+        $inc: { 'totalsByUser.$.points': entry.points }
+      }
+    ).exec();
+
+    if (updated.matchedCount === 0) {
+      // User not in totals, insert new totals record
+      await ChatterpointsModel.updateOne(
+        { cycleId },
+        {
+          $push: {
+            'operations.entries': entry,
+            totalsByUser: { userId: entry.userId, points: entry.points }
+          }
+        }
+      ).exec();
+    }
   }
 };
