@@ -3,7 +3,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { Logger } from '../helpers/loggerHelper';
 import { chatterpointsService } from '../services/chatterpointsService';
 import {
-  GameConfig,
+  GameSection,
   GameSettings,
   WordleSettings,
   HangmanSettings,
@@ -72,7 +72,7 @@ export const createCycle = async (
       endAt: endAt ? new Date(endAt) : undefined,
       durationMinutes,
       podiumPrizes: podiumPrizes ?? [0, 0, 0],
-      games: games?.map((g): Partial<GameConfig> & Pick<GameConfig, 'type' | 'gameId'> => ({
+      games: games?.map((g): Partial<GameSection> & Pick<GameSection, 'type' | 'gameId'> => ({
         gameId: g.gameId,
         type: g.type,
         enabled: g.enabled,

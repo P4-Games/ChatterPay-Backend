@@ -8,6 +8,7 @@ import { mongoUserService } from './mongo/mongoUserService';
 import { chatizaloOperatorReply } from '../types/chatizaloType';
 import { chatizaloService } from './chatizalo/chatizaloService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { RegisterOperationResult } from './chatterpointsService';
 import { CacheNames, NotificationLanguage } from '../types/commonType';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { formatIdentifierWithOptionalName } from '../helpers/formatHelper';
@@ -254,6 +255,7 @@ export async function sendReceivedTransferNotification(
  * @param result - Amount of the output token received.
  * @param outputToken - Symbol or identifier of the token received after the swap.
  * @param transactionHash - Blockchain transaction hash of the swap operation.
+ * @param chatterpointsOpResult Chatterpoints Operation Result.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  * @returns A Promise resolving to the result of the notification operation.
  */
@@ -264,6 +266,7 @@ export async function sendSwapNotification(
   result: string,
   outputToken: string,
   transactionHash: string,
+  chatterpointsOpResult: RegisterOperationResult | null,
   traceHeader?: string
 ): Promise<unknown> {
   try {
@@ -274,7 +277,7 @@ export async function sendSwapNotification(
       NotificationEnum.swap
     );
 
-    const formattedMessage = message
+    let formattedMessage = message
       .replaceAll('[AMOUNT]', amount)
       .replaceAll('[TOKEN]', token)
       .replaceAll('[RESULT]', result)
@@ -282,6 +285,18 @@ export async function sendSwapNotification(
       .replaceAll('[EXPLORER]', networkConfig.explorer)
       .replaceAll('[TRANSACTION_HASH]', transactionHash);
 
+    if (chatterpointsOpResult && chatterpointsOpResult.operation.points > 0) {
+      const { message: messageChpTemplate } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.chatterpoints_operation
+      );
+      const messageChp = messageChpTemplate.replaceAll(
+        '[POINTS]',
+        chatterpointsOpResult.operation.points.toString()
+      );
+
+      formattedMessage = `${formattedMessage}\n\n${messageChp}`;
+    }
     const sendAndPersistParams: SendAndPersistParams = {
       to: channel_user_id,
       messageBot: formattedMessage,
@@ -357,6 +372,7 @@ export async function sendMintNotification(
  * @param token - Token symbol or identifier (e.g., ETH, USDT).
  * @param user_notes - User notes associated with the transaction.
  * @param txHash - Blockchain transaction hash of the transfer.
+ * @param chatterpointsOpResult - Chatterpoints operation result.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  * @returns A Promise resolving to the result of the notification operation.
  */
@@ -368,6 +384,7 @@ export async function sendOutgoingTransferNotification(
   token: string,
   user_notes: string,
   txHash: string,
+  chatterpointsOpResult: RegisterOperationResult | null,
   traceHeader?: string
 ): Promise<unknown> {
   try {
@@ -381,14 +398,31 @@ export async function sendOutgoingTransferNotification(
       NotificationEnum.outgoing_transfer
     );
 
-    const formatMessage = (toNumberAndName: string) =>
-      message
+    let messageChp: string | null = null;
+    if (chatterpointsOpResult && chatterpointsOpResult.operation.points > 0) {
+      const { message: messageChpTemplate } = await getNotificationTemplate(
+        phoneNumberFrom,
+        NotificationEnum.chatterpoints_operation
+      );
+      messageChp = messageChpTemplate.replaceAll(
+        '[POINTS]',
+        chatterpointsOpResult.operation.points.toString()
+      );
+    }
+
+    const formatMessage = (toNumberAndName: string) => {
+      let base = message
         .replaceAll('[AMOUNT]', amount)
         .replaceAll('[TOKEN]', token)
         .replaceAll('[TO]', toNumberAndName)
         .replaceAll('[EXPLORER]', networkConfig.explorer)
         .replaceAll('[TX_HASH]', txHash)
         .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
+      if (messageChp) {
+        base = `${base}\n\n${messageChp}`;
+      }
+      return base;
+    };
 
     const toNumberAndName = formatIdentifierWithOptionalName(phoneNumberTo, toName, false);
     const toNumberAndNameMasked = formatIdentifierWithOptionalName(phoneNumberTo, toName, true);

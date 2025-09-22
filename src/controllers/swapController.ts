@@ -7,12 +7,14 @@ import { secService } from '../services/secService';
 import { delaySeconds } from '../helpers/timeHelper';
 import { executeSwap } from '../services/swapService';
 import { NotificationEnum } from '../models/templateModel';
+import { getTokenPrices } from '../services/balanceService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { getChatterpayTokenFee } from '../services/commonService';
 import { setupERC20 } from '../services/web3/contractSetupService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { chatterpointsService, RegisterOperationResult } from '../services/chatterpointsService';
 import {
   COMMON_REPLY_WALLET_NOT_CREATED,
   COMMON_REPLY_OPERATION_IN_PROGRESS
@@ -351,7 +353,23 @@ export const swap = async (
     await mongoUserService.updateUserOperationCounter(channel_user_id, 'swap');
 
     /* ***************************************************** */
-    /* 11. swap: send notification to user                   */
+    /* 11. swap: Chatterpoints Operation                     */
+    /* ***************************************************** */
+    const prices = await getTokenPrices([inputCurrency]);
+    const price = prices.get(inputCurrency.toUpperCase()) ?? 1;
+    const amountInUsd = toTokensReceivedInUnits * price;
+
+    const chatterpointsOpResult: RegisterOperationResult | null =
+      await chatterpointsService.registerOperation({
+        userId: fromUser.phone_number,
+        userLevel: fromUser.level,
+        type: ConcurrentOperationsEnum.Swap,
+        amount: amountInUsd,
+        operationId: executeSwapResult.swapTransactionHash
+      });
+
+    /* ***************************************************** */
+    /* 12. swap: send notification to user                   */
     /* ***************************************************** */
 
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
@@ -366,7 +384,8 @@ export const swap = async (
       fromTokensSentDisplay,
       toTokensReceivedDisplay,
       tokensData.tokenOutputSymbol,
-      executeSwapResult.swapTransactionHash
+      executeSwapResult.swapTransactionHash,
+      chatterpointsOpResult
     );
 
     Logger.info(

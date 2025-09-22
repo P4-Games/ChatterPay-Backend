@@ -51,7 +51,7 @@ async function getContractBalance(
  * @param {string[]} symbols - Array of token symbols to fetch prices for
  * @returns {Promise<Map<string, number>>} Map of token symbols to their USD prices
  */
-async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
+export async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
   const norm = (s: string) => String(s).trim().toUpperCase();
   const priceMap = new Map<string, number>();
 

@@ -1,5 +1,7 @@
 import { model, Schema, Document } from 'mongoose';
 
+import { ConcurrentOperationsEnum } from '../types/commonType';
+
 /**
  * Chatterpoints domain model
  *
@@ -7,7 +9,6 @@ import { model, Schema, Document } from 'mongoose';
  * Inside each cycle we persist: games configuration, generated periods, plays per user per period,
  * social registrations and precomputed totals for fast leaderboard queries.
  *
- * ⚠️ No `any` types. Everything is explicit.
  */
 
 /** Cycle/window enums */
@@ -16,6 +17,32 @@ export type WindowUnit = 'MINUTES' | 'HOURS' | 'DAYS' | 'WEEKS';
 export type GameType = 'WORDLE' | 'HANGMAN';
 export type PeriodStatus = 'OPEN' | 'CLOSED';
 export type SocialPlatform = 'discord' | 'youtube' | 'x' | 'instagram' | 'linkedin';
+
+/** Rule defining how many points an operation grants */
+export interface OperationPointsRule {
+  type: ConcurrentOperationsEnum; // reuse existing enum
+  minAmount: number; // minimum amount (e.g., USDT)
+  maxAmount: number; // maximum amount
+  userLevel: string; // L1, L2, etc.
+  points: number; // points assigned
+}
+
+/** A concrete operation performed during a cycle */
+export interface OperationEntry {
+  operationId: string; // tx hash or internal id
+  userId: string;
+  type: ConcurrentOperationsEnum; // enum type
+  amount: number;
+  userLevel: string;
+  points: number;
+  at: Date;
+}
+
+/** Operations section inside the cycle */
+export interface OperationsSection {
+  config: OperationPointsRule[];
+  entries: OperationEntry[];
+}
 
 export interface PeriodWord {
   en?: string;
@@ -76,7 +103,7 @@ export type GameSettings =
   | { type: 'HANGMAN'; settings: HangmanSettings; points: HangmanPointsConfig };
 
 /** Game configuration within a cycle */
-export interface GameConfig {
+export interface GameSection {
   gameId: string;
   type: GameType;
   enabled: boolean;
@@ -130,8 +157,7 @@ export interface GamePeriod {
   plays: PeriodUserPlays[];
 }
 
-/** Social registration idempotent record */
-export interface SocialRegistration {
+export interface SocialSection {
   userId: string;
   platform: SocialPlatform;
   at: Date;
@@ -149,11 +175,11 @@ export interface IChatterpoints {
   status: CycleStatus;
   startAt: Date;
   endAt: Date;
-  /** Podium prizes in stable coins for top 3 (index 0 = 1st, 1 = 2nd, 2 = 3rd) */
   podiumPrizes: number[];
-  games: GameConfig[];
+  games: GameSection[];
+  operations: OperationsSection;
   periods: GamePeriod[];
-  socialRegistrations: SocialRegistration[];
+  socialActions: SocialSection[];
   totalsByUser: TotalsByUser[];
   createdAt: Date;
   updatedAt: Date;
@@ -163,6 +189,46 @@ export type IChatterpointsDocument = Document<unknown, Record<string, never>, IC
   IChatterpoints & { cycleId: string };
 
 /** ---------- Schemas ---------- */
+
+const OperationPointsRuleSchema = new Schema<OperationPointsRule>(
+  {
+    type: {
+      type: String,
+      enum: Object.values(ConcurrentOperationsEnum),
+      required: true
+    },
+    minAmount: { type: Number, required: true },
+    maxAmount: { type: Number, required: true },
+    userLevel: { type: String, required: true },
+    points: { type: Number, required: true }
+  },
+  { _id: false }
+);
+
+const OperationEntrySchema = new Schema<OperationEntry>(
+  {
+    operationId: { type: String, required: true },
+    userId: { type: String, required: true, index: true },
+    type: {
+      type: String,
+      enum: Object.values(ConcurrentOperationsEnum),
+      required: true
+    },
+    amount: { type: Number, required: true },
+    userLevel: { type: String, required: true },
+    points: { type: Number, required: true },
+    at: { type: Date, required: true }
+  },
+  { _id: false }
+);
+
+const OperationsSchema = new Schema<OperationsSection>(
+  {
+    config: { type: [OperationPointsRuleSchema], required: true, default: [] },
+    entries: { type: [OperationEntrySchema], required: true, default: [] }
+  },
+  { _id: false }
+);
 
 const PlayAttemptSchema = new Schema<PlayAttempt>(
   {
@@ -225,7 +291,7 @@ const GameSettingsSchema = new Schema<GameSettings>(
   { _id: false, discriminatorKey: 'type' }
 );
 
-const SocialRegistrationSchema = new Schema<SocialRegistration>(
+const SocialActionsSchema = new Schema<SocialSection>(
   {
     userId: { type: String, required: true },
     platform: {
@@ -238,7 +304,7 @@ const SocialRegistrationSchema = new Schema<SocialRegistration>(
   { _id: false }
 );
 
-const GameConfigSchema = new Schema<GameConfig>(
+const GameSchema = new Schema<GameSection>(
   {
     gameId: { type: String, required: true },
     type: { type: String, enum: ['WORDLE', 'HANGMAN'], required: true },
@@ -270,9 +336,10 @@ const ChatterpointsSchema = new Schema<IChatterpoints>(
     startAt: { type: Date, required: true, index: true },
     endAt: { type: Date, required: true, index: true },
     podiumPrizes: { type: [Number], required: true, default: [0, 0, 0] },
-    games: { type: [GameConfigSchema], required: true, default: [] },
+    games: { type: [GameSchema], required: true, default: [] },
+    operations: { type: OperationsSchema, required: true, default: { config: [], entries: [] } },
+    socialActions: { type: [SocialActionsSchema], required: true, default: [] },
     periods: { type: [GamePeriodSchema], required: true, default: [] },
-    socialRegistrations: { type: [SocialRegistrationSchema], required: true, default: [] },
     totalsByUser: { type: [TotalsByUserSchema], required: true, default: [] }
   },
   {

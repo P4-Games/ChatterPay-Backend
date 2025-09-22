@@ -16,7 +16,8 @@ export enum NotificationEnum {
   aave_supply_created = 'aave_supply_created',
   aave_supply_info = 'aave_supply_info',
   aave_supply_info_no_data = 'aave_supply_info_no_data',
-  aave_supply_modified = 'aave_supply_modified'
+  aave_supply_modified = 'aave_supply_modified',
+  chatterpoints_operation = 'chatterpoints_operation'
 }
 
 export interface LocalizedContentType {
@@ -69,7 +70,8 @@ const templateSchema = new Schema<ITemplateSchema>({
     aave_supply_created: { type: notificationSchema, required: true },
     aave_supply_modified: { type: notificationSchema, required: true },
     aave_supply_info: { type: notificationSchema, required: true },
-    aave_supply_info_no_data: { type: notificationSchema, required: true }
+    aave_supply_info_no_data: { type: notificationSchema, required: true },
+    chatterpoints_operation: { type: notificationSchema, required: true }
   }
 });
 

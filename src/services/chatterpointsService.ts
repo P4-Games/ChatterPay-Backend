@@ -7,7 +7,12 @@ import { Logger } from '../helpers/loggerHelper';
 import { cacheService } from './cache/cacheService';
 import { getDisplayUserLabel } from './userService';
 import { mongoUserService } from './mongo/mongoUserService';
-import { CacheNames, gamesLanguage, gamesLanguages } from '../types/commonType';
+import {
+  CacheNames,
+  gamesLanguage,
+  gamesLanguages,
+  ConcurrentOperationsEnum
+} from '../types/commonType';
 import {
   LeaderboardItem,
   LeaderboardResponse,
@@ -22,16 +27,18 @@ import {
 } from '../config/constants';
 import {
   GameType,
-  GameConfig,
   GamePeriod,
   PeriodWord,
   TimeWindow,
+  GameSection,
   CycleStatus,
   PlayAttempt,
   GameSettings,
   PeriodStatus,
+  OperationEntry,
   HangmanSettings,
   PeriodUserPlays,
+  OperationsSection,
   IChatterpointsDocument
 } from '../models/chatterpointsModel';
 
@@ -45,7 +52,8 @@ export interface CreateCycleRequest {
   /** Explicit endAt (ignored if durationMinutes provided) */
   endAt?: Date;
   /** Games to enable with optional overrides; defaults applied if omitted */
-  games?: Array<Partial<GameConfig> & Pick<GameConfig, 'type' | 'gameId'>>;
+  games?: Array<Partial<GameSection> & Pick<GameSection, 'type' | 'gameId'>>;
+  operations?: OperationsSection;
   podiumPrizes?: number[];
 }
 
@@ -105,6 +113,14 @@ const DEFAULTS = {
     points: { victoryBase: 50, losePenalty: 0, maxWrongAttempts: 6 }
   }
 } as const;
+
+export interface RegisterOperationResult {
+  cycleId: string;
+  startAt: Date;
+  endAt: Date;
+  status: string;
+  operation: OperationEntry;
+}
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -379,7 +395,7 @@ async function randomWord(
  *
  * @async
  * @function expandPeriodsForGame
- * @param {GameConfig} game - The game configuration object, including settings and used words.
+ * @param {GameSection} game - The game configuration object, including settings and used words.
  * @param {Date} startAt - The start date of the game cycle.
  * @param {Date} endAt - The end date of the game cycle.
  * @returns {Promise<GamePeriod[]>} An array of `GamePeriod` objects, one for each slot.
@@ -397,7 +413,7 @@ async function randomWord(
  * - The function retries word generation and ensures uniqueness via `disallow`.
  */
 async function expandPeriodsForGame(
-  game: GameConfig,
+  game: GameSection,
   startAt: Date,
   endAt: Date
 ): Promise<GamePeriod[]> {
@@ -467,7 +483,7 @@ async function expandPeriodsForGame(
  * @function defaultGameConfig
  * @param {GameType} type - The type of the game (`"WORDLE"` or `"HANGMAN"`).
  * @param {string} gameId - A unique identifier for the game instance.
- * @returns {GameConfig} A new `GameConfig` object with the appropriate defaults.
+ * @returns {GameSection} A new `GameConfig` object with the appropriate defaults.
  *
  * @example
  * const wordleConfig = defaultGameConfig('WORDLE', 'game-123');
@@ -477,7 +493,7 @@ async function expandPeriodsForGame(
  * const hangmanConfig = defaultGameConfig('HANGMAN', 'game-456');
  * console.log(hangmanConfig.type); // → "HANGMAN"
  */
-function defaultGameConfig(type: GameType, gameId: string): GameConfig {
+function defaultGameConfig(type: GameType, gameId: string): GameSection {
   if (type === 'WORDLE') {
     return {
       gameId,
@@ -553,7 +569,7 @@ function validatePeriodHierarchy(cycleMinutes: number, periodMinutes: number): v
  * @param {string} periodId - The unique identifier of the active game period.
  * @param {PlayRequest} req - The incoming request containing user ID and guess.
  * @param {GamePeriod} period - The current active game period state.
- * @param {GameConfig} gameCfg - The game configuration, including Wordle rules and points.
+ * @param {GameSection} gameCfg - The game configuration, including Wordle rules and points.
  * @param {number} attemptNumber - The sequential number of the current attempt for this period.
  * @param {Date} now - The current timestamp of the play request.
  * @returns {Promise<{
@@ -575,7 +591,7 @@ async function playWordle(
   periodId: string,
   req: PlayRequest,
   period: GamePeriod,
-  gameCfg: GameConfig,
+  gameCfg: GameSection,
   attemptNumber: number,
   now: Date,
   lang: gamesLanguage
@@ -678,7 +694,7 @@ async function playWordle(
  * @param {string} periodId - The unique identifier of the active game period.
  * @param {PlayRequest} req - The incoming request containing user ID and guess.
  * @param {GamePeriod} period - The current active game period state.
- * @param {GameConfig} gameCfg - The game configuration, including Hangman rules and points.
+ * @param {GameSection} gameCfg - The game configuration, including Hangman rules and points.
  * @param {number} attemptNumber - The sequential number of the current attempt for this period.
  * @param {Date} now - The current timestamp of the play request.
  * @param {gamesLanguage} lang - The language of the current game word.
@@ -697,7 +713,7 @@ async function playHangman(
   periodId: string,
   req: PlayRequest,
   period: GamePeriod,
-  gameCfg: GameConfig,
+  gameCfg: GameSection,
   attemptNumber: number,
   now: Date,
   lang: gamesLanguage
@@ -811,7 +827,7 @@ export const chatterpointsService = {
   /**
    * Creates a new game cycle with configured games and periods.
    *
-   * - Validates that the requester has admin rights (`games_admin`).
+   * - Validates that the requester has admin rights (`chatterpoints_admin`).
    * - Ensures there is no currently open cycle; if one exists but is expired, it auto-closes it.
    * - Determines the cycle time range using either:
    *   - `req.startAt` + `req.durationMinutes`, or
@@ -849,7 +865,7 @@ export const chatterpointsService = {
     }
 
     const isAdmin = await mongoUserService.getUser(req.userId);
-    if (!isAdmin?.games_admin) {
+    if (!isAdmin?.chatterpoints_admin) {
       throw new Error("You don't have access to this operation.");
     }
 
@@ -874,9 +890,9 @@ export const chatterpointsService = {
     ];
 
     // Build game configs with defaults + overrides
-    const games: GameConfig[] = gamesRequested.map((g) => {
+    const games: GameSection[] = gamesRequested.map((g) => {
       const base = defaultGameConfig(g.type, g.gameId);
-      const merged: GameConfig = {
+      const merged: GameSection = {
         ...base,
         enabled: (g as { enabled?: boolean }).enabled ?? base.enabled,
         config: {
@@ -932,6 +948,7 @@ export const chatterpointsService = {
       startAt,
       endAt,
       games,
+      operations: req.operations,
       periods: allPeriods,
       podiumPrizes: req.podiumPrizes ?? [0, 0, 0]
     });
@@ -1586,6 +1603,82 @@ export const chatterpointsService = {
       endAt: cycle.endAt,
       status: cycle.status,
       plays
+    };
+  },
+
+  /**
+   * Register a new operation entry for a user in the current or specified cycle.
+   *
+   * Responsibilities:
+   * - Resolves the active cycle (by cycleId or last cycle if omitted).
+   * - Validates and finds a matching rule from `operations.config` based on type, userLevel, and amount.
+   * - Creates an `OperationEntry` with awarded points and persists it into the cycle.
+   * - Accumulates points in `totalsByUser` (increments if the user already exists, inserts otherwise).
+   * - Returns cycle metadata and all formatted operation entries (filtered by user if requested).
+   *
+   * @param {Object} opts - Operation registration input.
+   * @param {string} [opts.cycleId] - Target cycle ID; if not provided, the last cycle is used.
+   * @param {string} opts.userId - User performing the operation.
+   * @param {string} opts.userLevel - User level (e.g., L1, L2).
+   * @param {ConcurrentOperationsEnum} opts.type - Operation type from ConcurrentOperationsEnum.
+   * @param {number} opts.amount - Amount involved in the operation.
+   * @param {string} opts.operationId - Unique operation identifier (tx hash or internal id).
+   *
+   * @returns {Promise<{
+   *   cycleId: string;
+   *   startAt: Date;
+   *   endAt: Date;
+   *   status: string;
+   *   operations: string[];
+   * } | null>} Resolves with cycle metadata and formatted operations, or null if no cycle is found.
+   */
+  registerOperation: async (opts: {
+    cycleId?: string;
+    userId: string;
+    userLevel: string;
+    type: ConcurrentOperationsEnum;
+    amount: number;
+    operationId: string;
+  }): Promise<RegisterOperationResult | null> => {
+    let cycle: IChatterpointsDocument | null = null;
+
+    if (opts.cycleId) {
+      cycle = await mongoChatterpointsService.getCycleById(opts.cycleId);
+    } else {
+      cycle = await mongoChatterpointsService.getLastCycle();
+    }
+
+    if (!cycle || cycle.status !== 'OPEN') {
+      return null;
+    }
+
+    const rule = cycle.operations.config.find(
+      (r) =>
+        r.type === opts.type &&
+        r.userLevel === opts.userLevel &&
+        opts.amount >= r.minAmount &&
+        opts.amount <= r.maxAmount
+    );
+    if (!rule) throw new Error('no matching rule');
+
+    const entry: OperationEntry = {
+      operationId: opts.operationId,
+      userId: opts.userId,
+      type: opts.type,
+      amount: opts.amount,
+      userLevel: opts.userLevel,
+      points: rule.points,
+      at: new Date()
+    };
+
+    await mongoChatterpointsService.addOperationEntry(cycle.cycleId, entry);
+
+    return {
+      cycleId: cycle.cycleId,
+      startAt: cycle.startAt,
+      endAt: cycle.endAt,
+      status: cycle.status,
+      operation: entry
     };
   }
 };

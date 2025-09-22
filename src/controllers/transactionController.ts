@@ -9,13 +9,14 @@ import { delaySeconds } from '../helpers/timeHelper';
 import { IUser, IUserWallet } from '../models/userModel';
 import { NotificationEnum } from '../models/templateModel';
 import { getChatterpayTokenFee } from '../services/commonService';
-import { verifyWalletBalanceInRpc } from '../services/balanceService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import Transaction, { ITransaction } from '../models/transactionModel';
 import { sendTransferUserOperation } from '../services/transferService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
+import { getTokenPrices, verifyWalletBalanceInRpc } from '../services/balanceService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
+import { chatterpointsService, RegisterOperationResult } from '../services/chatterpointsService';
 import {
   TransactionData,
   ExecueTransactionResult,
@@ -704,12 +705,28 @@ export const makeTransaction = async (
       user_notes: santizedUserNotes
     };
     await mongoTransactionService.saveTransaction(transactionOut);
-    saveTransactionSpan?.endSpan();
 
+    /* ***************************************************** */
+    /* 12. makeTransaction: save chatterpoints               */
+    /* ***************************************************** */
+    const prices = await getTokenPrices([tokenSymbol]);
+    const price = prices.get(tokenSymbol.toUpperCase()) ?? 1;
+    const amountInUsd = parseFloat(amount) * price;
+
+    const chatterpointsOpResult: RegisterOperationResult | null =
+      await chatterpointsService.registerOperation({
+        userId: fromUser.phone_number,
+        userLevel: fromUser.level,
+        type: ConcurrentOperationsEnum.Transfer,
+        amount: amountInUsd,
+        operationId: executeTransactionResult.transactionHash
+      });
+
+    saveTransactionSpan?.endSpan();
     await mongoUserService.updateUserOperationCounter(channel_user_id, 'transfer');
 
     /* ***************************************************** */
-    /* 12. makeTransaction: send user notification           */
+    /* 13. makeTransaction: send user notification           */
     /* ***************************************************** */
     const notificationSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'sendUserNotifications' })
@@ -742,6 +759,7 @@ export const makeTransaction = async (
       tokenData!.symbol,
       santizedUserNotes,
       executeTransactionResult.transactionHash,
+      chatterpointsOpResult,
       traceHeader
     );
 
