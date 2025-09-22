@@ -1648,7 +1648,7 @@ export const chatterpointsService = {
       cycle = await mongoChatterpointsService.getLastCycle();
     }
 
-    if (!cycle) {
+    if (!cycle || cycle.status !== 'OPEN') {
       return null;
     }
 
