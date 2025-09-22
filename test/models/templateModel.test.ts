@@ -197,6 +197,18 @@ describe('Template Model', () => {
             es: '✅ Has retirado correctamente [AMOUNT] [TOKEN] de tu cuenta con intereses. 🎉\n\nPodés ver los detalles de la transacción aquí:\n[EXPLORER]/tx/[TX_HASH]',
             pt: '✅ Você retirou com sucesso [AMOUNT] [TOKEN] da sua conta com juros. 🎉\n\nConfira os detalhes da transação aqui:\n[EXPLORER]/tx/[TX_HASH]'
           }
+        },
+        chatterpoints_operation: {
+          title: {
+            en: 'ChatterPay: You earned ChatterPoints! 🎯',
+            es: 'ChatterPay: ¡Ganaste ChatterPoints! 🎯',
+            pt: 'ChatterPay: Você ganhou ChatterPoints! 🎯'
+          },
+          message: {
+            en: 'Con esta operación sumaste [POINTS] ChatterPoints! 🥳',
+            es: '¡Con esta operación sumaste [POINTS] ChatterPoints! 🥳',
+            pt: 'Com esta operação você ganhou [POINTS] ChatterPoints! 🥳'
+          }
         }
       }
     };
