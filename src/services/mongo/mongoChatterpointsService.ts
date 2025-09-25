@@ -59,10 +59,10 @@ function buildDefaultOperationsConfig() {
   const operations = Object.values(ConcurrentOperationsEnum).filter((op) => !excluded.has(op));
 
   const ranges = [
-    { min: 0, max: 100, points: 5 },
-    { min: 101, max: 500, points: 7 },
-    { min: 501, max: 1000, points: 10 },
-    { min: 1001, max: 5000, points: 20 },
+    { min: 0, max: 100, points: 50 },
+    { min: 101, max: 500, points: 50 },
+    { min: 501, max: 1000, points: 50 },
+    { min: 1001, max: 5000, points: 50 },
     { min: 5000, max: 9999999999, points: 50 }
   ];
 
