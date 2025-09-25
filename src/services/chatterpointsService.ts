@@ -30,8 +30,8 @@ import {
   GamePeriod,
   PeriodWord,
   TimeWindow,
-  GameSection,
   CycleStatus,
+  GameSection,
   PlayAttempt,
   GameSettings,
   PeriodStatus,
@@ -84,19 +84,19 @@ export interface ExpiredCleanupResult {
   closedCycles: number;
 }
 
-type LeaderboardRow = {
+export interface LeaderboardRow {
   position: number;
   trophy?: string;
   user: string;
   points: number;
   prize: number;
-};
+}
 
-type LeaderboardResult = {
+export interface LeaderboardResult {
   cycleId: string;
   cycleRange: string; // "startAt - endAt" for user display
   entries: LeaderboardRow[];
-};
+}
 
 const DEFAULTS = {
   cycleDurationMinutes: 7 * 24 * 60, // weekly

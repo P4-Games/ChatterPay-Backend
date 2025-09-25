@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { chatterpointsService } from '../services/chatterpointsService';
+import { LeaderboardResult, chatterpointsService } from '../services/chatterpointsService';
 import {
   GameSection,
   GameSettings,
@@ -146,8 +146,9 @@ export const leaderboard = async (
 ): Promise<void> => {
   try {
     const { cycleId, top } = req.body;
-    const result = await chatterpointsService.getLeaderboard({ cycleId, top });
-    await reply.status(200).send({ status: 'ok', leaderboard: result }); // prize included automatically
+    const result: LeaderboardResult = await chatterpointsService.getLeaderboard({ cycleId, top });
+    const sanitizedEntries = result.entries.map(({ prize: _prize, ...rest }) => rest);
+    await reply.status(200).send({ status: 'ok', leaderboard: sanitizedEntries });
   } catch (err) {
     Logger.error('[leaderboard] %s', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
