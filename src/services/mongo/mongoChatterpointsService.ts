@@ -66,11 +66,11 @@ function buildDefaultOperationsConfig() {
   const operations = Object.values(ConcurrentOperationsEnum).filter((op) => !excluded.has(op));
 
   const ranges = [
-    { min: 0, max: 100, basePoints: 0.5 },
-    { min: 101, max: 500, basePoints: 0.2 },
-    { min: 501, max: 1000, basePoints: 0.1 },
-    { min: 1001, max: 5000, basePoints: 0.05 },
-    { min: 5000, max: 9999999999, basePoints: 0.01 }
+    { min: 0, max: 100, basePoints: 0.5, fullCount: 10, decayFactor: 0.7 },
+    { min: 101, max: 500, basePoints: 0.2, fullCount: 8, decayFactor: 0.6 },
+    { min: 501, max: 1000, basePoints: 0.1, fullCount: 5, decayFactor: 0.5 },
+    { min: 1001, max: 5000, basePoints: 0.05, fullCount: 3, decayFactor: 0.5 },
+    { min: 5000, max: 9999999999, basePoints: 0.01, fullCount: 2, decayFactor: 0.4 }
   ];
 
   const config = userLevels.flatMap((level) =>
@@ -81,8 +81,8 @@ function buildDefaultOperationsConfig() {
         minAmount: r.min,
         maxAmount: r.max,
         basePoints: r.basePoints,
-        fullCount: 5, // first 5 operations count at 100%
-        decayFactor: 0.5 // from 6th onwards apply ×0.5
+        fullCount: r.fullCount,
+        decayFactor: r.decayFactor
       }))
     )
   );
