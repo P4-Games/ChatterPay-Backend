@@ -166,7 +166,12 @@ export interface SocialSection {
 /** Precomputed totals for fast leaderboard (cycle-scoped) */
 export interface TotalsByUser {
   userId: string;
-  points: number;
+  total: number;
+  breakdown: {
+    games: number;
+    operations: number;
+    social: number;
+  };
 }
 
 /** Main cycle document */
@@ -318,7 +323,12 @@ const GameSchema = new Schema<GameSection>(
 const TotalsByUserSchema = new Schema<TotalsByUser>(
   {
     userId: { type: String, required: true, index: true },
-    points: { type: Number, required: true, default: 0, index: true }
+    total: { type: Number, required: true, default: 0, index: true },
+    breakdown: {
+      games: { type: Number, required: true, default: 0 },
+      operations: { type: Number, required: true, default: 0 },
+      social: { type: Number, required: true, default: 0 }
+    }
   },
   { _id: false }
 );
