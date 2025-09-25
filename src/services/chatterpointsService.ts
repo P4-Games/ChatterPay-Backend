@@ -1250,12 +1250,13 @@ export const chatterpointsService = {
    *   - Otherwise, falls back to the most recent cycle (`getLastCycle`).
    * - Computes:
    *   - Total points accumulated by the user in the cycle.
+   *   - Breakdown of points by source (`games`, `operation`, `social`).
    *   - Number of periods played.
    *   - Number of wins.
    * - Determines the relevant period to display:
    *   - Prefers the currently active (OPEN) period that includes "now".
    *   - If none are active, uses the most recent period by `endAt`.
-   * - Builds a `periodRange` string (ISO timestamps).
+   * - Builds both `cycleRange` and `periodRange` strings (ISO timestamps).
    * - Resolves the user’s display label with `getDisplayUserLabel`.
    *
    * @async
@@ -1266,17 +1267,23 @@ export const chatterpointsService = {
    * @returns {Promise<{
    *   cycleId: string;
    *   periodId: string;
+   *   cycleRange: string;
    *   periodRange: string;
    *   userId: string;
    *   userProfile: string;
    *   totalPoints: number;
+   *   detailedPoints: {
+   *     games: number;
+   *     operation: number;
+   *     social: number;
+   *   };
    *   periodsPlayed: number;
    *   wins: number;
-   * }>} A stats object containing user totals and the relevant period.
+   * }>} A stats object containing user totals, breakdown by source, and the relevant period.
    *
    * @example
    * const stats = await getStats({ userId: "u123" });
-   * console.log(stats.totalPoints, stats.wins);
+   * console.log(stats.totalPoints, stats.detailedPoints.games, stats.wins);
    *
    * @throws {Error} Only if underlying DB queries fail; otherwise gracefully returns zeroed stats.
    */
@@ -1285,15 +1292,21 @@ export const chatterpointsService = {
   ): Promise<{
     cycleId: string;
     periodId: string;
+    cycleRange: string;
     periodRange: string;
     userId: string;
     userProfile: string;
     totalPoints: number;
+    detailedPoints: {
+      games: number;
+      operation: number;
+      social: number;
+    };
     periodsPlayed: number;
     wins: number;
   }> => {
     // Minimal shapes expected from mongo (narrowed locally to satisfy typing & linter)
-    type PeriodPlay = { userId: string; won: boolean };
+    type PeriodPlay = { userId: string; won: boolean; totalPoints?: number };
     type Period = {
       periodId: string;
       startAt: Date;
@@ -1301,7 +1314,14 @@ export const chatterpointsService = {
       status: 'OPEN' | 'CLOSED';
       plays: PeriodPlay[];
     };
-    type TotalsByUser = { userId: string; points: number };
+    type BreakdownA = { games: number; operations: number; social: number };
+    type BreakdownB = { games: number; operations: number; social: number };
+    type TotalsByUser = {
+      userId: string;
+      total: number;
+      breakdown?: BreakdownA | BreakdownB;
+    };
+
     type CycleDoc = {
       cycleId: string;
       startAt: Date;
@@ -1318,10 +1338,12 @@ export const chatterpointsService = {
         return {
           cycleId: '',
           periodId: '',
+          cycleRange: '',
           periodRange: '',
           userId: req.userId,
           userProfile: await getDisplayUserLabel(req.userId),
           totalPoints: 0,
+          detailedPoints: { games: 0, operation: 0, social: 0 },
           periodsPlayed: 0,
           wins: 0
         };
@@ -1330,28 +1352,49 @@ export const chatterpointsService = {
     }
 
     // 2) Load cycle document
-
-    const cycle: CycleDoc | null = await mongoChatterpointsService.getCycleById(cycleId);
+    const cycle = (await mongoChatterpointsService.getCycleById(
+      cycleId
+    )) as unknown as CycleDoc | null;
     if (!cycle) {
       return {
         cycleId,
         periodId: '',
+        cycleRange: '',
         periodRange: '',
         userId: req.userId,
         userProfile: await getDisplayUserLabel(req.userId),
         totalPoints: 0,
+        detailedPoints: { games: 0, operation: 0, social: 0 },
         periodsPlayed: 0,
         wins: 0
       };
     }
 
-    // 3) Compute user totals
-    const totalPoints: number =
-      cycle.totalsByUser.find((t: TotalsByUser) => t.userId === req.userId)?.points ?? 0;
+    // 3) Totals for this user (already precomputed in Mongo)
+    const userTotals = cycle.totalsByUser.find((t) => t.userId === req.userId);
+    const totalPoints: number = userTotals?.total ?? 0;
 
+    let gamesPoints = 0;
+    let operationPoints = 0;
+    let socialPoints = 0;
+
+    if (userTotals?.breakdown) {
+      gamesPoints = userTotals.breakdown.games ?? 0;
+      socialPoints = userTotals.breakdown.social ?? 0;
+
+      if ('operation' in userTotals.breakdown) {
+        operationPoints = userTotals.breakdown.operations ?? 0;
+      } else if ('operations' in userTotals.breakdown) {
+        operationPoints = userTotals.breakdown.operations ?? 0;
+      }
+    }
+
+    const detailedPoints = { games: gamesPoints, operation: operationPoints, social: socialPoints };
+
+    // 4) Aggregate periods played & wins
     const agg = cycle.periods.reduce<{ periodsPlayed: number; wins: number }>(
-      (acc, p: Period) => {
-        const u: PeriodPlay | undefined = p.plays.find((x: PeriodPlay) => x.userId === req.userId);
+      (acc, p) => {
+        const u = p.plays.find((x) => x.userId === req.userId);
         if (u) {
           acc.periodsPlayed += 1;
           acc.wins += u.won ? 1 : 0;
@@ -1361,44 +1404,33 @@ export const chatterpointsService = {
       { periodsPlayed: 0, wins: 0 }
     );
 
-    // 4) Determine period range to display:
-    //    prefer the active (OPEN) period that contains "now"; otherwise, the most recent by endAt.
-    const now: number = Date.now();
-    const active: Period | undefined = cycle.periods.find(
-      (p: Period) =>
-        p.status === 'OPEN' &&
-        p.startAt instanceof Date &&
-        p.endAt instanceof Date &&
-        p.startAt.getTime() <= now &&
-        now < p.endAt.getTime()
+    // 5) Determine period range
+    const now = Date.now();
+    const active = cycle.periods.find(
+      (p) => p.status === 'OPEN' && p.startAt.getTime() <= now && now < p.endAt.getTime()
     );
 
-    // Pick most recent (by endAt) if there is no active period
-    const mostRecent: Period | undefined =
-      active ??
-      cycle.periods
-        .slice()
-        .sort((a: Period, b: Period) => b.endAt.getTime() - a.endAt.getTime())[0];
-
+    const mostRecent =
+      active ?? cycle.periods.slice().sort((a, b) => b.endAt.getTime() - a.endAt.getTime())[0];
     const formatRange = (start: Date, end: Date): string =>
       `${start.toISOString()} - ${end.toISOString()}`;
 
-    const periodRange: string =
-      mostRecent && mostRecent.startAt instanceof Date && mostRecent.endAt instanceof Date
-        ? formatRange(mostRecent.startAt, mostRecent.endAt)
-        : '';
+    const periodRange = mostRecent ? formatRange(mostRecent.startAt, mostRecent.endAt) : '';
+    const cycleRange = cycle.startAt && cycle.endAt ? formatRange(cycle.startAt, cycle.endAt) : '';
 
-    // 5) Resolve display label
-    const userProfile: string = await getDisplayUserLabel(req.userId);
+    // 6) Resolve display label
+    const userProfile = await getDisplayUserLabel(req.userId);
 
-    // 6) Return payload
+    // 7) Return payload
     return {
       cycleId,
-      periodId: mostRecent.periodId,
+      periodId: mostRecent?.periodId ?? '',
       periodRange,
+      cycleRange,
       userId: req.userId,
       userProfile,
       totalPoints,
+      detailedPoints,
       periodsPlayed: agg.periodsPlayed,
       wins: agg.wins
     };
@@ -1448,7 +1480,7 @@ export const chatterpointsService = {
       targetCycleId = lastCycle.cycleId;
     }
 
-    // 2) Fetch leaderboard from mongo (shape: { cycle: {cycleId, startAt, endAt}, items: LeaderboardItem[] })
+    // 2) Fetch leaderboard from mongo
     const leaderboard: LeaderboardResponse | null =
       await mongoChatterpointsService.getLeaderboardTop(targetCycleId, top);
 
@@ -1461,7 +1493,7 @@ export const chatterpointsService = {
       items
     } = leaderboard;
 
-    // 3) Build user labels map with strict typing
+    // 3) Build user labels map
     const uniqueIds: string[] = Array.from(new Set(items.map((r: LeaderboardItem) => r.userId)));
 
     const idLabelPairs: Array<[string, string]> = await Promise.all(
@@ -1480,10 +1512,10 @@ export const chatterpointsService = {
       return trophies[pos];
     };
 
-    // 5) Cycle range for user display
+    // 5) Cycle range
     const cycleRange: string = `${startAt.toISOString()} - ${endAt.toISOString()}`;
 
-    // 6) Map mongo items to view rows
+    // 6) Map items to leaderboard rows
     const rows: LeaderboardRow[] = items.map<LeaderboardRow>((r: LeaderboardItem, idx: number) => ({
       position: idx + 1,
       trophy: trophyFor(idx + 1),

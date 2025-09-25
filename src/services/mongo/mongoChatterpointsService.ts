@@ -6,8 +6,10 @@ import { ConcurrentOperationsEnum } from '../../types/commonType';
 import {
   GamePeriod,
   PeriodWord,
+  TotalsByUser,
   IChatterpoints,
   OperationEntry,
+  PeriodUserPlays,
   ChatterpointsModel,
   IChatterpointsDocument
 } from '../../models/chatterpointsModel';
@@ -41,6 +43,11 @@ export interface LeaderboardItem {
 export interface LeaderboardResponse {
   cycle: {
     cycleId: string;
+    startAt: Date;
+    endAt: Date;
+  };
+  currentPeriod: {
+    periodId: string;
     startAt: Date;
     endAt: Date;
   };
@@ -475,20 +482,42 @@ export const mongoChatterpointsService = {
       .filter((pl) => pl.userId === userId)
       .map((pl) => pl.totalPoints ?? 0);
 
-    const cycleTotal = userPeriodTotals.reduce((a, b) => a + b, 0);
+    const pointsGames = userPeriodTotals.reduce((a, b) => a + b, 0);
 
-    const userExistsInTotals = cycleSnapshot?.totalsByUser?.some((t) => t.userId === userId);
+    // Recuperar breakdown existente si hay
+    const currentTotals = cycleSnapshot?.totalsByUser?.find((t) => t.userId === userId);
+    const pointsOperations = currentTotals?.breakdown?.operations ?? 0;
+    const pointsSocial = currentTotals?.breakdown?.social ?? 0;
 
-    if (!userExistsInTotals) {
+    const cycleTotal = pointsGames + pointsOperations + pointsSocial;
+
+    if (!currentTotals) {
       const totalsIns = await ChatterpointsModel.updateOne(
         { cycleId },
-        { $push: { totalsByUser: { userId, points: cycleTotal } } }
+        {
+          $push: {
+            totalsByUser: {
+              userId,
+              total: cycleTotal,
+              breakdown: {
+                games: pointsGames,
+                operations: pointsOperations,
+                social: pointsSocial
+              }
+            }
+          }
+        }
       ).exec();
       Logger.debug('[pushPlayEntry] totals: insert modified=%d', totalsIns.modifiedCount);
     } else {
       const totalsSet = await ChatterpointsModel.updateOne(
         { cycleId, 'totalsByUser.userId': userId },
-        { $set: { 'totalsByUser.$.points': cycleTotal } }
+        {
+          $set: {
+            'totalsByUser.$.breakdown.games': pointsGames,
+            'totalsByUser.$.total': cycleTotal
+          }
+        }
       ).exec();
       Logger.debug('[pushPlayEntry] totals: set modified=%d', totalsSet.modifiedCount);
     }
@@ -501,9 +530,11 @@ export const mongoChatterpointsService = {
       .lean<IChatterpointsDocument>()
       .exec();
 
-    const plays = finalSnapshot?.periods?.[0]?.plays || [];
-    const meFinal = plays.find((p) => p.userId === userId);
-    const totalPoints = finalSnapshot?.totalsByUser?.find((t) => t.userId === userId)?.points ?? 0;
+    const plays: PeriodUserPlays[] = finalSnapshot?.periods?.[0]?.plays || [];
+    const meFinal: PeriodUserPlays | undefined = plays.find((p) => p.userId === userId);
+
+    const totalPoints: number =
+      finalSnapshot?.totalsByUser?.find((t) => t.userId === userId)?.total ?? 0;
 
     Logger.debug(
       '[pushPlayEntry] snapshot period playsCount=%d myAttempts=%s myEntries=%s myPeriodTotal=%s myCycleTotal=%s',
@@ -558,9 +589,9 @@ export const mongoChatterpointsService = {
     cycleId: string | undefined,
     limit: number
   ): Promise<LeaderboardResponse | null> => {
-    let target = cycleId;
+    let target: string | undefined = cycleId;
     if (!target) {
-      const last = await mongoChatterpointsService.getLastCycle();
+      const last: IChatterpointsDocument | null = await mongoChatterpointsService.getLastCycle();
       if (!last) return null;
       target = last.cycleId;
     }
@@ -581,39 +612,51 @@ export const mongoChatterpointsService = {
 
     // Compute total attempts per user across all periods
     const attemptsByUser: Record<string, number> = {};
-    doc.periods.forEach((p) => {
-      p.plays.forEach((play) => {
+    doc.periods.forEach((p: GamePeriod) => {
+      p.plays.forEach((play: PeriodUserPlays) => {
         attemptsByUser[play.userId] = (attemptsByUser[play.userId] ?? 0) + (play.attempts ?? 0);
       });
     });
 
-    const totals = Array.isArray(doc.totalsByUser) ? doc.totalsByUser : [];
+    const podiumPrizes: number[] = Array.isArray(doc.podiumPrizes) ? doc.podiumPrizes : [0, 0, 0];
 
-    // filter out users with 0 points
-    const nonZeroTotals = totals.filter((t) => (t.points ?? 0) > 0);
+    const totals: TotalsByUser[] = Array.isArray(doc.totalsByUser) ? doc.totalsByUser : [];
 
-    // Sort first by points (desc), then by attempts (asc) in case of ties
-    const sorted = nonZeroTotals
+    // filter out users with 0 total
+    const nonZeroTotals: TotalsByUser[] = totals.filter((t: TotalsByUser) => (t.total ?? 0) > 0);
+
+    // Sort first by total (desc), then by attempts (asc) in case of ties
+    const sorted: TotalsByUser[] = nonZeroTotals
       .slice()
-      .sort((a, b) => {
-        if (b.points !== a.points) return b.points - a.points;
+      .sort((a: TotalsByUser, b: TotalsByUser) => {
+        if (b.total !== a.total) return b.total - a.total;
         return (attemptsByUser[a.userId] ?? Infinity) - (attemptsByUser[b.userId] ?? Infinity);
       })
       .slice(0, limit);
 
-    const podiumPrizes: number[] = Array.isArray(doc.podiumPrizes) ? doc.podiumPrizes : [0, 0, 0];
+    const items: LeaderboardItem[] = sorted.map<LeaderboardItem>(
+      (u: TotalsByUser, idx: number) => ({
+        userId: u.userId,
+        points: u.total,
+        prize: podiumPrizes[idx] ?? 0
+      })
+    );
 
-    const items: LeaderboardItem[] = sorted.map<LeaderboardItem>((u, idx) => ({
-      userId: u.userId,
-      points: u.points,
-      prize: podiumPrizes[idx] ?? 0
-    }));
+    // Pick last period by endAt (or startAt if prefered)
+    const lastPeriod: GamePeriod | undefined = [...doc.periods].sort(
+      (a: GamePeriod, b: GamePeriod) => new Date(b.endAt).getTime() - new Date(a.endAt).getTime()
+    )[0];
 
     return {
       cycle: {
         cycleId: doc.cycleId,
         startAt: doc.startAt,
         endAt: doc.endAt
+      },
+      currentPeriod: {
+        periodId: lastPeriod?.periodId ?? '',
+        startAt: lastPeriod?.startAt ?? null,
+        endAt: lastPeriod?.endAt ?? null
       },
       items
     };
@@ -748,7 +791,10 @@ export const mongoChatterpointsService = {
       { cycleId, 'totalsByUser.userId': entry.userId },
       {
         $push: { 'operations.entries': entry },
-        $inc: { 'totalsByUser.$.points': entry.points }
+        $inc: {
+          'totalsByUser.$.total': entry.points,
+          'totalsByUser.$.breakdown.operations': entry.points
+        }
       }
     ).exec();
 
@@ -759,7 +805,11 @@ export const mongoChatterpointsService = {
         {
           $push: {
             'operations.entries': entry,
-            totalsByUser: { userId: entry.userId, points: entry.points }
+            totalsByUser: {
+              userId: entry.userId,
+              total: entry.points,
+              breakdown: { games: 0, operations: entry.points, social: 0 }
+            }
           }
         }
       ).exec();
