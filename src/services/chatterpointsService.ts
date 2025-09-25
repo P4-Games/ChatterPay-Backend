@@ -821,6 +821,41 @@ async function playHangman(
   return { status: 'ok', periodClosed: false, won, points, display_info: displayInfo };
 }
 
+function withMeta(
+  base: {
+    status: string;
+    periodClosed: boolean;
+    won: boolean;
+    points: number;
+    display_info?: Record<string, unknown>;
+  },
+  cycle?: { cycleId: string; startAt: Date; endAt: Date; name?: string },
+  period?: { periodId: string; startAt: Date; endAt: Date; name?: string }
+) {
+  return {
+    ...base,
+    display_info: {
+      ...base.display_info,
+      ...(cycle && {
+        cycle: {
+          id: cycle.cycleId,
+          name: `Cycle ${cycle.cycleId}`,
+          startAt: cycle.startAt,
+          endAt: cycle.endAt
+        }
+      }),
+      ...(period && {
+        period: {
+          id: period.periodId,
+          name: `Period ${period.periodId}`,
+          startAt: period.startAt,
+          endAt: period.endAt
+        }
+      })
+    }
+  };
+}
+
 // -------------------------------------------------------------------------------------------------------------
 
 export const chatterpointsService = {
@@ -1005,13 +1040,13 @@ export const chatterpointsService = {
     let cycle = await mongoChatterpointsService.getOpenCycle();
     if (!cycle || cycle.status !== 'OPEN') {
       Logger.debug('[play] no OPEN cycle found');
-      return {
+      return withMeta({
         status: 'ok',
         periodClosed: true,
         won: false,
         points: 0,
         display_info: { message: 'No active cycle is currently open.' }
-      };
+      });
     }
 
     const { cycleId } = cycle;
@@ -1029,13 +1064,16 @@ export const chatterpointsService = {
 
     if (!active || !active.period) {
       Logger.debug('[play] no active period resolved for game=%s', req.gameId);
-      return {
-        status: 'ok',
-        periodClosed: true,
-        won: false,
-        points: 0,
-        display_info: { message: 'The current period has already concluded.' }
-      };
+      return withMeta(
+        {
+          status: 'ok',
+          periodClosed: true,
+          won: false,
+          points: 0,
+          display_info: { message: 'The current period has already concluded.' }
+        },
+        cycle
+      );
     }
 
     const { cycle: refreshedCycle, period } = active;
@@ -1065,28 +1103,36 @@ export const chatterpointsService = {
 
     // 5) Rules
     if (user?.won) {
-      return {
-        status: 'ok',
-        periodClosed: false,
-        won: true,
-        points: 0,
-        display_info: {
-          message: 'You already guessed the word this period. Please wait for the next one.'
-        }
-      };
+      return withMeta(
+        {
+          status: 'ok',
+          periodClosed: false,
+          won: true,
+          points: 0,
+          display_info: {
+            message: 'You already guessed the word this period. Please wait for the next one.'
+          }
+        },
+        cycle,
+        period
+      );
     }
 
     if (gameCfg.type === 'WORDLE') {
       const wordleCfg = gameCfg.config as Extract<GameSettings, { type: 'WORDLE' }>;
       const maxAttempts = wordleCfg.settings.attemptsPerUserPerPeriod;
       if ((user?.attempts ?? 0) >= maxAttempts) {
-        return {
-          status: 'ok',
-          periodClosed: false,
-          won: false,
-          points: 0,
-          display_info: { message: 'Max attempts reached for this period.' }
-        };
+        return withMeta(
+          {
+            status: 'ok',
+            periodClosed: false,
+            won: false,
+            points: 0,
+            display_info: { message: 'Max attempts reached for this period.' }
+          },
+          cycle,
+          period
+        );
       }
     } // hangman (verified en custom method)
 
@@ -1101,28 +1147,52 @@ export const chatterpointsService = {
         req.userId,
         normalizedGuess
       );
-      return {
-        status: 'error',
-        periodClosed: false,
-        won: false,
-        points: 0,
-        display_info: {
-          message:
-            gameCfg.type === 'WORDLE'
-              ? 'You already tried that word in this period. Try a different one.'
-              : 'You already tried that letter in this period. Try a different one.'
-        }
-      };
+      return withMeta(
+        {
+          status: 'error',
+          periodClosed: false,
+          won: false,
+          points: 0,
+          display_info: {
+            message:
+              gameCfg.type === 'WORDLE'
+                ? 'You already tried that word in this period. Try a different one.'
+                : 'You already tried that letter in this period. Try a different one.'
+          }
+        },
+        cycle,
+        period
+      );
     }
 
     // 6) Delegate to game-specific logic
     const userDoc = await mongoUserService.getUser(req.userId);
     const lang: gamesLanguage =
       (userDoc?.settings?.notifications?.language as gamesLanguage) ?? GAMES_LANGUAGE_DEFAULT;
-    if (gameCfg.type === 'WORDLE') {
-      return playWordle(cycleId, periodId, req, period, gameCfg, attemptNumber, now, lang);
-    }
-    return playHangman(cycleId, periodId, req, period, gameCfg, attemptNumber, now, lang);
+
+    const base =
+      gameCfg.type === 'WORDLE'
+        ? await playWordle(cycleId, periodId, req, period, gameCfg, attemptNumber, now, lang)
+        : await playHangman(cycleId, periodId, req, period, gameCfg, attemptNumber, now, lang);
+
+    return {
+      ...base,
+      display_info: {
+        ...base.display_info,
+        cycle: {
+          id: cycle.cycleId,
+          name: `Cycle ${cycle.cycleId}`,
+          startAt: cycle.startAt,
+          endAt: cycle.endAt
+        },
+        period: {
+          id: period.periodId,
+          name: `Period ${period.periodId}`,
+          startAt: period.startAt,
+          endAt: period.endAt
+        }
+      }
+    };
   },
 
   /**
