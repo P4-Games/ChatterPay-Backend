@@ -59,11 +59,11 @@ function buildDefaultOperationsConfig() {
   const operations = Object.values(ConcurrentOperationsEnum).filter((op) => !excluded.has(op));
 
   const ranges = [
-    { min: 0, max: 100, points: 50 },
-    { min: 101, max: 500, points: 50 },
-    { min: 501, max: 1000, points: 50 },
-    { min: 1001, max: 5000, points: 50 },
-    { min: 5000, max: 9999999999, points: 50 }
+    { min: 0, max: 100, points: 70 },
+    { min: 101, max: 500, points: 70 },
+    { min: 501, max: 1000, points: 70 },
+    { min: 1001, max: 5000, points: 70 },
+    { min: 5000, max: 9999999999, points: 70 }
   ];
 
   const config = userLevels.flatMap((level) =>
