@@ -1716,7 +1716,7 @@ export const chatterpointsService = {
    * - Validates and finds a matching rule from `operations.config` based on type, userLevel, and amount.
    * - Creates an `OperationEntry` with awarded points and persists it into the cycle.
    * - Accumulates points in `totalsByUser` (increments if the user already exists, inserts otherwise).
-   * - Returns cycle metadata and all formatted operation entries (filtered by user if requested).
+   * - Returns cycle metadata and the inserted operation entry.
    *
    * @param {Object} opts - Operation registration input.
    * @param {string} [opts.cycleId] - Target cycle ID; if not provided, the last cycle is used.
@@ -1731,8 +1731,8 @@ export const chatterpointsService = {
    *   startAt: Date;
    *   endAt: Date;
    *   status: string;
-   *   operations: string[];
-   * } | null>} Resolves with cycle metadata and formatted operations, or null if no cycle is found.
+   *   operation: OperationEntry;
+   * } | null>} Resolves with cycle metadata and operation entry, or null if no cycle is found.
    */
   registerOperation: async (opts: {
     cycleId?: string;
@@ -1763,13 +1763,25 @@ export const chatterpointsService = {
     );
     if (!rule) throw new Error('no matching rule');
 
+    // Count previous operations by this user of the same type within the cycle
+    const prevOpsCount = cycle.operations.entries.filter(
+      (e) => e.userId === opts.userId && e.type === opts.type
+    ).length;
+
+    // Apply diminishing returns
+    const factor =
+      prevOpsCount < rule.fullCount ? 1 : rule.decayFactor ** (prevOpsCount - rule.fullCount + 1);
+
+    // Compute points dynamically: basePoints * amount * factor
+    const computedPoints: number = Math.ceil(rule.basePoints * opts.amount * factor);
+
     const entry: OperationEntry = {
       operationId: opts.operationId,
       userId: opts.userId,
       type: opts.type,
       amount: opts.amount,
       userLevel: opts.userLevel,
-      points: rule.points,
+      points: computedPoints,
       at: new Date()
     };
 

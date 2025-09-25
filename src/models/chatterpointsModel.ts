@@ -24,7 +24,9 @@ export interface OperationPointsRule {
   minAmount: number; // minimum amount (e.g., USDT)
   maxAmount: number; // maximum amount
   userLevel: string; // L1, L2, etc.
-  points: number; // points assigned
+  basePoints: number; // base multiplier to compute final points
+  fullCount: number; // number of full-credit operations per user
+  decayFactor: number; // multiplier applied after fullCount is exceeded
 }
 
 /** A concrete operation performed during a cycle */
@@ -205,7 +207,9 @@ const OperationPointsRuleSchema = new Schema<OperationPointsRule>(
     minAmount: { type: Number, required: true },
     maxAmount: { type: Number, required: true },
     userLevel: { type: String, required: true },
-    points: { type: Number, required: true }
+    basePoints: { type: Number, required: true },
+    fullCount: { type: Number, required: true, default: 5 },
+    decayFactor: { type: Number, required: true, default: 0.5 }
   },
   { _id: false }
 );
