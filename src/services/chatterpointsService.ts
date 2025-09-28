@@ -124,12 +124,13 @@ export interface RegisterOperationResult {
 
 // -------------------------------------------------------------------------------------------------------------
 
-/**
+/** ------------------------------------------------------------------------------------------------
  * Retrieves a local Chatterpoints words file (encrypted JSON).
  *
- * @param {string} urlFile - The name of the words file to retrieve.
- * @returns {Promise<Record<string, Record<string, string[]>>>} The decrypted words dictionary.
- * @throws Throws an error if the local file cannot be retrieved.
+ * @param {string} urlFile - The file path (relative to this module) to read.
+ * @returns {Promise<Record<string, Record<string, string>>>}
+ * The encrypted words dictionary (values are base64 + AES).
+ * @throws {Error} If the local file cannot be read or parsed.
  */
 const getLocalChatterpointsWordsFile = async (
   urlFile: string
@@ -142,7 +143,7 @@ const getLocalChatterpointsWordsFile = async (
       throw new Error(`The file does not exist at path: ${filePath}`);
     }
 
-    // 🚨 Devuelve JSON encriptado, no hace decrypt
+    // Returns encrypted JSON; decryption is performed by getWords().
     return JSON.parse(fs.readFileSync(filePath, 'utf8')) as Record<string, Record<string, string>>;
   } catch (error) {
     Logger.error('getLocalChatterpointsWordsFile', urlFile, (error as Error).message);
@@ -153,8 +154,10 @@ const getLocalChatterpointsWordsFile = async (
 /**
  * Retrieves a Chatterpoints words file from cache or fetches it (from local or GCP).
  *
- * @param {string} fileKey - The key of the words file to retrieve.
- * @returns {Promise<Record<string, Record<string, string[]>>>} The decrypted words dictionary.
+ * @param {string} fileKey - Logical key of the words file (e.g., "Words").
+ * @returns {Promise<Record<string, Record<string, string>>>}
+ * The encrypted words dictionary (values are base64 + AES).
+ * @throws {Error} If the file cannot be retrieved.
  */
 const getChatterpointsWordFile = async (
   fileKey: string
@@ -223,26 +226,15 @@ function decryptJson(base64Str: string, pass: string): string[] {
 }
 
 /**
- * Loads and decrypts all words from the encrypted words dictionary file (`words.json`).
+ * Load and decrypt the per-language word lists for all supported lengths.
  *
- * - Supports multiple languages (currently: `en`, `es`, `pt`).
- * - Supports word lengths from `l5` up to `l15`.
- * - Uses the constant `CHATTERPOINTS_WORDS_SEED` as the decryption key.
- * - Results are cached in memory (`global.__wordsCache`) to avoid repeated decryption.
- *
- * @async
- * @function getWords
  * @returns {Promise<Record<string, Record<string, string[]>>>}
- * A nested record structure where:
- * - The first-level keys are word length identifiers (e.g., `"l5"`, `"l10"`).
- * - The second-level keys are language codes (`"en"`, `"es"`, `"pt"`).
- * - The values are arrays of decrypted words for the given length and language.
- *
+ * The decrypted words dictionary (arrays of plain strings).
  * @throws {Error} If the word file cannot be loaded or decryption fails.
  *
  * @example
  * const words = await getWords();
- * console.log(words["l5"]["en"]); // → Array of English words with length 5
+ * console.log(words["l5"]["en"]); // → array of English 5-letter words
  */
 const getWords = async (): Promise<Record<string, Record<string, string[]>>> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -888,12 +880,27 @@ async function playHangman(
 }
 
 /**
- * Merge base response with cycle/period metadata into display_info.
- * @param {object} base
- * @param {object} [cycle]
- * @param {object} [period]
- * @returns {object}
+ * @template T
+ * @async
+ * @function withMeta
+ * Wrap a service result with optional cycle/period metadata for diagnostics or UI.
+ *
+ * Semantics:
+ * - Executes `fn` and attaches (optional) `cycle` and `period` slices when provided.
+ *
+ * @param {() => Promise<T>} fn - Producer function that resolves the main payload.
+ * @param {Partial<IChatterpoints>} [cycle] - Optional cycle metadata to attach.
+ * @param {Partial<GamePeriod>} [period] - Optional period metadata to attach.
+ * @returns {Promise<{ data: T; cycle?: Partial<IChatterpoints>; period?: Partial<GamePeriod> }>}
+ *
+ * @example
+ * const out = await withMeta(
+ *   () => play(cycleId, periodId, userId, entry),
+ *   { cycleId, startAt, endAt },
+ *   { periodId, startAt: pStart, endAt: pEnd }
+ * );
  */
+
 function withMeta(
   base: {
     status: string;
@@ -1015,61 +1022,33 @@ function assertWordleConfigSafe(cfg: Extract<GameSettings, { type: 'WORDLE' }>) 
 
 export const chatterpointsService = {
   /**
-   * Creates a new game cycle with configured games and periods.
-   *
-   * - Validates that the requester has admin rights (`chatterpoints_admin`).
-   * - Checks if there is an existing open cycle:
-   *   - If found and already expired (`endAt` < now), it auto-closes it.
-   *   - If found and still active, it throws an error (cannot overlap cycles).
-   * - Determines the new cycle time range using either:
-   *   - `req.startAt` + `req.durationMinutes`, or
-   *   - `req.startAt` + `req.endAt`, or
-   *   - Defaults to current time + `DEFAULTS.cycleDurationMinutes`.
-   * - Builds base game configurations for supported games (`WORDLE`, `HANGMAN`):
-   *   - Merges with any overrides provided in `req.games`.
-   *   - For `WORDLE`, validates word length range and efficiencyPenalty rules
-   *     (efficiencyPenalty must be ≤ victoryBase to avoid over-penalizing wins).
-   *   - For `HANGMAN`, applies default settings (wordLength, period window, etc.)
-   *     if not overridden in request.
-   * - Runs `validatePeriodHierarchy` to ensure each game’s period duration
-   *   is strictly shorter than the full cycle duration.
-   * - Expands periods per enabled game using `expandPeriodsForGame`:
-   *   - Generates all period windows within the cycle range.
-   *   - Assigns words and records them in `usedWords` to avoid repetition.
-   * - Persists the cycle document in MongoDB through
-   *   `mongoChatterpointsService.createCycle`, including:
-   *   - games configuration,
-   *   - generated periods,
-   *   - podium prizes,
-   *   - initial totals and social actions.
-   *
    * @async
    * @function createCycle
-   * @param {CreateCycleRequest} req - Request containing:
-   *   - `userId`: string (must be admin).
-   *   - `startAt`: Date (optional).
-   *   - `endAt`: Date (optional).
-   *   - `durationMinutes`: number (optional).
-   *   - `games`: GameSection[] (optional overrides).
-   *   - `podiumPrizes`: number[] (podium rewards).
-   * @returns {Promise<IChatterpointsDocument>} The newly created cycle document stored in MongoDB.
+   * Create a new Chatterpoints cycle and its initial periods.
    *
-   * @throws {Error} If:
-   * - The requester is not authorized (not admin).
-   * - An open cycle already exists and is not expired.
-   * - Provided game configuration is invalid (e.g., Wordle word length out of range,
-   *   or efficiencyPenalty > victoryBase).
-   * - Period hierarchy validation fails (period duration ≥ cycle duration).
-   * - Persistence to MongoDB fails unexpectedly.
+   * Semantics:
+   * - Generates a unique cycleId.
+   * - Assigns sequential periodIds and sets the first period to OPEN, the rest to CLOSED.
+   * - Persists games, operations config (defaults if omitted), periods, and podium prizes.
+   *
+   * @param {Object} input - Cycle creation payload.
+   * @param {Date} input.startAt - Cycle start time (UTC).
+   * @param {Date} input.endAt - Cycle end time (UTC).
+   * @param {IChatterpoints['games']} input.games - Game sections configuration for the cycle.
+   * @param {IChatterpoints['operations']} [input.operations] - Optional operations rules/config.
+   * @param {Array<Omit<GamePeriod,'periodId'> & { word: PeriodWord }>} input.periods - Periods to materialize for this cycle (periodId is autogenerated).
+   * @param {number[]} [input.podiumPrizes] - Optional prizes for top N users.
+   * @returns {Promise<IChatterpointsDocument>} The created cycle (lean object).
+   * @throws {Error} If persistence fails or input is invalid.
    *
    * @example
-   * const cycle = await createCycle({
-   *   userId: "admin1",
-   *   durationMinutes: 1440, // 1 day
-   *   games: [{ type: "WORDLE", gameId: "wordle", enabled: true }],
-   *   podiumPrizes: [100, 50, 25]
+   * // Minimal example
+   * const cycle = await chatterpointsService.createCycle({
+   *   startAt: new Date(),
+   *   endAt: addDays(new Date(), 7),
+   *   games: [defaultWordleGame(), defaultHangmanGame()],
+   *   periods: expandDailyWordle({ /* ... *\/ })
    * });
-   * console.log(cycle.startAt, cycle.en*
    */
   createCycle: async (req: CreateCycleRequest): Promise<IChatterpointsDocument> => {
     if (!req.userId) {
@@ -1383,28 +1362,24 @@ export const chatterpointsService = {
   },
 
   /**
-   * Registers a user’s social participation in the current game cycle.
-   *
-   * - Requires that there is an active `OPEN` cycle.
-   * - If a `cycleId` is provided in the request, validates that the cycle exists and is `OPEN`.
-   * - If no `cycleId` is provided, resolves automatically to the latest `OPEN` cycle.
-   * - Records a social registration event with user ID, platform, and timestamp.
-   *
    * @async
    * @function registerSocial
-   * @param {SocialRequest} req - The request containing:
-   *   - `userId`: The ID of the user registering social participation.
-   *   - `platform`: The social platform (e.g., "twitter", "discord").
-   *   - `cycleId?`: Optional. The cycle to register against; if omitted, the latest `OPEN` cycle is used.
-   * @returns {Promise<{ granted: boolean }>} Whether the social registration was granted.
+   * Register a social action for a user in the OPEN cycle (idempotent on userId).
    *
-   * @throws {Error} If:
-   * - The provided cycle ID is invalid or not `OPEN`.
-   * - No `OPEN` cycle exists when one is required.
+   * Semantics:
+   * - Pushes a socialActions record only if none exists for the user in the OPEN cycle.
+   *
+   * @param {string} cycleId - Cycle identifier.
+   * @param {{ userId: string; platform: 'discord'|'youtube'|'x'|'instagram'|'linkedin'; at: Date }} reg - Social registration payload.
+   * @returns {Promise<boolean>} True if the registration was inserted; false if it already existed.
+   * @throws {Error} On database errors.
    *
    * @example
-   * const res = await registerSocial({ userId: "u123", platform: "twitter" });
-   * console.log(res.granted); // → true or false
+   * await chatterpointsService.registerSocial(cycleId, {
+   *   userId: 'u1',
+   *   platform: 'x',
+   *   at: new Date()
+   * });
    */
   registerSocial: async (req: SocialRequest): Promise<{ granted: boolean }> => {
     // Resolve to the last OPEN cycle (social points require an OPEN cycle)
@@ -1624,33 +1599,22 @@ export const chatterpointsService = {
   },
 
   /**
-   * Retrieves the leaderboard for a given cycle.
-   *
-   * - Resolves the target cycle:
-   *   - If `req.cycleId` is provided, fetches that cycle.
-   *   - Otherwise, falls back to the last available cycle (open or closed).
-   * - Determines how many top entries to fetch (defaults to 3 if `req.top` is not a valid number).
-   * - Queries MongoDB for leaderboard results (`getLeaderboardTop`).
-   * - Resolves display labels for all unique user IDs via `getDisplayUserLabel`.
-   * - Maps leaderboard positions to trophies:
-   *   - 🥇 for 1st
-   *   - 🥈 for 2nd
-   *   - 🥉 for 3rd
-   * - Builds the final leaderboard entries including position, user, points, and prize.
-   * - Returns the cycle ID, cycle date range, and formatted entries.
-   *
    * @async
-   * @function getLeaderboard
-   * @param {LeaderboardRequest} req - The request containing:
-   *   - `cycleId?`: Optional cycle to query; if omitted, uses the most recent cycle.
-   *   - `top?`: Number of top entries to return (defaults to 3).
-   * @returns {Promise<LeaderboardResult>} The leaderboard result including cycle info and entries.
+   * @function getLeaderboardTop
+   * Build leaderboard for a cycle (or the latest cycle if `cycleId` is omitted).
+   *
+   * Semantics:
+   * - Filters out users with total = 0.
+   * - Sorts by total points desc, then by total attempts asc (tie-breaker).
+   * - Applies `podiumPrizes[idx]` when available.
+   *
+   * @param {string|undefined} cycleId - Optional cycle identifier; latest cycle is used if omitted.
+   * @param {number} limit - Maximum number of leaderboard entries to return.
+   * @returns {Promise<LeaderboardResponse|null>} Leaderboard response or null if no cycle exists.
    *
    * @example
-   * const leaderboard = await getLeaderboard({ top: 5 });
-   * console.log(leaderboard.entries);
-   *
-   * @throws {Error} Only if underlying DB queries fail; otherwise returns an empty leaderboard.
+   * const lb = await chatterpointsService.getLeaderboardTop(undefined, 10);
+   * console.log(lb?.items.map(i => `${i.userId}:${i.points}`));
    */
   getLeaderboard: async (req: LeaderboardRequest): Promise<LeaderboardResult> => {
     // 1) Resolve target cycle safely (default top = 3)
