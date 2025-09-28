@@ -129,11 +129,12 @@ function makeCycleId(d: Date): string {
  * Generate a unique periodId inside a cycle.
  *
  * @param {string} cycleId - Parent cycle identifier.
+ * @param {string} gameId - Game identifier.
  * @param {number} index - Zero-based period index.
  * @returns {string} Unique period identifier for the cycle.
  */
-function makePeriodId(cycleId: string, index: number): string {
-  return `${cycleId}-p${index + 1}`;
+function makePeriodId(cycleId: string, gameId: string, index: number): string {
+  return `${gameId}-p${index + 1}-${cycleId}`;
 }
 
 export const mongoChatterpointsService = {
