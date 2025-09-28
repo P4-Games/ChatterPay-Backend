@@ -60,12 +60,22 @@ export interface PlaysBody {
   cycleId?: string;
   channel_user_id?: string;
 }
+
 export const createCycle = async (
   req: FastifyRequest<{ Body: CreateCycleBody }>,
   reply: FastifyReply
 ): Promise<void> => {
   try {
     const { channel_user_id, startAt, endAt, durationMinutes, podiumPrizes, games } = req.body;
+
+    Logger.info('createCycle', {
+      userId: channel_user_id,
+      startAt,
+      endAt,
+      durationMinutes,
+      hasGames: Array.isArray(games)
+    });
+
     const result = await chatterpointsService.createCycle({
       userId: channel_user_id,
       startAt: startAt ? new Date(startAt) : undefined,
@@ -91,9 +101,11 @@ export const createCycle = async (
           : undefined
       }))
     });
+
+    Logger.info('createCycle', 'cycle created', { cycleId: result.cycleId });
     await reply.status(200).send({ status: 'ok', cycleId: result.cycleId.toString() });
   } catch (err) {
-    Logger.error('[createCycle] %s', (err as Error).message);
+    Logger.error('createCycle', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -104,23 +116,35 @@ export const play = async (
 ): Promise<void> => {
   try {
     const { channel_user_id, gameId, guess } = req.body;
+
     if (!channel_user_id || !gameId || !guess) {
+      Logger.warn('play', 'missing required fields', {
+        channel_user_id,
+        gameId,
+        guessLen: guess?.length
+      });
       throw new Error('Missing required fields');
     }
+
     if (gameId.toUpperCase() === 'HANGMAN') {
       const isLetterGuess = guess.length === 1;
-      const isWordGuess = guess.length >= 2; // let service validate exact word length
+      const isWordGuess = guess.length >= 2; // service validates exact word length
       if (!isLetterGuess && !isWordGuess) {
+        Logger.warn('play', 'invalid hangman guess shape', { guess });
         throw new Error('Hangman guess must be a single letter or a full word.');
       }
     }
+
     if (!/^[A-Za-z]+$/.test(guess)) {
+      Logger.warn('play', 'guess contains non-letters', { guess });
       throw new Error('Guess must contain only letters (A-Z).');
     }
+
     const result = await chatterpointsService.play({ userId: channel_user_id, gameId, guess });
+    Logger.info('play', 'attempt accepted', { userId: channel_user_id, gameId });
     await reply.status(200).send(result);
   } catch (err) {
-    Logger.error('[play] %s', (err as Error).message);
+    Logger.error('play', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -131,11 +155,15 @@ export const stats = async (
 ): Promise<void> => {
   try {
     const { cycleId, channel_user_id } = req.body;
-    if (!channel_user_id) throw new Error('Missing required fields');
+    if (!channel_user_id) {
+      Logger.warn('stats', 'missing channel_user_id');
+      throw new Error('Missing required fields');
+    }
     const result = await chatterpointsService.getStats({ cycleId, userId: channel_user_id });
+    Logger.debug('stats', 'fetched', { cycleId: result.cycle?.cycleId, userId: channel_user_id });
     await reply.status(200).send({ status: 'ok', ...result });
   } catch (err) {
-    Logger.error('[stats] %s', (err as Error).message);
+    Logger.error('stats', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -148,9 +176,10 @@ export const leaderboard = async (
     const { cycleId, top } = req.body;
     const result: LeaderboardResult = await chatterpointsService.getLeaderboard({ cycleId, top });
     const sanitizedEntries = result.entries.map(({ prize: _prize, ...rest }) => rest);
+    Logger.debug('leaderboard', { cycleId, top, count: sanitizedEntries.length });
     await reply.status(200).send({ status: 'ok', leaderboard: sanitizedEntries });
   } catch (err) {
-    Logger.error('[leaderboard] %s', (err as Error).message);
+    Logger.error('leaderboard', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -161,15 +190,23 @@ export const social = async (
 ): Promise<void> => {
   try {
     const { cycleId, channel_user_id, platform } = req.body;
-    if (!channel_user_id || !platform) throw new Error('Missing required fields');
+    if (!channel_user_id || !platform) {
+      Logger.warn('social', 'missing required fields', { channel_user_id, platform });
+      throw new Error('Missing required fields');
+    }
     const result = await chatterpointsService.registerSocial({
       cycleId,
       userId: channel_user_id,
       platform
     });
+    Logger.info('social', 'registered', {
+      userId: channel_user_id,
+      platform,
+      inserted: result.inserted
+    });
     await reply.status(200).send({ status: 'ok', ...result });
   } catch (err) {
-    Logger.error('[social] %s', (err as Error).message);
+    Logger.error('social', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -177,10 +214,10 @@ export const social = async (
 export const gamesInfo = async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
   try {
     const result = await chatterpointsService.getCycleGamesInfo();
-
+    Logger.debug('gamesInfo', 'returned games info');
     await reply.status(200).send(result);
   } catch (err) {
-    Logger.error('[gamesInfo] %s', (err as Error).message);
+    Logger.error('gamesInfo', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -188,9 +225,10 @@ export const gamesInfo = async (req: FastifyRequest, reply: FastifyReply): Promi
 export const clean = async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
   try {
     const result = await chatterpointsService.maintainPeriodsAndCycles();
+    Logger.info('clean', 'maintenance summary', result);
     await reply.status(200).send({ status: 'ok', ...result });
   } catch (err) {
-    Logger.error('[cleanupExpired] %s', (err as Error).message);
+    Logger.error('clean', (err as Error).message);
     await reply.status(500).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -201,7 +239,6 @@ export const cyclePlays = async (
 ): Promise<void> => {
   try {
     const body = req.body ?? {};
-
     const { cycleId, channel_user_id } = body as Partial<PlaysBody>;
 
     const result = await chatterpointsService.getCyclePlays({
@@ -210,9 +247,12 @@ export const cyclePlays = async (
     });
 
     if (!result) {
+      Logger.debug('cyclePlays', 'no plays found', { cycleId, userId: channel_user_id });
       await reply.status(404).send({ status: 'error', error: 'No plays found' });
       return;
     }
+
+    Logger.debug('cyclePlays', 'ok', { cycleId: result.cycleId, count: result.plays?.length ?? 0 });
 
     await reply.status(200).send({
       status: 'ok',
@@ -223,7 +263,7 @@ export const cyclePlays = async (
       plays: result.plays
     });
   } catch (err) {
-    Logger.error('[plays] %s', (err as Error).message);
+    Logger.error('cyclePlays', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
