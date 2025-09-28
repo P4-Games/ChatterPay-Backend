@@ -892,8 +892,20 @@ function withMeta(
     points: number;
     display_info?: Record<string, unknown>;
   },
-  cycle?: { cycleId: string; startAt: Date; endAt: Date; name?: string },
-  period?: { periodId: string; startAt: Date; endAt: Date; name?: string }
+  cycle?: {
+    cycleId: string;
+    startAt: Date;
+    endAt: Date;
+    name?: string;
+    status?: 'OPEN' | 'CLOSED';
+  },
+  period?: {
+    periodId: string;
+    startAt: Date;
+    endAt: Date;
+    status?: 'OPEN' | 'CLOSED';
+    name?: string;
+  }
 ) {
   return {
     ...base,
@@ -904,7 +916,8 @@ function withMeta(
           id: cycle.cycleId,
           name: `Cycle ${cycle.cycleId}`,
           startAt: cycle.startAt,
-          endAt: cycle.endAt
+          endAt: cycle.endAt,
+          ...(cycle?.status ? { status: cycle.status } : {})
         }
       }),
       ...(period && {
@@ -912,7 +925,8 @@ function withMeta(
           id: period.periodId,
           name: `Period ${period.periodId}`,
           startAt: period.startAt,
-          endAt: period.endAt
+          endAt: period.endAt,
+          ...(period.status ? { status: period.status } : {})
         }
       })
     }
@@ -1258,24 +1272,7 @@ export const chatterpointsService = {
         ? await playWordle(cycleId, periodId, req, period, gameCfg, attemptNumber, now, lang)
         : await playHangman(cycleId, periodId, req, period, gameCfg, attemptNumber, now, lang);
 
-    return {
-      ...base,
-      display_info: {
-        ...base.display_info,
-        cycle: {
-          id: cycle.cycleId,
-          name: `Cycle ${cycle.cycleId}`,
-          startAt: cycle.startAt,
-          endAt: cycle.endAt
-        },
-        period: {
-          id: period.periodId,
-          name: `Period ${period.periodId}`,
-          startAt: period.startAt,
-          endAt: period.endAt
-        }
-      }
-    };
+    return withMeta(base, cycle, period);
   },
 
   /**
