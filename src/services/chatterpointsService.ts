@@ -731,6 +731,7 @@ async function playHangman(
   if (!answerRaw) throw new Error(`No word available for language=${lang} in this period`);
   const answer = answerRaw.toLowerCase();
   const guess = req.guess.toLowerCase();
+  const answerLen = answer.length;
 
   const hangmanCfg = gameCfg.config as Extract<GameSettings, { type: 'HANGMAN' }>;
   const settings = hangmanCfg.settings as HangmanSettings;
@@ -756,6 +757,55 @@ async function playHangman(
       ? (lastEntry.displayInfo.remainingAttempts as number)
       : hangmanCfg.points.maxWrongAttempts;
 
+  // --- HARD STOPS (no more plays if game is over or user already tried a full word) ---
+  const alreadyTriedFullWord =
+    prevEntries.some((e) => typeof e.guess === 'string' && e.guess.length === answerLen) || false;
+
+  if (remainingAttempts <= 0 || alreadyTriedFullWord) {
+    const wordProgressStop = answer
+      .split('')
+      .map((ch) => (guessedLetters.has(ch.toUpperCase()) ? ch.toUpperCase() : '?'))
+      .join(' ');
+    const displayInfoStop = {
+      wordProgress: wordProgressStop,
+      guessedLetters: Array.from(guessedLetters),
+      wrongLetters: Array.from(wrongLetters),
+      remainingAttempts,
+      message: alreadyTriedFullWord
+        ? 'You already attempted a full word. Please wait for the next period.'
+        : 'No attempts left this period.'
+    };
+    return {
+      status: 'ok',
+      periodClosed: false,
+      won: userPlays?.won ?? false,
+      points: 0,
+      display_info: displayInfoStop
+    };
+  }
+
+  // --- STRICT LENGTH VALIDATION (1 letter OR exact full word). Return (no throw). ---
+  if (!(guess.length === 1 || guess.length === answerLen)) {
+    const wordProgressLen = answer
+      .split('')
+      .map((ch) => (guessedLetters.has(ch.toUpperCase()) ? ch.toUpperCase() : '?'))
+      .join(' ');
+    const displayInfoLen = {
+      wordProgress: wordProgressLen,
+      guessedLetters: Array.from(guessedLetters),
+      wrongLetters: Array.from(wrongLetters),
+      remainingAttempts,
+      message: `Invalid guess length. Must be 1 letter or ${answerLen} letters for full word.`
+    };
+    return {
+      status: 'ok',
+      periodClosed: false,
+      won: false,
+      points: 0,
+      display_info: displayInfoLen
+    };
+  }
+
   // --- GAME LOGIC ---
   if (guess.length === 1) {
     const letterU = guess.toUpperCase();
@@ -773,15 +823,28 @@ async function playHangman(
       won = true;
       points = Math.max(hangmanCfg.points.victoryBase - (attemptNumber - 1) * penalty, 0);
       answer.split('').forEach((ch) => guessedLetters.add(ch.toUpperCase()));
+      remainingAttempts = 0; // end immediately on correct full word
+      // keep this line to mark the end of the game at max attempts (as requested)
+      attemptNumber = hangmanCfg.points.maxWrongAttempts;
     } else {
+      // process each letter of the guessed word before ending the game
+      guess.split('').forEach((ch: string) => {
+        const upper = ch.toUpperCase();
+        if (!guessedLetters.has(upper) && !wrongLetters.has(upper)) {
+          if (answer.includes(ch)) {
+            guessedLetters.add(upper);
+          } else {
+            wrongLetters.add(upper);
+            remainingAttempts = Math.max(remainingAttempts - 1, 0);
+          }
+        }
+      });
       won = false;
       points = hangmanCfg.points.losePenalty;
-      remainingAttempts = 0; // end immediately
+      remainingAttempts = 0; // end after wrong full word
+      // keep this line to mark the end of the game at max attempts (as requested)
+      attemptNumber = hangmanCfg.points.maxWrongAttempts;
     }
-  } else {
-    throw new Error(
-      `Invalid guess length. Must be 1 letter or ${answer.length} letters for full word.`
-    );
   }
 
   // Build word progress
@@ -1120,8 +1183,8 @@ export const chatterpointsService = {
 
     if (gameCfg.type === 'WORDLE') {
       const wordleCfg = gameCfg.config as Extract<GameSettings, { type: 'WORDLE' }>;
-      const maxAttempts = wordleCfg.settings.attemptsPerUserPerPeriod;
-      if ((user?.attempts ?? 0) >= maxAttempts) {
+      const maxWrongAttempts = wordleCfg.settings.attemptsPerUserPerPeriod;
+      if ((user?.attempts ?? 0) >= maxWrongAttempts) {
         return withMeta(
           {
             status: 'ok',
@@ -1134,7 +1197,27 @@ export const chatterpointsService = {
           period
         );
       }
-    } // hangman (verified en custom method)
+    }
+
+    if (gameCfg.type === 'HANGMAN') {
+      // Authoritative guard: attempts counter in plays, not displayInfo
+      const hangmanCfg = gameCfg.config as Extract<GameSettings, { type: 'HANGMAN' }>;
+      const { maxWrongAttempts } = hangmanCfg.points;
+
+      if ((user?.attempts ?? 0) >= maxWrongAttempts) {
+        return withMeta(
+          {
+            status: 'ok',
+            periodClosed: false,
+            won: false,
+            points: 0,
+            display_info: { message: 'No attempts left this period.' }
+          },
+          cycle,
+          period
+        );
+      }
+    }
 
     // 5b) Duplicate guess guard
     const normalizedGuess = req.guess.trim().toLowerCase();
