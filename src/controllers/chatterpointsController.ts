@@ -160,7 +160,7 @@ export const stats = async (
       throw new Error('Missing required fields');
     }
     const result = await chatterpointsService.getStats({ cycleId, userId: channel_user_id });
-    Logger.debug('stats', 'fetched', { cycleId: result.cycle?.cycleId, userId: channel_user_id });
+    Logger.debug('stats', 'fetched', { cycleId, userId: channel_user_id });
     await reply.status(200).send({ status: 'ok', ...result });
   } catch (err) {
     Logger.error('stats', (err as Error).message);
@@ -194,16 +194,20 @@ export const social = async (
       Logger.warn('social', 'missing required fields', { channel_user_id, platform });
       throw new Error('Missing required fields');
     }
+
     const result = await chatterpointsService.registerSocial({
       cycleId,
       userId: channel_user_id,
       platform
     });
+
+    // result: { granted: boolean }
     Logger.info('social', 'registered', {
       userId: channel_user_id,
       platform,
-      inserted: result.inserted
+      granted: result.granted
     });
+
     await reply.status(200).send({ status: 'ok', ...result });
   } catch (err) {
     Logger.error('social', (err as Error).message);
