@@ -887,6 +887,13 @@ async function playHangman(
   return { status: 'ok', periodClosed: false, won, points, display_info: displayInfo };
 }
 
+/**
+ * Merge base response with cycle/period metadata into display_info.
+ * @param {object} base
+ * @param {object} [cycle]
+ * @param {object} [period]
+ * @returns {object}
+ */
 function withMeta(
   base: {
     status: string;
@@ -936,6 +943,74 @@ function withMeta(
   };
 }
 
+/**
+ * Validate Wordle configuration for integer-only knobs and coherent scoring.
+ *
+ * Ensures:
+ * - settings.wordLength: integer ≥ 1
+ * - settings.attemptsPerUserPerPeriod: integer ≥ 1
+ * - settings.efficiencyPenalty: integer ≥ 0 and ≤ points.victoryBase
+ * - points.victoryBase: integer ≥ 1
+ * - points.letterExact: integer ≥ 0
+ * - points.letterPresent: integer ≥ 0
+ * - points.letterExact ≥ points.letterPresent
+ *
+ * Rationale:
+ * efficiencyPenalty ≤ victoryBase prevents over-penalizing early wins
+ * (win score doesn’t go negative before the runtime floor ≥ 1).
+ *
+ * @param {Extract<GameSettings, { type: 'WORDLE' }>} cfg
+ *        Wordle config object:
+ *        {
+ *          type: 'WORDLE',
+ *          settings: {
+ *            wordLength: number,
+ *            attemptsPerUserPerPeriod: number,
+ *            efficiencyPenalty: number
+ *          },
+ *          points: {
+ *            victoryBase: number,
+ *            letterExact: number,
+ *            letterPresent: number
+ *          }
+ *        }
+ * @returns {void}
+ * @throws {Error} If any of the constraints above is violated.
+ */
+function assertWordleConfigSafe(cfg: Extract<GameSettings, { type: 'WORDLE' }>) {
+  const { settings, points } = cfg;
+
+  if (!Number.isInteger(settings.wordLength) || settings.wordLength < 1) {
+    throw new Error('wordLength must be an integer ≥ 1');
+  }
+  if (
+    !Number.isInteger(settings.attemptsPerUserPerPeriod) ||
+    settings.attemptsPerUserPerPeriod < 1
+  ) {
+    throw new Error('attemptsPerUserPerPeriod must be an integer ≥ 1');
+  }
+  if (!Number.isInteger(points.victoryBase) || points.victoryBase < 1) {
+    throw new Error('points.victoryBase must be an integer ≥ 1');
+  }
+  if (!Number.isInteger(points.letterExact) || points.letterExact < 0) {
+    throw new Error('points.letterExact must be an integer ≥ 0');
+  }
+  if (!Number.isInteger(points.letterPresent) || points.letterPresent < 0) {
+    throw new Error('points.letterPresent must be an integer ≥ 0');
+  }
+  if (!Number.isInteger(settings.efficiencyPenalty) || settings.efficiencyPenalty < 0) {
+    throw new Error('efficiencyPenalty must be an integer ≥ 0');
+  }
+  if (points.letterExact < points.letterPresent) {
+    throw new Error('letterExact must be ≥ letterPresent');
+  }
+  // Why: efficiencyPenalty ≤ victoryBase prevents over-penalizing wins immediately;
+  // it guarantees early wins don’t go negative before clamping.
+  if (settings.efficiencyPenalty > points.victoryBase) {
+    throw new Error('efficiencyPenalty must be ≤ victoryBase');
+  }
+}
+
 // -------------------------------------------------------------------------------------------------------------
 
 export const chatterpointsService = {
@@ -943,27 +1018,49 @@ export const chatterpointsService = {
    * Creates a new game cycle with configured games and periods.
    *
    * - Validates that the requester has admin rights (`chatterpoints_admin`).
-   * - Ensures there is no currently open cycle; if one exists but is expired, it auto-closes it.
-   * - Determines the cycle time range using either:
+   * - Checks if there is an existing open cycle:
+   *   - If found and already expired (`endAt` < now), it auto-closes it.
+   *   - If found and still active, it throws an error (cannot overlap cycles).
+   * - Determines the new cycle time range using either:
    *   - `req.startAt` + `req.durationMinutes`, or
    *   - `req.startAt` + `req.endAt`, or
    *   - Defaults to current time + `DEFAULTS.cycleDurationMinutes`.
-   * - Builds default game configurations (`WORDLE`, `HANGMAN`) and merges with overrides from `req.games`.
-   * - Performs business validation (e.g., Wordle word length must be integer between 5 and 15).
-   * - Validates the relationship between cycle duration and period duration (`validatePeriodHierarchy`).
-   * - Expands periods for each enabled game using `expandPeriodsForGame` and tracks used words.
-   * - Persists the new cycle in MongoDB via `mongoChatterpointsService.createCycle`.
+   * - Builds base game configurations for supported games (`WORDLE`, `HANGMAN`):
+   *   - Merges with any overrides provided in `req.games`.
+   *   - For `WORDLE`, validates word length range and efficiencyPenalty rules
+   *     (efficiencyPenalty must be ≤ victoryBase to avoid over-penalizing wins).
+   *   - For `HANGMAN`, applies default settings (wordLength, period window, etc.)
+   *     if not overridden in request.
+   * - Runs `validatePeriodHierarchy` to ensure each game’s period duration
+   *   is strictly shorter than the full cycle duration.
+   * - Expands periods per enabled game using `expandPeriodsForGame`:
+   *   - Generates all period windows within the cycle range.
+   *   - Assigns words and records them in `usedWords` to avoid repetition.
+   * - Persists the cycle document in MongoDB through
+   *   `mongoChatterpointsService.createCycle`, including:
+   *   - games configuration,
+   *   - generated periods,
+   *   - podium prizes,
+   *   - initial totals and social actions.
    *
    * @async
    * @function createCycle
-   * @param {CreateCycleRequest} req - The request containing user ID, time settings, game configs, and podium prizes.
+   * @param {CreateCycleRequest} req - Request containing:
+   *   - `userId`: string (must be admin).
+   *   - `startAt`: Date (optional).
+   *   - `endAt`: Date (optional).
+   *   - `durationMinutes`: number (optional).
+   *   - `games`: GameSection[] (optional overrides).
+   *   - `podiumPrizes`: number[] (podium rewards).
    * @returns {Promise<IChatterpointsDocument>} The newly created cycle document stored in MongoDB.
    *
    * @throws {Error} If:
-   * - The user is not authorized (missing `userId` or not an admin).
-   * - There is an already open cycle that has not yet expired.
-   * - Game configuration validation fails (e.g., invalid Wordle word length).
-   * - Period hierarchy validation fails (periods not shorter than cycle).
+   * - The requester is not authorized (not admin).
+   * - An open cycle already exists and is not expired.
+   * - Provided game configuration is invalid (e.g., Wordle word length out of range,
+   *   or efficiencyPenalty > victoryBase).
+   * - Period hierarchy validation fails (period duration ≥ cycle duration).
+   * - Persistence to MongoDB fails unexpectedly.
    *
    * @example
    * const cycle = await createCycle({
@@ -972,7 +1069,7 @@ export const chatterpointsService = {
    *   games: [{ type: "WORDLE", gameId: "wordle", enabled: true }],
    *   podiumPrizes: [100, 50, 25]
    * });
-   * console.log(cycle.startAt, cycle.endAt, cycle.games.length);
+   * console.log(cycle.startAt, cycle.en*
    */
   createCycle: async (req: CreateCycleRequest): Promise<IChatterpointsDocument> => {
     if (!req.userId) {
