@@ -653,8 +653,11 @@ async function playWordle(
 
   if (guess === answer) {
     won = true;
-    const penalty = wordleCfg.settings.efficiencyPenalty ?? 2;
-    points = Math.max(wordleCfg.points.victoryBase - penalty * (attemptNumber - 1), 0);
+    // Clamp efficiencyPenalty to [0, victoryBase] so victory points never go negative
+    const rawPenalty = wordleCfg.settings.efficiencyPenalty ?? 2;
+    const penalty = Math.min(Math.max(rawPenalty, 0), wordleCfg.points.victoryBase);
+    const victoryPoints = wordleCfg.points.victoryBase - penalty * (attemptNumber - 1);
+    points = Math.max(victoryPoints, 1); // win never 0
   }
 
   const prettyResult = result.replace(/G/g, '🟩').replace(/Y/g, '🟨').replace(/\?/g, '⬛');
@@ -1033,6 +1036,13 @@ export const chatterpointsService = {
       }
 
       return merged;
+    });
+
+    // Wordle config validation at cycle creation (no loops)
+    games.forEach((g) => {
+      if (g.type === 'WORDLE') {
+        assertWordleConfigSafe(g.config as Extract<GameSettings, { type: 'WORDLE' }>);
+      }
     });
 
     // Validate hierarchy
