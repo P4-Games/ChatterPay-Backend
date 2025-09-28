@@ -8,7 +8,8 @@ import {
   gamesInfo,
   cyclePlays,
   createCycle,
-  leaderboard
+  leaderboard,
+  userHistory
 } from '../controllers/chatterpointsController';
 
 /**
@@ -23,6 +24,7 @@ export async function chatterpointsRoutes(fastify: FastifyInstance) {
   fastify.post('/chatterpoints/info', gamesInfo);
   fastify.post('/chatterpoints/clean', clean);
   fastify.post('/chatterpoints/cycle/plays', cyclePlays);
+  fastify.post('/chatterpoints/user/history', userHistory);
 }
 
 export default chatterpointsRoutes;

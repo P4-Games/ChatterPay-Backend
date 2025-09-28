@@ -123,6 +123,66 @@ export interface RegisterOperationResult {
   operation: OperationEntry;
 }
 
+export interface UserHistoryFilters {
+  userId: string;
+  from: Date;
+  to: Date;
+  include: Array<'games' | 'operations' | 'social' | 'prizes'>;
+  gameTypes: GameType[];
+  platforms: Array<'discord' | 'youtube' | 'x' | 'instagram' | 'linkedin'>;
+  gameIds?: string[];
+}
+
+export interface UserGamePlay {
+  cycleId: string;
+  periodId: string;
+  gameId: string;
+  gameType: GameType;
+  at: Date;
+  guess: string;
+  result?: string;
+  points: number;
+  won: boolean;
+}
+
+export interface UserOperationEntry {
+  cycleId: string;
+  type: string;
+  amount: number;
+  userLevel: string;
+  points: number;
+  at: Date;
+}
+
+export interface UserSocialAction {
+  cycleId: string;
+  platform: string;
+  at: Date;
+}
+
+export interface UserPrize {
+  cycleId: string;
+  rank: number;
+  prize: number;
+  totalPoints: number;
+  endAt: Date;
+}
+
+export interface UserHistoryResult {
+  include: Array<'games' | 'operations' | 'social' | 'prizes'>;
+  window: { from: Date; to: Date };
+  games?: UserGamePlay[];
+  operations?: UserOperationEntry[];
+  social?: UserSocialAction[];
+  prizes?: UserPrize[];
+  totals: {
+    games: number;
+    operations: number;
+    social: number;
+    grandTotal: number;
+  };
+}
+
 interface PlayResponseBase {
   status: string;
   periodClosed: boolean;
@@ -130,9 +190,10 @@ interface PlayResponseBase {
   points: number;
   display_info?: Record<string, unknown>;
 }
+
 // -------------------------------------------------------------------------------------------------------------
 
-/** ------------------------------------------------------------------------------------------------
+/**
  * Retrieves a local Chatterpoints words file (encrypted JSON).
  *
  * @param {string} urlFile - The file path (relative to this module) to read.
@@ -1957,6 +2018,70 @@ export const chatterpointsService = {
       endAt: cycle.endAt,
       status: cycle.status,
       operation: entry
+    };
+  },
+
+  getUserHistory: async (f: UserHistoryFilters): Promise<UserHistoryResult> => {
+    const wants = new Set(f.include);
+
+    const [games, operations, social, cycles]: [
+      UserGamePlay[] | undefined,
+      UserOperationEntry[] | undefined,
+      UserSocialAction[] | undefined,
+      IChatterpointsDocument[]
+    ] = await Promise.all([
+      wants.has('games')
+        ? mongoChatterpointsService.queryGamePlays(f.userId, f.from, f.to, f.gameTypes, f.gameIds)
+        : Promise.resolve(undefined),
+      wants.has('operations')
+        ? mongoChatterpointsService.queryOperationEntries(f.userId, f.from, f.to)
+        : Promise.resolve(undefined),
+      wants.has('social')
+        ? mongoChatterpointsService.querySocialActions(f.userId, f.from, f.to, f.platforms)
+        : Promise.resolve(undefined),
+      // for prizes we need cycles to compute rank vs podium
+      wants.has('prizes')
+        ? mongoChatterpointsService.queryCyclesSummary(f.from, f.to)
+        : Promise.resolve([] as IChatterpointsDocument[])
+    ]);
+
+    const prizes: UserPrize[] | undefined = wants.has('prizes')
+      ? cycles
+          .map((c) => {
+            const sorted = [...(c.totalsByUser ?? [])].sort((a, b) => b.total - a.total);
+            const rank = sorted.findIndex((x) => x.userId === f.userId);
+            if (rank === -1 || rank > 2) return null;
+            const prize = (c.podiumPrizes ?? [0, 0, 0])[rank] ?? 0;
+            const totalPoints = sorted[rank]?.total ?? 0;
+            return {
+              cycleId: c.cycleId,
+              rank: rank + 1,
+              prize,
+              totalPoints,
+              endAt: c.endAt
+            } as UserPrize;
+          })
+          .filter((x): x is UserPrize => x !== null)
+      : undefined;
+
+    const gamePoints = (games ?? []).reduce((acc, g) => acc + g.points, 0);
+    const opPoints = (operations ?? []).reduce((acc, o) => acc + o.points, 0);
+    // Social points are not defined in your model; keep 0 to avoid guessing.
+    const socialPoints = 0;
+
+    return {
+      include: f.include,
+      window: { from: f.from, to: f.to },
+      games,
+      operations,
+      social,
+      prizes,
+      totals: {
+        games: gamePoints,
+        operations: opPoints,
+        social: socialPoints,
+        grandTotal: gamePoints + opPoints + socialPoints
+      }
     };
   }
 };

@@ -3,15 +3,22 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { Logger } from '../helpers/loggerHelper';
 import { LeaderboardResult, chatterpointsService } from '../services/chatterpointsService';
 import {
+  GameType,
+  WindowUnit,
   GameSection,
   GameSettings,
   WordleSettings,
+  SocialPlatform,
   HangmanSettings,
   WordlePointsConfig,
   HangmanPointsConfig
 } from '../models/chatterpointsModel';
 
-export interface CreateCycleBody {
+// -------------------------------------------------------------------------------------------------------------
+// Local, controller-only types (mínimos, sin repetir lo que ya existe en el modelo)
+type IncludeKind = 'games' | 'operations' | 'social' | 'prizes';
+
+interface CreateCycleBody {
   startAt?: string;
   endAt?: string;
   channel_user_id: string;
@@ -19,20 +26,20 @@ export interface CreateCycleBody {
   podiumPrizes?: number[];
   games?: Array<{
     gameId: string;
-    type: 'WORDLE' | 'HANGMAN';
+    type: GameType;
     enabled?: boolean;
     config?: {
       settings?: {
         wordLength?: number;
         attemptsPerUserPerPeriod?: number;
-        periodWindow?: { unit: 'MINUTES' | 'HOURS' | 'DAYS' | 'WEEKS'; value: number };
+        periodWindow?: { unit: WindowUnit; value: number };
       };
       points?: Record<string, number>;
     };
   }>;
 }
 
-export interface PlayBody {
+interface PlayBody {
   cycleId: string;
   periodId: string;
   channel_user_id: string;
@@ -40,26 +47,112 @@ export interface PlayBody {
   guess: string;
 }
 
-export interface StatsBody {
+interface StatsBody {
   cycleId: string | undefined;
   channel_user_id: string;
 }
 
-export interface LeaderboardBody {
+interface LeaderboardBody {
   cycleId: string;
   top?: number;
 }
 
-export interface SocialBody {
+interface SocialBody {
   cycleId: string;
   channel_user_id: string;
-  platform: 'discord' | 'youtube' | 'x' | 'instagram' | 'linkedin';
+  platform: SocialPlatform;
 }
 
-export interface PlaysBody {
+interface PlaysBody {
   cycleId?: string;
   channel_user_id?: string;
 }
+
+type DatePreset =
+  | 'today'
+  | 'yesterday'
+  | 'last_7_days'
+  | 'last_30_days'
+  | 'last_365_days'
+  | 'custom';
+
+interface UserHistoryBody {
+  channel_user_id: string;
+  datePreset?: DatePreset;
+  startAt?: string; // ISO (required if datePreset === 'custom')
+  endAt?: string; // ISO (required if datePreset === 'custom')
+  include?: IncludeKind[]; // default: all
+  gameTypes?: GameType[]; // default: ['WORDLE','HANGMAN']
+  platforms?: SocialPlatform[]; // default: all platforms
+  gameIds?: string[]; // optional: filter by specific games (e.g., ['wordle','hangman'])
+}
+
+// -------------------------------------------------------------------------------------------------------------
+// Helpers (solo controller)
+
+function resolveDateRange(
+  preset: DatePreset | undefined,
+  startAt?: string,
+  endAt?: string
+): { from: Date; to: Date } {
+  const now = new Date();
+
+  const startOfDay = (d: Date): Date => {
+    const x = new Date(d);
+    x.setUTCHours(0, 0, 0, 0);
+    return x;
+  };
+  const endOfDay = (d: Date): Date => {
+    const x = new Date(d);
+    x.setUTCHours(23, 59, 59, 999);
+    return x;
+  };
+
+  switch (preset) {
+    case 'today':
+      return { from: startOfDay(now), to: endOfDay(now) };
+    case 'yesterday': {
+      const y = new Date(now);
+      y.setUTCDate(now.getUTCDate() - 1);
+      return { from: startOfDay(y), to: endOfDay(y) };
+    }
+    case 'last_7_days': {
+      const from = new Date(now);
+      from.setUTCDate(now.getUTCDate() - 6);
+      return { from: startOfDay(from), to: endOfDay(now) };
+    }
+    case 'last_30_days': {
+      const from = new Date(now);
+      from.setUTCDate(now.getUTCDate() - 29);
+      return { from: startOfDay(from), to: endOfDay(now) };
+    }
+    case 'last_365_days': {
+      const from = new Date(now);
+      from.setUTCDate(now.getUTCDate() - 364);
+      return { from: startOfDay(from), to: endOfDay(now) };
+    }
+    case 'custom': {
+      if (!startAt || !endAt) {
+        throw new Error('Custom date range requires startAt and endAt.');
+      }
+      const from = new Date(startAt);
+      const to = new Date(endAt);
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+        throw new Error('Invalid custom date range.');
+      }
+      return { from, to };
+    }
+    default: {
+      // Default: last 30 days
+      const from = new Date(now);
+      from.setUTCDate(now.getUTCDate() - 29);
+      return { from: startOfDay(from), to: endOfDay(now) };
+    }
+  }
+}
+
+// -------------------------------------------------------------------------------------------------------------
+// Handlers
 
 export const createCycle = async (
   req: FastifyRequest<{ Body: CreateCycleBody }>,
@@ -268,6 +361,83 @@ export const cyclePlays = async (
     });
   } catch (err) {
     Logger.error('cyclePlays', (err as Error).message);
+    await reply.status(200).send({ status: 'error', error: (err as Error).message });
+  }
+};
+
+// NEW: userHistory (controller -> negocio, no mongo)
+export const userHistory = async (
+  req: FastifyRequest<{ Body: UserHistoryBody }>,
+  reply: FastifyReply
+): Promise<void> => {
+  try {
+    // Body puede venir undefined, protegemos y tipamos
+    type UB = Partial<UserHistoryBody>;
+    const body: UB = (req.body ?? {}) as UB;
+
+    const { channel_user_id, datePreset, startAt, endAt } = body;
+
+    if (!channel_user_id) {
+      Logger.warn('userHistory', 'missing channel_user_id');
+      throw new Error('Missing required fields');
+    }
+
+    // Defaults MUTABLES (evitan el problema de readonly tuples)
+    const include: IncludeKind[] =
+      Array.isArray(body.include) && body.include.length > 0
+        ? body.include.filter(
+            (x): x is IncludeKind =>
+              x === 'games' || x === 'operations' || x === 'social' || x === 'prizes'
+          )
+        : (['games', 'operations', 'social', 'prizes'] as IncludeKind[]);
+
+    const gameTypes: GameType[] =
+      Array.isArray(body.gameTypes) && body.gameTypes.length > 0
+        ? body.gameTypes.filter((x): x is GameType => x === 'WORDLE' || x === 'HANGMAN')
+        : (['WORDLE', 'HANGMAN'] as GameType[]);
+
+    const platforms: SocialPlatform[] =
+      Array.isArray(body.platforms) && body.platforms.length > 0
+        ? body.platforms.filter(
+            (x): x is SocialPlatform =>
+              x === 'discord' ||
+              x === 'youtube' ||
+              x === 'x' ||
+              x === 'instagram' ||
+              x === 'linkedin'
+          )
+        : (['discord', 'youtube', 'x', 'instagram', 'linkedin'] as SocialPlatform[]);
+
+    const gameIds =
+      Array.isArray(body.gameIds) && body.gameIds.length > 0
+        ? body.gameIds
+            .filter((g): g is string => typeof g === 'string')
+            .map((g) => g.trim())
+            .filter((g) => g.length > 0)
+        : undefined;
+
+    const { from, to } = resolveDateRange(datePreset, startAt, endAt);
+
+    // Llama SOLO al servicio de negocio
+    const result = await chatterpointsService.getUserHistory({
+      userId: channel_user_id,
+      from,
+      to,
+      include,
+      gameTypes,
+      platforms,
+      gameIds
+    });
+
+    Logger.debug('userHistory', 'ok', {
+      userId: channel_user_id,
+      include: result.include,
+      window: { from, to }
+    });
+
+    await reply.status(200).send({ status: 'ok', ...result });
+  } catch (err) {
+    Logger.error('userHistory', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };

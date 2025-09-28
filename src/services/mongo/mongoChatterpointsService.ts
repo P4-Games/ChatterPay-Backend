@@ -1,4 +1,4 @@
-import { FilterQuery, UpdateQuery } from 'mongoose';
+import { FilterQuery, UpdateQuery, PipelineStage } from 'mongoose';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { newDateUTC } from '../../helpers/timeHelper';
@@ -134,7 +134,7 @@ function makeCycleId(d: Date): string {
  * @returns {string} Unique period identifier for the cycle.
  */
 function makePeriodId(cycleId: string, gameId: string, index: number): string {
-  return `${gameId}-p${index + 1}-${cycleId}`;
+  return `${gameId}-p${index + 1}-${cycleId}-`;
 }
 
 export const mongoChatterpointsService = {
@@ -1022,5 +1022,291 @@ export const mongoChatterpointsService = {
       .sort({ startAt: 1 }) // earliest to start
       .lean<IChatterpointsDocument>()
       .exec();
+  },
+
+  /**
+   * Query game plays for a user in a date range.
+   * Optionally filters by allowed game types and/or specific gameIds.
+   * Pure read (aggregation); does not mutate documents.
+   *
+   * @param {string} userId - User identifier to filter plays.
+   * @param {Date} from - Inclusive start of the time window (UTC).
+   * @param {Date} to - Inclusive end of the time window (UTC).
+   * @param {Array<'WORDLE'|'HANGMAN'>} gameTypes - Allowed game types to include.
+   * @param {string[] | undefined} gameIds - Optional list of gameIds to include (e.g., ['wordle','hangman']).
+   * @returns {Promise<Array<{
+   *   cycleId: string;
+   *   periodId: string;
+   *   gameId: string;
+   *   gameType: 'WORDLE'|'HANGMAN';
+   *   at: Date;
+   *   guess: string;
+   *   result?: string;
+   *   points: number;
+   *   won: boolean;
+   * }>>} Resolves with a chronologically sorted list of user plays.
+   */
+  queryGamePlays: async (
+    userId: string,
+    from: Date,
+    to: Date,
+    gameTypes: Array<'WORDLE' | 'HANGMAN'>,
+    gameIds?: string[]
+  ): Promise<
+    Array<{
+      cycleId: string;
+      periodId: string;
+      gameId: string;
+      gameType: 'WORDLE' | 'HANGMAN';
+      at: Date;
+      guess: string;
+      result?: string;
+      points: number;
+      won: boolean;
+    }>
+  > => {
+    type AggGameRow = {
+      cycleId: string;
+      periodId: string;
+      gameId: string;
+      at: Date;
+      guess: string;
+      result?: string;
+      points: number;
+      won: boolean;
+      games: Array<{ gameId: string; type: 'WORDLE' | 'HANGMAN' }>;
+    };
+
+    const matchGameIds = Array.isArray(gameIds) && gameIds.length > 0;
+
+    const pipeline: PipelineStage[] = [
+      { $match: { startAt: { $lte: to }, endAt: { $gte: from } } },
+      { $unwind: '$periods' }
+    ];
+
+    if (matchGameIds) {
+      pipeline.push({ $match: { 'periods.gameId': { $in: gameIds } } });
+    }
+
+    pipeline.push(
+      { $unwind: '$periods.plays' },
+      { $match: { 'periods.plays.userId': userId } },
+      { $unwind: '$periods.plays.entries' },
+      { $match: { 'periods.plays.entries.at': { $gte: from, $lte: to } } },
+      {
+        $project: {
+          _id: 0,
+          cycleId: '$cycleId',
+          periodId: '$periods.periodId',
+          gameId: '$periods.gameId',
+          at: '$periods.plays.entries.at',
+          guess: '$periods.plays.entries.guess',
+          result: '$periods.plays.entries.result',
+          points: '$periods.plays.entries.points',
+          won: '$periods.plays.won',
+          games: '$games'
+        }
+      }
+    );
+
+    const rows = await ChatterpointsModel.aggregate<AggGameRow>(pipeline).exec();
+
+    const mapped = rows
+      .reduce<
+        Array<{
+          cycleId: string;
+          periodId: string;
+          gameId: string;
+          gameType: 'WORDLE' | 'HANGMAN';
+          at: Date;
+          guess: string;
+          result?: string;
+          points: number;
+          won: boolean;
+        }>
+      >((acc, r) => {
+        const g = r.games.find((x) => x.gameId === r.gameId);
+        if (!g) return acc;
+        if (!gameTypes.includes(g.type)) return acc;
+        acc.push({
+          cycleId: r.cycleId,
+          periodId: r.periodId,
+          gameId: r.gameId,
+          gameType: g.type,
+          at: new Date(r.at),
+          guess: r.guess,
+          result: r.result,
+          points: Number(r.points),
+          won: Boolean(r.won)
+        });
+        return acc;
+      }, [])
+      .sort((a, b) => a.at.getTime() - b.at.getTime());
+
+    Logger.debug('queryGamePlays', 'done', { userId, from, to, count: mapped.length });
+    return mapped;
+  },
+
+  /**
+   * Query operations entries for a user in a date range.
+   * Pure read (aggregation); does not mutate documents.
+   *
+   * @param {string} userId - User identifier to filter operation entries.
+   * @param {Date} from - Inclusive start of the time window (UTC).
+   * @param {Date} to - Inclusive end of the time window (UTC).
+   * @returns {Promise<Array<{
+   *   cycleId: string;
+   *   type: string;
+   *   amount: number;
+   *   userLevel: string;
+   *   points: number;
+   *   at: Date;
+   * }>>} Resolves with a chronologically sorted list of operation entries.
+   */
+  queryOperationEntries: async (
+    userId: string,
+    from: Date,
+    to: Date
+  ): Promise<
+    Array<{
+      cycleId: string;
+      type: string;
+      amount: number;
+      userLevel: string;
+      points: number;
+      at: Date;
+    }>
+  > => {
+    type AggOpRow = {
+      cycleId: string;
+      type: string;
+      amount: number;
+      userLevel: string;
+      points: number;
+      at: Date;
+    };
+
+    const pipeline: PipelineStage[] = [
+      {
+        $match: {
+          'operations.entries.userId': userId,
+          endAt: { $gte: from },
+          startAt: { $lte: to }
+        }
+      },
+      { $unwind: '$operations.entries' },
+      {
+        $match: {
+          'operations.entries.userId': userId,
+          'operations.entries.at': { $gte: from, $lte: to }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          cycleId: '$cycleId',
+          type: '$operations.entries.type',
+          amount: '$operations.entries.amount',
+          userLevel: '$operations.entries.userLevel',
+          points: '$operations.entries.points',
+          at: '$operations.entries.at'
+        }
+      }
+    ];
+
+    const rows = await ChatterpointsModel.aggregate<AggOpRow>(pipeline).exec();
+
+    const mapped = rows
+      .map((r) => ({
+        cycleId: r.cycleId,
+        type: r.type,
+        amount: Number(r.amount),
+        userLevel: r.userLevel,
+        points: Number(r.points),
+        at: new Date(r.at)
+      }))
+      .sort((a, b) => a.at.getTime() - b.at.getTime());
+
+    Logger.debug('queryOperationEntries', 'done', { userId, from, to, count: mapped.length });
+    return mapped;
+  },
+
+  /**
+   * Query social actions for a user in a date range.
+   * Optionally filters by platforms. Pure read (aggregation); does not mutate documents.
+   *
+   * @param {string} userId - User identifier to filter social actions.
+   * @param {Date} from - Inclusive start of the time window (UTC).
+   * @param {Date} to - Inclusive end of the time window (UTC).
+   * @param {Array<'discord'|'youtube'|'x'|'instagram'|'linkedin'>} platforms - Allowed platforms (empty array means all).
+   * @returns {Promise<Array<{
+   *   cycleId: string;
+   *   platform: string;
+   *   at: Date;
+   * }>>} Resolves with a chronologically sorted list of social actions.
+   */
+  querySocialActions: async (
+    userId: string,
+    from: Date,
+    to: Date,
+    platforms: Array<'discord' | 'youtube' | 'x' | 'instagram' | 'linkedin'>
+  ): Promise<Array<{ cycleId: string; platform: string; at: Date }>> => {
+    type AggSocialRow = { cycleId: string; platform: string; at: Date };
+
+    const pipeline: PipelineStage[] = [
+      { $match: { 'socialActions.userId': userId, endAt: { $gte: from }, startAt: { $lte: to } } },
+      { $unwind: '$socialActions' },
+      {
+        $match: {
+          'socialActions.userId': userId,
+          'socialActions.at': { $gte: from, $lte: to },
+          ...(platforms.length > 0 ? { 'socialActions.platform': { $in: platforms } } : {})
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          cycleId: '$cycleId',
+          platform: '$socialActions.platform',
+          at: '$socialActions.at'
+        }
+      }
+    ];
+
+    const rows = await ChatterpointsModel.aggregate<AggSocialRow>(pipeline).exec();
+
+    const mapped = rows
+      .map((r) => ({ cycleId: r.cycleId, platform: r.platform, at: new Date(r.at) }))
+      .sort((a, b) => a.at.getTime() - b.at.getTime());
+
+    Logger.debug('querySocialActions', 'done', { userId, from, to, count: mapped.length });
+    return mapped;
+  },
+
+  /**
+   * Fetch cycles whose window intersects [from, to], projecting only the fields
+   * required to compute prize standings at the business layer.
+   * Pure read; does not mutate documents.
+   *
+   * @param {Date} from - Inclusive start of the time window (UTC).
+   * @param {Date} to - Inclusive end of the time window (UTC).
+   * @returns {Promise<IChatterpointsDocument[]>} Resolves with lean cycles (subset of fields).
+   */
+  queryCyclesSummary: async (from: Date, to: Date): Promise<IChatterpointsDocument[]> => {
+    const docs = await ChatterpointsModel.find({
+      startAt: { $lte: to },
+      endAt: { $gte: from }
+    })
+      .select({
+        cycleId: 1,
+        endAt: 1,
+        podiumPrizes: 1,
+        totalsByUser: 1
+      })
+      .lean<IChatterpointsDocument[]>()
+      .exec();
+
+    Logger.debug('queryCyclesSummary', 'done', { from, to, count: docs.length });
+    return docs;
   }
 };
