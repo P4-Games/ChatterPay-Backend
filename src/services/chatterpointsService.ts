@@ -1850,9 +1850,9 @@ export const chatterpointsService = {
               const attemptsInfo = `${play.attempts}`;
 
               return (
-                `${play.userId}, ${entry.at.toISOString()}, ${period.gameId}, ` +
+                `${play.userId}, ${period.gameId}, ` +
                 `guess: ${entry.guess}, result: ${result}, points: ${entry.points}, ` +
-                `attempts: ${attemptsInfo}, period: ${period.periodId}`
+                `attempts: ${attemptsInfo}, period: ${period.periodId}, attempt-timestamp: ${entry.at.toISOString()}`
               );
             })
           )

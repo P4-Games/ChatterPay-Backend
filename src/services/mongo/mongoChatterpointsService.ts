@@ -152,7 +152,7 @@ export const mongoChatterpointsService = {
   getOpenCycle: async (): Promise<IChatterpointsDocument | null> => {
     const now = new Date();
 
-    // 1) Close expired OPEN cycles and any leftover OPEN periods inside them
+    // 1) Close expired OPEN cycles + their lingering OPEN periods
     const expiredCycles = await ChatterpointsModel.updateMany(
       { status: 'OPEN', endAt: { $lte: now } },
       { $set: { status: 'CLOSED' } }
@@ -166,28 +166,60 @@ export const mongoChatterpointsService = {
       ).exec();
     }
 
-    // 2) Normalize periods across remaining OPEN cycles
-    // 2.a) Close expired OPEN periods
+    // 2) Close expired and early-opened periods across remaining OPEN cycles
     await ChatterpointsModel.updateMany(
       { status: 'OPEN' },
       { $set: { 'periods.$[p].status': 'CLOSED' } },
       { arrayFilters: [{ 'p.status': 'OPEN', 'p.endAt': { $lte: now } }] }
     ).exec();
 
-    // 2.b) Close early-opened periods (OPEN but startAt > now)
     await ChatterpointsModel.updateMany(
       { status: 'OPEN' },
       { $set: { 'periods.$[p].status': 'CLOSED' } },
       { arrayFilters: [{ 'p.status': 'OPEN', 'p.startAt': { $gt: now } }] }
     ).exec();
 
-    // 3) Return the OPEN cycle that actually contains "now"
-    return ChatterpointsModel.findOne({
+    // 3) Find in-window OPEN cycle
+    const cycle = await ChatterpointsModel.findOne({
       status: 'OPEN',
       startAt: { $lte: now },
       endAt: { $gt: now }
     })
       .sort({ startAt: -1 })
+      .exec();
+
+    if (!cycle) return null;
+
+    // 4) Ensure exactly one in-window OPEN period per game
+    const inWindow = cycle.periods.filter(
+      (p) => p.startAt.getTime() <= now.getTime() && now.getTime() < p.endAt.getTime()
+    );
+
+    const groups = inWindow.reduce<Record<string, GamePeriod[]>>((acc, p) => {
+      (acc[p.gameId] ||= []).push(p);
+      return acc;
+    }, {});
+
+    const chosenIds = Object.values(groups).map(
+      (list) => [...list].sort((a, b) => b.startAt.getTime() - a.startAt.getTime())[0].periodId
+    );
+
+    // Close all in-window periods first (idempotent), then open only chosen per game
+    await ChatterpointsModel.updateOne(
+      { cycleId: cycle.cycleId },
+      { $set: { 'periods.$[p].status': 'CLOSED' } },
+      { arrayFilters: [{ 'p.startAt': { $lte: now }, 'p.endAt': { $gt: now } }] }
+    ).exec();
+
+    if (chosenIds.length > 0) {
+      await ChatterpointsModel.updateOne(
+        { cycleId: cycle.cycleId },
+        { $set: { 'periods.$[p].status': 'OPEN' } },
+        { arrayFilters: [{ 'p.periodId': { $in: chosenIds } }] }
+      ).exec();
+    }
+
+    return ChatterpointsModel.findOne({ cycleId: cycle.cycleId })
       .lean<IChatterpointsDocument>()
       .exec();
   },
@@ -207,6 +239,7 @@ export const mongoChatterpointsService = {
    * @param {CreateCycleInput} input - Cycle creation payload (games, periods, time window and optional operations/prizes).
    * @returns {Promise<IChatterpointsDocument>} Resolves with the created cycle document (lean object).
    */
+
   createCycle: async (input: CreateCycleInput): Promise<IChatterpointsDocument> => {
     Logger.info('createCycle', 'creating', {
       startAt: input.startAt,
@@ -215,17 +248,51 @@ export const mongoChatterpointsService = {
       periods: input.periods?.length ?? 0
     });
 
-    const cycleId = makeCycleId(input.startAt ?? newDateUTC());
-    const periods = input.periods.map((p, idx) => ({
-      ...p,
-      periodId: makePeriodId(cycleId, idx),
-      status: idx === 0 ? 'OPEN' : 'CLOSED'
+    const periodKey = (p: { gameId: string; startAt: Date; endAt: Date }): string =>
+      `${p.gameId}|${p.startAt.getTime()}|${p.endAt.getTime()}`;
+
+    const startAt = input.startAt!;
+    const endAt = input.endAt!;
+    const cycleId = makeCycleId(startAt ?? newDateUTC());
+
+    // Group incoming periods by gameId
+    const byGame = input.periods.reduce<Record<string, typeof input.periods>>((acc, p) => {
+      (acc[p.gameId] ||= []).push(p);
+      return acc;
+    }, {});
+
+    // Choose one period per game to open at creation time:
+    // prefer the one whose window contains cycle.startAt; fallback to earliest of that game.
+    const chosenKeys = new Set<string>();
+    Object.values(byGame).forEach((list) => {
+      const inWindow = list
+        .filter(
+          (p) => p.startAt.getTime() <= startAt.getTime() && startAt.getTime() < p.endAt.getTime()
+        )
+        .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+
+      const fallback = [...list].sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+      const chosen = inWindow[0] ?? fallback[0];
+      if (chosen) chosenKeys.add(periodKey(chosen));
+    });
+
+    // Persisted periods: open only the chosen per game
+    const periods: GamePeriod[] = input.periods.map((p, idx) => ({
+      periodId: makePeriodId(cycleId, p.gameId, idx),
+      gameId: p.gameId,
+      index: p.index,
+      word: p.word,
+      startAt: p.startAt,
+      endAt: p.endAt,
+      status: chosenKeys.has(periodKey(p)) ? 'OPEN' : 'CLOSED',
+      plays: []
     }));
+
     const doc = await ChatterpointsModel.create({
       cycleId,
       status: 'OPEN',
-      startAt: input.startAt,
-      endAt: input.endAt,
+      startAt,
+      endAt,
       podiumPrizes: input.podiumPrizes ?? [0, 0, 0],
       games: input.games,
       operations: input.operations ?? buildDefaultOperationsConfig(),
