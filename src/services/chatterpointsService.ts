@@ -875,9 +875,11 @@ async function playHangman(
     remainingAttempts
   };
 
+  const result = wordProgress.replace(/ /g, '');
   await mongoChatterpointsService.pushPlayEntry(cycleId, periodId, req.userId, {
     guess,
     points,
+    result,
     at: now,
     won,
     attemptNumber,

@@ -137,7 +137,7 @@ export interface GameSection {
 export interface PlayAttempt {
   guess: string;
   points: number;
-  /** Optional compact result encoding (e.g., "GYY__" for Wordle, unused in Hangman) */
+  /** Optional compact result encoding (e.g., "GYY__") */
   result?: string;
   at: Date;
   /** Attempt number within the period (1-based) */
