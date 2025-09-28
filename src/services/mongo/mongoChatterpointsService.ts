@@ -161,6 +161,13 @@ export const mongoChatterpointsService = {
    * @returns {Promise<IChatterpointsDocument>} Resolves with the created cycle document (lean object).
    */
   createCycle: async (input: CreateCycleInput): Promise<IChatterpointsDocument> => {
+    Logger.info('createCycle', 'creating', {
+      startAt: input.startAt,
+      endAt: input.endAt,
+      games: input.games?.length ?? 0,
+      periods: input.periods?.length ?? 0
+    });
+
     const cycleId = makeCycleId(input.startAt ?? newDateUTC());
     const periods = input.periods.map((p, idx) => ({
       ...p,
@@ -179,6 +186,8 @@ export const mongoChatterpointsService = {
       socialActions: [],
       totalsByUser: []
     });
+
+    Logger.info('createCycle', 'created', { cycleId, periods: periods.length });
     return doc.toObject() as unknown as IChatterpointsDocument;
   },
 
@@ -190,6 +199,7 @@ export const mongoChatterpointsService = {
    */
   closeCycleById: async (cycleId: string): Promise<void> => {
     await ChatterpointsModel.updateOne({ cycleId }, { $set: { status: 'CLOSED' } }).exec();
+    Logger.info('closeCycleById', 'closed cycle', { cycleId });
   },
 
   /**
@@ -205,7 +215,21 @@ export const mongoChatterpointsService = {
       { cycleId, 'socialRegistrations.userId': { $ne: reg.userId }, status: 'OPEN' },
       { $push: { socialActions: reg } }
     ).exec();
-    return res.modifiedCount > 0;
+
+    const inserted = res.modifiedCount > 0;
+    if (inserted) {
+      Logger.info('addSocialRegistration', 'inserted', {
+        cycleId,
+        userId: reg.userId,
+        platform: reg.platform
+      });
+    } else {
+      Logger.debug('addSocialRegistration', 'skipped (already present or cycle closed)', {
+        cycleId,
+        userId: reg.userId
+      });
+    }
+    return inserted;
   },
 
   /**
@@ -233,10 +257,15 @@ export const mongoChatterpointsService = {
     gameId: string,
     now: Date
   ): Promise<{ cycle: IChatterpointsDocument; period: GamePeriod } | null> => {
+    Logger.debug('getActivePeriod', 'start', { cycleId, gameId, now });
+
     const cycle = await ChatterpointsModel.findOne({ cycleId, status: 'OPEN' })
       .lean<IChatterpointsDocument>()
       .exec();
-    if (!cycle) return null;
+    if (!cycle) {
+      Logger.debug('getActivePeriod', 'no OPEN cycle', { cycleId });
+      return null;
+    }
 
     const nowTs = now.getTime();
     const candidates = cycle.periods.filter((p) => p.gameId === gameId && p.status === 'OPEN');
@@ -246,11 +275,15 @@ export const mongoChatterpointsService = {
       (p) => new Date(p.startAt).getTime() <= nowTs && nowTs < new Date(p.endAt).getTime()
     );
     if (valid.length === 1) {
+      Logger.debug('getActivePeriod', 'valid open period found', { periodId: valid[0].periodId });
       return { cycle, period: valid[0] };
     }
 
     // Multiple overlapping open periods → keep the most recent, close others
     if (valid.length > 1) {
+      Logger.warn('getActivePeriod', 'overlapping OPEN periods detected; closing extras', {
+        count: valid.length
+      });
       const chosen = valid.sort((a, b) => b.startAt.getTime() - a.startAt.getTime())[0];
       await Promise.all(
         valid
@@ -262,18 +295,24 @@ export const mongoChatterpointsService = {
             )
           )
       );
+      Logger.info('getActivePeriod', 'kept latest period', { periodId: chosen.periodId });
       return { cycle, period: chosen };
     }
 
     // No valid open periods → close expired ones
-    await Promise.all(
-      candidates.map((p) =>
-        ChatterpointsModel.updateOne(
-          { cycleId, 'periods.periodId': p.periodId },
-          { $set: { 'periods.$.status': 'CLOSED' } }
+    if (candidates.length > 0) {
+      Logger.debug('getActivePeriod', 'closing expired OPEN periods', {
+        count: candidates.length
+      });
+      await Promise.all(
+        candidates.map((p) =>
+          ChatterpointsModel.updateOne(
+            { cycleId, 'periods.periodId': p.periodId },
+            { $set: { 'periods.$.status': 'CLOSED' } }
+          )
         )
-      )
-    );
+      );
+    }
 
     // Refresh snapshot after closing
     const refreshedCycle = await ChatterpointsModel.findOne({ cycleId })
@@ -294,6 +333,7 @@ export const mongoChatterpointsService = {
         { cycleId, 'periods.periodId': currentClosed.periodId },
         { $set: { 'periods.$.status': 'OPEN' } }
       ).exec();
+      Logger.info('getActivePeriod', 'opened current period', { periodId: currentClosed.periodId });
       return { cycle: refreshedCycle, period: currentClosed };
     }
 
@@ -306,6 +346,7 @@ export const mongoChatterpointsService = {
         { cycleId, 'periods.periodId': nextPeriod.periodId },
         { $set: { 'periods.$.status': 'OPEN' } }
       ).exec();
+      Logger.info('getActivePeriod', 'opened next period', { periodId: nextPeriod.periodId });
       return { cycle: refreshedCycle, period: nextPeriod };
     }
 
@@ -315,8 +356,10 @@ export const mongoChatterpointsService = {
       new Date(refreshedCycle.endAt).getTime() <= nowTs
     ) {
       await ChatterpointsModel.updateOne({ cycleId }, { $set: { status: 'CLOSED' } }).exec();
+      Logger.info('getActivePeriod', 'closed cycle after last period', { cycleId });
     }
 
+    Logger.debug('getActivePeriod', 'no active period available');
     return null;
   },
 
@@ -376,11 +419,7 @@ export const mongoChatterpointsService = {
       .exec();
 
     if (!cycle || cycle.periods[0].status !== 'OPEN') {
-      Logger.warn(
-        '[pushPlayEntry] rejected play: period is CLOSED cycleId=%s periodId=%s',
-        cycleId,
-        periodId
-      );
+      Logger.warn('pushPlayEntry', 'rejected play: period is CLOSED', { cycleId, periodId });
       throw new Error('Period closed');
     }
 
@@ -390,13 +429,12 @@ export const mongoChatterpointsService = {
       status: 'OPEN'
     };
 
-    Logger.debug(
-      '[pushPlayEntry] START cycleId=%s periodId=%s userId=%s attemptNumber=%s',
+    Logger.debug('pushPlayEntry', 'START', {
       cycleId,
       periodId,
       userId,
-      entry.attemptNumber
-    );
+      attemptNumber: entry.attemptNumber
+    });
 
     // Ensure user subdocument exists
     const hasUser = await ChatterpointsModel.findOne(
@@ -415,7 +453,7 @@ export const mongoChatterpointsService = {
       .lean()
       .exec();
 
-    Logger.debug('[pushPlayEntry] hasUser=%s', Boolean(hasUser));
+    Logger.debug('pushPlayEntry', 'hasUser', { hasUser: Boolean(hasUser) });
 
     // Insert minimal user subdoc if missing
     if (!hasUser) {
@@ -435,7 +473,7 @@ export const mongoChatterpointsService = {
         },
         { arrayFilters: [{ 'p.periodId': periodId }] }
       ).exec();
-      Logger.debug('[pushPlayEntry] inserted user subdoc modified=%d', insRes.modifiedCount);
+      Logger.debug('pushPlayEntry', 'inserted user subdoc', { modified: insRes.modifiedCount });
     }
 
     // Update attempt and best period score
@@ -464,21 +502,19 @@ export const mongoChatterpointsService = {
 
     const arrayFiltersPlays = [{ 'p.periodId': periodId }, { 'u.userId': userId }];
 
-    Logger.debug(
-      '[pushPlayEntry] plays:update filter=%s arrayFilters=%s',
-      JSON.stringify(filterPeriod),
-      JSON.stringify(arrayFiltersPlays)
-    );
+    Logger.debug('pushPlayEntry', 'plays:update', {
+      filter: filterPeriod,
+      arrayFilters: arrayFiltersPlays
+    });
 
     const resPlays = await ChatterpointsModel.updateOne(filterPeriod, updatePlays, {
       arrayFilters: arrayFiltersPlays
     }).exec();
 
-    Logger.debug(
-      '[pushPlayEntry] plays:update matched=%d modified=%d',
-      resPlays.matchedCount,
-      resPlays.modifiedCount
-    );
+    Logger.debug('pushPlayEntry', 'plays:result', {
+      matched: resPlays.matchedCount,
+      modified: resPlays.modifiedCount
+    });
 
     // Recompute totalsByUser (games + operations + social)
     const cycleSnapshot = await ChatterpointsModel.findOne(
@@ -519,7 +555,7 @@ export const mongoChatterpointsService = {
           }
         }
       ).exec();
-      Logger.debug('[pushPlayEntry] totals: insert modified=%d', totalsIns.modifiedCount);
+      Logger.debug('pushPlayEntry', 'totals:insert', { modified: totalsIns.modifiedCount });
     } else {
       const totalsSet = await ChatterpointsModel.updateOne(
         { cycleId, 'totalsByUser.userId': userId },
@@ -530,7 +566,7 @@ export const mongoChatterpointsService = {
           }
         }
       ).exec();
-      Logger.debug('[pushPlayEntry] totals: set modified=%d', totalsSet.modifiedCount);
+      Logger.debug('pushPlayEntry', 'totals:update', { modified: totalsSet.modifiedCount });
     }
 
     // Snapshot for verification
@@ -547,14 +583,13 @@ export const mongoChatterpointsService = {
     const totalPoints: number =
       finalSnapshot?.totalsByUser?.find((t) => t.userId === userId)?.total ?? 0;
 
-    Logger.debug(
-      '[pushPlayEntry] snapshot period playsCount=%d myAttempts=%s myEntries=%s myPeriodTotal=%s myCycleTotal=%s',
-      plays.length,
-      meFinal?.attempts ?? null,
-      meFinal?.entries?.length ?? null,
-      meFinal?.totalPoints ?? null,
-      totalPoints
-    );
+    Logger.debug('pushPlayEntry', 'snapshot', {
+      playsCount: plays.length,
+      myAttempts: meFinal?.attempts ?? null,
+      myEntries: meFinal?.entries?.length ?? null,
+      myPeriodTotal: meFinal?.totalPoints ?? null,
+      myCycleTotal: totalPoints
+    });
   },
 
   /**
@@ -569,6 +604,7 @@ export const mongoChatterpointsService = {
       { cycleId, 'periods.periodId': periodId },
       { $set: { 'periods.$.status': 'CLOSED' } }
     ).exec();
+    Logger.debug('closePeriod', 'closed', { cycleId, periodId });
   },
 
   /**
@@ -652,7 +688,7 @@ export const mongoChatterpointsService = {
       (a: GamePeriod, b: GamePeriod) => new Date(b.endAt).getTime() - new Date(a.endAt).getTime()
     )[0];
 
-    return {
+    const response: LeaderboardResponse = {
       cycle: {
         cycleId: doc.cycleId,
         startAt: doc.startAt,
@@ -665,6 +701,13 @@ export const mongoChatterpointsService = {
       },
       items
     };
+
+    Logger.debug('getLeaderboardTop', 'built leaderboard', {
+      cycleId: response.cycle.cycleId,
+      items: response.items.length
+    });
+
+    return response;
   },
 
   /**
@@ -690,7 +733,7 @@ export const mongoChatterpointsService = {
       .exec();
 
     if (openCycles.length === 0) {
-      Logger.debug('[closeExpiredPeriodsAndCycles] no OPEN cycles found');
+      Logger.debug('closeExpiredPeriodsAndCycles', 'no OPEN cycles found');
       return { closedPeriods: 0, closedCycles: 0 };
     }
 
@@ -699,12 +742,11 @@ export const mongoChatterpointsService = {
       cycle.periods
         .filter((p: GamePeriod) => p.status === 'OPEN' && new Date(p.endAt).getTime() <= nowTs)
         .map(async (expired: GamePeriod) => {
-          Logger.debug(
-            '[closeExpiredPeriodsAndCycles] closing periodId=%s (cycleId=%s endAt=%s)',
-            expired.periodId,
-            cycle.cycleId,
-            new Date(expired.endAt).toISOString()
-          );
+          Logger.debug('closeExpiredPeriodsAndCycles', 'closing period', {
+            periodId: expired.periodId,
+            cycleId: cycle.cycleId,
+            endAt: new Date(expired.endAt).toISOString()
+          });
           await mongoChatterpointsService.closePeriod(cycle.cycleId, expired.periodId);
         })
     );
@@ -713,21 +755,19 @@ export const mongoChatterpointsService = {
     const expiredCycles = openCycles
       .filter((c: IChatterpointsDocument) => new Date(c.endAt).getTime() <= nowTs)
       .map(async (expiredCycle: IChatterpointsDocument) => {
-        Logger.debug(
-          '[closeExpiredPeriodsAndCycles] closing cycleId=%s (endAt=%s)',
-          expiredCycle.cycleId,
-          new Date(expiredCycle.endAt).toISOString()
-        );
+        Logger.debug('closeExpiredPeriodsAndCycles', 'closing cycle', {
+          cycleId: expiredCycle.cycleId,
+          endAt: new Date(expiredCycle.endAt).toISOString()
+        });
         await mongoChatterpointsService.closeCycleById(expiredCycle.cycleId);
       });
 
     await Promise.all([...expiredPeriods, ...expiredCycles]);
 
-    Logger.debug(
-      '[closeExpiredPeriodsAndCycles] summary closedPeriods=%d closedCycles=%d',
-      expiredPeriods.length,
-      expiredCycles.length
-    );
+    Logger.info('closeExpiredPeriodsAndCycles', 'summary', {
+      closedPeriods: expiredPeriods.length,
+      closedCycles: expiredCycles.length
+    });
 
     return { closedPeriods: expiredPeriods.length, closedCycles: expiredCycles.length };
   },
@@ -750,7 +790,7 @@ export const mongoChatterpointsService = {
       .exec();
 
     if (openCycles.length === 0) {
-      Logger.debug('[openUpcomingPeriods] no OPEN cycles found');
+      Logger.debug('openUpcomingPeriods', 'no OPEN cycles found');
       return { openedPeriods: 0 };
     }
 
@@ -766,17 +806,16 @@ export const mongoChatterpointsService = {
     );
 
     if (periodsToOpen.length === 0) {
-      Logger.debug('[openUpcomingPeriods] no periods matched criteria');
+      Logger.debug('openUpcomingPeriods', 'no periods matched criteria');
       return { openedPeriods: 0 };
     }
 
     await Promise.all(
       periodsToOpen.map(async (p) => {
-        Logger.debug(
-          '[openUpcomingPeriods] opening periodId=%s (cycleId=%s)',
-          p.periodId,
-          p.cycleId
-        );
+        Logger.debug('openUpcomingPeriods', 'opening period', {
+          cycleId: p.cycleId,
+          periodId: p.periodId
+        });
         await ChatterpointsModel.updateOne(
           { cycleId: p.cycleId, 'periods.periodId': p.periodId },
           { $set: { 'periods.$.status': 'OPEN' } }
@@ -784,6 +823,7 @@ export const mongoChatterpointsService = {
       })
     );
 
+    Logger.info('openUpcomingPeriods', 'summary', { openedPeriods: periodsToOpen.length });
     return { openedPeriods: periodsToOpen.length };
   },
 
@@ -824,6 +864,17 @@ export const mongoChatterpointsService = {
           }
         }
       ).exec();
+      Logger.debug('addOperationEntry', 'inserted totals record', {
+        cycleId,
+        userId: entry.userId,
+        points: entry.points
+      });
+    } else {
+      Logger.debug('addOperationEntry', 'updated totals record', {
+        cycleId,
+        userId: entry.userId,
+        points: entry.points
+      });
     }
   }
 };
