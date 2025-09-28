@@ -133,8 +133,8 @@ function makeCycleId(d: Date): string {
  * @param {number} index - Zero-based period index.
  * @returns {string} Unique period identifier for the cycle.
  */
-function makePeriodId(cycleId: string, gameId: string, index: number): string {
-  return `${gameId}-p${index + 1}-${cycleId}-`;
+function getPeriodId(cycleId: string, gameId: string, index: number): string {
+  return `${gameId}-p${index + 1}-${cycleId}`;
 }
 
 export const mongoChatterpointsService = {
@@ -248,9 +248,6 @@ export const mongoChatterpointsService = {
       periods: input.periods?.length ?? 0
     });
 
-    const periodKey = (p: { gameId: string; startAt: Date; endAt: Date }): string =>
-      `${p.gameId}|${p.startAt.getTime()}|${p.endAt.getTime()}`;
-
     const startAt = input.startAt!;
     const endAt = input.endAt!;
     const cycleId = makeCycleId(startAt ?? newDateUTC());
@@ -273,21 +270,20 @@ export const mongoChatterpointsService = {
 
       const fallback = [...list].sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
       const chosen = inWindow[0] ?? fallback[0];
-      if (chosen) chosenKeys.add(periodKey(chosen));
+      if (chosen) chosenKeys.add(getPeriodId(cycleId, chosen.gameId, chosen.index));
     });
 
     // Persisted periods: open only the chosen per game
-    const periods: GamePeriod[] = input.periods.map((p, idx) => ({
-      periodId: makePeriodId(cycleId, p.gameId, idx),
+    const periods: GamePeriod[] = input.periods.map((p) => ({
+      periodId: getPeriodId(cycleId, p.gameId, p.index),
       gameId: p.gameId,
       index: p.index,
       word: p.word,
       startAt: p.startAt,
       endAt: p.endAt,
-      status: chosenKeys.has(periodKey(p)) ? 'OPEN' : 'CLOSED',
+      status: chosenKeys.has(getPeriodId(cycleId, p.gameId, p.index)) ? 'OPEN' : 'CLOSED',
       plays: []
     }));
-
     const doc = await ChatterpointsModel.create({
       cycleId,
       status: 'OPEN',
