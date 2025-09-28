@@ -9,6 +9,21 @@ import { ConcurrentOperationsEnum } from '../types/commonType';
  * Inside each cycle we persist: games configuration, generated periods, plays per user per period,
  * social registrations and precomputed totals for fast leaderboard queries.
  *
+ * DESIGN DECISION — Why are "periods" stored at cycle root (not inside each game)?
+ * --------------------------------------------------------------------------------
+ * 1) Cross-game scheduling & reporting: opening/closing windows, finding the next/previous
+ *    active period, and building leaderboards are transversal tasks across all games. Keeping a
+ *    flat time-series (cycle.periods[]) allows simple, efficient scans and updates without
+ *    navigating nested arrays (games[].periods[]).
+ * 2) Write-path simplicity: high-frequency writes (user plays, points increments, status flips)
+ *    benefit from shorter, stable update paths and simpler arrayFilters. A single positional
+ *    match on periods[] is cheaper and less error-prone than matching games[] + periods[].
+ * 3) Indexing strategy: time-range and status queries (e.g., { 'periods.gameId': 1, 'periods.startAt': 1 })
+ *    remain straightforward with a flat array; nested paths often require more complex compound
+ *    indexes and longer key paths with little functional gain for our current workloads.
+ * 4) Evolution cost: the service layer can still return "view models" grouped by game (periods
+ *    aggregated per game in-memory) without changing storage. If we ever introduce game-specific
+ *    period schemas that diverge significantly, we can revisit nesting with a planned migration.
  */
 
 /** Cycle/window enums */
@@ -185,6 +200,10 @@ export interface IChatterpoints {
   podiumPrizes: number[];
   games: GameSection[];
   operations: OperationsSection;
+  /**
+   * Flat time-series of game periods at cycle scope (see DESIGN DECISION above).
+   * Each period references the target game via gameId to keep scheduling and reporting transversal.
+   */
   periods: GamePeriod[];
   socialActions: SocialSection[];
   totalsByUser: TotalsByUser[];
@@ -353,6 +372,10 @@ const ChatterpointsSchema = new Schema<IChatterpoints>(
     games: { type: [GameSchema], required: true, default: [] },
     operations: { type: OperationsSchema, required: true, default: { config: [], entries: [] } },
     socialActions: { type: [SocialActionsSchema], required: true, default: [] },
+    /**
+     * Flat array kept at cycle scope (see DESIGN DECISION above).
+     * Each record links to its game via gameId.
+     */
     periods: { type: [GamePeriodSchema], required: true, default: [] },
     totalsByUser: { type: [TotalsByUserSchema], required: true, default: [] }
   },
