@@ -16,7 +16,8 @@ import {
 
 /**
  * Low-level Mongo access layer for Chatterpoints using Mongoose.
- * Only persistence, atomic updates and queries. No business logic.
+ * This module provides persistence primitives, atomic updates, and read queries.
+ * Business rules and orchestration belong in the service layer.
  */
 
 export interface CreateCycleInput {
@@ -48,12 +49,18 @@ export interface LeaderboardResponse {
   };
   currentPeriod: {
     periodId: string;
-    startAt: Date;
-    endAt: Date;
+    startAt: Date | null;
+    endAt: Date | null;
   };
   items: LeaderboardItem[];
 }
 
+/**
+ * Build the default operations configuration (rules and empty entries).
+ *
+ * @returns {{config: IChatterpoints['operations']['config']; entries: IChatterpoints['operations']['entries']}}
+ * Returns a configuration object with rules for all eligible operations and empty entries.
+ */
 function buildDefaultOperationsConfig() {
   const userLevels = ['L1', 'L2'] as const;
 
@@ -93,8 +100,8 @@ function buildDefaultOperationsConfig() {
 /**
  * Pad a number to 2 digits with leading zero.
  *
- * @param {number} n Input number.
- * @returns {string} Zero-padded 2-digit string.
+ * @param {number} n - Number to pad.
+ * @returns {string} Two-digit zero-padded string.
  */
 function pad2(n: number): string {
   return n.toString().padStart(2, '0');
@@ -103,8 +110,8 @@ function pad2(n: number): string {
 /**
  * Generate a unique cycleId based on UTC date/time and randomness.
  *
- * @param {Date} d Date used to generate ID.
- * @returns {string} Unique cycleId string.
+ * @param {Date} d - Date used to generate the ID.
+ * @returns {string} Unique cycle identifier.
  */
 function makeCycleId(d: Date): string {
   const yy = d.getUTCFullYear().toString();
@@ -121,9 +128,9 @@ function makeCycleId(d: Date): string {
 /**
  * Generate a unique periodId inside a cycle.
  *
- * @param {string} cycleId Parent cycle ID.
- * @param {number} index Zero-based index of the period.
- * @returns {string} Period ID.
+ * @param {string} cycleId - Parent cycle identifier.
+ * @param {number} index - Zero-based period index.
+ * @returns {string} Unique period identifier for the cycle.
  */
 function makePeriodId(cycleId: string, index: number): string {
   return `${cycleId}-p${index + 1}`;
@@ -131,27 +138,27 @@ function makePeriodId(cycleId: string, index: number): string {
 
 export const mongoChatterpointsService = {
   /**
-   * Get the current open cycle (status = OPEN).
+   * Retrieve the current open cycle (status = OPEN).
    *
-   * @returns {Promise<IChatterpointsDocument|null>} Open cycle or null.
+   * @returns {Promise<IChatterpointsDocument|null>} Resolves with the open cycle or null when not found.
    */
   getOpenCycle: async (): Promise<IChatterpointsDocument | null> =>
     ChatterpointsModel.findOne({ status: 'OPEN' }).lean<IChatterpointsDocument>().exec(),
 
   /**
-   * Get the last created cycle ordered by startAt descending.
+   * Retrieve the last created cycle ordered by startAt descending.
    *
-   * @returns {Promise<IChatterpointsDocument|null>} Last cycle or null.
+   * @returns {Promise<IChatterpointsDocument|null>} Resolves with the most recent cycle or null.
    */
   getLastCycle: async (): Promise<IChatterpointsDocument | null> =>
     ChatterpointsModel.findOne({}).sort({ startAt: -1 }).lean<IChatterpointsDocument>().exec(),
 
   /**
    * Create a new cycle document.
-   * Generates cycleId, assigns periodIds, and persists all input.
+   * Generates a cycleId, assigns sequential periodIds, opens the first period, and persists all input.
    *
-   * @param {CreateCycleInput} input Cycle data.
-   * @returns {Promise<IChatterpointsDocument>} Created cycle.
+   * @param {CreateCycleInput} input - Cycle creation payload (games, periods, time window and optional operations/prizes).
+   * @returns {Promise<IChatterpointsDocument>} Resolves with the created cycle document (lean object).
    */
   createCycle: async (input: CreateCycleInput): Promise<IChatterpointsDocument> => {
     const cycleId = makeCycleId(input.startAt ?? newDateUTC());
@@ -178,23 +185,23 @@ export const mongoChatterpointsService = {
   /**
    * Close a cycle by setting status = CLOSED.
    *
-   * @param {string} cycleId Cycle ID.
-   * @returns {Promise<void>}
+   * @param {string} cycleId - Cycle identifier.
+   * @returns {Promise<void>} Resolves when the update has been persisted.
    */
   closeCycleById: async (cycleId: string): Promise<void> => {
     await ChatterpointsModel.updateOne({ cycleId }, { $set: { status: 'CLOSED' } }).exec();
   },
 
   /**
-   * Add a social registration if not already present.
-   * Idempotent operation.
+   * Add a social registration if not already present (idempotent).
    *
-   * @param {string} cycleId Cycle ID.
-   * @param {SocialRegInput} reg Registration data.
-   * @returns {Promise<boolean>} True if inserted.
+   * @param {string} cycleId - Cycle identifier.
+   * @param {SocialRegInput} reg - Social registration payload.
+   * @returns {Promise<boolean>} Resolves true when the registration was inserted; false otherwise.
    */
   addSocialRegistration: async (cycleId: string, reg: SocialRegInput): Promise<boolean> => {
     const res = await ChatterpointsModel.updateOne(
+      // NOTE: field used for dedupe is the socialActions array; we guard by userId
       { cycleId, 'socialRegistrations.userId': { $ne: reg.userId }, status: 'OPEN' },
       { $push: { socialActions: reg } }
     ).exec();
@@ -202,20 +209,23 @@ export const mongoChatterpointsService = {
   },
 
   /**
-   * Get the active period for a game.
+   * Resolve the active period for a game at a given moment.
    *
-   * Responsibilities:
-   * - Checks if there is a valid active period for the given time (`now`).
-   * - If multiple valid periods overlap → keeps the latest started and closes the others.
-   * - If current open periods have expired → closes them.
-   * - If there is a next scheduled period → opens it and returns it.
-   * - If no future periods remain and all are closed → closes the entire cycle.
+   * Behavior:
+   *  - If exactly one OPEN period matches the current time window → returns it.
+   *  - If multiple OPEN periods overlap → closes all but the latest by startAt, returns the chosen one.
+   *  - If no OPEN period is valid:
+   *      * closes any OPEN-but-expired periods,
+   *      * opens the CLOSED period whose time window contains `now`, if any,
+   *      * otherwise opens the next future CLOSED period if one exists,
+   *      * finally, if no future periods remain and the cycle window has ended, closes the cycle.
    *
-   * @param {string} cycleId - Cycle ID.
-   * @param {string} gameId - Game ID.
-   * @param {Date} now - Current time reference.
+   * @param {string} cycleId - Cycle identifier.
+   * @param {string} gameId - Game identifier.
+   * @param {Date} now - Current time reference (UTC).
    * @returns {Promise<{ cycle: IChatterpointsDocument; period: GamePeriod } | null>}
-   * Resolves with the cycle + active period, or null if no active period is available.
+   * Resolves with the (cycle, active period) pair or null when none applies.
+   * @throws {Error} Propagates I/O errors from Mongo if updates fail.
    */
   getActivePeriod: async (
     cycleId: string,
@@ -230,7 +240,7 @@ export const mongoChatterpointsService = {
     const nowTs = now.getTime();
     const candidates = cycle.periods.filter((p) => p.gameId === gameId && p.status === 'OPEN');
 
-    // Case: exactly one valid open period
+    // Single valid open period
     const valid = candidates.filter(
       (p) => new Date(p.startAt).getTime() <= nowTs && nowTs < new Date(p.endAt).getTime()
     );
@@ -238,7 +248,7 @@ export const mongoChatterpointsService = {
       return { cycle, period: valid[0] };
     }
 
-    // Case: overlap edge case → keep the most recent, close others
+    // Multiple overlapping open periods → keep the most recent, close others
     if (valid.length > 1) {
       const chosen = valid.sort((a, b) => b.startAt.getTime() - a.startAt.getTime())[0];
       await Promise.all(
@@ -254,7 +264,7 @@ export const mongoChatterpointsService = {
       return { cycle, period: chosen };
     }
 
-    // Case: no valid open period → close expired ones
+    // No valid open periods → close expired ones
     await Promise.all(
       candidates.map((p) =>
         ChatterpointsModel.updateOne(
@@ -264,13 +274,13 @@ export const mongoChatterpointsService = {
       )
     );
 
-    // Refresh cycle after closing periods
+    // Refresh snapshot after closing
     const refreshedCycle = await ChatterpointsModel.findOne({ cycleId })
       .lean<IChatterpointsDocument>()
       .exec();
     if (!refreshedCycle) return null;
 
-    // 1) Reopen the period that is in the current time window (but marked CLOSED)
+    // 1) Open CLOSED period that currently contains `now`
     const currentClosed = refreshedCycle.periods.find(
       (p) =>
         p.gameId === gameId &&
@@ -278,7 +288,6 @@ export const mongoChatterpointsService = {
         new Date(p.startAt).getTime() <= nowTs &&
         nowTs < new Date(p.endAt).getTime()
     );
-
     if (currentClosed) {
       await ChatterpointsModel.updateOne(
         { cycleId, 'periods.periodId': currentClosed.periodId },
@@ -287,11 +296,10 @@ export const mongoChatterpointsService = {
       return { cycle: refreshedCycle, period: currentClosed };
     }
 
-    // 2) If not inside a current one, find the next future CLOSED period
+    // 2) Otherwise open the next future CLOSED period
     const nextPeriod = refreshedCycle.periods.find(
       (p) => p.gameId === gameId && p.status === 'CLOSED' && new Date(p.startAt).getTime() > nowTs
     );
-
     if (nextPeriod) {
       await ChatterpointsModel.updateOne(
         { cycleId, 'periods.periodId': nextPeriod.periodId },
@@ -300,7 +308,7 @@ export const mongoChatterpointsService = {
       return { cycle: refreshedCycle, period: nextPeriod };
     }
 
-    // 3) If no next period exists and cycle already expired → close the cycle
+    // 3) If nothing to open and cycle already expired → close the cycle
     if (
       refreshedCycle.periods.every((p) => p.status === 'CLOSED') &&
       new Date(refreshedCycle.endAt).getTime() <= nowTs
@@ -312,37 +320,28 @@ export const mongoChatterpointsService = {
   },
 
   /**
-   * Append a play entry for a user in a given period.
+   * Append a play entry for a user in a given period and update totals.
    *
-   * Responsibilities:
-   * - Ensures the user has a play subdocument in the period (inserts if missing).
-   * - Increments the user's attempt counter.
-   * - Pushes the new play attempt into the `entries` array with metadata.
-   * - Updates `won` flag if the attempt resolves the game.
-   * - Keeps the highest `totalPoints` achieved in the period (`$max`).
-   * - Recomputes the user's total cycle points by summing the best score
-   *   across all periods, and updates `totalsByUser`.
-   * - Produces debug snapshots for verification.
+   * Semantics:
+   *  - Ensures the user's subdocument exists in the period (creates if missing).
+   *  - Increments attempt counter and appends the attempt entry.
+   *  - Tracks the user's best score in the period via $max(totalPoints).
+   *  - Recomputes cycle-wide totalsByUser (games + operations + social).
+   *  - Emits debug logs with snapshots.
    *
-   * Supports both game types:
-   * - **Wordle**: can accumulate partial points across attempts.
-   * - **Hangman**: usually keeps `points=0` on intermediate letter guesses,
-   *   and only assigns final points (victoryBase or losePenalty) once the
-   *   game outcome is decided. `$max` ensures the final score is preserved.
-   *
-   * @param {string} cycleId - Parent cycle ID.
-   * @param {string} periodId - Period ID where the play is recorded.
-   * @param {string} userId - User performing the play.
-   * @param {object} entry - Play attempt data.
-   * @param {string} entry.guess - User guess (word or letter).
-   * @param {number} entry.points - Points awarded for this attempt.
-   * @param {string} [entry.result] - Optional compact result encoding.
-   * @param {Date} entry.at - Timestamp of the attempt.
-   * @param {boolean} entry.won - True if this attempt completes the game successfully.
-   * @param {number} entry.attemptNumber - Attempt index within the period (1-based).
-   * @param {Record<string, unknown>} [entry.displayInfo] - Extra user-facing details
-   *   (e.g., Wordle grid, Hangman state).
-   * @returns {Promise<void>} Resolves when persistence completes.
+   * @param {string} cycleId - Cycle identifier.
+   * @param {string} periodId - Period identifier.
+   * @param {string} userId - User identifier.
+   * @param {object} entry - Play attempt payload.
+   * @param {string} entry.guess - Guess content (word or letter).
+   * @param {number} entry.points - Points awarded to this attempt.
+   * @param {string} [entry.result] - Optional compact result encoding (e.g. Wordle mask).
+   * @param {Date} entry.at - Attempt timestamp.
+   * @param {boolean} entry.won - True if the attempt completed the game successfully.
+   * @param {number} entry.attemptNumber - 1-based attempt number.
+   * @param {Record<string, unknown>} [entry.displayInfo] - Optional UI-facing metadata.
+   * @returns {Promise<void>} Resolves after persistence completes.
+   * @throws {Error} When the target period is closed.
    */
   pushPlayEntry: async (
     cycleId: string,
@@ -388,7 +387,7 @@ export const mongoChatterpointsService = {
       entry.attemptNumber
     );
 
-    // 0) Check if user subdoc already exists
+    // Ensure user subdocument exists
     const hasUser = await ChatterpointsModel.findOne(
       {
         cycleId,
@@ -407,7 +406,7 @@ export const mongoChatterpointsService = {
 
     Logger.debug('[pushPlayEntry] hasUser=%s', Boolean(hasUser));
 
-    // 1) If NOT exists, insert minimal subdoc
+    // Insert minimal user subdoc if missing
     if (!hasUser) {
       const insRes = await ChatterpointsModel.updateOne(
         { cycleId, 'periods.periodId': periodId, status: 'OPEN' },
@@ -428,7 +427,7 @@ export const mongoChatterpointsService = {
       Logger.debug('[pushPlayEntry] inserted user subdoc modified=%d', insRes.modifiedCount);
     }
 
-    // 2) Update play (increment attempts, push entry, keep best points in period)
+    // Update attempt and best period score
     const updatePlays: UpdateQuery<IChatterpointsDocument> = {
       $set: {
         'periods.$[p].plays.$[u].lastUpdatedAt': entry.at,
@@ -470,7 +469,7 @@ export const mongoChatterpointsService = {
       resPlays.modifiedCount
     );
 
-    // 3) TotalsByUser - accumulate the best period score into the cycle total
+    // Recompute totalsByUser (games + operations + social)
     const cycleSnapshot = await ChatterpointsModel.findOne(
       { cycleId },
       { periods: 1, totalsByUser: 1 }
@@ -486,7 +485,6 @@ export const mongoChatterpointsService = {
 
     const pointsGames = userPeriodTotals.reduce((a, b) => a + b, 0);
 
-    // Recuperar breakdown existente si hay
     const currentTotals = cycleSnapshot?.totalsByUser?.find((t) => t.userId === userId);
     const pointsOperations = currentTotals?.breakdown?.operations ?? 0;
     const pointsSocial = currentTotals?.breakdown?.social ?? 0;
@@ -524,7 +522,7 @@ export const mongoChatterpointsService = {
       Logger.debug('[pushPlayEntry] totals: set modified=%d', totalsSet.modifiedCount);
     }
 
-    // 4) Snapshot to verify persisted state
+    // Snapshot for verification
     const finalSnapshot = await ChatterpointsModel.findOne(
       { cycleId, 'periods.periodId': periodId },
       { 'periods.$': 1, totalsByUser: 1 }
@@ -549,11 +547,11 @@ export const mongoChatterpointsService = {
   },
 
   /**
-   * Close a specific period by setting status = CLOSED.
+   * Close a specific period (status = CLOSED).
    *
-   * @param {string} cycleId Cycle ID.
-   * @param {string} periodId Period ID.
-   * @returns {Promise<void>}
+   * @param {string} cycleId - Cycle identifier.
+   * @param {string} periodId - Period identifier.
+   * @returns {Promise<void>} Resolves after the update is persisted.
    */
   closePeriod: async (cycleId: string, periodId: string): Promise<void> => {
     await ChatterpointsModel.updateOne(
@@ -563,29 +561,26 @@ export const mongoChatterpointsService = {
   },
 
   /**
-   * Get a cycle by its ID.
+   * Retrieve a cycle by its identifier.
    *
-   * @param {string} id Cycle ID.
-   * @returns {Promise<IChatterpointsDocument|null>} Cycle or null.
+   * @param {string} id - Cycle identifier.
+   * @returns {Promise<IChatterpointsDocument|null>} Resolves with the cycle or null when not found.
    */
   getCycleById: async (id: string): Promise<IChatterpointsDocument | null> =>
     ChatterpointsModel.findOne({ cycleId: id }).lean<IChatterpointsDocument>().exec(),
 
   /**
-   * Get leaderboard with cycle metadata.
+   * Build the leaderboard for a cycle, with cycle metadata and current/last period.
    *
-   * - Resolves the target cycle:
-   *   - If `cycleId` is provided, fetches that cycle.
-   *   - If not, falls back to the last cycle (open or closed).
-   * - Computes total attempts per user across all periods of the cycle.
-   * - Sorts users by:
-   *   1. Highest points (descending).
-   *   2. If tied on points, the user with fewer attempts is ranked higher.
-   * - Returns top N entries with cycle metadata and podium prizes.
+   * Logic:
+   *  - If `cycleId` is missing, the latest cycle (open or closed) is used.
+   *  - Users with total = 0 are filtered out.
+   *  - Sorting: by total points (desc), then by total attempts (asc).
+   *  - Prize assignment uses `podiumPrizes[idx]` when available.
    *
-   * @param {string|undefined} cycleId Cycle ID or undefined.
-   * @param {number} limit Max leaderboard items to return.
-   * @returns {Promise<LeaderboardResponse|null>} Leaderboard or null if no cycle found.
+   * @param {string|undefined} cycleId - Optional cycle identifier.
+   * @param {number} limit - Maximum number of leaderboard items.
+   * @returns {Promise<LeaderboardResponse|null>} Leaderboard or null when no cycle exists.
    */
   getLeaderboardTop: async (
     cycleId: string | undefined,
@@ -612,7 +607,7 @@ export const mongoChatterpointsService = {
 
     if (!doc) return null;
 
-    // Compute total attempts per user across all periods
+    // Sum attempts per user across periods
     const attemptsByUser: Record<string, number> = {};
     doc.periods.forEach((p: GamePeriod) => {
       p.plays.forEach((play: PeriodUserPlays) => {
@@ -621,13 +616,10 @@ export const mongoChatterpointsService = {
     });
 
     const podiumPrizes: number[] = Array.isArray(doc.podiumPrizes) ? doc.podiumPrizes : [0, 0, 0];
-
     const totals: TotalsByUser[] = Array.isArray(doc.totalsByUser) ? doc.totalsByUser : [];
 
-    // filter out users with 0 total
     const nonZeroTotals: TotalsByUser[] = totals.filter((t: TotalsByUser) => (t.total ?? 0) > 0);
 
-    // Sort first by total (desc), then by attempts (asc) in case of ties
     const sorted: TotalsByUser[] = nonZeroTotals
       .slice()
       .sort((a: TotalsByUser, b: TotalsByUser) => {
@@ -644,7 +636,7 @@ export const mongoChatterpointsService = {
       })
     );
 
-    // Pick last period by endAt (or startAt if prefered)
+    // Pick last period by endAt
     const lastPeriod: GamePeriod | undefined = [...doc.periods].sort(
       (a: GamePeriod, b: GamePeriod) => new Date(b.endAt).getTime() - new Date(a.endAt).getTime()
     )[0];
@@ -665,15 +657,16 @@ export const mongoChatterpointsService = {
   },
 
   /**
-   * Close all expired periods and cycles (status = CLOSED).
+   * Close all expired periods and cycles.
    *
-   * - Finds all cycles with status = OPEN.
-   * - Closes periods whose endAt <= now.
-   * - If all periods are CLOSED and cycle endAt <= now, closes the cycle.
+   * Semantics:
+   *  - For all OPEN cycles, CLOSE any period with endAt <= now.
+   *  - If a cycle window has ended and all periods are CLOSED, set cycle status = CLOSED.
    *
-   * Intended for scheduled cleanup jobs.
+   * Intended to be called by a scheduled job.
    *
    * @returns {Promise<{ closedPeriods: number; closedCycles: number }>}
+   * Summary of how many periods and cycles were closed.
    */
   closeExpiredPeriodsAndCycles: async (): Promise<{
     closedPeriods: number;
@@ -681,7 +674,6 @@ export const mongoChatterpointsService = {
   }> => {
     const nowTs: number = Date.now();
 
-    // Get all cycles still marked as OPEN
     const openCycles: IChatterpointsDocument[] = await ChatterpointsModel.find({ status: 'OPEN' })
       .lean<IChatterpointsDocument[]>()
       .exec();
@@ -691,7 +683,7 @@ export const mongoChatterpointsService = {
       return { closedPeriods: 0, closedCycles: 0 };
     }
 
-    // 1) Close expired periods (endAt <= now)
+    // Close expired periods (endAt <= now)
     const expiredPeriods = openCycles.flatMap((cycle: IChatterpointsDocument) =>
       cycle.periods
         .filter((p: GamePeriod) => p.status === 'OPEN' && new Date(p.endAt).getTime() <= nowTs)
@@ -706,7 +698,7 @@ export const mongoChatterpointsService = {
         })
     );
 
-    // 2) Close expired cycles (endAt <= now)
+    // Close expired cycles (endAt <= now)
     const expiredCycles = openCycles
       .filter((c: IChatterpointsDocument) => new Date(c.endAt).getTime() <= nowTs)
       .map(async (expiredCycle: IChatterpointsDocument) => {
@@ -730,19 +722,18 @@ export const mongoChatterpointsService = {
   },
 
   /**
-   * Open periods that should now be active (status = OPEN).
+   * Open periods that should be active now (status -> OPEN).
    *
-   * - Finds cycles with status = OPEN.
-   * - For each period with status = CLOSED and startAt <= now < endAt → set to OPEN.
+   * Semantics:
+   *  - For all OPEN cycles, any CLOSED period whose window contains `now` is set to OPEN.
    *
-   * Intended for scheduled activation jobs.
+   * Intended to be called by a scheduled job.
    *
-   * @returns {Promise<{ openedPeriods: number }>}
+   * @returns {Promise<{ openedPeriods: number }>} Count of periods that transitioned to OPEN.
    */
   openUpcomingPeriods: async (): Promise<{ openedPeriods: number }> => {
     const nowTs: number = Date.now();
 
-    // Find cycles still OPEN
     const openCycles: IChatterpointsDocument[] = await ChatterpointsModel.find({ status: 'OPEN' })
       .lean<IChatterpointsDocument[]>()
       .exec();
@@ -752,7 +743,6 @@ export const mongoChatterpointsService = {
       return { openedPeriods: 0 };
     }
 
-    // Collect periods that should be opened
     const periodsToOpen = openCycles.flatMap((cycle: IChatterpointsDocument) =>
       cycle.periods
         .filter(
@@ -769,7 +759,6 @@ export const mongoChatterpointsService = {
       return { openedPeriods: 0 };
     }
 
-    // Update all matching periods
     await Promise.all(
       periodsToOpen.map(async (p) => {
         Logger.debug(
@@ -787,8 +776,18 @@ export const mongoChatterpointsService = {
     return { openedPeriods: periodsToOpen.length };
   },
 
+  /**
+   * Append an operations entry and update totals for the user.
+   *
+   * Semantics:
+   *  - If the user already exists in totalsByUser → push entry and increment totals (total and breakdown.operations).
+   *  - Else → push entry and insert a new totalsByUser record initialized with the operation points.
+   *
+   * @param {string} cycleId - Cycle identifier.
+   * @param {OperationEntry} entry - Operation entry to persist.
+   * @returns {Promise<void>} Resolves when the update is persisted.
+   */
   addOperationEntry: async (cycleId: string, entry: OperationEntry): Promise<void> => {
-    // Try update totals if user already exists
     const updated = await ChatterpointsModel.updateOne(
       { cycleId, 'totalsByUser.userId': entry.userId },
       {
@@ -801,7 +800,6 @@ export const mongoChatterpointsService = {
     ).exec();
 
     if (updated.matchedCount === 0) {
-      // User not in totals, insert new totals record
       await ChatterpointsModel.updateOne(
         { cycleId },
         {
