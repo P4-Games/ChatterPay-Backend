@@ -36,6 +36,7 @@ import {
   GameSettings,
   PeriodStatus,
   OperationEntry,
+  IChatterpoints,
   HangmanSettings,
   PeriodUserPlays,
   OperationsSection,
@@ -122,6 +123,13 @@ export interface RegisterOperationResult {
   operation: OperationEntry;
 }
 
+interface PlayResponseBase {
+  status: string;
+  periodClosed: boolean;
+  won: boolean;
+  points: number;
+  display_info?: Record<string, unknown>;
+}
 // -------------------------------------------------------------------------------------------------------------
 
 /** ------------------------------------------------------------------------------------------------
@@ -901,29 +909,27 @@ async function playHangman(
  * );
  */
 
-function withMeta(
-  base: {
-    status: string;
-    periodClosed: boolean;
-    won: boolean;
-    points: number;
-    display_info?: Record<string, unknown>;
-  },
-  cycle?: {
-    cycleId: string;
-    startAt: Date;
-    endAt: Date;
-    name?: string;
-    status?: 'OPEN' | 'CLOSED';
-  },
-  period?: {
-    periodId: string;
-    startAt: Date;
-    endAt: Date;
-    status?: 'OPEN' | 'CLOSED';
-    name?: string;
+function withMeta(base: PlayResponseBase, cycle?: IChatterpoints, period?: GamePeriod) {
+  let indexInfo: Record<string, string> | undefined;
+
+  if (cycle && period) {
+    // Group periods by gameId
+    const grouped: Record<string, GamePeriod[]> = cycle.periods.reduce(
+      (acc, p) => {
+        (acc[p.gameId] ||= []).push(p);
+        return acc;
+      },
+      {} as Record<string, GamePeriod[]>
+    );
+
+    const gamePeriods = grouped[period.gameId];
+    if (gamePeriods) {
+      const total = gamePeriods.length;
+      const current = period.index + 1; // 0-based in DB
+      indexInfo = { [period.gameId]: `${current}/${total}` };
+    }
   }
-) {
+
   return {
     ...base,
     display_info: {
@@ -937,15 +943,28 @@ function withMeta(
           ...(cycle?.status ? { status: cycle.status } : {})
         }
       }),
-      ...(period && {
-        period: {
-          id: period.periodId,
-          name: `Period ${period.periodId}`,
-          startAt: period.startAt,
-          endAt: period.endAt,
-          ...(period.status ? { status: period.status } : {})
-        }
-      })
+      ...(period
+        ? {
+            period: {
+              id: period.periodId,
+              name: `Period ${period.periodId}`,
+              startAt: period.startAt,
+              endAt: period.endAt,
+              status: period.status,
+              ...(indexInfo ? { index: indexInfo } : {})
+            }
+          }
+        : cycle && {
+            // If no active period, expose all periods grouped by game
+            periods: cycle.periods.map((p) => ({
+              id: p.periodId,
+              gameId: p.gameId,
+              startAt: p.startAt,
+              endAt: p.endAt,
+              status: p.status,
+              index: `${p.index + 1}/${cycle.periods.filter((x) => x.gameId === p.gameId).length}`
+            }))
+          })
     }
   };
 }
@@ -1060,17 +1079,22 @@ export const chatterpointsService = {
       throw new Error("You don't have access to this operation.");
     }
 
+    // Time-aware: if this returns something, it's the in-window OPEN cycle → block creation
     const existing = await mongoChatterpointsService.getOpenCycle();
     if (existing) {
-      // Auto-close if expired
-      if (new Date(existing.endAt).getTime() <= Date.now()) {
-        await mongoChatterpointsService.closeCycleById(existing.cycleId);
-      } else {
-        throw new Error('There is an already OPEN cycle');
-      }
+      throw new Error('There is an already OPEN cycle');
     }
 
-    const startAt = req.startAt ?? new Date();
+    // Guard against early-OPEN cycle (OPEN status, but starts in the future)
+    const earlyOpen = await mongoChatterpointsService.getScheduledOpenCycle();
+    if (earlyOpen) {
+      throw new Error(
+        `There is a scheduled OPEN cycle starting at ${new Date(earlyOpen.startAt).toISOString()}`
+      );
+    }
+
+    const now = new Date();
+    const startAt = req.startAt ?? now;
     const endAt = req.durationMinutes
       ? addMinutes(startAt, req.durationMinutes)
       : (req.endAt ?? addMinutes(startAt, DEFAULTS.cycleDurationMinutes));
@@ -1222,12 +1246,12 @@ export const chatterpointsService = {
       new Date(cycle.endAt).toISOString()
     );
 
-    // 2) Active period handling
+    // Active period handling (time-authoritative inside service)
     const now = new Date();
     const active = await mongoChatterpointsService.getActivePeriod(cycleId, req.gameId, now);
 
     if (!active || !active.period) {
-      Logger.debug('play', 'no active period resolved for game=%s', req.gameId);
+      Logger.debug('play', `no active period resolved for game=${req.gameId}`);
       return withMeta(
         {
           status: 'ok',
@@ -1253,7 +1277,7 @@ export const chatterpointsService = {
       period.status
     );
 
-    // 4) Game config
+    // Game config
     const gameCfg = cycle.games.find((g) => g.gameId === req.gameId && g.enabled);
     if (!gameCfg) {
       Logger.debug('play', 'game not configured or disabled gameId=%s', req.gameId);
@@ -1266,7 +1290,7 @@ export const chatterpointsService = {
 
     const attemptNumber = (user?.attempts ?? 0) + 1;
 
-    // 5) Rules
+    //  Rules
     if (user?.won) {
       return withMeta(
         {

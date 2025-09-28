@@ -138,12 +138,58 @@ function makePeriodId(cycleId: string, index: number): string {
 
 export const mongoChatterpointsService = {
   /**
-   * Retrieve the current open cycle (status = OPEN).
+   * Retrieve the current open cycle (status = OPEN) after time-based normalization.
    *
-   * @returns {Promise<IChatterpointsDocument|null>} Resolves with the open cycle or null when not found.
+   * Normalization rules (time is authoritative):
+   *  - Close expired OPEN cycles (endAt <= now) and their lingering OPEN periods.
+   *  - For remaining OPEN cycles:
+   *      • Close expired periods (endAt <= now).
+   *      • Close early-opened periods (startAt > now).
+   *
+   * @returns {Promise<IChatterpointsDocument|null>} Resolves with the in-window OPEN cycle (startAt <= now < endAt) or null.
    */
-  getOpenCycle: async (): Promise<IChatterpointsDocument | null> =>
-    ChatterpointsModel.findOne({ status: 'OPEN' }).lean<IChatterpointsDocument>().exec(),
+  getOpenCycle: async (): Promise<IChatterpointsDocument | null> => {
+    const now = new Date();
+
+    // 1) Close expired OPEN cycles and any leftover OPEN periods inside them
+    const expiredCycles = await ChatterpointsModel.updateMany(
+      { status: 'OPEN', endAt: { $lte: now } },
+      { $set: { status: 'CLOSED' } }
+    ).exec();
+
+    if (expiredCycles.modifiedCount > 0) {
+      await ChatterpointsModel.updateMany(
+        { status: 'CLOSED', endAt: { $lte: now } },
+        { $set: { 'periods.$[p].status': 'CLOSED' } },
+        { arrayFilters: [{ 'p.status': 'OPEN' }] }
+      ).exec();
+    }
+
+    // 2) Normalize periods across remaining OPEN cycles
+    // 2.a) Close expired OPEN periods
+    await ChatterpointsModel.updateMany(
+      { status: 'OPEN' },
+      { $set: { 'periods.$[p].status': 'CLOSED' } },
+      { arrayFilters: [{ 'p.status': 'OPEN', 'p.endAt': { $lte: now } }] }
+    ).exec();
+
+    // 2.b) Close early-opened periods (OPEN but startAt > now)
+    await ChatterpointsModel.updateMany(
+      { status: 'OPEN' },
+      { $set: { 'periods.$[p].status': 'CLOSED' } },
+      { arrayFilters: [{ 'p.status': 'OPEN', 'p.startAt': { $gt: now } }] }
+    ).exec();
+
+    // 3) Return the OPEN cycle that actually contains "now"
+    return ChatterpointsModel.findOne({
+      status: 'OPEN',
+      startAt: { $lte: now },
+      endAt: { $gt: now }
+    })
+      .sort({ startAt: -1 })
+      .lean<IChatterpointsDocument>()
+      .exec();
+  },
 
   /**
    * Retrieve the last created cycle ordered by startAt descending.
@@ -192,14 +238,29 @@ export const mongoChatterpointsService = {
   },
 
   /**
-   * Close a cycle by setting status = CLOSED.
+   * Close a cycle and all its periods in a single atomic update on the document.
+   *
+   * - Sets cycle.status = 'CLOSED'
+   * - Sets every period.status = 'CLOSED' (only those not already CLOSED)
    *
    * @param {string} cycleId - Cycle identifier.
    * @returns {Promise<void>} Resolves when the update has been persisted.
    */
   closeCycleById: async (cycleId: string): Promise<void> => {
-    await ChatterpointsModel.updateOne({ cycleId }, { $set: { status: 'CLOSED' } }).exec();
-    Logger.info('closeCycleById', 'closed cycle', { cycleId });
+    await ChatterpointsModel.updateOne(
+      { cycleId },
+      {
+        $set: {
+          status: 'CLOSED',
+          'periods.$[p].status': 'CLOSED'
+        }
+      },
+      {
+        arrayFilters: [{ 'p.status': { $ne: 'CLOSED' } }]
+      }
+    ).exec();
+
+    Logger.info('closeCycleById', 'closed cycle and all periods', { cycleId });
   },
 
   /**
@@ -233,7 +294,20 @@ export const mongoChatterpointsService = {
   },
 
   /**
-   * Resolve the active period for a game at a given moment.
+   * Time is authoritative. This function reconciles period/cycle states by "now":
+   * - If the cycle is NOT OPEN:
+   *    • Close all periods (regardless of dates)
+   *    • Close the cycle if past endAt and all periods are CLOSED
+   *    • Return null
+   * - If the cycle IS OPEN:
+   *    • Close EXPIRED periods across ALL games (endAt <= now)
+   *    • Close EARLY-OPENED periods (startAt > now but status === OPEN)
+   *    • For the requested gameId:
+   *        – Find all in-window periods (startAt <= now < endAt)
+   *        – If multiple, keep the latest by startAt and close the rest
+   *        – Ensure the chosen one is OPEN and return it
+   *    • If none is in-window, return null
+   *    • If now >= endAt and all periods are CLOSED, close the cycle
    *
    * @param {string} cycleId - Cycle identifier.
    * @param {string} gameId - Game identifier.
@@ -247,105 +321,163 @@ export const mongoChatterpointsService = {
   ): Promise<{ cycle: IChatterpointsDocument; period: GamePeriod } | null> => {
     Logger.debug('getActivePeriod', 'start', { cycleId, gameId, now });
 
-    const cycle = await ChatterpointsModel.findOne({ cycleId, status: 'OPEN' })
-      .lean<IChatterpointsDocument>()
-      .exec();
+    // Load cycle regardless of status to allow normalization even when not OPEN
+    let cycle = await ChatterpointsModel.findOne({ cycleId }).exec();
     if (!cycle) {
-      Logger.debug('getActivePeriod', 'no OPEN cycle', { cycleId });
+      Logger.debug('getActivePeriod', 'cycle not found', { cycleId });
       return null;
     }
 
     const nowTs = now.getTime();
-    const candidates = cycle.periods.filter((p) => p.gameId === gameId && p.status === 'OPEN');
 
-    const valid = candidates.filter(
-      (p) => new Date(p.startAt).getTime() <= nowTs && nowTs < new Date(p.endAt).getTime()
-    );
+    /**
+     * If cycle is NOT OPEN:
+     * - Close all periods (normalize to CLOSED)
+     * - Close cycle if past endAt and all CLOSED
+     * - Return null
+     */
+    if (cycle.status !== 'OPEN') {
+      const hadOpen = cycle.periods.some((p) => p.status === 'OPEN');
 
-    if (valid.length === 1) {
-      Logger.debug('getActivePeriod', 'valid open period found', { periodId: valid[0].periodId });
-      return { cycle, period: valid[0] };
+      if (hadOpen) {
+        await ChatterpointsModel.updateOne(
+          { cycleId },
+          { $set: { 'periods.$[p].status': 'CLOSED' } },
+          { arrayFilters: [{ 'p.status': 'OPEN' }] }
+        ).exec();
+        Logger.info('getActivePeriod', 'closed all OPEN periods because cycle is not OPEN', {
+          cycleId
+        });
+      }
+
+      // Optionally close cycle if time passed and all periods are closed
+      cycle = await ChatterpointsModel.findOne({ cycleId }).exec();
+      if (
+        cycle &&
+        new Date(cycle.endAt).getTime() <= nowTs &&
+        cycle.periods.every((p) => p.status === 'CLOSED') &&
+        cycle.status !== 'CLOSED'
+      ) {
+        await ChatterpointsModel.updateOne({ cycleId }, { $set: { status: 'CLOSED' } }).exec();
+        Logger.info('getActivePeriod', 'closed cycle after normalization (not OPEN)', { cycleId });
+      }
+
+      Logger.debug('getActivePeriod', 'no OPEN cycle after normalization', { cycleId });
+      return null;
     }
 
-    if (valid.length > 1) {
-      Logger.warn('getActivePeriod', 'overlapping OPEN periods detected; closing extras', {
-        count: valid.length
+    /**
+     * Cycle is OPEN → First, homogeneous time-based normalization across ALL games:
+     * - Close expired OPEN periods: endAt <= now
+     * - Close early-opened periods: startAt > now (should not be OPEN yet)
+     */
+    const closeExpired = await ChatterpointsModel.updateOne(
+      { cycleId },
+      { $set: { 'periods.$[p].status': 'CLOSED' } },
+      { arrayFilters: [{ 'p.status': 'OPEN', 'p.endAt': { $lte: now } }] }
+    ).exec();
+
+    if (closeExpired.modifiedCount > 0) {
+      Logger.info('getActivePeriod', 'closed expired periods across ALL games', {
+        cycleId,
+        modified: closeExpired.modifiedCount
       });
-      const chosen = valid.sort((a, b) => b.startAt.getTime() - a.startAt.getTime())[0];
-      await Promise.all(
-        valid
-          .filter((p) => p.periodId !== chosen.periodId)
-          .map((p) =>
-            ChatterpointsModel.updateOne(
-              { cycleId, 'periods.periodId': p.periodId },
-              { $set: { 'periods.$.status': 'CLOSED' } }
-            )
-          )
-      );
-      Logger.info('getActivePeriod', 'kept latest period', { periodId: chosen.periodId });
-      return { cycle, period: chosen };
     }
 
-    // No valid open periods → close expired ones
-    if (candidates.length > 0) {
-      Logger.debug('getActivePeriod', 'closing expired OPEN periods', {
-        count: candidates.length
+    const closeEarlyOpened = await ChatterpointsModel.updateOne(
+      { cycleId },
+      { $set: { 'periods.$[p].status': 'CLOSED' } },
+      { arrayFilters: [{ 'p.status': 'OPEN', 'p.startAt': { $gt: now } }] }
+    ).exec();
+
+    if (closeEarlyOpened.modifiedCount > 0) {
+      Logger.info('getActivePeriod', 'closed early-opened periods across ALL games', {
+        cycleId,
+        modified: closeEarlyOpened.modifiedCount
       });
-      await Promise.all(
-        candidates.map((p) =>
-          ChatterpointsModel.updateOne(
-            { cycleId, 'periods.periodId': p.periodId },
-            { $set: { 'periods.$.status': 'CLOSED' } }
-          )
-        )
-      );
     }
 
-    const refreshedCycle = await ChatterpointsModel.findOne({ cycleId })
-      .lean<IChatterpointsDocument>()
-      .exec();
-    if (!refreshedCycle) return null;
+    // Refresh cycle after time-based normalization
+    cycle = await ChatterpointsModel.findOne({ cycleId, status: 'OPEN' }).exec();
+    if (!cycle) {
+      Logger.debug('getActivePeriod', 'cycle became non-OPEN after normalization', { cycleId });
+      return null;
+    }
 
-    const currentClosed = refreshedCycle.periods.find(
+    /**
+     * Resolve in-window periods for the requested game:
+     *   startAt <= now < endAt
+     */
+    const inWindow: GamePeriod[] = cycle.periods.filter(
       (p) =>
         p.gameId === gameId &&
-        p.status === 'CLOSED' &&
         new Date(p.startAt).getTime() <= nowTs &&
         nowTs < new Date(p.endAt).getTime()
     );
 
-    if (currentClosed) {
-      await ChatterpointsModel.updateOne(
-        { cycleId, 'periods.periodId': currentClosed.periodId },
-        { $set: { 'periods.$.status': 'OPEN' } }
-      ).exec();
-      Logger.info('getActivePeriod', 'opened current period', { periodId: currentClosed.periodId });
-      return { cycle: refreshedCycle, period: currentClosed };
+    if (inWindow.length === 0) {
+      // No active window for this game at this time
+      // If we are past cycle end and everything closed, close the cycle.
+      if (
+        new Date(cycle.endAt).getTime() <= nowTs &&
+        cycle.periods.every((p) => p.status === 'CLOSED')
+      ) {
+        await ChatterpointsModel.updateOne({ cycleId }, { $set: { status: 'CLOSED' } }).exec();
+        Logger.info('getActivePeriod', 'closed cycle after last period (no in-window)', {
+          cycleId
+        });
+      }
+
+      Logger.debug('getActivePeriod', 'no in-window period for game', { cycleId, gameId });
+      return null;
     }
 
-    const nextPeriod = refreshedCycle.periods.find(
-      (p) => p.gameId === gameId && p.status === 'CLOSED' && new Date(p.startAt).getTime() > nowTs
-    );
+    // If multiple in-window (overlap), keep the latest by startAt, close the others
+    const chosen = [...inWindow].sort((a, b) => b.startAt.getTime() - a.startAt.getTime())[0];
+    const toCloseIds = inWindow
+      .filter((p) => p.periodId !== chosen.periodId)
+      .map((p) => p.periodId);
 
-    if (nextPeriod) {
+    if (toCloseIds.length > 0) {
       await ChatterpointsModel.updateOne(
-        { cycleId, 'periods.periodId': nextPeriod.periodId },
-        { $set: { 'periods.$.status': 'OPEN' } }
+        { cycleId },
+        { $set: { 'periods.$[p].status': 'CLOSED' } },
+        { arrayFilters: [{ 'p.periodId': { $in: toCloseIds } }] }
       ).exec();
-      Logger.info('getActivePeriod', 'opened next period', { periodId: nextPeriod.periodId });
-      return { cycle: refreshedCycle, period: nextPeriod };
+      Logger.warn('getActivePeriod', 'overlap detected; closed older in-window periods', {
+        cycleId,
+        gameId,
+        closed: toCloseIds
+      });
     }
 
+    // Ensure chosen is OPEN
+    if (chosen.status !== 'OPEN') {
+      await ChatterpointsModel.updateOne(
+        { cycleId, 'periods.periodId': chosen.periodId },
+        { $set: { 'periods.$.status': 'OPEN' } }
+      ).exec();
+      Logger.info('getActivePeriod', 'opened chosen in-window period', {
+        cycleId,
+        gameId,
+        periodId: chosen.periodId
+      });
+    }
+
+    // Optional refresh; keep it consistent with your document type
+    const finalRaw = await ChatterpointsModel.findOne({ cycleId, status: 'OPEN' }).exec();
+    const finalCycle = (finalRaw ?? cycle) as unknown as IChatterpointsDocument;
+
+    // If end passed and everything closed, close cycle (race guard)
     if (
-      refreshedCycle.periods.every((p) => p.status === 'CLOSED') &&
-      new Date(refreshedCycle.endAt).getTime() <= nowTs
+      new Date(finalCycle.endAt).getTime() <= nowTs &&
+      finalCycle.periods.every((p) => p.status === 'CLOSED')
     ) {
       await ChatterpointsModel.updateOne({ cycleId }, { $set: { status: 'CLOSED' } }).exec();
-      Logger.info('getActivePeriod', 'closed cycle after last period', { cycleId });
+      Logger.info('getActivePeriod', 'closed cycle after reconciliation', { cycleId });
     }
 
-    Logger.debug('getActivePeriod', 'no active period available');
-    return null;
+    return { cycle: finalCycle, period: chosen };
   },
 
   /**
@@ -805,5 +937,22 @@ export const mongoChatterpointsService = {
         points: entry.points
       });
     }
+  },
+
+  /**
+   * Retrieve a scheduled cycle that is already marked as OPEN but has not started yet.
+   * This prevents creating a new cycle that would overlap once it begins.
+   *
+   * @returns {Promise<IChatterpointsDocument|null>} The next early-OPEN cycle, or null.
+   */
+  getScheduledOpenCycle: async (): Promise<IChatterpointsDocument | null> => {
+    const now = new Date();
+    return ChatterpointsModel.findOne({
+      status: 'OPEN',
+      startAt: { $gt: now }
+    })
+      .sort({ startAt: 1 }) // earliest to start
+      .lean<IChatterpointsDocument>()
+      .exec();
   }
 };
