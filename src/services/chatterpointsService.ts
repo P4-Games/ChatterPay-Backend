@@ -105,12 +105,12 @@ const DEFAULTS = {
     attemptsPerUserPerPeriod: 6,
     periodWindow: { unit: 'DAYS', value: 1 } as TimeWindow,
     efficiencyPenalty: 2,
-    points: { victoryBase: 45, letterExact: 5, letterPresent: 2 }
+    points: { victoryBase: 5, letterExact: 2, letterPresent: 1 }
   },
   hangman: {
     wordLength: 7,
     periodWindow: { unit: 'DAYS', value: 1 } as TimeWindow,
-    points: { victoryBase: 35, losePenalty: 0, maxWrongAttempts: 6 }
+    points: { victoryBase: 8, losePenalty: 0, maxWrongAttempts: 6 }
   }
 } as const;
 
