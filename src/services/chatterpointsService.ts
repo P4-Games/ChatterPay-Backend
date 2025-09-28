@@ -137,7 +137,7 @@ const getLocalChatterpointsWordsFile = async (
 ): Promise<Record<string, Record<string, string>>> => {
   try {
     const filePath = path.resolve(__dirname, urlFile);
-    Logger.log('getLocalChatterpointsWordsFile', 'Looking for file in:', filePath);
+    Logger.debug('getLocalChatterpointsWordsFile', 'Looking for file in:', filePath);
 
     if (!fs.existsSync(filePath)) {
       throw new Error(`The file does not exist at path: ${filePath}`);
@@ -178,7 +178,7 @@ const getChatterpointsWordFile = async (
     cacheKey
   );
   if (hit) {
-    Logger.log('getChatterpointsWordFile', `CACHE HIT key=${cacheKey}`);
+    Logger.debug('getChatterpointsWordFile', `CACHE HIT key=${cacheKey}`);
     return hit;
   }
 
@@ -186,7 +186,7 @@ const getChatterpointsWordFile = async (
     CacheNames.CHATTERPOINTS_WORDS,
     cacheKey,
     async () => {
-      Logger.log(
+      Logger.debug(
         'getChatterpointsWordFile',
         `CACHE MISS key=${cacheKey} — loading from ${CacheNames.CHATTERPOINTS_WORDS}...`
       );
@@ -1198,11 +1198,11 @@ export const chatterpointsService = {
     points: number;
     display_info?: Record<string, unknown>;
   }> => {
-    Logger.debug('[play] start userId=%s gameId=%s guess=%s', req.userId, req.gameId, req.guess);
+    Logger.debug('play', 'start userId=%s gameId=%s guess=%s', req.userId, req.gameId, req.guess);
 
     let cycle = await mongoChatterpointsService.getOpenCycle();
     if (!cycle || cycle.status !== 'OPEN') {
-      Logger.debug('[play] no OPEN cycle found');
+      Logger.debug('play', 'no OPEN cycle found');
       return withMeta({
         status: 'ok',
         periodClosed: true,
@@ -1214,7 +1214,8 @@ export const chatterpointsService = {
 
     const { cycleId } = cycle;
     Logger.debug(
-      '[play] cycle found cycleId=%s status=%s startAt=%s endAt=%s',
+      'play',
+      'cycle found cycleId=%s status=%s startAt=%s endAt=%s',
       cycleId,
       cycle.status,
       new Date(cycle.startAt).toISOString(),
@@ -1226,7 +1227,7 @@ export const chatterpointsService = {
     const active = await mongoChatterpointsService.getActivePeriod(cycleId, req.gameId, now);
 
     if (!active || !active.period) {
-      Logger.debug('[play] no active period resolved for game=%s', req.gameId);
+      Logger.debug('play', 'no active period resolved for game=%s', req.gameId);
       return withMeta(
         {
           status: 'ok',
@@ -1244,7 +1245,8 @@ export const chatterpointsService = {
     const { periodId } = period;
 
     Logger.debug(
-      '[play] active period resolved periodId=%s startAt=%s endAt=%s status=%s',
+      'play',
+      'active period resolved periodId=%s startAt=%s endAt=%s status=%s',
       periodId,
       new Date(period.startAt).toISOString(),
       new Date(period.endAt).toISOString(),
@@ -1254,13 +1256,13 @@ export const chatterpointsService = {
     // 4) Game config
     const gameCfg = cycle.games.find((g) => g.gameId === req.gameId && g.enabled);
     if (!gameCfg) {
-      Logger.debug('[play] game not configured or disabled gameId=%s', req.gameId);
+      Logger.debug('play', 'game not configured or disabled gameId=%s', req.gameId);
       throw new Error('Game disabled or not configured');
     }
-    Logger.debug('[play] gameCfg type=%s enabled=%s', gameCfg.type, gameCfg.enabled);
+    Logger.debug('play', 'gameCfg type=%s enabled=%s', gameCfg.type, gameCfg.enabled);
 
     const user = period.plays.find((u) => u.userId === req.userId);
-    Logger.debug('[play] user state attempts=%s won=%s', user?.attempts ?? 0, user?.won ?? false);
+    Logger.debug('play', 'user state attempts=%s won=%s', user?.attempts ?? 0, user?.won ?? false);
 
     const attemptNumber = (user?.attempts ?? 0) + 1;
 
@@ -1326,7 +1328,8 @@ export const chatterpointsService = {
 
     if (alreadyTriedSame) {
       Logger.debug(
-        '[play] duplicate guess in the same period userId=%s guess=%s',
+        'play',
+        'duplicate guess in the same period userId=%s guess=%s',
         req.userId,
         normalizedGuess
       );
@@ -1764,13 +1767,14 @@ export const chatterpointsService = {
     closedCycles: number;
     openedPeriods: number;
   }> => {
-    Logger.debug('[chatterpointsService.maintainPeriodsAndCycles] job started');
+    Logger.debug('maintainPeriodsAndCycles', 'job started');
 
     const closed = await mongoChatterpointsService.closeExpiredPeriodsAndCycles();
     const opened = await mongoChatterpointsService.openUpcomingPeriods();
 
     Logger.info(
-      '[chatterpointsService.maintainPeriodsAndCycles] job finished closedPeriods=%d closedCycles=%d openedPeriods=%d',
+      'maintainPeriodsAndCycles',
+      'job finished closedPeriods=%d closedCycles=%d openedPeriods=%d',
       closed.closedPeriods,
       closed.closedCycles,
       opened.openedPeriods
