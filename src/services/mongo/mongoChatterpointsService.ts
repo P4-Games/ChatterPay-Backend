@@ -209,23 +209,24 @@ export const mongoChatterpointsService = {
   },
 
   /**
-   * Resolve the active period for a game at a given moment.
+   * @async
+   * @function getActivePeriod
+   * Resolve the active period for a given game at time `now`, applying overlap/expiry rules.
    *
-   * Behavior:
-   *  - If exactly one OPEN period matches the current time window → returns it.
-   *  - If multiple OPEN periods overlap → closes all but the latest by startAt, returns the chosen one.
-   *  - If no OPEN period is valid:
-   *      * closes any OPEN-but-expired periods,
-   *      * opens the CLOSED period whose time window contains `now`, if any,
-   *      * otherwise opens the next future CLOSED period if one exists,
-   *      * finally, if no future periods remain and the cycle window has ended, closes the cycle.
+   * Semantics:
+   * - If >1 OPEN periods overlap, closes all but the latest by startAt.
+   * - If none is valid, closes expired, tries to open the current window or the next future one.
+   * - Closes the whole cycle if no future periods remain and cycle has expired.
    *
    * @param {string} cycleId - Cycle identifier.
    * @param {string} gameId - Game identifier.
-   * @param {Date} now - Current time reference (UTC).
+   * @param {Date} now - Current UTC time.
    * @returns {Promise<{ cycle: IChatterpointsDocument; period: GamePeriod } | null>}
-   * Resolves with the (cycle, active period) pair or null when none applies.
-   * @throws {Error} Propagates I/O errors from Mongo if updates fail.
+   * @throws {Error} On database errors during state transitions.
+   *
+   * @example
+   * const ap = await chatterpointsService.getActivePeriod(cycleId, 'WORDLE-1', new Date());
+   * if (ap) console.log(ap.period.periodId);
    */
   getActivePeriod: async (
     cycleId: string,
@@ -320,28 +321,38 @@ export const mongoChatterpointsService = {
   },
 
   /**
-   * Append a play entry for a user in a given period and update totals.
+   * @async
+   * @function play
+   * Register a user attempt in the specified period and update cycle totals.
    *
    * Semantics:
-   *  - Ensures the user's subdocument exists in the period (creates if missing).
-   *  - Increments attempt counter and appends the attempt entry.
-   *  - Tracks the user's best score in the period via $max(totalPoints).
-   *  - Recomputes cycle-wide totalsByUser (games + operations + social).
-   *  - Emits debug logs with snapshots.
+   * - Ensures a PeriodUserPlays subdocument exists for the user (creates if missing).
+   * - Increments attempts, appends the attempt entry, and $max the best period score.
+   * - Recomputes totalsByUser = games + operations + social.
+   * - Rejects if the target period is CLOSED.
    *
-   * @param {string} cycleId - Cycle identifier.
-   * @param {string} periodId - Period identifier.
-   * @param {string} userId - User identifier.
-   * @param {object} entry - Play attempt payload.
-   * @param {string} entry.guess - Guess content (word or letter).
-   * @param {number} entry.points - Points awarded to this attempt.
-   * @param {string} [entry.result] - Optional compact result encoding (e.g. Wordle mask).
+   * @param {string} cycleId - Target cycle identifier.
+   * @param {string} periodId - Target period identifier.
+   * @param {string} userId - Player identifier.
+   * @param {Object} entry - Attempt payload.
+   * @param {string} entry.guess - Guess text (word or letter).
+   * @param {number} entry.points - Points assigned to this attempt.
    * @param {Date} entry.at - Attempt timestamp.
-   * @param {boolean} entry.won - True if the attempt completed the game successfully.
-   * @param {number} entry.attemptNumber - 1-based attempt number.
-   * @param {Record<string, unknown>} [entry.displayInfo] - Optional UI-facing metadata.
-   * @returns {Promise<void>} Resolves after persistence completes.
-   * @throws {Error} When the target period is closed.
+   * @param {boolean} entry.won - True if the game is completed successfully by this attempt.
+   * @param {number} entry.attemptNumber - 1-based attempt index within the period.
+   * @param {string} [entry.result] - Optional compact result encoding (e.g., Wordle mask).
+   * @param {Record<string,unknown>} [entry.displayInfo] - Optional UI-facing details.
+   * @returns {Promise<void>} Resolves when persistence completes.
+   * @throws {Error} If the period is closed or a DB error occurs.
+   *
+   * @example
+   * await chatterpointsService.play(cycleId, periodId, userId, {
+   *   guess: 'APPLE',
+   *   points: 42,
+   *   at: new Date(),
+   *   won: true,
+   *   attemptNumber: 1
+   * });
    */
   pushPlayEntry: async (
     cycleId: string,
