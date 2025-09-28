@@ -102,15 +102,15 @@ const DEFAULTS = {
   cycleDurationMinutes: 7 * 24 * 60, // weekly
   wordle: {
     wordLength: 7,
-    attemptsPerUserPerPeriod: 6,
+    attemptsPerUserPerPeriod: 7,
     periodWindow: { unit: 'DAYS', value: 1 } as TimeWindow,
-    efficiencyPenalty: 2,
-    points: { victoryBase: 5, letterExact: 2, letterPresent: 1 }
+    efficiencyPenalty: 1,
+    points: { victoryBase: 10, letterExact: 2, letterPresent: 0 }
   },
   hangman: {
     wordLength: 7,
     periodWindow: { unit: 'DAYS', value: 1 } as TimeWindow,
-    points: { victoryBase: 8, losePenalty: 0, maxWrongAttempts: 6 }
+    points: { victoryBase: 10, losePenalty: 0, maxWrongAttempts: 7 }
   }
 } as const;
 
