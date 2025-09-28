@@ -1283,45 +1283,7 @@ export const chatterpointsService = {
       );
     }
 
-    if (gameCfg.type === 'WORDLE') {
-      const wordleCfg = gameCfg.config as Extract<GameSettings, { type: 'WORDLE' }>;
-      const maxWrongAttempts = wordleCfg.settings.attemptsPerUserPerPeriod;
-      if ((user?.attempts ?? 0) >= maxWrongAttempts) {
-        return withMeta(
-          {
-            status: 'ok',
-            periodClosed: false,
-            won: false,
-            points: 0,
-            display_info: { message: 'Max attempts reached for this period.' }
-          },
-          cycle,
-          period
-        );
-      }
-    }
-
-    if (gameCfg.type === 'HANGMAN') {
-      // Authoritative guard: attempts counter in plays, not displayInfo
-      const hangmanCfg = gameCfg.config as Extract<GameSettings, { type: 'HANGMAN' }>;
-      const { maxWrongAttempts } = hangmanCfg.points;
-
-      if ((user?.attempts ?? 0) >= maxWrongAttempts) {
-        return withMeta(
-          {
-            status: 'ok',
-            periodClosed: false,
-            won: false,
-            points: 0,
-            display_info: { message: 'No attempts left this period.' }
-          },
-          cycle,
-          period
-        );
-      }
-    }
-
-    // 5b) Duplicate guess guard
+    // Duplicate guess guard
     const normalizedGuess = req.guess.trim().toLowerCase();
     const alreadyTriedSame =
       user?.entries?.some((e) => e.guess.trim().toLowerCase() === normalizedGuess) ?? false;
@@ -1351,7 +1313,28 @@ export const chatterpointsService = {
       );
     }
 
-    // 6) Delegate to game-specific logic
+    // Attempts guard (WORDLE/HANGMAN) — unified with normalized message
+    const attemptsLimit =
+      gameCfg.type === 'WORDLE'
+        ? (gameCfg.config as Extract<GameSettings, { type: 'WORDLE' }>).settings
+            .attemptsPerUserPerPeriod
+        : (gameCfg.config as Extract<GameSettings, { type: 'HANGMAN' }>).points.maxWrongAttempts;
+
+    if ((user?.attempts ?? 0) >= attemptsLimit) {
+      return withMeta(
+        {
+          status: 'ok',
+          periodClosed: false,
+          won: false,
+          points: 0,
+          display_info: { message: 'No attempts remaining for this period.' }
+        },
+        cycle,
+        period
+      );
+    }
+
+    // Delegate to game-specific logic
     const userDoc = await mongoUserService.getUser(req.userId);
     const lang: gamesLanguage =
       (userDoc?.settings?.notifications?.language as gamesLanguage) ?? GAMES_LANGUAGE_DEFAULT;
