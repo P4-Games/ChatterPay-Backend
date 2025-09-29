@@ -1,17 +1,24 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { chatterpointsService } from '../services/chatterpointsService';
+import { LeaderboardResult, chatterpointsService } from '../services/chatterpointsService';
 import {
+  GameType,
+  WindowUnit,
   GameSection,
   GameSettings,
   WordleSettings,
+  SocialPlatform,
   HangmanSettings,
   WordlePointsConfig,
   HangmanPointsConfig
 } from '../models/chatterpointsModel';
 
-export interface CreateCycleBody {
+// -------------------------------------------------------------------------------------------------------------
+// Local, controller-only types (mínimos, sin repetir lo que ya existe en el modelo)
+type IncludeKind = 'games' | 'operations' | 'social' | 'prizes';
+
+interface CreateCycleBody {
   startAt?: string;
   endAt?: string;
   channel_user_id: string;
@@ -19,20 +26,20 @@ export interface CreateCycleBody {
   podiumPrizes?: number[];
   games?: Array<{
     gameId: string;
-    type: 'WORDLE' | 'HANGMAN';
+    type: GameType;
     enabled?: boolean;
     config?: {
       settings?: {
         wordLength?: number;
         attemptsPerUserPerPeriod?: number;
-        periodWindow?: { unit: 'MINUTES' | 'HOURS' | 'DAYS' | 'WEEKS'; value: number };
+        periodWindow?: { unit: WindowUnit; value: number };
       };
       points?: Record<string, number>;
     };
   }>;
 }
 
-export interface PlayBody {
+interface PlayBody {
   cycleId: string;
   periodId: string;
   channel_user_id: string;
@@ -40,32 +47,128 @@ export interface PlayBody {
   guess: string;
 }
 
-export interface StatsBody {
+interface StatsBody {
   cycleId: string | undefined;
   channel_user_id: string;
 }
 
-export interface LeaderboardBody {
+interface LeaderboardBody {
   cycleId: string;
   top?: number;
 }
 
-export interface SocialBody {
+interface SocialBody {
   cycleId: string;
   channel_user_id: string;
-  platform: 'discord' | 'youtube' | 'x' | 'instagram' | 'linkedin';
+  platform: SocialPlatform;
 }
 
-export interface PlaysBody {
+interface PlaysBody {
   cycleId?: string;
   channel_user_id?: string;
 }
+
+type DatePreset =
+  | 'today'
+  | 'yesterday'
+  | 'last_7_days'
+  | 'last_30_days'
+  | 'last_365_days'
+  | 'custom';
+
+interface UserHistoryBody {
+  channel_user_id: string;
+  datePreset?: DatePreset;
+  startAt?: string; // ISO (required if datePreset === 'custom')
+  endAt?: string; // ISO (required if datePreset === 'custom')
+  include?: IncludeKind[]; // default: all
+  gameTypes?: GameType[]; // default: ['WORDLE','HANGMAN']
+  platforms?: SocialPlatform[]; // default: all platforms
+  gameIds?: string[]; // optional: filter by specific games (e.g., ['wordle','hangman'])
+}
+
+// -------------------------------------------------------------------------------------------------------------
+// Helpers (solo controller)
+
+function resolveDateRange(
+  preset: DatePreset | undefined,
+  startAt?: string,
+  endAt?: string
+): { from: Date; to: Date } {
+  const now = new Date();
+
+  const startOfDay = (d: Date): Date => {
+    const x = new Date(d);
+    x.setUTCHours(0, 0, 0, 0);
+    return x;
+  };
+  const endOfDay = (d: Date): Date => {
+    const x = new Date(d);
+    x.setUTCHours(23, 59, 59, 999);
+    return x;
+  };
+
+  switch (preset) {
+    case 'today':
+      return { from: startOfDay(now), to: endOfDay(now) };
+    case 'yesterday': {
+      const y = new Date(now);
+      y.setUTCDate(now.getUTCDate() - 1);
+      return { from: startOfDay(y), to: endOfDay(y) };
+    }
+    case 'last_7_days': {
+      const from = new Date(now);
+      from.setUTCDate(now.getUTCDate() - 6);
+      return { from: startOfDay(from), to: endOfDay(now) };
+    }
+    case 'last_30_days': {
+      const from = new Date(now);
+      from.setUTCDate(now.getUTCDate() - 29);
+      return { from: startOfDay(from), to: endOfDay(now) };
+    }
+    case 'last_365_days': {
+      const from = new Date(now);
+      from.setUTCDate(now.getUTCDate() - 364);
+      return { from: startOfDay(from), to: endOfDay(now) };
+    }
+    case 'custom': {
+      if (!startAt || !endAt) {
+        throw new Error('Custom date range requires startAt and endAt.');
+      }
+      const from = new Date(startAt);
+      const to = new Date(endAt);
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+        throw new Error('Invalid custom date range.');
+      }
+      return { from, to };
+    }
+    default: {
+      // Default: last 30 days
+      const from = new Date(now);
+      from.setUTCDate(now.getUTCDate() - 29);
+      return { from: startOfDay(from), to: endOfDay(now) };
+    }
+  }
+}
+
+// -------------------------------------------------------------------------------------------------------------
+// Handlers
+
 export const createCycle = async (
   req: FastifyRequest<{ Body: CreateCycleBody }>,
   reply: FastifyReply
 ): Promise<void> => {
   try {
     const { channel_user_id, startAt, endAt, durationMinutes, podiumPrizes, games } = req.body;
+
+    Logger.info('createCycle', {
+      userId: channel_user_id,
+      startAt,
+      endAt,
+      durationMinutes,
+      hasGames: Array.isArray(games)
+    });
+
     const result = await chatterpointsService.createCycle({
       userId: channel_user_id,
       startAt: startAt ? new Date(startAt) : undefined,
@@ -91,9 +194,11 @@ export const createCycle = async (
           : undefined
       }))
     });
+
+    Logger.info('createCycle', 'cycle created', { cycleId: result.cycleId });
     await reply.status(200).send({ status: 'ok', cycleId: result.cycleId.toString() });
   } catch (err) {
-    Logger.error('[createCycle] %s', (err as Error).message);
+    Logger.error('createCycle', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -104,23 +209,35 @@ export const play = async (
 ): Promise<void> => {
   try {
     const { channel_user_id, gameId, guess } = req.body;
+
     if (!channel_user_id || !gameId || !guess) {
+      Logger.warn('play', 'missing required fields', {
+        channel_user_id,
+        gameId,
+        guessLen: guess?.length
+      });
       throw new Error('Missing required fields');
     }
+
     if (gameId.toUpperCase() === 'HANGMAN') {
       const isLetterGuess = guess.length === 1;
-      const isWordGuess = guess.length >= 2; // let service validate exact word length
+      const isWordGuess = guess.length >= 2; // service validates exact word length
       if (!isLetterGuess && !isWordGuess) {
+        Logger.warn('play', 'invalid hangman guess shape', { guess });
         throw new Error('Hangman guess must be a single letter or a full word.');
       }
     }
+
     if (!/^[A-Za-z]+$/.test(guess)) {
+      Logger.warn('play', 'guess contains non-letters', { guess });
       throw new Error('Guess must contain only letters (A-Z).');
     }
+
     const result = await chatterpointsService.play({ userId: channel_user_id, gameId, guess });
+    Logger.info('play', 'attempt accepted', { userId: channel_user_id, gameId });
     await reply.status(200).send(result);
   } catch (err) {
-    Logger.error('[play] %s', (err as Error).message);
+    Logger.error('play', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -131,11 +248,15 @@ export const stats = async (
 ): Promise<void> => {
   try {
     const { cycleId, channel_user_id } = req.body;
-    if (!channel_user_id) throw new Error('Missing required fields');
+    if (!channel_user_id) {
+      Logger.warn('stats', 'missing channel_user_id');
+      throw new Error('Missing required fields');
+    }
     const result = await chatterpointsService.getStats({ cycleId, userId: channel_user_id });
+    Logger.debug('stats', 'fetched', { cycleId, userId: channel_user_id });
     await reply.status(200).send({ status: 'ok', ...result });
   } catch (err) {
-    Logger.error('[stats] %s', (err as Error).message);
+    Logger.error('stats', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -146,10 +267,12 @@ export const leaderboard = async (
 ): Promise<void> => {
   try {
     const { cycleId, top } = req.body;
-    const result = await chatterpointsService.getLeaderboard({ cycleId, top });
-    await reply.status(200).send({ status: 'ok', leaderboard: result }); // prize included automatically
+    const result: LeaderboardResult = await chatterpointsService.getLeaderboard({ cycleId, top });
+    const sanitizedEntries = result.entries.map(({ prize: _prize, ...rest }) => rest);
+    Logger.debug('leaderboard', { cycleId, top, count: sanitizedEntries.length });
+    await reply.status(200).send({ status: 'ok', leaderboard: sanitizedEntries });
   } catch (err) {
-    Logger.error('[leaderboard] %s', (err as Error).message);
+    Logger.error('leaderboard', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -160,15 +283,27 @@ export const social = async (
 ): Promise<void> => {
   try {
     const { cycleId, channel_user_id, platform } = req.body;
-    if (!channel_user_id || !platform) throw new Error('Missing required fields');
+    if (!channel_user_id || !platform) {
+      Logger.warn('social', 'missing required fields', { channel_user_id, platform });
+      throw new Error('Missing required fields');
+    }
+
     const result = await chatterpointsService.registerSocial({
       cycleId,
       userId: channel_user_id,
       platform
     });
+
+    // result: { granted: boolean }
+    Logger.info('social', 'registered', {
+      userId: channel_user_id,
+      platform,
+      granted: result.granted
+    });
+
     await reply.status(200).send({ status: 'ok', ...result });
   } catch (err) {
-    Logger.error('[social] %s', (err as Error).message);
+    Logger.error('social', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -176,10 +311,10 @@ export const social = async (
 export const gamesInfo = async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
   try {
     const result = await chatterpointsService.getCycleGamesInfo();
-
+    Logger.debug('gamesInfo', 'returned games info');
     await reply.status(200).send(result);
   } catch (err) {
-    Logger.error('[gamesInfo] %s', (err as Error).message);
+    Logger.error('gamesInfo', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -187,9 +322,10 @@ export const gamesInfo = async (req: FastifyRequest, reply: FastifyReply): Promi
 export const clean = async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
   try {
     const result = await chatterpointsService.maintainPeriodsAndCycles();
+    Logger.info('clean', 'maintenance summary', result);
     await reply.status(200).send({ status: 'ok', ...result });
   } catch (err) {
-    Logger.error('[cleanupExpired] %s', (err as Error).message);
+    Logger.error('clean', (err as Error).message);
     await reply.status(500).send({ status: 'error', error: (err as Error).message });
   }
 };
@@ -200,7 +336,6 @@ export const cyclePlays = async (
 ): Promise<void> => {
   try {
     const body = req.body ?? {};
-
     const { cycleId, channel_user_id } = body as Partial<PlaysBody>;
 
     const result = await chatterpointsService.getCyclePlays({
@@ -209,9 +344,12 @@ export const cyclePlays = async (
     });
 
     if (!result) {
+      Logger.debug('cyclePlays', 'no plays found', { cycleId, userId: channel_user_id });
       await reply.status(404).send({ status: 'error', error: 'No plays found' });
       return;
     }
+
+    Logger.debug('cyclePlays', 'ok', { cycleId: result.cycleId, count: result.plays?.length ?? 0 });
 
     await reply.status(200).send({
       status: 'ok',
@@ -222,7 +360,84 @@ export const cyclePlays = async (
       plays: result.plays
     });
   } catch (err) {
-    Logger.error('[plays] %s', (err as Error).message);
+    Logger.error('cyclePlays', (err as Error).message);
+    await reply.status(200).send({ status: 'error', error: (err as Error).message });
+  }
+};
+
+// NEW: userHistory (controller -> negocio, no mongo)
+export const userHistory = async (
+  req: FastifyRequest<{ Body: UserHistoryBody }>,
+  reply: FastifyReply
+): Promise<void> => {
+  try {
+    // Body puede venir undefined, protegemos y tipamos
+    type UB = Partial<UserHistoryBody>;
+    const body: UB = (req.body ?? {}) as UB;
+
+    const { channel_user_id, datePreset, startAt, endAt } = body;
+
+    if (!channel_user_id) {
+      Logger.warn('userHistory', 'missing channel_user_id');
+      throw new Error('Missing required fields');
+    }
+
+    // Defaults MUTABLES (evitan el problema de readonly tuples)
+    const include: IncludeKind[] =
+      Array.isArray(body.include) && body.include.length > 0
+        ? body.include.filter(
+            (x): x is IncludeKind =>
+              x === 'games' || x === 'operations' || x === 'social' || x === 'prizes'
+          )
+        : (['games', 'operations', 'social', 'prizes'] as IncludeKind[]);
+
+    const gameTypes: GameType[] =
+      Array.isArray(body.gameTypes) && body.gameTypes.length > 0
+        ? body.gameTypes.filter((x): x is GameType => x === 'WORDLE' || x === 'HANGMAN')
+        : (['WORDLE', 'HANGMAN'] as GameType[]);
+
+    const platforms: SocialPlatform[] =
+      Array.isArray(body.platforms) && body.platforms.length > 0
+        ? body.platforms.filter(
+            (x): x is SocialPlatform =>
+              x === 'discord' ||
+              x === 'youtube' ||
+              x === 'x' ||
+              x === 'instagram' ||
+              x === 'linkedin'
+          )
+        : (['discord', 'youtube', 'x', 'instagram', 'linkedin'] as SocialPlatform[]);
+
+    const gameIds =
+      Array.isArray(body.gameIds) && body.gameIds.length > 0
+        ? body.gameIds
+            .filter((g): g is string => typeof g === 'string')
+            .map((g) => g.trim())
+            .filter((g) => g.length > 0)
+        : undefined;
+
+    const { from, to } = resolveDateRange(datePreset, startAt, endAt);
+
+    // Llama SOLO al servicio de negocio
+    const result = await chatterpointsService.getUserHistory({
+      userId: channel_user_id,
+      from,
+      to,
+      include,
+      gameTypes,
+      platforms,
+      gameIds
+    });
+
+    Logger.debug('userHistory', 'ok', {
+      userId: channel_user_id,
+      include: result.include,
+      window: { from, to }
+    });
+
+    await reply.status(200).send({ status: 'ok', ...result });
+  } catch (err) {
+    Logger.error('userHistory', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };

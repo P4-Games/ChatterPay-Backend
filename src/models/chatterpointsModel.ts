@@ -9,6 +9,21 @@ import { ConcurrentOperationsEnum } from '../types/commonType';
  * Inside each cycle we persist: games configuration, generated periods, plays per user per period,
  * social registrations and precomputed totals for fast leaderboard queries.
  *
+ * DESIGN DECISION — Why are "periods" stored at cycle root (not inside each game)?
+ * --------------------------------------------------------------------------------
+ * 1) Cross-game scheduling & reporting: opening/closing windows, finding the next/previous
+ *    active period, and building leaderboards are transversal tasks across all games. Keeping a
+ *    flat time-series (cycle.periods[]) allows simple, efficient scans and updates without
+ *    navigating nested arrays (games[].periods[]).
+ * 2) Write-path simplicity: high-frequency writes (user plays, points increments, status flips)
+ *    benefit from shorter, stable update paths and simpler arrayFilters. A single positional
+ *    match on periods[] is cheaper and less error-prone than matching games[] + periods[].
+ * 3) Indexing strategy: time-range and status queries (e.g., { 'periods.gameId': 1, 'periods.startAt': 1 })
+ *    remain straightforward with a flat array; nested paths often require more complex compound
+ *    indexes and longer key paths with little functional gain for our current workloads.
+ * 4) Evolution cost: the service layer can still return "view models" grouped by game (periods
+ *    aggregated per game in-memory) without changing storage. If we ever introduce game-specific
+ *    period schemas that diverge significantly, we can revisit nesting with a planned migration.
  */
 
 /** Cycle/window enums */
@@ -24,7 +39,9 @@ export interface OperationPointsRule {
   minAmount: number; // minimum amount (e.g., USDT)
   maxAmount: number; // maximum amount
   userLevel: string; // L1, L2, etc.
-  points: number; // points assigned
+  basePoints: number; // base multiplier to compute final points
+  fullCount: number; // number of full-credit operations per user
+  decayFactor: number; // multiplier applied after fullCount is exceeded
 }
 
 /** A concrete operation performed during a cycle */
@@ -120,7 +137,7 @@ export interface GameSection {
 export interface PlayAttempt {
   guess: string;
   points: number;
-  /** Optional compact result encoding (e.g., "GYY__" for Wordle, unused in Hangman) */
+  /** Optional compact result encoding (e.g., "GYY__") */
   result?: string;
   at: Date;
   /** Attempt number within the period (1-based) */
@@ -166,7 +183,12 @@ export interface SocialSection {
 /** Precomputed totals for fast leaderboard (cycle-scoped) */
 export interface TotalsByUser {
   userId: string;
-  points: number;
+  total: number;
+  breakdown: {
+    games: number;
+    operations: number;
+    social: number;
+  };
 }
 
 /** Main cycle document */
@@ -178,6 +200,10 @@ export interface IChatterpoints {
   podiumPrizes: number[];
   games: GameSection[];
   operations: OperationsSection;
+  /**
+   * Flat time-series of game periods at cycle scope (see DESIGN DECISION above).
+   * Each period references the target game via gameId to keep scheduling and reporting transversal.
+   */
   periods: GamePeriod[];
   socialActions: SocialSection[];
   totalsByUser: TotalsByUser[];
@@ -200,7 +226,9 @@ const OperationPointsRuleSchema = new Schema<OperationPointsRule>(
     minAmount: { type: Number, required: true },
     maxAmount: { type: Number, required: true },
     userLevel: { type: String, required: true },
-    points: { type: Number, required: true }
+    basePoints: { type: Number, required: true },
+    fullCount: { type: Number, required: true, default: 5 },
+    decayFactor: { type: Number, required: true, default: 0.5 }
   },
   { _id: false }
 );
@@ -318,7 +346,12 @@ const GameSchema = new Schema<GameSection>(
 const TotalsByUserSchema = new Schema<TotalsByUser>(
   {
     userId: { type: String, required: true, index: true },
-    points: { type: Number, required: true, default: 0, index: true }
+    total: { type: Number, required: true, default: 0, index: true },
+    breakdown: {
+      games: { type: Number, required: true, default: 0 },
+      operations: { type: Number, required: true, default: 0 },
+      social: { type: Number, required: true, default: 0 }
+    }
   },
   { _id: false }
 );
@@ -339,6 +372,10 @@ const ChatterpointsSchema = new Schema<IChatterpoints>(
     games: { type: [GameSchema], required: true, default: [] },
     operations: { type: OperationsSchema, required: true, default: { config: [], entries: [] } },
     socialActions: { type: [SocialActionsSchema], required: true, default: [] },
+    /**
+     * Flat array kept at cycle scope (see DESIGN DECISION above).
+     * Each record links to its game via gameId.
+     */
     periods: { type: [GamePeriodSchema], required: true, default: [] },
     totalsByUser: { type: [TotalsByUserSchema], required: true, default: [] }
   },

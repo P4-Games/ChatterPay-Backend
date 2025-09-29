@@ -30,12 +30,13 @@ import {
   GamePeriod,
   PeriodWord,
   TimeWindow,
-  GameSection,
   CycleStatus,
+  GameSection,
   PlayAttempt,
   GameSettings,
   PeriodStatus,
   OperationEntry,
+  IChatterpoints,
   HangmanSettings,
   PeriodUserPlays,
   OperationsSection,
@@ -84,33 +85,33 @@ export interface ExpiredCleanupResult {
   closedCycles: number;
 }
 
-type LeaderboardRow = {
+export interface LeaderboardRow {
   position: number;
   trophy?: string;
   user: string;
   points: number;
   prize: number;
-};
+}
 
-type LeaderboardResult = {
+export interface LeaderboardResult {
   cycleId: string;
   cycleRange: string; // "startAt - endAt" for user display
   entries: LeaderboardRow[];
-};
+}
 
 const DEFAULTS = {
   cycleDurationMinutes: 7 * 24 * 60, // weekly
   wordle: {
     wordLength: 7,
-    attemptsPerUserPerPeriod: 6,
+    attemptsPerUserPerPeriod: 7,
     periodWindow: { unit: 'DAYS', value: 1 } as TimeWindow,
-    efficiencyPenalty: 2,
-    points: { victoryBase: 50, letterExact: 5, letterPresent: 2 }
+    efficiencyPenalty: 1,
+    points: { victoryBase: 10, letterExact: 2, letterPresent: 0 }
   },
   hangman: {
     wordLength: 7,
     periodWindow: { unit: 'DAYS', value: 1 } as TimeWindow,
-    points: { victoryBase: 50, losePenalty: 0, maxWrongAttempts: 6 }
+    points: { victoryBase: 10, losePenalty: 0, maxWrongAttempts: 7 }
   }
 } as const;
 
@@ -122,27 +123,96 @@ export interface RegisterOperationResult {
   operation: OperationEntry;
 }
 
+export interface UserHistoryFilters {
+  userId: string;
+  from: Date;
+  to: Date;
+  include: Array<'games' | 'operations' | 'social' | 'prizes'>;
+  gameTypes: GameType[];
+  platforms: Array<'discord' | 'youtube' | 'x' | 'instagram' | 'linkedin'>;
+  gameIds?: string[];
+}
+
+export interface UserGamePlay {
+  cycleId: string;
+  periodId: string;
+  gameId: string;
+  gameType: GameType;
+  at: Date;
+  guess: string;
+  result?: string;
+  points: number;
+  won: boolean;
+}
+
+export interface UserOperationEntry {
+  cycleId: string;
+  type: string;
+  amount: number;
+  userLevel: string;
+  points: number;
+  at: Date;
+}
+
+export interface UserSocialAction {
+  cycleId: string;
+  platform: string;
+  at: Date;
+}
+
+export interface UserPrize {
+  cycleId: string;
+  rank: number;
+  prize: number;
+  totalPoints: number;
+  endAt: Date;
+}
+
+export interface UserHistoryResult {
+  include: Array<'games' | 'operations' | 'social' | 'prizes'>;
+  window: { from: Date; to: Date };
+  games?: UserGamePlay[];
+  operations?: UserOperationEntry[];
+  social?: UserSocialAction[];
+  prizes?: UserPrize[];
+  totals: {
+    games: number;
+    operations: number;
+    social: number;
+    grandTotal: number;
+  };
+}
+
+interface PlayResponseBase {
+  status: string;
+  periodClosed: boolean;
+  won: boolean;
+  points: number;
+  display_info?: Record<string, unknown>;
+}
+
 // -------------------------------------------------------------------------------------------------------------
 
 /**
  * Retrieves a local Chatterpoints words file (encrypted JSON).
  *
- * @param {string} urlFile - The name of the words file to retrieve.
- * @returns {Promise<Record<string, Record<string, string[]>>>} The decrypted words dictionary.
- * @throws Throws an error if the local file cannot be retrieved.
+ * @param {string} urlFile - The file path (relative to this module) to read.
+ * @returns {Promise<Record<string, Record<string, string>>>}
+ * The encrypted words dictionary (values are base64 + AES).
+ * @throws {Error} If the local file cannot be read or parsed.
  */
 const getLocalChatterpointsWordsFile = async (
   urlFile: string
 ): Promise<Record<string, Record<string, string>>> => {
   try {
     const filePath = path.resolve(__dirname, urlFile);
-    Logger.log('getLocalChatterpointsWordsFile', 'Looking for file in:', filePath);
+    Logger.debug('getLocalChatterpointsWordsFile', 'Looking for file in:', filePath);
 
     if (!fs.existsSync(filePath)) {
       throw new Error(`The file does not exist at path: ${filePath}`);
     }
 
-    // 🚨 Devuelve JSON encriptado, no hace decrypt
+    // Returns encrypted JSON; decryption is performed by getWords().
     return JSON.parse(fs.readFileSync(filePath, 'utf8')) as Record<string, Record<string, string>>;
   } catch (error) {
     Logger.error('getLocalChatterpointsWordsFile', urlFile, (error as Error).message);
@@ -153,8 +223,10 @@ const getLocalChatterpointsWordsFile = async (
 /**
  * Retrieves a Chatterpoints words file from cache or fetches it (from local or GCP).
  *
- * @param {string} fileKey - The key of the words file to retrieve.
- * @returns {Promise<Record<string, Record<string, string[]>>>} The decrypted words dictionary.
+ * @param {string} fileKey - Logical key of the words file (e.g., "Words").
+ * @returns {Promise<Record<string, Record<string, string>>>}
+ * The encrypted words dictionary (values are base64 + AES).
+ * @throws {Error} If the file cannot be retrieved.
  */
 const getChatterpointsWordFile = async (
   fileKey: string
@@ -175,7 +247,7 @@ const getChatterpointsWordFile = async (
     cacheKey
   );
   if (hit) {
-    Logger.log('getChatterpointsWordFile', `CACHE HIT key=${cacheKey}`);
+    Logger.debug('getChatterpointsWordFile', `CACHE HIT key=${cacheKey}`);
     return hit;
   }
 
@@ -183,7 +255,7 @@ const getChatterpointsWordFile = async (
     CacheNames.CHATTERPOINTS_WORDS,
     cacheKey,
     async () => {
-      Logger.log(
+      Logger.debug(
         'getChatterpointsWordFile',
         `CACHE MISS key=${cacheKey} — loading from ${CacheNames.CHATTERPOINTS_WORDS}...`
       );
@@ -223,26 +295,15 @@ function decryptJson(base64Str: string, pass: string): string[] {
 }
 
 /**
- * Loads and decrypts all words from the encrypted words dictionary file (`words.json`).
+ * Load and decrypt the per-language word lists for all supported lengths.
  *
- * - Supports multiple languages (currently: `en`, `es`, `pt`).
- * - Supports word lengths from `l5` up to `l15`.
- * - Uses the constant `CHATTERPOINTS_WORDS_SEED` as the decryption key.
- * - Results are cached in memory (`global.__wordsCache`) to avoid repeated decryption.
- *
- * @async
- * @function getWords
  * @returns {Promise<Record<string, Record<string, string[]>>>}
- * A nested record structure where:
- * - The first-level keys are word length identifiers (e.g., `"l5"`, `"l10"`).
- * - The second-level keys are language codes (`"en"`, `"es"`, `"pt"`).
- * - The values are arrays of decrypted words for the given length and language.
- *
+ * The decrypted words dictionary (arrays of plain strings).
  * @throws {Error} If the word file cannot be loaded or decryption fails.
  *
  * @example
  * const words = await getWords();
- * console.log(words["l5"]["en"]); // → Array of English words with length 5
+ * console.log(words["l5"]["en"]); // → array of English 5-letter words
  */
 const getWords = async (): Promise<Record<string, Record<string, string[]>>> => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -653,8 +714,11 @@ async function playWordle(
 
   if (guess === answer) {
     won = true;
-    const penalty = wordleCfg.settings.efficiencyPenalty ?? 2;
-    points = Math.max(wordleCfg.points.victoryBase - penalty * (attemptNumber - 1), 0);
+    // Clamp efficiencyPenalty to [0, victoryBase] so victory points never go negative
+    const rawPenalty = wordleCfg.settings.efficiencyPenalty ?? 2;
+    const penalty = Math.min(Math.max(rawPenalty, 0), wordleCfg.points.victoryBase);
+    const victoryPoints = wordleCfg.points.victoryBase - penalty * (attemptNumber - 1);
+    points = Math.max(victoryPoints, 1); // win never 0
   }
 
   const prettyResult = result.replace(/G/g, '🟩').replace(/Y/g, '🟨').replace(/\?/g, '⬛');
@@ -731,6 +795,7 @@ async function playHangman(
   if (!answerRaw) throw new Error(`No word available for language=${lang} in this period`);
   const answer = answerRaw.toLowerCase();
   const guess = req.guess.toLowerCase();
+  const answerLen = answer.length;
 
   const hangmanCfg = gameCfg.config as Extract<GameSettings, { type: 'HANGMAN' }>;
   const settings = hangmanCfg.settings as HangmanSettings;
@@ -756,6 +821,55 @@ async function playHangman(
       ? (lastEntry.displayInfo.remainingAttempts as number)
       : hangmanCfg.points.maxWrongAttempts;
 
+  // --- HARD STOPS (no more plays if game is over or user already tried a full word) ---
+  const alreadyTriedFullWord =
+    prevEntries.some((e) => typeof e.guess === 'string' && e.guess.length === answerLen) || false;
+
+  if (remainingAttempts <= 0 || alreadyTriedFullWord) {
+    const wordProgressStop = answer
+      .split('')
+      .map((ch) => (guessedLetters.has(ch.toUpperCase()) ? ch.toUpperCase() : '?'))
+      .join(' ');
+    const displayInfoStop = {
+      wordProgress: wordProgressStop,
+      guessedLetters: Array.from(guessedLetters),
+      wrongLetters: Array.from(wrongLetters),
+      remainingAttempts,
+      message: alreadyTriedFullWord
+        ? 'You already attempted a full word. Please wait for the next period.'
+        : 'No attempts left this period.'
+    };
+    return {
+      status: 'ok',
+      periodClosed: false,
+      won: userPlays?.won ?? false,
+      points: 0,
+      display_info: displayInfoStop
+    };
+  }
+
+  // --- STRICT LENGTH VALIDATION (1 letter OR exact full word). Return (no throw). ---
+  if (!(guess.length === 1 || guess.length === answerLen)) {
+    const wordProgressLen = answer
+      .split('')
+      .map((ch) => (guessedLetters.has(ch.toUpperCase()) ? ch.toUpperCase() : '?'))
+      .join(' ');
+    const displayInfoLen = {
+      wordProgress: wordProgressLen,
+      guessedLetters: Array.from(guessedLetters),
+      wrongLetters: Array.from(wrongLetters),
+      remainingAttempts,
+      message: `Invalid guess length. Must be 1 letter or ${answerLen} letters for full word.`
+    };
+    return {
+      status: 'ok',
+      periodClosed: false,
+      won: false,
+      points: 0,
+      display_info: displayInfoLen
+    };
+  }
+
   // --- GAME LOGIC ---
   if (guess.length === 1) {
     const letterU = guess.toUpperCase();
@@ -773,15 +887,28 @@ async function playHangman(
       won = true;
       points = Math.max(hangmanCfg.points.victoryBase - (attemptNumber - 1) * penalty, 0);
       answer.split('').forEach((ch) => guessedLetters.add(ch.toUpperCase()));
+      remainingAttempts = 0; // end immediately on correct full word
+      // keep this line to mark the end of the game at max attempts (as requested)
+      attemptNumber = hangmanCfg.points.maxWrongAttempts;
     } else {
+      // process each letter of the guessed word before ending the game
+      guess.split('').forEach((ch: string) => {
+        const upper = ch.toUpperCase();
+        if (!guessedLetters.has(upper) && !wrongLetters.has(upper)) {
+          if (answer.includes(ch)) {
+            guessedLetters.add(upper);
+          } else {
+            wrongLetters.add(upper);
+            remainingAttempts = Math.max(remainingAttempts - 1, 0);
+          }
+        }
+      });
       won = false;
       points = hangmanCfg.points.losePenalty;
-      remainingAttempts = 0; // end immediately
+      remainingAttempts = 0; // end after wrong full word
+      // keep this line to mark the end of the game at max attempts (as requested)
+      attemptNumber = hangmanCfg.points.maxWrongAttempts;
     }
-  } else {
-    throw new Error(
-      `Invalid guess length. Must be 1 letter or ${answer.length} letters for full word.`
-    );
   }
 
   // Build word progress
@@ -809,9 +936,11 @@ async function playHangman(
     remainingAttempts
   };
 
+  const result = wordProgress.replace(/ /g, '');
   await mongoChatterpointsService.pushPlayEntry(cycleId, periodId, req.userId, {
     guess,
     points,
+    result,
     at: now,
     won,
     attemptNumber,
@@ -821,43 +950,187 @@ async function playHangman(
   return { status: 'ok', periodClosed: false, won, points, display_info: displayInfo };
 }
 
+/**
+ * @template T
+ * @async
+ * @function withMeta
+ * Wrap a service result with optional cycle/period metadata for diagnostics or UI.
+ *
+ * Semantics:
+ * - Executes `fn` and attaches (optional) `cycle` and `period` slices when provided.
+ *
+ * @param {() => Promise<T>} fn - Producer function that resolves the main payload.
+ * @param {Partial<IChatterpoints>} [cycle] - Optional cycle metadata to attach.
+ * @param {Partial<GamePeriod>} [period] - Optional period metadata to attach.
+ * @returns {Promise<{ data: T; cycle?: Partial<IChatterpoints>; period?: Partial<GamePeriod> }>}
+ *
+ * @example
+ * const out = await withMeta(
+ *   () => play(cycleId, periodId, userId, entry),
+ *   { cycleId, startAt, endAt },
+ *   { periodId, startAt: pStart, endAt: pEnd }
+ * );
+ */
+
+function withMeta(base: PlayResponseBase, cycle?: IChatterpoints, period?: GamePeriod) {
+  let indexInfo: Record<string, string> | undefined;
+
+  if (cycle && period) {
+    // Group periods by gameId
+    const grouped: Record<string, GamePeriod[]> = cycle.periods.reduce(
+      (acc, p) => {
+        (acc[p.gameId] ||= []).push(p);
+        return acc;
+      },
+      {} as Record<string, GamePeriod[]>
+    );
+
+    const gamePeriods = grouped[period.gameId];
+    if (gamePeriods) {
+      const total = gamePeriods.length;
+      const current = period.index + 1; // 0-based in DB
+      indexInfo = { [period.gameId]: `${current}/${total}` };
+    }
+  }
+
+  return {
+    ...base,
+    display_info: {
+      ...base.display_info,
+      ...(cycle && {
+        cycle: {
+          id: cycle.cycleId,
+          name: `Cycle ${cycle.cycleId}`,
+          startAt: cycle.startAt,
+          endAt: cycle.endAt,
+          ...(cycle?.status ? { status: cycle.status } : {})
+        }
+      }),
+      ...(period
+        ? {
+            period: {
+              id: period.periodId,
+              name: `Period ${period.periodId}`,
+              startAt: period.startAt,
+              endAt: period.endAt,
+              status: period.status,
+              ...(indexInfo ? { index: indexInfo } : {})
+            }
+          }
+        : cycle && {
+            // If no active period, expose all periods grouped by game
+            periods: cycle.periods.map((p) => ({
+              id: p.periodId,
+              gameId: p.gameId,
+              startAt: p.startAt,
+              endAt: p.endAt,
+              status: p.status,
+              index: `${p.index + 1}/${cycle.periods.filter((x) => x.gameId === p.gameId).length}`
+            }))
+          })
+    }
+  };
+}
+
+/**
+ * Validate Wordle configuration for integer-only knobs and coherent scoring.
+ *
+ * Ensures:
+ * - settings.wordLength: integer ≥ 1
+ * - settings.attemptsPerUserPerPeriod: integer ≥ 1
+ * - settings.efficiencyPenalty: integer ≥ 0 and ≤ points.victoryBase
+ * - points.victoryBase: integer ≥ 1
+ * - points.letterExact: integer ≥ 0
+ * - points.letterPresent: integer ≥ 0
+ * - points.letterExact ≥ points.letterPresent
+ *
+ * Rationale:
+ * efficiencyPenalty ≤ victoryBase prevents over-penalizing early wins
+ * (win score doesn’t go negative before the runtime floor ≥ 1).
+ *
+ * @param {Extract<GameSettings, { type: 'WORDLE' }>} cfg
+ *        Wordle config object:
+ *        {
+ *          type: 'WORDLE',
+ *          settings: {
+ *            wordLength: number,
+ *            attemptsPerUserPerPeriod: number,
+ *            efficiencyPenalty: number
+ *          },
+ *          points: {
+ *            victoryBase: number,
+ *            letterExact: number,
+ *            letterPresent: number
+ *          }
+ *        }
+ * @returns {void}
+ * @throws {Error} If any of the constraints above is violated.
+ */
+function assertWordleConfigSafe(cfg: Extract<GameSettings, { type: 'WORDLE' }>) {
+  const { settings, points } = cfg;
+
+  if (!Number.isInteger(settings.wordLength) || settings.wordLength < 1) {
+    throw new Error('wordLength must be an integer ≥ 1');
+  }
+  if (
+    !Number.isInteger(settings.attemptsPerUserPerPeriod) ||
+    settings.attemptsPerUserPerPeriod < 1
+  ) {
+    throw new Error('attemptsPerUserPerPeriod must be an integer ≥ 1');
+  }
+  if (!Number.isInteger(points.victoryBase) || points.victoryBase < 1) {
+    throw new Error('points.victoryBase must be an integer ≥ 1');
+  }
+  if (!Number.isInteger(points.letterExact) || points.letterExact < 0) {
+    throw new Error('points.letterExact must be an integer ≥ 0');
+  }
+  if (!Number.isInteger(points.letterPresent) || points.letterPresent < 0) {
+    throw new Error('points.letterPresent must be an integer ≥ 0');
+  }
+  if (!Number.isInteger(settings.efficiencyPenalty) || settings.efficiencyPenalty < 0) {
+    throw new Error('efficiencyPenalty must be an integer ≥ 0');
+  }
+  if (points.letterExact < points.letterPresent) {
+    throw new Error('letterExact must be ≥ letterPresent');
+  }
+  // Why: efficiencyPenalty ≤ victoryBase prevents over-penalizing wins immediately;
+  // it guarantees early wins don’t go negative before clamping.
+  if (settings.efficiencyPenalty > points.victoryBase) {
+    throw new Error('efficiencyPenalty must be ≤ victoryBase');
+  }
+}
+
 // -------------------------------------------------------------------------------------------------------------
 
 export const chatterpointsService = {
   /**
-   * Creates a new game cycle with configured games and periods.
-   *
-   * - Validates that the requester has admin rights (`chatterpoints_admin`).
-   * - Ensures there is no currently open cycle; if one exists but is expired, it auto-closes it.
-   * - Determines the cycle time range using either:
-   *   - `req.startAt` + `req.durationMinutes`, or
-   *   - `req.startAt` + `req.endAt`, or
-   *   - Defaults to current time + `DEFAULTS.cycleDurationMinutes`.
-   * - Builds default game configurations (`WORDLE`, `HANGMAN`) and merges with overrides from `req.games`.
-   * - Performs business validation (e.g., Wordle word length must be integer between 5 and 15).
-   * - Validates the relationship between cycle duration and period duration (`validatePeriodHierarchy`).
-   * - Expands periods for each enabled game using `expandPeriodsForGame` and tracks used words.
-   * - Persists the new cycle in MongoDB via `mongoChatterpointsService.createCycle`.
-   *
    * @async
    * @function createCycle
-   * @param {CreateCycleRequest} req - The request containing user ID, time settings, game configs, and podium prizes.
-   * @returns {Promise<IChatterpointsDocument>} The newly created cycle document stored in MongoDB.
+   * Create a new Chatterpoints cycle and its initial periods.
    *
-   * @throws {Error} If:
-   * - The user is not authorized (missing `userId` or not an admin).
-   * - There is an already open cycle that has not yet expired.
-   * - Game configuration validation fails (e.g., invalid Wordle word length).
-   * - Period hierarchy validation fails (periods not shorter than cycle).
+   * Semantics:
+   * - Generates a unique cycleId.
+   * - Assigns sequential periodIds and sets the first period to OPEN, the rest to CLOSED.
+   * - Persists games, operations config (defaults if omitted), periods, and podium prizes.
+   *
+   * @param {Object} input - Cycle creation payload.
+   * @param {Date} input.startAt - Cycle start time (UTC).
+   * @param {Date} input.endAt - Cycle end time (UTC).
+   * @param {IChatterpoints['games']} input.games - Game sections configuration for the cycle.
+   * @param {IChatterpoints['operations']} [input.operations] - Optional operations rules/config.
+   * @param {Array<Omit<GamePeriod,'periodId'> & { word: PeriodWord }>} input.periods - Periods to materialize for this cycle (periodId is autogenerated).
+   * @param {number[]} [input.podiumPrizes] - Optional prizes for top N users.
+   * @returns {Promise<IChatterpointsDocument>} The created cycle (lean object).
+   * @throws {Error} If persistence fails or input is invalid.
    *
    * @example
-   * const cycle = await createCycle({
-   *   userId: "admin1",
-   *   durationMinutes: 1440, // 1 day
-   *   games: [{ type: "WORDLE", gameId: "wordle", enabled: true }],
-   *   podiumPrizes: [100, 50, 25]
+   * // Minimal example
+   * const cycle = await chatterpointsService.createCycle({
+   *   startAt: new Date(),
+   *   endAt: addDays(new Date(), 7),
+   *   games: [defaultWordleGame(), defaultHangmanGame()],
+   *   periods: expandDailyWordle({ /* ... *\/ })
    * });
-   * console.log(cycle.startAt, cycle.endAt, cycle.games.length);
    */
   createCycle: async (req: CreateCycleRequest): Promise<IChatterpointsDocument> => {
     if (!req.userId) {
@@ -869,17 +1142,22 @@ export const chatterpointsService = {
       throw new Error("You don't have access to this operation.");
     }
 
+    // Time-aware: if this returns something, it's the in-window OPEN cycle → block creation
     const existing = await mongoChatterpointsService.getOpenCycle();
     if (existing) {
-      // Auto-close if expired
-      if (new Date(existing.endAt).getTime() <= Date.now()) {
-        await mongoChatterpointsService.closeCycleById(existing.cycleId);
-      } else {
-        throw new Error('There is an already OPEN cycle');
-      }
+      throw new Error('There is an already OPEN cycle');
     }
 
-    const startAt = req.startAt ?? new Date();
+    // Guard against early-OPEN cycle (OPEN status, but starts in the future)
+    const earlyOpen = await mongoChatterpointsService.getScheduledOpenCycle();
+    if (earlyOpen) {
+      throw new Error(
+        `There is a scheduled OPEN cycle starting at ${new Date(earlyOpen.startAt).toISOString()}`
+      );
+    }
+
+    const now = new Date();
+    const startAt = req.startAt ?? now;
     const endAt = req.durationMinutes
       ? addMinutes(startAt, req.durationMinutes)
       : (req.endAt ?? addMinutes(startAt, DEFAULTS.cycleDurationMinutes));
@@ -921,6 +1199,13 @@ export const chatterpointsService = {
       }
 
       return merged;
+    });
+
+    // Wordle config validation at cycle creation (no loops)
+    games.forEach((g) => {
+      if (g.type === 'WORDLE') {
+        assertWordleConfigSafe(g.config as Extract<GameSettings, { type: 'WORDLE' }>);
+      }
     });
 
     // Validate hierarchy
@@ -1000,42 +1285,46 @@ export const chatterpointsService = {
     points: number;
     display_info?: Record<string, unknown>;
   }> => {
-    Logger.debug('[play] start userId=%s gameId=%s guess=%s', req.userId, req.gameId, req.guess);
+    Logger.debug('play', 'start userId=%s gameId=%s guess=%s', req.userId, req.gameId, req.guess);
 
     let cycle = await mongoChatterpointsService.getOpenCycle();
     if (!cycle || cycle.status !== 'OPEN') {
-      Logger.debug('[play] no OPEN cycle found');
-      return {
+      Logger.debug('play', 'no OPEN cycle found');
+      return withMeta({
         status: 'ok',
         periodClosed: true,
         won: false,
         points: 0,
         display_info: { message: 'No active cycle is currently open.' }
-      };
+      });
     }
 
     const { cycleId } = cycle;
     Logger.debug(
-      '[play] cycle found cycleId=%s status=%s startAt=%s endAt=%s',
+      'play',
+      'cycle found cycleId=%s status=%s startAt=%s endAt=%s',
       cycleId,
       cycle.status,
       new Date(cycle.startAt).toISOString(),
       new Date(cycle.endAt).toISOString()
     );
 
-    // 2) Active period handling
+    // Active period handling (time-authoritative inside service)
     const now = new Date();
     const active = await mongoChatterpointsService.getActivePeriod(cycleId, req.gameId, now);
 
     if (!active || !active.period) {
-      Logger.debug('[play] no active period resolved for game=%s', req.gameId);
-      return {
-        status: 'ok',
-        periodClosed: true,
-        won: false,
-        points: 0,
-        display_info: { message: 'The current period has already concluded.' }
-      };
+      Logger.debug('play', `no active period resolved for game=${req.gameId}`);
+      return withMeta(
+        {
+          status: 'ok',
+          periodClosed: true,
+          won: false,
+          points: 0,
+          display_info: { message: 'The current period has already concluded.' }
+        },
+        cycle
+      );
     }
 
     const { cycle: refreshedCycle, period } = active;
@@ -1043,111 +1332,127 @@ export const chatterpointsService = {
     const { periodId } = period;
 
     Logger.debug(
-      '[play] active period resolved periodId=%s startAt=%s endAt=%s status=%s',
+      'play',
+      'active period resolved periodId=%s startAt=%s endAt=%s status=%s',
       periodId,
       new Date(period.startAt).toISOString(),
       new Date(period.endAt).toISOString(),
       period.status
     );
 
-    // 4) Game config
+    // Game config
     const gameCfg = cycle.games.find((g) => g.gameId === req.gameId && g.enabled);
     if (!gameCfg) {
-      Logger.debug('[play] game not configured or disabled gameId=%s', req.gameId);
+      Logger.debug('play', 'game not configured or disabled gameId=%s', req.gameId);
       throw new Error('Game disabled or not configured');
     }
-    Logger.debug('[play] gameCfg type=%s enabled=%s', gameCfg.type, gameCfg.enabled);
+    Logger.debug('play', 'gameCfg type=%s enabled=%s', gameCfg.type, gameCfg.enabled);
 
     const user = period.plays.find((u) => u.userId === req.userId);
-    Logger.debug('[play] user state attempts=%s won=%s', user?.attempts ?? 0, user?.won ?? false);
+    Logger.debug('play', 'user state attempts=%s won=%s', user?.attempts ?? 0, user?.won ?? false);
 
     const attemptNumber = (user?.attempts ?? 0) + 1;
 
-    // 5) Rules
+    //  Rules
     if (user?.won) {
-      return {
-        status: 'ok',
-        periodClosed: false,
-        won: true,
-        points: 0,
-        display_info: {
-          message: 'You already guessed the word this period. Please wait for the next one.'
-        }
-      };
-    }
-
-    if (gameCfg.type === 'WORDLE') {
-      const wordleCfg = gameCfg.config as Extract<GameSettings, { type: 'WORDLE' }>;
-      const maxAttempts = wordleCfg.settings.attemptsPerUserPerPeriod;
-      if ((user?.attempts ?? 0) >= maxAttempts) {
-        return {
+      return withMeta(
+        {
           status: 'ok',
           periodClosed: false,
-          won: false,
+          won: true,
           points: 0,
-          display_info: { message: 'Max attempts reached for this period.' }
-        };
-      }
-    } // hangman (verified en custom method)
+          display_info: {
+            message: 'You already guessed the word this period. Please wait for the next one.'
+          }
+        },
+        cycle,
+        period
+      );
+    }
 
-    // 5b) Duplicate guess guard
+    // Duplicate guess guard
     const normalizedGuess = req.guess.trim().toLowerCase();
     const alreadyTriedSame =
       user?.entries?.some((e) => e.guess.trim().toLowerCase() === normalizedGuess) ?? false;
 
     if (alreadyTriedSame) {
       Logger.debug(
-        '[play] duplicate guess in the same period userId=%s guess=%s',
+        'play',
+        'duplicate guess in the same period userId=%s guess=%s',
         req.userId,
         normalizedGuess
       );
-      return {
-        status: 'error',
-        periodClosed: false,
-        won: false,
-        points: 0,
-        display_info: {
-          message:
-            gameCfg.type === 'WORDLE'
-              ? 'You already tried that word in this period. Try a different one.'
-              : 'You already tried that letter in this period. Try a different one.'
-        }
-      };
+      return withMeta(
+        {
+          status: 'error',
+          periodClosed: false,
+          won: false,
+          points: 0,
+          display_info: {
+            message:
+              gameCfg.type === 'WORDLE'
+                ? 'You already tried that word in this period. Try a different one.'
+                : 'You already tried that letter in this period. Try a different one.'
+          }
+        },
+        cycle,
+        period
+      );
     }
 
-    // 6) Delegate to game-specific logic
+    // Attempts guard (WORDLE/HANGMAN) — unified with normalized message
+    const attemptsLimit =
+      gameCfg.type === 'WORDLE'
+        ? (gameCfg.config as Extract<GameSettings, { type: 'WORDLE' }>).settings
+            .attemptsPerUserPerPeriod
+        : (gameCfg.config as Extract<GameSettings, { type: 'HANGMAN' }>).points.maxWrongAttempts;
+
+    if ((user?.attempts ?? 0) >= attemptsLimit) {
+      return withMeta(
+        {
+          status: 'ok',
+          periodClosed: false,
+          won: false,
+          points: 0,
+          display_info: { message: 'No attempts remaining for this period.' }
+        },
+        cycle,
+        period
+      );
+    }
+
+    // Delegate to game-specific logic
     const userDoc = await mongoUserService.getUser(req.userId);
     const lang: gamesLanguage =
       (userDoc?.settings?.notifications?.language as gamesLanguage) ?? GAMES_LANGUAGE_DEFAULT;
-    if (gameCfg.type === 'WORDLE') {
-      return playWordle(cycleId, periodId, req, period, gameCfg, attemptNumber, now, lang);
-    }
-    return playHangman(cycleId, periodId, req, period, gameCfg, attemptNumber, now, lang);
+
+    const base =
+      gameCfg.type === 'WORDLE'
+        ? await playWordle(cycleId, periodId, req, period, gameCfg, attemptNumber, now, lang)
+        : await playHangman(cycleId, periodId, req, period, gameCfg, attemptNumber, now, lang);
+
+    return withMeta(base, cycle, period);
   },
 
   /**
-   * Registers a user’s social participation in the current game cycle.
-   *
-   * - Requires that there is an active `OPEN` cycle.
-   * - If a `cycleId` is provided in the request, validates that the cycle exists and is `OPEN`.
-   * - If no `cycleId` is provided, resolves automatically to the latest `OPEN` cycle.
-   * - Records a social registration event with user ID, platform, and timestamp.
-   *
    * @async
    * @function registerSocial
-   * @param {SocialRequest} req - The request containing:
-   *   - `userId`: The ID of the user registering social participation.
-   *   - `platform`: The social platform (e.g., "twitter", "discord").
-   *   - `cycleId?`: Optional. The cycle to register against; if omitted, the latest `OPEN` cycle is used.
-   * @returns {Promise<{ granted: boolean }>} Whether the social registration was granted.
+   * Register a social action for a user in the OPEN cycle (idempotent on userId).
    *
-   * @throws {Error} If:
-   * - The provided cycle ID is invalid or not `OPEN`.
-   * - No `OPEN` cycle exists when one is required.
+   * Semantics:
+   * - Pushes a socialActions record only if none exists for the user in the OPEN cycle.
+   *
+   * @param {string} cycleId - Cycle identifier.
+   * @param {{ userId: string; platform: 'discord'|'youtube'|'x'|'instagram'|'linkedin'; at: Date }} reg - Social registration payload.
+   * @returns {Promise<boolean>} True if the registration was inserted; false if it already existed.
+   * @throws {Error} On database errors.
    *
    * @example
-   * const res = await registerSocial({ userId: "u123", platform: "twitter" });
-   * console.log(res.granted); // → true or false
+   * await chatterpointsService.registerSocial(cycleId, {
+   *   userId: 'u1',
+   *   platform: 'x',
+   *   at: new Date()
+   * });
    */
   registerSocial: async (req: SocialRequest): Promise<{ granted: boolean }> => {
     // Resolve to the last OPEN cycle (social points require an OPEN cycle)
@@ -1180,12 +1485,13 @@ export const chatterpointsService = {
    *   - Otherwise, falls back to the most recent cycle (`getLastCycle`).
    * - Computes:
    *   - Total points accumulated by the user in the cycle.
+   *   - Breakdown of points by source (`games`, `operation`, `social`).
    *   - Number of periods played.
    *   - Number of wins.
    * - Determines the relevant period to display:
    *   - Prefers the currently active (OPEN) period that includes "now".
    *   - If none are active, uses the most recent period by `endAt`.
-   * - Builds a `periodRange` string (ISO timestamps).
+   * - Builds both `cycleRange` and `periodRange` strings (ISO timestamps).
    * - Resolves the user’s display label with `getDisplayUserLabel`.
    *
    * @async
@@ -1196,17 +1502,23 @@ export const chatterpointsService = {
    * @returns {Promise<{
    *   cycleId: string;
    *   periodId: string;
+   *   cycleRange: string;
    *   periodRange: string;
    *   userId: string;
    *   userProfile: string;
    *   totalPoints: number;
+   *   detailedPoints: {
+   *     games: number;
+   *     operation: number;
+   *     social: number;
+   *   };
    *   periodsPlayed: number;
    *   wins: number;
-   * }>} A stats object containing user totals and the relevant period.
+   * }>} A stats object containing user totals, breakdown by source, and the relevant period.
    *
    * @example
    * const stats = await getStats({ userId: "u123" });
-   * console.log(stats.totalPoints, stats.wins);
+   * console.log(stats.totalPoints, stats.detailedPoints.games, stats.wins);
    *
    * @throws {Error} Only if underlying DB queries fail; otherwise gracefully returns zeroed stats.
    */
@@ -1215,15 +1527,21 @@ export const chatterpointsService = {
   ): Promise<{
     cycleId: string;
     periodId: string;
+    cycleRange: string;
     periodRange: string;
     userId: string;
     userProfile: string;
     totalPoints: number;
+    detailedPoints: {
+      games: number;
+      operation: number;
+      social: number;
+    };
     periodsPlayed: number;
     wins: number;
   }> => {
     // Minimal shapes expected from mongo (narrowed locally to satisfy typing & linter)
-    type PeriodPlay = { userId: string; won: boolean };
+    type PeriodPlay = { userId: string; won: boolean; totalPoints?: number };
     type Period = {
       periodId: string;
       startAt: Date;
@@ -1231,7 +1549,14 @@ export const chatterpointsService = {
       status: 'OPEN' | 'CLOSED';
       plays: PeriodPlay[];
     };
-    type TotalsByUser = { userId: string; points: number };
+    type BreakdownA = { games: number; operations: number; social: number };
+    type BreakdownB = { games: number; operations: number; social: number };
+    type TotalsByUser = {
+      userId: string;
+      total: number;
+      breakdown?: BreakdownA | BreakdownB;
+    };
+
     type CycleDoc = {
       cycleId: string;
       startAt: Date;
@@ -1248,10 +1573,12 @@ export const chatterpointsService = {
         return {
           cycleId: '',
           periodId: '',
+          cycleRange: '',
           periodRange: '',
           userId: req.userId,
           userProfile: await getDisplayUserLabel(req.userId),
           totalPoints: 0,
+          detailedPoints: { games: 0, operation: 0, social: 0 },
           periodsPlayed: 0,
           wins: 0
         };
@@ -1260,28 +1587,49 @@ export const chatterpointsService = {
     }
 
     // 2) Load cycle document
-
-    const cycle: CycleDoc | null = await mongoChatterpointsService.getCycleById(cycleId);
+    const cycle = (await mongoChatterpointsService.getCycleById(
+      cycleId
+    )) as unknown as CycleDoc | null;
     if (!cycle) {
       return {
         cycleId,
         periodId: '',
+        cycleRange: '',
         periodRange: '',
         userId: req.userId,
         userProfile: await getDisplayUserLabel(req.userId),
         totalPoints: 0,
+        detailedPoints: { games: 0, operation: 0, social: 0 },
         periodsPlayed: 0,
         wins: 0
       };
     }
 
-    // 3) Compute user totals
-    const totalPoints: number =
-      cycle.totalsByUser.find((t: TotalsByUser) => t.userId === req.userId)?.points ?? 0;
+    // 3) Totals for this user (already precomputed in Mongo)
+    const userTotals = cycle.totalsByUser.find((t) => t.userId === req.userId);
+    const totalPoints: number = userTotals?.total ?? 0;
 
+    let gamesPoints = 0;
+    let operationPoints = 0;
+    let socialPoints = 0;
+
+    if (userTotals?.breakdown) {
+      gamesPoints = userTotals.breakdown.games ?? 0;
+      socialPoints = userTotals.breakdown.social ?? 0;
+
+      if ('operation' in userTotals.breakdown) {
+        operationPoints = userTotals.breakdown.operations ?? 0;
+      } else if ('operations' in userTotals.breakdown) {
+        operationPoints = userTotals.breakdown.operations ?? 0;
+      }
+    }
+
+    const detailedPoints = { games: gamesPoints, operation: operationPoints, social: socialPoints };
+
+    // 4) Aggregate periods played & wins
     const agg = cycle.periods.reduce<{ periodsPlayed: number; wins: number }>(
-      (acc, p: Period) => {
-        const u: PeriodPlay | undefined = p.plays.find((x: PeriodPlay) => x.userId === req.userId);
+      (acc, p) => {
+        const u = p.plays.find((x) => x.userId === req.userId);
         if (u) {
           acc.periodsPlayed += 1;
           acc.wins += u.won ? 1 : 0;
@@ -1291,77 +1639,55 @@ export const chatterpointsService = {
       { periodsPlayed: 0, wins: 0 }
     );
 
-    // 4) Determine period range to display:
-    //    prefer the active (OPEN) period that contains "now"; otherwise, the most recent by endAt.
-    const now: number = Date.now();
-    const active: Period | undefined = cycle.periods.find(
-      (p: Period) =>
-        p.status === 'OPEN' &&
-        p.startAt instanceof Date &&
-        p.endAt instanceof Date &&
-        p.startAt.getTime() <= now &&
-        now < p.endAt.getTime()
+    // 5) Determine period range
+    const now = Date.now();
+    const active = cycle.periods.find(
+      (p) => p.status === 'OPEN' && p.startAt.getTime() <= now && now < p.endAt.getTime()
     );
 
-    // Pick most recent (by endAt) if there is no active period
-    const mostRecent: Period | undefined =
-      active ??
-      cycle.periods
-        .slice()
-        .sort((a: Period, b: Period) => b.endAt.getTime() - a.endAt.getTime())[0];
-
+    const mostRecent =
+      active ?? cycle.periods.slice().sort((a, b) => b.endAt.getTime() - a.endAt.getTime())[0];
     const formatRange = (start: Date, end: Date): string =>
       `${start.toISOString()} - ${end.toISOString()}`;
 
-    const periodRange: string =
-      mostRecent && mostRecent.startAt instanceof Date && mostRecent.endAt instanceof Date
-        ? formatRange(mostRecent.startAt, mostRecent.endAt)
-        : '';
+    const periodRange = mostRecent ? formatRange(mostRecent.startAt, mostRecent.endAt) : '';
+    const cycleRange = cycle.startAt && cycle.endAt ? formatRange(cycle.startAt, cycle.endAt) : '';
 
-    // 5) Resolve display label
-    const userProfile: string = await getDisplayUserLabel(req.userId);
+    // 6) Resolve display label
+    const userProfile = await getDisplayUserLabel(req.userId);
 
-    // 6) Return payload
+    // 7) Return payload
     return {
       cycleId,
-      periodId: mostRecent.periodId,
+      periodId: mostRecent?.periodId ?? '',
       periodRange,
+      cycleRange,
       userId: req.userId,
       userProfile,
       totalPoints,
+      detailedPoints,
       periodsPlayed: agg.periodsPlayed,
       wins: agg.wins
     };
   },
 
   /**
-   * Retrieves the leaderboard for a given cycle.
-   *
-   * - Resolves the target cycle:
-   *   - If `req.cycleId` is provided, fetches that cycle.
-   *   - Otherwise, falls back to the last available cycle (open or closed).
-   * - Determines how many top entries to fetch (defaults to 3 if `req.top` is not a valid number).
-   * - Queries MongoDB for leaderboard results (`getLeaderboardTop`).
-   * - Resolves display labels for all unique user IDs via `getDisplayUserLabel`.
-   * - Maps leaderboard positions to trophies:
-   *   - 🥇 for 1st
-   *   - 🥈 for 2nd
-   *   - 🥉 for 3rd
-   * - Builds the final leaderboard entries including position, user, points, and prize.
-   * - Returns the cycle ID, cycle date range, and formatted entries.
-   *
    * @async
-   * @function getLeaderboard
-   * @param {LeaderboardRequest} req - The request containing:
-   *   - `cycleId?`: Optional cycle to query; if omitted, uses the most recent cycle.
-   *   - `top?`: Number of top entries to return (defaults to 3).
-   * @returns {Promise<LeaderboardResult>} The leaderboard result including cycle info and entries.
+   * @function getLeaderboardTop
+   * Build leaderboard for a cycle (or the latest cycle if `cycleId` is omitted).
+   *
+   * Semantics:
+   * - Filters out users with total = 0.
+   * - Sorts by total points desc, then by total attempts asc (tie-breaker).
+   * - Applies `podiumPrizes[idx]` when available.
+   *
+   * @param {string|undefined} cycleId - Optional cycle identifier; latest cycle is used if omitted.
+   * @param {number} limit - Maximum number of leaderboard entries to return.
+   * @returns {Promise<LeaderboardResponse|null>} Leaderboard response or null if no cycle exists.
    *
    * @example
-   * const leaderboard = await getLeaderboard({ top: 5 });
-   * console.log(leaderboard.entries);
-   *
-   * @throws {Error} Only if underlying DB queries fail; otherwise returns an empty leaderboard.
+   * const lb = await chatterpointsService.getLeaderboardTop(undefined, 10);
+   * console.log(lb?.items.map(i => `${i.userId}:${i.points}`));
    */
   getLeaderboard: async (req: LeaderboardRequest): Promise<LeaderboardResult> => {
     // 1) Resolve target cycle safely (default top = 3)
@@ -1378,7 +1704,7 @@ export const chatterpointsService = {
       targetCycleId = lastCycle.cycleId;
     }
 
-    // 2) Fetch leaderboard from mongo (shape: { cycle: {cycleId, startAt, endAt}, items: LeaderboardItem[] })
+    // 2) Fetch leaderboard from mongo
     const leaderboard: LeaderboardResponse | null =
       await mongoChatterpointsService.getLeaderboardTop(targetCycleId, top);
 
@@ -1391,7 +1717,7 @@ export const chatterpointsService = {
       items
     } = leaderboard;
 
-    // 3) Build user labels map with strict typing
+    // 3) Build user labels map
     const uniqueIds: string[] = Array.from(new Set(items.map((r: LeaderboardItem) => r.userId)));
 
     const idLabelPairs: Array<[string, string]> = await Promise.all(
@@ -1410,10 +1736,10 @@ export const chatterpointsService = {
       return trophies[pos];
     };
 
-    // 5) Cycle range for user display
+    // 5) Cycle range
     const cycleRange: string = `${startAt.toISOString()} - ${endAt.toISOString()}`;
 
-    // 6) Map mongo items to view rows
+    // 6) Map items to leaderboard rows
     const rows: LeaderboardRow[] = items.map<LeaderboardRow>((r: LeaderboardItem, idx: number) => ({
       position: idx + 1,
       trophy: trophyFor(idx + 1),
@@ -1511,13 +1837,14 @@ export const chatterpointsService = {
     closedCycles: number;
     openedPeriods: number;
   }> => {
-    Logger.debug('[chatterpointsService.maintainPeriodsAndCycles] job started');
+    Logger.debug('maintainPeriodsAndCycles', 'job started');
 
     const closed = await mongoChatterpointsService.closeExpiredPeriodsAndCycles();
     const opened = await mongoChatterpointsService.openUpcomingPeriods();
 
     Logger.info(
-      '[chatterpointsService.maintainPeriodsAndCycles] job finished closedPeriods=%d closedCycles=%d openedPeriods=%d',
+      'maintainPeriodsAndCycles',
+      'job finished closedPeriods=%d closedCycles=%d openedPeriods=%d',
       closed.closedPeriods,
       closed.closedCycles,
       opened.openedPeriods
@@ -1584,9 +1911,9 @@ export const chatterpointsService = {
               const attemptsInfo = `${play.attempts}`;
 
               return (
-                `${play.userId}, ${entry.at.toISOString()}, ${period.gameId}, ` +
+                `${play.userId}, ${period.gameId}, ` +
                 `guess: ${entry.guess}, result: ${result}, points: ${entry.points}, ` +
-                `attempts: ${attemptsInfo}, period: ${period.periodId}`
+                `attempts: ${attemptsInfo}, period: ${period.periodId}, attempt-timestamp: ${entry.at.toISOString()}`
               );
             })
           )
@@ -1614,7 +1941,7 @@ export const chatterpointsService = {
    * - Validates and finds a matching rule from `operations.config` based on type, userLevel, and amount.
    * - Creates an `OperationEntry` with awarded points and persists it into the cycle.
    * - Accumulates points in `totalsByUser` (increments if the user already exists, inserts otherwise).
-   * - Returns cycle metadata and all formatted operation entries (filtered by user if requested).
+   * - Returns cycle metadata and the inserted operation entry.
    *
    * @param {Object} opts - Operation registration input.
    * @param {string} [opts.cycleId] - Target cycle ID; if not provided, the last cycle is used.
@@ -1629,8 +1956,8 @@ export const chatterpointsService = {
    *   startAt: Date;
    *   endAt: Date;
    *   status: string;
-   *   operations: string[];
-   * } | null>} Resolves with cycle metadata and formatted operations, or null if no cycle is found.
+   *   operation: OperationEntry;
+   * } | null>} Resolves with cycle metadata and operation entry, or null if no cycle is found.
    */
   registerOperation: async (opts: {
     cycleId?: string;
@@ -1661,13 +1988,25 @@ export const chatterpointsService = {
     );
     if (!rule) throw new Error('no matching rule');
 
+    // Count previous operations by this user of the same type within the cycle
+    const prevOpsCount = cycle.operations.entries.filter(
+      (e) => e.userId === opts.userId && e.type === opts.type
+    ).length;
+
+    // Apply diminishing returns
+    const factor =
+      prevOpsCount < rule.fullCount ? 1 : rule.decayFactor ** (prevOpsCount - rule.fullCount + 1);
+
+    // Compute points dynamically: basePoints * amount * factor
+    const computedPoints: number = Math.ceil(rule.basePoints * opts.amount * factor);
+
     const entry: OperationEntry = {
       operationId: opts.operationId,
       userId: opts.userId,
       type: opts.type,
       amount: opts.amount,
       userLevel: opts.userLevel,
-      points: rule.points,
+      points: computedPoints,
       at: new Date()
     };
 
@@ -1679,6 +2018,70 @@ export const chatterpointsService = {
       endAt: cycle.endAt,
       status: cycle.status,
       operation: entry
+    };
+  },
+
+  getUserHistory: async (f: UserHistoryFilters): Promise<UserHistoryResult> => {
+    const wants = new Set(f.include);
+
+    const [games, operations, social, cycles]: [
+      UserGamePlay[] | undefined,
+      UserOperationEntry[] | undefined,
+      UserSocialAction[] | undefined,
+      IChatterpointsDocument[]
+    ] = await Promise.all([
+      wants.has('games')
+        ? mongoChatterpointsService.queryGamePlays(f.userId, f.from, f.to, f.gameTypes, f.gameIds)
+        : Promise.resolve(undefined),
+      wants.has('operations')
+        ? mongoChatterpointsService.queryOperationEntries(f.userId, f.from, f.to)
+        : Promise.resolve(undefined),
+      wants.has('social')
+        ? mongoChatterpointsService.querySocialActions(f.userId, f.from, f.to, f.platforms)
+        : Promise.resolve(undefined),
+      // for prizes we need cycles to compute rank vs podium
+      wants.has('prizes')
+        ? mongoChatterpointsService.queryCyclesSummary(f.from, f.to)
+        : Promise.resolve([] as IChatterpointsDocument[])
+    ]);
+
+    const prizes: UserPrize[] | undefined = wants.has('prizes')
+      ? cycles
+          .map((c) => {
+            const sorted = [...(c.totalsByUser ?? [])].sort((a, b) => b.total - a.total);
+            const rank = sorted.findIndex((x) => x.userId === f.userId);
+            if (rank === -1 || rank > 2) return null;
+            const prize = (c.podiumPrizes ?? [0, 0, 0])[rank] ?? 0;
+            const totalPoints = sorted[rank]?.total ?? 0;
+            return {
+              cycleId: c.cycleId,
+              rank: rank + 1,
+              prize,
+              totalPoints,
+              endAt: c.endAt
+            } as UserPrize;
+          })
+          .filter((x): x is UserPrize => x !== null)
+      : undefined;
+
+    const gamePoints = (games ?? []).reduce((acc, g) => acc + g.points, 0);
+    const opPoints = (operations ?? []).reduce((acc, o) => acc + o.points, 0);
+    // Social points are not defined in your model; keep 0 to avoid guessing.
+    const socialPoints = 0;
+
+    return {
+      include: f.include,
+      window: { from: f.from, to: f.to },
+      games,
+      operations,
+      social,
+      prizes,
+      totals: {
+        games: gamePoints,
+        operations: opPoints,
+        social: socialPoints,
+        grandTotal: gamePoints + opPoints + socialPoints
+      }
     };
   }
 };
