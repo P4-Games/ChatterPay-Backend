@@ -35,8 +35,8 @@ import {
   PlayAttempt,
   GameSettings,
   PeriodStatus,
-  OperationEntry,
   IChatterpoints,
+  OperationEntry,
   HangmanSettings,
   PeriodUserPlays,
   OperationsSection,
@@ -1907,12 +1907,16 @@ export const chatterpointsService = {
           })
           .flatMap((play: PeriodUserPlays) =>
             play.entries.map((entry: PlayAttempt) => {
-              const result = entry.result ?? '';
+              const rawResult = entry.result ?? '';
+              const prettyResult =
+                period.gameId === 'wordle'
+                  ? rawResult.replace(/G/g, '🟩').replace(/Y/g, '🟨').replace(/\?/g, '⬛')
+                  : rawResult;
               const attemptsInfo = `${play.attempts}`;
 
               return (
                 `${play.userId}, ${period.gameId}, ` +
-                `guess: ${entry.guess}, result: ${result}, points: ${entry.points}, ` +
+                `guess: ${entry.guess}, result: ${prettyResult}, points: ${entry.points}, ` +
                 `attempts: ${attemptsInfo}, period: ${period.periodId}, attempt-timestamp: ${entry.at.toISOString()}`
               );
             })
