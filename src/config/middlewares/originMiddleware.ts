@@ -45,15 +45,25 @@ export async function originMiddleware(
 
   // If there is no `origin` in the request headers, return a 403 error
   if (!origin) {
-    Logger.warn('originMiddleware', `Origin '${origin}' is not allowed by CORS.`);
-    returnErrorResponse(reply, 403, `Origin '${origin}' is not allowed by CORS.`);
+    returnErrorResponse(
+      'originMiddleware',
+      '',
+      reply,
+      403,
+      `Origin '${origin}' is not allowed by CORS.`
+    );
     return;
   }
 
   // Block requests from Postman by checking the User-Agent header
   if (userAgent && userAgent.includes('PostmanRuntime') && CORS_ORIGINS_CHECK_POSTMAN) {
-    Logger.warn('originMiddleware', `Access forbidden by CORS. Postman requests are not allowed.`);
-    returnErrorResponse(reply, 403, `Access forbidden by CORS. Postman requests are not allowed.`);
+    returnErrorResponse(
+      'originMiddleware',
+      '',
+      reply,
+      403,
+      `Access forbidden by CORS. Postman requests are not allowed.`
+    );
     return;
   }
 
@@ -81,7 +91,12 @@ export async function originMiddleware(
 
   // If the origin is not allowed, return a 403 error
   if (!isAllowed) {
-    Logger.warn('originMiddleware', `Origin '${cleanOrigin}' is not allowed by CORS.`);
-    returnErrorResponse(reply, 403, `Origin '${cleanOrigin}' is not allowed by CORS.`);
+    returnErrorResponse(
+      'originMiddleware',
+      '',
+      reply,
+      403,
+      `Origin '${cleanOrigin}' is not allowed by CORS.`
+    );
   }
 }

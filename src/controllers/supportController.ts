@@ -27,7 +27,7 @@ export const checkUsersWithOpenOperations = async (
     return await returnSuccessResponse(reply, '', { users });
   } catch (error) {
     Logger.error('checkUsersWithOpenOperations', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('checkUsersWithOpenOperations', '', reply);
   }
 };
 
@@ -51,7 +51,7 @@ export const resetUsersOperations = async (
     );
   } catch (error) {
     Logger.error('resetUsersOperations', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('resetUsersOperations', '', reply);
   }
 };
 
@@ -76,7 +76,114 @@ export const resetUsersOperationsWithTimeCondition = async (
     );
   } catch (error) {
     Logger.error('resetUsersOperationsWithTimeCondition', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('resetUsersOperationsWithTimeCondition', '', reply);
+  }
+};
+
+/**
+ * Handler to clear all operation counters for one user
+ * Sets the `operations_counters` field to an empty object for the user.
+ *
+ * @param {FastifyRequest} request - The incoming Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object for sending the response.
+ * @returns {Promise<FastifyReply>} A response containing the number of users updated.
+ */
+export const resetUsersOperationLimits = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  try {
+    if (!request.body) {
+      return await returnErrorResponse(
+        'resetUsersOperationLimits',
+        '',
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
+    }
+
+    const { channel_user_id } = request.body as { channel_user_id: string };
+
+    await mongoUserService.resetrUserOperationCounters(channel_user_id);
+
+    return await returnSuccessResponse(reply, `user operation counters have been cleared.`);
+  } catch (error) {
+    Logger.error('clearUsersOperationLimits', error);
+    return returnErrorResponse500('resetUsersOperationLimits', '', reply);
+  }
+};
+
+/**
+ * Handler to clear all defined caches.
+ *
+ * @param {FastifyRequest} request - The incoming Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object for sending the response.
+ * @returns {Promise<FastifyReply>} A response indicating the caches were cleared.
+ */
+export const clearAllCaches = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  try {
+    cacheService.clearAllCaches();
+    return await returnSuccessResponse(reply, 'All caches have been cleared.');
+  } catch (error) {
+    Logger.error('clearAllCaches', error);
+    return returnErrorResponse500('clearAllCaches', '', reply);
+  }
+};
+
+/**
+ * Handler to clear a specific cache by name.
+ *
+ * @param {FastifyRequest} request - The incoming Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object for sending the response.
+ * @returns {Promise<FastifyReply>} A response indicating the named cache was cleared.
+ */
+export const clearCacheByName = async (
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  try {
+    if (!request.body) {
+      return await returnErrorResponse(
+        'clearCacheByName',
+        '',
+        reply,
+        400,
+        'You must send a body with cacheName'
+      );
+    }
+
+    const { cacheName } = request.body as { cacheName: string };
+
+    if (!cacheService.isValidCacheName(cacheName)) {
+      return await returnErrorResponse(
+        'clearCacheByName',
+        '',
+        reply,
+        400,
+        `Invalid cache name. Must be one of: ${Object.values(CacheNames).join(', ')}`
+      );
+    }
+
+    if (!Object.values(CacheNames).includes(cacheName)) {
+      return await returnErrorResponse(
+        'clearCacheByName',
+        '',
+        reply,
+        400,
+        `Invalid cache name. Must be one of: ${Object.values(CacheNames).join(', ')}`
+      );
+    }
+
+    cacheService.clearCache(cacheName as CacheNames);
+
+    return await returnSuccessResponse(reply, `Cache '${cacheName}' has been cleared.`);
+  } catch (error) {
+    Logger.error('clearCacheByName', error);
+    return returnErrorResponse500('clearCacheByName', '', reply);
   }
 };
 

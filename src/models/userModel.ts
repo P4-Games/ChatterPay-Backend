@@ -5,7 +5,6 @@ import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT } from '../con
 export interface IUserWallet {
   wallet_proxy: string;
   wallet_eoa: string;
-  sk_hashed: string;
   created_with_chatterpay_proxy_address: string;
   created_with_factory_address: string;
   chain_id: number;
@@ -41,13 +40,13 @@ export interface IUser extends Document {
     mint_nft_copy: Record<string, number>;
   };
   manteca_user_id?: string;
+  chatterpoints_admin?: boolean;
 }
 
 const walletSchema = new Schema<IUserWallet>(
   {
     wallet_proxy: { type: String, required: true, default: '' },
     wallet_eoa: { type: String, required: true, default: '' },
-    sk_hashed: { type: String, required: true, default: '' },
     created_with_chatterpay_proxy_address: {
       type: String,
       required: false,
@@ -92,7 +91,8 @@ const userSchema = new Schema<IUser>({
     mint_nft: { type: Map, of: Number, default: {} },
     mint_nft_copy: { type: Map, of: Number, default: {} }
   },
-  manteca_user_id: { type: String, required: false, default: '' }
+  manteca_user_id: { type: String, required: false, default: '' },
+  chatterpoints_admin: { type: Boolean, required: false, default: false }
 });
 
 export const UserModel = model<IUser>('User', userSchema, 'users');

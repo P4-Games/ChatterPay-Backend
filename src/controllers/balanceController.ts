@@ -3,21 +3,27 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 import { getPhoneNFTs } from './nftController';
 import { Logger } from '../helpers/loggerHelper';
 import { IUser, IUserWallet } from '../models/userModel';
+import { Currency, BalanceInfo } from '../types/commonType';
 import { getFiatQuotes } from '../services/criptoya/criptoYaService';
 import { COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
 import { getUser, getUserWalletByChainId } from '../services/userService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import {
-  getTokenBalances,
-  calculateBalances,
-  calculateBalancesTotals
-} from '../services/balanceService';
-import {
   returnErrorResponse,
   returnSuccessResponse,
   returnErrorResponse500
 } from '../helpers/requestHelper';
+import {
+  getTokenBalances,
+  calculateBalances,
+  mergeSameTokenBalances,
+  calculateBalancesTotals
+} from '../services/balanceService';
+
+type CheckExternalDepositsQuery = {
+  sendNotification?: string;
+};
 
 type CheckExternalDepositsQuery = {
   sendNotification?: string;
@@ -54,45 +60,69 @@ export const checkExternalDeposits = async (
 
 /**
  * Fetches and calculates balance information for a given address
- * @param address - Address to get balance for
+ * @param proxyAddress - Address to get balance for
+ * @param eoaAddress - Externally Owned Account address
  * @param reply - Fastify reply object
  * @param fastify - Fastify instance containing global state
  * @returns Fastify reply with balance information
  */
 async function getAddressBalanceWithNfts(
   phoneNumber: string | null,
-  address: string,
+  proxyAddress: string,
+  eoaAddress: string,
   reply: FastifyReply,
   fastify: FastifyInstance
 ): Promise<FastifyReply> {
   const { networkConfig } = fastify;
 
+  const eoaProvided =
+    !!eoaAddress &&
+    eoaAddress.trim().length > 0 &&
+    eoaAddress.toLowerCase() !== proxyAddress.toLowerCase();
+
   Logger.log(
     'getAddressBalanceWithNfts',
-    `Fetching balance for address: ${address} on network ${networkConfig.name}`
+    `Fetching balances for proxy ${proxyAddress}${eoaProvided ? ` + eoa ${eoaAddress}` : ''} on network ${networkConfig.name}`
   );
 
   try {
-    const [fiatQuotes, tokenBalances, NFTs] = await Promise.all([
+    const [fiatQuotes, proxyTokenBalances, eoaTokenBalances, NFTs] = await Promise.all([
       getFiatQuotes(),
-      getTokenBalances(address, fastify.tokens, networkConfig),
-      phoneNumber ? getPhoneNFTs(phoneNumber) : { nfts: [] }
+      getTokenBalances(proxyAddress, fastify.tokens, networkConfig),
+      eoaProvided
+        ? getTokenBalances(eoaAddress, fastify.tokens, networkConfig)
+        : Promise.resolve([]),
+      phoneNumber ? getPhoneNFTs(phoneNumber) : Promise.resolve({ nfts: [] })
     ]);
 
-    const balances = calculateBalances(tokenBalances, fiatQuotes, networkConfig.name);
-    const totals = calculateBalancesTotals(balances);
+    //  Combine raw token balances
+    const combinedTokenBalances = eoaProvided
+      ? [...proxyTokenBalances, ...eoaTokenBalances]
+      : proxyTokenBalances;
+
+    //  Merge duplicates BEFORE calculating balances
+    const mergedTokenBalances = mergeSameTokenBalances(combinedTokenBalances);
+
+    //  Now calculate balances with fiat conversions
+    const balances: BalanceInfo[] = calculateBalances(
+      mergedTokenBalances,
+      fiatQuotes,
+      networkConfig.name
+    );
+
+    // Totals
+    const totals: Record<Currency, number> = calculateBalancesTotals(balances);
 
     const response = {
       balances,
       totals,
       certificates: NFTs.nfts,
-      wallet: address
+      wallets: eoaProvided ? [proxyAddress, eoaAddress] : [proxyAddress]
     };
 
     return await returnSuccessResponse(reply, 'Wallet balance fetched successfully', response);
   } catch (error) {
-    Logger.error('getAddressBalanceWithNfts', 'Error fetching wallet balance:', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('getAddressBalanceWithNfts', '', reply);
   }
 }
 
@@ -109,14 +139,20 @@ export const walletBalance = async (
   const { wallet } = request.params;
 
   if (!wallet) {
-    return returnErrorResponse(reply, 400, 'Wallet address is required');
+    return returnErrorResponse('walletBalance', '', reply, 400, 'Wallet address is required');
   }
 
   if (!isValidEthereumWallet(wallet)) {
-    return returnErrorResponse(reply, 400, 'Wallet must be a valid ethereum wallet address');
+    return returnErrorResponse(
+      'walletBalance',
+      '',
+      reply,
+      400,
+      'Wallet must be a valid ethereum wallet address'
+    );
   }
 
-  return getAddressBalanceWithNfts('', wallet, reply, request.server);
+  return getAddressBalanceWithNfts('', wallet, '', reply, request.server);
 };
 
 /**
@@ -132,14 +168,12 @@ export const balanceByPhoneNumber = async (
   const { channel_user_id: phone } = request.query as { channel_user_id?: string };
 
   if (!phone) {
-    Logger.warn('balanceByPhoneNumber', 'Phone number is required');
-    return returnErrorResponse(reply, 400, 'Phone number is required');
+    return returnErrorResponse('balanceByPhoneNumber', '', reply, 400, 'Phone number is required');
   }
 
   if (!isValidPhoneNumber(phone)) {
-    Logger.warn('balanceByPhoneNumber', `Phone number ${phone} is invalid`);
     const msgError = `'${phone}' is invalid. 'phone' parameter must be a phone number (without spaces or symbols)`;
-    return returnErrorResponse(reply, 400, msgError);
+    return returnErrorResponse('balanceByPhoneNumber', '', reply, 400, msgError);
   }
 
   try {
@@ -154,21 +188,17 @@ export const balanceByPhoneNumber = async (
     const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, chain_id);
 
     if (!userWallet) {
-      Logger.warn(
-        'balanceByPhoneNumber',
-        `Wallet not found for phone number: ${phone} and chainId ${chain_id}`
-      );
-      return await returnErrorResponse(reply, 404, 'Wallet not found');
+      return await returnErrorResponse('balanceByPhoneNumber', '', reply, 404, 'Wallet not found');
     }
 
     return await getAddressBalanceWithNfts(
       user.phone_number,
       userWallet.wallet_proxy,
+      userWallet.wallet_eoa,
       reply,
       request.server
     );
   } catch (error) {
-    Logger.error('balanceByPhoneNumber', 'Error fetching user balance:', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('balanceByPhoneNumber', '', reply);
   }
 };

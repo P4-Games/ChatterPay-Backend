@@ -1,9 +1,9 @@
 import { ethers } from 'ethers';
 
+import { secService } from './secService';
 import { IToken } from '../models/tokenModel';
 import { wrapRpc } from './web3/rpc/rpcService';
 import { Logger } from '../helpers/loggerHelper';
-import { SIGNING_KEY } from '../config/constants';
 import { IBlockchain } from '../models/blockchainModel';
 import { mongoUserService } from './mongo/mongoUserService';
 import { MintResult, rpcProviders } from '../types/commonType';
@@ -67,11 +67,10 @@ export async function issueTokens(
 ): Promise<MintResult[]> {
   const amount: string = '10000';
 
-  // Create provider using network config from decorator.
   const provider: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(
     networkConfig.rpc
   );
-  const signer: ethers.Wallet = new ethers.Wallet(SIGNING_KEY!, provider);
+  const bs = secService.get_bs(provider);
 
   // Filter tokens for the current chain
   const chainTokens = tokens.filter((token) => token.chain_id === networkConfig.chainId);
@@ -84,9 +83,9 @@ export async function issueTokens(
   // Fetch nonce using rate-limited queue
   const currentNonce = (await wrapRpc(
     {
-      fn: () => provider.getTransactionCount(signer.address),
+      fn: () => provider.getTransactionCount(bs.address),
       name: 'getTransactionCount',
-      args: [signer.address]
+      args: [bs.address]
     },
     rpcProviders.ALCHEMY
   )) as number;
@@ -103,10 +102,10 @@ export async function issueTokens(
     (tokenAddress, index): Promise<MintResult> =>
       wrapRpc<MintResult>(
         {
-          fn: () => mintToken(signer, tokenAddress, recipientAddress, amount, currentNonce + index),
+          fn: () => mintToken(bs, tokenAddress, recipientAddress, amount, currentNonce + index),
           name: 'mintToken',
           args: [
-            signer.address,
+            bs.address,
             tokenAddress,
             recipientAddress,
             amount.toString(),

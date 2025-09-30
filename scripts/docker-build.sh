@@ -28,7 +28,6 @@ docker build \
   --build-arg PUSH_ENABLED="$PUSH_ENABLED" \
   --build-arg PUSH_NETWORK="$PUSH_NETWORK" \
   --build-arg PUSH_ENVIRONMENT="$PUSH_ENVIRONMENT" \
-  --build-arg BACKEND_ENDPINT_TOKEN_ISSUE="$BACKEND_ENDPINT_TOKEN_ISSUE" \
   --build-arg MINOR_LOG_LEVEL="$MINOR_LOG_LEVEL" \
   --build-arg MANTECA_BASE_URL="$MANTECA_BASE_URL" \
   --build-arg MANTECA_API_KEY="$MANTECA_API_KEY" \
@@ -42,8 +41,22 @@ docker build \
   --build-arg SWAP_SLIPPAGE_CONFIG_STABLE="$SLIPPAGE_CONFIG_STABLE" \
   --build-arg SWAP_SLIPPAGE_CONFIG_DEFAULT="$SLIPPAGE_CONFIG_DEFAULT" \
   --build-arg SWAP_SLIPPAGE_CONFIG_EXTRA="$SLIPPAGE_CONFIG_EXTRA" \
+  --build-arg SWAP_ZERO_FEE_MODE="$SWAP_ZERO_FEE_MODE" \
+  --build-arg SWAP_EXECUTE_SIMPLE="$SWAP_EXECUTE_SIMPLE" \
+  --build-arg SWAP_USE_QUOTER="$SWAP_USE_QUOTER" \
   --build-arg CHATIZALO_PHONE_NUMBER="$CHATIZALO_PHONE_NUMBER" \
-  --build-arg SWAP_SLIPPAGE_CONFIG_EXTRA="$QUEUE_BUNDLER_INTERVAL" \
+  --build-arg QUEUE_BUNDLER_INTERVAL="$QUEUE_BUNDLER_INTERVAL" \
   --build-arg QUEUE_GAS_INTERVAL="$QUEUE_GAS_INTERVAL" \
   --build-arg MAX_REQUESTS_PER_MINUTE="$MAX_REQUESTS_PER_MINUTE" \
+  --build-arg CHATTERPOINTS_WORDS_SEED="$CHATTERPOINTS_WORDS_SEED" \
+  --build-arg CHATTERPOINTS_WORDS_READ_FROM="$CHATTERPOINTS_WORDS_READ_FROM" \
+  --build-arg CDS1="$CDS1" \
+  --build-arg CDS2="$CDS2" \
+  --build-arg CDS3="$CDS3" \
+  --build-arg CDO1="$CDO1" \
+  --build-arg CDO2="$CDO2" \
+  --build-arg CDO3="$CDO3" \
+  --build-arg CDO4="$CDO4" \
+  --build-arg CDP1="$CDP1" \
+  --build-arg CDP2="$CDP2" \
   -t chatterpay-back-app ..

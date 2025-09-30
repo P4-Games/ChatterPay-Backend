@@ -2,11 +2,11 @@ import { Logger } from '../helpers/loggerHelper';
 import { pushService } from './push/pushService';
 import { computeWallet } from './web3/rpc/rpcService';
 import { mongoUserService } from './mongo/mongoUserService';
-import { getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { mongoCountryService } from './mongo/mongoCountryService';
 import { IUser, UserModel, IUserWallet } from '../models/userModel';
 import { PUSH_ENABLED, DEFAULT_CHAIN_ID } from '../config/constants';
 import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
+import { getPhoneNumberFormatted, formatIdentifierWithOptionalName } from '../helpers/formatHelper';
 
 /**
  * Updates the operation count for the user by the specified increment.
@@ -66,7 +66,6 @@ export const createUserWithWallet = async (
       {
         wallet_proxy: predictedWallet.proxyAddress,
         wallet_eoa: predictedWallet.EOAAddress,
-        sk_hashed: predictedWallet.privateKey,
         created_with_chatterpay_proxy_address: chatterpayProxyAddress,
         created_with_factory_address: factoryAddress,
         chain_id: DEFAULT_CHAIN_ID,
@@ -108,10 +107,7 @@ export const createUserWithWallet = async (
 
   if (PUSH_ENABLED) {
     Logger.log('createUserWithWallet', 'Push protocol', phoneNumber, predictedWallet.EOAAddress);
-    await pushService.subscribeToPushChannel(
-      predictedWallet.privateKeyNotHashed,
-      predictedWallet.EOAAddress
-    );
+    await pushService.subscribeToPushChannel(predictedWallet.data, predictedWallet.EOAAddress);
   } else {
     Logger.info(
       'createUserWithWallet',
@@ -160,7 +156,6 @@ export const addWalletToUser = async (
   const newWallet = {
     wallet_proxy: predictedWallet.proxyAddress,
     wallet_eoa: predictedWallet.EOAAddress,
-    sk_hashed: predictedWallet.privateKey,
     created_with_chatterpay_proxy_address: chatterpayProxyAddress,
     created_with_factory_address: factoryAddress,
     chain_id: chainId,
@@ -331,3 +326,22 @@ export const closeOperation = (
   phoneNumber: string,
   operation: ConcurrentOperationsEnum
 ): Promise<void> => updateOperationCount(phoneNumber, operation, -1);
+
+/**
+ *
+ * @param {string} phoneNumber - The phone number of the user.
+ * @returns
+ */
+export const getDisplayUserLabel = async (phoneNumber: string): Promise<string> => {
+  const user: IUser | null = await UserModel.findOne({
+    phone_number: getPhoneNumberFormatted(phoneNumber)
+  });
+  if (!user) return phoneNumber;
+
+  const wallet: IUserWallet | null = await getUserWallet(phoneNumber, DEFAULT_CHAIN_ID);
+  return formatIdentifierWithOptionalName(
+    wallet?.wallet_proxy || '0x0000000000000000000000000000000000000000',
+    user.name,
+    true
+  );
+};

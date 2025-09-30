@@ -3,7 +3,7 @@ import { ethers, BigNumber } from 'ethers';
 import { Logger } from '../../helpers/loggerHelper';
 import { IBlockchain } from '../../models/blockchainModel';
 import { PackedUserOperation } from '../../types/userOperationType';
-import { createPaymasterAndData } from '../../helpers/paymasterHelper';
+import { getPaymasterAndData } from '../../helpers/paymasterHelper';
 
 /**
  * Add paymaster-related data to the given UserOperation.
@@ -24,7 +24,7 @@ export async function addPaymasterData(
   callData: string,
   chainId: number
 ): Promise<PackedUserOperation> {
-  const paymasterAndData = await createPaymasterAndData(
+  const paymasterAndData = await getPaymasterAndData(
     paymasterAddress,
     userOp.sender,
     backendSigner,

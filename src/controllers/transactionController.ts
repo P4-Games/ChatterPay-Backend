@@ -9,13 +9,14 @@ import { delaySeconds } from '../helpers/timeHelper';
 import { IUser, IUserWallet } from '../models/userModel';
 import { NotificationEnum } from '../models/templateModel';
 import { getChatterpayTokenFee } from '../services/commonService';
-import { verifyWalletBalanceInRpc } from '../services/balanceService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import Transaction, { ITransaction } from '../models/transactionModel';
 import { sendTransferUserOperation } from '../services/transferService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
+import { getTokenPrices, verifyWalletBalanceInRpc } from '../services/balanceService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
+import { chatterpointsService, RegisterOperationResult } from '../services/chatterpointsService';
 import {
   TransactionData,
   ExecueTransactionResult,
@@ -119,7 +120,13 @@ export const checkTransactionStatus = async (
 
     const transaction = await Transaction.findOne({ trx_hash });
     if (!transaction) {
-      return await returnErrorResponse(reply, 404, 'Transaction not found');
+      return await returnErrorResponse(
+        'checkTransactionStatus',
+        '',
+        reply,
+        404,
+        'Transaction not found'
+      );
     }
 
     const receipt = await web3.eth.getTransactionReceipt(trx_hash);
@@ -132,8 +139,7 @@ export const checkTransactionStatus = async (
 
     return await returnSuccessResponse(reply, transaction.status);
   } catch (error) {
-    Logger.error('checkTransactionStatus', error);
-    return returnErrorResponse(reply, 400, 'Bad Request');
+    return returnErrorResponse('checkTransactionStatus', '', reply, 400, 'Bad Request');
   }
 };
 
@@ -146,7 +152,13 @@ export const createTransaction = async (
 ) => {
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(
+        'createTransaction',
+        '',
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
     }
     const newTransaction = new Transaction(request.body);
     await newTransaction.save();
@@ -156,8 +168,14 @@ export const createTransaction = async (
       newTransaction.toJSON()
     );
   } catch (error) {
-    Logger.error('createTransaction', error);
-    return returnErrorResponse(reply, 400, 'Error creating transaction', (error as Error).message);
+    return returnErrorResponse(
+      'createTransaction',
+      '',
+      reply,
+      400,
+      'Error creating transaction',
+      (error as Error).message
+    );
   }
 };
 
@@ -185,8 +203,14 @@ export const getAllTransactions = async (
       totalItems: total
     });
   } catch (error) {
-    Logger.error('getAllTransactions', error);
-    return returnErrorResponse(reply, 400, 'Error fetching transactions', (error as Error).message);
+    return returnErrorResponse(
+      'getAllTransactions',
+      '',
+      reply,
+      400,
+      'Error fetching transactions',
+      (error as Error).message
+    );
   }
 };
 
@@ -202,7 +226,13 @@ export const getTransactionById = async (
   try {
     const transaction = await Transaction.findById(id);
     if (!transaction) {
-      return await returnErrorResponse(reply, 404, 'Transaction not found');
+      return await returnErrorResponse(
+        'getTransactionById',
+        '',
+        reply,
+        404,
+        'Transaction not found'
+      );
     }
     return await returnSuccessResponse(
       reply,
@@ -210,8 +240,14 @@ export const getTransactionById = async (
       transaction.toJSON()
     );
   } catch (error) {
-    Logger.error('getTransactionById', error);
-    return returnErrorResponse(reply, 400, 'Error fetching transaction', (error as Error).message);
+    return returnErrorResponse(
+      'getTransactionById',
+      '',
+      reply,
+      400,
+      'Error fetching transaction',
+      (error as Error).message
+    );
   }
 };
 
@@ -229,14 +265,26 @@ export const updateTransaction = async (
 
   try {
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(
+        'updateTransaction',
+        '',
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
     }
 
     const updatedTransaction = await Transaction.findByIdAndUpdate(id, request.body, {
       new: true
     });
     if (!updatedTransaction) {
-      return await returnErrorResponse(reply, 404, 'Transaction not found');
+      return await returnErrorResponse(
+        'updateTransaction',
+        '',
+        reply,
+        404,
+        'Transaction not found'
+      );
     }
     return await returnSuccessResponse(
       reply,
@@ -244,8 +292,14 @@ export const updateTransaction = async (
       updatedTransaction.toJSON()
     );
   } catch (error) {
-    Logger.error('updateTransaction', error);
-    return returnErrorResponse(reply, 400, 'Error updating transaction', (error as Error).message);
+    return returnErrorResponse(
+      'updateTransaction',
+      '',
+      reply,
+      400,
+      'Error updating transaction',
+      (error as Error).message
+    );
   }
 };
 
@@ -261,12 +315,24 @@ export const deleteTransaction = async (
   try {
     const deletedTransaction = await Transaction.findByIdAndDelete(id);
     if (!deletedTransaction) {
-      return await returnErrorResponse(reply, 404, 'Transaction not found');
+      return await returnErrorResponse(
+        'deleteTransaction',
+        '',
+        reply,
+        404,
+        'Transaction not found'
+      );
     }
     return await returnSuccessResponse(reply, 'Transaction deleted successfully');
   } catch (error) {
-    Logger.error('deleteTransaction', error);
-    return returnErrorResponse(reply, 400, 'Error deleting transaction', (error as Error).message);
+    return returnErrorResponse(
+      'deleteTransaction',
+      '',
+      reply,
+      400,
+      'Error deleting transaction',
+      (error as Error).message
+    );
   }
 };
 
@@ -357,7 +423,13 @@ export const makeTransaction = async (
     /* ***************************************************** */
     if (!request.body) {
       rootSpan?.endSpan();
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(
+        'makeTransaction',
+        logKey,
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
     }
 
     const { channel_user_id, to, token: tokenSymbol, amount, user_notes } = request.body;
@@ -382,7 +454,14 @@ export const makeTransaction = async (
 
     if (validationError) {
       rootSpan?.endSpan();
-      return await returnErrorResponse(reply, 400, 'Error making transaction', validationError);
+      return await returnErrorResponse(
+        'makeTransaction',
+        logKey,
+        reply,
+        400,
+        'Error making transaction',
+        validationError
+      );
     }
 
     /* ***************************************************** */
@@ -590,12 +669,7 @@ export const makeTransaction = async (
     );
 
     if (!executeTransactionResult.success) {
-      await sendInternalErrorNotification(
-        userWallet.wallet_proxy,
-        channel_user_id,
-        lastBotMsgDelaySeconds,
-        traceHeader
-      );
+      await sendInternalErrorNotification(channel_user_id, lastBotMsgDelaySeconds, traceHeader);
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
       transactionExecutionSpan?.endSpan();
       rootSpan?.endSpan();
@@ -631,12 +705,30 @@ export const makeTransaction = async (
       user_notes: santizedUserNotes
     };
     await mongoTransactionService.saveTransaction(transactionOut);
-    saveTransactionSpan?.endSpan();
 
     await mongoUserService.updateUserOperationCounter(channel_user_id, 'transfer');
 
     /* ***************************************************** */
-    /* 12. makeTransaction: send user notification           */
+    /* 12. makeTransaction: save chatterpoints               */
+    /* ***************************************************** */
+    const prices = await getTokenPrices([tokenSymbol]);
+    const price = prices.get(tokenSymbol.toUpperCase()) ?? 1;
+    const amountInUsd = parseFloat(amount) * price;
+
+    const chatterpointsOpResult: RegisterOperationResult | null =
+      await chatterpointsService.registerOperation({
+        userId: fromUser.phone_number,
+        userLevel: fromUser.level,
+        type: ConcurrentOperationsEnum.Transfer,
+        amount: amountInUsd,
+        operationId: executeTransactionResult.transactionHash
+      });
+
+    saveTransactionSpan?.endSpan();
+    await mongoUserService.updateUserOperationCounter(channel_user_id, 'transfer');
+
+    /* ***************************************************** */
+    /* 13. makeTransaction: send user notification           */
     /* ***************************************************** */
     const notificationSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'sendUserNotifications' })
@@ -653,17 +745,23 @@ export const makeTransaction = async (
       await delaySeconds(lastBotMsgDelaySeconds);
     }
 
-    const amountAfterFeeDecimals = tokenData?.display_decimals;
-    const amountAfterFee = (parseFloat(amount) - chatterpayFee).toFixed(amountAfterFeeDecimals);
+    const displayDecimals = tokenData!.display_decimals;
+    // Normalizar valores a number antes de formatear
+    const parsedAmount = Number(amount);
+    const parsedAmountAfterFee = parsedAmount - chatterpayFee;
+
+    const formattedAmount = parsedAmount.toFixed(displayDecimals);
+    const formattedAmountAfterFee = parsedAmountAfterFee.toFixed(displayDecimals);
 
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
       toUser?.phone_number ?? toAddress,
       toUser?.name ?? '',
-      amount,
+      formattedAmount,
       tokenData!.symbol,
       santizedUserNotes,
       executeTransactionResult.transactionHash,
+      chatterpointsOpResult,
       traceHeader
     );
 
@@ -673,7 +771,7 @@ export const makeTransaction = async (
         fromUser.phone_number,
         fromUser.name,
         toUser.phone_number,
-        amountAfterFee.toString(),
+        formattedAmountAfterFee,
         tokenData!.symbol,
         santizedUserNotes,
         traceHeader
