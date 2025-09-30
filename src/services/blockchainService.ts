@@ -240,7 +240,6 @@ export async function checkBlockchainConditions(
     if (!hasEnoughBalance) {
       throw new Error(balanceError);
     }
-    */
 
     const entrypointABI = await getEntryPointABI();
     const entrypointContract = new ethers.Contract(

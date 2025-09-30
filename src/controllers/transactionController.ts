@@ -706,8 +706,6 @@ export const makeTransaction = async (
     };
     await mongoTransactionService.saveTransaction(transactionOut);
 
-    await mongoUserService.updateUserOperationCounter(channel_user_id, 'transfer');
-
     /* ***************************************************** */
     /* 12. makeTransaction: save chatterpoints               */
     /* ***************************************************** */

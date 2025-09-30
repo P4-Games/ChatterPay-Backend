@@ -321,12 +321,6 @@ export const swap = async (
       tokensData.tokenInputAddress
     );
 
-    const chatterpayFee = await getChatterpayTokenFee(
-      proxyAddress,
-      checkBlockchainConditionsResult.setupContractsResult!.provider,
-      tokensData.tokenInputAddress
-    );
-
     // Save transactions OUT
     Logger.log('swap', logKey, 'Updating swap transactions in database.');
     const transactionOut: TransactionData = {

@@ -25,10 +25,6 @@ type CheckExternalDepositsQuery = {
   sendNotification?: string;
 };
 
-type CheckExternalDepositsQuery = {
-  sendNotification?: string;
-};
-
 /**
  * Handles the request to check external deposits.
  *

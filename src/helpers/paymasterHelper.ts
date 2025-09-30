@@ -52,7 +52,6 @@ export async function getPaymasterAndData(
     [$d](ethers.utils.arrayify(messageHash));
   const expirationBytes = ethers.utils.hexZeroPad(ethers.utils.hexlify(expirationTimestamp), 8);
 
-  // Log debugging information
   Logger.log(
     'Debugging createPaymasterAndData:',
     `userProxyAddress: ${userProxyAddress},expirationTimestamp: ${expirationTimestamp}, chainId: ${actualChainId}, entryPointAddress: ${entryPointAddress}, callData (first 100 chars): ${callData.substring(0, 100)}, encodedData: ${encodedData}, messageHash: ${messageHash}`
