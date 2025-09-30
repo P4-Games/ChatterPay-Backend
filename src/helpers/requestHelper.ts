@@ -1,5 +1,9 @@
 import { FastifyReply } from 'fastify';
 
+import { Logger } from './loggerHelper';
+import { isValidPhoneNumber } from './validationHelper';
+import { sendInternalErrorNotification } from '../services/notificationService';
+
 export interface SuccessResponse {
   status: 'success';
   data: {
@@ -44,6 +48,8 @@ export function returnSuccessResponse(
 
 /**
  * Returns an error response.
+ * @param method
+ * @param logKey
  * @param {FastifyReply} reply - The Fastify reply object.
  * @param {number} code - The HTTP status code.
  * @param {string} message - The error message.
@@ -51,11 +57,19 @@ export function returnSuccessResponse(
  * @returns {Promise<FastifyReply>} The Fastify reply object with the error response.
  */
 export function returnErrorResponse(
+  method: string,
+  logKey: string,
   reply: FastifyReply,
   code: number,
   message: string,
   details?: string
 ) {
+  if (code === 403) {
+    Logger.warn(method, logKey || 'no-key', message, details || '');
+  } else {
+    Logger.error(method, logKey || 'no-key', message, details || '');
+  }
+
   const response: ErrorResponse = {
     status: 'error',
     data: {
@@ -68,6 +82,53 @@ export function returnErrorResponse(
   return reply.status(code).send(response);
 }
 
-export function returnErrorResponse500(reply: FastifyReply) {
-  return returnErrorResponse(reply, 500, 'Internal Server Error');
+/**
+ *
+ * @param method
+ * @param logKey
+ * @param reply
+ * @param code
+ * @param message
+ * @param notifyUserWithBot
+ * @param channel_user_id
+ * @param details
+ * @returns
+ */
+export async function returnErrorResponseAsSuccess(
+  method: string,
+  logKey: string,
+  reply: FastifyReply,
+  message: string,
+  notifyUserWithBot: boolean,
+  channel_user_id: string,
+  details?: string
+) {
+  try {
+    if (notifyUserWithBot && isValidPhoneNumber(channel_user_id)) {
+      await sendInternalErrorNotification(channel_user_id, 0, '');
+    }
+  } catch (ex) {
+    Logger.warn('returnErrorResponseAssSuccess', ex);
+  }
+
+  const response: ErrorResponse = {
+    status: 'error',
+    data: {
+      code: 200,
+      message,
+      details
+    },
+    timestamp: new Date().toISOString()
+  };
+
+  return reply.status(200).send(response);
+}
+
+/**
+ *
+ * @param reply
+ * @returns
+ */
+export function returnErrorResponse500(method: string, logKey: string, reply: FastifyReply) {
+  return returnErrorResponse(method, logKey, reply, 500, 'Internal Server Error');
 }

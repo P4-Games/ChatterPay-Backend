@@ -32,7 +32,6 @@ describe('User Model', () => {
         {
           wallet_proxy: '0xProxyAddress',
           wallet_eoa: '0xEoaAddress',
-          sk_hashed: 'hashed-sk',
           created_with_chatterpay_proxy_address: '0xChatterpayProxyAddress',
           chain_id: 1,
           status: 'active'
@@ -101,7 +100,6 @@ describe('User Model', () => {
         {
           wallet_proxy: '0xProxy1',
           wallet_eoa: '0xEoa1',
-          sk_hashed: 'hashed-sk-1',
           created_with_chatterpay_proxy_address: '0xChatterpayProxyAddress1',
           chain_id: 1,
           status: 'active'
@@ -109,7 +107,6 @@ describe('User Model', () => {
         {
           wallet_proxy: '0xProxy2',
           wallet_eoa: '0xEoa2',
-          sk_hashed: 'hashed-sk-2',
           created_with_chatterpay_proxy_address: '0xChatterpayProxyAddress2',
           chain_id: 2,
           status: 'inactive'

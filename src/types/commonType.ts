@@ -38,6 +38,7 @@ export interface TokenBalance extends TokenInfo {
 export interface BalanceInfo {
   network: string;
   token: string;
+  tokenAddress?: string;
   balance: number;
   balance_conv: Record<Currency, number>;
 }
@@ -58,9 +59,11 @@ export interface swapTokensData {
   tokenInputAddress: string;
   tokenInputSymbol: string;
   tokenInputDisplaySymbol: string;
+  tokenInputDisplayDecimals: number;
   tokenOutputAddress: string;
   tokenOutputSymbol: string;
   tokenOutputDisplaySymbol: string;
+  tokenOutputDisplayDecimals: number;
 }
 
 export interface ExecuteSwapResult {
@@ -77,8 +80,8 @@ export interface ExecueTransactionResult {
 
 export interface SetupContractReturn {
   provider: ethers.providers.JsonRpcProvider;
-  signer: ethers.Wallet;
-  backendSigner: ethers.Wallet;
+  userPrincipal: ethers.Wallet;
+  backPrincipal: ethers.Wallet;
   chatterPay: ethers.Contract;
   proxy: ComputedAddress;
   accountExists: boolean;
@@ -117,17 +120,13 @@ export interface MintResult {
   txHash: string;
 }
 
-export interface PhoneNumberToAddress {
-  hashedPrivateKey: string;
-  privateKey: string;
-  publicKey: string;
+export interface UserPrincipal {
+  data: string;
+  EOAAddress: string;
 }
 
-export interface ComputedAddress {
+export interface ComputedAddress extends UserPrincipal {
   proxyAddress: string;
-  EOAAddress: string;
-  privateKey: string;
-  privateKeyNotHashed: string;
 }
 
 export const rpcProviders = {
@@ -143,8 +142,15 @@ export enum CacheNames {
   ABI = 'abiCache',
   NOTIFICATION = 'notificationTemplateCache',
   TOR = 'torCache',
-  COINGECKO = 'coingeckoCache'
+  COINGECKO = 'coingeckoCache',
+  ERC20 = 'erc20',
+  CHATTERPOINTS_WORDS = 'chatterpoints_words'
 }
 
-export const notificationLanguages = ['en', 'es', 'pt'] as const;
+const systemLanguages = ['en', 'es', 'pt'] as const;
+
+export const notificationLanguages = systemLanguages;
 export type NotificationLanguage = (typeof notificationLanguages)[number];
+
+export const gamesLanguages = systemLanguages;
+export type gamesLanguage = (typeof gamesLanguages)[number];

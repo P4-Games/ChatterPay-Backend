@@ -102,7 +102,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   const authHeader: string | undefined = request.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    returnErrorResponse(reply, 401, 'Authentication token was not provided');
+    returnErrorResponse('authMiddleware', '', reply, 401, 'Authentication token was not provided');
     return;
   }
 
@@ -111,7 +111,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   const tokenType: TokenResponse = await verifyToken(token);
 
   if (!tokenType) {
-    returnErrorResponse(reply, 401, 'Invalid Authorization Token');
+    returnErrorResponse('authMiddleware', '', reply, 401, 'Invalid Authorization Token');
     return;
   }
 

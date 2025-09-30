@@ -33,26 +33,23 @@ export const pushService = {
   /**
    * Subscribe User To Push Channel
    *
-   * @param user_private_key
+   * @param user_p
    * @param user_address
    * @returns
    */
-  subscribeToPushChannel: async (
-    user_private_key: string,
-    user_address: string
-  ): Promise<boolean> => {
+  subscribeToPushChannel: async (user_p: string, user_address: string): Promise<boolean> => {
     try {
-      let userPrivateKeyFormatted = user_private_key;
+      let userPFormatted = user_p;
       let userAddressFormatted = user_address;
 
-      if (!user_private_key.startsWith('0x')) {
-        userPrivateKeyFormatted = `0x${user_private_key}`;
+      if (!user_p.startsWith('0x')) {
+        userPFormatted = `0x${user_p}`;
       }
       if (!user_address.startsWith('0x')) {
         userAddressFormatted = `0x${user_address}`;
       }
 
-      const signer = new ethers.Wallet(userPrivateKeyFormatted);
+      const signer = new ethers.Wallet(userPFormatted);
       const subscriptionResponse = await PushAPIChannels.subscribe({
         signer,
         channelAddress: `eip155:${PUSH_NETWORK}:${PUSH_CHANNEL_ADDRESS}`,

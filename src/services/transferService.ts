@@ -4,13 +4,14 @@ import { ethers } from 'ethers';
 import { IToken } from '../models/tokenModel';
 import { Logger } from '../helpers/loggerHelper';
 import { getTokenBalances } from './balanceService';
+import { delaySeconds } from '../helpers/timeHelper';
 import { IBlockchain } from '../models/blockchainModel';
 import { IUser, IUserWallet } from '../models/userModel';
 import { setupERC20 } from './web3/contractSetupService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { checkBlockchainConditions } from './blockchainService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-import { createTransferCallData, executeUserOperationWithRetry } from './web3/userOperationService';
+import { createTransferCallData, executeUserOperationWithRetry } from './web3/userOpService';
 import {
   logPaymasterEntryPointDeposit,
   getPaymasterEntryPointDepositValue
@@ -54,7 +55,7 @@ export async function sendTransferUserOperation(
 ): Promise<ExecueTransactionResult> {
   try {
     Logger.log('sendTransferUserOperation', 'Getting ERC20 Contract');
-    const erc20 = await setupERC20(tokenAddress, setupContractsResult.signer);
+    const erc20 = await setupERC20(tokenAddress, setupContractsResult.userPrincipal);
     Logger.log('sendTransferUserOperation', 'Getted ERC20 Contract OK');
 
     Logger.log('sendTransferUserOperation', 'Validating sender contract init-code');
@@ -96,8 +97,7 @@ export async function sendTransferUserOperation(
     const userOpResult = await executeUserOperationWithRetry(
       networkConfig,
       setupContractsResult.provider,
-      setupContractsResult.signer,
-      setupContractsResult.backendSigner,
+      setupContractsResult.userPrincipal,
       entryPointContract,
       callData,
       setupContractsResult.proxy.proxyAddress,
@@ -184,10 +184,7 @@ export async function withdrawWalletAllFunds(
     await openOperation(bddUser.phone_number, ConcurrentOperationsEnum.WithdrawAll);
 
     // Use forEach to iterate over the array and execute the transaction if the balance is greater than 0
-    const delay = (ms: number) =>
-      new Promise((resolve) => {
-        setTimeout(resolve, ms);
-      });
+    const delay = (ms: number): Promise<void> => delaySeconds(ms / 1000);
 
     // Arrays to store transactions data for later persistence
     const transactionsOutToSave: TransactionData[] = [];

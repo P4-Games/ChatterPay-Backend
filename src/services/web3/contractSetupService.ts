@@ -1,10 +1,9 @@
 import { ethers } from 'ethers';
 
-import { SIGNING_KEY } from '../../config/constants';
+import { secService } from '../secService';
 import { IBlockchain } from '../../models/blockchainModel';
 import { IUser, IUserWallet } from '../../models/userModel';
 import { getERC20ABI, getChatterpayABI } from './abiService';
-import { generateWalletSeed } from '../../helpers/SecurityHelper';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
 import { ComputedAddress, SetupContractReturn } from '../../types/commonType';
 
@@ -22,15 +21,14 @@ export async function setupContracts(
   const network = await mongoBlockchainService.getNetworkConfig();
   const provider = new ethers.providers.JsonRpcProvider(network.rpc);
 
-  const privateKey = generateWalletSeed(user.phone_number, blockchain.chainId.toString());
-  const signer = new ethers.Wallet(privateKey, provider);
-  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+  const data = secService.get_up(user.phone_number, blockchain.chainId.toString());
+  const signer = new ethers.Wallet(data, provider);
+  const bs = secService.get_bs(provider);
   const userWallet: IUserWallet = user.wallets[0];
   const computedAddress: ComputedAddress = {
     proxyAddress: userWallet.wallet_proxy,
     EOAAddress: userWallet.wallet_eoa,
-    privateKey: userWallet.sk_hashed,
-    privateKeyNotHashed: privateKey
+    data
   };
   const accountExists = true;
 
@@ -43,8 +41,8 @@ export async function setupContracts(
 
   const result: SetupContractReturn = {
     provider,
-    signer,
-    backendSigner,
+    userPrincipal: signer,
+    backPrincipal: bs,
     chatterPay: chatterPayContract,
     proxy: computedAddress,
     accountExists

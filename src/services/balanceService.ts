@@ -1,13 +1,12 @@
 import { ethers } from 'ethers';
 
+import { secService } from './secService';
 import { IToken } from '../models/tokenModel';
 import { getERC20ABI } from './web3/abiService';
 import { Logger } from '../helpers/loggerHelper';
-import { getTokenData } from './blockchainService';
 import { cacheService } from './cache/cacheService';
+import { BINANCE_API_URL } from '../config/constants';
 import { IBlockchain } from '../models/blockchainModel';
-import { setupERC20 } from './web3/contractSetupService';
-import { SIGNING_KEY, BINANCE_API_URL } from '../config/constants';
 import {
   Currency,
   FiatQuote,
@@ -52,80 +51,70 @@ async function getContractBalance(
  * @param {string[]} symbols - Array of token symbols to fetch prices for
  * @returns {Promise<Map<string, number>>} Map of token symbols to their USD prices
  */
-async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
+export async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
+  const norm = (s: string) => String(s).trim().toUpperCase();
+  const priceMap = new Map<string, number>();
+
+  const STABLES: Set<string> = new Set(['USDT', 'USDC', 'DAI', 'AUSDC', 'AUSDT']);
+  STABLES.forEach((s) => priceMap.set(s, 1));
+
+  const symbolsToFetch = Array.from(new Set(symbols.map(norm))).filter((s) => !STABLES.has(s));
+  if (symbolsToFetch.length === 0) return priceMap;
+
   try {
-    const priceMap = new Map<string, number>();
+    const cachedPrices = Object.fromEntries(
+      symbolsToFetch.map((symbol) => [symbol, cacheService.get(CacheNames.PRICE, symbol)])
+    );
+    const symbolsToFetchFromApi = symbolsToFetch.filter((symbol) => !cachedPrices[symbol]);
 
-    // USDT is always 1 USD
-    priceMap.set('USDT', 1);
-    priceMap.set('USDC', 1);
+    Object.entries(cachedPrices).forEach(([symbol, price]) => {
+      if (typeof price === 'number') priceMap.set(symbol, price);
+    });
 
-    // Filter out USDT as we already set its price
-    const symbolsToFetch = symbols.filter((s) => s !== 'USDT' && s !== 'USDC');
-
-    if (symbolsToFetch.length === 0) return priceMap;
-
-    try {
-      // Check cache for existing prices
-      const cachedPrices = Object.fromEntries(
-        symbolsToFetch.map((symbol) => [symbol, cacheService.get(CacheNames.PRICE, symbol)])
-      );
-
-      const symbolsToFetchFromApi = symbolsToFetch.filter((symbol) => !cachedPrices[symbol]);
-
-      // Set cached prices to the priceMap
-      Object.entries(cachedPrices).forEach(([symbol, price]) => {
-        priceMap.set(symbol, price as number);
-      });
-
-      if (symbolsToFetchFromApi.length === 0) {
-        Logger.log('getTokenPrices', 'getting prices from cache!');
-        return priceMap;
-      }
-    } catch (error) {
-      // Avoid throwing error
-      Logger.error(
-        'getTokenPrices',
-        `Error getting prices from cache: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+    if (symbolsToFetchFromApi.length === 0) {
+      Logger.log('getTokenPrices', 'getting prices from cache!');
+      return priceMap;
     }
 
+    // Wrap/unwrap helpers
     const unwrapToken = (symbol: string): string =>
       symbol.replace(/^WETH$/, 'ETH').replace(/^WBTC$/, 'BTC');
-
     const wrapToken = (symbol: string): string =>
       symbol.replace(/^ETH$/, 'WETH').replace(/^BTC$/, 'WBTC');
 
-    // Get prices for all symbols against USDT
-    const promises = symbolsToFetch.map(async (symbol) => {
-      try {
-        const unwrapped = unwrapToken(symbol);
-        const response = await fetch(`${BINANCE_API_URL}/ticker/price?symbol=${unwrapped}USDT`);
-        const data = await response.json();
+    // Fetch to Binance
+    await Promise.all(
+      symbolsToFetchFromApi.map(async (symbol) => {
+        try {
+          const unwrapped = unwrapToken(symbol);
+          const res = await fetch(`${BINANCE_API_URL}/ticker/price?symbol=${unwrapped}USDT`);
+          const data = await res.json();
+          const wrapped = wrapToken(unwrapped);
 
-        const wrapped = wrapToken(unwrapped);
-
-        if (data.price) {
-          const price = parseFloat(data.price);
-          Logger.log('getTokenPrices', `Price for ${symbol}: ${price} USDT`);
-          priceMap.set(wrapped, price);
-          cacheService.set(CacheNames.PRICE, wrapped, price);
-        } else {
-          Logger.warn('getTokenPrices', `No price found for ${unwrapped}USDT`);
-          priceMap.set(wrapped, 0);
+          if (data?.price) {
+            const price = parseFloat(data.price);
+            Logger.log('getTokenPrices', `Price for ${symbol}: ${price} USDT`);
+            priceMap.set(wrapped, price);
+            cacheService.set(CacheNames.PRICE, wrapped, price);
+          } else {
+            Logger.warn('getTokenPrices', `No price found for ${unwrapped}USDT`);
+            priceMap.set(wrapped, 0);
+          }
+        } catch (err) {
+          Logger.error('getTokenPrices', `Error fetching price for ${symbol}:`, err);
+          priceMap.set(symbol, 0);
         }
-      } catch (error) {
-        Logger.error('getTokenPrices', `Error fetching price for ${symbol}:`, error);
-        priceMap.set(symbol, 0);
-      }
-    });
+      })
+    );
 
-    await Promise.all(promises);
     return priceMap;
   } catch (error) {
     Logger.error('getTokenPrices', 'Error fetching token prices from Binance:', error);
-    // Return a map with 0 prices in case of error, except USDT which is always 1
-    return new Map(symbols.map((symbol) => [symbol, symbol === 'USDT' ? 1 : 0]));
+    // Consistent fallback: keep stables = 1, the rest = 0, everything normalized
+    const out = new Map<string, number>();
+    const all = Array.from(new Set(symbols.map(norm)));
+    all.forEach((s) => out.set(s, STABLES.has(s) ? 1 : 0));
+    return out;
   }
 }
 
@@ -136,16 +125,16 @@ async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
  * @returns {Promise<TokenInfo[]>} Array of tokens with current price information
  */
 async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo[]> {
+  const norm = (s: string) => String(s).trim().toUpperCase();
   const chainTokens = tokens.filter((token) => token.chain_id === chanId);
-  const symbols = [...new Set(chainTokens.map((token) => token.symbol))];
-
+  const symbols = [...new Set(chainTokens.map((token) => norm(token.symbol)))];
   const prices = await getTokenPrices(symbols);
 
   return chainTokens.map((token) => ({
     symbol: token.symbol,
     address: token.address,
     type: token.type,
-    rateUSD: prices.get(token.symbol) || 0,
+    rateUSD: prices.get(norm(token.symbol)) ?? 0,
     display_decimals: token.display_decimals,
     display_symbol: token.display_symbol,
     operations_limits: token.operations_limits
@@ -165,13 +154,17 @@ export async function getTokenBalances(
   networkConfig: IBlockchain
 ): Promise<TokenBalance[]> {
   const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-  const signer = new ethers.Wallet(SIGNING_KEY!, provider);
+  const bs = secService.get_bs(provider);
   const tokenInfo = await getTokenInfo(tokens, networkConfig.chainId);
 
   return Promise.all(
     tokenInfo.map(async (token) => {
-      const balance = await getContractBalance(token.address, signer, address);
-      return { ...token, balance };
+      const rawBalance = await getContractBalance(token.address, bs, address);
+
+      // Apply display_decimals here, keep as string
+      const formattedBalance = parseFloat(rawBalance).toFixed(token.display_decimals);
+
+      return { ...token, balance: formattedBalance };
     })
   );
 }
@@ -188,12 +181,21 @@ export function calculateBalances(
   fiatQuotes: FiatQuote[],
   networkName: string
 ): BalanceInfo[] {
-  return tokenBalances.map(({ symbol, balance, rateUSD }) => {
-    const balanceUSD = parseFloat(balance) * rateUSD;
+  return tokenBalances.map(({ symbol, address, balance, rateUSD, display_decimals }) => {
+    // Cast once for math
+    const balanceNum = parseFloat(balance);
+
+    // Round again explicitly with display_decimals before returning
+    const roundedBalance = parseFloat(balanceNum.toFixed(display_decimals));
+    Logger.debug('calculateBalances', symbol, balance, display_decimals, roundedBalance);
+
+    const balanceUSD = roundedBalance * rateUSD;
+
     return {
       network: networkName,
       token: symbol,
-      balance: parseFloat(balance),
+      tokenAddress: address,
+      balance: roundedBalance,
       balance_conv: {
         USD: balanceUSD,
         UYU: balanceUSD * (fiatQuotes.find((q) => q.currency === 'UYU')?.rate ?? 1),
@@ -219,6 +221,36 @@ export function calculateBalancesTotals(balances: BalanceInfo[]): Record<Currenc
     },
     {} as Record<Currency, number>
   );
+}
+
+/**
+ * Merge balances that represent the same asset (on the same network).
+ * Uses tokenAddress when present; otherwise falls back to token+network.
+ * Sums both the raw balance and each fiat conversion key.
+ *
+ * @param items List of BalanceInfo entries (potentially with duplicates)
+ * @returns Deduplicated list with summed balances
+ */
+export function mergeSameTokenBalances(items: TokenBalance[]): TokenBalance[] {
+  const agg = items.reduce<Record<string, TokenBalance>>((acc, it) => {
+    const key = `${it.symbol.toLowerCase()}::${it.address.toLowerCase()}`;
+    const prev = acc[key];
+
+    if (!prev) {
+      acc[key] = { ...it };
+      return acc;
+    }
+
+    // sum balances (string → number → string otra vez)
+    const nextBalance = (parseFloat(prev.balance) + parseFloat(it.balance)).toFixed(
+      it.display_decimals
+    );
+
+    acc[key] = { ...prev, balance: nextBalance };
+    return acc;
+  }, {});
+
+  return Object.values(agg);
 }
 
 /**
@@ -256,55 +288,6 @@ export async function verifyWalletBalance(
   };
 
   return result;
-}
-
-/**
- * Helper function to verify balance in wallet by token address
- * @param {IBlockchain} blockchainConfig - Blockchain configuration object
- * @param {string} tokenContractAddress - Token contract address
- * @param {string} walletAddress - Wallet address to check
- * @param {string} amountToCheck - Amount to check in wallet
- * @returns {Promise<WalletBalanceInfo>} Wallet balance information
- */
-export async function verifyWalletBalanceByTokenAddress(
-  blockchainConfig: IBlockchain,
-  tokenContractAddress: string,
-  walletAddress: string,
-  amountToCheck: string
-): Promise<WalletBalanceInfo> {
-  const provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpc);
-  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-  const tokenContract: ethers.Contract = await setupERC20(tokenContractAddress, backendSigner);
-  return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
-}
-
-/**
- * Helper function to verify balance in wallet by token symbol
- * @param {IBlockchain} blockchainConfig - Blockchain configuration object
- * @param {IToken[]} blockchainTokens - Array of blockchain tokens
- * @param {string} tokenSymbol - Symbol of the token
- * @param {string} walletAddress - Wallet address to check
- * @param {string} amountToCheck - Amount to check in wallet
- * @returns {Promise<WalletBalanceInfo>} Wallet balance information
- */
-export async function verifyWalletBalanceByTokenSymbol(
-  blockchainConfig: IBlockchain,
-  blockchainTokens: IToken[],
-  tokenSymbol: string,
-  walletAddress: string,
-  amountToCheck: string
-): Promise<WalletBalanceInfo> {
-  const provider = new ethers.providers.JsonRpcProvider(blockchainConfig.rpc);
-  const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
-  const tokenData: IToken | undefined = getTokenData(
-    blockchainConfig,
-    blockchainTokens,
-    tokenSymbol
-  );
-  const tokenContractAddress = tokenData!.address;
-  const tokenContract: ethers.Contract = await setupERC20(tokenContractAddress, backendSigner);
-
-  return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
 }
 
 /**

@@ -5,7 +5,7 @@ import { FastifyInstance } from 'fastify/types/instance';
 import { startServer } from './config/server';
 import { Logger } from './helpers/loggerHelper';
 import { connectToDatabase } from './config/database';
-import { BUN_ENV, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
+import { $B, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
 
 /**
  * Sets up a graceful shutdown process for the server and database connection.
@@ -37,7 +37,7 @@ function initializeCloudTrace(): void {
         // logLevel: 4,
         samplingRate: 20, // capture up to 20 requests per second for tracing.
         serviceContext: {
-          service: `chatterpay-service-${BUN_ENV}`,
+          service: `chatterpay-service-${$B}`,
           version: '1.0.0'
         }
       });

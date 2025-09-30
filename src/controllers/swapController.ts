@@ -3,26 +3,28 @@ import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { IUser } from '../models/userModel';
 import { Logger } from '../helpers/loggerHelper';
+import { secService } from '../services/secService';
 import { delaySeconds } from '../helpers/timeHelper';
 import { executeSwap } from '../services/swapService';
 import { NotificationEnum } from '../models/templateModel';
+import { getTokenPrices } from '../services/balanceService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { getChatterpayTokenFee } from '../services/commonService';
 import { setupERC20 } from '../services/web3/contractSetupService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { chatterpointsService, RegisterOperationResult } from '../services/chatterpointsService';
+import {
+  COMMON_REPLY_WALLET_NOT_CREATED,
+  COMMON_REPLY_OPERATION_IN_PROGRESS
+} from '../config/constants';
 import {
   getUser,
   openOperation,
   closeOperation,
   hasPhoneAnyOperationInProgress
 } from '../services/userService';
-import {
-  SIGNING_KEY,
-  COMMON_REPLY_WALLET_NOT_CREATED,
-  COMMON_REPLY_OPERATION_IN_PROGRESS
-} from '../config/constants';
 import {
   swapTokensData,
   TransactionData,
@@ -109,7 +111,13 @@ export const swap = async (
     /* 1. swap: input params                                 */
     /* ***************************************************** */
     if (!request.body) {
-      return await returnErrorResponse(reply, 400, 'You have to send a body with this request');
+      return await returnErrorResponse(
+        'swap',
+        '',
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
     }
 
     const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
@@ -126,7 +134,7 @@ export const swap = async (
     let validationError: string = await validateInputs(request.body, tokensData);
 
     if (validationError) {
-      return await returnErrorResponse(reply, 400, validationError);
+      return await returnErrorResponse('swap', '', reply, 400, validationError);
     }
 
     /* ***************************************************** */
@@ -220,14 +228,14 @@ export const swap = async (
     /* 7. swap: check user balance                           */
     /* ***************************************************** */
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-    const backendSigner = new ethers.Wallet(SIGNING_KEY!, provider);
+    const bs = secService.get_bs(provider);
     const proxyAddress = fromUser.wallets[0].wallet_proxy;
 
     // Get the contracts and decimals for the tokens
-    const fromTokenContract = await setupERC20(tokensData.tokenInputAddress, backendSigner);
+    const fromTokenContract = await setupERC20(tokensData.tokenInputAddress, bs);
     const fromTokenDecimals = await fromTokenContract.decimals();
 
-    const toTokenContract = await setupERC20(tokensData.tokenOutputAddress, backendSigner);
+    const toTokenContract = await setupERC20(tokensData.tokenOutputAddress, bs);
     const toTokenDecimals = await toTokenContract.decimals();
 
     // Get the current balances before the transaction
@@ -271,7 +279,7 @@ export const swap = async (
       logKey
     );
     if (!executeSwapResult.success) {
-      await sendInternalErrorNotification(proxyAddress, channel_user_id, lastBotMsgDelaySeconds);
+      await sendInternalErrorNotification(channel_user_id, lastBotMsgDelaySeconds);
       await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
       return undefined;
     }
@@ -287,12 +295,24 @@ export const swap = async (
     const fromTokensSent = fromTokenCurrentBalance.sub(fromTokenNewBalance);
     const toTokensReceived = toTokenNewBalance.sub(toTokenCurrentBalance);
 
-    // Ensure the values are in the correct units (converted to 'number' for saveTransaction)
+    // Normalize balances to human units
+    const fromTokensSentNormalized = ethers.utils.formatUnits(fromTokensSent, fromTokenDecimals);
+    const toTokensReceivedNormalized = ethers.utils.formatUnits(toTokensReceived, toTokenDecimals);
+
+    // Apply display_decimals for DB (numbers) and notifications (strings)
     const fromTokensSentInUnits = parseFloat(
-      ethers.utils.formatUnits(fromTokensSent, fromTokenDecimals)
+      parseFloat(fromTokensSentNormalized).toFixed(tokensData.tokenInputDisplayDecimals)
     );
     const toTokensReceivedInUnits = parseFloat(
-      ethers.utils.formatUnits(toTokensReceived, toTokenDecimals)
+      parseFloat(toTokensReceivedNormalized).toFixed(tokensData.tokenOutputDisplayDecimals)
+    );
+
+    // String versions for notifications (preserve trailing zeros)
+    const fromTokensSentDisplay = parseFloat(fromTokensSentNormalized).toFixed(
+      tokensData.tokenInputDisplayDecimals
+    );
+    const toTokensReceivedDisplay = parseFloat(toTokensReceivedNormalized).toFixed(
+      tokensData.tokenOutputDisplayDecimals
     );
 
     const chatterpayFee = await getChatterpayTokenFee(
@@ -333,7 +353,23 @@ export const swap = async (
     await mongoUserService.updateUserOperationCounter(channel_user_id, 'swap');
 
     /* ***************************************************** */
-    /* 11. swap: send notification to user                   */
+    /* 11. swap: Chatterpoints Operation                     */
+    /* ***************************************************** */
+    const prices = await getTokenPrices([inputCurrency]);
+    const price = prices.get(inputCurrency.toUpperCase()) ?? 1;
+    const amountInUsd = toTokensReceivedInUnits * price;
+
+    const chatterpointsOpResult: RegisterOperationResult | null =
+      await chatterpointsService.registerOperation({
+        userId: fromUser.phone_number,
+        userLevel: fromUser.level,
+        type: ConcurrentOperationsEnum.Swap,
+        amount: amountInUsd,
+        operationId: executeSwapResult.swapTransactionHash
+      });
+
+    /* ***************************************************** */
+    /* 12. swap: send notification to user                   */
     /* ***************************************************** */
 
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
@@ -345,10 +381,11 @@ export const swap = async (
     await sendSwapNotification(
       channel_user_id,
       tokensData.tokenInputSymbol,
-      fromTokensSentInUnits.toString(),
-      toTokensReceivedInUnits.toString(),
+      fromTokensSentDisplay,
+      toTokensReceivedDisplay,
       tokensData.tokenOutputSymbol,
-      executeSwapResult.swapTransactionHash
+      executeSwapResult.swapTransactionHash,
+      chatterpointsOpResult
     );
 
     Logger.info(

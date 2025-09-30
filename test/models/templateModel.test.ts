@@ -149,6 +149,66 @@ describe('Template Model', () => {
             es: 'El monto que intentas operar está fuera de los límites de esta operación (min: [LIMIT_MIN], max: [LIMIT_MAX]). Por favor, inténtalo nuevamente con un monto válido. 🙅‍♂️',
             pt: 'O valor que você está tentando operar está fora dos limites desta operação (min: [LIMIT_MIN], max: [LIMIT_MAX]). Tente novamente com um valor válido. 🙅‍♂️'
           }
+        },
+        aave_supply_created: {
+          title: {
+            en: 'Chatterpay: Savings created successfully!',
+            es: 'Chatterpay: ✅ Ahorro creado con éxito',
+            pt: 'Chatterpay: Poupança criada com sucesso!'
+          },
+          message: {
+            en: '✅ You have successfully deposited [AMOUNT] [TOKEN] to start earning interest! 🎉\n\nCheck the transaction details here: [EXPLORER]/tx/[TX_HASH]',
+            es: '✅ ¡Has depositado correctamente [AMOUNT] [TOKEN] para empezar a generar intereses! 🎉\n\nPodés ver los detalles de la transacción aquí:\n[EXPLORER]/tx/[TX_HASH]',
+            pt: '✅ Você depositou [AMOUNT] [TOKEN] com sucesso para começar a ganhar juros! 🎉\n\nConfira os detalhes da transação aqui:\n[EXPLORER]/tx/[TX_HASH]'
+          }
+        },
+        aave_supply_info: {
+          title: {
+            en: 'Chatterpay: Your Savings Info',
+            es: 'Chatterpay: 💰 Información de tu Ahorro',
+            pt: 'Chatterpay: Informações da sua Poupança'
+          },
+          message: {
+            en: '📊 Current savings status:\n• Deposited amount: [ATOKEN_BALANCE] [ATOKEN_SYMBOL]\n• Annual interest rate (APY): [SUPPLY_APY]%\n\n✨ Your funds keep earning interest automatically.',
+            es: '📊 Estado actual de tu ahorro:\n• Monto depositado: [ATOKEN_BALANCE] [ATOKEN_SYMBOL]\n• Tasa de interés anual (APY): [SUPPLY_APY]%\n\n✨ Tu dinero sigue generando intereses automáticamente.',
+            pt: '📊 Status atual da sua poupança:\n• Quantia depositada: [ATOKEN_BALANCE] [ATOKEN_SYMBOL]\n• Taxa de juros anual (APY): [SUPPLY_APY]%\n\n✨ Seu dinheiro continua gerando juros automaticamente.'
+          }
+        },
+        aave_supply_info_no_data: {
+          title: {
+            en: 'Chatterpay: Your Savings Info',
+            es: 'Chatterpay: 💰 Información de tu Ahorro',
+            pt: 'Chatterpay: Informações da sua Poupança'
+          },
+          message: {
+            en: 'ℹ️ We couldn’t find information about your savings at this moment.',
+            es: 'ℹ️ No encontramos información de tu ahorro en este momento.',
+            pt: 'ℹ️ Não encontramos informações da sua poupança neste momento.'
+          }
+        },
+        aave_supply_modified: {
+          title: {
+            en: 'Chatterpay: Savings withdrawal completed',
+            es: 'Chatterpay: ✅ Retiro de ahorro completado',
+            pt: 'Chatterpay: Retirada de poupança concluída'
+          },
+          message: {
+            en: '✅ You successfully withdrew [AMOUNT] [TOKEN] from your interest-bearing account. 🎉\n\nCheck the transaction details here:\n[EXPLORER]/tx/[TX_HASH]',
+            es: '✅ Has retirado correctamente [AMOUNT] [TOKEN] de tu cuenta con intereses. 🎉\n\nPodés ver los detalles de la transacción aquí:\n[EXPLORER]/tx/[TX_HASH]',
+            pt: '✅ Você retirou com sucesso [AMOUNT] [TOKEN] da sua conta com juros. 🎉\n\nConfira os detalhes da transação aqui:\n[EXPLORER]/tx/[TX_HASH]'
+          }
+        },
+        chatterpoints_operation: {
+          title: {
+            en: 'ChatterPay: You earned ChatterPoints! 🎯',
+            es: 'ChatterPay: ¡Ganaste ChatterPoints! 🎯',
+            pt: 'ChatterPay: Você ganhou ChatterPoints! 🎯'
+          },
+          message: {
+            en: 'Con esta operación sumaste [POINTS] ChatterPoints! 🥳',
+            es: '¡Con esta operación sumaste [POINTS] ChatterPoints! 🥳',
+            pt: 'Com esta operação você ganhou [POINTS] ChatterPoints! 🥳'
+          }
         }
       }
     };
@@ -158,6 +218,16 @@ describe('Template Model', () => {
 
     expect(savedTemplate._id).toBeDefined();
     expect(savedTemplate.notifications.incoming_transfer.title.en).toBe('Transfer completed');
+
+    expect(savedTemplate.notifications.aave_supply_created.title.es).toBe(
+      'Chatterpay: ✅ Ahorro creado con éxito'
+    );
+    expect(savedTemplate.notifications.aave_supply_info.message.es).toContain(
+      'Estado actual de tu ahorro'
+    );
+    expect(savedTemplate.notifications.aave_supply_modified.title.es).toBe(
+      'Chatterpay: ✅ Retiro de ahorro completado'
+    );
   });
 
   it('should fail to save without required fields', async () => {

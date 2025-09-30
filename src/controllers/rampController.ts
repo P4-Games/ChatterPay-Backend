@@ -85,7 +85,7 @@ export const linkToOperate = async (
   Logger.log('widgetLinkToOperate', 'Get Ramp Widget Link to operate');
 
   if (!request.body) {
-    return returnErrorResponse(reply, 400, 'Request body is required');
+    return returnErrorResponse('linkToOperate', '', reply, 400, 'Request body is required');
   }
 
   const { channel_user_id, operation, asset, against, assetAmount } = request.body;
@@ -140,7 +140,7 @@ export const linkToOperate = async (
     );
   } catch (error) {
     Logger.error('widgetLinkToOperate', 'Error getting ramp widget link to operate:', error);
-    return returnErrorResponse500(reply);
+    return returnErrorResponse500('linkToOperate', '', reply);
   }
 };
 
@@ -417,7 +417,7 @@ export const getRampUserBalance = async (request: FastifyRequest, reply: Fastify
   try {
     await mantecaUserService.getUserById(userId);
   } catch (error: unknown) {
-    return returnErrorResponse(reply, 404, 'user not found');
+    return returnErrorResponse('getRampUserBalance', '', reply, 404, 'user not found');
   }
 
   const balance: MantecaUserBalance = await mantecaBalanceService.getUserBalance(userId);
