@@ -8,7 +8,7 @@ import { IS_DEVELOPMENT, CURRENT_LOG_LEVEL } from '../config/constants';
 const prettyStream = pinoPretty({
   // Enables color output for logs in the console,
   colorize: true,
-  // Logs are written synchronously to ensure immediate delivery
+  // Logs are written synchronously to ensure immediate delivery (just in local!)
   sync: true,
   translateTime: 'SYS:standard',
   ignore: 'hostname,pid'
@@ -20,8 +20,8 @@ const prettyStream = pinoPretty({
 const cloudStream = pino.destination({
   // Avoid errors caused by ANSI characters when using pinoPretty for coloring
   colorize: false,
-  // Ensures logs are written immediately
-  sync: true
+  // Avoid write delays in cloud environments
+  sync: false
 });
 
 const selectedStream = IS_DEVELOPMENT ? prettyStream : cloudStream;
