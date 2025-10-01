@@ -727,52 +727,6 @@ export async function sendInternalErrorNotification(
 }
 
 /**
- * Sends a notification when a business error occurs (e.g., validation or domain-specific issues).
- *
- * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
- * @param details - Mandatory details about the error to be communicated to the user.
- * @param lastBotMsgDelaySeconds - (Optional) Delay in seconds since the last bot message was sent. Defaults to 0.
- */
-export async function sendBusinessErrorNotification(
-  channel_user_id: string,
-  details: string,
-  lastBotMsgDelaySeconds: number = 0
-) {
-  try {
-    if (lastBotMsgDelaySeconds > 0) {
-      Logger.log(
-        'sendBusinessErrorNotification',
-        `Delaying bot notification ${lastBotMsgDelaySeconds} seconds.`
-      );
-      await delaySeconds(lastBotMsgDelaySeconds);
-    }
-
-    Logger.log(
-      'sendBusinessErrorNotification',
-      `Sending internal error notification to ${channel_user_id}, details: ${details}`
-    );
-
-    const finalMessage = `We detected a validation error.\n\nDetails: ${details}`;
-
-    const sendAndPersistParams: SendAndPersistParams = {
-      to: channel_user_id,
-      messageBot: finalMessage,
-      messagePush: finalMessage,
-      template: NotificationEnum.internal_error,
-      sendPush: true,
-      sendBot: true,
-      title: 'Internal Error'
-    };
-
-    const data = await persistAndSendNotification(sendAndPersistParams);
-    return data;
-  } catch (error) {
-    Logger.error('sendBusinessErrorNotification', error);
-    throw error;
-  }
-}
-
-/**
  * Sends a notification when the user has concurrent operations.
  *
  * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
