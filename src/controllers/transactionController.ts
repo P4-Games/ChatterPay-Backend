@@ -463,7 +463,7 @@ export const makeTransaction = async (
         logKey,
         reply,
         'Error making transaction',
-        true,
+        false,
         channel_user_id,
         validationError
       );

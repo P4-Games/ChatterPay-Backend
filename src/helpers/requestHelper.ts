@@ -2,7 +2,7 @@ import { FastifyReply } from 'fastify';
 
 import { Logger } from './loggerHelper';
 import { isValidPhoneNumber } from './validationHelper';
-import { sendBusinessErrorNotification } from '../services/notificationService';
+import { sendInternalErrorNotification } from '../services/notificationService';
 
 export interface SuccessResponse {
   status: 'success';
@@ -105,10 +105,10 @@ export async function returnErrorResponseAsSuccess(
 ) {
   try {
     if (notifyUserWithBot && isValidPhoneNumber(channel_user_id)) {
-      await sendBusinessErrorNotification(channel_user_id, details || 'no details', 0);
+      await sendInternalErrorNotification(channel_user_id, 0, '');
     }
   } catch (ex) {
-    Logger.warn('returnErrorResponseAssSuccess', method, logKey, ex);
+    Logger.warn('returnErrorResponseAssSuccess', ex);
   }
 
   const response: ErrorResponse = {
