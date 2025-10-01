@@ -14,9 +14,13 @@ import Transaction, { ITransaction } from '../models/transactionModel';
 import { sendTransferUserOperation } from '../services/transferService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { getTokenPrices, verifyWalletBalanceInRpc } from '../services/balanceService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import { chatterpointsService, RegisterOperationResult } from '../services/chatterpointsService';
+import {
+  returnErrorResponse,
+  returnSuccessResponse,
+  returnErrorResponseAsSuccess
+} from '../helpers/requestHelper';
 import {
   TransactionData,
   ExecueTransactionResult,
@@ -454,12 +458,13 @@ export const makeTransaction = async (
 
     if (validationError) {
       rootSpan?.endSpan();
-      return await returnErrorResponse(
+      return await returnErrorResponseAsSuccess(
         'makeTransaction',
         logKey,
         reply,
-        400,
         'Error making transaction',
+        true,
+        channel_user_id,
         validationError
       );
     }
