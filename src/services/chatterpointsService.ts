@@ -682,8 +682,10 @@ async function playWordle(
     throw new Error(`Invalid guess length. Expected ${wordLen} letters.`);
   }
 
-  const answerArr = answer.split('');
-  const guessArr = guess.split('');
+  const cleanGuess = normalizeInput(req.guess);
+  const cleanAnswer = normalizeInput(answer);
+  const guessArr = cleanGuess.split('');
+  const answerArr = cleanAnswer.split('');
   let result = '';
   const used: Record<string, number> = {};
 
@@ -712,7 +714,8 @@ async function playWordle(
     }
   }
 
-  if (guess === answer) {
+  // Victory check with normalized strings
+  if (cleanGuess === cleanAnswer) {
     won = true;
     // Clamp efficiencyPenalty to [0, victoryBase] so victory points never go negative
     const rawPenalty = wordleCfg.settings.efficiencyPenalty ?? 2;
@@ -793,8 +796,10 @@ async function playHangman(
 
   const answerRaw = period.word[lang];
   if (!answerRaw) throw new Error(`No word available for language=${lang} in this period`);
-  const answer = answerRaw.toLowerCase();
-  const guess = req.guess.toLowerCase();
+
+  // Normalize both answer and guess to ignore accents, spaces and case
+  const answer = normalizeInput(answerRaw);
+  const guess = normalizeInput(req.guess);
   const answerLen = answer.length;
 
   const hangmanCfg = gameCfg.config as Extract<GameSettings, { type: 'HANGMAN' }>;
@@ -875,9 +880,9 @@ async function playHangman(
     const letterU = guess.toUpperCase();
     if (!guessedLetters.has(letterU) && !wrongLetters.has(letterU)) {
       if (answer.includes(guess)) {
-        guessedLetters.add(letterU); // correct
+        guessedLetters.add(letterU);
       } else {
-        wrongLetters.add(letterU); // wrong → -1 life
+        wrongLetters.add(letterU);
         remainingAttempts = Math.max(remainingAttempts - 1, 0);
       }
     }
@@ -1098,6 +1103,33 @@ function assertWordleConfigSafe(cfg: Extract<GameSettings, { type: 'WORDLE' }>) 
   if (settings.efficiencyPenalty > points.victoryBase) {
     throw new Error('efficiencyPenalty must be ≤ victoryBase');
   }
+}
+
+/**
+ * Normalizes a user-provided string for consistent game comparisons.
+ *
+ * - Removes diacritical marks (accents, tildes, etc.) using Unicode normalization.
+ * - Trims leading and trailing spaces.
+ * - Converts all characters to lowercase.
+ *
+ * This ensures that user guesses like `"Árbol"`, `"arbol "`, or `"ÁRBOL"`
+ * are treated equivalently and matched correctly against dictionary words.
+ *
+ * @function normalizeInput
+ * @param {string} input - The raw user input (word or single letter).
+ * @returns {string} The normalized version of the input string,
+ * without accents, in lowercase, and trimmed.
+ *
+ * @example
+ * normalizeInput("  Canción  "); // → "cancion"
+ * normalizeInput("Á");           // → "a"
+ */
+function normalizeInput(input: string): string {
+  return input
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
 }
 
 // -------------------------------------------------------------------------------------------------------------
