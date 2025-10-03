@@ -673,11 +673,13 @@ export async function sendNoValidBlockchainConditionsNotification(
  *
  * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).
  * @param lastBotMsgDelaySeconds - (Optional) Delay in seconds since the last bot message was sent. Defaults to 0.
+ * @param details - (Optional) Additional details about the error.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  */
 export async function sendInternalErrorNotification(
   channel_user_id: string,
   lastBotMsgDelaySeconds: number = 0,
+  details?: string,
   traceHeader?: string
 ) {
   try {
@@ -695,7 +697,7 @@ export async function sendInternalErrorNotification(
 
     Logger.log(
       'sendInternalErrorNotification',
-      `Sending internal error notification to ${channel_user_id}`
+      `Sending internal error notification to ${channel_user_id}, details: ${details || 'no details'}`
     );
 
     const { title, message } = await getNotificationTemplate(
@@ -703,10 +705,12 @@ export async function sendInternalErrorNotification(
       NotificationEnum.internal_error
     );
 
+    const finalMessage = details ? `${message}\n\n(Details: ${details})` : message;
+
     const sendAndPersistParams: SendAndPersistParams = {
       to: channel_user_id,
-      messageBot: message,
-      messagePush: message,
+      messageBot: finalMessage,
+      messagePush: finalMessage,
       template: NotificationEnum.internal_error,
       sendPush: true,
       sendBot: true,
