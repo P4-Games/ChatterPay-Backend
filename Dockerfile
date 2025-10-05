@@ -70,6 +70,7 @@ ARG CDO3
 ARG CDO4
 ARG CDP1
 ARG CDP2
+ARG TELEGRAM_BOT_API_KEY
 
 # Set environment variables
 ENV BUN_ENV $BUN_ENV
@@ -127,6 +128,7 @@ ENV CDO3 $CDO3
 ENV CDO4 $CDO4
 ENV CDP1 $CDP1
 ENV CDP2 $CDP2
+ENV TELEGRAM_BOT_API_KEY $TELEGRAM_BOT_API_KEY
 
 # Copy project configuration files
 COPY package.json bun.lockb tsconfig.json ./

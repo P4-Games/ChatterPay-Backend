@@ -71,7 +71,8 @@ const {
   CDO3,
   CDO4,
   CDP1,
-  CDP2
+  CDP2,
+  TELEGRAM_BOT_API_KEY
 } = process.env;
 
 export {
@@ -101,6 +102,7 @@ export {
   THE_GRAPH_API_KEY,
   SIGNING_KEY as $P,
   GCP_BUCKET_BASE_URL,
+  TELEGRAM_BOT_API_KEY,
   CHATIZALO_PHONE_NUMBER,
   SEED_INTERNAL_SALT as $S,
   CHATTERPOINTS_WORDS_SEED,
@@ -200,7 +202,8 @@ export const COMMON_REPLY_OPERATION_IN_PROGRESS =
 export const COMMON_REPLY_WALLET_NOT_CREATED = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
 
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
-export const CORS_ORIGINS_EXCEPTIONS: string = '/metadata/opensea,/favicon.ico,/docs';
+export const CORS_ORIGINS_EXCEPTIONS: string =
+  '/metadata/opensea,/favicon.ico,/docs, /telegram/webhook';
 
 export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/price';
 export const TOKEN_IDS = ['usd-coin', 'tether', 'ethereum', 'bitcoin', 'wrapped-bitcoin', 'dai'];
@@ -218,6 +221,8 @@ export const QUEUE_BUNDLER_INTERVAL = Number(queueBundlerInterval);
 export const QUEUE_GAS_INTERVAL = Number(queueGasInterval);
 export const QUEUE_CREATE_PROXY_INTERVAL = Number(queueCreateProxyInterval);
 export const MAX_REQUESTS_PER_MINUTE = Number(maxRequestsPerMinute);
+
+export const TELEGRAM_WEBHOOK_PATH = '/telegram/webhook';
 
 export const CACHE_OPENSEA_TTL = 300; // 5 min
 export const CACHE_OPENSEA_CHECK_PERIOD = 600; // 10 min

@@ -98,3 +98,6 @@ CDO3=
 CDO4=
 CDP1=
 CDP2=
+
+# telegram bot
+TELEGRAM_BOT_API_KEY=''
