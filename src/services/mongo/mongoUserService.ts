@@ -24,6 +24,24 @@ export const mongoUserService = {
   },
 
   /**
+   * Retrieves a user based on the Telegram ID.
+   * This function finds the user by the numeric `telegram_id` field.
+   *
+   * @param {string} telegramId - Telegram user ID (numeric, integer).
+   * @returns {Promise<IUser | null>} The user object if found, or null if not found.
+   */
+  getUserByTelegramId: async (telegramId: string): Promise<IUser | null> => {
+    const id = (telegramId ?? '').trim();
+
+    // Reject null, empty, whitespace-only, or non-numeric values
+    if (id.length === 0 || !/^\d+$/.test(id)) {
+      return null;
+    }
+    const user: IUser | null = await UserModel.findOne({ telegram_id: telegramId });
+    return user;
+  },
+
+  /**
    * Retrieves all users with operations in progress.
    * This function searches the database for users where any field in `operations_in_progress` has the value `1`.
    *
@@ -250,6 +268,176 @@ export const mongoUserService = {
         `Error Resetting operations_counters for user ${phoneNumber}`,
         (error as Error).message
       );
+    }
+  },
+
+  /**
+   * Sets the `telegram_id` for the user identified by phone number.
+   * Creates the field if it does not exist.
+   *
+   * Validation:
+   * - `phoneNumber` is normalized with `getPhoneNumberFormatted`.
+   * - `telegramId` must be non-empty, trimmed, and numeric (digits only).
+   * - If the `telegram_id` is already linked to another user, it will not overwrite and returns null.
+   *
+   * @param {string} phoneNumber - The user's phone number (any format; will be normalized).
+   * @param {string} telegramId - Telegram user ID as string (digits only).
+   * @returns {Promise<IUser | null>} The updated user or null if user not found or validation fails.
+   */
+  setTelegramIdByPhone: async (phoneNumber: string, telegramId: string): Promise<IUser | null> => {
+    const formattedPhone = getPhoneNumberFormatted(phoneNumber);
+    const id = (telegramId ?? '').trim();
+
+    if (!formattedPhone) {
+      Logger.warn('setTelegramIdByPhone', 'Empty or invalid phone number after formatting.');
+      return null;
+    }
+
+    if (id.length === 0 || !/^\d+$/.test(id)) {
+      Logger.warn(
+        'setTelegramIdByPhone',
+        `Invalid telegramId '${telegramId}' (must be digits only).`
+      );
+      return null;
+    }
+
+    // Prevent linking a telegram_id that already belongs to a different user
+    const alreadyLinked = await UserModel.findOne({
+      telegram_id: id,
+      phone_number: { $ne: formattedPhone }
+    }).lean();
+
+    if (alreadyLinked) {
+      Logger.warn(
+        'setTelegramIdByPhone',
+        `telegram_id '${id}' already linked to a different user (${alreadyLinked.phone_number}).`
+      );
+      return null;
+    }
+
+    const user: IUser | null = await UserModel.findOneAndUpdate(
+      { phone_number: formattedPhone },
+      { $set: { telegram_id: id } },
+      { new: true }
+    );
+
+    if (!user) {
+      Logger.warn('setTelegramIdByPhone', `User not found for phone ${formattedPhone}.`);
+      return null;
+    }
+
+    Logger.info('setTelegramIdByPhone', `telegram_id set for ${formattedPhone} -> ${id}`);
+    return user;
+  },
+
+  /**
+   * Sets a new 6-digit verification code into `users.code`.
+   *
+   * - Normalizes the phone number.
+   * - Generates a code in [100000, 999999].
+   * - Persists it under `code`.
+   *
+   * @param {string} phoneNumber - Any-format phone number (will be normalized).
+   * @returns {Promise<number | null>} The newly generated code, or null if user not found or invalid phone.
+   */
+  setUserVerificationCode: async (phoneNumber: string): Promise<number | null> => {
+    const formattedPhone = getPhoneNumberFormatted(phoneNumber);
+
+    if (!formattedPhone) {
+      Logger.warn('setUserVerificationCode', 'Empty or invalid phone number after formatting.');
+      return null;
+    }
+
+    const code: number = Math.floor(Math.random() * (999999 - 100000 + 1)) + 100000;
+
+    try {
+      const res = await UserModel.updateOne({ phone_number: formattedPhone }, { $set: { code } });
+
+      if (res.matchedCount === 0) {
+        Logger.warn('setUserVerificationCode', `User not found for phone ${formattedPhone}.`);
+        return null;
+      }
+
+      Logger.info('setUserVerificationCode', `Code set for ${formattedPhone}.`);
+      return code;
+    } catch (error) {
+      Logger.error(
+        'setUserVerificationCode',
+        `Error setting code for ${formattedPhone}`,
+        (error as Error).message
+      );
+      return null; // avoid throw
+    }
+  },
+
+  /**
+   * Retrieves the 6-digit verification code from `users.code`.
+   *
+   * @param {string} phoneNumber - Any-format phone number (will be normalized).
+   * @returns {Promise<number | null>} The stored code, or null if not found/empty/invalid phone.
+   */
+  getUserVerificationCode: async (phoneNumber: string): Promise<number | null> => {
+    const formattedPhone = getPhoneNumberFormatted(phoneNumber);
+
+    if (!formattedPhone) {
+      Logger.warn('getUserVerificationCode', 'Empty or invalid phone number after formatting.');
+      return null;
+    }
+
+    try {
+      const user = await UserModel.findOne({ phone_number: formattedPhone }, { code: 1 }).lean<{
+        code?: number | null;
+      }>();
+
+      const value = typeof user?.code === 'number' ? user.code : null;
+      if (value === null) {
+        Logger.info('getUserVerificationCode', `No code set for ${formattedPhone}.`);
+      }
+      return value;
+    } catch (error) {
+      Logger.error(
+        'getUserVerificationCode',
+        `Error reading code for ${formattedPhone}`,
+        (error as Error).message
+      );
+      return null; // avoid throw
+    }
+  },
+
+  /**
+   * Clears the verification code by setting `users.code` to null.
+   *
+   * @param {string} phoneNumber - Any-format phone number (will be normalized).
+   * @returns {Promise<boolean>} True if a document was updated, false otherwise.
+   */
+  clearUserVerificationCode: async (phoneNumber: string): Promise<boolean> => {
+    const formattedPhone = getPhoneNumberFormatted(phoneNumber);
+
+    if (!formattedPhone) {
+      Logger.warn('clearUserVerificationCode', 'Empty or invalid phone number after formatting.');
+      return false;
+    }
+
+    try {
+      const res = await UserModel.updateOne(
+        { phone_number: formattedPhone },
+        { $set: { code: null } }
+      );
+
+      const updated = res.modifiedCount > 0 || res.matchedCount > 0;
+      if (updated) {
+        Logger.info('clearUserVerificationCode', `Code cleared for ${formattedPhone}.`);
+      } else {
+        Logger.warn('clearUserVerificationCode', `User not found for phone ${formattedPhone}.`);
+      }
+      return updated;
+    } catch (error) {
+      Logger.error(
+        'clearUserVerificationCode',
+        `Error clearing code for ${formattedPhone}`,
+        (error as Error).message
+      );
+      return false; // avoid throw
     }
   }
 };
