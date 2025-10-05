@@ -7,6 +7,8 @@ import { Logger } from '../helpers/loggerHelper';
 import { cacheService } from './cache/cacheService';
 import { BINANCE_API_URL } from '../config/constants';
 import { IBlockchain } from '../models/blockchainModel';
+import { getFiatQuotes } from './criptoya/criptoYaService';
+import { getPhoneNFTs } from '../controllers/nftController';
 import {
   Currency,
   FiatQuote,
@@ -14,7 +16,8 @@ import {
   CacheNames,
   BalanceInfo,
   TokenBalance,
-  WalletBalanceInfo
+  WalletBalanceInfo,
+  AddressBalanceWithNfts
 } from '../types/commonType';
 
 /**
@@ -311,4 +314,78 @@ export async function verifyWalletBalanceInRpc(
   const tokenContract = new ethers.Contract(tokenAddress, ERC20ABI, provider);
 
   return verifyWalletBalance(tokenContract, walletAddress, amountToCheck);
+}
+
+/**
+ * Fetches and calculates balance information for a given address.
+ * @param phoneNumber - Optional phone number used to fetch user-bound NFTs
+ * @param proxyAddress - Address to get balance for
+ * @param eoaAddress - Externally Owned Account address
+ * @param reply - Fastify reply object
+ * @param networkConfig - Fastify blockchain network configuration
+ * @param tokens - Token metadata list for the target network
+ * @returns Plain data object with balances, totals, certificates and wallets
+ */
+
+export async function getAddressBalanceWithNfts(
+  phoneNumber: string | null,
+  proxyAddress: string,
+  eoaAddress: string,
+  networkConfig: IBlockchain,
+  tokens: IToken[]
+): Promise<AddressBalanceWithNfts> {
+  const eoaProvided =
+    !!eoaAddress &&
+    eoaAddress.trim().length > 0 &&
+    eoaAddress.toLowerCase() !== proxyAddress.toLowerCase();
+
+  Logger.log(
+    'getAddressBalanceWithNfts',
+    `Fetching balances for proxy ${proxyAddress}${eoaProvided ? ` + eoa ${eoaAddress}` : ''} on network ${networkConfig.name}`
+  );
+
+  try {
+    const [fiatQuotes, proxyTokenBalances, eoaTokenBalances, NFTs] = await Promise.all([
+      getFiatQuotes(),
+      getTokenBalances(proxyAddress, tokens, networkConfig),
+      eoaProvided ? getTokenBalances(eoaAddress, tokens, networkConfig) : Promise.resolve([]),
+      phoneNumber ? getPhoneNFTs(phoneNumber) : Promise.resolve({ nfts: [] })
+    ]);
+
+    //  Combine raw token balances
+    const combinedTokenBalances = eoaProvided
+      ? [...proxyTokenBalances, ...eoaTokenBalances]
+      : proxyTokenBalances;
+
+    //  Merge duplicates BEFORE calculating balances
+    const mergedTokenBalances = mergeSameTokenBalances(combinedTokenBalances);
+
+    //  Now calculate balances with fiat conversions
+    const balances: BalanceInfo[] = calculateBalances(
+      mergedTokenBalances,
+      fiatQuotes,
+      networkConfig.name
+    );
+
+    // Totals
+    const totals: Record<Currency, number> = calculateBalancesTotals(balances);
+
+    const response: AddressBalanceWithNfts = {
+      balances,
+      totals,
+      certificates: NFTs.nfts,
+      wallets: eoaProvided ? [proxyAddress, eoaAddress] : [proxyAddress]
+    };
+
+    return response;
+  } catch (error) {
+    Logger.error('getAddressBalanceWithNfts', `Error: ${(error as Error).message}`);
+    const emptyTotals: Record<Currency, number> = {} as Record<Currency, number>;
+    return {
+      balances: [],
+      totals: emptyTotals,
+      certificates: [],
+      wallets: eoaProvided ? [proxyAddress, eoaAddress] : [proxyAddress]
+    };
+  }
 }
