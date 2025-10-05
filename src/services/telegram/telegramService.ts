@@ -6,6 +6,7 @@ import { getAddressBalanceWithNfts } from '../balanceService';
 import { Currency, BalanceInfo } from '../../types/commonType';
 import { chatizaloService } from '../chatizalo/chatizaloService';
 import { isValidPhoneNumber } from '../../helpers/validationHelper';
+import { getPhoneNumberVariants } from '../../helpers/formatHelper';
 import { tryIssueTokens, createOrReturnWallet } from '../walletService';
 import {
   IS_DEVELOPMENT,
@@ -171,8 +172,16 @@ export const telegramService = {
       };
     }
 
-    const user = await getUser(candidate);
+    // Try all phone variants (example: handles AR +54 9 / +54 cases)
+    const variants = await getPhoneNumberVariants(candidate);
+
+    const user = (await Promise.all(variants.map((v) => getUser(v)))).find(Boolean) as IUser | null;
+
     if (!user) {
+      Logger.info(
+        'telegramWallet',
+        `Checking phone variants for ${candidate}: ${variants.join(', ')}`
+      );
       return {
         ok: false,
         reply: {
