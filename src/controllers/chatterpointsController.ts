@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { LeaderboardResult, chatterpointsService } from '../services/chatterpointsService';
+import { ChatterPointsBusinessException } from '../exxceptions/domain/ChatterpointBusinessError';
 import {
   GameType,
   WindowUnit,
@@ -219,26 +220,24 @@ export const play = async (
       throw new Error('Missing required fields');
     }
 
-    if (gameId.toUpperCase() === 'HANGMAN') {
-      const isLetterGuess = guess.length === 1;
-      const isWordGuess = guess.length >= 2; // service validates exact word length
-      if (!isLetterGuess && !isWordGuess) {
-        Logger.warn('play', 'invalid hangman guess shape', { guess });
-        throw new Error('Hangman guess must be a single letter or a full word.');
-      }
-    }
-
-    if (!/^[A-Za-z]+$/.test(guess)) {
-      Logger.warn('play', 'guess contains non-letters', { guess });
-      throw new Error('Guess must contain only letters (A-Z).');
-    }
-
     const result = await chatterpointsService.play({ userId: channel_user_id, gameId, guess });
     Logger.info('play', 'attempt accepted', { userId: channel_user_id, gameId });
     await reply.status(200).send(result);
   } catch (err) {
+    if (err instanceof ChatterPointsBusinessException) {
+      Logger.info('play', err.message, { code: err.code });
+      await reply.status(200).send({
+        status: 'error',
+        code: err.code,
+        error: err.message
+      });
+    }
+
     Logger.error('play', (err as Error).message);
-    await reply.status(200).send({ status: 'error', error: (err as Error).message });
+    await reply.status(200).send({
+      status: 'error',
+      error: (err as Error).message
+    });
   }
 };
 

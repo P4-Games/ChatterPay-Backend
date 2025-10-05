@@ -279,6 +279,17 @@ export const getUser = async (phoneNumber: string): Promise<IUser | null> => {
 };
 
 /**
+ * Checks if a user exists based on their telegram id.
+ *
+ * @param {string} telegramId - The telegram Id to check.
+ * @returns {Promise<boolean>} True if the user exists, false otherwise.
+ */
+export const getUserByTelegramId = async (telegramId: string): Promise<IUser | null> => {
+  const user: IUser | null = await mongoUserService.getUserByTelegramId(telegramId);
+  return user;
+};
+
+/**
  * Checks if a user has any operation in progress.
  * Verifies if any field in the `operations_in_progress` object has a value greater than 0.
  *
@@ -345,3 +356,48 @@ export const getDisplayUserLabel = async (phoneNumber: string): Promise<string> 
     true
   );
 };
+
+/**
+ * Sets the `telegram_id` for a user identified by phone number.
+ * Delegates to `mongoUserService.setTelegramIdByPhone`.
+ *
+ * @param {string} phoneNumber - User's phone number.
+ * @param {string} telegramId - Telegram user ID as string (digits only).
+ * @returns {Promise<IUser | null>} The updated user or null if not found or validation fails.
+ */
+export const setUserTelegramIdByPhone = async (
+  phoneNumber: string,
+  telegramId: string
+): Promise<IUser | null> => mongoUserService.setTelegramIdByPhone(phoneNumber, telegramId);
+
+// --- Verification code wrappers (userService) ---
+
+/**
+ * Generates and stores a new 6-digit verification code for the user.
+ * Delegates to `mongoUserService.setUserVerificationCode`.
+ *
+ * @param {string} phoneNumber - Any-format phone number (will be normalized).
+ * @returns {Promise<number | null>} The newly generated code, or null if user not found/invalid.
+ */
+export const setUserVerificationCode = async (phoneNumber: string): Promise<number | null> =>
+  mongoUserService.setUserVerificationCode(phoneNumber);
+
+/**
+ * Retrieves the stored 6-digit verification code for the user, if any.
+ * Delegates to `mongoUserService.getUserVerificationCode`.
+ *
+ * @param {string} phoneNumber - Any-format phone number (will be normalized).
+ * @returns {Promise<number | null>} The stored code, or null if not set/not found/invalid.
+ */
+export const getUserVerificationCode = async (phoneNumber: string): Promise<number | null> =>
+  mongoUserService.getUserVerificationCode(phoneNumber);
+
+/**
+ * Clears the stored verification code for the user (sets to null).
+ * Delegates to `mongoUserService.clearUserVerificationCode`.
+ *
+ * @param {string} phoneNumber - Any-format phone number (will be normalized).
+ * @returns {Promise<boolean>} True if a document was updated, false otherwise.
+ */
+export const clearUserVerificationCode = async (phoneNumber: string): Promise<boolean> =>
+  mongoUserService.clearUserVerificationCode(phoneNumber);

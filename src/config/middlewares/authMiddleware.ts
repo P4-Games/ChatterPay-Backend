@@ -1,7 +1,12 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { FRONTEND_TOKEN, CHATIZALO_TOKEN } from '../constants';
 import { returnErrorResponse } from '../../helpers/requestHelper';
+import {
+  FRONTEND_TOKEN,
+  CHATIZALO_TOKEN,
+  TELEGRAM_BOT_API_KEY,
+  TELEGRAM_WEBHOOK_PATH
+} from '../constants';
 
 /**
  * Represents the possible token types that can be verified.
@@ -74,46 +79,77 @@ const isPublicRoute = (route: string): boolean =>
   });
 
 /**
- * Middleware function to authenticate requests using a Bearer token.
+ * Checks whether the incoming request targets the Telegram webhook route.
  *
- * This function checks if the request includes a valid Authorization token in the `Authorization` header.
- * If the token is valid, it adds the token type to the request headers. If not, it sends a 401 Unauthorized response.
+ * @param {string} route - The request URL.
+ * @returns {boolean} True if the route is the Telegram webhook.
+ */
+const isTelegramWebhookRoute = (route: string): boolean => route === TELEGRAM_WEBHOOK_PATH;
+
+/**
+ * Fastify auth middleware.
  *
- * @param {FastifyRequest} request - The Fastify request object.
- * @param {FastifyReply} reply - The Fastify reply object.
- * @returns {Promise<void>}
+ * Behavior:
+ * - For the Telegram webhook route:
+ *   - If `TELEGRAM_SECRET_TOKEN` is set, validates `X-Telegram-Bot-Api-Secret-Token`.
+ *   - If not set, allows the request (useful for local dev without secret).
+ * - For any other route:
+ *   - Skips auth if the route is public.
+ *   - Requires `Authorization: Bearer <token>` and validates it against known tokens.
  *
- * @throws {FastifyReply} Sends a 401 response if authentication fails.
- *
- * @description
- * This middleware function performs the following steps:
- * 1. Extracts the authorization header from the request.
- * 2. Checks if the header exists and starts with 'Bearer '.
- * 3. Verifies the token using the `verifyToken` function.
- * 4. If the token is valid, adds the token type to the request headers.
- * 5. If any step fails, it sends a 401 response with an error message.
+ * @param {FastifyRequest} request - Fastify request.
+ * @param {FastifyReply} reply - Fastify reply.
+ * @returns {Promise<void>} Resolves when the request can proceed or after replying with an error.
  */
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  // Skip authentication for public routes (ping, opensea metadata, etc.)
-  if (isPublicRoute(request.url)) {
+  const { url } = request;
+
+  // 1) Telegram webhook: validate optional secret header, skip Bearer.
+  if (isTelegramWebhookRoute(url)) {
+    const expected = TELEGRAM_BOT_API_KEY;
+
+    const got = request.headers['x-telegram-bot-api-secret-token'];
+    if (typeof got !== 'string' || got !== expected) {
+      await returnErrorResponse(
+        'authMiddleware',
+        '',
+        reply,
+        401,
+        'Unauthorized Telegram webhook request'
+      );
+      return;
+    }
     return;
   }
 
+  // 2) Public routes: skip auth
+  if (isPublicRoute(url)) {
+    return;
+  }
+
+  // 3) Bearer auth for the rest
   const authHeader: string | undefined = request.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    returnErrorResponse('authMiddleware', '', reply, 401, 'Authentication token was not provided');
+    await returnErrorResponse(
+      'authMiddleware',
+      '',
+      reply,
+      401,
+      'Authentication token was not provided'
+    );
     return;
   }
 
   const token: string = authHeader.split(' ')[1];
-
   const tokenType: TokenResponse = await verifyToken(token);
 
   if (!tokenType) {
-    returnErrorResponse('authMiddleware', '', reply, 401, 'Invalid Authorization Token');
+    await returnErrorResponse('authMiddleware', '', reply, 401, 'Invalid Authorization Token');
     return;
   }
 
-  request.headers.tokenType = tokenType;
+  // If you need to pass tokenType downstream, prefer attaching it to request (typed) rather than headers.
+  // Minimal change: keep behavior but avoid mutating headers shape.
+  (request as FastifyRequest & { tokenType?: TokenResponse }).tokenType = tokenType;
 }

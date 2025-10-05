@@ -154,3 +154,10 @@ export type NotificationLanguage = (typeof notificationLanguages)[number];
 
 export const gamesLanguages = systemLanguages;
 export type gamesLanguage = (typeof gamesLanguages)[number];
+
+export type AddressBalanceWithNfts = {
+  balances: BalanceInfo[];
+  totals: Record<Currency, number>;
+  certificates: unknown[];
+  wallets: string[];
+};
