@@ -7,6 +7,7 @@ import { Logger } from '../helpers/loggerHelper';
 import { cacheService } from './cache/cacheService';
 import { getDisplayUserLabel } from './userService';
 import { mongoUserService } from './mongo/mongoUserService';
+import { ChatterPointsBusinessException } from '../exxceptions/domain/ChatterpointBusinessError';
 import {
   CacheNames,
   gamesLanguage,
@@ -670,7 +671,7 @@ async function playWordle(
   // Select answer word in requested language (default "en")
   const answerRaw = period.word[lang];
   if (!answerRaw) {
-    throw new Error(`No word available for language=${lang} in this period`);
+    throw ChatterPointsBusinessException.noWordForLanguage(lang);
   }
 
   const answer = answerRaw.toLowerCase();
@@ -679,7 +680,7 @@ async function playWordle(
   const wordLen = wordleCfg.settings.wordLength;
 
   if (guess.length !== wordLen) {
-    throw new Error(`Invalid guess length. Expected ${wordLen} letters.`);
+    throw ChatterPointsBusinessException.invalidGuessLength(wordLen);
   }
 
   const cleanGuess = normalizeInput(req.guess);
@@ -1400,6 +1401,32 @@ export const chatterpointsService = {
         cycle,
         period
       );
+    }
+
+    if (req.gameId.toUpperCase() === 'HANGMAN') {
+      const isLetterGuess = req.guess.length === 1;
+      const isWordGuess = req.guess.length >= 2; // service validates exact word length
+      if (!isLetterGuess && !isWordGuess) {
+        Logger.warn('play', 'invalid hangman guess shape', req.guess);
+        return withMeta({
+          status: 'ok',
+          periodClosed: false,
+          won: false,
+          points: 0,
+          display_info: { message: 'Hangman guess must be a single letter or a full word.' }
+        });
+      }
+    }
+
+    if (!/^[A-Za-z]+$/.test(req.guess)) {
+      Logger.debug('play', 'guess contains non-letters', req.guess);
+      return withMeta({
+        status: 'ok',
+        periodClosed: false,
+        won: false,
+        points: 0,
+        display_info: { message: 'Guess must contain only letters (A-Z).' }
+      });
     }
 
     // Duplicate guess guard
