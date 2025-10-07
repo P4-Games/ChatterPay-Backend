@@ -178,9 +178,10 @@ const processAlchemyExternalDeposits = async (
             null,
             user.phone_number,
             formattedValue,
-            '',
-            tokenInfo.symbol
+            tokenInfo.symbol,
+            ''
           );
+
           Logger.debug(
             'processAlchemyExternalDeposit',
             `Notification sent successfully for deposit ${dep.txHash} to user ${user.phone_number}`
@@ -306,8 +307,8 @@ async function processTheGraphExternalDeposit(
           null,
           user.phone_number,
           formattedValue,
-          '',
-          tokenInfo.symbol
+          tokenInfo.symbol,
+          ''
         );
         Logger.debug(
           'processExternalDeposit',
