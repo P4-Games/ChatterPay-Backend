@@ -59,7 +59,7 @@ BLACKLIST_IPS=''
 MAX_REQUESTS_PER_MINUTE=50
 
 # Network
-DEFAULT_CHAIN_ID=421614
+DEFAULT_CHAIN_ID=534351
 
 # Swap
 SWAP_SLIPPAGE_CONFIG_STABLE=300
@@ -101,3 +101,36 @@ CDP2=
 
 # telegram bot
 TELEGRAM_BOT_API_KEY=''
+
+# Selects which provider is used to fetch and process external deposits.
+# - 'alchemy': uses local collection `external_deposits` populated by Alchemy webhooks.
+# - 'thegraph': uses The Graph subgraph API for historical analytics.
+EXTERNAL_DEPOSITS_PROVIDER='alchemy' | 'thegraph'
+
+
+# Authentication token for the Alchemy Admin API (used to manage webhook variables).
+# This token is generated from the Alchemy Dashboard → Account Settings → API Keys.
+ALCHEMY_AUTH_TOKEN=''
+
+# Optional signing key for verifying webhook signatures received from Alchemy.
+# Ensures payload integrity and prevents spoofed webhook events.
+ALCHEMY_SIGNING_KEY=''
+
+# Header name expected in webhook requests from Alchemy for authentication.
+# Usually `x-alchemy-signature` or a custom header defined in your webhook settings.
+ALCHEMY_WEBHOOK_HEADER_API_KEY=''
+
+# These three variables correspond to *Alchemy Dashboard Variable IDs* used by your webhook.
+# They are created automatically when a webhook is configured in Alchemy.
+# Each variable stores dynamic values (wallets, tokens, topics) that can be updated
+# programmatically from your backend through the Alchemy Admin API.
+# The IDs themselves are static (they do not change unless the webhook is recreated).
+
+# → ALCHEMY_VAR_WALLETS_ID: variable holding the list of wallet addresses to monitor.
+ALCHEMY_VAR_WALLETS_ID=''
+
+# → ALCHEMY_VAR_WALLETS_TOPIC_ID: variable that references the wallet-topic binding used by the webhook.
+ALCHEMY_VAR_WALLETS_TOPIC_ID=''
+
+# → ALCHEMY_VAR_TOKENS_ID: variable holding the list of token contract addresses to monitor.
+ALCHEMY_VAR_TOKENS_ID=''
