@@ -1,11 +1,15 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
+import { Logger } from '../../helpers/loggerHelper';
 import { returnErrorResponse } from '../../helpers/requestHelper';
+import { verifyAlchemySignature } from '../../helpers/alchemyHelper';
 import {
   FRONTEND_TOKEN,
   CHATIZALO_TOKEN,
   TELEGRAM_BOT_API_KEY,
-  TELEGRAM_WEBHOOK_PATH
+  TELEGRAM_WEBHOOK_PATH,
+  ALCHEMY_WEBHOOKS_PATH,
+  ALCHEMY_WEBHOOK_HEADER_API_KEY
 } from '../constants';
 
 /**
@@ -61,22 +65,31 @@ const PUBLIC_ROUTES = [
  * @param route - The route to check.
  * @returns `true` if the route is public, `false` otherwise.
  */
-const isPublicRoute = (route: string): boolean =>
-  PUBLIC_ROUTES.some((publicRoute) => {
-    if (publicRoute.includes('*')) {
-      return route.startsWith(publicRoute.replace(/\*/g, ''));
+const isPublicRoute = (route: string): boolean => {
+  const cleanRoute = route.replace(/\/+$/, ''); // remove trailing slash if present
+
+  return PUBLIC_ROUTES.some((publicRoute) => {
+    const cleanPublic = publicRoute.replace(/\/+$/, '');
+
+    if (cleanPublic.includes('*')) {
+      const base = cleanPublic.replace(/\*/g, '');
+      return (
+        cleanRoute === base.replace(/\/$/, '') || // exact match without trailing slash
+        cleanRoute.startsWith(base) // match subpaths
+      );
     }
-    if (publicRoute.includes('<id>')) {
-      // Match exactly /nft/ followed by numbers only and nothing after
-      const nftIdMatch = route.match(/^\/nft\/(\d+)$/);
+
+    if (cleanPublic.includes('<id>')) {
+      const nftIdMatch = cleanRoute.match(/^\/nft\/(\d+)$/);
       if (!nftIdMatch) return false;
 
-      // Ensure there are no letters in the id
       const id = nftIdMatch[1];
       return /^\d+$/.test(id);
     }
-    return publicRoute === route;
+
+    return cleanPublic === cleanRoute;
   });
+};
 
 /**
  * Checks whether the incoming request targets the Telegram webhook route.
@@ -84,7 +97,23 @@ const isPublicRoute = (route: string): boolean =>
  * @param {string} route - The request URL.
  * @returns {boolean} True if the route is the Telegram webhook.
  */
-const isTelegramWebhookRoute = (route: string): boolean => route === TELEGRAM_WEBHOOK_PATH;
+const isTelegramWebhookRoute = (route: string): boolean =>
+  route === TELEGRAM_WEBHOOK_PATH || route === TELEGRAM_WEBHOOK_PATH.replace(/\/$/, '');
+
+/**
+ * Checks whether the incoming request targets any Alchemy webhook route.
+ *
+ * Matches both the base path (/webhooks/alchemy) and subpaths
+ * like /webhooks/alchemy/deposits, /webhooks/alchemy/factory, etc.
+ *
+ * @param route - The request URL.
+ * @returns {boolean} True if the route starts with the Alchemy webhook base path.
+ */
+const isAlchemyWebhookRoute = (route: string): boolean => {
+  const cleanRoute = route.replace(/\/+$/, ''); // remove trailing slashes
+  const cleanBase = ALCHEMY_WEBHOOKS_PATH.replace(/\/+$/, '');
+  return cleanRoute === cleanBase || cleanRoute.startsWith(`${cleanBase}/`);
+};
 
 /**
  * Fastify auth middleware.
@@ -104,7 +133,7 @@ const isTelegramWebhookRoute = (route: string): boolean => route === TELEGRAM_WE
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const { url } = request;
 
-  // 1) Telegram webhook: validate optional secret header, skip Bearer.
+  // Telegram webhook: validate optional secret header, skip Bearer.
   if (isTelegramWebhookRoute(url)) {
     const expected = TELEGRAM_BOT_API_KEY;
 
@@ -122,8 +151,61 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     return;
   }
 
+  /**
+   * Alchemy webhook authentication and signature verification
+   */
+  if (isAlchemyWebhookRoute(url)) {
+    const alchemyHeaderSignature = request.headers['x-alchemy-signature'] as string | undefined;
+    const alchemyHeaderApiKey = request.headers['x-api-key'] as string | undefined;
+
+    if (!alchemyHeaderSignature || !alchemyHeaderApiKey) {
+      await returnErrorResponse('authMiddleware', '', reply, 401, 'Missing Alchemy headers');
+      return;
+    }
+
+    // Validate Alchemy Webhook header API key for consistency
+    if (ALCHEMY_WEBHOOK_HEADER_API_KEY && alchemyHeaderApiKey !== ALCHEMY_WEBHOOK_HEADER_API_KEY) {
+      Logger.warn('authMiddleware', 'Alchemy API key mismatch', {
+        expected: `${ALCHEMY_WEBHOOK_HEADER_API_KEY.slice(0, 8)}***`,
+        received: `${alchemyHeaderApiKey.slice(0, 8)}***`,
+        temp: alchemyHeaderApiKey
+      });
+      await returnErrorResponse('authMiddleware', '', reply, 401, 'Invalid Alchemy API key');
+      return;
+    }
+
+    // Extract raw request body
+    const rawBody = (request.rawBody as string | undefined) ?? '';
+
+    // Skip signature validation if body is empty (e.g. /webhooks/alchemy/health pings)
+    if (rawBody.length === 0) {
+      Logger.debug('authMiddleware', 'Skipping Alchemy signature verification (empty body)');
+      return;
+    }
+
+    // Verify the signature using your private signing key
+    const isValid = verifyAlchemySignature(rawBody, alchemyHeaderSignature);
+    if (!isValid) {
+      Logger.warn('authMiddleware', 'Alchemy signature verification failed', {
+        rawBodyLength: rawBody.length,
+        rawBodyPreview: rawBody.slice(0, 120),
+        receivedSignature: `${alchemyHeaderSignature.slice(0, 12)}***`,
+        temp: alchemyHeaderSignature
+      });
+      await returnErrorResponse('authMiddleware', '', reply, 401, 'Invalid Alchemy signature');
+      return;
+    }
+
+    Logger.debug('authMiddleware', 'Valid Alchemy webhook verified successfully');
+    return;
+  }
+
   // 2) Public routes: skip auth
   if (isPublicRoute(url)) {
+    Logger.debug(
+      'authMiddleware',
+      `Public route accessed: ${url}, headers: ${JSON.stringify(request.headers, null, 2)}`
+    );
     return;
   }
 
