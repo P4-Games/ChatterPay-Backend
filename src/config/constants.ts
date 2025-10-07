@@ -50,6 +50,7 @@ const {
   ALCHEMY_VAR_TOKENS_ID,
   ALCHEMY_WEBHOOK_HEADER_API_KEY,
   ALCHEMY_ERC20_TRANSFER_SIGNATURE = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+  ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY: alchemyValidateWebhookHeaderApiKey = 'false',
   EXTERNAL_DEPOSITS_PROVIDER = 'thegraph',
   FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: fastifyRefreshNetworksIntervalMs = 86400000,
   FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000,
@@ -222,8 +223,11 @@ export const EXTERNAL_DEPOSITS_PROVIDER_IS_ALCHEMY =
   EXTERNAL_DEPOSITS_PROVIDER.toLowerCase() === 'alchemy';
 export const EXERNAL_DEPOSITS_PROVIDER_IS_THEGRAPH =
   EXTERNAL_DEPOSITS_PROVIDER.toLowerCase() === 'thegraph';
+export const ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY: boolean =
+  alchemyValidateWebhookHeaderApiKey.toLowerCase() === 'true';
 
 export const TELEGRAM_WEBHOOK_PATH = '/telegram/webhook';
+
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
 export const CORS_ORIGINS_EXCEPTIONS: string = `/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH}`;
 

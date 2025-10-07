@@ -9,7 +9,8 @@ import {
   TELEGRAM_BOT_API_KEY,
   TELEGRAM_WEBHOOK_PATH,
   ALCHEMY_WEBHOOKS_PATH,
-  ALCHEMY_WEBHOOK_HEADER_API_KEY
+  ALCHEMY_WEBHOOK_HEADER_API_KEY,
+  ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY
 } from '../constants';
 
 /**
@@ -158,20 +159,46 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     const alchemyHeaderSignature = request.headers['x-alchemy-signature'] as string | undefined;
     const alchemyHeaderApiKey = request.headers['x-api-key'] as string | undefined;
 
-    if (!alchemyHeaderSignature || !alchemyHeaderApiKey) {
-      await returnErrorResponse('authMiddleware', '', reply, 401, 'Missing Alchemy headers');
+    // Verify that at least the signature header exists
+    if (!alchemyHeaderSignature) {
+      await returnErrorResponse(
+        'authMiddleware',
+        '',
+        reply,
+        401,
+        'Missing Alchemy signature header'
+      );
       return;
     }
 
-    // Validate Alchemy Webhook header API key for consistency
-    if (ALCHEMY_WEBHOOK_HEADER_API_KEY && alchemyHeaderApiKey !== ALCHEMY_WEBHOOK_HEADER_API_KEY) {
-      Logger.warn('authMiddleware', 'Alchemy API key mismatch', {
-        expected: `${ALCHEMY_WEBHOOK_HEADER_API_KEY.slice(0, 8)}***`,
-        received: `${alchemyHeaderApiKey.slice(0, 8)}***`,
-        temp: alchemyHeaderApiKey
-      });
-      await returnErrorResponse('authMiddleware', '', reply, 401, 'Invalid Alchemy API key');
-      return;
+    // Conditionally validate the x-api-key header based on environment flag
+    if (ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY) {
+      if (!alchemyHeaderApiKey) {
+        await returnErrorResponse(
+          'authMiddleware',
+          '',
+          reply,
+          401,
+          'Missing Alchemy API key header'
+        );
+        return;
+      }
+
+      // Always compare, even if ALCHEMY_WEBHOOK_HEADER_API_KEY is empty
+      const expected = ALCHEMY_WEBHOOK_HEADER_API_KEY || '';
+      const received = alchemyHeaderApiKey || '';
+
+      if (received !== expected) {
+        Logger.warn('authMiddleware', 'Alchemy API key mismatch', {
+          expected: expected ? `${expected.slice(0, 8)}***` : '(empty)',
+          received: received ? `${received.slice(0, 8)}***` : '(empty)',
+          temp: alchemyHeaderApiKey
+        });
+        await returnErrorResponse('authMiddleware', '', reply, 401, 'Invalid Alchemy API key');
+        return;
+      }
+    } else {
+      Logger.debug('authMiddleware', 'Skipping Alchemy API key validation (disabled by env flag)');
     }
 
     // Extract raw request body
@@ -183,14 +210,13 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
       return;
     }
 
-    // Verify the signature using your private signing key
+    // Verify the HMAC signature using the private signing key
     const isValid = verifyAlchemySignature(rawBody, alchemyHeaderSignature);
     if (!isValid) {
       Logger.warn('authMiddleware', 'Alchemy signature verification failed', {
         rawBodyLength: rawBody.length,
         rawBodyPreview: rawBody.slice(0, 120),
-        receivedSignature: `${alchemyHeaderSignature.slice(0, 12)}***`,
-        temp: alchemyHeaderSignature
+        receivedSignature: `${alchemyHeaderSignature.slice(0, 12)}***`
       });
       await returnErrorResponse('authMiddleware', '', reply, 401, 'Invalid Alchemy signature');
       return;
