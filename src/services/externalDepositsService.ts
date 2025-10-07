@@ -174,7 +174,7 @@ const processAlchemyExternalDeposits = async (
           const formattedValue = value.toFixed(displayDecimals);
 
           await sendReceivedTransferNotification(
-            dep.to,
+            dep.from,
             null,
             user.phone_number,
             formattedValue,
@@ -303,7 +303,7 @@ async function processTheGraphExternalDeposit(
         const formattedValue = value.toFixed(displayDecimals);
 
         await sendReceivedTransferNotification(
-          transfer.to,
+          transfer.from,
           null,
           user.phone_number,
           formattedValue,
