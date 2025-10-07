@@ -33,6 +33,7 @@ describe('User Model', () => {
           wallet_proxy: '0xProxyAddress',
           wallet_eoa: '0xEoaAddress',
           created_with_chatterpay_proxy_address: '0xChatterpayProxyAddress',
+          alchemy_registered: false,
           chain_id: 1,
           status: 'active'
         } as IUserWallet
@@ -101,6 +102,7 @@ describe('User Model', () => {
           wallet_proxy: '0xProxy1',
           wallet_eoa: '0xEoa1',
           created_with_chatterpay_proxy_address: '0xChatterpayProxyAddress1',
+          alchemy_registered: false,
           chain_id: 1,
           status: 'active'
         } as IUserWallet,
@@ -108,6 +110,7 @@ describe('User Model', () => {
           wallet_proxy: '0xProxy2',
           wallet_eoa: '0xEoa2',
           created_with_chatterpay_proxy_address: '0xChatterpayProxyAddress2',
+          alchemy_registered: false,
           chain_id: 2,
           status: 'inactive'
         } as IUserWallet
