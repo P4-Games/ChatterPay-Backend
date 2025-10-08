@@ -191,8 +191,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
       if (received !== expected) {
         Logger.warn('authMiddleware', 'Alchemy API key mismatch', {
           expected: expected ? `${expected.slice(0, 8)}***` : '(empty)',
-          received: received ? `${received.slice(0, 8)}***` : '(empty)',
-          temp: alchemyHeaderApiKey
+          received: received ? `${received.slice(0, 8)}***` : '(empty)'
         });
         await returnErrorResponse('authMiddleware', '', reply, 401, 'Invalid Alchemy API key');
         return;
