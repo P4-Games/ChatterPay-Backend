@@ -39,7 +39,13 @@ export async function originMiddleware(
 
   // Check if the request URL contains any exception paths
   const requestPath = request.url.split('?')[0]; // Extract only the path without query parameters
-  if (corsExceptions.some((exception) => requestPath.includes(exception))) {
+  if (
+    corsExceptions.some((exception) => {
+      const cleanReq = requestPath.replace(/\/+$/, ''); // remove trailing slash
+      const cleanExc = exception.replace(/\/+$/, '');
+      return cleanReq === cleanExc || cleanReq.startsWith(`${cleanExc}/`);
+    })
+  ) {
     return;
   }
 

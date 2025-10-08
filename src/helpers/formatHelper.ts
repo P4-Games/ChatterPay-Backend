@@ -81,3 +81,19 @@ export async function getPhoneNumberVariants(phone: string): Promise<string[]> {
 
   return Array.from(variants);
 }
+
+/**
+ * Converts a raw on-chain token amount (big integer string) into a human-readable decimal value.
+ *
+ * This helper divides the raw integer representation (e.g. wei, smallest token unit)
+ * by `10 ** decimals` to obtain the standard user-facing numeric amount.
+ * Use this only for display or lightweight arithmetic, as large values may lose precision in JS `number`.
+ *
+ * @param {string} rawValue - The raw integer amount as a string (e.g. "1000000000000000000").
+ * @param {number} decimals - Number of decimals the token uses (e.g. 18 for ETH/USDT).
+ * @returns {number} The value expressed in whole tokens with decimals applied.
+ */
+export const formatTokenAmount = (rawValue: string, decimals: number): number => {
+  const divisor = 10 ** decimals;
+  return Number(rawValue) / divisor;
+};

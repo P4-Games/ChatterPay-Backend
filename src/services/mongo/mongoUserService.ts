@@ -439,5 +439,11 @@ export const mongoUserService = {
       );
       return false; // avoid throw
     }
+  },
+
+  async getUserByWalletProxyInsensitive(address: string) {
+    return UserModel.findOne({
+      'wallets.wallet_proxy': { $regex: new RegExp(`^${address}$`, 'i') }
+    }).lean();
   }
 };

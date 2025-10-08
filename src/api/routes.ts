@@ -9,6 +9,7 @@ import { pingRoutes } from './pingRoutes';
 import { rampRoutes } from './rampRoutes';
 import uploadRoutes from './uploadRoutes';
 import supportRoutes from './supportRoutes';
+import webhookRoutes from './alchemyRoutes';
 import { walletRouter } from './walletRoutes';
 import telegramRoutes from './telegramRoutes';
 import { balanceRoutes } from './balanceRoutes';
@@ -35,4 +36,5 @@ export async function setupRoutes(server: FastifyInstance): Promise<void> {
   server.register(aaveRoutes);
   server.register(chatterpointsRoutes);
   server.register(telegramRoutes);
+  server.register(webhookRoutes);
 }

@@ -6,12 +6,19 @@ import { Logger } from '../helpers/loggerHelper';
 import { getTokenInfo } from './blockchainService';
 import Token, { IToken } from '../models/tokenModel';
 import { TransactionData } from '../types/commonType';
+import { formatTokenAmount } from '../helpers/formatHelper';
 import { mongoTokenService } from './mongo/mongoTokenService';
 import Blockchain, { IBlockchain } from '../models/blockchainModel';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
-import { sendReceivedTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-import { THE_GRAPH_API_KEY, THE_GRAPH_EXTERNAL_DEPOSITS_URL } from '../config/constants';
+import { sendReceivedExternalTransferNotification } from './notificationService';
+import { mongoExternalDepositsService } from './mongo/mongoExternalDepositsService';
+import {
+  THE_GRAPH_API_KEY,
+  EXTERNAL_DEPOSITS_PROVIDER,
+  THE_GRAPH_EXTERNAL_DEPOSITS_URL,
+  EXTERNAL_DEPOSITS_PROVIDER_IS_ALCHEMY
+} from '../config/constants';
 
 /**
  * GraphQL query to fetch external deposits.
@@ -49,13 +56,176 @@ interface Transfer {
 }
 
 /**
- * Processes a single external deposit.
+ * Processes pending external deposits from the Alchemy provider and records them in the `transactions` collection.
+ *
+ * This function mirrors the logic used in `processTheGraphExternalDeposit`, but sources deposits
+ * from the local `external_deposits` schema populated by Alchemy webhooks.
+ *
+ * Business rules:
+ * - Validates that the referenced token is listed and active for the given chain.
+ * - Matches each deposit to a registered user by `wallets.wallet_proxy` (case-insensitive).
+ * - Skips already processed or duplicated transactions (`trx_hash` exists).
+ * - Converts raw on-chain values (BigInt strings) to numeric amounts using token decimals.
+ * - Inserts valid deposits as `type: "external"` and `status: "completed"` in the `transactions` collection.
+ * - Marks each processed record in `external_deposits` as `status: "processed"`.
+ * - Optionally sends user notifications for new deposits when `sendNotification` is true.
+ *
  * @async
- * @param {Transfer} transfer - The transfer object to process.
- * @param {number} chanId - The chain ID where the transfer occurred.
- * @param {boolean} sendNotification - Enable / Disable send external deposit notification
+ * @param {number} chainId - The blockchain network ID being processed.
+ * @param {boolean} sendNotification - Whether to send deposit notifications to matched users.
+ * @returns {Promise<string>} A summary message indicating how many deposits were inserted or skipped.
  */
-async function processExternalDeposit(
+const processAlchemyExternalDeposits = async (
+  chainId: number,
+  sendNotification: boolean
+): Promise<string> => {
+  const deposits = await mongoExternalDepositsService.getUnprocessedAlchemyDeposits(chainId);
+  if (deposits.length === 0) {
+    return 'No external deposits pending for processing (alchemy).';
+  }
+
+  type Totals = { inserted: number; skipped: number };
+
+  const totals = await deposits.reduce<Promise<Totals>>(
+    async (prevPromise, dep) => {
+      const acc = await prevPromise;
+
+      try {
+        // Normalize token to satisfy type safety
+        const tokenAddress = dep.token ?? '';
+        const tokenObject = tokenAddress
+          ? await mongoTokenService.getToken(tokenAddress, chainId)
+          : null;
+
+        if (!tokenObject) {
+          Logger.warn(
+            'processAlchemyExternalDeposit',
+            `External deposit rejected: Token ${dep.token} is not listed for chain ${chainId}`
+          );
+          await mongoExternalDepositsService.markAsProcessedById(String(dep._id));
+          return { inserted: acc.inserted, skipped: acc.skipped + 1 };
+        }
+
+        const normalizedTo = dep.to.toLowerCase();
+
+        // Find users with at least one wallet_proxy that matches (case-insensitive)
+        const candidates = await UserModel.find({
+          'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') }
+        });
+
+        const user = candidates.find((u) =>
+          u.wallets.some((w) => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
+        );
+
+        if (!user) {
+          Logger.warn(
+            'processAlchemyExternalDeposit',
+            `No user found with wallet: ${dep.to}. Deposit not processed: ${dep.txHash}`
+          );
+          await mongoExternalDepositsService.markAsProcessedById(String(dep._id));
+          return { inserted: acc.inserted, skipped: acc.skipped + 1 };
+        }
+
+        const value = formatTokenAmount(dep.value, dep.decimals);
+
+        const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+        const blockchainTokens = await Token.find({ chain_id: chainId });
+        const tokenInfo: IToken | undefined = getTokenInfo(
+          networkConfig,
+          blockchainTokens,
+          tokenAddress
+        );
+
+        if (!tokenInfo) {
+          Logger.warn(
+            'processAlchemyExternalDeposit',
+            `Token info not found for address: ${tokenAddress}`
+          );
+          await mongoExternalDepositsService.markAsProcessedById(String(dep._id));
+          return { inserted: acc.inserted, skipped: acc.skipped + 1 };
+        }
+
+        // Skip if transaction already exists
+        const already = await mongoTransactionService.existsByHash(dep.txHash);
+        if (already) {
+          await mongoExternalDepositsService.markAsProcessedById(String(dep._id));
+          return { inserted: acc.inserted, skipped: acc.skipped + 1 };
+        }
+
+        const transactionData: TransactionData = {
+          tx: dep.txHash,
+          walletFrom: getAddress(dep.from),
+          walletTo: getAddress(dep.to),
+          amount: value,
+          fee: 0,
+          token: tokenInfo.symbol,
+          type: 'deposit',
+          status: 'completed',
+          chain_id: chainId,
+          date: new Date(),
+          user_notes: ''
+        };
+
+        await mongoTransactionService.saveTransaction(transactionData);
+        await mongoExternalDepositsService.markAsProcessedById(String(dep._id));
+
+        if (sendNotification) {
+          const displayDecimals = tokenInfo.display_decimals ?? tokenInfo.decimals ?? 2;
+          const formattedValue = value.toFixed(displayDecimals);
+
+          await sendReceivedExternalTransferNotification(
+            dep.from,
+            null,
+            user.phone_number,
+            formattedValue,
+            tokenInfo.symbol,
+            ''
+          );
+
+          Logger.debug(
+            'processAlchemyExternalDeposit',
+            `Notification sent successfully for deposit ${dep.txHash} to user ${user.phone_number}`
+          );
+        }
+
+        return { inserted: acc.inserted + 1, skipped: acc.skipped };
+      } catch (error) {
+        Logger.error(
+          'processAlchemyExternalDeposit',
+          `Error processing deposit ${dep.txHash}`,
+          (error as Error).message
+        );
+        return acc;
+      }
+    },
+    Promise.resolve({ inserted: 0, skipped: 0 })
+  );
+
+  return `Processed external deposits (alchemy). Inserted: ${totals.inserted}. Skipped: ${totals.skipped}.`;
+};
+
+/**
+ * Processes a single external deposit detected via **The Graph** subgraph.
+ *
+ * This function handles deposits obtained from on-chain event indexing through The Graph,
+ * transforming them into `transactions` entries used by the ChatterPay ecosystem.
+ *
+ * Business rules:
+ * - Validates that the referenced token exists and is active for the current chain.
+ * - Matches the recipient address (`transfer.to`) to a registered user via `wallets.wallet_proxy` (case-insensitive).
+ * - Extracts the actual transaction hash from `transfer.id` (first 66 characters, `0x` + 64 hex digits).
+ * - Converts the raw `transfer.value` to a human-readable amount using the token's decimals.
+ * - Inserts the transaction with `type: "deposit"` and `status: "completed"`.
+ * - Optionally sends a notification to the recipient if `sendNotification` is enabled.
+ * - Skips processing if no user is found or if the token is not recognized.
+ *
+ * @async
+ * @param {Transfer} transfer - The raw transfer object obtained from The Graph query.
+ * @param {number} chanId - The blockchain network ID where the transfer occurred.
+ * @param {boolean} sendNotification - Whether to send a deposit notification to the matched user.
+ * @returns {Promise<void>} Resolves when processing is completed; logs warnings for skipped deposits.
+ */
+async function processTheGraphExternalDeposit(
   transfer: Transfer,
   chanId: number,
   sendNotification: boolean
@@ -129,13 +299,16 @@ async function processExternalDeposit(
       await mongoTransactionService.saveTransaction(transactionData);
 
       if (sendNotification) {
-        await sendReceivedTransferNotification(
-          transfer.to,
+        const displayDecimals = tokenInfo.display_decimals ?? tokenInfo.decimals ?? 2;
+        const formattedValue = value.toFixed(displayDecimals);
+
+        await sendReceivedExternalTransferNotification(
+          transfer.from,
           null,
           user.phone_number,
-          value.toString(),
-          '',
-          tokenInfo.symbol
+          formattedValue,
+          tokenInfo.symbol,
+          ''
         );
         Logger.debug(
           'processExternalDeposit',
@@ -155,33 +328,52 @@ async function processExternalDeposit(
 }
 
 /**
- * Fetches and processes external deposits for users in the ecosystem.
+ * Fetches and processes external deposits detected through **The Graph** subgraph integration.
+ *
+ * This function queries the configured GraphQL endpoint to retrieve recent transfer events,
+ * filters out internal protocol transactions (Uniswap router and pool addresses), and delegates
+ * processing of each valid deposit to `processTheGraphExternalDeposit()`.
+ *
+ * Business rules:
+ * - Executes only when the active external deposits provider is **The Graph**.
+ * - Skips execution entirely when `EXTERNAL_DEPOSITS_PROVIDER_IS_ALCHEMY` is enabled.
+ * - Reads the last processed block timestamp from the `Blockchain` document to avoid duplicates.
+ * - Fetches new transfers via `THE_GRAPH_QUERY_EXTERNAL_DEPOSITS` using pagination variables.
+ * - Filters out transfers originating from router or pool addresses.
+ * - Persists updates to `blockchain.externalDeposits.lastBlockProcessed` after successful sync.
  *
  * @async
- * @param {string} routerAddress - The address of the Uniswap V2 router (used to filter internal transfers).
- * @param {string} poolAddress - The address of the Uniswap v3 Pool (used to filter internal transfers)
- * @param {number} chainId - The ID of the blockchain network being processed.
- * @param {boolean} sendNotification - Enable / Disable send external deposit notification
- * @returns {Promise<string>} A message indicating the result of the processing.
+ * @param {string} routerAddress - Uniswap V2 router address, used to exclude internal transfers.
+ * @param {string} poolAddress - Uniswap V3 pool address, used to exclude internal transfers.
+ * @param {number} chainId - Blockchain network ID to process.
+ * @param {boolean} sendNotification - Whether to send deposit notifications for matched users.
+ * @returns {Promise<string>} Summary message indicating blocks or deposits processed.
  */
-export async function fetchExternalDeposits(
+async function processThegraphExternalDeposits(
   routerAddress: string,
   poolAddress: string,
   chainId: number,
   sendNotification: boolean
 ) {
+  // Guard: Only process if The Graph is the active provider
+  if (EXTERNAL_DEPOSITS_PROVIDER_IS_ALCHEMY) {
+    const message = `External deposits processing skipped - provider is ${EXTERNAL_DEPOSITS_PROVIDER}`;
+    Logger.warn('processThegraphExternalDeposits', message);
+    return message;
+  }
+
   try {
     const blockchain = await Blockchain.findOne({ chainId });
 
     if (!blockchain) {
       const message = `No network found for chain_id ${chainId}`;
-      Logger.error('fetchExternalDeposits', message);
+      Logger.error('processThegraphExternalDeposits', message);
       return message;
     }
 
     if (!blockchain.externalDeposits) {
       const message = `Missing externalDeposits structure in bdd for network ${chainId}`;
-      Logger.error('fetchExternalDeposits', message);
+      Logger.error('processThegraphExternalDeposits', message);
       return message;
     }
 
@@ -191,7 +383,7 @@ export async function fetchExternalDeposits(
     };
 
     Logger.log(
-      'fetchExternalDeposits',
+      'processThegraphExternalDeposits',
       `Fetching network (${chainId}), fromTimestamp: ${fromTimestamp}, variables: ${JSON.stringify(variables)}`
     );
 
@@ -221,7 +413,7 @@ export async function fetchExternalDeposits(
     // Process each external deposit
     await Promise.all(
       externalDeposits.map((transfer) =>
-        processExternalDeposit(transfer, chainId, sendNotification)
+        processTheGraphExternalDeposit(transfer, chainId, sendNotification)
       )
     );
 
@@ -236,14 +428,60 @@ export async function fetchExternalDeposits(
       blockchain.externalDeposits.updatedAt = new Date();
       await blockchain.save();
       finalMsg = `Processed external deposits up to Block ${maxTimestampProcessed}`;
-      Logger.info('fetchExternalDeposits', finalMsg);
+      Logger.info('processThegraphExternalDeposits', finalMsg);
       return finalMsg;
     }
 
-    Logger.info('fetchExternalDeposits', finalMsg);
+    Logger.info('processThegraphExternalDeposits', finalMsg);
     return finalMsg;
   } catch (error) {
-    Logger.error('fetchExternalDeposits', `Error fetching external deposits: ${error}`);
+    Logger.error('processThegraphExternalDeposits', `Error fetching external deposits: ${error}`);
     return `Error fetching external deposits: ${error}`;
+  }
+}
+
+/**
+ * Entry point for **external deposits synchronization** across providers.
+ *
+ * This orchestrator dynamically selects which data source to use for processing deposits:
+ * - When `EXTERNAL_DEPOSITS_PROVIDER_IS_ALCHEMY` is `true`, it executes `processAlchemyExternalDeposits()`
+ *   to synchronize deposits stored in the local `external_deposits` collection populated by Alchemy webhooks.
+ * - Otherwise, it invokes `processThegraphExternalDeposits()` to fetch and process deposits
+ *   directly from The Graph subgraph endpoint (deprecated flow).
+ *
+ * Business rules:
+ * - Provides a unified interface for the controller layer, abstracting the active provider.
+ * - Logs which provider is being used for transparency and debugging.
+ * - Handles unexpected errors gracefully and returns a summary message instead of throwing.
+ *
+ * @async
+ * @param {string} routerAddress - Uniswap V2 router address (used only by The Graph provider).
+ * @param {string} poolAddress - Uniswap V3 pool address (used only by The Graph provider).
+ * @param {number} chainId - The blockchain network identifier to process.
+ * @param {boolean} sendNotification - Whether to send notifications for new deposits.
+ * @returns {Promise<string>} Summary message describing which provider was executed and the result.
+ */
+export async function fetchExternalDeposits(
+  routerAddress: string,
+  poolAddress: string,
+  chainId: number,
+  sendNotification: boolean
+): Promise<string> {
+  try {
+    if (EXTERNAL_DEPOSITS_PROVIDER_IS_ALCHEMY) {
+      Logger.info('fetchExternalDeposits', `Using Alchemy as external deposits provider.`);
+      return await processAlchemyExternalDeposits(chainId, sendNotification);
+    }
+
+    Logger.info('fetchExternalDeposits', `Using The Graph as external deposits provider.`);
+    return await processThegraphExternalDeposits(
+      routerAddress,
+      poolAddress,
+      chainId,
+      sendNotification
+    );
+  } catch (error) {
+    Logger.error('fetchExternalDeposits', 'Unhandled error:', (error as Error).message);
+    return `Error while fetching external deposits: ${(error as Error).message}`;
   }
 }

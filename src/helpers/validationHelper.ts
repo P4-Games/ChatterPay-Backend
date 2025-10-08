@@ -56,3 +56,16 @@ export const isShortUrl = (url: string): boolean =>
  * @returns `true` if the string is a valid Ethereum address, `false` otherwise.
  */
 export const isValidEthereumWallet = (address: string): boolean => ethers.utils.isAddress(address);
+
+/**
+ * Normalizes an Ethereum address to lowercase with 0x prefix
+ * @param addr - The address to normalize
+ * @returns The normalized address
+ */
+export const normalizeWalletAddress = (addr: string): string => {
+  const clean = addr.trim().toLowerCase();
+  if (!ethers.utils.isAddress(clean)) {
+    throw new Error(`Invalid Ethereum address: ${addr}`);
+  }
+  return ethers.utils.getAddress(clean);
+};
