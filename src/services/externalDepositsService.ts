@@ -10,8 +10,8 @@ import { formatTokenAmount } from '../helpers/formatHelper';
 import { mongoTokenService } from './mongo/mongoTokenService';
 import Blockchain, { IBlockchain } from '../models/blockchainModel';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
-import { sendReceivedExternalTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
+import { sendReceivedExternalTransferNotification } from './notificationService';
 import { mongoExternalDepositsService } from './mongo/mongoExternalDepositsService';
 import {
   THE_GRAPH_API_KEY,
