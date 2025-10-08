@@ -27,19 +27,26 @@ All environment variables are defined in **`example_env`** at the root of the re
 ## Alchemy Flow (Webhook-based)
 
 1. **Event Origin:** Alchemy sends webhooks whenever a monitored address receives ETH or ERC-20 tokens.
+
 2. **Free Plan Limitation:**
    On Alchemy’s **free plan**, it is **not possible to programmatically register new wallets** through their Admin API.
 
    * Only manual wallet configuration is allowed.
    * When creating the webhook in the dashboard, you must manually enter all wallet addresses under “Addresses to monitor”.
    * Adding or removing wallets automatically requires a paid plan, where the Admin API endpoints are unlocked.
-3. **Ingestion:**
-   The `depositIngestorService.ingestDeposits()` reads webhook payloads and:
 
-   * Extracts transfers from `logs`, `transaction`, or `activity`.
-   * Normalizes sender, receiver, token, and amount.
-   * Persists events in the `external_deposits` collection with status `observed`.
-   * Emits domain events for further processing.
+3. **Ingestion:**
+   The `depositIngestorService.ingestDeposits()` reads and processes each Alchemy webhook payload as follows:
+
+   * Extracts transfers from `logs`, `transaction`, or `activity` entries in the payload.
+   * Normalizes sender, receiver, token, and amount fields into a consistent event format.
+   * **Validates each event** before persisting:
+     * Skips transactions that already exist in the `transactions` collection (`trx_hash`, case-insensitive).
+     * Skips events where the sender (`from`) belongs to an internal ChatterPay wallet (`users.wallets.wallet_proxy`).
+     * Logs all skipped items at `debug` level, including hash, from, to, and amount.
+   * Persists only valid external deposits into the `external_deposits` collection with status `observed`.
+   * Emits domain events for subsequent balance updates or notifications.
+
 4. **Processing:**
    The `processAlchemyExternalDeposits()` job:
 
@@ -48,6 +55,7 @@ All environment variables are defined in **`example_env`** at the root of the re
    * Skips duplicates already stored in `transactions`.
    * Inserts valid new deposits as `type: deposit`, `status: completed`.
    * Optionally sends formatted notifications to users.
+
 5. **Wallet Sync (Paid Plan Only):**
    The `walletProvisioningService` keeps wallet lists synchronized through the `alchemyAdminService`, but this automation only works on paid plans. Free-tier setups must manage monitored wallets manually from the dashboard.
 

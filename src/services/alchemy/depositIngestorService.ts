@@ -1,8 +1,10 @@
 import { ethers } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
+import { mongoUserService } from '../mongo/mongoUserService';
 import { fromTopicAddress } from '../../helpers/alchemyHelper';
 import { IExternalDeposit } from '../../models/externalDepositModel';
+import { mongoTransactionService } from '../mongo/mongoTransactionService';
 import { mongoExternalDepositsService } from '../mongo/mongoExternalDepositsService';
 import { DEFAULT_CHAIN_ID, ALCHEMY_ERC20_TRANSFER_SIGNATURE } from '../../config/constants';
 import {
@@ -176,7 +178,46 @@ export const depositIngestorService = {
         return [];
       }
 
-      const persistedEvents = await mongoExternalDepositsService.persistDepositEvents(events);
+      const filtered = (
+        await Promise.all(
+          events.map(async (event) => {
+            const { txHash, from, to, value } = event;
+
+            const existingTx = await mongoTransactionService.getByHashInsensitive(txHash);
+            if (existingTx) {
+              Logger.debug('DepositIngestor', 'Skipped internal ChatterPay transaction', {
+                reason: 'Transaction already exists in transactions',
+                txHash,
+                from,
+                to,
+                value
+              });
+              return null;
+            }
+
+            const chatterUser = await mongoUserService.getUserByWalletProxyInsensitive(from);
+            if (chatterUser) {
+              Logger.debug('DepositIngestor', 'Skipped internal ChatterPay transfer', {
+                reason: 'Sender is a ChatterPay wallet',
+                txHash,
+                from,
+                to,
+                value
+              });
+              return null;
+            }
+
+            return event;
+          })
+        )
+      ).filter(Boolean) as ExternalDepositEvent[];
+
+      if (filtered.length === 0) {
+        Logger.debug('DepositIngestor', `All events skipped for payload ${payload.id}`);
+        return [];
+      }
+
+      const persistedEvents = await mongoExternalDepositsService.persistDepositEvents(filtered);
       persistedEvents.forEach((event) => depositIngestorService.emitDepositEvent(event));
 
       return persistedEvents;

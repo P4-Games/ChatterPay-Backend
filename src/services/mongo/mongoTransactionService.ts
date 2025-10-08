@@ -63,5 +63,11 @@ export const mongoTransactionService = {
       );
       return false;
     }
+  },
+
+  async getByHashInsensitive(txHash: string) {
+    return Transaction.findOne({
+      trx_hash: { $regex: new RegExp(`^${txHash}$`, 'i') }
+    }).lean();
   }
 };
