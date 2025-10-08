@@ -10,7 +10,7 @@ import { formatTokenAmount } from '../helpers/formatHelper';
 import { mongoTokenService } from './mongo/mongoTokenService';
 import Blockchain, { IBlockchain } from '../models/blockchainModel';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
-import { sendReceivedTransferNotification } from './notificationService';
+import { sendReceivedExternalTransferNotification } from './notificationService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
 import { mongoExternalDepositsService } from './mongo/mongoExternalDepositsService';
 import {
@@ -173,7 +173,7 @@ const processAlchemyExternalDeposits = async (
           const displayDecimals = tokenInfo.display_decimals ?? tokenInfo.decimals ?? 2;
           const formattedValue = value.toFixed(displayDecimals);
 
-          await sendReceivedTransferNotification(
+          await sendReceivedExternalTransferNotification(
             dep.from,
             null,
             user.phone_number,
@@ -302,7 +302,7 @@ async function processTheGraphExternalDeposit(
         const displayDecimals = tokenInfo.display_decimals ?? tokenInfo.decimals ?? 2;
         const formattedValue = value.toFixed(displayDecimals);
 
-        await sendReceivedTransferNotification(
+        await sendReceivedExternalTransferNotification(
           transfer.from,
           null,
           user.phone_number,
