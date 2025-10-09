@@ -226,8 +226,8 @@ export const play = async (
   } catch (err) {
     if (err instanceof ChatterPointsBusinessException) {
       Logger.info('play', err.message, { code: err.code });
-      await reply.status(200).send({
-        status: 'error',
+      reply.status(200).send({
+        status: 'info',
         code: err.code,
         error: err.message
       });
