@@ -222,7 +222,7 @@ export const play = async (
 
     const result = await chatterpointsService.play({ userId: channel_user_id, gameId, guess });
     Logger.info('play', 'attempt accepted', { userId: channel_user_id, gameId });
-    reply.status(200).send(result);
+    return await reply.status(200).send(result);
   } catch (err) {
     if (err instanceof ChatterPointsBusinessException) {
       Logger.info('play', err.message, { code: err.code });
@@ -234,7 +234,7 @@ export const play = async (
     }
 
     Logger.error('play', (err as Error).message);
-    reply.status(200).send({
+    return reply.status(200).send({
       status: 'error',
       error: (err as Error).message
     });
