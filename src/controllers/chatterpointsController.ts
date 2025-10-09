@@ -226,18 +226,18 @@ export const play = async (
   } catch (err) {
     if (err instanceof ChatterPointsBusinessException) {
       Logger.info('play', err.message, { code: err.code });
-      return reply.status(200).send({
+      await reply.status(200).send({
         status: 'info',
         code: err.code,
         error: err.message
       });
+    } else {
+      Logger.error('play', (err as Error).message);
+      await reply.status(200).send({
+        status: 'error',
+        error: (err as Error).message
+      });
     }
-
-    Logger.error('play', (err as Error).message);
-    await reply.status(200).send({
-      status: 'error',
-      error: (err as Error).message
-    });
   }
 };
 
