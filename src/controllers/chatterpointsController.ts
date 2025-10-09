@@ -197,10 +197,10 @@ export const createCycle = async (
     });
 
     Logger.info('createCycle', 'cycle created', { cycleId: result.cycleId });
-    reply.status(200).send({ status: 'ok', cycleId: result.cycleId.toString() });
+    await reply.status(200).send({ status: 'ok', cycleId: result.cycleId.toString() });
   } catch (err) {
     Logger.error('createCycle', (err as Error).message);
-    reply.status(200).send({ status: 'error', error: (err as Error).message });
+    await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
 
@@ -222,7 +222,7 @@ export const play = async (
 
     const result = await chatterpointsService.play({ userId: channel_user_id, gameId, guess });
     Logger.info('play', 'attempt accepted', { userId: channel_user_id, gameId });
-    return await reply.status(200).send(result);
+    await reply.status(200).send(result);
   } catch (err) {
     if (err instanceof ChatterPointsBusinessException) {
       Logger.info('play', err.message, { code: err.code });
@@ -234,7 +234,7 @@ export const play = async (
     }
 
     Logger.error('play', (err as Error).message);
-    return reply.status(200).send({
+    await reply.status(200).send({
       status: 'error',
       error: (err as Error).message
     });
@@ -253,10 +253,10 @@ export const stats = async (
     }
     const result = await chatterpointsService.getStats({ cycleId, userId: channel_user_id });
     Logger.debug('stats', 'fetched', { cycleId, userId: channel_user_id });
-    reply.status(200).send({ status: 'ok', ...result });
+    await reply.status(200).send({ status: 'ok', ...result });
   } catch (err) {
     Logger.error('stats', (err as Error).message);
-    reply.status(200).send({ status: 'error', error: (err as Error).message });
+    await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
 
@@ -269,9 +269,10 @@ export const leaderboard = async (
     const result: LeaderboardResult = await chatterpointsService.getLeaderboard({ cycleId, top });
     const sanitizedEntries = result.entries.map(({ prize: _prize, ...rest }) => rest);
     Logger.debug('leaderboard', { cycleId, top, count: sanitizedEntries.length });
+    await reply.status(200).send({ status: 'ok', leaderboard: sanitizedEntries });
   } catch (err) {
     Logger.error('leaderboard', (err as Error).message);
-    reply.status(200).send({ status: 'error', error: (err as Error).message });
+    await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
 
@@ -299,10 +300,10 @@ export const social = async (
       granted: result.granted
     });
 
-    reply.status(200).send({ status: 'ok', ...result });
+    await reply.status(200).send({ status: 'ok', ...result });
   } catch (err) {
     Logger.error('social', (err as Error).message);
-    reply.status(200).send({ status: 'error', error: (err as Error).message });
+    await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
 
@@ -310,10 +311,10 @@ export const gamesInfo = async (req: FastifyRequest, reply: FastifyReply): Promi
   try {
     const result = await chatterpointsService.getCycleGamesInfo();
     Logger.debug('gamesInfo', 'returned games info');
-    reply.status(200).send(result);
+    await reply.status(200).send(result);
   } catch (err) {
     Logger.error('gamesInfo', (err as Error).message);
-    reply.status(200).send({ status: 'error', error: (err as Error).message });
+    await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
 
@@ -321,10 +322,10 @@ export const clean = async (req: FastifyRequest, reply: FastifyReply): Promise<v
   try {
     const result = await chatterpointsService.maintainPeriodsAndCycles();
     Logger.info('clean', 'maintenance summary', result);
-    reply.status(200).send({ status: 'ok', ...result });
+    await reply.status(200).send({ status: 'ok', ...result });
   } catch (err) {
     Logger.error('clean', (err as Error).message);
-    reply.status(500).send({ status: 'error', error: (err as Error).message });
+    await reply.status(500).send({ status: 'error', error: (err as Error).message });
   }
 };
 
@@ -343,13 +344,13 @@ export const cyclePlays = async (
 
     if (!result) {
       Logger.debug('cyclePlays', 'no plays found', { cycleId, userId: channel_user_id });
-      reply.status(404).send({ status: 'error', error: 'No plays found' });
+      await reply.status(404).send({ status: 'error', error: 'No plays found' });
       return;
     }
 
     Logger.debug('cyclePlays', 'ok', { cycleId: result.cycleId, count: result.plays?.length ?? 0 });
 
-    reply.status(200).send({
+    await reply.status(200).send({
       status: 'ok',
       cycleId: result.cycleId,
       startAt: result.startAt,
@@ -359,7 +360,7 @@ export const cyclePlays = async (
     });
   } catch (err) {
     Logger.error('cyclePlays', (err as Error).message);
-    reply.status(200).send({ status: 'error', error: (err as Error).message });
+    await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
 
@@ -432,9 +433,9 @@ export const userHistory = async (
       window: { from, to }
     });
 
-    reply.status(200).send({ status: 'ok', ...result });
+    await reply.status(200).send({ status: 'ok', ...result });
   } catch (err) {
     Logger.error('userHistory', (err as Error).message);
-    reply.status(200).send({ status: 'error', error: (err as Error).message });
+    await reply.status(200).send({ status: 'error', error: (err as Error).message });
   }
 };
