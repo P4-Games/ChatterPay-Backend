@@ -26,11 +26,11 @@ export const handleAlchemyDeposits = async (
       processed: persistedEvents.length
     });
 
-    await reply.status(200).send({ ok: true, processed: persistedEvents.length });
+    reply.status(200).send({ ok: true, processed: persistedEvents.length });
   } catch (error) {
     Logger.error('alchemyController', 'Error processing deposits webhook', { ...ctx, error });
     // Return 200 to prevent Alchemy retries
-    await reply.status(200).send({ ok: true, processed: 0 });
+    reply.status(200).send({ ok: true, processed: 0 });
   }
 };
 
@@ -55,10 +55,10 @@ export const handleAlchemyFactory = async (
       processed
     });
 
-    await reply.status(200).send({ ok: true, processed });
+    reply.status(200).send({ ok: true, processed });
   } catch (error) {
     Logger.error('alchemyController', 'Error processing factory webhook', { ...ctx, error });
-    await reply.status(200).send({ ok: true, processed: 0 });
+    reply.status(200).send({ ok: true, processed: 0 });
   }
 };
 
@@ -75,14 +75,14 @@ export const handleAlchemyHealth = async (
       .then(() => true)
       .catch(() => false);
 
-    await reply.status(200).send({
+    reply.status(200).send({
       status: 'healthy',
       alchemy: alchemyHealthy,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
     Logger.error('alchemyController', 'Health check failed', error);
-    await reply.status(503).send({
+    reply.status(503).send({
       status: 'unhealthy',
       alchemy: false,
       timestamp: new Date().toISOString()
