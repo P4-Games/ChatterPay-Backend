@@ -227,17 +227,17 @@ export const play = async (
     if (err instanceof ChatterPointsBusinessException) {
       Logger.info('play', err.message, { code: err.code });
       await reply.status(200).send({
-        status: 'error',
+        status: 'info',
         code: err.code,
         error: err.message
       });
+    } else {
+      Logger.error('play', (err as Error).message);
+      await reply.status(200).send({
+        status: 'error',
+        error: (err as Error).message
+      });
     }
-
-    Logger.error('play', (err as Error).message);
-    await reply.status(200).send({
-      status: 'error',
-      error: (err as Error).message
-    });
   }
 };
 
@@ -364,7 +364,6 @@ export const cyclePlays = async (
   }
 };
 
-// NEW: userHistory (controller -> negocio, no mongo)
 export const userHistory = async (
   req: FastifyRequest<{ Body: UserHistoryBody }>,
   reply: FastifyReply

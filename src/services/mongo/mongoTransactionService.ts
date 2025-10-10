@@ -43,5 +43,31 @@ export const mongoTransactionService = {
         (error as Error).message
       );
     }
+  },
+
+  /**
+   * Checks whether a transaction exists by its hash.
+   *
+   * @param {string} tx - Transaction hash to check.
+   * @returns {Promise<boolean>} True if a document with this hash exists.
+   */
+  existsByHash: async (tx: string): Promise<boolean> => {
+    try {
+      const found = await Transaction.exists({ trx_hash: tx });
+      return Boolean(found);
+    } catch (error: unknown) {
+      Logger.error(
+        'existsByHash',
+        `Error checking transaction existence for ${tx}:`,
+        (error as Error).message
+      );
+      return false;
+    }
+  },
+
+  async getByHashInsensitive(txHash: string) {
+    return Transaction.findOne({
+      trx_hash: { $regex: new RegExp(`^${txHash}$`, 'i') }
+    }).lean();
   }
 };
