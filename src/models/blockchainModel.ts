@@ -24,6 +24,7 @@ export interface BlockchainOperationLimits {
 
 export interface ExternalDeposits {
   lastBlockProcessed: number;
+  lastBlockTimestampProcessed: number;
   updatedAt: Date;
 }
 
@@ -97,6 +98,7 @@ const operationLimitsSchema = new Schema<BlockchainOperationLimits>({
 const externalDepositsSchema = new Schema<ExternalDeposits>(
   {
     lastBlockProcessed: { type: Number, required: true },
+    lastBlockTimestampProcessed: { type: Number, required: false },
     updatedAt: { type: Date, default: Date.now }
   },
   { _id: false }
