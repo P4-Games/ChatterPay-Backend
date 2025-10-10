@@ -24,7 +24,7 @@ import {
  * GraphQL query to fetch external deposits.
  */
 const THE_GRAPH_QUERY_EXTERNAL_DEPOSITS = gql`
-  query getExternalDeposits($lastTimestamp: Int!) {
+  query getExternalDeposits($lastTimestamp: BigInt!) {
     chatterPayTransfers(
       where: { blockTimestamp_gt: $lastTimestamp }
       orderBy: blockTimestamp
@@ -231,18 +231,42 @@ async function processTheGraphExternalDeposit(
   sendNotification: boolean
 ) {
   try {
+    // Normalize addresses
+    const normalizedFrom = transfer.from.toLowerCase();
+    const normalizedTo = transfer.to.toLowerCase();
+    const txHash = transfer.transactionHash;
+
+    // Skip if sender is a ChatterPay user (internal transfer)
+    const senderCandidates = await UserModel.find({
+      'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedFrom}$`, 'i') }
+    });
+    const isInternalSender = senderCandidates.some((u) =>
+      u.wallets.some((w) => w.wallet_proxy?.toLowerCase() === normalizedFrom)
+    );
+    if (isInternalSender) {
+      Logger.info(
+        'processExternalDeposit',
+        `Skipping internal transfer between ChatterPay users: ${transfer.from} → ${transfer.to}, hash: ${transfer.transactionHash}`
+      );
+      return;
+    }
+
     // First validate if the token is listed and active
     const tokenObject = await mongoTokenService.getToken(transfer.token, chanId);
-
     if (!tokenObject) {
-      Logger.warn(
+      Logger.info(
         'processExternalDeposit',
         `External Deposit transaction rejected: Token ${transfer.token} is not listed for chain ${chanId}`
       );
       return;
     }
 
-    const normalizedTo = transfer.to.toLowerCase();
+    // Skip if transaction already exists
+    const already = await mongoTransactionService.existsByHash(txHash);
+    if (already) {
+      Logger.debug('processExternalDeposit', `Skipping existing transaction ${txHash}`);
+      return;
+    }
 
     // Find users with at least one wallet_proxy that matches (case-insensitive)
     const candidates = await UserModel.find({
@@ -254,71 +278,63 @@ async function processTheGraphExternalDeposit(
       u.wallets.some((w) => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
     );
 
-    if (user) {
+    if (!user) {
+      Logger.info(
+        'processExternalDeposit',
+        `No user found with wallet: ${transfer.to}. Transfer not processed: ${txHash}`
+      );
+      return;
+    }
+
+    // Get token info
+    const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+    const blockchainTokens = await Token.find({ chain_id: chanId });
+    const tokenInfo: IToken | undefined = getTokenInfo(
+      networkConfig,
+      blockchainTokens,
+      transfer.token
+    );
+
+    if (!tokenInfo) {
+      Logger.info('processExternalDeposit', `Token info not found for address: ${transfer.token}`);
+      return;
+    }
+
+    Logger.info(
+      'processExternalDeposit',
+      `Processing external deposit for user user: ${transfer.to}. Transfer: ${JSON.stringify(transfer)}`
+    );
+
+    const valuAmount = Number((Number(transfer.value) / 10 ** tokenObject.decimals).toFixed(4));
+    const transactionData: TransactionData = {
+      tx: txHash,
+      walletFrom: getAddress(transfer.from),
+      walletTo: getAddress(transfer.to),
+      amount: valuAmount,
+      fee: 0,
+      token: tokenInfo.symbol,
+      type: 'deposit',
+      status: 'completed',
+      chain_id: chanId,
+      date: new Date(Number(transfer.blockTimestamp) * 1000)
+    };
+    await mongoTransactionService.saveTransaction(transactionData);
+
+    if (sendNotification) {
+      const displayDecimals = tokenInfo.display_decimals ?? tokenInfo.decimals ?? 2;
+      const formattedValue = valuAmount.toFixed(displayDecimals);
+
+      await sendReceivedExternalTransferNotification(
+        transfer.from,
+        null,
+        user.phone_number,
+        formattedValue,
+        tokenInfo.symbol,
+        ''
+      );
       Logger.debug(
         'processExternalDeposit',
-        `Processing external deposit for user user: ${transfer.to}. Transfer: ${JSON.stringify(transfer)}`
-      );
-      const value = Number((Number(transfer.value) / 10 ** tokenObject.decimals).toFixed(4));
-
-      // Get token info
-      const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
-      const blockchainTokens = await Token.find({ chain_id: chanId });
-      const tokenInfo: IToken | undefined = getTokenInfo(
-        networkConfig,
-        blockchainTokens,
-        transfer.token
-      );
-
-      if (!tokenInfo) {
-        Logger.warn(
-          'processExternalDeposit',
-          `Token info not found for address: ${transfer.token}`
-        );
-        return;
-      }
-
-      Logger.debug('processExternalDeposit', 'Saving external deposit transaction in database.');
-
-      // Some subgraphs use `id` as a composite of `txHash + logIndex`.
-      // We extract only the first 66 characters to get the actual transaction hash (0x + 64 hex digits).
-      const txHash = transfer.id.slice(0, 66);
-
-      const transactionData: TransactionData = {
-        tx: txHash,
-        walletFrom: getAddress(transfer.from),
-        walletTo: getAddress(transfer.to),
-        amount: value,
-        fee: 0,
-        token: tokenInfo.symbol,
-        type: 'deposit',
-        status: 'completed',
-        chain_id: chanId,
-        date: new Date(Number(transfer.blockTimestamp) * 1000)
-      };
-      await mongoTransactionService.saveTransaction(transactionData);
-
-      if (sendNotification) {
-        const displayDecimals = tokenInfo.display_decimals ?? tokenInfo.decimals ?? 2;
-        const formattedValue = value.toFixed(displayDecimals);
-
-        await sendReceivedExternalTransferNotification(
-          transfer.from,
-          null,
-          user.phone_number,
-          formattedValue,
-          tokenInfo.symbol,
-          ''
-        );
-        Logger.debug(
-          'processExternalDeposit',
-          `Notification sent successfully for transfer ${txHash} to user ${user.phone_number}`
-        );
-      }
-    } else {
-      Logger.warn(
-        'processExternalDeposit',
-        `No user found with wallet: ${transfer.to}. Transfer not processed: ${JSON.stringify(transfer)}`
+        `Notification sent successfully for transfer ${txHash} to user ${user.phone_number}`
       );
     }
   } catch (error) {
