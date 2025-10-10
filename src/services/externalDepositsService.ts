@@ -36,6 +36,7 @@ const THE_GRAPH_QUERY_EXTERNAL_DEPOSITS = gql`
       to
       value
       token
+      blockNumber
       blockTimestamp
       transactionHash
     }
@@ -51,6 +52,7 @@ interface Transfer {
   to: string;
   value: string;
   token: string;
+  blockNumber: string;
   blockTimestamp: string;
   transactionHash: string;
 }
@@ -394,8 +396,8 @@ async function processThegraphExternalDeposits(
     }
 
     const fromTimestamp = blockchain.externalDeposits?.lastBlockTimestampProcessed || 0;
-    const variables = {
-      lastTimestamp: fromTimestamp
+    const lastBlock = blockchain.externalDeposits.lastBlockProcessed || 'N/A';
+    const variables = { lastTimestamp: fromTimestamp };
     };
 
     Logger.log(
