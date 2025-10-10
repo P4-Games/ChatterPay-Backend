@@ -407,7 +407,7 @@ async function processThegraphExternalDeposits(
   - Last timestamp (UTC): ${new Date(ts * 1000).toISOString()}
   - Network chainId: ${chainId}`;
 
-    Logger.log(
+    Logger.info(
       'processThegraphExternalDeposits',
       `Fetching network (${chainId}), fromTimestamp: ${fromTimestamp}, variables: ${JSON.stringify(variables)}`
     );
