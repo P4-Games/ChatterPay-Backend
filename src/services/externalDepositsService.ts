@@ -393,7 +393,7 @@ async function processThegraphExternalDeposits(
       return message;
     }
 
-    const fromTimestamp = blockchain.externalDeposits?.lastBlockProcessed || 0;
+    const fromTimestamp = blockchain.externalDeposits?.lastBlockTimestampProcessed || 0;
     const variables = {
       lastTimestamp: fromTimestamp
     };
