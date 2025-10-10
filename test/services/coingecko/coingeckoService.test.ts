@@ -29,7 +29,7 @@ describe('coingeckoService', () => {
     // Stub: force NodeCache.get() to return undefined
     vi.spyOn(NodeCache.prototype, 'get').mockReturnValue(undefined);
 
-    // 🔑 Stub: avoid TimeoutOverflowWarning by neutralizing .set()
+    // Stub: avoid TimeoutOverflowWarning by neutralizing .set()
     vi.spyOn(NodeCache.prototype, 'set').mockImplementation(() => true);
   });
 

@@ -247,6 +247,75 @@ export async function sendReceivedTransferNotification(
 }
 
 /**
+ * Sends a notification for a received transfer from an external wallet.
+ *
+ * @param phoneNumberFrom - Sender's phone number (external wallet placeholder).
+ * @param nameFrom - Sender's name (optional).
+ * @param phoneNumberTo - Recipient's phone number.
+ * @param amount - Amount received.
+ * @param token - Token symbol or identifier (e.g., ETH, USDT).
+ * @param user_notes - User notes associated with the transaction.
+ * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
+ * @returns A Promise resolving to the result of the notification operation.
+ */
+export async function sendReceivedExternalTransferNotification(
+  phoneNumberFrom: string,
+  nameFrom: string | null,
+  phoneNumberTo: string,
+  amount: string,
+  token: string,
+  user_notes: string,
+  traceHeader?: string
+): Promise<unknown> {
+  try {
+    Logger.log(
+      'sendReceivedExternalTransferNotification',
+      `Sending received external transfer notification from ${phoneNumberFrom} to ${phoneNumberTo}`
+    );
+    if (!isValidPhoneNumber(phoneNumberTo)) return '';
+
+    const { title, message } = await getNotificationTemplate(
+      phoneNumberTo,
+      NotificationEnum.incoming_transfer_external
+    );
+
+    const formatMessage = (fromNumberAndName: string) =>
+      message
+        .replaceAll('[FROM]', fromNumberAndName)
+        .replaceAll('[AMOUNT]', amount)
+        .replaceAll('[TOKEN]', token)
+        .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
+
+    const fromNumberAndName = formatIdentifierWithOptionalName(phoneNumberFrom, nameFrom, false);
+    const fromNumberAndNameMasked = formatIdentifierWithOptionalName(
+      phoneNumberFrom,
+      nameFrom,
+      true
+    );
+
+    const formattedMessageBot = formatMessage(fromNumberAndName);
+    const formattedMessagePush = formatMessage(fromNumberAndNameMasked);
+
+    const sendAndPersistParams: SendAndPersistParams = {
+      to: phoneNumberTo,
+      messageBot: formattedMessageBot,
+      messagePush: formattedMessagePush,
+      template: NotificationEnum.incoming_transfer_external,
+      sendPush: true,
+      sendBot: true,
+      title,
+      traceHeader
+    };
+
+    const data = await persistAndSendNotification(sendAndPersistParams);
+    return data;
+  } catch (error) {
+    Logger.error('sendReceivedExternalTransferNotification', error);
+    throw error;
+  }
+}
+
+/**
  * Sends a notification for a completed token swap.
  *
  * @param channel_user_id - The user's identifier within the communication channel (e.g., Telegram or WhatsApp).

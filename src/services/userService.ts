@@ -6,6 +6,7 @@ import { mongoCountryService } from './mongo/mongoCountryService';
 import { IUser, UserModel, IUserWallet } from '../models/userModel';
 import { PUSH_ENABLED, DEFAULT_CHAIN_ID } from '../config/constants';
 import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
+import { walletProvisioningService } from './alchemy/walletProvisioningService';
 import { getPhoneNumberFormatted, formatIdentifierWithOptionalName } from '../helpers/formatHelper';
 
 /**
@@ -35,6 +36,46 @@ const updateOperationCount = async (
     await user.save(); // Save the updated user
   }
 };
+
+/**
+ * Attempts to register a wallet with Alchemy and update the user document accordingly.
+ *
+ * @param user - The user document to update
+ * @param walletProxy - The wallet proxy address
+ * @param chainId - The chain ID
+ */
+async function registerWalletWithAlchemy(
+  user: IUser,
+  walletProxy: string,
+  chainId: number
+): Promise<void> {
+  try {
+    const success = await walletProvisioningService.onWalletCreated(walletProxy, chainId);
+
+    if (success) {
+      const wallet = user.wallets.find((w) => w.wallet_proxy === walletProxy);
+      if (wallet) {
+        wallet.alchemy_registered = true;
+        await user.save();
+        Logger.info('registerWalletWithAlchemy', `Wallet marked as Alchemy-registered`, {
+          userId: user.phone_number,
+          walletProxy
+        });
+      }
+    } else {
+      Logger.warn('registerWalletWithAlchemy', `Alchemy Wallet registration skipped or failed`, {
+        userId: user.phone_number,
+        walletProxy
+      });
+    }
+  } catch (error) {
+    Logger.error('registerWalletWithAlchemy', `Unexpected error during Alchemy registration`, {
+      userId: user.phone_number,
+      walletProxy,
+      error
+    });
+  }
+}
 
 /**
  * Creates a new user with a wallet for the given phone number.
@@ -115,6 +156,9 @@ export const createUserWithWallet = async (
     );
   }
 
+  // Register wallet with Alchemy webhook system
+  await registerWalletWithAlchemy(user, predictedWallet.proxyAddress, DEFAULT_CHAIN_ID);
+
   return user;
 };
 
@@ -165,10 +209,8 @@ export const addWalletToUser = async (
   user.wallets.push(newWallet);
   await user.save();
 
-  Logger.log(
-    'addWalletToUser',
-    `New wallet added for user ${phoneNumber} with chain_id ${chainId}`
-  );
+  // Register wallet with Alchemy webhook system
+  await registerWalletWithAlchemy(user, predictedWallet.proxyAddress, chainId);
 
   return { user, newWallet };
 };

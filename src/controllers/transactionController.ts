@@ -81,24 +81,51 @@ const validateInputs = async (
   if (!channel_user_id || !to || !token || !amount) {
     return 'One or more fields are empty';
   }
-  if (Number.isNaN(parseFloat(amount))) {
+
+  const rawAmount = amount.trim();
+
+  // Reject if contains commas (strict policy)
+  if (rawAmount.includes(',')) {
+    return 'Invalid amount format: use "." (point) as the decimal separator (no commas allowed)';
+  }
+
+  // Reject if contains letters or invalid chars
+  if (!/^[0-9.]+$/.test(rawAmount)) {
+    return 'Amount must contain only digits and optionally a single decimal point';
+  }
+
+  // Reject multiple decimal points
+  if ((rawAmount.match(/\./g) || []).length > 1) {
+    return 'The amount format is invalid: multiple decimal points detected';
+  }
+
+  const parsed = parseFloat(rawAmount);
+  if (Number.isNaN(parsed) || parsed <= 0) {
     return 'The entered amount is invalid';
   }
+
+  const [, decimals] = rawAmount.split('.');
+  if (decimals && decimals.length > 18) {
+    return 'Too many decimal places (maximum allowed is 18)';
+  }
+
   if (channel_user_id.trim() === to.trim()) {
     return 'You cannot send money to yourself';
   }
+
   if (!isValidEthereumWallet(channel_user_id) && !isValidPhoneNumber(channel_user_id)) {
     return `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a Wallet or phone number (without spaces or symbols)`;
   }
+
   if (!isValidEthereumWallet(to) && !isValidPhoneNumber(to)) {
     return `'${to}' is invalid. 'to' parameter must be a Wallet or phone number (without spaces or symbols)`;
   }
+
   if (token.length > 5) {
     return 'The token symbol is invalid';
   }
 
   const targetChainId = chain_id ? parseInt(chain_id, 10) : currentChainId;
-
   if (targetChainId !== currentChainId) {
     return 'The selected blockchain is currently unavailable';
   }

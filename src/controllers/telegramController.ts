@@ -204,11 +204,55 @@ export async function handleTelegramUpdate(
   reply: FastifyReply
 ): Promise<FastifyReply> {
   const msg = request.body?.message;
-  const chatId = msg?.chat?.id ?? null;
-  const text = msg?.text?.trim() ?? '';
+  const chatIdRaw = msg?.chat?.id;
+  const chatId: number | null = typeof chatIdRaw === 'number' ? chatIdRaw : null;
+  const textRaw = msg?.text;
+  const text: string = typeof textRaw === 'string' ? textRaw.trim() : '';
   const lower = text.toLowerCase();
-  const fromId = msg?.from?.id?.toString() ?? null;
-  const contactPhone = msg?.contact?.phone_number ?? '';
+  const fromIdRaw = msg?.from?.id;
+  const fromId: string | null = typeof fromIdRaw === 'number' ? String(fromIdRaw) : null;
+  const contactPhoneRaw = msg?.contact?.phone_number;
+  const contactPhone: string = typeof contactPhoneRaw === 'string' ? contactPhoneRaw.trim() : '';
+
+  // [PATCH] Handle “Share my phone 📱” even if TELEGRAM_AWAITING_PHONE flag was lost
+  if (contactPhone && chatId !== null && !TELEGRAM_AWAITING_PHONE.has(chatId)) {
+    const phone = contactPhone;
+    const safeChatId: number = chatId;
+    const safeFromId: string = fromId ?? 'unknown';
+
+    Logger.info(`[telegramLink:unflagged] Received phone ${phone}`);
+
+    try {
+      const result = await telegramService.startVerificationForPhone(
+        safeChatId,
+        phone,
+        safeFromId,
+        BOT_DATA_TOKEN!,
+        CODE_TTL_MIN
+      );
+
+      if (result.ok) {
+        TELEGRAM_AWAITING_CODE.set(safeChatId, {
+          phone: result.phone,
+          expiresAt: result.expiresAt
+        });
+      }
+
+      return await reply.send(result.reply);
+    } catch (err) {
+      Logger.error('telegramWalletCodeUnflagged', String(safeChatId), (err as Error).message);
+      return reply.send({
+        method: 'sendMessage',
+        chat_id: safeChatId,
+        text: 'Could not start phone verification right now.',
+        parse_mode: 'Markdown'
+      });
+    }
+  } else if (contactPhone && chatId === null) {
+    // Defensive fallback — log and ignore if contact without chatId
+    Logger.error('telegramUpdate', 'Received contact but chatId was null');
+    return reply.status(200).send();
+  }
 
   // Route base commands
   if (lower === '/start')

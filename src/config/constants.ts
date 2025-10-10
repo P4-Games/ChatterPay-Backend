@@ -42,7 +42,16 @@ const {
   THE_GRAPH_EXTERNAL_DEPOSITS_URL = '',
   CORS_ORIGINS = '*',
   BLACKLIST_IPS = '',
-  DEFAULT_CHAIN_ID: defaultChainId = 421614, // Arbitrum Sepolia
+  DEFAULT_CHAIN_ID: defaultChainId = 534351, // Scroll Sepolia
+  ALCHEMY_AUTH_TOKEN,
+  ALCHEMY_SIGNING_KEY,
+  ALCHEMY_VAR_WALLETS_ID,
+  ALCHEMY_VAR_WALLETS_TOPIC_ID,
+  ALCHEMY_VAR_TOKENS_ID,
+  ALCHEMY_WEBHOOK_HEADER_API_KEY,
+  ALCHEMY_ERC20_TRANSFER_SIGNATURE = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+  ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY: alchemyValidateWebhookHeaderApiKey = 'false',
+  EXTERNAL_DEPOSITS_PROVIDER = 'thegraph',
   FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: fastifyRefreshNetworksIntervalMs = 86400000,
   FASTIFY_REFRESH_TOKENS_INTERVAL_MS: fastifyRefreshTokensIntervalMs = 86400000,
   ABIS_VERSION = 'v1.0.0',
@@ -101,12 +110,20 @@ export {
   MANTECA_BASE_URL,
   THE_GRAPH_API_KEY,
   SIGNING_KEY as $P,
+  ALCHEMY_AUTH_TOKEN,
+  ALCHEMY_SIGNING_KEY,
   GCP_BUCKET_BASE_URL,
   TELEGRAM_BOT_API_KEY,
+  ALCHEMY_VAR_TOKENS_ID,
+  ALCHEMY_VAR_WALLETS_ID,
   CHATIZALO_PHONE_NUMBER,
   SEED_INTERNAL_SALT as $S,
   CHATTERPOINTS_WORDS_SEED,
-  THE_GRAPH_EXTERNAL_DEPOSITS_URL
+  EXTERNAL_DEPOSITS_PROVIDER,
+  ALCHEMY_VAR_WALLETS_TOPIC_ID,
+  ALCHEMY_WEBHOOK_HEADER_API_KEY,
+  THE_GRAPH_EXTERNAL_DEPOSITS_URL,
+  ALCHEMY_ERC20_TRANSFER_SIGNATURE
 };
 
 export const IS_DEVELOPMENT =
@@ -201,9 +218,18 @@ export const COMMON_REPLY_OPERATION_IN_PROGRESS =
 
 export const COMMON_REPLY_WALLET_NOT_CREATED = `A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.`;
 
+export const ALCHEMY_WEBHOOKS_PATH = '/webhooks/alchemy/';
+export const EXTERNAL_DEPOSITS_PROVIDER_IS_ALCHEMY =
+  EXTERNAL_DEPOSITS_PROVIDER.toLowerCase() === 'alchemy';
+export const EXERNAL_DEPOSITS_PROVIDER_IS_THEGRAPH =
+  EXTERNAL_DEPOSITS_PROVIDER.toLowerCase() === 'thegraph';
+export const ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY: boolean =
+  alchemyValidateWebhookHeaderApiKey.toLowerCase() === 'true';
+
+export const TELEGRAM_WEBHOOK_PATH = '/telegram/webhook';
+
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
-export const CORS_ORIGINS_EXCEPTIONS: string =
-  '/metadata/opensea,/favicon.ico,/docs, /telegram/webhook';
+export const CORS_ORIGINS_EXCEPTIONS: string = `/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH}`;
 
 export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/price';
 export const TOKEN_IDS = ['usd-coin', 'tether', 'ethereum', 'bitcoin', 'wrapped-bitcoin', 'dai'];
@@ -221,8 +247,6 @@ export const QUEUE_BUNDLER_INTERVAL = Number(queueBundlerInterval);
 export const QUEUE_GAS_INTERVAL = Number(queueGasInterval);
 export const QUEUE_CREATE_PROXY_INTERVAL = Number(queueCreateProxyInterval);
 export const MAX_REQUESTS_PER_MINUTE = Number(maxRequestsPerMinute);
-
-export const TELEGRAM_WEBHOOK_PATH = '/telegram/webhook';
 
 export const CACHE_OPENSEA_TTL = 300; // 5 min
 export const CACHE_OPENSEA_CHECK_PERIOD = 600; // 10 min

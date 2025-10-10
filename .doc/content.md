@@ -8,7 +8,10 @@
 
 - [Sequence Diagrams](./development/sequence-diagrams.md)
 - [Coding Guidelines](./development/coding-guidelines.md)
+- [External Deposits Details](./development/external-deposits-details.md)
+- [Sequence Diagrams](./development/sequence-diagrams.md)
+- [Documentation Links](./development/documentation-links.md)
 
 ## Deployment
 
-- [Deployment Guidelines](./deployment/deployment-guidelines.md)
+- [External Deposits Deployment](./deployment/external-deposits-deployment.md)

@@ -43,6 +43,7 @@ describe('Blockchain Model', () => {
       supportsEIP1559: true,
       externalDeposits: {
         lastBlockProcessed: 123456,
+        lastBlockTimestampProcessed: 1760101394,
         updatedAt: new Date()
       },
       contracts: {

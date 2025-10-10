@@ -9,6 +9,7 @@ export interface IUserWallet {
   created_with_factory_address: string;
   chain_id: number;
   status: string;
+  alchemy_registered?: boolean; // flag to indicate if the wallet is registered with Alchemy webHook
 }
 
 export interface IUser extends Document {
@@ -59,7 +60,8 @@ const walletSchema = new Schema<IUserWallet>(
       default: ''
     },
     chain_id: { type: Number, required: true, default: DEFAULT_CHAIN_ID },
-    status: { type: String, required: true, default: 'active' }
+    status: { type: String, required: true, default: 'active' },
+    alchemy_registered: { type: Boolean, required: false, default: false }
   },
   { _id: false }
 );

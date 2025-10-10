@@ -1,6 +1,6 @@
-import CountryModel from '../../models/countries';
 import { Logger } from '../../helpers/loggerHelper';
 import { NotificationLanguage } from '../../types/commonType';
+import CountryModel, { ICountry } from '../../models/countries';
 import { SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT } from '../../config/constants';
 
 export const mongoCountryService = {
@@ -38,6 +38,51 @@ export const mongoCountryService = {
         err
       );
       return SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT;
+    }
+  },
+
+  /**
+   * Fetch all countries with basic fields (code, phone_code, languages)
+   */
+  getAllCountries: async (): Promise<
+    Pick<ICountry, 'code' | 'phone_code' | 'notification_language'>[]
+  > => {
+    try {
+      return await CountryModel.find(
+        {},
+        { code: 1, phone_code: 1, notification_language: 1 }
+      ).lean();
+    } catch (err) {
+      Logger.error('mongoCountryService', 'getAllCountries DB error:', err);
+      return [];
+    }
+  },
+
+  /**
+   * Find a country by its ISO code (e.g., 'AR')
+   */
+  getCountryByCode: async (code: string): Promise<ICountry | null> => {
+    try {
+      return await CountryModel.findOne({ code: code.toLowerCase() }).lean();
+    } catch (err) {
+      Logger.error('mongoCountryService', 'getCountryByCode DB error:', err);
+      return null;
+    }
+  },
+
+  /**
+   * Find a country by matching the start of a phone number with its phone_code.
+   * E.g., '549115...' → Argentina
+   */
+  getCountryByPhoneNumber: async (phoneNumber: string): Promise<ICountry | null> => {
+    const digits = phoneNumber.replace(/\D/g, '');
+    try {
+      const countries = await CountryModel.find({}, { code: 1, phone_code: 1 }).lean();
+      const sorted = countries.sort((a, b) => b.phone_code.length - a.phone_code.length);
+      return sorted.find((c) => digits.startsWith(c.phone_code)) ?? null;
+    } catch (err) {
+      Logger.error('mongoCountryService', 'getCountryByPhoneNumber DB error:', err);
+      return null;
     }
   }
 };
