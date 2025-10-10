@@ -304,7 +304,7 @@ async function processTheGraphExternalDeposit(
 
     Logger.info(
       'processExternalDeposit',
-      `Processing external deposit for user user: ${transfer.to}. Transfer: ${JSON.stringify(transfer)}`
+      `Processing external deposit for user: ${transfer.to}. Transfer: ${JSON.stringify(transfer)}`
     );
 
     const valuAmount = Number((Number(transfer.value) / 10 ** tokenObject.decimals).toFixed(4));
@@ -398,7 +398,14 @@ async function processThegraphExternalDeposits(
     const fromTimestamp = blockchain.externalDeposits?.lastBlockTimestampProcessed || 0;
     const lastBlock = blockchain.externalDeposits.lastBlockProcessed || 'N/A';
     const variables = { lastTimestamp: fromTimestamp };
-    };
+
+    // Inline formatter just for consistent log messages
+    const fmt = (action: string, count: number, block: number | string, ts: number) =>
+      `${action}${count ? ` ${count} external deposits` : ''}:
+  - Last block processed: ${block}
+  - Last timestamp (epoch): ${ts}
+  - Last timestamp (UTC): ${new Date(ts * 1000).toISOString()}
+  - Network chainId: ${chainId}`;
 
     Logger.log(
       'processThegraphExternalDeposits',
@@ -435,17 +442,27 @@ async function processThegraphExternalDeposits(
       )
     );
 
-    // Update the last processed Block in BDD
-    let finalMsg = `No new deposits found since Block ${fromTimestamp}`;
+    let finalMsg = fmt('No new deposits found since', 0, lastBlock, fromTimestamp);
+
     if (externalDeposits.length > 0) {
       const maxTimestampProcessed = Math.max(
         ...externalDeposits.map((t) => parseInt(t.blockTimestamp, 10))
       );
+      const maxBlockProcessed = Math.max(
+        ...externalDeposits.map((t) => parseInt(t.blockNumber, 10))
+      );
 
-      blockchain.externalDeposits.lastBlockProcessed = maxTimestampProcessed;
+      blockchain.externalDeposits.lastBlockProcessed = maxBlockProcessed;
+      blockchain.externalDeposits.lastBlockTimestampProcessed = maxTimestampProcessed;
       blockchain.externalDeposits.updatedAt = new Date();
       await blockchain.save();
-      finalMsg = `Processed external deposits up to Block ${maxTimestampProcessed}`;
+
+      finalMsg = fmt(
+        'Processed',
+        externalDeposits.length,
+        maxBlockProcessed,
+        maxTimestampProcessed
+      );
       Logger.info('processThegraphExternalDeposits', finalMsg);
       return finalMsg;
     }
