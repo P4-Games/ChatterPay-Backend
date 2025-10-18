@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 
-import { createWallet, withdrawAllFunds } from '../controllers/walletController';
+import { createWallet, getRampWallet, withdrawAllFunds } from '../controllers/walletController';
 
 /**
  * Configures routes related to wallets.
@@ -8,6 +8,13 @@ import { createWallet, withdrawAllFunds } from '../controllers/walletController'
  * @returns {Promise<void>} Resolves once all routes are registered
  */
 export const walletRouter = async (fastify: FastifyInstance): Promise<void> => {
+  /**
+   * Route to get just the wallet to use with ramp-prompts
+   * @route POST /get_ramp_wallet/
+   * @returns {Object} The details of the user wallet
+   */
+  fastify.post('/get_ramp_wallet/', getRampWallet);
+
   /**
    * Route to get or create a wallet
    * @route POST /get_wallet/
