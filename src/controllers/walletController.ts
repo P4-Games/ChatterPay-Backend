@@ -1,4 +1,5 @@
 import { once as onceEvent } from 'events';
+import { ServerResponse, IncomingMessage } from 'http';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { ServerResponse, IncomingMessage } from 'http';
 
@@ -13,6 +14,64 @@ import {
   sendWalletCreationNotification,
   sendWalletAlreadyExistsNotification
 } from '../services/notificationService';
+
+/**
+ * Retrieves the ChatterPay wallet address associated with the given user.
+ * If the wallet does not exist, it will be created automatically.
+ *
+ * This endpoint is typically used by the on-ramp flow to obtain the user's wallet
+ * address before redirecting them to an external provider (e.g., Onramp.Money).
+ *
+ * @param {FastifyRequest<{
+ *   Body: { channel_user_id: string };
+ *   Querystring?: { lastBotMsgDelaySeconds?: number };
+ * }>} request - Fastify request containing the user's WhatsApp ID or phone number.
+ *
+ * @param {FastifyReply} reply - Fastify reply object used to send the HTTP response.
+ *
+ * @returns {Promise<FastifyReply>} A promise that resolves with the user's wallet
+ * address in the HTTP response, or an error if the process fails.
+ */
+export const getRampWallet = async (
+  request: FastifyRequest<{
+    Body: { channel_user_id: string };
+    Querystring?: { lastBotMsgDelaySeconds?: number };
+  }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  try {
+    if (!request.body) throw new Error('Missing request body');
+
+    const { channel_user_id } = request.body;
+    if (!channel_user_id) throw new Error('Missing channel_user_id in body');
+
+    if (!isValidPhoneNumber(channel_user_id)) {
+      return await returnSuccessResponse(reply, `Invalid phone number: '${channel_user_id}'`);
+    }
+
+    const logKey = `[op:getRampWallet:${channel_user_id}]`;
+    const { networkConfig } = request.server;
+
+    const { message, walletAddress } = await createOrReturnWallet(
+      channel_user_id,
+      networkConfig,
+      logKey
+    );
+
+    Logger.log('getRampWallet', logKey, `${message}, ${walletAddress}`);
+
+    return await returnSuccessResponse(reply, walletAddress);
+  } catch (error) {
+    const err = error as Error;
+    return returnErrorResponse(
+      'getRampWallet',
+      err.message ?? '',
+      reply,
+      500,
+      'Internal Server Error'
+    );
+  }
+};
 
 /**
  * Handles the creation of a new wallet for the user.
