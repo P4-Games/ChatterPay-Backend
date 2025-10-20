@@ -1,7 +1,6 @@
 import { once as onceEvent } from 'events';
 import { ServerResponse, IncomingMessage } from 'http';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { ServerResponse, IncomingMessage } from 'http';
 
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
