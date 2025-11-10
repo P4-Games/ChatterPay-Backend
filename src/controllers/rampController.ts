@@ -642,3 +642,67 @@ export const rampOff = async (request: FastifyRequest, reply: FastifyReply) => {
 
   return returnSuccessResponse(reply, 'ramp-off', rampOffResponse);
 };
+
+/**
+ * Controller for generating an on-ramp link for a given phone number.
+ * Retrieves the wallet address associated with the phone number and returns
+ * the formatted on-ramp URL.
+ *
+ * @param request - Fastify request object containing the phone number
+ * @param reply - Fastify reply object
+ * @returns Response with status 200 and the on-ramp link
+ */
+export const generateOnRampLink = async (
+  request: FastifyRequest<{
+    Body: { phone_number: string };
+  }>,
+  reply: FastifyReply
+) => {
+  Logger.log('generateOnRampLink', 'Generating on-ramp link for user');
+
+  if (!request.body) {
+    return returnErrorResponse('generateOnRampLink', '', reply, 400, 'Request body is required');
+  }
+
+  const { phone_number } = request.body;
+
+  if (!phone_number) {
+    return returnErrorResponse(
+      'generateOnRampLink',
+      '',
+      reply,
+      400,
+      'Missing "phone_number" in the request body'
+    );
+  }
+
+  const fromUser: IUser | null = await getUser(phone_number);
+
+  if (!fromUser) {
+    return returnErrorResponse(
+      'generateOnRampLink',
+      phone_number,
+      reply,
+      404,
+      COMMON_REPLY_WALLET_NOT_CREATED
+    );
+  }
+
+  if (!fromUser.wallets || fromUser.wallets.length === 0) {
+    return returnErrorResponse(
+      'generateOnRampLink',
+      phone_number,
+      reply,
+      404,
+      'User has no wallet associated'
+    );
+  }
+
+  const walletAddress = fromUser.wallets[0].wallet_proxy;
+
+  const onRampLink = `https://onramp.money/main/buy/?appId=1562916&coinCode=usdt&network=scroll&walletAddress=${walletAddress}`;
+
+  Logger.log('generateOnRampLink', `On-ramp link generated for ${phone_number}: ${onRampLink}`);
+
+  return returnSuccessResponse(reply, 'on-ramp link generated successfully', { link: onRampLink });
+};
