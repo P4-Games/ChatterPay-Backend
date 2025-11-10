@@ -19,8 +19,12 @@ import {
   returnErrorResponse500
 } from '../helpers/requestHelper';
 import {
+  ONRAMP_APP_ID,
   FIAT_CURRENCIES,
+  ONRAMP_BASE_URL,
   CHATIZALO_PHONE_NUMBER,
+  ONRAMP_DEFAULT_NETWORK,
+  ONRAMP_DEFAULT_COIN_CODE,
   COMMON_REPLY_WALLET_NOT_CREATED,
   MANTECA_MOCK_UPLOAD_DOCUMENTS_URL
 } from '../config/constants';
@@ -700,7 +704,7 @@ export const generateOnRampLink = async (
 
   const walletAddress = fromUser.wallets[0].wallet_proxy;
 
-  const onRampLink = `https://onramp.money/main/buy/?appId=1562916&coinCode=usdt&network=scroll&walletAddress=${walletAddress}`;
+  const onRampLink = `${ONRAMP_BASE_URL}?appId=${ONRAMP_APP_ID}&coinCode=${ONRAMP_DEFAULT_COIN_CODE}&network=${ONRAMP_DEFAULT_NETWORK}&walletAddress=${walletAddress}`;
 
   Logger.log('generateOnRampLink', `On-ramp link generated for ${phone_number}: ${onRampLink}`);
 
