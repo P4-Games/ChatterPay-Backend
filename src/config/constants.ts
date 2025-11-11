@@ -271,3 +271,9 @@ export const CACHE_ERC20_DATA_CHECK_PERIOD = 518400; // 6 days
 
 export const CACHE_CHATTERPOINTS_WORDS_TTL = 1728000; // 20 days
 export const CACHE_CHATTERPOINTS_WORDS_CHECK_PERIOD = 1728600; // 20 days + 10 min
+
+// On-Ramp Configuration
+export const ONRAMP_BASE_URL = 'https://onramp.money/main/buy/';
+export const ONRAMP_APP_ID = '1562916';
+export const ONRAMP_DEFAULT_COIN_CODE = 'usdt';
+export const ONRAMP_DEFAULT_NETWORK = 'scroll';
