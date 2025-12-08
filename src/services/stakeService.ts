@@ -11,10 +11,7 @@ import { STAKED_USX_CONTRACT_ADDRESS } from '../config/constants';
 import StakedUSXABI from './web3/abis/StakedUSX.sol/StakedUSX.json';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-import {
-  createExecuteCallData,
-  executeUserOperationWithRetry
-} from './web3/userOpService';
+import { createExecuteCallData, executeUserOperationWithRetry } from './web3/userOpService';
 import {
   logPaymasterEntryPointDeposit,
   getPaymasterEntryPointDepositValue
@@ -49,7 +46,7 @@ const STAKING_CONFIG: Record<string, StakingStrategy> = {
 /**
  * Gets the staking strategy for a given token.
  * Prioritizes MongoDB configuration, falls back to hardcoded config.
- * 
+ *
  * @param networkConfig - The blockchain network configuration
  * @param tokenSymbol - The token symbol (e.g., 'USX', 'USDC')
  * @returns StakingStrategy or null if not found
@@ -71,7 +68,6 @@ function getStakingStrategy(
   // Fallback to hardcoded config for backward compatibility
   return STAKING_CONFIG[tokenSymbol] || null;
 }
-
 
 /**
  * Sends a user operation for staking tokens.
@@ -130,7 +126,7 @@ async function sendStakeUserOperation(
         approveCallData,
         proxy.proxyAddress,
         'stake',
-        `${logKey  }-approve`,
+        `${logKey}-approve`,
         userOpGasConfig.perGasInitialMultiplier,
         userOpGasConfig.perGasIncrement,
         userOpGasConfig.callDataInitialMultiplier,
@@ -141,7 +137,11 @@ async function sendStakeUserOperation(
       if (!approveResult.success) {
         throw new Error(`Approval failed: ${approveResult.error}`);
       }
-      Logger.info('sendStakeUserOperation', logKey, `Approval successful: ${approveResult.transactionHash}`);
+      Logger.info(
+        'sendStakeUserOperation',
+        logKey,
+        `Approval successful: ${approveResult.transactionHash}`
+      );
     }
 
     // 4. Create Deposit Call Data
@@ -162,7 +162,7 @@ async function sendStakeUserOperation(
     // 6. Execute UserOp
     const userOpGasConfig = networkConfig.gas.operations.stake;
     if (!userOpGasConfig) {
-        throw new Error('Stake gas configuration missing');
+      throw new Error('Stake gas configuration missing');
     }
     const userOpResult = await executeUserOperationWithRetry(
       networkConfig,
@@ -181,14 +181,9 @@ async function sendStakeUserOperation(
     );
 
     return userOpResult;
-
   } catch (error) {
     const errorMessage = JSON.stringify(error);
-    Logger.error(
-      'sendStakeUserOperation',
-      `Error, amount: ${amount}, error: `,
-      errorMessage
-    );
+    Logger.error('sendStakeUserOperation', `Error, amount: ${amount}, error: `, errorMessage);
     return { success: false, transactionHash: '', error: errorMessage };
   }
 }
@@ -233,7 +228,7 @@ async function sendUnstakeUserOperation(
     const withdrawCallData = stakingInterface.encodeFunctionData('withdraw', [
       amountBN,
       userWalletAddress, // receiver
-      userWalletAddress  // owner
+      userWalletAddress // owner
     ]);
 
     // 4. Create Execute Call Data for Wallet
@@ -247,7 +242,7 @@ async function sendUnstakeUserOperation(
     // 5. Execute UserOp (using unstake gas config)
     const userOpGasConfig = networkConfig.gas.operations.unstake;
     if (!userOpGasConfig) {
-        throw new Error('Unstake gas configuration missing');
+      throw new Error('Unstake gas configuration missing');
     }
     const userOpResult = await executeUserOperationWithRetry(
       networkConfig,
@@ -266,14 +261,9 @@ async function sendUnstakeUserOperation(
     );
 
     return userOpResult;
-
   } catch (error) {
     const errorMessage = JSON.stringify(error);
-    Logger.error(
-      'sendUnstakeUserOperation',
-      `Error, amount: ${amount}, error: `,
-      errorMessage
-    );
+    Logger.error('sendUnstakeUserOperation', `Error, amount: ${amount}, error: `, errorMessage);
     return { success: false, transactionHash: '', error: errorMessage };
   }
 }
@@ -304,10 +294,7 @@ export async function processStakeRequest(
       return { result: false, message: 'User not found' };
     }
 
-    const userWallet: IUserWallet | null = getUserWalletByChainId(
-      bddUser.wallets,
-      chain_id
-    );
+    const userWallet: IUserWallet | null = getUserWalletByChainId(bddUser.wallets, chain_id);
     if (!userWallet) {
       return { result: false, message: `No wallet found for chain ${chain_id}` };
     }
@@ -321,8 +308,10 @@ export async function processStakeRequest(
 
     // Check Blockchain Conditions
 
-
-    const checkResult: CheckBalanceConditionsResult = await checkBlockchainConditions(networkConfig, bddUser);
+    const checkResult: CheckBalanceConditionsResult = await checkBlockchainConditions(
+      networkConfig,
+      bddUser
+    );
 
     if (!checkResult.success) {
       return { result: false, message: 'Invalid Blockchain Conditions' };
@@ -331,7 +320,7 @@ export async function processStakeRequest(
     await openOperation(bddUser.phone_number, ConcurrentOperationsEnum.Transfer);
 
     let executeResult: ExecueTransactionResult;
-    
+
     // Keep Paymaster Deposit Value
     const paymasterDepositValuePrev = await getPaymasterEntryPointDepositValue(
       checkResult.entryPointContract!,
@@ -384,12 +373,11 @@ export async function processStakeRequest(
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.Transfer);
 
     if (executeResult.success) {
-        return { result: true, message: '', transactionHash: executeResult.transactionHash };
-    } 
-        return { result: false, message: executeResult.error };
-    
+      return { result: true, message: '', transactionHash: executeResult.transactionHash };
+    }
+    return { result: false, message: executeResult.error };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.Transfer);
     return { result: false, message: error.message };

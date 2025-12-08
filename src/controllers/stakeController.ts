@@ -20,13 +20,19 @@ export const stakeHandler = async (
 
   Logger.info('stakeHandler', LOG_KEY, `Processing stake request for ${amount} ${token}`);
 
-  const result = await processStakeRequest(channel_user_id, amount, chain_id, 'stake', token, LOG_KEY);
+  const result = await processStakeRequest(
+    channel_user_id,
+    amount,
+    chain_id,
+    'stake',
+    token,
+    LOG_KEY
+  );
 
   if (result.result) {
     return reply.code(200).send(result);
-  } 
-    return reply.code(400).send(result);
-  
+  }
+  return reply.code(400).send(result);
 };
 
 export const unstakeHandler = async (
@@ -38,11 +44,17 @@ export const unstakeHandler = async (
 
   Logger.info('unstakeHandler', LOG_KEY, `Processing unstake request for ${amount} ${token}`);
 
-  const result = await processStakeRequest(channel_user_id, amount, chain_id, 'unstake', token, LOG_KEY);
+  const result = await processStakeRequest(
+    channel_user_id,
+    amount,
+    chain_id,
+    'unstake',
+    token,
+    LOG_KEY
+  );
 
   if (result.result) {
     return reply.code(200).send(result);
-  } 
-    return reply.code(400).send(result);
-  
+  }
+  return reply.code(400).send(result);
 };

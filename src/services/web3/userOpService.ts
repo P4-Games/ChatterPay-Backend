@@ -38,7 +38,7 @@ export async function createGenericUserOperation(
   gasMultiplier: number
 ): Promise<PackedUserOperation> {
   const gasValues = gasConfig.operations[userOpType];
-  
+
   if (!gasValues) {
     throw new Error(`Gas configuration not found for operation: ${userOpType}`);
   }
@@ -49,11 +49,7 @@ export async function createGenericUserOperation(
   };
 
   if (!gasConfig.useFixedValues) {
-    const DynamicGasValues = await gasService.getPerGasValues(
-      gasValues,
-      provider,
-      gasMultiplier
-    );
+    const DynamicGasValues = await gasService.getPerGasValues(gasValues, provider, gasMultiplier);
 
     perGasData.maxPriorityFeePerGas = DynamicGasValues.maxPriorityFeePerGas;
     perGasData.maxFeePerGas = DynamicGasValues.maxFeePerGas;
@@ -425,7 +421,7 @@ async function prepareAndExecuteUserOperation(
       Logger.debug(userOpType, logKey, 'Update gas values');
       const opGasValues = networkConfig.gas.operations[userOpType];
       if (!opGasValues) {
-         throw new Error(`Gas configuration not found for operation: ${userOpType} during update`);
+        throw new Error(`Gas configuration not found for operation: ${userOpType} during update`);
       }
       const callDataGasValues = await gasService.getcallDataGasValues(
         opGasValues,
