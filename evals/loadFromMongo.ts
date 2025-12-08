@@ -72,7 +72,8 @@ async function connectToMongoDB(): Promise<void> {
     return;
   }
 
-  const mongoUri = process.env.CHATIZALO_MONGO_URI ?? 'mongodb://localhost:27017/chatterpay-develop';
+  const mongoUri =
+    process.env.CHATIZALO_MONGO_URI ?? 'mongodb://localhost:27017/chatterpay-develop';
   console.log(`[loadFromMongo] Connecting to MongoDB: ${mongoUri}`);
 
   try {
@@ -124,8 +125,8 @@ async function loadChatFunctions(): Promise<Tool[]> {
     function: {
       name: func.model_config.function.name,
       description: func.model_config.function.description,
-      parameters: func.model_config.function.parameters,
-    },
+      parameters: func.model_config.function.parameters
+    }
   }));
 
   return tools;
@@ -145,7 +146,7 @@ export async function loadPromptConfig(): Promise<PromptConfig> {
 
   return {
     systemPrompt,
-    tools,
+    tools
   };
 }
 
