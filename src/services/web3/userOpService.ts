@@ -50,7 +50,7 @@ export async function createGenericUserOperation(
 
   if (!gasConfig.useFixedValues) {
     const DynamicGasValues = await gasService.getPerGasValues(
-      gasConfig.operations[userOpType],
+      gasValues,
       provider,
       gasMultiplier
     );
@@ -423,8 +423,12 @@ async function prepareAndExecuteUserOperation(
     if (!networkConfig.gas.useFixedValues) {
       // Get dynamic callData Gas Values and update userOperation
       Logger.debug(userOpType, logKey, 'Update gas values');
+      const opGasValues = networkConfig.gas.operations[userOpType];
+      if (!opGasValues) {
+         throw new Error(`Gas configuration not found for operation: ${userOpType} during update`);
+      }
       const callDataGasValues = await gasService.getcallDataGasValues(
-        networkConfig.gas.operations[userOpType],
+        opGasValues,
         userOperation,
         networkConfig.rpc,
         entryPointContract.address,

@@ -7,8 +7,10 @@ import { IUser, IUserWallet } from '../models/userModel';
 import { setupERC20 } from './web3/contractSetupService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { checkBlockchainConditions } from './blockchainService';
-import { mongoTransactionService } from './mongo/mongoTransactionService';
+import { STAKED_USX_CONTRACT_ADDRESS } from '../config/constants';
+import StakedUSXABI from './web3/abis/StakedUSX.sol/StakedUSX.json';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
+import { mongoTransactionService } from './mongo/mongoTransactionService';
 import {
   createExecuteCallData,
   executeUserOperationWithRetry
@@ -18,21 +20,20 @@ import {
   getPaymasterEntryPointDepositValue
 } from './web3/paymasterService';
 import {
+  ExecueTransactionResult,
+  ConcurrentOperationsEnum,
+  CheckBalanceConditionsResult
+} from '../types/commonType';
+import {
   openOperation,
   closeOperation,
   getUserWalletByChainId,
   hasUserAnyOperationInProgress
 } from './userService';
-import {
-  ConcurrentOperationsEnum,
-  CheckBalanceConditionsResult,
-  ExecueTransactionResult
-} from '../types/commonType';
-import { STAKED_USX_CONTRACT_ADDRESS } from '../config/constants';
-import StakedUSXABI from './web3/abis/StakedUSX.sol/StakedUSX.json';
 
 interface StakingStrategy {
   contractAddress: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   abi: any;
   tokenSymbol: string;
 }
@@ -59,6 +60,7 @@ const STAKING_CONFIG: Record<string, StakingStrategy> = {
  */
 async function sendStakeUserOperation(
   networkConfig: IBlockchain,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setupContractsResult: any,
   entryPointContract: ethers.Contract,
   userWalletAddress: string,
@@ -90,6 +92,9 @@ async function sendStakeUserOperation(
       ]);
 
       const userOpGasConfig = networkConfig.gas.operations.stake;
+      if (!userOpGasConfig) {
+        throw new Error('Stake gas configuration missing');
+      }
       const approveResult = await executeUserOperationWithRetry(
         networkConfig,
         provider,
@@ -98,7 +103,7 @@ async function sendStakeUserOperation(
         approveCallData,
         proxy.proxyAddress,
         'stake',
-        logKey + '-approve',
+        `${logKey  }-approve`,
         userOpGasConfig.perGasInitialMultiplier,
         userOpGasConfig.perGasIncrement,
         userOpGasConfig.callDataInitialMultiplier,
@@ -129,6 +134,9 @@ async function sendStakeUserOperation(
 
     // 6. Execute UserOp
     const userOpGasConfig = networkConfig.gas.operations.stake;
+    if (!userOpGasConfig) {
+        throw new Error('Stake gas configuration missing');
+    }
     const userOpResult = await executeUserOperationWithRetry(
       networkConfig,
       provider,
@@ -172,6 +180,7 @@ async function sendStakeUserOperation(
  */
 async function sendUnstakeUserOperation(
   networkConfig: IBlockchain,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setupContractsResult: any,
   entryPointContract: ethers.Contract,
   userWalletAddress: string,
@@ -210,6 +219,9 @@ async function sendUnstakeUserOperation(
 
     // 5. Execute UserOp (using unstake gas config)
     const userOpGasConfig = networkConfig.gas.operations.unstake;
+    if (!userOpGasConfig) {
+        throw new Error('Unstake gas configuration missing');
+    }
     const userOpResult = await executeUserOperationWithRetry(
       networkConfig,
       provider,
@@ -333,9 +345,9 @@ export async function processStakeRequest(
         amount: parseFloat(amount),
         fee: 0,
         token: strategy.tokenSymbol,
-        type: type,
+        type,
         status: 'completed',
-        chain_id: chain_id
+        chain_id
       });
     }
 
@@ -343,10 +355,11 @@ export async function processStakeRequest(
 
     if (executeResult.success) {
         return { result: true, message: '', transactionHash: executeResult.transactionHash };
-    } else {
+    } 
         return { result: false, message: executeResult.error };
-    }
+    
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     await closeOperation(channel_user_id, ConcurrentOperationsEnum.Transfer);
     return { result: false, message: error.message };

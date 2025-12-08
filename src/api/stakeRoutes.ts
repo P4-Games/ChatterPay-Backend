@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+
 import { stakeHandler, unstakeHandler } from '../controllers/stakeController';
 
 const stakeRoutes = async (fastify: FastifyInstance): Promise<void> => {

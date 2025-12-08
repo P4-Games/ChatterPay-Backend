@@ -1,16 +1,15 @@
-import { it, expect, describe, vi, beforeEach, afterEach } from 'vitest';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ethers } from 'ethers';
-import { processStakeRequest } from '../../src/services/stakeService';
-import { mongoUserService } from '../../src/services/mongo/mongoUserService';
-import { mongoTransactionService } from '../../src/services/mongo/mongoTransactionService';
-import { mongoBlockchainService } from '../../src/services/mongo/mongoBlockchainService';
+import { it, vi, expect, describe, beforeEach } from 'vitest';
+
 import * as userService from '../../src/services/userService';
-import * as blockchainService from '../../src/services/blockchainService';
+import { processStakeRequest } from '../../src/services/stakeService';
 import * as userOpService from '../../src/services/web3/userOpService';
+import * as blockchainService from '../../src/services/blockchainService';
+import { mongoUserService } from '../../src/services/mongo/mongoUserService';
 import * as paymasterService from '../../src/services/web3/paymasterService';
 import * as contractSetupService from '../../src/services/web3/contractSetupService';
-import { ConcurrentOperationsEnum } from '../../src/types/commonType';
-import { STAKED_USX_CONTRACT_ADDRESS } from '../../src/config/constants';
+import { mongoBlockchainService } from '../../src/services/mongo/mongoBlockchainService';
 
 // Mock dependencies
 vi.mock('../../src/services/mongo/mongoUserService');
