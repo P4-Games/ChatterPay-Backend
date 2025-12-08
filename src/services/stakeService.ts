@@ -47,6 +47,17 @@ const STAKING_CONFIG: Record<string, StakingStrategy> = {
 };
 
 /**
+ * Gets the staking strategy for a given token.
+ * 
+ * @param tokenSymbol - The token symbol (e.g., 'USX', 'USDC')
+ * @returns StakingStrategy or null if not found
+ */
+function getStakingStrategy(tokenSymbol: string): StakingStrategy | null {
+  return STAKING_CONFIG[tokenSymbol] || null;
+}
+
+
+/**
  * Sends a user operation for staking tokens.
  *
  * @param networkConfig
@@ -260,8 +271,14 @@ export async function processStakeRequest(
   logKey: string
 ): Promise<{ result: boolean; message: string; transactionHash?: string }> {
   try {
+    // Get Blockchain Config first
+    const networkConfig = await mongoBlockchainService.getNetworkConfig(chain_id);
+    if (!networkConfig) {
+      return { result: false, message: 'Blockchain not configured' };
+    }
+
     // Validate Token Strategy
-    const strategy = STAKING_CONFIG[tokenSymbol];
+    const strategy = getStakingStrategy(tokenSymbol);
     if (!strategy) {
       return { result: false, message: `Staking not supported for token: ${tokenSymbol}` };
     }
@@ -287,10 +304,7 @@ export async function processStakeRequest(
     }
 
     // Check Blockchain Conditions
-    const networkConfig = await mongoBlockchainService.getNetworkConfig(chain_id);
-    if (!networkConfig) {
-      return { result: false, message: 'Blockchain not configured' };
-    }
+
 
     const checkResult: CheckBalanceConditionsResult = await checkBlockchainConditions(networkConfig, bddUser);
 
