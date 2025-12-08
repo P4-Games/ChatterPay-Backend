@@ -273,3 +273,9 @@ export const CACHE_CHATTERPOINTS_WORDS_TTL = 1728000; // 20 days
 export const CACHE_CHATTERPOINTS_WORDS_CHECK_PERIOD = 1728600; // 20 days + 10 min
 
 export const STAKED_USX_CONTRACT_ADDRESS = '0x49CBe0911c4f878E744387F4168fF592B26b1042';
+
+// On-Ramp Configuration
+export const ONRAMP_BASE_URL = 'https://onramp.money/main/buy/';
+export const ONRAMP_APP_ID = '1562916';
+export const ONRAMP_DEFAULT_COIN_CODE = 'usdt';
+export const ONRAMP_DEFAULT_NETWORK = 'scroll';

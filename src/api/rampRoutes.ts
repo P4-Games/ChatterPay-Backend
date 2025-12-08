@@ -8,6 +8,7 @@ import {
   createRampUser,
   getRampUserLimits,
   getRampUserBalance,
+  generateOnRampLink,
   checkRampUsersStatus,
   addRampUserBankAccount,
   getRampCryptoPairPrices,
@@ -37,4 +38,5 @@ export const rampRoutes = async (fastify: FastifyInstance): Promise<void> => {
   fastify.post('/ramp/on', rampOn);
   fastify.post('/ramp/off', rampOff);
   fastify.post('/ramp/users/compliance/status/check', checkRampUsersStatus);
+  fastify.post('/ramp/onramp/link', generateOnRampLink);
 };
