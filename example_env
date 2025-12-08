@@ -145,3 +145,8 @@ ALCHEMY_VAR_TOKENS_ID=''
 # - Set to 'false' for free plan setups, since the value must be captured manually and may change if recreated.
 # - Set to 'true' in production or paid plans for stricter validation.
 ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY='false' | 'true'
+
+# Promptfoo Configuration - System Prompt and Chat Functions Evaluation and Testing (Development environment)
+CHATIZALO_MONGO_URI=
+ANTHROPIC_API_KEY=
+OPENAI_API_KEY=
