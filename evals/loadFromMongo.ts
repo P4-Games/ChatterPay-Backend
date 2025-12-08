@@ -74,7 +74,20 @@ async function connectToMongoDB(): Promise<void> {
 
   const mongoUri =
     process.env.CHATIZALO_MONGO_URI ?? 'mongodb://localhost:27017/chatterpay-develop';
-  console.log(`[loadFromMongo] Connecting to MongoDB: ${mongoUri}`);
+  // Sanitize URI for logging to avoid leaking credentials
+  let sanitizedUri: string;
+  try {
+    const uriObj = new URL(mongoUri);
+    if (uriObj.username || uriObj.password) {
+      uriObj.username = uriObj.username ? '***' : '';
+      uriObj.password = uriObj.password ? '***' : '';
+    }
+    sanitizedUri = uriObj.toString();
+  } catch (e) {
+    // Fallback: if parsing fails, redact anything before '@'
+    sanitizedUri = mongoUri.replace(/\/\/.*@/, '//***:***@');
+  }
+  console.log(`[loadFromMongo] Connecting to MongoDB: ${sanitizedUri}`);
 
   try {
     await mongoose.connect(mongoUri);
@@ -95,7 +108,7 @@ async function loadSystemPrompt(): Promise<string> {
   }
 
   const collection = db.collection<ChatMode>('chat_modes');
-  const chatMode = await collection.findOne({});
+  const chatMode = await collection.findOne({}, { sort: { "date.$date": -1 } });
 
   if (!chatMode || !chatMode.default?.start_system_message) {
     throw new Error('No chat mode found or start_system_message is missing');

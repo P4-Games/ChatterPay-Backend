@@ -135,7 +135,7 @@ export const functionalTestCases: TestCase[] = [
       {
         type: 'llm-rubric',
         value:
-          'The assistant should guide the user through the swap process, asking for amount. Network and other details are known, just ask for amount'
+          'The assistant should guide the user through the swap process, asking for the amount (network and other details are already known)'
       },
       {
         type: 'not-contains',

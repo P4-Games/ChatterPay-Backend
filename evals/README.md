@@ -6,7 +6,7 @@ Isolated evaluation system for testing AI prompts using [promptfoo](https://www.
 
 ```
 evals/
-├── promptfooconfig.ts    # Main promptfoo configuration
+├── generate-config.ts     # Dynamically generates promptfoo configuration
 ├── loadFromMongo.ts      # Loads prompts and functions from MongoDB
 ├── cases/
 │   ├── functional.ts     # Functional test cases (normal operations)
@@ -70,8 +70,7 @@ npx promptfoo eval -c evals/.promptfoo-temp-config.json
 ```
 
 This will:
-- Load system prompt from `chat_modes` collection
-- Load active functions from `chat_functions` collection
+
 - Run functional tests (balance checks, transfers, etc.)
 - Run security tests (prompt injection, jailbreaks, data leaks)
 - Compare Claude Sonnet 4 vs GPT-4o

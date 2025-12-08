@@ -17,6 +17,7 @@ async function generateConfig() {
   const allTests = [...functionalTestCases, ...securityTestCases].map((test) => ({
     ...test,
     vars: {
+      ...test.vars,
       query: test.vars?.userMessage || ''
     }
   }));
@@ -36,7 +37,8 @@ async function generateConfig() {
 
     tests: allTests,
 
-    outputPath: './evals/output/results.json'
+    outputPath: './evals/output/results.json',
+    tools: config.tools
   };
 
   // Write temporary config
