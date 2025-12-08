@@ -55,6 +55,8 @@ export interface IBlockchain extends Document {
     operations: {
       transfer: OpGasValues;
       swap: OpGasValues;
+      stake?: OpGasValues;
+      unstake?: OpGasValues;
     };
   };
   balances: {
@@ -130,7 +132,9 @@ const blockchainSchema = new Schema<IBlockchain>({
     useFixedValues: { type: Boolean, required: true },
     operations: {
       transfer: { type: opGasSchema, required: true },
-      swap: { type: opGasSchema, required: true }
+      swap: { type: opGasSchema, required: true },
+      stake: { type: opGasSchema, required: false }, // Made optional to avoid validation errors if DB not updated immediately
+      unstake: { type: opGasSchema, required: false }
     }
   },
   balances: {

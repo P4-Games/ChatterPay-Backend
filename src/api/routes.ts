@@ -15,6 +15,7 @@ import telegramRoutes from './telegramRoutes';
 import { balanceRoutes } from './balanceRoutes';
 import transactionRoutes from './transactionRoutes';
 import { chatterpointsRoutes } from './chatterpointsRoutes';
+import stakeRoutes from './stakeRoutes';
 
 /**
  * Sets up all routes for the Fastify server.
@@ -37,4 +38,5 @@ export async function setupRoutes(server: FastifyInstance): Promise<void> {
   server.register(chatterpointsRoutes);
   server.register(telegramRoutes);
   server.register(webhookRoutes);
+  server.register(stakeRoutes);
 }

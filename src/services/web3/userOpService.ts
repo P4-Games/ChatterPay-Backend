@@ -34,10 +34,15 @@ export async function createGenericUserOperation(
   callData: string,
   sender: string,
   nonce: BigNumber,
-  userOpType: 'transfer' | 'swap',
+  userOpType: 'transfer' | 'swap' | 'stake' | 'unstake',
   gasMultiplier: number
 ): Promise<PackedUserOperation> {
   const gasValues = gasConfig.operations[userOpType];
+  
+  if (!gasValues) {
+    throw new Error(`Gas configuration not found for operation: ${userOpType}`);
+  }
+
   const perGasData: { maxPriorityFeePerGas: BigNumber; maxFeePerGas: BigNumber } = {
     maxPriorityFeePerGas: ethers.utils.parseUnits(gasValues.maxPriorityFeePerGas, 'gwei'),
     maxFeePerGas: ethers.utils.parseUnits(gasValues.maxFeePerGas, 'gwei')
@@ -353,7 +358,7 @@ async function prepareAndExecuteUserOperation(
   entryPointContract: ethers.Contract,
   userOpCallData: string,
   userProxyAddress: string,
-  userOpType: 'transfer' | 'swap',
+  userOpType: 'transfer' | 'swap' | 'stake' | 'unstake',
   logKey: string,
   perGasMultiplier: number,
   callDataGasMultiplier: number
@@ -507,7 +512,7 @@ export async function executeUserOperationWithRetry(
   entryPointContract: ethers.Contract,
   userOpCallData: string,
   userProxyAddress: string,
-  userOpType: 'transfer' | 'swap',
+  userOpType: 'transfer' | 'swap' | 'stake' | 'unstake',
   logKey: string,
   perGasInitialMultiplier: number,
   perGasIncrement: number,
@@ -566,4 +571,23 @@ export async function executeUserOperationWithRetry(
     `Max retries reached or a non-retryable error occurred.`
   );
   return result;
+}
+
+/**
+ * Creates the encoded call data for a generic execution on the user's Smart Account.
+ *
+ * @param {ethers.Contract} chatterPayContract - The Smart Account contract.
+ * @param {string} target - The target contract address.
+ * @param {BigNumber} value - The value to send (in wei).
+ * @param {string} callData - The encoded function call data.
+ * @returns {Promise<string>} The encoded call data for the user operation.
+ */
+export async function createExecuteCallData(
+  chatterPayContract: ethers.Contract,
+  target: string,
+  value: ethers.BigNumber,
+  callData: string
+): Promise<string> {
+  // execute(address dest, uint256 value, bytes func)
+  return chatterPayContract.interface.encodeFunctionData('execute', [target, value, callData]);
 }
