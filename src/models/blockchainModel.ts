@@ -13,6 +13,13 @@ export interface OpGasValues {
   preVerificationGas: number;
 }
 
+export interface StakingContractConfig {
+  [tokenSymbol: string]: {
+    contractAddress: string;
+    abi?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  };
+}
+
 export interface BlockchainLimitDetail {
   [unit: string]: number;
 }
@@ -50,6 +57,7 @@ export interface IBlockchain extends Document {
     poolAddress?: string;
     quoterAddress: string;
   };
+  stakingContracts?: StakingContractConfig;
   gas: {
     useFixedValues: boolean;
     operations: {
@@ -128,6 +136,7 @@ const blockchainSchema = new Schema<IBlockchain>({
     poolAddress: { type: String, required: false },
     quoterAddress: { type: String, required: false }
   },
+  stakingContracts: { type: Schema.Types.Mixed, required: false },
   gas: {
     useFixedValues: { type: Boolean, required: true },
     operations: {

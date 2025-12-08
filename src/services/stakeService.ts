@@ -48,11 +48,27 @@ const STAKING_CONFIG: Record<string, StakingStrategy> = {
 
 /**
  * Gets the staking strategy for a given token.
+ * Prioritizes MongoDB configuration, falls back to hardcoded config.
  * 
+ * @param networkConfig - The blockchain network configuration
  * @param tokenSymbol - The token symbol (e.g., 'USX', 'USDC')
  * @returns StakingStrategy or null if not found
  */
-function getStakingStrategy(tokenSymbol: string): StakingStrategy | null {
+function getStakingStrategy(
+  networkConfig: IBlockchain,
+  tokenSymbol: string
+): StakingStrategy | null {
+  // First, try to get from networkConfig.stakingContracts (MongoDB)
+  if (networkConfig.stakingContracts && networkConfig.stakingContracts[tokenSymbol]) {
+    const config = networkConfig.stakingContracts[tokenSymbol];
+    return {
+      contractAddress: config.contractAddress,
+      abi: config.abi || StakedUSXABI.abi, // Use custom ABI if provided, fallback to StakedUSXABI
+      tokenSymbol
+    };
+  }
+
+  // Fallback to hardcoded config for backward compatibility
   return STAKING_CONFIG[tokenSymbol] || null;
 }
 
@@ -277,8 +293,8 @@ export async function processStakeRequest(
       return { result: false, message: 'Blockchain not configured' };
     }
 
-    // Validate Token Strategy
-    const strategy = getStakingStrategy(tokenSymbol);
+    // Validate Token Strategy (MongoDB first, fallback to hardcoded)
+    const strategy = getStakingStrategy(networkConfig, tokenSymbol);
     if (!strategy) {
       return { result: false, message: `Staking not supported for token: ${tokenSymbol}` };
     }
