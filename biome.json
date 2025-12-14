@@ -25,7 +25,7 @@
     "indentWidth": 2,
     "lineWidth": 100,
     "formatWithErrors": true,
-    "lineEnding": "lf"
+    "lineEnding": "auto"
   },
   "linter": {
     "enabled": true,
