@@ -4,12 +4,14 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
+import { NotificationEnum } from '../models/templateModel';
 import { withdrawWalletAllFunds } from '../services/transferService';
 import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../config/constants';
 import { tryIssueTokens, createOrReturnWallet } from '../services/walletService';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
 import {
+  getNotificationTemplate,
   sendWalletCreationNotification,
   sendWalletAlreadyExistsNotification
 } from '../services/notificationService';
@@ -171,6 +173,84 @@ export const createWallet = async (
   })();
 
   return reply;
+};
+
+/**
+ * Handles the creation of a new wallet for the user.
+ * @param {FastifyRequest<{ Body: { channel_user_id: string } }>} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object used to send the response.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the result.
+ */
+export const createWalletSync = async (
+  request: FastifyRequest<{
+    Body: { channel_user_id: string };
+    Querystring?: { lastBotMsgDelaySeconds?: number };
+  }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  let logKey = '[op:createWalletSync:unknown]';
+
+  try {
+    if (!request.body) throw new Error('Missing request body');
+
+    const { channel_user_id } = request.body;
+    logKey = `[op:createWalletSync:${channel_user_id}]`;
+
+    if (!channel_user_id) throw new Error('Missing channel_user_id in body');
+    if (!isValidPhoneNumber(channel_user_id)) {
+      throw new Error(`Invalid phone number: '${channel_user_id}'`);
+    }
+
+    const { networkConfig, tokens } = request.server;
+
+    const {
+      message: walletResultMessage,
+      walletAddress,
+      wasWalletCreated
+    } = await createOrReturnWallet(channel_user_id, networkConfig, logKey);
+
+    const notificationType = wasWalletCreated
+      ? NotificationEnum.wallet_creation
+      : NotificationEnum.wallet_already_exists;
+
+    const { message: templateMessage } = await getNotificationTemplate(
+      channel_user_id,
+      notificationType
+    );
+
+    const notificationMessage = templateMessage
+      .replace('[WALLET_ADDRESS]', walletAddress)
+      .replace('[NETWORK_NAME]', networkConfig.name);
+
+    if (
+      wasWalletCreated &&
+      networkConfig.environment.toUpperCase() !== 'PRODUCTION' &&
+      IS_DEVELOPMENT &&
+      ISSUER_TOKENS_ENABLED
+    ) {
+      Logger.log('createWalletSync', logKey, `Issuing tokens for ${walletAddress}`);
+      await tryIssueTokens(walletAddress, tokens, networkConfig);
+    }
+
+    Logger.log('createWalletSync', logKey, `${walletResultMessage}, ${walletAddress}`);
+
+    return await reply.send({
+      status: 'success',
+      data: {
+        message: notificationMessage,
+        walletAddress,
+        wasWalletCreated
+      }
+    });
+  } catch (error) {
+    const err = error as Error;
+    Logger.error('createWalletSync', logKey, err.message || err);
+
+    return reply.status(500).send({
+      status: 'error',
+      message: err.message || 'Internal error'
+    });
+  }
 };
 
 /**
