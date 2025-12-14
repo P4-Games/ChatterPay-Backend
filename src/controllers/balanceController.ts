@@ -160,7 +160,8 @@ export const balanceByPhoneNumber = async (
  * @param {FastifyRequest} request - Fastify request with `channel_user_id` query param.
  * @param {FastifyReply} reply - Fastify reply instance.
  * @returns {Promise<FastifyReply>} Simplified balance response.
- */ export const balanceByPhoneNumberSync = async (
+ */
+export const balanceByPhoneNumberSync = async (
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
@@ -205,30 +206,31 @@ export const balanceByPhoneNumber = async (
 
     const USD = 'USD' as const satisfies Currency;
 
-    const toFixed2 = (n: number): string => Number(n).toFixed(2);
-    const toFixed6 = (n: number): string => Number(n).toFixed(6);
-    const usdFrom = (rec?: Record<Currency, number>): number => Number((rec && rec[USD]) ?? 0);
-
     const balances: BalanceInfo[] = Array.isArray(data.balances) ? data.balances : [];
 
     const sorted: BalanceInfo[] = balances
       .slice()
-      .sort((a, b) => usdFrom(b.balance_conv) - usdFrom(a.balance_conv))
+      .sort((a, b) => (b.balance_conv?.[USD] ?? 0) - (a.balance_conv?.[USD] ?? 0))
       .slice(0, 5);
-
-    const headerLine: string = `Network: ${networkConfig.name ?? networkConfig.chainId}`;
 
     const tokenLines: string[] = sorted.map((t) => {
       const symbol: string = t.token ?? '—';
-      const amount: string = Number.isFinite(t.balance) ? toFixed6(t.balance) : '0.000000';
-      const usd: string = toFixed2(usdFrom(t.balance_conv));
+      const amount = t.balance;
+      const usdRaw = t.balance_conv?.[USD] ?? 0;
 
-      return `${symbol}: ${amount} · $${usd}`;
+      const usdFormatted = Number(usdRaw).toFixed(2);
+
+      if (usdRaw > 0) {
+        return `${symbol}: ${amount} (~ $${usdFormatted})`;
+      }
+
+      return `${symbol}: ${amount}`;
     });
 
-    const totalUsd: string = toFixed2(Number((data.totals && data.totals[USD]) ?? 0));
+    const totalUsdRaw = data.totals?.[USD] ?? 0;
+    const totalUsdFormatted = Number(totalUsdRaw).toFixed(2);
 
-    const textResponse: string = [headerLine, ...tokenLines, `Total: $${totalUsd}`].join('\n');
+    const textResponse: string = [...tokenLines, `Total: $${totalUsdFormatted}`].join('\n');
 
     return await returnSuccessResponse(reply, textResponse);
   } catch (err) {
