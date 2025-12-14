@@ -1,35 +1,34 @@
 /* eslint-disable no-restricted-syntax */
-import { ethers } from 'ethers';
-
-import { IToken } from '../models/tokenModel';
+import type { ethers } from 'ethers';
 import { Logger } from '../helpers/loggerHelper';
-import { getTokenBalances } from './balanceService';
 import { delaySeconds } from '../helpers/timeHelper';
-import { IBlockchain } from '../models/blockchainModel';
-import { IUser, IUserWallet } from '../models/userModel';
-import { setupERC20 } from './web3/contractSetupService';
-import { mongoUserService } from './mongo/mongoUserService';
+import type { IBlockchain } from '../models/blockchainModel';
+import type { IToken } from '../models/tokenModel';
+import type { IUser, IUserWallet } from '../models/userModel';
+import {
+  type CheckBalanceConditionsResult,
+  ConcurrentOperationsEnum,
+  type ExecueTransactionResult,
+  type SetupContractReturn,
+  type TokenBalance,
+  type TransactionData
+} from '../types/commonType';
+import { getTokenBalances } from './balanceService';
 import { checkBlockchainConditions } from './blockchainService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
-import { createTransferCallData, executeUserOperationWithRetry } from './web3/userOpService';
+import { mongoUserService } from './mongo/mongoUserService';
 import {
-  logPaymasterEntryPointDeposit,
-  getPaymasterEntryPointDepositValue
-} from './web3/paymasterService';
-import {
-  openOperation,
   closeOperation,
   getUserWalletByChainId,
-  hasUserAnyOperationInProgress
+  hasUserAnyOperationInProgress,
+  openOperation
 } from './userService';
+import { setupERC20 } from './web3/contractSetupService';
 import {
-  TokenBalance,
-  TransactionData,
-  SetupContractReturn,
-  ExecueTransactionResult,
-  ConcurrentOperationsEnum,
-  CheckBalanceConditionsResult
-} from '../types/commonType';
+  getPaymasterEntryPointDepositValue,
+  logPaymasterEntryPointDeposit
+} from './web3/paymasterService';
+import { createTransferCallData, executeUserOperationWithRetry } from './web3/userOpService';
 
 /**
  * Sends a user operation for token transfer.

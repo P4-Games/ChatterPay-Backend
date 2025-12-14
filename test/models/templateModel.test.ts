@@ -1,12 +1,12 @@
-import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { it, expect, describe, afterEach, beforeEach } from 'vitest';
+import mongoose from 'mongoose';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  TemplateType,
-  ITemplateSchema,
-  NotificationEnum,
-  NotificationTemplateType
+  type ITemplateSchema,
+  type NotificationEnum,
+  type NotificationTemplateType,
+  TemplateType
 } from '../../src/models/templateModel';
 
 describe('Template Model', () => {

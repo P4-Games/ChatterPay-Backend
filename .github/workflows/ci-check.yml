@@ -36,25 +36,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-  prettier:
-    name: Check Code Formatting
-    runs-on: ubuntu-latest
-    needs: setup
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Run Prettier
-        run: bun x prettier --check . --ignore-path .prettierignore
-
-      - name: Check for uncommitted changes
-        run: git diff --exit-code
-
   lint:
-    name: Check with Lint
+    name: Lint & Type Check (Biome)
     runs-on: ubuntu-latest
     needs: setup
     steps:
@@ -68,10 +51,16 @@ jobs:
         run: bun add -d @types/bun
 
       - name: Run TypeScript type check
-        run: bun x tsc --noEmit
+        run: bunx tsc --noEmit
 
-      - name: Run ESLint
-        run: bun x eslint . --max-warnings=0
+      - name: Normalize line endings (tracked files only)
+        run: |
+          # Ensure consistent LF line endings across environments (respecting .gitignore)
+          git config --global core.autocrlf false
+          git ls-files -z | xargs -0 sed -i 's/\r$//'
+
+      - name: Run Biome
+        run: bunx biome check .
 
   tests:
     name: Test Application
@@ -98,7 +87,7 @@ jobs:
           bun --eval "const { MongoBinary } = require('mongodb-memory-server-core'); MongoBinary.getPath({ downloadDir: '/tmp/mongodb-binaries', version: '7.0.14' });"
 
       - name: Run tests
-        run: bun x vitest --exclude test/services/coingecko/coingeckoService.test.ts
+        run: bunx vitest --exclude test/services/coingecko/coingeckoService.test.ts
 
   docker-build:
     name: Build Docker Image

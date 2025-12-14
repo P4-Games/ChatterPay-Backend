@@ -1,16 +1,15 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
-
-import { IToken } from '../models/tokenModel';
-import { Logger } from '../helpers/loggerHelper';
-import { IBlockchain } from '../models/blockchainModel';
-import { IUser, IUserWallet } from '../models/userModel';
-import { Currency, BalanceInfo } from '../types/commonType';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
-import { getAddressBalanceWithNfts } from '../services/balanceService';
-import { getUser, getUserWalletByChainId } from '../services/userService';
-import { fetchExternalDeposits } from '../services/externalDepositsService';
+import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
-import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
+import { isValidEthereumWallet, isValidPhoneNumber } from '../helpers/validationHelper';
+import type { IBlockchain } from '../models/blockchainModel';
+import type { IToken } from '../models/tokenModel';
+import type { IUser, IUserWallet } from '../models/userModel';
+import { getAddressBalanceWithNfts } from '../services/balanceService';
+import { fetchExternalDeposits } from '../services/externalDepositsService';
+import { getUser, getUserWalletByChainId } from '../services/userService';
+import type { BalanceInfo, Currency } from '../types/commonType';
 
 type CheckExternalDepositsQuery = {
   sendNotification?: string;

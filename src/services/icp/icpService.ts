@@ -1,16 +1,15 @@
-import { createHash } from 'crypto';
 import { HttpAgent } from '@dfinity/agent';
 import { AssetManager } from '@dfinity/assets';
 import { Ed25519KeyIdentity } from '@dfinity/identity';
 import { mnemonicToSeed, validateMnemonic } from 'bip39';
-
-import { Logger } from '../../helpers/loggerHelper';
+import { createHash } from 'crypto';
 import {
-  ICP_URL,
-  ICP_MNEMONIC,
   ICP_CANISTER_ID,
+  ICP_MNEMONIC,
+  ICP_URL,
   NFT_UPLOAD_IMAGE_ICP
 } from '../../config/constants';
+import { Logger } from '../../helpers/loggerHelper';
 
 /**
  * Generates an Ed25519KeyIdentity from a mnemonic seed phrase.

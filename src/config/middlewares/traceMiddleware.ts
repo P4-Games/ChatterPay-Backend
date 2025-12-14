@@ -1,6 +1,6 @@
-import { randomUUID } from 'crypto';
 import { get } from '@google-cloud/trace-agent';
-import { FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
+import { randomUUID } from 'crypto';
+import type { FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
 
 /**
  * Middleware for tracing incoming requests with Google Cloud Trace.

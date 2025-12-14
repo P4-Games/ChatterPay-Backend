@@ -1,8 +1,7 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
-
-import { BLACKLIST_IPS } from '../constants';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Logger } from '../../helpers/loggerHelper';
 import { returnErrorResponse } from '../../helpers/requestHelper';
+import { BLACKLIST_IPS } from '../constants';
 
 const blacklistedIps = (BLACKLIST_IPS || '').split(',').map((ip) => ip.trim());
 

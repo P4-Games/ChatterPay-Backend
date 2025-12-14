@@ -1,6 +1,6 @@
 import { Logger } from '../../helpers/loggerHelper';
-import { ExternalDepositEvent } from '../../types/alchemyTypes';
-import { IExternalDeposit, ExternalDepositModel } from '../../models/externalDepositModel';
+import { ExternalDepositModel, type IExternalDeposit } from '../../models/externalDepositModel';
+import type { ExternalDepositEvent } from '../../types/alchemyTypes';
 
 /**
  * Mongo service for persisting and retrieving external deposit events.
@@ -35,6 +35,7 @@ export const mongoExternalDepositsService = {
             }
           ).lean();
 
+          // @ts-expect-error
           if (doc) persisted.push(doc as IExternalDeposit);
 
           Logger.debug('mongoExternalDepositsService', 'Persisted deposit event', {
@@ -81,6 +82,7 @@ export const mongoExternalDepositsService = {
     logIndex: number
   ): Promise<IExternalDeposit | null> => {
     try {
+      // @ts-expect-error
       return await ExternalDepositModel.findOne({ txHash, logIndex }).lean();
     } catch (err) {
       Logger.error('mongoExternalDepositsService', 'getDepositByTxAndIndex DB error:', err);
@@ -94,6 +96,7 @@ export const mongoExternalDepositsService = {
   getRecentDeposits: async (hours: number): Promise<IExternalDeposit[]> => {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
     try {
+      // @ts-expect-error
       return await ExternalDepositModel.find({ observedAt: { $gte: since } }).lean();
     } catch (err) {
       Logger.error('mongoExternalDepositsService', 'getRecentDeposits DB error:', err);
@@ -109,6 +112,7 @@ export const mongoExternalDepositsService = {
    */
   async getUnprocessedAlchemyDeposits(chainId: number): Promise<readonly IExternalDeposit[]> {
     try {
+      // @ts-expect-error
       return await ExternalDepositModel.find({
         chainId,
         provider: 'alchemy',

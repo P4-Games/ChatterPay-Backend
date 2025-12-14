@@ -1,9 +1,9 @@
-import { ethers, BigNumber } from 'ethers';
+import { BigNumber, ethers } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { IBlockchain } from '../../models/blockchainModel';
-import { PackedUserOperation } from '../../types/userOperationType';
 import { getPaymasterAndData } from '../../helpers/paymasterHelper';
+import type { IBlockchain } from '../../models/blockchainModel';
+import type { PackedUserOperation } from '../../types/userOperationType';
 
 /**
  * Add paymaster-related data to the given UserOperation.

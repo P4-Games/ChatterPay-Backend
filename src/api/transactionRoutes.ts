@@ -1,13 +1,13 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import {
-  makeTransaction,
+  checkTransactionStatus,
   createTransaction,
   deleteTransaction,
-  updateTransaction,
   getAllTransactions,
   getTransactionById,
-  checkTransactionStatus
+  makeTransaction,
+  updateTransaction
 } from '../controllers/transactionController';
 
 /**

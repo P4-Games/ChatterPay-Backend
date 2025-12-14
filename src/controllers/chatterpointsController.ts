@@ -1,19 +1,18 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
-
-import { Logger } from '../helpers/loggerHelper';
-import { LeaderboardResult, chatterpointsService } from '../services/chatterpointsService';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ChatterPointsBusinessException } from '../exxceptions/domain/ChatterpointBusinessError';
-import {
-  GameType,
-  WindowUnit,
+import { Logger } from '../helpers/loggerHelper';
+import type {
   GameSection,
   GameSettings,
-  WordleSettings,
-  SocialPlatform,
+  GameType,
+  HangmanPointsConfig,
   HangmanSettings,
+  SocialPlatform,
+  WindowUnit,
   WordlePointsConfig,
-  HangmanPointsConfig
+  WordleSettings
 } from '../models/chatterpointsModel';
+import { chatterpointsService, type LeaderboardResult } from '../services/chatterpointsService';
 
 // -------------------------------------------------------------------------------------------------------------
 // Local, controller-only types (mínimos, sin repetir lo que ya existe en el modelo)

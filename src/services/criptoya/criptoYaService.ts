@@ -1,6 +1,6 @@
-import { Logger } from '../../helpers/loggerHelper';
-import { Currency, FiatQuote } from '../../types/commonType';
 import { CRIPTO_YA_URL, FIAT_CURRENCIES } from '../../config/constants';
+import { Logger } from '../../helpers/loggerHelper';
+import type { Currency, FiatQuote } from '../../types/commonType';
 
 /**
  * Fetches fiat quotes from external APIs

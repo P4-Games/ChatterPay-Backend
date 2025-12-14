@@ -1,13 +1,13 @@
+import { DEFAULT_CHAIN_ID, PUSH_ENABLED } from '../config/constants';
+import { formatIdentifierWithOptionalName, getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
+import { type IUser, type IUserWallet, UserModel } from '../models/userModel';
+import type { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
+import { walletProvisioningService } from './alchemy/walletProvisioningService';
+import { mongoCountryService } from './mongo/mongoCountryService';
+import { mongoUserService } from './mongo/mongoUserService';
 import { pushService } from './push/pushService';
 import { computeWallet } from './web3/rpc/rpcService';
-import { mongoUserService } from './mongo/mongoUserService';
-import { mongoCountryService } from './mongo/mongoCountryService';
-import { IUser, UserModel, IUserWallet } from '../models/userModel';
-import { PUSH_ENABLED, DEFAULT_CHAIN_ID } from '../config/constants';
-import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
-import { walletProvisioningService } from './alchemy/walletProvisioningService';
-import { getPhoneNumberFormatted, formatIdentifierWithOptionalName } from '../helpers/formatHelper';
 
 /**
  * Updates the operation count for the user by the specified increment.

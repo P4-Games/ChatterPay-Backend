@@ -1,12 +1,12 @@
-import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { it, expect, describe, afterEach, beforeEach } from 'vitest';
+import mongoose from 'mongoose';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  GameType,
-  WindowUnit,
-  PeriodStatus,
-  ChatterpointsModel
+  ChatterpointsModel,
+  type GameType,
+  type PeriodStatus,
+  type WindowUnit
 } from '../../src/models/chatterpointsModel';
 
 describe('Chatterpoints Model', () => {

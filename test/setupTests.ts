@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import { afterAll, beforeAll } from 'vitest';
-import { MongoMemoryServer } from 'mongodb-memory-server';
 
 // Load environment variables from .env
 dotenv.config();

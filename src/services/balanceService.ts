@@ -1,24 +1,23 @@
 import { ethers } from 'ethers';
-
-import { secService } from './secService';
-import { IToken } from '../models/tokenModel';
-import { getERC20ABI } from './web3/abiService';
-import { Logger } from '../helpers/loggerHelper';
-import { cacheService } from './cache/cacheService';
 import { BINANCE_API_URL } from '../config/constants';
-import { IBlockchain } from '../models/blockchainModel';
-import { getFiatQuotes } from './criptoya/criptoYaService';
 import { getPhoneNFTs } from '../controllers/nftController';
+import { Logger } from '../helpers/loggerHelper';
+import type { IBlockchain } from '../models/blockchainModel';
+import type { IToken } from '../models/tokenModel';
 import {
-  Currency,
-  FiatQuote,
-  TokenInfo,
+  type AddressBalanceWithNfts,
+  type BalanceInfo,
   CacheNames,
-  BalanceInfo,
-  TokenBalance,
-  WalletBalanceInfo,
-  AddressBalanceWithNfts
+  type Currency,
+  type FiatQuote,
+  type TokenBalance,
+  type TokenInfo,
+  type WalletBalanceInfo
 } from '../types/commonType';
+import { cacheService } from './cache/cacheService';
+import { getFiatQuotes } from './criptoya/criptoYaService';
+import { secService } from './secService';
+import { getERC20ABI } from './web3/abiService';
 
 /**
  * Fetches the balance of a specific token for a given address

@@ -1,5 +1,5 @@
 import { DEFAULT_CHAIN_ID } from '../../config/constants';
-import Blockchain, { IBlockchain } from '../../models/blockchainModel';
+import Blockchain, { type IBlockchain } from '../../models/blockchainModel';
 
 export const mongoBlockchainService = {
   /**

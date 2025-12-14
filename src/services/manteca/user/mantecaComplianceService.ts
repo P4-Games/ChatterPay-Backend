@@ -1,7 +1,6 @@
 import axios from 'axios';
-
-import { Logger } from '../../../helpers/loggerHelper';
 import { MANTECA_BASE_URL } from '../../../config/constants';
+import { Logger } from '../../../helpers/loggerHelper';
 import { getMantecaAxiosConfig } from '../mantecaCommonService';
 
 export const mantecaComplianceService = {

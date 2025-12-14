@@ -1,14 +1,13 @@
 import { ethers } from 'ethers';
-
-import { Logger } from '../../helpers/loggerHelper';
 import { DEFAULT_CHAIN_ID } from '../../config/constants';
-import { alchemyAdminService } from './alchemyAdminService';
-import { mongoTokenWhitelistService } from '../mongo/mongoTokenWhitelistService';
-import {
+import { Logger } from '../../helpers/loggerHelper';
+import type {
+  AlchemyAddressActivity,
   AlchemyLog,
-  AlchemyWebhookPayload,
-  AlchemyAddressActivity
+  AlchemyWebhookPayload
 } from '../../types/alchemyTypes';
+import { mongoTokenWhitelistService } from '../mongo/mongoTokenWhitelistService';
+import { alchemyAdminService } from './alchemyAdminService';
 
 // Factory event signatures
 const TOKEN_WHITELISTED_SIGNATURE = '0x'; // no emitted by chatterpay contract.

@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+import type { ethers } from 'ethers';
 
 export interface AaveReserveValidationResult {
   supported: boolean;

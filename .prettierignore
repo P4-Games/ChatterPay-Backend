@@ -1,9 +1,0 @@
-.vscode
-**/node_modules/*
-package.json
-package-lock.json
-yarn.lock
-cloudbuild.yaml
-README.md
-**/abis/*
-**/*.md

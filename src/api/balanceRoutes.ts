@@ -1,10 +1,10 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import {
-  walletBalance,
   balanceByPhoneNumber,
+  balanceByPhoneNumberSync,
   checkExternalDeposits,
-  balanceByPhoneNumberSync
+  walletBalance
 } from '../controllers/balanceController';
 
 /**

@@ -1,13 +1,12 @@
 import { ethers } from 'ethers';
-
-import { secService } from './secService';
-import { IToken } from '../models/tokenModel';
-import { wrapRpc } from './web3/rpc/rpcService';
 import { Logger } from '../helpers/loggerHelper';
-import { IBlockchain } from '../models/blockchainModel';
+import type { IBlockchain } from '../models/blockchainModel';
+import type { IToken } from '../models/tokenModel';
+import { type MintResult, rpcProviders } from '../types/commonType';
 import { mongoUserService } from './mongo/mongoUserService';
-import { MintResult, rpcProviders } from '../types/commonType';
+import { secService } from './secService';
 import { addWalletToUser, createUserWithWallet, getUserWalletByChainId } from './userService';
+import { wrapRpc } from './web3/rpc/rpcService';
 
 /**
  * Mints a specified amount of tokens for a given address.

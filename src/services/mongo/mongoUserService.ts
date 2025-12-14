@@ -1,12 +1,12 @@
-import { Logger } from '../../helpers/loggerHelper';
-import { IUser, UserModel } from '../../models/userModel';
-import { mongoCountryService } from './mongoCountryService';
-import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
-import { NotificationLanguage, notificationLanguages } from '../../types/commonType';
 import {
   RESET_USER_OPERATION_THRESHOLD_MINUTES,
   SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT
 } from '../../config/constants';
+import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
+import { Logger } from '../../helpers/loggerHelper';
+import { type IUser, UserModel } from '../../models/userModel';
+import { type NotificationLanguage, notificationLanguages } from '../../types/commonType';
+import { mongoCountryService } from './mongoCountryService';
 
 export const mongoUserService = {
   /**
