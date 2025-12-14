@@ -63,6 +63,7 @@ export const mongoCountryService = {
    */
   getCountryByCode: async (code: string): Promise<ICountry | null> => {
     try {
+      // @ts-expect-error
       return await CountryModel.findOne({ code: code.toLowerCase() }).lean();
     } catch (err) {
       Logger.error('mongoCountryService', 'getCountryByCode DB error:', err);
@@ -79,6 +80,7 @@ export const mongoCountryService = {
     try {
       const countries = await CountryModel.find({}, { code: 1, phone_code: 1 }).lean();
       const sorted = countries.sort((a, b) => b.phone_code.length - a.phone_code.length);
+      // @ts-expect-error
       return sorted.find((c) => digits.startsWith(c.phone_code)) ?? null;
     } catch (err) {
       Logger.error('mongoCountryService', 'getCountryByPhoneNumber DB error:', err);

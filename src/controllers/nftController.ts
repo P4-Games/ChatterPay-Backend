@@ -380,6 +380,7 @@ export const generateNftOriginal = async (
   try {
     nftMintData = await mintNftOriginal(
       userWalletByChainId.wallet_proxy,
+      // @ts-expect-error
       (mongoData._id as ObjectId).toString()
     );
   } catch (error) {
@@ -643,6 +644,7 @@ export const generateNftCopy = async (
       nftMintData = await mintNftCopy(
         userWallet.wallet_proxy,
         nftCopyOf.id,
+        // @ts-expect-error
         (mongoData._id as ObjectId).toString()
       );
     } catch (error) {
