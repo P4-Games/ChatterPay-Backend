@@ -15,7 +15,7 @@
     "lint": "biome lint .",
     "lint:fix": "biome check . --write",
     "format": "biome format . --write",
-    "pre-commit": "bun run biome:fix && bun run type-check",
+    "pre-commit": "bun run lint:fix && bun run type-check",
     "create-env": "printenv > .env",
     "docker:build": "bash ./scripts/docker-build.sh",
     "docker:run": "bash docker run -d -p 3000:3000 --name chatterpay-back-app-container chatterpay-back-app",
