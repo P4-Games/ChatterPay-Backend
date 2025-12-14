@@ -1,9 +1,9 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import {
   createWallet,
-  getRampWallet,
   createWalletSync,
+  getRampWallet,
   withdrawAllFunds
 } from '../controllers/walletController';
 

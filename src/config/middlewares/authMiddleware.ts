@@ -1,16 +1,15 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
-
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { verifyAlchemySignature } from '../../helpers/alchemyHelper';
 import { Logger } from '../../helpers/loggerHelper';
 import { returnErrorResponse } from '../../helpers/requestHelper';
-import { verifyAlchemySignature } from '../../helpers/alchemyHelper';
 import {
-  FRONTEND_TOKEN,
-  CHATIZALO_TOKEN,
-  TELEGRAM_BOT_API_KEY,
-  TELEGRAM_WEBHOOK_PATH,
-  ALCHEMY_WEBHOOKS_PATH,
+  ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY,
   ALCHEMY_WEBHOOK_HEADER_API_KEY,
-  ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY
+  ALCHEMY_WEBHOOKS_PATH,
+  CHATIZALO_TOKEN,
+  FRONTEND_TOKEN,
+  TELEGRAM_BOT_API_KEY,
+  TELEGRAM_WEBHOOK_PATH
 } from '../constants';
 
 /**
@@ -255,7 +254,6 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     await returnErrorResponse('authMiddleware', '', reply, 401, 'Invalid Authorization Token');
     return;
   }
-
   // If you need to pass tokenType downstream, prefer attaching it to request (typed) rather than headers.
   // Minimal change: keep behavior but avoid mutating headers shape.
   (request as FastifyRequest & { tokenType?: TokenResponse }).tokenType = tokenType;

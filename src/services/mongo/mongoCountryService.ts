@@ -1,7 +1,7 @@
-import { Logger } from '../../helpers/loggerHelper';
-import { NotificationLanguage } from '../../types/commonType';
-import CountryModel, { ICountry } from '../../models/countries';
 import { SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT } from '../../config/constants';
+import { Logger } from '../../helpers/loggerHelper';
+import CountryModel, { type ICountry } from '../../models/countries';
+import type { NotificationLanguage } from '../../types/commonType';
 
 export const mongoCountryService = {
   /**

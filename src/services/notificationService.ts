@@ -1,25 +1,25 @@
-import { Logger } from '../helpers/loggerHelper';
-import { pushService } from './push/pushService';
-import { AaveSupplyInfo } from '../types/aaveType';
-import { cacheService } from './cache/cacheService';
-import { delaySeconds } from '../helpers/timeHelper';
-import { IBlockchain } from '../models/blockchainModel';
-import { mongoUserService } from './mongo/mongoUserService';
-import { chatizaloOperatorReply } from '../types/chatizaloType';
-import { chatizaloService } from './chatizalo/chatizaloService';
-import { isValidPhoneNumber } from '../helpers/validationHelper';
-import { RegisterOperationResult } from './chatterpointsService';
-import { CacheNames, NotificationLanguage } from '../types/commonType';
-import { mongoBlockchainService } from './mongo/mongoBlockchainService';
-import { formatIdentifierWithOptionalName } from '../helpers/formatHelper';
-import { mongoNotificationService } from './mongo/mongoNotificationServices';
 import { BOT_DATA_TOKEN, CHATTERPAY_NFTS_SHARE_URL } from '../config/constants';
-import { templateEnum, mongoTemplateService } from './mongo/mongoTemplateService';
+import { formatIdentifierWithOptionalName } from '../helpers/formatHelper';
+import { Logger } from '../helpers/loggerHelper';
+import { delaySeconds } from '../helpers/timeHelper';
+import { isValidPhoneNumber } from '../helpers/validationHelper';
+import type { IBlockchain } from '../models/blockchainModel';
 import {
-  ITemplateSchema,
+  type ITemplateSchema,
   NotificationEnum,
-  NotificationTemplatesTypes
+  type NotificationTemplatesTypes
 } from '../models/templateModel';
+import type { AaveSupplyInfo } from '../types/aaveType';
+import type { chatizaloOperatorReply } from '../types/chatizaloType';
+import { CacheNames, type NotificationLanguage } from '../types/commonType';
+import { cacheService } from './cache/cacheService';
+import { chatizaloService } from './chatizalo/chatizaloService';
+import type { RegisterOperationResult } from './chatterpointsService';
+import { mongoBlockchainService } from './mongo/mongoBlockchainService';
+import { mongoNotificationService } from './mongo/mongoNotificationServices';
+import { mongoTemplateService, templateEnum } from './mongo/mongoTemplateService';
+import { mongoUserService } from './mongo/mongoUserService';
+import { pushService } from './push/pushService';
 
 /**
  * Retrieves a notification template based on the user's channel ID and the specified notification type.

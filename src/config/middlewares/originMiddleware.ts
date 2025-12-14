@@ -1,12 +1,12 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { returnErrorResponse } from '../../helpers/requestHelper';
 import {
   CORS_ORIGINS,
-  IS_DEVELOPMENT,
+  CORS_ORIGINS_CHECK_POSTMAN,
   CORS_ORIGINS_EXCEPTIONS,
-  CORS_ORIGINS_CHECK_POSTMAN
+  IS_DEVELOPMENT
 } from '../constants';
 
 // Get the list of allowed CORS origins from environment variables or default to an empty string

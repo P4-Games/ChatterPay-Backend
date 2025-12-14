@@ -1,5 +1,5 @@
+import type { FastifyError, FastifyInstance, FastifyRequest } from 'fastify';
 import querystring from 'querystring';
-import { FastifyError, FastifyRequest, FastifyInstance } from 'fastify';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { ALCHEMY_WEBHOOKS_PATH } from '../constants';

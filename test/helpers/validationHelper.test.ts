@@ -1,12 +1,12 @@
 import { ethers } from 'ethers';
-import { it, expect, describe } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { short_urls_domains } from '../../src/config/shortUrlsDomains.json';
 import {
-  isValidUrl,
   isShortUrl,
+  isValidEthereumWallet,
   isValidPhoneNumber,
-  isValidEthereumWallet
+  isValidUrl
 } from '../../src/helpers/validationHelper';
 
 describe('Validation Functions', () => {

@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+import type { ethers } from 'ethers';
 
 /**
  * Basic token information including price

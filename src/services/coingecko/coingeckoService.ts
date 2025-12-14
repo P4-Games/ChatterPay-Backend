@@ -1,9 +1,8 @@
 import axios from 'axios';
-
+import { COINGECKO_API_BASE_URL, RESULT_CURRENCIES, TOKEN_IDS } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
+import { CacheNames, type ConversionRates } from '../../types/commonType';
 import { cacheService } from '../cache/cacheService';
-import { CacheNames, ConversionRates } from '../../types/commonType';
-import { TOKEN_IDS, RESULT_CURRENCIES, COINGECKO_API_BASE_URL } from '../../config/constants';
 
 /**
  * Generates a fallback response with zero values for all tokens and currencies.

@@ -1,10 +1,10 @@
-import { it, expect, describe } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   ONRAMP_APP_ID,
   ONRAMP_BASE_URL,
-  ONRAMP_DEFAULT_NETWORK,
-  ONRAMP_DEFAULT_COIN_CODE
+  ONRAMP_DEFAULT_COIN_CODE,
+  ONRAMP_DEFAULT_NETWORK
 } from '../../src/config/constants';
 
 describe('generateOnRampLink', () => {

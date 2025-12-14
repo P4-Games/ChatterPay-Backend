@@ -1,17 +1,16 @@
-import axios, { AxiosResponse } from 'axios';
-import { ethers, BigNumber, TypedDataField, TypedDataDomain } from 'ethers';
-
-import { gasService } from './gasService';
-import { wrapRpc } from './rpc/rpcService';
-import { secService } from '../secService';
-import { Logger } from '../../helpers/loggerHelper';
-import { addPaymasterData } from './paymasterService';
-import { rpcProviders } from '../../types/commonType';
-import { IBlockchain } from '../../models/blockchainModel';
-import { sendUserOperationToBundler } from './bundlerService';
+import axios, { type AxiosResponse } from 'axios';
+import { BigNumber, ethers, type TypedDataDomain, type TypedDataField } from 'ethers';
 import { CDO1, CDO2, CDO3, CDO4 } from '../../config/constants';
+import { Logger } from '../../helpers/loggerHelper';
 import { getUserOpHash } from '../../helpers/userOperationHelper';
-import { PackedUserOperation, UserOperationReceipt } from '../../types/userOperationType';
+import type { IBlockchain } from '../../models/blockchainModel';
+import { rpcProviders } from '../../types/commonType';
+import type { PackedUserOperation, UserOperationReceipt } from '../../types/userOperationType';
+import { secService } from '../secService';
+import { sendUserOperationToBundler } from './bundlerService';
+import { gasService } from './gasService';
+import { addPaymasterData } from './paymasterService';
+import { wrapRpc } from './rpc/rpcService';
 
 /**
  * Creates a generic user operation for a transaction.

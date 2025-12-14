@@ -1,11 +1,11 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import {
+  checkUsersWithOpenOperations,
   clearAllCaches,
   clearCacheByName,
-  resetUsersOperations,
   resetUsersOperationLimits,
-  checkUsersWithOpenOperations,
+  resetUsersOperations,
   resetUsersOperationsWithTimeCondition
 } from '../controllers/supportController';
 

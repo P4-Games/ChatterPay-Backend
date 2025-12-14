@@ -1,20 +1,19 @@
 import { once as onceEvent } from 'events';
-import { ServerResponse, IncomingMessage } from 'http';
-import { FastifyReply, FastifyRequest } from 'fastify';
-
-import { Logger } from '../helpers/loggerHelper';
-import { delaySeconds } from '../helpers/timeHelper';
-import { NotificationEnum } from '../models/templateModel';
-import { withdrawWalletAllFunds } from '../services/transferService';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { IncomingMessage, ServerResponse } from 'http';
 import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../config/constants';
-import { tryIssueTokens, createOrReturnWallet } from '../services/walletService';
+import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
-import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
+import { delaySeconds } from '../helpers/timeHelper';
+import { isValidEthereumWallet, isValidPhoneNumber } from '../helpers/validationHelper';
+import { NotificationEnum } from '../models/templateModel';
 import {
   getNotificationTemplate,
-  sendWalletCreationNotification,
-  sendWalletAlreadyExistsNotification
+  sendWalletAlreadyExistsNotification,
+  sendWalletCreationNotification
 } from '../services/notificationService';
+import { withdrawWalletAllFunds } from '../services/transferService';
+import { createOrReturnWallet, tryIssueTokens } from '../services/walletService';
 
 /**
  * Retrieves the ChatterPay wallet address associated with the given user.
@@ -103,7 +102,6 @@ export const createWallet = async (
       onceEvent(res, 'close') // client closed connection earlier; we still continue
     ]);
   }
-
   // Async processing after the reply
   (async () => {
     let logKey = '[op:createWallet:unknown]';

@@ -1,33 +1,32 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
-
-import { IUser } from '../models/userModel';
-import { IToken } from '../models/tokenModel';
-import { Logger } from '../helpers/loggerHelper';
-import { getUser } from '../services/userService';
-import { mantecaUserService } from '../services/manteca/user/mantecaUserService';
-import { mantecaPriceService } from '../services/manteca/market/mantecaPriceService';
-import { mantecaWidgetService } from '../services/manteca/user/mantecaWidgetService';
-import { mantecaBalanceService } from '../services/manteca/user/mantecaBalanceService';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import {
-  MantecaUserBalance,
-  MantecaOperationSide,
-  MantecaWidgetOnboarding
-} from '../types/mantecaType';
+  CHATIZALO_PHONE_NUMBER,
+  COMMON_REPLY_WALLET_NOT_CREATED,
+  FIAT_CURRENCIES,
+  MANTECA_MOCK_UPLOAD_DOCUMENTS_URL,
+  ONRAMP_APP_ID,
+  ONRAMP_BASE_URL,
+  ONRAMP_DEFAULT_COIN_CODE,
+  ONRAMP_DEFAULT_NETWORK
+} from '../config/constants';
+import { Logger } from '../helpers/loggerHelper';
 import {
   returnErrorResponse,
-  returnSuccessResponse,
-  returnErrorResponse500
+  returnErrorResponse500,
+  returnSuccessResponse
 } from '../helpers/requestHelper';
-import {
-  ONRAMP_APP_ID,
-  FIAT_CURRENCIES,
-  ONRAMP_BASE_URL,
-  CHATIZALO_PHONE_NUMBER,
-  ONRAMP_DEFAULT_NETWORK,
-  ONRAMP_DEFAULT_COIN_CODE,
-  COMMON_REPLY_WALLET_NOT_CREATED,
-  MANTECA_MOCK_UPLOAD_DOCUMENTS_URL
-} from '../config/constants';
+import type { IToken } from '../models/tokenModel';
+import type { IUser } from '../models/userModel';
+import { mantecaPriceService } from '../services/manteca/market/mantecaPriceService';
+import { mantecaBalanceService } from '../services/manteca/user/mantecaBalanceService';
+import { mantecaUserService } from '../services/manteca/user/mantecaUserService';
+import { mantecaWidgetService } from '../services/manteca/user/mantecaWidgetService';
+import { getUser } from '../services/userService';
+import type {
+  MantecaOperationSide,
+  MantecaUserBalance,
+  MantecaWidgetOnboarding
+} from '../types/mantecaType';
 
 interface widgetLinkToOperateBody {
   channel_user_id: string;

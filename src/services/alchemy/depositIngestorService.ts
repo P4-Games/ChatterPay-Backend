@@ -1,19 +1,18 @@
 import { ethers } from 'ethers';
-
-import { Logger } from '../../helpers/loggerHelper';
-import { mongoUserService } from '../mongo/mongoUserService';
+import { ALCHEMY_ERC20_TRANSFER_SIGNATURE, DEFAULT_CHAIN_ID } from '../../config/constants';
 import { fromTopicAddress } from '../../helpers/alchemyHelper';
-import { IExternalDeposit } from '../../models/externalDepositModel';
-import { mongoTransactionService } from '../mongo/mongoTransactionService';
-import { mongoExternalDepositsService } from '../mongo/mongoExternalDepositsService';
-import { DEFAULT_CHAIN_ID, ALCHEMY_ERC20_TRANSFER_SIGNATURE } from '../../config/constants';
-import {
+import { Logger } from '../../helpers/loggerHelper';
+import type { IExternalDeposit } from '../../models/externalDepositModel';
+import type {
+  AlchemyAddressActivity,
   AlchemyLog,
   AlchemyTransaction,
-  ExternalDepositEvent,
   AlchemyWebhookPayload,
-  AlchemyAddressActivity
+  ExternalDepositEvent
 } from '../../types/alchemyTypes';
+import { mongoExternalDepositsService } from '../mongo/mongoExternalDepositsService';
+import { mongoTransactionService } from '../mongo/mongoTransactionService';
+import { mongoUserService } from '../mongo/mongoUserService';
 
 /**
  * Functional service for ingesting and processing Alchemy webhook deposit events

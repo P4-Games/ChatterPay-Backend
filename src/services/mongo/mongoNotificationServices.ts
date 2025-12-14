@@ -1,5 +1,5 @@
 import { Logger } from '../../helpers/loggerHelper';
-import NotificationModel, { INotification } from '../../models/notificationModel';
+import NotificationModel, { type INotification } from '../../models/notificationModel';
 
 export const mongoNotificationService = {
   /**

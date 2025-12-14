@@ -1,4 +1,4 @@
-import { BigNumber } from 'ethers';
+import type { BigNumber } from 'ethers';
 
 /**
  * Represents a packed user operation for Ethereum execution.

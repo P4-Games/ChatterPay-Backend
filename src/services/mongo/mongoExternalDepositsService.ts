@@ -1,6 +1,6 @@
 import { Logger } from '../../helpers/loggerHelper';
-import { ExternalDepositEvent } from '../../types/alchemyTypes';
-import { IExternalDeposit, ExternalDepositModel } from '../../models/externalDepositModel';
+import { ExternalDepositModel, type IExternalDeposit } from '../../models/externalDepositModel';
+import type { ExternalDepositEvent } from '../../types/alchemyTypes';
 
 /**
  * Mongo service for persisting and retrieving external deposit events.

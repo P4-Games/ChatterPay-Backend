@@ -1,8 +1,8 @@
-import { it, expect, describe, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ALCHEMY_ERC20_TRANSFER_SIGNATURE } from '../../../src/config/constants';
 import { depositIngestorService } from '../../../src/services/alchemy/depositIngestorService';
-import {
+import type {
   AlchemyLog,
   AlchemyTransaction,
   AlchemyWebhookPayload

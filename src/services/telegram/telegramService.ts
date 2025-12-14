@@ -1,27 +1,27 @@
-import { IToken } from '../../models/tokenModel';
-import { Logger } from '../../helpers/loggerHelper';
-import { IBlockchain } from '../../models/blockchainModel';
-import { IUser, IUserWallet } from '../../models/userModel';
-import { getAddressBalanceWithNfts } from '../balanceService';
-import { Currency, BalanceInfo } from '../../types/commonType';
-import { chatizaloService } from '../chatizalo/chatizaloService';
-import { isValidPhoneNumber } from '../../helpers/validationHelper';
-import { getPhoneNumberVariants } from '../../helpers/formatHelper';
-import { tryIssueTokens, createOrReturnWallet } from '../walletService';
 import {
+  COMMON_REPLY_WALLET_NOT_CREATED,
   IS_DEVELOPMENT,
-  ISSUER_TOKENS_ENABLED,
-  COMMON_REPLY_WALLET_NOT_CREATED
+  ISSUER_TOKENS_ENABLED
 } from '../../config/constants';
+import { getPhoneNumberVariants } from '../../helpers/formatHelper';
+import { Logger } from '../../helpers/loggerHelper';
+import { isValidPhoneNumber } from '../../helpers/validationHelper';
+import type { IBlockchain } from '../../models/blockchainModel';
+import type { IToken } from '../../models/tokenModel';
+import type { IUser, IUserWallet } from '../../models/userModel';
+import type { BalanceInfo, Currency } from '../../types/commonType';
+import { getAddressBalanceWithNfts } from '../balanceService';
+import { chatizaloService } from '../chatizalo/chatizaloService';
 import {
+  clearUserVerificationCode,
   getUser,
   getUserByTelegramId,
-  getUserWalletByChainId,
-  setUserVerificationCode,
   getUserVerificationCode,
+  getUserWalletByChainId,
   setUserTelegramIdByPhone,
-  clearUserVerificationCode
+  setUserVerificationCode
 } from '../userService';
+import { createOrReturnWallet, tryIssueTokens } from '../walletService';
 
 /** Telegram-compatible reply payload (what the controller sends back). */
 export type TelegramReplyPayload = {

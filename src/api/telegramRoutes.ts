@@ -1,4 +1,4 @@
-import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { TelegramUpdate } from '../controllers/telegramController';
 

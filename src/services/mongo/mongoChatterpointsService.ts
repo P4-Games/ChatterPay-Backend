@@ -1,18 +1,18 @@
-import { FilterQuery, UpdateQuery, PipelineStage } from 'mongoose';
+import type { FilterQuery, PipelineStage, UpdateQuery } from 'mongoose';
 
 import { Logger } from '../../helpers/loggerHelper';
 import { newDateUTC } from '../../helpers/timeHelper';
-import { ConcurrentOperationsEnum } from '../../types/commonType';
 import {
-  GamePeriod,
-  PeriodWord,
-  TotalsByUser,
-  IChatterpoints,
-  OperationEntry,
-  PeriodUserPlays,
   ChatterpointsModel,
-  IChatterpointsDocument
+  type GamePeriod,
+  type IChatterpoints,
+  type IChatterpointsDocument,
+  type OperationEntry,
+  type PeriodUserPlays,
+  type PeriodWord,
+  type TotalsByUser
 } from '../../models/chatterpointsModel';
+import { ConcurrentOperationsEnum } from '../../types/commonType';
 
 /**
  * Low-level Mongo access layer for Chatterpoints using Mongoose.

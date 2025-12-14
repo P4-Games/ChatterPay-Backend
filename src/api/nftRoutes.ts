@@ -1,12 +1,12 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import {
-  getNftById,
-  getAllNFTs,
-  getLastNFT,
-  getNftList,
   generateNftCopy,
   generateNftOriginal,
+  getAllNFTs,
+  getLastNFT,
+  getNftById,
+  getNftList,
   getNftMetadataRequiredByOpenSea
 } from '../controllers/nftController';
 

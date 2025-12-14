@@ -1,7 +1,6 @@
-import { ethers, Signer } from 'ethers';
-
-import { Logger } from './loggerHelper';
+import { ethers, type Signer } from 'ethers';
 import { CDP1, CDP2 } from '../config/constants';
+import { Logger } from './loggerHelper';
 
 /**
  * Constructs the `paymasterAndData` field for a UserOperation.

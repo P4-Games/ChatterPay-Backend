@@ -1,4 +1,4 @@
-import { model, Schema, Document } from 'mongoose';
+import { type Document, model, Schema } from 'mongoose';
 
 import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT } from '../config/constants';
 

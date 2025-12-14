@@ -1,9 +1,9 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { AlchemyWebhookPayload } from '../types/alchemyTypes';
 import { depositIngestorService } from '../services/alchemy/depositIngestorService';
 import { tokenWhitelistSyncService } from '../services/alchemy/tokenWhitelistSyncService';
+import type { AlchemyWebhookPayload } from '../types/alchemyTypes';
 
 /**
  * Handles Alchemy deposit webhooks (ETH + ERC-20).
