@@ -54,8 +54,9 @@ jobs:
         run: bunx tsc --noEmit
 
       - name: Run Biome
-        run: bunx biome format .
-        run: bunx biome check .
+        run: |
+          bunx biome format .
+          bunx biome check .
 
   tests:
     name: Test Application
