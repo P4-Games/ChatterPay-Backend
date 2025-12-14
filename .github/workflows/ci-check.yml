@@ -1,4 +1,4 @@
-name: 'ci-check'
+name: ci-check
 
 on:
   pull_request:
@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          clean: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -43,6 +45,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          clean: true
 
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
@@ -65,6 +69,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          clean: true
 
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
@@ -92,6 +98,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          clean: true
 
       - name: Build Docker image
         run: |
