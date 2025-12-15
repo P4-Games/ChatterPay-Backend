@@ -1,6 +1,9 @@
 import { ethers } from 'ethers';
 import { BINANCE_API_URL } from '../config/constants';
 import { getPhoneNFTs } from '../controllers/nftController';
+
+const DEFILLAMA_API_URL = 'https://coins.llama.fi/prices/current';
+
 import { Logger } from '../helpers/loggerHelper';
 import type { IBlockchain } from '../models/blockchainModel';
 import type { IToken } from '../models/tokenModel';
@@ -18,6 +21,69 @@ import { cacheService } from './cache/cacheService';
 import { getFiatQuotes } from './criptoya/criptoYaService';
 import { secService } from './secService';
 import { getERC20ABI } from './web3/abiService';
+
+/**
+ * Maps chain IDs to DefiLlama chain prefixes
+ * @param {number} chainId - Chain ID
+ * @returns {string} DefiLlama chain prefix
+ */
+function getDefiLlamaChainPrefix(chainId: number): string {
+  const chainMap: Record<number, string> = {
+    1: 'ethereum',
+    56: 'bsc',
+    137: 'polygon',
+    42161: 'arbitrum',
+    10: 'optimism',
+    534352: 'scroll',
+    8453: 'base'
+  };
+  return chainMap[chainId] || 'scroll';
+}
+
+/**
+ * Fetches token prices from DefiLlama API using contract addresses
+ * @param {Map<string, string>} tokenAddresses - Map of token symbols to contract addresses
+ * @param {number} chainId - Chain ID for the blockchain network
+ * @returns {Promise<Map<string, number>>} Map of token symbols to their USD prices
+ */
+async function getPricesFromDefiLlama(
+  tokenAddresses: Map<string, string>,
+  chainId: number
+): Promise<Map<string, number>> {
+  const priceMap = new Map<string, number>();
+
+  if (tokenAddresses.size === 0) return priceMap;
+
+  try {
+    const chainPrefix = getDefiLlamaChainPrefix(chainId);
+    const coins = Array.from(tokenAddresses.entries())
+      .map(([_, address]) => `${chainPrefix}:${address}`)
+      .join(',');
+
+    const url = `${DEFILLAMA_API_URL}/${coins}`;
+    Logger.log('getPricesFromDefiLlama', `Fetching prices from DefiLlama: ${url}`);
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data?.coins) {
+      tokenAddresses.forEach((address, symbol) => {
+        const key = `${chainPrefix}:${address}`;
+        const coinData = data.coins[key];
+        if (coinData?.price) {
+          const price = parseFloat(coinData.price);
+          Logger.log('getPricesFromDefiLlama', `Price for ${symbol}: ${price} USD (DefiLlama)`);
+          priceMap.set(symbol, price);
+        }
+      });
+    }
+
+    return priceMap;
+  } catch (error) {
+    Logger.error('getPricesFromDefiLlama', 'Error fetching prices from DefiLlama:', error);
+    return priceMap;
+  }
+}
 
 /**
  * Fetches the balance of a specific token for a given address
@@ -49,15 +115,30 @@ async function getContractBalance(
 }
 
 /**
- * Fetches token prices from Binance API using USDT pairs
+ * Fetches token prices from Binance API using USDT pairs, with DefiLlama fallback
  * @param {string[]} symbols - Array of token symbols to fetch prices for
+ * @param {Map<string, string>} tokenAddresses - Map of token symbols to contract addresses
+ * @param {number} chainId - Chain ID for DefiLlama fallback
  * @returns {Promise<Map<string, number>>} Map of token symbols to their USD prices
  */
-export async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
+export async function getTokenPrices(
+  symbols: string[],
+  tokenAddresses: Map<string, string> = new Map(),
+  chainId: number = 1
+): Promise<Map<string, number>> {
   const norm = (s: string) => String(s).trim().toUpperCase();
   const priceMap = new Map<string, number>();
 
-  const STABLES: Set<string> = new Set(['USDT', 'USDC', 'DAI', 'AUSDC', 'AUSDT']);
+  const STABLES: Set<string> = new Set([
+    'AUSDC',
+    'AUSDT',
+    'DAI',
+    'sUSX',
+    'USDC',
+    'USDQ',
+    'USDT',
+    'USX'
+  ]);
   STABLES.forEach((s) => priceMap.set(s, 1));
 
   const symbolsToFetch = Array.from(new Set(symbols.map(norm))).filter((s) => !STABLES.has(s));
@@ -109,6 +190,26 @@ export async function getTokenPrices(symbols: string[]): Promise<Map<string, num
       })
     );
 
+    // DefiLlama fallback for tokens that failed to fetch from Binance
+    const failedTokens = new Map<string, string>();
+    symbolsToFetchFromApi.forEach((symbol) => {
+      if (!priceMap.has(symbol) || priceMap.get(symbol) === 0) {
+        const address = tokenAddresses.get(symbol);
+        if (address) {
+          failedTokens.set(symbol, address);
+        }
+      }
+    });
+
+    if (failedTokens.size > 0) {
+      Logger.log('getTokenPrices', `Attempting DefiLlama fallback for ${failedTokens.size} tokens`);
+      const defiLlamaPrices = await getPricesFromDefiLlama(failedTokens, chainId);
+      defiLlamaPrices.forEach((price, symbol) => {
+        priceMap.set(symbol, price);
+        cacheService.set(CacheNames.PRICE, symbol, price);
+      });
+    }
+
     return priceMap;
   } catch (error) {
     Logger.error('getTokenPrices', 'Error fetching token prices from Binance:', error);
@@ -130,7 +231,14 @@ async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo
   const norm = (s: string) => String(s).trim().toUpperCase();
   const chainTokens = tokens.filter((token) => token.chain_id === chanId);
   const symbols = [...new Set(chainTokens.map((token) => norm(token.symbol)))];
-  const prices = await getTokenPrices(symbols);
+
+  // Build address map for DefiLlama fallback
+  const tokenAddresses = new Map<string, string>();
+  chainTokens.forEach((token) => {
+    tokenAddresses.set(norm(token.symbol), token.address);
+  });
+
+  const prices = await getTokenPrices(symbols, tokenAddresses, chanId);
 
   return chainTokens.map((token) => ({
     symbol: token.symbol,
