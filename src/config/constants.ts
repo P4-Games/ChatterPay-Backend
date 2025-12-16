@@ -280,3 +280,6 @@ export const ONRAMP_BASE_URL = 'https://onramp.money/main/buy/';
 export const ONRAMP_APP_ID = '1562916';
 export const ONRAMP_DEFAULT_COIN_CODE = 'usdt';
 export const ONRAMP_DEFAULT_NETWORK = 'scroll';
+
+// DefiLlama Configuration
+export const DEFILLAMA_API_URL = 'https://coins.llama.fi/prices/current';

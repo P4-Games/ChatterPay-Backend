@@ -1,9 +1,6 @@
 import { ethers } from 'ethers';
-import { BINANCE_API_URL } from '../config/constants';
+import { BINANCE_API_URL, DEFILLAMA_API_URL } from '../config/constants';
 import { getPhoneNFTs } from '../controllers/nftController';
-
-const DEFILLAMA_API_URL = 'https://coins.llama.fi/prices/current';
-
 import { Logger } from '../helpers/loggerHelper';
 import type { IBlockchain } from '../models/blockchainModel';
 import type { IToken } from '../models/tokenModel';
