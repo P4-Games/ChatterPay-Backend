@@ -3,6 +3,7 @@ import { Logger } from '../helpers/loggerHelper';
 import type { IBlockchain } from '../models/blockchainModel';
 import type { IToken } from '../models/tokenModel';
 import { type MintResult, rpcProviders } from '../types/commonType';
+import { mongoReferralService } from './mongo/mongoReferralService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { secService } from './secService';
 import { addWalletToUser, createUserWithWallet, getUserWalletByChainId } from './userService';
@@ -145,7 +146,8 @@ export async function tryIssueTokens(
 export async function createOrReturnWallet(
   channelUserId: string,
   networkConfig: IBlockchain,
-  logKey: string
+  logKey: string,
+  referralByCode?: string
 ): Promise<{
   message: string;
   walletAddress: string;
@@ -163,6 +165,10 @@ ChatterPay can’t reverse transactions made outside of our app, such as when th
   const existingUser = await mongoUserService.getUser(channelUserId);
 
   if (existingUser) {
+    if (referralByCode && referralByCode.trim().length > 0) {
+      await mongoReferralService.setReferralByCodeIfEmpty(channelUserId, referralByCode.trim());
+    }
+
     const existingWallet = getUserWalletByChainId(existingUser.wallets, chainId);
     if (existingWallet) {
       return {
@@ -199,7 +205,12 @@ ChatterPay can’t reverse transactions made outside of our app, such as when th
 
   Logger.log('createOrReturnWallet', logKey, `Creating user and wallet from scratch`);
 
-  const newUser = await createUserWithWallet(channelUserId, chatterpayProxyAddress, factoryAddress);
+  const newUser = await createUserWithWallet(
+    channelUserId,
+    chatterpayProxyAddress,
+    factoryAddress,
+    referralByCode?.trim()
+  );
 
   const wallet = newUser.wallets[0];
 
