@@ -34,7 +34,7 @@ import { createOrReturnWallet, tryIssueTokens } from '../services/walletService'
  */
 export const getRampWallet = async (
   request: FastifyRequest<{
-    Body: { channel_user_id: string };
+    Body: { channel_user_id: string; referral_by_code?: string };
     Querystring?: { lastBotMsgDelaySeconds?: number };
   }>,
   reply: FastifyReply
@@ -42,7 +42,7 @@ export const getRampWallet = async (
   try {
     if (!request.body) throw new Error('Missing request body');
 
-    const { channel_user_id } = request.body;
+    const { channel_user_id, referral_by_code } = request.body;
     if (!channel_user_id) throw new Error('Missing channel_user_id in body');
 
     if (!isValidPhoneNumber(channel_user_id)) {
@@ -55,7 +55,8 @@ export const getRampWallet = async (
     const { message, walletAddress } = await createOrReturnWallet(
       channel_user_id,
       networkConfig,
-      logKey
+      logKey,
+      referral_by_code
     );
 
     Logger.log('getRampWallet', logKey, `${message}, ${walletAddress}`);
@@ -81,7 +82,7 @@ export const getRampWallet = async (
  */
 export const createWallet = async (
   request: FastifyRequest<{
-    Body: { channel_user_id: string };
+    Body: { channel_user_id: string; referral_by_code?: string };
     Querystring?: { lastBotMsgDelaySeconds?: number };
   }>,
   reply: FastifyReply
@@ -111,7 +112,7 @@ export const createWallet = async (
     try {
       if (!request.body) throw new Error('Missing request body');
 
-      const { channel_user_id } = request.body;
+      const { channel_user_id, referral_by_code } = request.body;
       logKey = `[op:createWallet:${channel_user_id}]`;
 
       if (!channel_user_id) throw new Error('Missing channel_user_id in body');
@@ -124,7 +125,8 @@ export const createWallet = async (
       const { message, walletAddress, wasWalletCreated } = await createOrReturnWallet(
         channel_user_id,
         networkConfig,
-        logKey
+        logKey,
+        referral_by_code
       );
 
       const processingTimeMs = Date.now() - startTime;
@@ -181,7 +183,7 @@ export const createWallet = async (
  */
 export const createWalletSync = async (
   request: FastifyRequest<{
-    Body: { channel_user_id: string };
+    Body: { channel_user_id: string; referral_by_code?: string };
     Querystring?: { lastBotMsgDelaySeconds?: number };
   }>,
   reply: FastifyReply
@@ -191,7 +193,7 @@ export const createWalletSync = async (
   try {
     if (!request.body) throw new Error('Missing request body');
 
-    const { channel_user_id } = request.body;
+    const { channel_user_id, referral_by_code } = request.body;
     logKey = `[op:createWalletSync:${channel_user_id}]`;
 
     if (!channel_user_id) throw new Error('Missing channel_user_id in body');
@@ -205,7 +207,7 @@ export const createWalletSync = async (
       message: walletResultMessage,
       walletAddress,
       wasWalletCreated
-    } = await createOrReturnWallet(channel_user_id, networkConfig, logKey);
+    } = await createOrReturnWallet(channel_user_id, networkConfig, logKey, referral_by_code);
 
     const notificationType = wasWalletCreated
       ? NotificationEnum.wallet_creation

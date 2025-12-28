@@ -1,6 +1,7 @@
 import { DEFAULT_CHAIN_ID, PUSH_ENABLED } from '../config/constants';
 import { formatIdentifierWithOptionalName, getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
+import { generateReferralCode } from '../helpers/referralHelper';
 import { type IUser, type IUserWallet, UserModel } from '../models/userModel';
 import type { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
 import { walletProvisioningService } from './alchemy/walletProvisioningService';
@@ -89,7 +90,8 @@ async function registerWalletWithAlchemy(
 export const createUserWithWallet = async (
   phoneNumber: string,
   chatterpayProxyAddress: string,
-  factoryAddress: string
+  factoryAddress: string,
+  referralByCode?: string
 ): Promise<IUser> => {
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
   const predictedWallet: ComputedAddress = await computeWallet(formattedPhoneNumber);
@@ -101,6 +103,7 @@ export const createUserWithWallet = async (
     `Creating user with wallet for ${phoneNumber}, wallet: ${predictedWallet.proxyAddress}, lng: ${detectedNotificationLng}`
   );
 
+  const referralCode = generateReferralCode(formattedPhoneNumber);
   const user = new UserModel({
     phone_number: formattedPhoneNumber,
     wallets: [
@@ -138,7 +141,9 @@ export const createUserWithWallet = async (
       mint_nft: {},
       mint_nft_copy: {}
     },
-    manteca_user_id: ''
+    manteca_user_id: '',
+    referral_code: referralCode,
+    referral_by_code: referralByCode ?? ''
   });
 
   await user.save();
