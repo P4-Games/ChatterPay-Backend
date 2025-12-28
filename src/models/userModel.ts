@@ -43,6 +43,8 @@ export interface IUser extends Document {
   manteca_user_id?: string;
   chatterpoints_admin?: boolean;
   telegram_id?: string;
+  referral_code?: string;
+  referral_by_code?: string;
 }
 
 const walletSchema = new Schema<IUserWallet>(
@@ -96,7 +98,9 @@ const userSchema = new Schema<IUser>({
   },
   manteca_user_id: { type: String, required: false, default: '' },
   chatterpoints_admin: { type: Boolean, required: false, default: false },
-  telegram_id: { type: String, required: false, default: 0 }
+  telegram_id: { type: String, required: false, default: 0 },
+  referral_code: { type: String, required: false, default: '' },
+  referral_by_code: { type: String, required: false, default: '' }
 });
 
 export const UserModel = model<IUser>('User', userSchema, 'users');
