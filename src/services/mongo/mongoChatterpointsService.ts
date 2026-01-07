@@ -66,8 +66,7 @@ function buildDefaultOperationsConfig() {
 
   const excluded = new Set([
     ConcurrentOperationsEnum.MintNft,
-    ConcurrentOperationsEnum.MintNftCopy,
-    ConcurrentOperationsEnum.WithdrawAll
+    ConcurrentOperationsEnum.MintNftCopy
   ]);
 
   const operations = Object.values(ConcurrentOperationsEnum).filter((op) => !excluded.has(op));
