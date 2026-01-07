@@ -31,7 +31,6 @@ export interface IUser extends Document {
     swap: number;
     mint_nft: number;
     mint_nft_copy: number;
-    withdraw_all: number;
   };
   level: string;
   operations_counters?: {
@@ -86,8 +85,7 @@ const userSchema = new Schema<IUser>({
     transfer: { type: Number, required: false, default: 0 },
     swap: { type: Number, required: false, default: 0 },
     mint_nft: { type: Number, required: false, default: 0 },
-    mint_nft_copy: { type: Number, required: false, default: 0 },
-    withdraw_all: { type: Number, required: false, default: 0 }
+    mint_nft_copy: { type: Number, required: false, default: 0 }
   },
   level: { type: String, required: true, default: 'L1' },
   operations_counters: {
