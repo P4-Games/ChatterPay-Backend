@@ -91,8 +91,7 @@ export enum ConcurrentOperationsEnum {
   Transfer = 'transfer',
   Swap = 'swap',
   MintNft = 'mint_nft',
-  MintNftCopy = 'mint_nft_copy',
-  WithdrawAll = 'withdraw_all'
+  MintNftCopy = 'mint_nft_copy'
 }
 
 export interface TransactionData {
