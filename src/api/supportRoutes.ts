@@ -35,8 +35,7 @@ const supportRoutes = async (fastify: FastifyInstance): Promise<void> => {
    *         "transfer": 1,
    *         "swap": 0,
    *         "mint_nft": 1,
-   *         "mint_nft_copy": 0,
-   *         "withdraw_all": 0
+   *         "mint_nft_copy": 0
    *       }
    *     }
    *   ]
