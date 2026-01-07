@@ -46,8 +46,7 @@ describe('User Model', () => {
         transfer: 1,
         swap: 2,
         mint_nft: 3,
-        mint_nft_copy: 4,
-        withdraw_all: 5
+        mint_nft_copy: 4
       }
     };
 
@@ -90,7 +89,6 @@ describe('User Model', () => {
     expect(savedUser.operations_in_progress?.swap).toBe(0);
     expect(savedUser.operations_in_progress?.mint_nft).toBe(0);
     expect(savedUser.operations_in_progress?.mint_nft_copy).toBe(0);
-    expect(savedUser.operations_in_progress?.withdraw_all).toBe(0);
   });
 
   it('should allow multiple wallets', async () => {
