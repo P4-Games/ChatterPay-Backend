@@ -145,4 +145,3 @@ export const getUniswapRouter02ABI = async (): Promise<ABI> => getFile('UniswapR
  * @returns {Promise<ABI>} The Multicall3 ABI object.
  */
 export const getMulticall3ABI = async (): Promise<ABI> => getFile('Multicall3');
-

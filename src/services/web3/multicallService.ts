@@ -38,7 +38,7 @@ interface TokenBalanceResult {
 
 /**
  * Gets balances for multiple tokens using a single Multicall3 call
- * 
+ *
  * @param provider - Ethers provider
  * @param walletAddress - Address to check balances for
  * @param tokenAddresses - Array of token contract addresses
@@ -54,12 +54,8 @@ export async function getTokenBalancesMulticall(
   try {
     // Load Multicall3 ABI from abiService (with cache)
     const multicall3ABI = await getMulticall3ABI();
-    
-    const multicallContract = new ethers.Contract(
-      MULTICALL3_ADDRESS,
-      multicall3ABI,
-      provider
-    );
+
+    const multicallContract = new ethers.Contract(MULTICALL3_ADDRESS, multicall3ABI, provider);
 
     const erc20Interface = new ethers.utils.Interface(ERC20_MINIMAL_ABI);
 

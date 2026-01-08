@@ -287,7 +287,10 @@ export async function getTokenBalances(
     );
     const elapsed = Date.now() - startTime;
 
-    Logger.log('getTokenBalances', `Multicall completed in ${elapsed}ms for ${tokenAddresses.length} tokens`);
+    Logger.log(
+      'getTokenBalances',
+      `Multicall completed in ${elapsed}ms for ${tokenAddresses.length} tokens`
+    );
 
     // Map multicall results back to token info
     return tokenInfo.map((token, index) => {
