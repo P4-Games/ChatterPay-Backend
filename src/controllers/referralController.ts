@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-
+import { COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
 import {
   returnErrorResponse,
   returnErrorResponseAsSuccess,
@@ -45,7 +45,7 @@ export const getReferralCode = async (
         'getReferralCode',
         logKey,
         reply,
-        'Missing channel_user_id in body',
+        COMMON_REPLY_WALLET_NOT_CREATED,
         false,
         channel_user_id
       );
@@ -96,7 +96,7 @@ export const getReferralByCode = async (
         'getReferralByCode',
         logKey,
         reply,
-        'User not found',
+        COMMON_REPLY_WALLET_NOT_CREATED,
         false,
         channel_user_id
       );
@@ -159,7 +159,7 @@ export const getReferralCodeWithUsageCount = async (
         'getReferralCodeWithUsageCount',
         logKey,
         reply,
-        'User not found',
+        COMMON_REPLY_WALLET_NOT_CREATED,
         false,
         channel_user_id
       );
@@ -233,7 +233,7 @@ export const submitReferralByCode = async (
         'submitReferralByCode',
         logKey,
         reply,
-        'User not found',
+        COMMON_REPLY_WALLET_NOT_CREATED,
         false,
         channel_user_id
       );
