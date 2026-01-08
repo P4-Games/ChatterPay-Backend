@@ -18,6 +18,7 @@ import { cacheService } from './cache/cacheService';
 import { getFiatQuotes } from './criptoya/criptoYaService';
 import { secService } from './secService';
 import { getERC20ABI } from './web3/abiService';
+import { getDecimalsCache, getTokenBalancesMulticall } from './web3/multicallService';
 
 /**
  * Maps chain IDs to DefiLlama chain prefixes
@@ -249,7 +250,7 @@ async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo
 }
 
 /**
- * Fetches token balances for a given address
+ * Fetches token balances for a given address using Multicall for efficiency
  * @param {string} address - Address to check balances for
  * @param {IToken[]} tokens - Array of token objects
  * @param {IBlockchain} networkConfig - Blockchain network configuration
@@ -261,19 +262,64 @@ export async function getTokenBalances(
   networkConfig: IBlockchain
 ): Promise<TokenBalance[]> {
   const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-  const bs = secService.get_bs(provider);
   const tokenInfo = await getTokenInfo(tokens, networkConfig.chainId);
 
-  return Promise.all(
-    tokenInfo.map(async (token) => {
-      const rawBalance = await getContractBalance(token.address, bs, address);
+  try {
+    const tokenAddresses = tokenInfo.map((t) => t.address);
 
-      // Apply display_decimals here, keep as string
-      const formattedBalance = parseFloat(rawBalance).toFixed(token.display_decimals);
+    // Preload decimals cache from token metadata (if available)
+    const cachedDecimals = getDecimalsCache();
+    tokenInfo.forEach((token) => {
+      // Try to use decimals from token metadata if available
+      const key = token.address.toLowerCase();
+      if (!cachedDecimals.has(key)) {
+        // We'll let multicall fetch it, but we could also infer from display_decimals
+        // For now, multicall will handle it
+      }
+    });
 
+    const startTime = Date.now();
+    const multicallResults = await getTokenBalancesMulticall(
+      provider,
+      address,
+      tokenAddresses,
+      cachedDecimals
+    );
+    const elapsed = Date.now() - startTime;
+
+    Logger.log('getTokenBalances', `Multicall completed in ${elapsed}ms for ${tokenAddresses.length} tokens`);
+
+    // Map multicall results back to token info
+    return tokenInfo.map((token, index) => {
+      const result = multicallResults[index];
+
+      if (!result.success) {
+        Logger.warn(
+          'getTokenBalances',
+          `Failed to get balance for ${token.symbol} (${token.address}): ${result.error || 'Unknown error'}`
+        );
+        return {
+          ...token,
+          balance: parseFloat('0').toFixed(token.display_decimals)
+        };
+      }
+
+      const formattedBalance = parseFloat(result.balance).toFixed(token.display_decimals);
       return { ...token, balance: formattedBalance };
-    })
-  );
+    });
+  } catch (error) {
+    // Fallback to individual calls if multicall fails
+    Logger.error('getTokenBalances', 'Multicall failed, falling back to individual calls:', error);
+
+    const bs = secService.get_bs(provider);
+    return Promise.all(
+      tokenInfo.map(async (token) => {
+        const rawBalance = await getContractBalance(token.address, bs, address);
+        const formattedBalance = parseFloat(rawBalance).toFixed(token.display_decimals);
+        return { ...token, balance: formattedBalance };
+      })
+    );
+  }
 }
 
 /**

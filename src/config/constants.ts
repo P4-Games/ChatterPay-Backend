@@ -144,7 +144,8 @@ export const GCP_ABIs: ABIs = {
   ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.sol/ERC20.json`,
   ChainlinkPriceFeed: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`,
   UniswapQuoterV2: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/Uniswap.sol/QuoterV2.json`,
-  UniswapRouter02: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/Uniswap.sol/Router02.json`
+  UniswapRouter02: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/Uniswap.sol/Router02.json`,
+  Multicall3: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/Multicall3.sol/Multicall3.json`
 };
 
 export const LOCAL_ABIs: ABIs = {
@@ -156,7 +157,8 @@ export const LOCAL_ABIs: ABIs = {
   ERC20: `ERC20.sol/ERC20.json`,
   ChainlinkPriceFeed: `ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`,
   UniswapQuoterV2: `Uniswap.sol/QuoterV2.json`,
-  UniswapRouter02: `Uniswap.sol/Router02.json`
+  UniswapRouter02: `Uniswap.sol/Router02.json`,
+  Multicall3: `Multicall3.sol/Multicall3.json`
 };
 
 export const GCP_CHATTERPOINTS: CHATTERPOINTS = {
