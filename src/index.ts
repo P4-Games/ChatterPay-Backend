@@ -1,11 +1,10 @@
-import mongoose from 'mongoose';
 import { start } from '@google-cloud/trace-agent';
-import { FastifyInstance } from 'fastify/types/instance';
-
+import type { FastifyInstance } from 'fastify/types/instance';
+import mongoose from 'mongoose';
+import { $B, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
+import { connectToDatabase } from './config/database';
 import { startServer } from './config/server';
 import { Logger } from './helpers/loggerHelper';
-import { connectToDatabase } from './config/database';
-import { $B, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
 
 /**
  * Sets up a graceful shutdown process for the server and database connection.

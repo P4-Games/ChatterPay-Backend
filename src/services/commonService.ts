@@ -1,9 +1,9 @@
-import { ethers, BigNumber, ContractInterface } from 'ethers';
+import { type BigNumber, type ContractInterface, ethers } from 'ethers';
 
 import { Logger } from '../helpers/loggerHelper';
 import { CacheNames } from '../types/commonType';
 import { cacheService } from './cache/cacheService';
-import { getERC20ABI, getChatterpayABI } from './web3/abiService';
+import { getChatterpayABI, getERC20ABI } from './web3/abiService';
 
 const norm = (addr: string) => addr.toLowerCase();
 

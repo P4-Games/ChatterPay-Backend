@@ -1,8 +1,7 @@
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
-
-import { LogLevel, validLogLevels } from '../types/loggerType';
-import { IS_DEVELOPMENT, CURRENT_LOG_LEVEL } from '../config/constants';
+import { CURRENT_LOG_LEVEL, IS_DEVELOPMENT } from '../config/constants';
+import { type LogLevel, validLogLevels } from '../types/loggerType';
 
 // Create a pretty stream for local console output with colorized logs
 const prettyStream = pinoPretty({
@@ -66,44 +65,44 @@ export class Logger {
   }
 
   static trace(method: string = 'trace', ...args: unknown[]): void {
-    if (this.shouldLog('trace')) {
-      this.logMessage('trace', method, ...args);
+    if (Logger.shouldLog('trace')) {
+      Logger.logMessage('trace', method, ...args);
     }
   }
 
   static log(method: string = 'debug', ...args: unknown[]): void {
-    if (this.shouldLog('debug')) {
-      this.logMessage('debug', method, ...args);
+    if (Logger.shouldLog('debug')) {
+      Logger.logMessage('debug', method, ...args);
     }
   }
 
   static debug(method: string = 'debug', ...args: unknown[]): void {
-    if (this.shouldLog('debug')) {
-      this.logMessage('debug', method, ...args);
+    if (Logger.shouldLog('debug')) {
+      Logger.logMessage('debug', method, ...args);
     }
   }
 
   static info(method: string = 'info', ...args: unknown[]): void {
-    if (this.shouldLog('info')) {
-      this.logMessage('info', method, ...args);
+    if (Logger.shouldLog('info')) {
+      Logger.logMessage('info', method, ...args);
     }
   }
 
   static warn(method: string = 'warn', ...args: unknown[]): void {
-    if (this.shouldLog('warn')) {
-      this.logMessage('warn', method, ...args);
+    if (Logger.shouldLog('warn')) {
+      Logger.logMessage('warn', method, ...args);
     }
   }
 
   static error(method: string = 'error', ...args: unknown[]): void {
-    if (this.shouldLog('error')) {
-      this.logMessage('error', method, ...args);
+    if (Logger.shouldLog('error')) {
+      Logger.logMessage('error', method, ...args);
     }
   }
 
   static fatal(method: string = 'unknown', ...args: unknown[]): void {
-    if (this.shouldLog('fatal')) {
-      this.logMessage('fatal', method, ...args);
+    if (Logger.shouldLog('fatal')) {
+      Logger.logMessage('fatal', method, ...args);
     }
   }
 }

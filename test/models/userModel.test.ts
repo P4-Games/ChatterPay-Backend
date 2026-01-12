@@ -1,9 +1,8 @@
-import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { it, expect, describe, afterEach, beforeEach } from 'vitest';
-
-import { IUser, UserModel, IUserWallet } from '../../src/models/userModel';
+import mongoose from 'mongoose';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT } from '../../src/config/constants';
+import { type IUser, type IUserWallet, UserModel } from '../../src/models/userModel';
 
 describe('User Model', () => {
   let mongoServer: MongoMemoryServer;
@@ -47,8 +46,7 @@ describe('User Model', () => {
         transfer: 1,
         swap: 2,
         mint_nft: 3,
-        mint_nft_copy: 4,
-        withdraw_all: 5
+        mint_nft_copy: 4
       }
     };
 
@@ -91,7 +89,6 @@ describe('User Model', () => {
     expect(savedUser.operations_in_progress?.swap).toBe(0);
     expect(savedUser.operations_in_progress?.mint_nft).toBe(0);
     expect(savedUser.operations_in_progress?.mint_nft_copy).toBe(0);
-    expect(savedUser.operations_in_progress?.withdraw_all).toBe(0);
   });
 
   it('should allow multiple wallets', async () => {

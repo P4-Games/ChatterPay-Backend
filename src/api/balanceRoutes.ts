@@ -1,9 +1,10 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import {
-  walletBalance,
   balanceByPhoneNumber,
-  checkExternalDeposits
+  balanceByPhoneNumberSync,
+  checkExternalDeposits,
+  walletBalance
 } from '../controllers/balanceController';
 
 /**
@@ -27,6 +28,14 @@ export const balanceRoutes = async (fastify: FastifyInstance): Promise<void> => 
    * @returns {Object} The balance linked to the specified phone number
    */
   fastify.get('/balance_by_phone/', balanceByPhoneNumber);
+
+  /**
+   * Route to get the balance associated with a phone number (sync)
+   * @route GET /balance_by_phone/
+   * @param {string} phoneNumber - The phone number to look up the balance for
+   * @returns {Object} The balance linked to the specified phone number
+   */
+  fastify.get('/balance_by_phone_sync/', balanceByPhoneNumberSync);
 
   /**
    * Route to check external deposits, typically used by Alchemy webhooks to notify of events.

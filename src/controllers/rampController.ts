@@ -1,29 +1,32 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
-
-import { IUser } from '../models/userModel';
-import { IToken } from '../models/tokenModel';
-import { Logger } from '../helpers/loggerHelper';
-import { getUser } from '../services/userService';
-import { mantecaUserService } from '../services/manteca/user/mantecaUserService';
-import { mantecaPriceService } from '../services/manteca/market/mantecaPriceService';
-import { mantecaWidgetService } from '../services/manteca/user/mantecaWidgetService';
-import { mantecaBalanceService } from '../services/manteca/user/mantecaBalanceService';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import {
-  MantecaUserBalance,
-  MantecaOperationSide,
-  MantecaWidgetOnboarding
-} from '../types/mantecaType';
-import {
-  returnErrorResponse,
-  returnSuccessResponse,
-  returnErrorResponse500
-} from '../helpers/requestHelper';
-import {
-  FIAT_CURRENCIES,
   CHATIZALO_PHONE_NUMBER,
   COMMON_REPLY_WALLET_NOT_CREATED,
-  MANTECA_MOCK_UPLOAD_DOCUMENTS_URL
+  FIAT_CURRENCIES,
+  MANTECA_MOCK_UPLOAD_DOCUMENTS_URL,
+  ONRAMP_APP_ID,
+  ONRAMP_BASE_URL,
+  ONRAMP_DEFAULT_COIN_CODE,
+  ONRAMP_DEFAULT_NETWORK
 } from '../config/constants';
+import { Logger } from '../helpers/loggerHelper';
+import {
+  returnErrorResponse,
+  returnErrorResponse500,
+  returnSuccessResponse
+} from '../helpers/requestHelper';
+import type { IToken } from '../models/tokenModel';
+import type { IUser } from '../models/userModel';
+import { mantecaPriceService } from '../services/manteca/market/mantecaPriceService';
+import { mantecaBalanceService } from '../services/manteca/user/mantecaBalanceService';
+import { mantecaUserService } from '../services/manteca/user/mantecaUserService';
+import { mantecaWidgetService } from '../services/manteca/user/mantecaWidgetService';
+import { getUser } from '../services/userService';
+import type {
+  MantecaOperationSide,
+  MantecaUserBalance,
+  MantecaWidgetOnboarding
+} from '../types/mantecaType';
 
 interface widgetLinkToOperateBody {
   channel_user_id: string;
@@ -641,4 +644,68 @@ export const rampOff = async (request: FastifyRequest, reply: FastifyReply) => {
   };
 
   return returnSuccessResponse(reply, 'ramp-off', rampOffResponse);
+};
+
+/**
+ * Controller for generating an on-ramp link for a given phone number.
+ * Retrieves the wallet address associated with the phone number and returns
+ * the formatted on-ramp URL.
+ *
+ * @param request - Fastify request object containing the phone number
+ * @param reply - Fastify reply object
+ * @returns Response with status 200 and the on-ramp link
+ */
+export const generateOnRampLink = async (
+  request: FastifyRequest<{
+    Body: { phone_number: string };
+  }>,
+  reply: FastifyReply
+) => {
+  Logger.log('generateOnRampLink', 'Generating on-ramp link for user');
+
+  if (!request.body) {
+    return returnErrorResponse('generateOnRampLink', '', reply, 400, 'Request body is required');
+  }
+
+  const { phone_number } = request.body;
+
+  if (!phone_number) {
+    return returnErrorResponse(
+      'generateOnRampLink',
+      '',
+      reply,
+      400,
+      'Missing "phone_number" in the request body'
+    );
+  }
+
+  const fromUser: IUser | null = await getUser(phone_number);
+
+  if (!fromUser) {
+    return returnErrorResponse(
+      'generateOnRampLink',
+      phone_number,
+      reply,
+      404,
+      COMMON_REPLY_WALLET_NOT_CREATED
+    );
+  }
+
+  if (!fromUser.wallets || fromUser.wallets.length === 0) {
+    return returnErrorResponse(
+      'generateOnRampLink',
+      phone_number,
+      reply,
+      404,
+      'User has no wallet associated'
+    );
+  }
+
+  const walletAddress = fromUser.wallets[0].wallet_proxy;
+
+  const onRampLink = `${ONRAMP_BASE_URL}?appId=${ONRAMP_APP_ID}&coinCode=${ONRAMP_DEFAULT_COIN_CODE}&network=${ONRAMP_DEFAULT_NETWORK}&walletAddress=${walletAddress}`;
+
+  Logger.log('generateOnRampLink', `On-ramp link generated for ${phone_number}: ${onRampLink}`);
+
+  return returnSuccessResponse(reply, 'on-ramp link generated successfully', { link: onRampLink });
 };

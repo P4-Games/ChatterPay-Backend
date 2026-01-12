@@ -1,10 +1,9 @@
+import axios, { type AxiosResponse } from 'axios';
 import { ethers } from 'ethers';
-import axios, { AxiosResponse } from 'axios';
-
-import { wrapRpc } from './rpc/rpcService';
 import { Logger } from '../../helpers/loggerHelper';
 import { rpcProviders } from '../../types/commonType';
-import { PackedUserOperation } from '../../types/userOperationType';
+import type { PackedUserOperation } from '../../types/userOperationType';
+import { wrapRpc } from './rpc/rpcService';
 
 /**
  * Serialize User Operation

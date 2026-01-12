@@ -1,19 +1,18 @@
-import { ethers, BigNumber } from 'ethers';
-
-import { gasService } from '../gasService';
-import { secService } from '../../secService';
+import { BigNumber, ethers } from 'ethers';
 import { Logger } from '../../../helpers/loggerHelper';
-import { rpcQueueAlchemy, rpcQueuePimlico } from './rpcQueue';
-import { IBlockchain } from '../../../models/blockchainModel';
-import { getChatterPayWalletFactoryABI } from '../abiService';
-import { mongoBlockchainService } from '../../mongo/mongoBlockchainService';
+import type { IBlockchain } from '../../../models/blockchainModel';
 import {
-  RpcProvider,
+  type ComputedAddress,
+  type RpcProvider,
   rpcProviders,
-  UserPrincipal,
-  ComputedAddress
+  type UserPrincipal
 } from '../../../types/commonType';
 import { ChatterPayWalletFactory__factory } from '../../../types/ethers-contracts/factories/ChatterPayWalletFactory__factory';
+import { mongoBlockchainService } from '../../mongo/mongoBlockchainService';
+import { secService } from '../../secService';
+import { getChatterPayWalletFactoryABI } from '../abiService';
+import { gasService } from '../gasService';
+import { rpcQueueAlchemy, rpcQueuePimlico } from './rpcQueue';
 
 type Serializable =
   | string

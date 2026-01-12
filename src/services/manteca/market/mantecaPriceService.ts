@@ -1,9 +1,8 @@
 import axios from 'axios';
-
-import { Logger } from '../../../helpers/loggerHelper';
 import { MANTECA_BASE_URL } from '../../../config/constants';
+import { Logger } from '../../../helpers/loggerHelper';
+import type { MantecaHistoricalPrice, MantecaPrice } from '../../../types/mantecaType';
 import { getMantecaAxiosConfig } from '../mantecaCommonService';
-import { MantecaPrice, MantecaHistoricalPrice } from '../../../types/mantecaType';
 
 export const mantecaPriceService = {
   /**

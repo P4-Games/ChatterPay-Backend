@@ -1,9 +1,9 @@
-import { Logger } from '../../helpers/loggerHelper';
-import { alchemyAdminService } from './alchemyAdminService';
 import {
   EXTERNAL_DEPOSITS_PROVIDER,
   EXTERNAL_DEPOSITS_PROVIDER_IS_ALCHEMY
 } from '../../config/constants';
+import { Logger } from '../../helpers/loggerHelper';
+import { alchemyAdminService } from './alchemyAdminService';
 
 type WalletAction = 'register' | 'deregister' | 'backfill';
 

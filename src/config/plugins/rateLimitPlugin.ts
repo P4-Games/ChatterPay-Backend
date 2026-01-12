@@ -1,5 +1,5 @@
-import { FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
+import type { FastifyInstance } from 'fastify';
 
 import { MAX_REQUESTS_PER_MINUTE } from '../constants';
 

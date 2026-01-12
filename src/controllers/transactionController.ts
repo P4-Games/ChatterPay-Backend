@@ -1,62 +1,64 @@
-import { Web3 } from 'web3';
 import { get } from '@google-cloud/trace-agent';
-import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
-import { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
-
-import { IToken } from '../models/tokenModel';
+import type { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { Web3 } from 'web3';
+import {
+  COMMON_REPLY_OPERATION_IN_PROGRESS,
+  COMMON_REPLY_WALLET_NOT_CREATED,
+  GCP_CLOUD_TRACE_ENABLED,
+  INFURA_API_KEY,
+  INFURA_URL
+} from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
-import { delaySeconds } from '../helpers/timeHelper';
-import { IUser, IUserWallet } from '../models/userModel';
-import { NotificationEnum } from '../models/templateModel';
-import { getChatterpayTokenFee } from '../services/commonService';
-import { mongoUserService } from '../services/mongo/mongoUserService';
-import Transaction, { ITransaction } from '../models/transactionModel';
-import { sendTransferUserOperation } from '../services/transferService';
-import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
-import { getTokenPrices, verifyWalletBalanceInRpc } from '../services/balanceService';
-import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
-import { chatterpointsService, RegisterOperationResult } from '../services/chatterpointsService';
 import {
   returnErrorResponse,
-  returnSuccessResponse,
-  returnErrorResponseAsSuccess
+  returnErrorResponseAsSuccess,
+  returnSuccessResponse
 } from '../helpers/requestHelper';
+import { delaySeconds } from '../helpers/timeHelper';
+import { isValidEthereumWallet, isValidPhoneNumber } from '../helpers/validationHelper';
+import { NotificationEnum } from '../models/templateModel';
+import type { IToken } from '../models/tokenModel';
+import Transaction, { type ITransaction } from '../models/transactionModel';
+import type { IUser, IUserWallet } from '../models/userModel';
+import { getTokenPrices, verifyWalletBalanceInRpc } from '../services/balanceService';
 import {
-  TransactionData,
-  ExecueTransactionResult,
-  ConcurrentOperationsEnum,
-  CheckBalanceConditionsResult
-} from '../types/commonType';
-import {
-  getTokenData,
   checkBlockchainConditions,
+  getTokenData,
   userReachedOperationLimit,
   userWithinTokenOperationLimits
 } from '../services/blockchainService';
 import {
-  getUser,
-  openOperation,
-  closeOperation,
-  getOrCreateUser,
-  getUserWalletByChainId,
-  hasUserAnyOperationInProgress
-} from '../services/userService';
+  chatterpointsService,
+  type RegisterOperationResult
+} from '../services/chatterpointsService';
+import { getChatterpayTokenFee } from '../services/commonService';
+import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
+import { mongoUserService } from '../services/mongo/mongoUserService';
 import {
-  INFURA_URL,
-  INFURA_API_KEY,
-  GCP_CLOUD_TRACE_ENABLED,
-  COMMON_REPLY_WALLET_NOT_CREATED,
-  COMMON_REPLY_OPERATION_IN_PROGRESS
-} from '../config/constants';
-import {
-  persistNotification,
   getNotificationTemplate,
+  persistNotification,
   sendInternalErrorNotification,
+  sendNoValidBlockchainConditionsNotification,
   sendOutgoingTransferNotification,
   sendReceivedTransferNotification,
-  sendUserInsufficientBalanceNotification,
-  sendNoValidBlockchainConditionsNotification
+  sendUserInsufficientBalanceNotification
 } from '../services/notificationService';
+import { sendTransferUserOperation } from '../services/transferService';
+import {
+  closeOperation,
+  getOrCreateUser,
+  getUser,
+  getUserWalletByChainId,
+  hasUserAnyOperationInProgress,
+  openOperation
+} from '../services/userService';
+import {
+  type CheckBalanceConditionsResult,
+  ConcurrentOperationsEnum,
+  type ExecueTransactionResult,
+  type TransactionData
+} from '../types/commonType';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {

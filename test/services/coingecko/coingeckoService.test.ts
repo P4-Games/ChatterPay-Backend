@@ -1,8 +1,8 @@
 import axios from 'axios';
 import NodeCache from 'node-cache';
-import { it, vi, expect, describe, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TOKEN_IDS, RESULT_CURRENCIES } from '../../../src/config/constants';
+import { RESULT_CURRENCIES, TOKEN_IDS } from '../../../src/config/constants';
 import { coingeckoService } from '../../../src/services/coingecko/coingeckoService';
 
 vi.mock('axios', () => ({

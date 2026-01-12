@@ -1,19 +1,18 @@
 import { ethers } from 'ethers';
-
-import { secService } from './secService';
 import { Logger } from '../helpers/loggerHelper';
+import type { BlockchainOperationLimits, IBlockchain } from '../models/blockchainModel';
+import Token, { type IToken, type TokenOperationLimits } from '../models/tokenModel';
+import { type IUser, UserModel } from '../models/userModel';
+import type {
+  CheckBalanceConditionsResult,
+  SetupContractReturn,
+  swapTokensData
+} from '../types/commonType';
+import { mongoBlockchainService } from './mongo/mongoBlockchainService';
+import { secService } from './secService';
 import { getEntryPointABI } from './web3/abiService';
-import { IUser, UserModel } from '../models/userModel';
 import { setupContracts } from './web3/contractSetupService';
 import { ensurePaymasterHasEnoughEth } from './web3/paymasterService';
-import { mongoBlockchainService } from './mongo/mongoBlockchainService';
-import Token, { IToken, TokenOperationLimits } from '../models/tokenModel';
-import { IBlockchain, BlockchainOperationLimits } from '../models/blockchainModel';
-import {
-  swapTokensData,
-  SetupContractReturn,
-  CheckBalanceConditionsResult
-} from '../types/commonType';
 
 /**
  * Gets token info based on token address or symbol

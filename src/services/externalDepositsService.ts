@@ -1,24 +1,23 @@
 import { getAddress } from 'ethers/lib/utils';
 import { gql, request } from 'graphql-request';
-
-import { UserModel } from '../models/userModel';
-import { Logger } from '../helpers/loggerHelper';
-import { getTokenInfo } from './blockchainService';
-import Token, { IToken } from '../models/tokenModel';
-import { TransactionData } from '../types/commonType';
+import {
+  EXTERNAL_DEPOSITS_PROVIDER,
+  EXTERNAL_DEPOSITS_PROVIDER_IS_ALCHEMY,
+  THE_GRAPH_API_KEY,
+  THE_GRAPH_EXTERNAL_DEPOSITS_URL
+} from '../config/constants';
 import { formatTokenAmount } from '../helpers/formatHelper';
-import { mongoTokenService } from './mongo/mongoTokenService';
-import Blockchain, { IBlockchain } from '../models/blockchainModel';
+import { Logger } from '../helpers/loggerHelper';
+import Blockchain, { type IBlockchain } from '../models/blockchainModel';
+import Token, { type IToken } from '../models/tokenModel';
+import { UserModel } from '../models/userModel';
+import type { TransactionData } from '../types/commonType';
+import { getTokenInfo } from './blockchainService';
 import { mongoBlockchainService } from './mongo/mongoBlockchainService';
+import { mongoExternalDepositsService } from './mongo/mongoExternalDepositsService';
+import { mongoTokenService } from './mongo/mongoTokenService';
 import { mongoTransactionService } from './mongo/mongoTransactionService';
 import { sendReceivedExternalTransferNotification } from './notificationService';
-import { mongoExternalDepositsService } from './mongo/mongoExternalDepositsService';
-import {
-  THE_GRAPH_API_KEY,
-  EXTERNAL_DEPOSITS_PROVIDER,
-  THE_GRAPH_EXTERNAL_DEPOSITS_URL,
-  EXTERNAL_DEPOSITS_PROVIDER_IS_ALCHEMY
-} from '../config/constants';
 
 /**
  * GraphQL query to fetch external deposits.

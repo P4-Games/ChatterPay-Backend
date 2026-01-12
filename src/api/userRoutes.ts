@@ -1,11 +1,11 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import {
   createUser,
   deleteUser,
-  updateUser,
   getAllUsers,
-  getUserById
+  getUserById,
+  updateUser
 } from '../controllers/userController';
 
 /**

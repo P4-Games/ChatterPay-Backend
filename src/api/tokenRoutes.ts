@@ -1,13 +1,13 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import {
   createToken,
   deleteToken,
-  updateToken,
+  getAllTokenConvertionRates,
   getAllTokens,
   getTokenById,
   issueTokensHandler,
-  getAllTokenConvertionRates
+  updateToken
 } from '../controllers/tokenController';
 
 /**

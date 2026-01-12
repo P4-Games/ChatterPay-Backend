@@ -1,13 +1,14 @@
+import { DEFAULT_CHAIN_ID, PUSH_ENABLED } from '../config/constants';
+import { formatIdentifierWithOptionalName, getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
+import { generateReferralCode } from '../helpers/referralHelper';
+import { type IUser, type IUserWallet, UserModel } from '../models/userModel';
+import type { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
+import { walletProvisioningService } from './alchemy/walletProvisioningService';
+import { mongoCountryService } from './mongo/mongoCountryService';
+import { mongoUserService } from './mongo/mongoUserService';
 import { pushService } from './push/pushService';
 import { computeWallet } from './web3/rpc/rpcService';
-import { mongoUserService } from './mongo/mongoUserService';
-import { mongoCountryService } from './mongo/mongoCountryService';
-import { IUser, UserModel, IUserWallet } from '../models/userModel';
-import { PUSH_ENABLED, DEFAULT_CHAIN_ID } from '../config/constants';
-import { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonType';
-import { walletProvisioningService } from './alchemy/walletProvisioningService';
-import { getPhoneNumberFormatted, formatIdentifierWithOptionalName } from '../helpers/formatHelper';
 
 /**
  * Updates the operation count for the user by the specified increment.
@@ -89,7 +90,8 @@ async function registerWalletWithAlchemy(
 export const createUserWithWallet = async (
   phoneNumber: string,
   chatterpayProxyAddress: string,
-  factoryAddress: string
+  factoryAddress: string,
+  referralByCode?: string
 ): Promise<IUser> => {
   const formattedPhoneNumber = getPhoneNumberFormatted(phoneNumber);
   const predictedWallet: ComputedAddress = await computeWallet(formattedPhoneNumber);
@@ -101,6 +103,7 @@ export const createUserWithWallet = async (
     `Creating user with wallet for ${phoneNumber}, wallet: ${predictedWallet.proxyAddress}, lng: ${detectedNotificationLng}`
   );
 
+  const referralCode = generateReferralCode(formattedPhoneNumber);
   const user = new UserModel({
     phone_number: formattedPhoneNumber,
     wallets: [
@@ -128,8 +131,7 @@ export const createUserWithWallet = async (
       transfer: 0,
       swap: 0,
       mint_nft: 0,
-      mint_nft_copy: 0,
-      withdraw_all: 0
+      mint_nft_copy: 0
     },
     level: 'L1',
     operations_counters: {
@@ -138,7 +140,9 @@ export const createUserWithWallet = async (
       mint_nft: {},
       mint_nft_copy: {}
     },
-    manteca_user_id: ''
+    manteca_user_id: '',
+    referral_code: referralCode,
+    referral_by_code: referralByCode ?? ''
   });
 
   await user.save();

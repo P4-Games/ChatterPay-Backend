@@ -1,18 +1,18 @@
 import { once as onceEvent } from 'events';
-import { ServerResponse, IncomingMessage } from 'http';
-import { FastifyReply, FastifyRequest } from 'fastify';
-
-import { Logger } from '../helpers/loggerHelper';
-import { delaySeconds } from '../helpers/timeHelper';
-import { withdrawWalletAllFunds } from '../services/transferService';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { IncomingMessage, ServerResponse } from 'http';
 import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../config/constants';
-import { tryIssueTokens, createOrReturnWallet } from '../services/walletService';
+import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
-import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
+import { delaySeconds } from '../helpers/timeHelper';
+import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { NotificationEnum } from '../models/templateModel';
 import {
-  sendWalletCreationNotification,
-  sendWalletAlreadyExistsNotification
+  getNotificationTemplate,
+  sendWalletAlreadyExistsNotification,
+  sendWalletCreationNotification
 } from '../services/notificationService';
+import { createOrReturnWallet, tryIssueTokens } from '../services/walletService';
 
 /**
  * Retrieves the ChatterPay wallet address associated with the given user.
@@ -33,7 +33,7 @@ import {
  */
 export const getRampWallet = async (
   request: FastifyRequest<{
-    Body: { channel_user_id: string };
+    Body: { channel_user_id: string; referral_by_code?: string };
     Querystring?: { lastBotMsgDelaySeconds?: number };
   }>,
   reply: FastifyReply
@@ -41,7 +41,7 @@ export const getRampWallet = async (
   try {
     if (!request.body) throw new Error('Missing request body');
 
-    const { channel_user_id } = request.body;
+    const { channel_user_id, referral_by_code } = request.body;
     if (!channel_user_id) throw new Error('Missing channel_user_id in body');
 
     if (!isValidPhoneNumber(channel_user_id)) {
@@ -54,7 +54,8 @@ export const getRampWallet = async (
     const { message, walletAddress } = await createOrReturnWallet(
       channel_user_id,
       networkConfig,
-      logKey
+      logKey,
+      referral_by_code
     );
 
     Logger.log('getRampWallet', logKey, `${message}, ${walletAddress}`);
@@ -80,7 +81,7 @@ export const getRampWallet = async (
  */
 export const createWallet = async (
   request: FastifyRequest<{
-    Body: { channel_user_id: string };
+    Body: { channel_user_id: string; referral_by_code?: string };
     Querystring?: { lastBotMsgDelaySeconds?: number };
   }>,
   reply: FastifyReply
@@ -101,7 +102,6 @@ export const createWallet = async (
       onceEvent(res, 'close') // client closed connection earlier; we still continue
     ]);
   }
-
   // Async processing after the reply
   (async () => {
     let logKey = '[op:createWallet:unknown]';
@@ -111,7 +111,7 @@ export const createWallet = async (
     try {
       if (!request.body) throw new Error('Missing request body');
 
-      const { channel_user_id } = request.body;
+      const { channel_user_id, referral_by_code } = request.body;
       logKey = `[op:createWallet:${channel_user_id}]`;
 
       if (!channel_user_id) throw new Error('Missing channel_user_id in body');
@@ -124,7 +124,8 @@ export const createWallet = async (
       const { message, walletAddress, wasWalletCreated } = await createOrReturnWallet(
         channel_user_id,
         networkConfig,
-        logKey
+        logKey,
+        referral_by_code
       );
 
       const processingTimeMs = Date.now() - startTime;
@@ -174,98 +175,79 @@ export const createWallet = async (
 };
 
 /**
- * Handles the withdrawal of all funds.
- * @param {FastifyRequest<{ Body: { channel_user_id: string, dst_address: string } }>} request - The Fastify request object.
- * @param {FastifyReply} reply - The Fastify reply object.
- * @returns {Promise<FastifyReply>} The Fastify reply object.
+ * Handles the creation of a new wallet for the user.
+ * @param {FastifyRequest<{ Body: { channel_user_id: string } }>} request - The Fastify request object.
+ * @param {FastifyReply} reply - The Fastify reply object used to send the response.
+ * @returns {Promise<FastifyReply>} A promise that resolves to the Fastify reply object containing the result.
  */
-export const withdrawAllFunds = async (
+export const createWalletSync = async (
   request: FastifyRequest<{
-    Body: {
-      channel_user_id: string;
-      dst_address: string;
-    };
+    Body: { channel_user_id: string; referral_by_code?: string };
+    Querystring?: { lastBotMsgDelaySeconds?: number };
   }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
-  let logKey = `[op:withdrawAllFunds:${''}:${''}]`;
+  let logKey = '[op:createWalletSync:unknown]';
 
   try {
-    if (!request.body) {
-      return await returnErrorResponse(
-        'withdrawAllFunds',
-        logKey,
-        reply,
-        400,
-        'Request body is required'
-      );
-    }
+    if (!request.body) throw new Error('Missing request body');
 
-    const { channel_user_id, dst_address } = request.body;
+    const { channel_user_id, referral_by_code } = request.body;
+    logKey = `[op:createWalletSync:${channel_user_id}]`;
 
-    if (!channel_user_id) {
-      return await returnErrorResponse(
-        'withdrawAllFunds',
-        logKey,
-        reply,
-        400,
-        'Missing "channel_user_id" in the request body'
-      );
-    }
-
-    if (!dst_address) {
-      return await returnErrorResponse(
-        'withdrawAllFunds',
-        logKey,
-        reply,
-        400,
-        'Missing "dst_address" in the request body'
-      );
-    }
-
+    if (!channel_user_id) throw new Error('Missing channel_user_id in body');
     if (!isValidPhoneNumber(channel_user_id)) {
-      return await returnErrorResponse(
-        'withdrawAllFunds',
-        logKey,
-        reply,
-        400,
-        `'${channel_user_id}' is invalid. "channel_user_id" must be a valid phone number (without spaces or symbols)`
-      );
+      throw new Error(`Invalid phone number: '${channel_user_id}'`);
     }
 
-    if (!isValidEthereumWallet(dst_address)) {
-      return await returnErrorResponse(
-        'withdrawAllFunds',
-        logKey,
-        reply,
-        400,
-        'Invalid Ethereum wallet address'
-      );
-    }
+    const { networkConfig, tokens } = request.server;
 
-    logKey = `[op:withdrawAllFunds:${channel_user_id}:${dst_address}]`;
-    const fastify = request.server;
-    const withdrawResult = await withdrawWalletAllFunds(
-      fastify.tokens,
-      fastify.networkConfig,
+    const {
+      message: walletResultMessage,
+      walletAddress,
+      wasWalletCreated
+    } = await createOrReturnWallet(channel_user_id, networkConfig, logKey, referral_by_code);
+
+    const notificationType = wasWalletCreated
+      ? NotificationEnum.wallet_creation
+      : NotificationEnum.wallet_already_exists;
+
+    const { message: templateMessage } = await getNotificationTemplate(
       channel_user_id,
-      dst_address,
-      logKey
+      notificationType
     );
 
-    if (withdrawResult.result) {
-      Logger.info('withdrawAllFunds', logKey, 'All funds withdrawn successfully');
-      return await returnSuccessResponse(reply, 'All funds withdrawn successfully');
+    const notificationMessage = templateMessage
+      .replace('[WALLET_ADDRESS]', walletAddress)
+      .replace('[NETWORK_NAME]', networkConfig.name);
+
+    if (
+      wasWalletCreated &&
+      networkConfig.environment.toUpperCase() !== 'PRODUCTION' &&
+      IS_DEVELOPMENT &&
+      ISSUER_TOKENS_ENABLED
+    ) {
+      Logger.log('createWalletSync', logKey, `Issuing tokens for ${walletAddress}`);
+      await tryIssueTokens(walletAddress, tokens, networkConfig);
     }
 
-    return await returnErrorResponse('withdrawAllFunds', '', reply, 400, withdrawResult.message);
+    Logger.log('createWalletSync', logKey, `${walletResultMessage}, ${walletAddress}`);
+
+    return await reply.send({
+      status: 'success',
+      data: {
+        message: notificationMessage,
+        walletAddress,
+        wasWalletCreated
+      }
+    });
   } catch (error) {
-    return returnErrorResponse(
-      'withdrawAllFunds',
-      logKey,
-      reply,
-      400,
-      'An error occurred while withdrawing all funds'
-    );
+    const err = error as Error;
+    Logger.error('createWalletSync', logKey, err.message || err);
+
+    return reply.status(500).send({
+      status: 'error',
+      message: err.message || 'Internal error'
+    });
   }
 };

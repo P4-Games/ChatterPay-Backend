@@ -1,16 +1,16 @@
-import { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
+import type { FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { getUser } from '../services/userService';
-import { icpService } from '../services/icp/icpService';
-import { isShortUrl } from '../helpers/validationHelper';
-import { ipfsService } from '../services/ipfs/ipfsService';
-import { downloadAndProcessImage } from '../services/imageService';
 import {
   returnErrorResponse,
-  returnSuccessResponse,
-  returnErrorResponse500
+  returnErrorResponse500,
+  returnSuccessResponse
 } from '../helpers/requestHelper';
+import { isShortUrl } from '../helpers/validationHelper';
+import { icpService } from '../services/icp/icpService';
+import { downloadAndProcessImage } from '../services/imageService';
+import { ipfsService } from '../services/ipfs/ipfsService';
+import { getUser } from '../services/userService';
 
 interface UploadBody {
   phone_number: string;

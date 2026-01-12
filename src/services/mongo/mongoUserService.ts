@@ -1,12 +1,12 @@
-import { Logger } from '../../helpers/loggerHelper';
-import { IUser, UserModel } from '../../models/userModel';
-import { mongoCountryService } from './mongoCountryService';
-import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
-import { NotificationLanguage, notificationLanguages } from '../../types/commonType';
 import {
   RESET_USER_OPERATION_THRESHOLD_MINUTES,
   SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT
 } from '../../config/constants';
+import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
+import { Logger } from '../../helpers/loggerHelper';
+import { type IUser, UserModel } from '../../models/userModel';
+import { type NotificationLanguage, notificationLanguages } from '../../types/commonType';
+import { mongoCountryService } from './mongoCountryService';
 
 export const mongoUserService = {
   /**
@@ -56,8 +56,7 @@ export const mongoUserService = {
    *       "transfer": 1,
    *       "swap": 0,
    *       "mint_nft": 0,
-   *       "mint_nft_copy": 0,
-   *       "withdraw_all": 1
+   *       "mint_nft_copy": 0
    *     }
    *   }
    * ]
@@ -71,8 +70,7 @@ export const mongoUserService = {
           { 'operations_in_progress.transfer': 1 },
           { 'operations_in_progress.swap': 1 },
           { 'operations_in_progress.mint_nft': 1 },
-          { 'operations_in_progress.mint_nft_copy': 1 },
-          { 'operations_in_progress.withdraw_all': 1 }
+          { 'operations_in_progress.mint_nft_copy': 1 }
         ]
       },
       'phone_number lastOperationDate operations_in_progress'
@@ -93,8 +91,7 @@ export const mongoUserService = {
    *     "transfer": 1,
    *     "swap": 1,
    *     "mint_nft": 1,
-   *     "mint_nft_copy": 1,
-   *     "withdraw_all": 1
+   *     "mint_nft_copy": 1
    *   }
    * }
    *
@@ -104,8 +101,7 @@ export const mongoUserService = {
    *     "transfer": 0,
    *     "swap": 0,
    *     "mint_nft": 0,
-   *     "mint_nft_copy": 0,
-   *     "withdraw_all": 0
+   *     "mint_nft_copy": 0
    *   }
    * }
    */
@@ -116,8 +112,7 @@ export const mongoUserService = {
           { 'operations_in_progress.transfer': { $ne: 0 } },
           { 'operations_in_progress.swap': { $ne: 0 } },
           { 'operations_in_progress.mint_nft': { $ne: 0 } },
-          { 'operations_in_progress.mint_nft_copy': { $ne: 0 } },
-          { 'operations_in_progress.withdraw_all': { $ne: 0 } }
+          { 'operations_in_progress.mint_nft_copy': { $ne: 0 } }
         ]
       },
       {
@@ -125,8 +120,7 @@ export const mongoUserService = {
           'operations_in_progress.transfer': 0,
           'operations_in_progress.swap': 0,
           'operations_in_progress.mint_nft': 0,
-          'operations_in_progress.mint_nft_copy': 0,
-          'operations_in_progress.withdraw_all': 0
+          'operations_in_progress.mint_nft_copy': 0
         }
       }
     );
@@ -153,8 +147,7 @@ export const mongoUserService = {
               { 'operations_in_progress.transfer': { $ne: 0 } },
               { 'operations_in_progress.swap': { $ne: 0 } },
               { 'operations_in_progress.mint_nft': { $ne: 0 } },
-              { 'operations_in_progress.mint_nft_copy': { $ne: 0 } },
-              { 'operations_in_progress.withdraw_all': { $ne: 0 } }
+              { 'operations_in_progress.mint_nft_copy': { $ne: 0 } }
             ]
           },
           { last_operation_date: { $lte: thirtyMinutesAgo } }
@@ -165,8 +158,7 @@ export const mongoUserService = {
           'operations_in_progress.transfer': 0,
           'operations_in_progress.swap': 0,
           'operations_in_progress.mint_nft': 0,
-          'operations_in_progress.mint_nft_copy': 0,
-          'operations_in_progress.withdraw_all': 0
+          'operations_in_progress.mint_nft_copy': 0
         }
       }
     );

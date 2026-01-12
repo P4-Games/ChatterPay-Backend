@@ -1,15 +1,14 @@
-import { ethers, ContractInterface } from 'ethers';
-
-import { getERC20ABI } from '../web3/abiService';
+import { type ContractInterface, ethers } from 'ethers';
 import { Logger } from '../../helpers/loggerHelper';
-import { SetupContractReturn } from '../../types/commonType';
-import {
-  AaveTokenInfo,
+import type {
+  AaveReserveValidationResult,
   AaveSupplyInfo,
-  AaveWithdrawResult,
   AaveTokenBalanceInfo,
-  AaveReserveValidationResult
+  AaveTokenInfo,
+  AaveWithdrawResult
 } from '../../types/aaveType';
+import type { SetupContractReturn } from '../../types/commonType';
+import { getERC20ABI } from '../web3/abiService';
 
 // ====== HARD-CODED (Scroll Sepolia) ======
 const USDC_ADDRESS = '0x2c9678042d52b97d27f2bd2947f7111d93f3dd0d';

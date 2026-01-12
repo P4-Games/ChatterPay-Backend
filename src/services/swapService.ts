@@ -1,38 +1,37 @@
-import { ethers, ContractInterface } from 'ethers';
-
-import { IToken } from '../models/tokenModel';
-import { gasService } from './web3/gasService';
-import { Logger } from '../helpers/loggerHelper';
-import { getTokenInfo } from './blockchainService';
-import { IBlockchain } from '../models/blockchainModel';
-import { getTokenSymbol, getTokenDecimals } from './commonService';
-import { executeUserOperationWithRetry } from './web3/userOpService';
-import {
-  logPaymasterEntryPointDeposit,
-  getPaymasterEntryPointDepositValue
-} from './web3/paymasterService';
-import {
-  getERC20ABI,
-  getChatterpayABI,
-  getUniswapQuoterV2ABI,
-  getChainlinkPriceFeedABI
-} from './web3/abiService';
-import {
-  swapTokensData,
-  ExecuteSwapResult,
-  SetupContractReturn,
-  ExecueTransactionResult
-} from '../types/commonType';
+import { type ContractInterface, ethers } from 'ethers';
 import {
   BINANCE_API_URL,
-  SWAP_USE_QUOTER,
-  SWAP_ZERO_FEE_MODE,
   SWAP_EXECUTE_SIMPLE,
+  SWAP_PRICE_THRESHOLD_PERCENT,
+  SWAP_SLIPPAGE_CONFIG_DEFAULT,
   SWAP_SLIPPAGE_CONFIG_EXTRA,
   SWAP_SLIPPAGE_CONFIG_STABLE,
-  SWAP_SLIPPAGE_CONFIG_DEFAULT,
-  SWAP_PRICE_THRESHOLD_PERCENT
+  SWAP_USE_QUOTER,
+  SWAP_ZERO_FEE_MODE
 } from '../config/constants';
+import { Logger } from '../helpers/loggerHelper';
+import type { IBlockchain } from '../models/blockchainModel';
+import type { IToken } from '../models/tokenModel';
+import type {
+  ExecueTransactionResult,
+  ExecuteSwapResult,
+  SetupContractReturn,
+  swapTokensData
+} from '../types/commonType';
+import { getTokenInfo } from './blockchainService';
+import { getTokenDecimals, getTokenSymbol } from './commonService';
+import {
+  getChainlinkPriceFeedABI,
+  getChatterpayABI,
+  getERC20ABI,
+  getUniswapQuoterV2ABI
+} from './web3/abiService';
+import { gasService } from './web3/gasService';
+import {
+  getPaymasterEntryPointDepositValue,
+  logPaymasterEntryPointDeposit
+} from './web3/paymasterService';
+import { executeUserOperationWithRetry } from './web3/userOpService';
 
 const SLIPPAGE_CONFIG = {
   STABLE: SWAP_SLIPPAGE_CONFIG_STABLE,

@@ -1,10 +1,10 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import {
   aaveCreateSupply,
+  aaveGetSupplyInfo,
   aaveRemoveSupply,
-  aaveUpdateSupply,
-  aaveGetSupplyInfo
+  aaveUpdateSupply
 } from '../controllers/aaveController';
 
 const aaveRoutes = async (fastify: FastifyInstance): Promise<void> => {

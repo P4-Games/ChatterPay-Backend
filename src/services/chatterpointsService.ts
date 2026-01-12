@@ -1,48 +1,47 @@
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
-
-import { getGcpFile } from './gcp/gcpService';
-import { Logger } from '../helpers/loggerHelper';
-import { cacheService } from './cache/cacheService';
-import { getDisplayUserLabel } from './userService';
-import { mongoUserService } from './mongo/mongoUserService';
+import {
+  CHATTERPOINTS_WORDS_READ_FROM,
+  CHATTERPOINTS_WORDS_SEED,
+  GAMES_LANGUAGE_DEFAULT,
+  GCP_CHATTERPOINTS,
+  LOCAL_CHATTERPOINTS
+} from '../config/constants';
 import { ChatterPointsBusinessException } from '../exxceptions/domain/ChatterpointBusinessError';
+import { Logger } from '../helpers/loggerHelper';
+import type {
+  CycleStatus,
+  GamePeriod,
+  GameSection,
+  GameSettings,
+  GameType,
+  HangmanSettings,
+  IChatterpoints,
+  IChatterpointsDocument,
+  OperationEntry,
+  OperationsSection,
+  PeriodStatus,
+  PeriodUserPlays,
+  PeriodWord,
+  PlayAttempt,
+  TimeWindow
+} from '../models/chatterpointsModel';
 import {
   CacheNames,
-  gamesLanguage,
-  gamesLanguages,
-  ConcurrentOperationsEnum
+  type ConcurrentOperationsEnum,
+  type gamesLanguage,
+  gamesLanguages
 } from '../types/commonType';
+import { cacheService } from './cache/cacheService';
+import { getGcpFile } from './gcp/gcpService';
 import {
-  LeaderboardItem,
-  LeaderboardResponse,
+  type LeaderboardItem,
+  type LeaderboardResponse,
   mongoChatterpointsService
 } from './mongo/mongoChatterpointsService';
-import {
-  GCP_CHATTERPOINTS,
-  LOCAL_CHATTERPOINTS,
-  GAMES_LANGUAGE_DEFAULT,
-  CHATTERPOINTS_WORDS_SEED,
-  CHATTERPOINTS_WORDS_READ_FROM
-} from '../config/constants';
-import {
-  GameType,
-  GamePeriod,
-  PeriodWord,
-  TimeWindow,
-  CycleStatus,
-  GameSection,
-  PlayAttempt,
-  GameSettings,
-  PeriodStatus,
-  IChatterpoints,
-  OperationEntry,
-  HangmanSettings,
-  PeriodUserPlays,
-  OperationsSection,
-  IChatterpointsDocument
-} from '../models/chatterpointsModel';
+import { mongoUserService } from './mongo/mongoUserService';
+import { getDisplayUserLabel } from './userService';
 
 // -------------------------------------------------------------------------------------------------------------
 

@@ -1,14 +1,14 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { Logger } from '../helpers/loggerHelper';
-import { CacheNames } from '../types/commonType';
-import { cacheService } from '../services/cache/cacheService';
-import { mongoUserService } from '../services/mongo/mongoUserService';
 import {
   returnErrorResponse,
-  returnSuccessResponse,
-  returnErrorResponse500
+  returnErrorResponse500,
+  returnSuccessResponse
 } from '../helpers/requestHelper';
+import { cacheService } from '../services/cache/cacheService';
+import { mongoUserService } from '../services/mongo/mongoUserService';
+import { CacheNames } from '../types/commonType';
 
 /**
  * Handler to check for users with open operations in progress.

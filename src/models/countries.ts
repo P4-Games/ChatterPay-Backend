@@ -1,6 +1,6 @@
-import { model, Schema, Document } from 'mongoose';
+import { type Document, model, Schema } from 'mongoose';
 
-import { NotificationLanguage, notificationLanguages } from '../types/commonType';
+import { type NotificationLanguage, notificationLanguages } from '../types/commonType';
 
 export interface ICountry extends Document {
   code: string; // ISO 3166-1 alpha-2 country code (e.g., 'AR')

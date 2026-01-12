@@ -1,13 +1,12 @@
-import axios, { isAxiosError, AxiosInstance } from 'axios';
-
-import { Logger } from '../../helpers/loggerHelper';
-import { toTopicAddress } from '../../helpers/alchemyHelper';
+import axios, { type AxiosInstance, isAxiosError } from 'axios';
 import {
   ALCHEMY_AUTH_TOKEN,
   ALCHEMY_VAR_TOKENS_ID,
   ALCHEMY_VAR_WALLETS_ID,
   ALCHEMY_VAR_WALLETS_TOPIC_ID
 } from '../../config/constants';
+import { toTopicAddress } from '../../helpers/alchemyHelper';
+import { Logger } from '../../helpers/loggerHelper';
 
 interface AlchemyVariable {
   id: string;

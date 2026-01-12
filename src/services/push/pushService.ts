@@ -1,18 +1,17 @@
-import { ethers } from 'ethers';
 import { channels as PushAPIChannels, payloads as PushAPIPayloads } from '@pushprotocol/restapi';
-
-import { Logger } from '../../helpers/loggerHelper';
-import { IUser, IUserWallet } from '../../models/userModel';
-import { mongoUserService } from '../mongo/mongoUserService';
+import { ethers } from 'ethers';
 import {
-  PUSH_ENABLED,
-  PUSH_NETWORK,
-  DEFAULT_CHAIN_ID,
-  PUSH_ENVIRONMENT,
   CHATTERPAY_DOMAIN,
+  DEFAULT_CHAIN_ID,
   PUSH_CHANNEL_ADDRESS,
-  PUSH_CHANNEL_PRIVATE_KEY
+  PUSH_CHANNEL_PRIVATE_KEY,
+  PUSH_ENABLED,
+  PUSH_ENVIRONMENT,
+  PUSH_NETWORK
 } from '../../config/constants';
+import { Logger } from '../../helpers/loggerHelper';
+import type { IUser, IUserWallet } from '../../models/userModel';
+import { mongoUserService } from '../mongo/mongoUserService';
 
 /**
  * Retrieves the wallet for a specific chain_id from a user's wallet array.

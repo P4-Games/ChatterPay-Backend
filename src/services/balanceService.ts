@@ -1,24 +1,87 @@
 import { ethers } from 'ethers';
-
-import { secService } from './secService';
-import { IToken } from '../models/tokenModel';
-import { getERC20ABI } from './web3/abiService';
-import { Logger } from '../helpers/loggerHelper';
-import { cacheService } from './cache/cacheService';
-import { BINANCE_API_URL } from '../config/constants';
-import { IBlockchain } from '../models/blockchainModel';
-import { getFiatQuotes } from './criptoya/criptoYaService';
+import { BINANCE_API_URL, DEFILLAMA_API_URL } from '../config/constants';
 import { getPhoneNFTs } from '../controllers/nftController';
+import { Logger } from '../helpers/loggerHelper';
+import type { IBlockchain } from '../models/blockchainModel';
+import type { IToken } from '../models/tokenModel';
 import {
-  Currency,
-  FiatQuote,
-  TokenInfo,
+  type AddressBalanceWithNfts,
+  type BalanceInfo,
   CacheNames,
-  BalanceInfo,
-  TokenBalance,
-  WalletBalanceInfo,
-  AddressBalanceWithNfts
+  type Currency,
+  type FiatQuote,
+  type TokenBalance,
+  type TokenInfo,
+  type WalletBalanceInfo
 } from '../types/commonType';
+import { cacheService } from './cache/cacheService';
+import { getFiatQuotes } from './criptoya/criptoYaService';
+import { secService } from './secService';
+import { getERC20ABI } from './web3/abiService';
+import { getDecimalsCache, getTokenBalancesMulticall } from './web3/multicallService';
+
+/**
+ * Maps chain IDs to DefiLlama chain prefixes
+ * @param {number} chainId - Chain ID
+ * @returns {string} DefiLlama chain prefix
+ */
+function getDefiLlamaChainPrefix(chainId: number): string {
+  const chainMap: Record<number, string> = {
+    1: 'ethereum',
+    56: 'bsc',
+    137: 'polygon',
+    42161: 'arbitrum',
+    10: 'optimism',
+    534352: 'scroll',
+    8453: 'base'
+  };
+  return chainMap[chainId] || 'scroll';
+}
+
+/**
+ * Fetches token prices from DefiLlama API using contract addresses
+ * @param {Map<string, string>} tokenAddresses - Map of token symbols to contract addresses
+ * @param {number} chainId - Chain ID for the blockchain network
+ * @returns {Promise<Map<string, number>>} Map of token symbols to their USD prices
+ */
+async function getPricesFromDefiLlama(
+  tokenAddresses: Map<string, string>,
+  chainId: number
+): Promise<Map<string, number>> {
+  const priceMap = new Map<string, number>();
+
+  if (tokenAddresses.size === 0) return priceMap;
+
+  try {
+    const chainPrefix = getDefiLlamaChainPrefix(chainId);
+    const coins = Array.from(tokenAddresses.entries())
+      .map(([_, address]) => `${chainPrefix}:${address}`)
+      .join(',');
+
+    const url = `${DEFILLAMA_API_URL}/${coins}`;
+    Logger.log('getPricesFromDefiLlama', `Fetching prices from DefiLlama: ${url}`);
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data?.coins) {
+      tokenAddresses.forEach((address, symbol) => {
+        const key = `${chainPrefix}:${address}`;
+        const coinData = data.coins[key];
+        if (coinData?.price) {
+          const price = parseFloat(coinData.price);
+          Logger.log('getPricesFromDefiLlama', `Price for ${symbol}: ${price} USD (DefiLlama)`);
+          priceMap.set(symbol, price);
+        }
+      });
+    }
+
+    return priceMap;
+  } catch (error) {
+    Logger.error('getPricesFromDefiLlama', 'Error fetching prices from DefiLlama:', error);
+    return priceMap;
+  }
+}
 
 /**
  * Fetches the balance of a specific token for a given address
@@ -50,15 +113,30 @@ async function getContractBalance(
 }
 
 /**
- * Fetches token prices from Binance API using USDT pairs
+ * Fetches token prices from Binance API using USDT pairs, with DefiLlama fallback
  * @param {string[]} symbols - Array of token symbols to fetch prices for
+ * @param {Map<string, string>} tokenAddresses - Map of token symbols to contract addresses
+ * @param {number} chainId - Chain ID for DefiLlama fallback
  * @returns {Promise<Map<string, number>>} Map of token symbols to their USD prices
  */
-export async function getTokenPrices(symbols: string[]): Promise<Map<string, number>> {
+export async function getTokenPrices(
+  symbols: string[],
+  tokenAddresses: Map<string, string> = new Map(),
+  chainId: number = 1
+): Promise<Map<string, number>> {
   const norm = (s: string) => String(s).trim().toUpperCase();
   const priceMap = new Map<string, number>();
 
-  const STABLES: Set<string> = new Set(['USDT', 'USDC', 'DAI', 'AUSDC', 'AUSDT']);
+  const STABLES: Set<string> = new Set([
+    'AUSDC',
+    'AUSDT',
+    'DAI',
+    'sUSX',
+    'USDC',
+    'USDQ',
+    'USDT',
+    'USX'
+  ]);
   STABLES.forEach((s) => priceMap.set(s, 1));
 
   const symbolsToFetch = Array.from(new Set(symbols.map(norm))).filter((s) => !STABLES.has(s));
@@ -110,6 +188,26 @@ export async function getTokenPrices(symbols: string[]): Promise<Map<string, num
       })
     );
 
+    // DefiLlama fallback for tokens that failed to fetch from Binance
+    const failedTokens = new Map<string, string>();
+    symbolsToFetchFromApi.forEach((symbol) => {
+      if (!priceMap.has(symbol) || priceMap.get(symbol) === 0) {
+        const address = tokenAddresses.get(symbol);
+        if (address) {
+          failedTokens.set(symbol, address);
+        }
+      }
+    });
+
+    if (failedTokens.size > 0) {
+      Logger.log('getTokenPrices', `Attempting DefiLlama fallback for ${failedTokens.size} tokens`);
+      const defiLlamaPrices = await getPricesFromDefiLlama(failedTokens, chainId);
+      defiLlamaPrices.forEach((price, symbol) => {
+        priceMap.set(symbol, price);
+        cacheService.set(CacheNames.PRICE, symbol, price);
+      });
+    }
+
     return priceMap;
   } catch (error) {
     Logger.error('getTokenPrices', 'Error fetching token prices from Binance:', error);
@@ -131,7 +229,14 @@ async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo
   const norm = (s: string) => String(s).trim().toUpperCase();
   const chainTokens = tokens.filter((token) => token.chain_id === chanId);
   const symbols = [...new Set(chainTokens.map((token) => norm(token.symbol)))];
-  const prices = await getTokenPrices(symbols);
+
+  // Build address map for DefiLlama fallback
+  const tokenAddresses = new Map<string, string>();
+  chainTokens.forEach((token) => {
+    tokenAddresses.set(norm(token.symbol), token.address);
+  });
+
+  const prices = await getTokenPrices(symbols, tokenAddresses, chanId);
 
   return chainTokens.map((token) => ({
     symbol: token.symbol,
@@ -145,7 +250,7 @@ async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo
 }
 
 /**
- * Fetches token balances for a given address
+ * Fetches token balances for a given address using Multicall for efficiency
  * @param {string} address - Address to check balances for
  * @param {IToken[]} tokens - Array of token objects
  * @param {IBlockchain} networkConfig - Blockchain network configuration
@@ -157,19 +262,67 @@ export async function getTokenBalances(
   networkConfig: IBlockchain
 ): Promise<TokenBalance[]> {
   const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
-  const bs = secService.get_bs(provider);
   const tokenInfo = await getTokenInfo(tokens, networkConfig.chainId);
 
-  return Promise.all(
-    tokenInfo.map(async (token) => {
-      const rawBalance = await getContractBalance(token.address, bs, address);
+  try {
+    const tokenAddresses = tokenInfo.map((t) => t.address);
 
-      // Apply display_decimals here, keep as string
-      const formattedBalance = parseFloat(rawBalance).toFixed(token.display_decimals);
+    // Preload decimals cache from token metadata (if available)
+    const cachedDecimals = getDecimalsCache();
+    tokenInfo.forEach((token) => {
+      // Try to use decimals from token metadata if available
+      const key = token.address.toLowerCase();
+      if (!cachedDecimals.has(key)) {
+        // We'll let multicall fetch it, but we could also infer from display_decimals
+        // For now, multicall will handle it
+      }
+    });
 
+    const startTime = Date.now();
+    const multicallResults = await getTokenBalancesMulticall(
+      provider,
+      address,
+      tokenAddresses,
+      cachedDecimals
+    );
+    const elapsed = Date.now() - startTime;
+
+    Logger.log(
+      'getTokenBalances',
+      `Multicall completed in ${elapsed}ms for ${tokenAddresses.length} tokens`
+    );
+
+    // Map multicall results back to token info
+    return tokenInfo.map((token, index) => {
+      const result = multicallResults[index];
+
+      if (!result.success) {
+        Logger.warn(
+          'getTokenBalances',
+          `Failed to get balance for ${token.symbol} (${token.address}): ${result.error || 'Unknown error'}`
+        );
+        return {
+          ...token,
+          balance: parseFloat('0').toFixed(token.display_decimals)
+        };
+      }
+
+      const formattedBalance = parseFloat(result.balance).toFixed(token.display_decimals);
       return { ...token, balance: formattedBalance };
-    })
-  );
+    });
+  } catch (error) {
+    // Fallback to individual calls if multicall fails
+    Logger.error('getTokenBalances', 'Multicall failed, falling back to individual calls:', error);
+
+    const bs = secService.get_bs(provider);
+    return Promise.all(
+      tokenInfo.map(async (token) => {
+        const rawBalance = await getContractBalance(token.address, bs, address);
+        const formattedBalance = parseFloat(rawBalance).toFixed(token.display_decimals);
+        return { ...token, balance: formattedBalance };
+      })
+    );
+  }
 }
 
 /**
