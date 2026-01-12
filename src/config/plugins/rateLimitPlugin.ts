@@ -3,8 +3,6 @@ import type { FastifyInstance } from 'fastify';
 
 import { MAX_REQUESTS_PER_MINUTE } from '../constants';
 
-import { MAX_REQUESTS_PER_MINUTE } from '../constants';
-
 /**
  * Configures rate limiting for the Fastify server.
  * @param server - The Fastify server instance.

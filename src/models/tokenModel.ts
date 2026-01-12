@@ -10,16 +10,6 @@ export interface TokenOperationLimits {
   L2: TokenLimitDetail;
 }
 
-export interface TokenLimitDetail {
-  min: number;
-  max: number;
-}
-
-export interface TokenOperationLimits {
-  L1: TokenLimitDetail;
-  L2: TokenLimitDetail;
-}
-
 export interface IToken extends Document {
   name: string;
   chain_id: number;
