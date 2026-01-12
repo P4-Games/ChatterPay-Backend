@@ -1,5 +1,5 @@
-import { ethers, Signer } from 'ethers';
-
+import { ethers, type Signer } from 'ethers';
+import { CDP1, CDP2 } from '../config/constants';
 import { Logger } from './loggerHelper';
 import { CDP1, CDP2 } from '../config/constants';
 

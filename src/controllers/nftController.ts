@@ -1,51 +1,50 @@
 import { ethers } from 'ethers';
-import mongoose, { ObjectId } from 'mongoose';
-import { FastifyReply, FastifyRequest } from 'fastify';
-
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import mongoose, { type ObjectId } from 'mongoose';
+import {
+  CHATIZALO_PHONE_NUMBER,
+  COMMON_REPLY_OPERATION_IN_PROGRESS,
+  COMMON_REPLY_WALLET_NOT_CREATED,
+  DEFAULT_CHAIN_ID,
+  defaultNftImage,
+  WHATSAPP_API_URL
+} from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
-import { secService } from '../services/secService';
-import { delaySeconds } from '../helpers/timeHelper';
-import { icpService } from '../services/icp/icpService';
-import { gasService } from '../services/web3/gasService';
-import { IUser, IUserWallet } from '../models/userModel';
-import { ipfsService } from '../services/ipfs/ipfsService';
-import { NotificationEnum } from '../models/templateModel';
-import { cacheService } from '../services/cache/cacheService';
-import NFTModel, { INFT, INFTMetadata } from '../models/nftModel';
-import { getChatterPayNFTABI } from '../services/web3/abiService';
-import { downloadAndProcessImage } from '../services/imageService';
-import { mongoUserService } from '../services/mongo/mongoUserService';
-import { userReachedOperationLimit } from '../services/blockchainService';
-import { CacheNames, ConcurrentOperationsEnum } from '../types/commonType';
-import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
-import { isShortUrl, isValidUrl, isValidPhoneNumber } from '../helpers/validationHelper';
 import {
   returnErrorResponse,
-  returnSuccessResponse,
-  returnErrorResponse500
+  returnErrorResponse500,
+  returnSuccessResponse
 } from '../helpers/requestHelper';
+import { delaySeconds } from '../helpers/timeHelper';
+import { isShortUrl, isValidPhoneNumber, isValidUrl } from '../helpers/validationHelper';
+import NFTModel, { type INFT, type INFTMetadata } from '../models/nftModel';
+import { NotificationEnum } from '../models/templateModel';
+import type { IUser, IUserWallet } from '../models/userModel';
+import { userReachedOperationLimit } from '../services/blockchainService';
+import { cacheService } from '../services/cache/cacheService';
+import { icpService } from '../services/icp/icpService';
+import { downloadAndProcessImage } from '../services/imageService';
+import { ipfsService } from '../services/ipfs/ipfsService';
+import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
+import { mongoUserService } from '../services/mongo/mongoUserService';
 import {
+  getNotificationTemplate,
   persistNotification,
-  sendMintNotification,
-  getNotificationTemplate
+  sendMintNotification
 } from '../services/notificationService';
+import { secService } from '../services/secService';
 import {
-  getUser,
-  getUserWallet,
-  openOperation,
   closeOperation,
   getOrCreateUser,
+  getUser,
+  getUserWallet,
   getUserWalletByChainId,
-  hasPhoneAnyOperationInProgress
+  hasPhoneAnyOperationInProgress,
+  openOperation
 } from '../services/userService';
-import {
-  defaultNftImage,
-  DEFAULT_CHAIN_ID,
-  WHATSAPP_API_URL,
-  CHATIZALO_PHONE_NUMBER,
-  COMMON_REPLY_WALLET_NOT_CREATED,
-  COMMON_REPLY_OPERATION_IN_PROGRESS
-} from '../config/constants';
+import { getChatterPayNFTABI } from '../services/web3/abiService';
+import { gasService } from '../services/web3/gasService';
+import { CacheNames, ConcurrentOperationsEnum } from '../types/commonType';
 
 export interface NFTInfo {
   description: string;
@@ -381,6 +380,7 @@ export const generateNftOriginal = async (
   try {
     nftMintData = await mintNftOriginal(
       userWalletByChainId.wallet_proxy,
+      // @ts-expect-error
       (mongoData._id as ObjectId).toString()
     );
   } catch (error) {
@@ -644,6 +644,7 @@ export const generateNftCopy = async (
       nftMintData = await mintNftCopy(
         userWallet.wallet_proxy,
         nftCopyOf.id,
+        // @ts-expect-error
         (mongoData._id as ObjectId).toString()
       );
     } catch (error) {

@@ -1,4 +1,4 @@
-import Token, { IToken } from '../../models/tokenModel';
+import Token, { type IToken } from '../../models/tokenModel';
 
 export const mongoTokenService = {
   /**

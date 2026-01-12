@@ -1,18 +1,18 @@
-import path from 'path';
 import fastifyStatic from '@fastify/static';
-import Fastify, { FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
+import path from 'path';
 
 import { setupRoutes } from '../api/routes';
 import { Logger } from '../helpers/loggerHelper';
-import { setupSwagger } from './plugins/swaggerPlugin';
-import { setupRateLimit } from './plugins/rateLimitPlugin';
+import { CURRENT_LOG_LEVEL, GCP_CLOUD_TRACE_ENABLED, PORT } from './constants';
 import { authMiddleware } from './middlewares/authMiddleware';
-import { traceMiddleware } from './middlewares/traceMiddleware';
-import { originMiddleware } from './middlewares/originMiddleware';
-import { setupNetworkConfigPlugin } from './plugins/networkConfigPlugin';
-import { ipBlacklistMiddleware } from './middlewares/ipsBlackListMiddleware';
-import { PORT, CURRENT_LOG_LEVEL, GCP_CLOUD_TRACE_ENABLED } from './constants';
 import { setupBodyParserMiddleware } from './middlewares/bodyParserMiddleware';
+import { ipBlacklistMiddleware } from './middlewares/ipsBlackListMiddleware';
+import { originMiddleware } from './middlewares/originMiddleware';
+import { traceMiddleware } from './middlewares/traceMiddleware';
+import { setupNetworkConfigPlugin } from './plugins/networkConfigPlugin';
+import { setupRateLimit } from './plugins/rateLimitPlugin';
+import { setupSwagger } from './plugins/swaggerPlugin';
 
 /**
  * Starts the Fastify server with all necessary configurations.

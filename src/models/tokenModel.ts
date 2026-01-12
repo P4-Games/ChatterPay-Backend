@@ -1,4 +1,14 @@
-import { model, Schema, Document } from 'mongoose';
+import { type Document, model, Schema } from 'mongoose';
+
+export interface TokenLimitDetail {
+  min: number;
+  max: number;
+}
+
+export interface TokenOperationLimits {
+  L1: TokenLimitDetail;
+  L2: TokenLimitDetail;
+}
 
 export interface TokenLimitDetail {
   min: number;

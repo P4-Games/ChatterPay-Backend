@@ -1,4 +1,32 @@
-import { model, Schema, Document } from 'mongoose';
+import { type Document, model, Schema } from 'mongoose';
+
+export interface OpGasValues {
+  perGasInitialMultiplier: number;
+  perGasIncrement: number;
+  callDataInitialMultiplier: number;
+  maxRetries: number;
+  timeoutMsBetweenRetries: number;
+  maxFeePerGas: string;
+  maxPriorityFeePerGas: string;
+  verificationGasLimit: number;
+  callGasLimit: number;
+  preVerificationGas: number;
+}
+
+export interface BlockchainLimitDetail {
+  [unit: string]: number;
+}
+
+export interface BlockchainOperationLimits {
+  L1: BlockchainLimitDetail;
+  L2: BlockchainLimitDetail;
+}
+
+export interface ExternalDeposits {
+  lastBlockProcessed: number;
+  lastBlockTimestampProcessed: number;
+  updatedAt: Date;
+}
 
 export interface OpGasValues {
   perGasInitialMultiplier: number;

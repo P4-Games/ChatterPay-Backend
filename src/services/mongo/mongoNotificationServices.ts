@@ -1,5 +1,5 @@
 import { Logger } from '../../helpers/loggerHelper';
-import NotificationModel, { INotification } from '../../models/notificationModel';
+import NotificationModel, { type INotification } from '../../models/notificationModel';
 
 export const mongoNotificationService = {
   /**
@@ -25,6 +25,7 @@ export const mongoNotificationService = {
    */
   getAllNotifications: async (): Promise<INotification[]> => {
     try {
+      // @ts-expect-error
       return await NotificationModel.find().lean();
     } catch (error) {
       Logger.error(
@@ -44,6 +45,7 @@ export const mongoNotificationService = {
    */
   getNotificationsByRecipient: async (recipient: string): Promise<INotification[]> => {
     try {
+      // @ts-expect-error
       return await NotificationModel.find({ to: recipient }).lean();
     } catch (error) {
       Logger.error(

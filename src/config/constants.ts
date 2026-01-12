@@ -1,7 +1,10 @@
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
-
-import { LogLevel, validLogLevels } from '../types/loggerType';
-import { gamesLanguage, NotificationLanguage, notificationLanguages } from '../types/commonType';
+import {
+  type gamesLanguage,
+  type NotificationLanguage,
+  notificationLanguages
+} from '../types/commonType';
+import { type LogLevel, validLogLevels } from '../types/loggerType';
 
 interface ABIs {
   [key: string]: string;
@@ -141,7 +144,8 @@ export const GCP_ABIs: ABIs = {
   ERC20: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ERC20.sol/ERC20.json`,
   ChainlinkPriceFeed: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`,
   UniswapQuoterV2: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/Uniswap.sol/QuoterV2.json`,
-  UniswapRouter02: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/Uniswap.sol/Router02.json`
+  UniswapRouter02: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/Uniswap.sol/Router02.json`,
+  Multicall3: `${GCP_BUCKET_BASE_URL}/ABIs/${ABIS_VERSION}/Multicall3.sol/Multicall3.json`
 };
 
 export const LOCAL_ABIs: ABIs = {
@@ -153,7 +157,8 @@ export const LOCAL_ABIs: ABIs = {
   ERC20: `ERC20.sol/ERC20.json`,
   ChainlinkPriceFeed: `ChainlinkPriceFeed.sol/ChainlinkPriceFeed.json`,
   UniswapQuoterV2: `Uniswap.sol/QuoterV2.json`,
-  UniswapRouter02: `Uniswap.sol/Router02.json`
+  UniswapRouter02: `Uniswap.sol/Router02.json`,
+  Multicall3: `Multicall3.sol/Multicall3.json`
 };
 
 export const GCP_CHATTERPOINTS: CHATTERPOINTS = {
@@ -271,3 +276,12 @@ export const CACHE_ERC20_DATA_CHECK_PERIOD = 518400; // 6 days
 
 export const CACHE_CHATTERPOINTS_WORDS_TTL = 1728000; // 20 days
 export const CACHE_CHATTERPOINTS_WORDS_CHECK_PERIOD = 1728600; // 20 days + 10 min
+
+// On-Ramp Configuration
+export const ONRAMP_BASE_URL = 'https://onramp.money/main/buy/';
+export const ONRAMP_APP_ID = '1562916';
+export const ONRAMP_DEFAULT_COIN_CODE = 'usdt';
+export const ONRAMP_DEFAULT_NETWORK = 'scroll';
+
+// DefiLlama Configuration
+export const DEFILLAMA_API_URL = 'https://coins.llama.fi/prices/current';

@@ -1,8 +1,8 @@
-import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { it, expect, describe, afterEach, beforeEach } from 'vitest';
+import mongoose from 'mongoose';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import Blockchain, { IBlockchain } from '../../src/models/blockchainModel';
+import Blockchain, { type IBlockchain } from '../../src/models/blockchainModel';
 
 describe('Blockchain Model', () => {
   let mongoServer: MongoMemoryServer;

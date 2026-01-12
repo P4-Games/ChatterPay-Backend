@@ -1,13 +1,12 @@
 import axios from 'axios';
-
-import { Logger } from '../../helpers/loggerHelper';
-import { chatizaloOperatorReply } from '../../types/chatizaloType';
-import { isValidPhoneNumber } from '../../helpers/validationHelper';
 import {
   BOT_API_URL,
-  GCP_CLOUD_TRACE_ENABLED,
-  BOT_NOTIFICATIONS_ENABLED
+  BOT_NOTIFICATIONS_ENABLED,
+  GCP_CLOUD_TRACE_ENABLED
 } from '../../config/constants';
+import { Logger } from '../../helpers/loggerHelper';
+import { isValidPhoneNumber } from '../../helpers/validationHelper';
+import type { chatizaloOperatorReply } from '../../types/chatizaloType';
 
 export const chatizaloService = {
   /**

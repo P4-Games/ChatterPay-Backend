@@ -1,12 +1,11 @@
-import path from 'path';
+import type { ethers } from 'ethers';
 import * as fs from 'fs-extra';
-import { ethers } from 'ethers';
-
-import { getGcpFile } from '../gcp/gcpService';
+import path from 'path';
+import { ABIS_READ_FROM, GCP_ABIs, LOCAL_ABIs } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
 import { CacheNames } from '../../types/commonType';
 import { cacheService } from '../cache/cacheService';
-import { GCP_ABIs, LOCAL_ABIs, ABIS_READ_FROM } from '../../config/constants';
+import { getGcpFile } from '../gcp/gcpService';
 
 export type ABI = ethers.ContractInterface;
 
@@ -139,3 +138,10 @@ export const getUniswapQuoterV2ABI = async (): Promise<ABI> => getFile('UniswapQ
  * @returns {Promise<ABI>} The Uniswap Router 02 ABI object.
  */
 export const getUniswapRouter02ABI = async (): Promise<ABI> => getFile('UniswapRouter02');
+
+/**
+ * Retrieves the Multicall3 ABI.
+ *
+ * @returns {Promise<ABI>} The Multicall3 ABI object.
+ */
+export const getMulticall3ABI = async (): Promise<ABI> => getFile('Multicall3');

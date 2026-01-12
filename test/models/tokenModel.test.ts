@@ -1,8 +1,8 @@
-import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { it, expect, describe, afterEach, beforeEach } from 'vitest';
+import mongoose from 'mongoose';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import Token, { IToken } from '../../src/models/tokenModel';
+import Token, { type IToken } from '../../src/models/tokenModel';
 
 describe('Token Model', () => {
   let mongoServer: MongoMemoryServer;

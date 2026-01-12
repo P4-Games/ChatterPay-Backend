@@ -1,6 +1,6 @@
 import { Logger } from '../../helpers/loggerHelper';
 import Transaction from '../../models/transactionModel';
-import { TransactionData } from '../../types/commonType';
+import type { TransactionData } from '../../types/commonType';
 
 export const mongoTransactionService = {
   /**

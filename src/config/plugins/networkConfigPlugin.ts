@@ -1,12 +1,12 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import { Logger } from '../../helpers/loggerHelper';
-import Token, { IToken } from '../../models/tokenModel';
-import { IBlockchain } from '../../models/blockchainModel';
+import type { IBlockchain } from '../../models/blockchainModel';
+import Token, { type IToken } from '../../models/tokenModel';
 import { mongoBlockchainService } from '../../services/mongo/mongoBlockchainService';
 import {
-  FASTIFY_REFRESH_TOKENS_INTERVAL_MS,
-  FASTIFY_REFRESH_NETWORKS_INTERVAL_MS
+  FASTIFY_REFRESH_NETWORKS_INTERVAL_MS,
+  FASTIFY_REFRESH_TOKENS_INTERVAL_MS
 } from '../constants';
 
 // Extend the FastifyInstance interface to include our custom decorations

@@ -1,27 +1,26 @@
 import { once as onceEvent } from 'events';
-import { ServerResponse, IncomingMessage } from 'http';
-import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
-
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { IncomingMessage, ServerResponse } from 'http';
+import {
+  COMMON_REPLY_OPERATION_IN_PROGRESS,
+  COMMON_REPLY_WALLET_NOT_CREATED
+} from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
-import { AaveWithdrawResult } from '../types/aaveType';
-import { IUser, IUserWallet } from '../models/userModel';
-import { aaveService } from '../services/aave/aaveService';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
-import { CheckBalanceConditionsResult } from '../types/commonType';
+import type { IUser, IUserWallet } from '../models/userModel';
+import { aaveService } from '../services/aave/aaveService';
 import { checkBlockchainConditions } from '../services/blockchainService';
-import { getUser, getUserWalletByChainId } from '../services/userService';
 import {
-  COMMON_REPLY_WALLET_NOT_CREATED,
-  COMMON_REPLY_OPERATION_IN_PROGRESS
-} from '../config/constants';
-import {
-  sendInternalErrorNotification,
-  sendAaveSupplyInfoNotification,
   sendAAVECreateSuplyNotification,
   sendAAVERemoveSuplyNotification,
+  sendAaveSupplyInfoNotification,
+  sendInternalErrorNotification,
   sendNoValidBlockchainConditionsNotification
 } from '../services/notificationService';
+import { getUser, getUserWalletByChainId } from '../services/userService';
+import type { AaveWithdrawResult } from '../types/aaveType';
+import type { CheckBalanceConditionsResult } from '../types/commonType';
 
 type AaveSupplyBody = {
   channel_user_id: string;
@@ -62,7 +61,6 @@ export const aaveCreateSupply = async (
       onceEvent(res, 'close') // client closed connection earlier; we still continue
     ]);
   }
-
   // Async processing after the reply
   // eslint-disable-next-line consistent-return
   (async () => {
@@ -180,7 +178,6 @@ export const aaveUpdateSupply = async (
       onceEvent(res, 'close') // client closed connection earlier; we still continue
     ]);
   }
-
   // Async processing after the reply
   // eslint-disable-next-line consistent-return
   (async () => {
@@ -297,7 +294,6 @@ export const aaveRemoveSupply = async (
       onceEvent(res, 'close') // client closed connection earlier; we still continue
     ]);
   }
-
   // Async processing after the reply
   // eslint-disable-next-line consistent-return
   (async () => {
@@ -414,7 +410,6 @@ export const aaveGetSupplyInfo = async (
       onceEvent(res, 'close') // client closed connection earlier; we still continue
     ]);
   }
-
   // Async processing after the reply
   // eslint-disable-next-line consistent-return
   (async () => {

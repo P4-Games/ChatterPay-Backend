@@ -30,7 +30,6 @@
 
 ## Frontend => Backend
 
-- transferAll => /withdraw_all, POST
 - getBalancesWithTotalsFromBackend => /balance:walletAddress, GET
 - fethCustomTokens => /balance:walletAddress, GET
 

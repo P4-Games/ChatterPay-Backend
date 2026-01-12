@@ -1,51 +1,53 @@
 import { ethers } from 'ethers';
-import { FastifyReply, FastifyRequest, FastifyInstance } from 'fastify';
-
-import { IUser } from '../models/userModel';
-import { Logger } from '../helpers/loggerHelper';
-import { secService } from '../services/secService';
-import { delaySeconds } from '../helpers/timeHelper';
-import { executeSwap } from '../services/swapService';
-import { NotificationEnum } from '../models/templateModel';
-import { getTokenPrices } from '../services/balanceService';
-import { isValidPhoneNumber } from '../helpers/validationHelper';
-import { getChatterpayTokenFee } from '../services/commonService';
-import { setupERC20 } from '../services/web3/contractSetupService';
-import { mongoUserService } from '../services/mongo/mongoUserService';
-import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
-import { chatterpointsService, RegisterOperationResult } from '../services/chatterpointsService';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
-  COMMON_REPLY_WALLET_NOT_CREATED,
-  COMMON_REPLY_OPERATION_IN_PROGRESS
+  COMMON_REPLY_OPERATION_IN_PROGRESS,
+  COMMON_REPLY_WALLET_NOT_CREATED
 } from '../config/constants';
+import { Logger } from '../helpers/loggerHelper';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import { delaySeconds } from '../helpers/timeHelper';
+import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { NotificationEnum } from '../models/templateModel';
+import type { IUser } from '../models/userModel';
+import { getTokenPrices } from '../services/balanceService';
 import {
-  getUser,
-  openOperation,
-  closeOperation,
-  hasPhoneAnyOperationInProgress
-} from '../services/userService';
-import {
-  swapTokensData,
-  TransactionData,
-  ExecuteSwapResult,
-  ConcurrentOperationsEnum,
-  CheckBalanceConditionsResult
-} from '../types/commonType';
-import {
-  getSwapTokensData,
   checkBlockchainConditions,
+  getSwapTokensData,
   userReachedOperationLimit,
   userWithinTokenOperationLimits
 } from '../services/blockchainService';
 import {
-  persistNotification,
-  sendSwapNotification,
+  chatterpointsService,
+  type RegisterOperationResult
+} from '../services/chatterpointsService';
+import { getChatterpayTokenFee } from '../services/commonService';
+import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
+import { mongoUserService } from '../services/mongo/mongoUserService';
+import {
   getNotificationTemplate,
+  persistNotification,
   sendInternalErrorNotification,
-  sendUserInsufficientBalanceNotification,
-  sendNoValidBlockchainConditionsNotification
+  sendNoValidBlockchainConditionsNotification,
+  sendSwapNotification,
+  sendUserInsufficientBalanceNotification
 } from '../services/notificationService';
+import { secService } from '../services/secService';
+import { executeSwap } from '../services/swapService';
+import {
+  closeOperation,
+  getUser,
+  hasPhoneAnyOperationInProgress,
+  openOperation
+} from '../services/userService';
+import { setupERC20 } from '../services/web3/contractSetupService';
+import {
+  type CheckBalanceConditionsResult,
+  ConcurrentOperationsEnum,
+  type ExecuteSwapResult,
+  type swapTokensData,
+  type TransactionData
+} from '../types/commonType';
 
 interface SwapBody {
   channel_user_id: string;

@@ -1,6 +1,6 @@
-import { it, expect, describe } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { toTopicAddress, fromTopicAddress } from '../../src/helpers/alchemyHelper';
+import { fromTopicAddress, toTopicAddress } from '../../src/helpers/alchemyHelper';
 
 describe('alchemyHelper', () => {
   const addr = '0xc17456b51ce6bebc5fb01869d1403517111dbe02';

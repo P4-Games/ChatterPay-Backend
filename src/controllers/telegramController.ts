@@ -1,10 +1,9 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
-
-import { IToken } from '../models/tokenModel';
-import { Logger } from '../helpers/loggerHelper';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { BOT_DATA_TOKEN } from '../config/constants';
-import { IBlockchain } from '../models/blockchainModel';
-import { ServerCtx, telegramService } from '../services/telegram/telegramService';
+import { Logger } from '../helpers/loggerHelper';
+import type { IBlockchain } from '../models/blockchainModel';
+import type { IToken } from '../models/tokenModel';
+import { type ServerCtx, telegramService } from '../services/telegram/telegramService';
 
 // -------------------------------------------------------------------------------------------------------------
 // Telegram type definitions (minimal subset used by our bot)

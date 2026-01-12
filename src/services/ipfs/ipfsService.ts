@@ -1,8 +1,7 @@
-import { Readable } from 'stream';
 import PinataSDK from '@pinata/sdk';
-
+import { Readable } from 'stream';
+import { NFT_UPLOAD_IMAGE_IPFS, PINATA_IPFS_URL, PINATA_JWT } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
-import { PINATA_JWT, PINATA_IPFS_URL, NFT_UPLOAD_IMAGE_IPFS } from '../../config/constants';
 
 export const ipfsService = {
   /*

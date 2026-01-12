@@ -1,8 +1,8 @@
-import { ethers, Contract, BigNumber } from 'ethers';
+import { BigNumber, type Contract, ethers } from 'ethers';
 
 import { Logger } from '../../helpers/loggerHelper';
-import { OpGasValues } from '../../models/blockchainModel';
-import { PackedUserOperation } from '../../types/userOperationType';
+import type { OpGasValues } from '../../models/blockchainModel';
+import type { PackedUserOperation } from '../../types/userOperationType';
 
 /**
  * Calculates recommended gas values, prioritizing latest network estimations.

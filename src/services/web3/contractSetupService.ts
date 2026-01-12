@@ -1,11 +1,10 @@
 import { ethers } from 'ethers';
-
-import { secService } from '../secService';
-import { IBlockchain } from '../../models/blockchainModel';
-import { IUser, IUserWallet } from '../../models/userModel';
-import { getERC20ABI, getChatterpayABI } from './abiService';
+import type { IBlockchain } from '../../models/blockchainModel';
+import type { IUser, IUserWallet } from '../../models/userModel';
+import type { ComputedAddress, SetupContractReturn } from '../../types/commonType';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
-import { ComputedAddress, SetupContractReturn } from '../../types/commonType';
+import { secService } from '../secService';
+import { getChatterpayABI, getERC20ABI } from './abiService';
 
 /**
  * Sets up the necessary contracts and providers for blockchain interaction.

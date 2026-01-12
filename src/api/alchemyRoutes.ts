@@ -1,10 +1,10 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import { ALCHEMY_WEBHOOKS_PATH } from '../config/constants';
 import {
-  handleAlchemyHealth,
+  handleAlchemyDeposits,
   handleAlchemyFactory,
-  handleAlchemyDeposits
+  handleAlchemyHealth
 } from '../controllers/alchemyController';
 
 /**

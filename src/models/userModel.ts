@@ -1,4 +1,4 @@
-import { model, Schema, Document } from 'mongoose';
+import { type Document, model, Schema } from 'mongoose';
 
 import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT } from '../config/constants';
 
@@ -31,7 +31,6 @@ export interface IUser extends Document {
     swap: number;
     mint_nft: number;
     mint_nft_copy: number;
-    withdraw_all: number;
   };
   level: string;
   operations_counters?: {
@@ -43,6 +42,8 @@ export interface IUser extends Document {
   manteca_user_id?: string;
   chatterpoints_admin?: boolean;
   telegram_id?: string;
+  referral_code?: string;
+  referral_by_code?: string;
 }
 
 const walletSchema = new Schema<IUserWallet>(
@@ -84,8 +85,7 @@ const userSchema = new Schema<IUser>({
     transfer: { type: Number, required: false, default: 0 },
     swap: { type: Number, required: false, default: 0 },
     mint_nft: { type: Number, required: false, default: 0 },
-    mint_nft_copy: { type: Number, required: false, default: 0 },
-    withdraw_all: { type: Number, required: false, default: 0 }
+    mint_nft_copy: { type: Number, required: false, default: 0 }
   },
   level: { type: String, required: true, default: 'L1' },
   operations_counters: {
@@ -96,7 +96,9 @@ const userSchema = new Schema<IUser>({
   },
   manteca_user_id: { type: String, required: false, default: '' },
   chatterpoints_admin: { type: Boolean, required: false, default: false },
-  telegram_id: { type: String, required: false, default: 0 }
+  telegram_id: { type: String, required: false, default: 0 },
+  referral_code: { type: String, required: false, default: '' },
+  referral_by_code: { type: String, required: false, default: '' }
 });
 
 export const UserModel = model<IUser>('User', userSchema, 'users');

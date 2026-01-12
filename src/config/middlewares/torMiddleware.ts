@@ -1,9 +1,8 @@
 import axios from 'axios';
-import { FastifyReply, FastifyRequest } from 'fastify';
-
-import { CacheNames } from '../../types/commonType';
-import { cacheService } from '../../services/cache/cacheService';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { returnErrorResponse } from '../../helpers/requestHelper';
+import { cacheService } from '../../services/cache/cacheService';
+import { CacheNames } from '../../types/commonType';
 
 /**
  * Retrieves the list of Tor exit node IPs from the Tor Project's exit-addresses service.

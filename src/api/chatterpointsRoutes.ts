@@ -1,14 +1,14 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import {
-  play,
-  stats,
   clean,
-  social,
-  gamesInfo,
-  cyclePlays,
   createCycle,
+  cyclePlays,
+  gamesInfo,
   leaderboard,
+  play,
+  social,
+  stats,
   userHistory
 } from '../controllers/chatterpointsController';
 

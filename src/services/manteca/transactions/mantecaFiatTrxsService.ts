@@ -1,8 +1,7 @@
 import axios from 'axios';
-
-import { Logger } from '../../../helpers/loggerHelper';
 import { MANTECA_BASE_URL } from '../../../config/constants';
-import { MantecaTransaction } from '../../../types/mantecaType';
+import { Logger } from '../../../helpers/loggerHelper';
+import type { MantecaTransaction } from '../../../types/mantecaType';
 import { getMantecaAxiosConfig } from '../mantecaCommonService';
 
 export const mantecaFiatTrxsService = {

@@ -1,7 +1,6 @@
 import mongoose from 'mongoose';
-
-import { MONGO_URI } from './constants';
 import { Logger } from '../helpers/loggerHelper';
+import { MONGO_URI } from './constants';
 
 /**
  * Connects to the MongoDB database using the provided URI or a default local URI.

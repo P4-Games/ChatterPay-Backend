@@ -1,14 +1,13 @@
-import { FastifyReply, FastifyRequest } from 'fastify';
-
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { COMMON_REPLY_WALLET_NOT_CREATED, IS_DEVELOPMENT } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
-import Token, { IToken } from '../models/tokenModel';
-import { issueTokens } from '../services/walletService';
-import { IUser, IUserWallet } from '../models/userModel';
-import { getUser, getUserWalletByChainId } from '../services/userService';
-import { coingeckoService } from '../services/coingecko/coingeckoService';
-import { IS_DEVELOPMENT, COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
-import { isValidPhoneNumber, isValidEthereumWallet } from '../helpers/validationHelper';
+import { isValidEthereumWallet, isValidPhoneNumber } from '../helpers/validationHelper';
+import Token, { type IToken } from '../models/tokenModel';
+import type { IUser, IUserWallet } from '../models/userModel';
+import { coingeckoService } from '../services/coingecko/coingeckoService';
+import { getUser, getUserWalletByChainId } from '../services/userService';
+import { issueTokens } from '../services/walletService';
 
 /**
  * Creates a new token.

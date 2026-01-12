@@ -1,4 +1,4 @@
-import { model, Schema, Document } from 'mongoose';
+import { type Document, model, Schema } from 'mongoose';
 
 export interface IExternalDeposit extends Document {
   chainId: number;

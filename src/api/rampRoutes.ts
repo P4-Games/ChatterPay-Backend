@@ -1,20 +1,21 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import {
-  rampOn,
-  rampOff,
-  onBoarding,
-  linkToOperate,
-  createRampUser,
-  getRampUserLimits,
-  getRampUserBalance,
-  checkRampUsersStatus,
   addRampUserBankAccount,
+  checkRampUsersStatus,
+  createRampUser,
+  generateOnRampLink,
   getRampCryptoPairPrices,
-  uploadRampUserDocuments,
-  removeRampUserBankAccount,
+  getRampUserBalance,
   getRampUserDocumentsStatus,
-  getRampUserValidationStatus
+  getRampUserLimits,
+  getRampUserValidationStatus,
+  linkToOperate,
+  onBoarding,
+  rampOff,
+  rampOn,
+  removeRampUserBankAccount,
+  uploadRampUserDocuments
 } from '../controllers/rampController';
 
 /**
@@ -37,4 +38,5 @@ export const rampRoutes = async (fastify: FastifyInstance): Promise<void> => {
   fastify.post('/ramp/on', rampOn);
   fastify.post('/ramp/off', rampOff);
   fastify.post('/ramp/users/compliance/status/check', checkRampUsersStatus);
+  fastify.post('/ramp/onramp/link', generateOnRampLink);
 };
