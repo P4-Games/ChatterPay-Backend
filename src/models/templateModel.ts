@@ -41,6 +41,7 @@ export interface ITemplateSchema extends Document {
   notifications: {
     [key in NotificationEnum]: NotificationTemplateType;
   };
+  security_questions: Record<string, LocalizedContentType>;
 }
 
 const localizedContentSchema = new Schema<LocalizedContentType>({
@@ -74,7 +75,8 @@ const templateSchema = new Schema<ITemplateSchema>({
     aave_supply_info: { type: notificationSchema, required: true },
     aave_supply_info_no_data: { type: notificationSchema, required: true },
     chatterpoints_operation: { type: notificationSchema, required: true }
-  }
+  },
+  security_questions: { type: Map, of: localizedContentSchema, required: false }
 });
 
 export const TemplateType = model<ITemplateSchema>('Template', templateSchema, 'templates');
