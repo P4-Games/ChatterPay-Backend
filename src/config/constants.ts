@@ -1,4 +1,5 @@
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
+
 import {
   type gamesLanguage,
   type NotificationLanguage,
@@ -85,7 +86,11 @@ const {
   CDO4,
   CDP1,
   CDP2,
-  TELEGRAM_BOT_API_KEY
+  TELEGRAM_BOT_API_KEY,
+  SECURITY_PIN_LENGTH: securityPinLength = 6,
+  SECURITY_PIN_MAX_FAILED_ATTEMPTS: securityPinMaxFailedAttempts = 3,
+  SECURITY_PIN_BLOCK_MINUTES: securityPinBlockMinutes = 60,
+  SECURITY_PIN_ENABLED: securityPinEnabled = 'true'
 } = process.env;
 
 export {
@@ -289,6 +294,7 @@ export const ONRAMP_DEFAULT_NETWORK = 'scroll';
 export const DEFILLAMA_API_URL = 'https://coins.llama.fi/prices/current';
 
 // Security Configuration
-export const SECURITY_PIN_LENGTH = 6;
-export const SECURITY_PIN_MAX_FAILED_ATTEMPTS = 3;
-export const SECURITY_PIN_BLOCK_MINUTES = 30;
+export const SECURITY_PIN_LENGTH = Number(securityPinLength);
+export const SECURITY_PIN_MAX_FAILED_ATTEMPTS = Number(securityPinMaxFailedAttempts);
+export const SECURITY_PIN_BLOCK_MINUTES = Number(securityPinBlockMinutes);
+export const SECURITY_PIN_ENABLED: boolean = securityPinEnabled.toLowerCase() === 'true';
