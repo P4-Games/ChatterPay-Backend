@@ -1,12 +1,15 @@
 import crypto from 'crypto';
+
 import {
   SECURITY_HMAC_KEY,
   SECURITY_PIN_BLOCK_MINUTES,
+  SECURITY_PIN_ENABLED,
   SECURITY_PIN_LENGTH,
   SECURITY_PIN_MAX_FAILED_ATTEMPTS,
   SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT
 } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
+
 import type { LocalizedContentType } from '../models/templateModel';
 import { mongoSecurityEventsService } from './mongo/mongoSecurityEventsService';
 import { mongoSecurityService, type RecoveryQuestionRecord } from './mongo/mongoSecurityService';
@@ -539,6 +542,11 @@ export const securityService = {
    */
   getOperationGate: async (phoneNumber: string): Promise<OperationGate> => {
     try {
+      if (!SECURITY_PIN_ENABLED) {
+        return {
+          allowed: true
+        };
+      }
       const status = await securityService.getSecurityStatus(phoneNumber);
       const now = new Date();
 
