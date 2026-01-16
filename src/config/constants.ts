@@ -20,6 +20,7 @@ const {
   MONGO_URI: envMongoUri,
   SEED_INTERNAL_SALT,
   SIGNING_KEY,
+  SECURITY_HMAC_KEY,
   PINATA_JWT,
   ICP_CANISTER_ID,
   ICP_MNEMONIC,
@@ -112,6 +113,7 @@ export {
   MANTECA_API_KEY,
   MANTECA_BASE_URL,
   THE_GRAPH_API_KEY,
+  SECURITY_HMAC_KEY,
   SIGNING_KEY as $P,
   ALCHEMY_AUTH_TOKEN,
   ALCHEMY_SIGNING_KEY,
@@ -285,3 +287,8 @@ export const ONRAMP_DEFAULT_NETWORK = 'scroll';
 
 // DefiLlama Configuration
 export const DEFILLAMA_API_URL = 'https://coins.llama.fi/prices/current';
+
+// Security Configuration
+export const SECURITY_PIN_LENGTH = 6;
+export const SECURITY_PIN_MAX_FAILED_ATTEMPTS = 3;
+export const SECURITY_PIN_BLOCK_MINUTES = 30;
