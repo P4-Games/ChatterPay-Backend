@@ -33,6 +33,7 @@ import {
   sendUserInsufficientBalanceNotification
 } from '../services/notificationService';
 import { secService } from '../services/secService';
+import { securityService } from '../services/securityService';
 import { executeSwap } from '../services/swapService';
 import {
   closeOperation,
@@ -169,6 +170,19 @@ export const swap = async (
       Logger.info('swap', logKey, `${message}`);
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, message);
+    }
+
+    /* ***************************************************** */
+    /* 3.1. swap: check security gate                        */
+    /* ***************************************************** */
+    const operationGate = await securityService.getOperationGate(channel_user_id);
+    if (!operationGate.allowed) {
+      return await returnSuccessResponse(reply, 'Security verification required', {
+        allowed: false,
+        required_flow: operationGate.required_flow,
+        reason: operationGate.reason,
+        blocked_until: operationGate.blocked_until
+      });
     }
 
     /* ***************************************************** */
