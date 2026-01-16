@@ -327,6 +327,11 @@ describe('securityService', () => {
       expect(gate.reason).toBe('pin_blocked');
       expect(gate.blocked_until).toBeDefined();
     });
+
+    // Note: When SECURITY_PIN_ENABLED is false in the environment,
+    // getOperationGate will always return { allowed: true } regardless of PIN state.
+    // This allows transfer and swap operations to bypass PIN validation when the feature is disabled.
+    // See securityService.ts getOperationGate implementation for details.
   });
 
   describe('listSecurityQuestions', () => {
