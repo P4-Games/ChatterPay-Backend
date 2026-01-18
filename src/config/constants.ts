@@ -1,5 +1,3 @@
-import { ENV } from '@pushprotocol/restapi/src/lib/constants';
-
 import {
   type gamesLanguage,
   type NotificationLanguage,
@@ -34,12 +32,7 @@ const {
   GCP_BUCKET_BASE_URL,
   FRONTEND_TOKEN,
   CHATIZALO_TOKEN,
-  PUSH_CHANNEL_ADDRESS: pushChannelAddress = '',
-  PUSH_CHANNEL_PRIVATE_KEY: pushChannelPrivateKey = '',
-  PUSH_ENABLED: pushEnabled = 'false',
   GCP_CLOUD_TRACE_ENABLED: gcpCloudTraceEnabled = 'false',
-  PUSH_NETWORK: pushNetwork = '11155111',
-  PUSH_ENVIRONMENT: pushEnvironment = ENV.DEV,
   MINOR_LOG_LEVEL: minorLogLevel = 'debug',
   MANTECA_BASE_URL = 'https://sandbox.manteca.dev/crypto/v1',
   MANTECA_API_KEY,
@@ -182,18 +175,9 @@ export const NFT_UPLOAD_IMAGE_ICP: boolean = envNftUploadImageIcp.toLowerCase() 
 export const NFT_UPLOAD_IMAGE_IPFS: boolean = envNftUploadImageIpfs.toLowerCase() === 'true';
 export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
 
-export const PUSH_CHANNEL_ADDRESS = !pushChannelAddress.startsWith('0x')
-  ? `0x${pushChannelAddress}`
-  : pushChannelAddress;
-export const PUSH_CHANNEL_PRIVATE_KEY = !pushChannelPrivateKey.startsWith('0x')
-  ? `0x${pushChannelPrivateKey}`
-  : pushChannelPrivateKey;
-export const PUSH_ENABLED: boolean = pushEnabled.toLowerCase() === 'true';
 export const ISSUER_TOKENS_ENABLED: boolean = issuerTokensEnabled.toLowerCase() === 'true';
 
 export const BOT_NOTIFICATIONS_ENABLED: boolean = botNotificationsEnabled.toLowerCase() === 'true';
-export const PUSH_NETWORK: string = pushNetwork;
-export const PUSH_ENVIRONMENT: ENV = (pushEnvironment.toLowerCase() as ENV) || ENV.DEV;
 export const CHATTERPAY_DOMAIN: string = `https://${IS_DEVELOPMENT ? 'dev.' : ''}chatterpay.net`;
 export const CHATTERPAY_NFTS_SHARE_URL: string = `${CHATTERPAY_DOMAIN}/nfts/share`;
 export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
