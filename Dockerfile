@@ -12,7 +12,7 @@ ENV BUN_INSTALL="/root/.bun"
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
 
 RUN node -v && bun -v
-WORKDIR /app
+WORKDIR /app 
 
 # Copy environment variables as build arguments
 ARG BUN_ENV
