@@ -12,6 +12,27 @@ export interface IUserWallet {
   alchemy_registered?: boolean; // flag to indicate if the wallet is registered with Alchemy webHook
 }
 
+export interface IRecoveryQuestion {
+  question_id: string;
+  answer_hash: string;
+  salt: string;
+  set_at: Date;
+}
+
+export interface ISecurityPin {
+  hash: string;
+  status: 'active' | 'blocked' | 'not_set';
+  failed_attempts: number;
+  blocked_until: Date | null;
+  last_set_at: Date | null;
+  reset_required: boolean;
+}
+
+export interface IUserSecurity {
+  pin: ISecurityPin;
+  recovery_questions: IRecoveryQuestion[];
+}
+
 export interface IUser extends Document {
   name: string;
   email: string;
@@ -24,6 +45,7 @@ export interface IUser extends Document {
     notifications: {
       language: string;
     };
+    security?: IUserSecurity;
   };
   lastOperationDate?: Date;
   operations_in_progress?: {
@@ -67,6 +89,36 @@ const walletSchema = new Schema<IUserWallet>(
   { _id: false }
 );
 
+const recoveryQuestionSchema = new Schema<IRecoveryQuestion>(
+  {
+    question_id: { type: String, required: true },
+    answer_hash: { type: String, required: true },
+    salt: { type: String, required: true },
+    set_at: { type: Date, required: true }
+  },
+  { _id: false }
+);
+
+const securityPinSchema = new Schema<ISecurityPin>(
+  {
+    hash: { type: String, required: false, default: '' },
+    status: { type: String, required: true, default: 'not_set' },
+    failed_attempts: { type: Number, required: true, default: 0 },
+    blocked_until: { type: Date, required: false, default: null },
+    last_set_at: { type: Date, required: false, default: null },
+    reset_required: { type: Boolean, required: true, default: false }
+  },
+  { _id: false }
+);
+
+const securitySchema = new Schema<IUserSecurity>(
+  {
+    pin: { type: securityPinSchema, required: true, default: {} },
+    recovery_questions: { type: [recoveryQuestionSchema], required: true, default: [] }
+  },
+  { _id: false }
+);
+
 const userSchema = new Schema<IUser>({
   name: { type: String, required: false },
   email: { type: String, required: false },
@@ -78,7 +130,8 @@ const userSchema = new Schema<IUser>({
   settings: {
     notifications: {
       language: { type: String, required: true, default: SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT }
-    }
+    },
+    security: { type: securitySchema, required: true, default: {} }
   },
   lastOperationDate: { type: Date, required: false },
   operations_in_progress: {

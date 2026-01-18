@@ -1,4 +1,5 @@
 import { ENV } from '@pushprotocol/restapi/src/lib/constants';
+
 import {
   type gamesLanguage,
   type NotificationLanguage,
@@ -20,6 +21,7 @@ const {
   MONGO_URI: envMongoUri,
   SEED_INTERNAL_SALT,
   SIGNING_KEY,
+  SECURITY_PIN_HMAC_KEY,
   PINATA_JWT,
   ICP_CANISTER_ID,
   ICP_MNEMONIC,
@@ -84,7 +86,11 @@ const {
   CDO4,
   CDP1,
   CDP2,
-  TELEGRAM_BOT_API_KEY
+  TELEGRAM_BOT_API_KEY,
+  SECURITY_PIN_LENGTH: securityPinLength = 6,
+  SECURITY_PIN_MAX_FAILED_ATTEMPTS: securityPinMaxFailedAttempts = 3,
+  SECURITY_PIN_BLOCK_MINUTES: securityPinBlockMinutes = 60,
+  SECURITY_PIN_ENABLED: securityPinEnabled = 'true'
 } = process.env;
 
 export {
@@ -112,6 +118,7 @@ export {
   MANTECA_API_KEY,
   MANTECA_BASE_URL,
   THE_GRAPH_API_KEY,
+  SECURITY_PIN_HMAC_KEY,
   SIGNING_KEY as $P,
   ALCHEMY_AUTH_TOKEN,
   ALCHEMY_SIGNING_KEY,
@@ -285,3 +292,9 @@ export const ONRAMP_DEFAULT_NETWORK = 'scroll';
 
 // DefiLlama Configuration
 export const DEFILLAMA_API_URL = 'https://coins.llama.fi/prices/current';
+
+// Security Configuration
+export const SECURITY_PIN_LENGTH = Number(securityPinLength);
+export const SECURITY_PIN_MAX_FAILED_ATTEMPTS = Number(securityPinMaxFailedAttempts);
+export const SECURITY_PIN_BLOCK_MINUTES = Number(securityPinBlockMinutes);
+export const SECURITY_PIN_ENABLED: boolean = securityPinEnabled.toLowerCase() === 'true';

@@ -124,6 +124,17 @@ export const createUserWithWallet = async (
     settings: {
       notifications: {
         language: detectedNotificationLng
+      },
+      security: {
+        pin: {
+          hash: '',
+          status: 'not_set',
+          failed_attempts: 0,
+          blocked_until: null,
+          last_set_at: null,
+          reset_required: false
+        },
+        recovery_questions: []
       }
     },
     lastOperationDate: null,
