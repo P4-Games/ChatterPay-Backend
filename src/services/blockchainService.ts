@@ -362,7 +362,7 @@ export async function userWithinTokenOperationLimits(
   try {
     // Fetch the token configuration based on token symbol and chain_id
     const token = await Token.findOne({
-      symbol: tokenSymbol,
+      symbol: new RegExp(`^${tokenSymbol}$`, 'i'),
       chain_id: chainId
     });
 
