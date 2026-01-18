@@ -21,13 +21,10 @@ const {
   SIGNING_KEY,
   SECURITY_PIN_HMAC_KEY,
   PINATA_JWT,
-  ICP_CANISTER_ID,
-  ICP_MNEMONIC,
   INFURA_API_KEY,
   BOT_DATA_TOKEN,
   BOT_API_URL,
   BOT_NOTIFICATIONS_ENABLED: botNotificationsEnabled = 'true',
-  NFT_UPLOAD_IMAGE_ICP: envNftUploadImageIcp = 'false',
   NFT_UPLOAD_IMAGE_IPFS: envNftUploadImageIpfs = 'false',
   GCP_BUCKET_BASE_URL,
   FRONTEND_TOKEN,
@@ -98,7 +95,6 @@ export {
   CDP2,
   PINATA_JWT,
   BOT_API_URL,
-  ICP_MNEMONIC,
   CORS_ORIGINS,
   ABIS_VERSION,
   BUN_ENV as $B,
@@ -106,7 +102,6 @@ export {
   INFURA_API_KEY,
   BOT_DATA_TOKEN,
   FRONTEND_TOKEN,
-  ICP_CANISTER_ID,
   CHATIZALO_TOKEN,
   MANTECA_API_KEY,
   MANTECA_BASE_URL,
@@ -171,7 +166,6 @@ export const LOCAL_CHATTERPOINTS: CHATTERPOINTS = {
 
 export const ABIS_READ_FROM = abisReadFrom.toLowerCase();
 export const CHATTERPOINTS_WORDS_READ_FROM = chatterpointsWordsReadFrom.toLowerCase();
-export const NFT_UPLOAD_IMAGE_ICP: boolean = envNftUploadImageIcp.toLowerCase() === 'true';
 export const NFT_UPLOAD_IMAGE_IPFS: boolean = envNftUploadImageIpfs.toLowerCase() === 'true';
 export const defaultNftImage = `${GCP_BUCKET_BASE_URL}/images/default_nft.png`;
 
@@ -206,7 +200,6 @@ export const BINANCE_API_URL = 'https://api.binance.us/api/v3';
 export const CRIPTO_YA_URL: string = 'https://criptoya.com/api/ripio/USDT';
 export const FIAT_CURRENCIES = ['UYU', 'ARS', 'BRL'];
 
-export const ICP_URL = 'https://ic0.app';
 export const PINATA_IPFS_URL = 'https://gateway.pinata.cloud/ipfs';
 
 export const COMMON_REPLY_OPERATION_IN_PROGRESS =
