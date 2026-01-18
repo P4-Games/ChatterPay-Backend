@@ -3,6 +3,7 @@ import { type Document, model, Schema } from 'mongoose';
 export type SecurityEventType =
   | 'PIN_SET'
   | 'PIN_RESET'
+  | 'PIN_RESET_FAILED'
   | 'QUESTIONS_SET'
   | 'QUESTIONS_UPDATED'
   | 'PIN_VERIFY_FAILED'
