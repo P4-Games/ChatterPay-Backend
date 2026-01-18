@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 
 import {
-  SECURITY_HMAC_KEY,
+  SECURITY_PIN_HMAC_KEY,
   SECURITY_PIN_BLOCK_MINUTES,
   SECURITY_PIN_ENABLED,
   SECURITY_PIN_LENGTH,
@@ -20,10 +20,10 @@ const HMAC_ALGORITHM = 'sha256';
 const DEFAULT_SALT_BYTES = 16;
 
 const getSecurityHmacKey = (): string => {
-  if (!SECURITY_HMAC_KEY) {
-    throw new Error('SECURITY_HMAC_KEY is not configured');
+  if (!SECURITY_PIN_HMAC_KEY) {
+    throw new Error('SECURITY_PIN_HMAC_KEY is not configured');
   }
-  return SECURITY_HMAC_KEY;
+  return SECURITY_PIN_HMAC_KEY;
 };
 
 const hmacSha256Hex = (value: string, key: string): string =>

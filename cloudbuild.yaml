@@ -66,7 +66,7 @@ steps:
       'FRONTEND_TOKEN',
       'SEED_INTERNAL_SALT',
       'SIGNING_KEY',
-      'SECURITY_HMAC_KEY',
+      'SECURITY_PIN_HMAC_KEY',
       'PUSH_CHANNEL_PRIVATE_KEY',
       'MANTECA_API_KEY',
       'THE_GRAPH_API_KEY',
@@ -146,7 +146,7 @@ steps:
       '--build-arg=SECURITY_PIN_MAX_FAILED_ATTEMPTS=${_SECURITY_PIN_MAX_FAILED_ATTEMPTS}',
       '--build-arg=SECURITY_PIN_BLOCK_MINUTES=${_SECURITY_PIN_BLOCK_MINUTES}',
       '--build-arg=SECURITY_PIN_ENABLED=${_SECURITY_PIN_ENABLED}',
-      '--build-arg=SECURITY_HMAC_KEY=$$SECURITY_HMAC_KEY',
+      '--build-arg=SECURITY_PIN_HMAC_KEY=$$SECURITY_PIN_HMAC_KEY',
       '--build-arg=ALCHEMY_VAR_WALLETS_ID=${_ALCHEMY_VAR_WALLETS_ID}',
       '--build-arg=ALCHEMY_VAR_WALLETS_TOPIC_ID=${_ALCHEMY_VAR_WALLETS_TOPIC_ID}',
       '--build-arg=ALCHEMY_VAR_TOKENS_ID=${_ALCHEMY_VAR_TOKENS_ID}',
@@ -161,7 +161,7 @@ steps:
       'FRONTEND_TOKEN',
       'SEED_INTERNAL_SALT',
       'SIGNING_KEY',
-      'SECURITY_HMAC_KEY',
+      'SECURITY_PIN_HMAC_KEY',
       'PUSH_CHANNEL_PRIVATE_KEY',
       'MANTECA_API_KEY',
       'THE_GRAPH_API_KEY',
@@ -207,8 +207,8 @@ availableSecrets:
       env: 'SEED_INTERNAL_SALT'
     - versionName: projects/$PROJECT_ID/secrets/${_SIGNING_KEY_SECRET_NAME}/versions/latest
       env: 'SIGNING_KEY'
-    - versionName: projects/$PROJECT_ID/secrets/${_SECURITY_HMAC_KEY_SECRET_NAME}/versions/latest
-      env: 'SECURITY_HMAC_KEY'
+    - versionName: projects/$PROJECT_ID/secrets/${_SECURITY_PIN_HMAC_KEY_SECRET_NAME}/versions/latest
+      env: 'SECURITY_PIN_HMAC_KEY'
     - versionName: projects/$PROJECT_ID/secrets/${_PUSH_CHANNEL_PRIVATE_KEY_NAME}/versions/latest
       env: 'PUSH_CHANNEL_PRIVATE_KEY'
     - versionName: projects/$PROJECT_ID/secrets/${_MANTECA_API_KEY_NAME}/versions/latest
