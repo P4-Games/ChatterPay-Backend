@@ -3,7 +3,6 @@ import { type Document, model, Schema } from 'mongoose';
 export interface INFTMetadata {
   image_url: {
     gcp?: string;
-    icp?: string;
     ipfs?: string;
   };
   description: string;
@@ -48,7 +47,6 @@ const NFTSchema = new Schema<INFT>({
       type: new Schema(
         {
           gcp: { type: String, required: false },
-          icp: { type: String, required: false },
           ipfs: { type: String, required: false }
         },
         { _id: false }
