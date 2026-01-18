@@ -18,17 +18,12 @@ SECURITY_PIN_ENABLED=false
 # IPFS
 PINATA_JWT=
 
-# ICP
-ICP_CANISTER_ID=
-ICP_MNEMONIC=
-
 # BOT
 BOT_NOTIFICATIONS_ENABLED= true | false
 BOT_API_URL=
 BOT_DATA_TOKEN=
 
 # Upload NFT image
-NFT_UPLOAD_IMAGE_ICP=
 NFT_UPLOAD_IMAGE_IPFS=
 
 # GCP Bucket
@@ -37,13 +32,6 @@ GCP_BUCKET_BASE_URL=
 # Tokens
 FRONTEND_TOKEN=
 CHATIZALO_TOKEN=
-
-# Push Protocol Notifications
-PUSH_CHANNEL_ADDRESS=
-PUSH_CHANNEL_PRIVATE_KEY=
-PUSH_ENABLED=true | false
-PUSH_NETWORK= 11155111 | 421614 | 42161
-PUSH_ENVIRONMENT= dev | staging | prod
 
 # Logging
 MINOR_LOG_LEVEL= 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'

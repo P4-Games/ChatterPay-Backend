@@ -19,7 +19,6 @@ import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { mongoNotificationService } from './mongo/mongoNotificationServices';
 import { mongoTemplateService, templateEnum } from './mongo/mongoTemplateService';
 import { mongoUserService } from './mongo/mongoUserService';
-import { pushService } from './push/pushService';
 
 /**
  * Retrieves a notification template based on the user's channel ID and the specified notification type.
@@ -988,11 +987,6 @@ export async function persistAndSendNotification({
         message: messageBot
       };
       await chatizaloService.sendBotNotification(payload, traceHeader);
-    }
-
-    // 3. Send via PUSH if flag is true
-    if (sendPush && title) {
-      pushService.sendPushNotificaton(title, messagePush, to); // fire & forget (avoid await)
     }
 
     return data;

@@ -7,6 +7,7 @@ import {
   returnSuccessResponse
 } from '../helpers/requestHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import type { SecurityEventChannel } from '../models/securityEventModel';
 import type { IUser } from '../models/userModel';
 import { securityService } from '../services/securityService';
 import { getUser } from '../services/userService';
@@ -107,7 +108,9 @@ export const getSecurityQuestions = async (
 };
 
 export const setSecurityPin = async (
-  request: FastifyRequest<{ Body: { channel_user_id: string; pin: string } }>,
+  request: FastifyRequest<{
+    Body: { channel_user_id: string; pin: string; channel?: SecurityEventChannel };
+  }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   const logKey = '[op:setSecurityPin]';
@@ -122,7 +125,7 @@ export const setSecurityPin = async (
       );
     }
 
-    const { channel_user_id, pin } = request.body;
+    const { channel_user_id, pin, channel } = request.body;
 
     if (!channel_user_id) {
       return await returnErrorResponse(
@@ -156,7 +159,7 @@ export const setSecurityPin = async (
       );
     }
 
-    const result = await securityService.setPin(channel_user_id, pin);
+    const result = await securityService.setPin(channel_user_id, pin, channel, false);
 
     if (!result.success) {
       return await returnErrorResponseAsSuccess(
@@ -180,7 +183,9 @@ export const setSecurityPin = async (
 };
 
 export const verifySecurityPin = async (
-  request: FastifyRequest<{ Body: { channel_user_id: string; pin: string } }>,
+  request: FastifyRequest<{
+    Body: { channel_user_id: string; pin: string; channel?: SecurityEventChannel };
+  }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
   const logKey = '[op:verifySecurityPin]';
@@ -195,7 +200,7 @@ export const verifySecurityPin = async (
       );
     }
 
-    const { channel_user_id, pin } = request.body;
+    const { channel_user_id, pin, channel } = request.body;
 
     if (!channel_user_id) {
       return await returnErrorResponse(
@@ -229,7 +234,7 @@ export const verifySecurityPin = async (
       );
     }
 
-    const result = await securityService.verifyPin(channel_user_id, pin);
+    const result = await securityService.verifyPin(channel_user_id, pin, channel);
 
     return await returnSuccessResponse(reply, 'PIN verification completed', {
       ok: result.ok,
@@ -247,6 +252,7 @@ export const setSecurityRecoveryQuestions = async (
     Body: {
       channel_user_id: string;
       questions: Array<{ question_id: string; answer: string }>;
+      channel?: SecurityEventChannel;
     };
   }>,
   reply: FastifyReply
@@ -263,7 +269,7 @@ export const setSecurityRecoveryQuestions = async (
       );
     }
 
-    const { channel_user_id, questions } = request.body;
+    const { channel_user_id, questions, channel } = request.body;
 
     if (!channel_user_id) {
       return await returnErrorResponse(
@@ -303,7 +309,7 @@ export const setSecurityRecoveryQuestions = async (
       );
     }
 
-    const result = await securityService.setRecoveryQuestions(channel_user_id, questions);
+    const result = await securityService.setRecoveryQuestions(channel_user_id, questions, channel);
 
     if (!result.success) {
       return await returnErrorResponseAsSuccess(
@@ -338,6 +344,7 @@ export const resetSecurityPin = async (
       channel_user_id: string;
       new_pin: string;
       answers: Array<{ question_id: string; answer: string }>;
+      channel?: SecurityEventChannel;
     };
   }>,
   reply: FastifyReply
@@ -354,7 +361,7 @@ export const resetSecurityPin = async (
       );
     }
 
-    const { channel_user_id, new_pin, answers } = request.body;
+    const { channel_user_id, new_pin, answers, channel } = request.body;
 
     if (!channel_user_id) {
       return await returnErrorResponse(
@@ -399,7 +406,12 @@ export const resetSecurityPin = async (
       );
     }
 
-    const result = await securityService.resetPinWithRecovery(channel_user_id, answers, new_pin);
+    const result = await securityService.resetPinWithRecovery(
+      channel_user_id,
+      answers,
+      new_pin,
+      channel
+    );
 
     if (!result.success) {
       return await returnErrorResponseAsSuccess(

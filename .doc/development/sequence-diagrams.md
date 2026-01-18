@@ -5,4 +5,4 @@ Images were generated using _PlantUML_ code and converted to PNG via [PlantUML O
 
 ## Create Wallet
 
-![createWallet](./sequence-diagrams/create-wallet-1.svg)
+![createWallet](./sequence-diagrams/create-wallet-1.png)

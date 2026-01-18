@@ -184,7 +184,8 @@ export const securityService = {
     phoneNumber: string,
     pin: string,
     channel?: string,
-    allowOverwrite = false
+    allowOverwrite = false,
+    avoidLogEvent = false
   ): Promise<SetPinResult> => {
     try {
       // Validate PIN format
@@ -219,12 +220,15 @@ export const securityService = {
         };
       }
 
-      // Log event
-      await mongoSecurityEventsService.logSecurityEvent({
-        user_id: phoneNumber,
-        event_type: 'PIN_SET',
-        channel: (channel as 'bot' | 'frontend' | 'unknown') ?? 'unknown'
-      });
+      // avoid logging event PIN_SET in case of PIN reset
+      if (!avoidLogEvent) {
+        // Log event
+        await mongoSecurityEventsService.logSecurityEvent({
+          user_id: phoneNumber,
+          event_type: 'PIN_SET',
+          channel: (channel as 'bot' | 'frontend' | 'unknown') ?? 'unknown'
+        });
+      }
 
       const status = await securityService.getSecurityStatus(phoneNumber);
 
@@ -246,7 +250,11 @@ export const securityService = {
   /**
    * Verify user's PIN
    */
-  verifyPin: async (phoneNumber: string, pin: string): Promise<VerifyPinResult> => {
+  verifyPin: async (
+    phoneNumber: string,
+    pin: string,
+    channel?: string
+  ): Promise<VerifyPinResult> => {
     try {
       const securityState = await mongoSecurityService.getSecurityState(phoneNumber);
       const now = new Date();
@@ -294,6 +302,7 @@ export const securityService = {
       await mongoSecurityEventsService.logSecurityEvent({
         user_id: phoneNumber,
         event_type: 'PIN_VERIFY_FAILED',
+        channel: (channel as 'bot' | 'frontend' | 'unknown') ?? 'unknown',
         metadata: { failed_attempts }
       });
 
@@ -306,6 +315,7 @@ export const securityService = {
         await mongoSecurityEventsService.logSecurityEvent({
           user_id: phoneNumber,
           event_type: 'PIN_BLOCKED',
+          channel: (channel as 'bot' | 'frontend' | 'unknown') ?? 'unknown',
           metadata: { blocked_until: blockedUntil.toISOString() }
         });
 
@@ -460,6 +470,7 @@ export const securityService = {
 
       // Validate recovery questions are set
       if (securityState.recovery_questions.length === 0) {
+        // no need to log event here
         return {
           success: false,
           message: 'Recovery questions not set'
@@ -468,6 +479,7 @@ export const securityService = {
 
       // Validate all answers provided
       if (answers.length !== securityState.recovery_questions.length) {
+        // no need to log event here
         return {
           success: false,
           message: 'All recovery answers must be provided'
@@ -499,6 +511,11 @@ export const securityService = {
       }
 
       if (!allCorrect) {
+        await mongoSecurityEventsService.logSecurityEvent({
+          user_id: phoneNumber,
+          event_type: 'PIN_RESET_FAILED',
+          channel: (channel as 'bot' | 'frontend' | 'unknown') ?? 'unknown'
+        });
         return {
           success: false,
           message: 'Recovery answers are incorrect'
@@ -506,9 +523,15 @@ export const securityService = {
       }
 
       // All answers correct - set new PIN (with overwrite allowed)
-      const setPinResult = await securityService.setPin(phoneNumber, newPin, channel, true);
+      const setPinResult = await securityService.setPin(phoneNumber, newPin, channel, true, true);
 
       if (!setPinResult.success) {
+        await mongoSecurityEventsService.logSecurityEvent({
+          user_id: phoneNumber,
+          event_type: 'PIN_RESET_FAILED',
+          channel: (channel as 'bot' | 'frontend' | 'unknown') ?? 'unknown'
+        });
+
         return {
           success: false,
           message: setPinResult.message
