@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import {
+  getSecurityEvents,
   getSecurityQuestions,
   getSecurityStatus,
   resetSecurityPin,
@@ -20,6 +21,12 @@ export default async function securityRoutes(fastify: FastifyInstance) {
    * Get list of available security questions
    */
   fastify.post('/get_security_questions/', getSecurityQuestions);
+
+  /**
+   * @route POST /get_security_events/
+   * Get list of security events for a user
+   */
+  fastify.post('/get_security_events/', getSecurityEvents);
 
   /**
    * @route POST /set_security_pin/
