@@ -10,6 +10,11 @@ import {
 } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 
+import type {
+  ISecurityEvent,
+  SecurityEventChannel,
+  SecurityEventType
+} from '../models/securityEventModel';
 import type { LocalizedContentType } from '../models/templateModel';
 import { mongoSecurityEventsService } from './mongo/mongoSecurityEventsService';
 import { mongoSecurityService, type RecoveryQuestionRecord } from './mongo/mongoSecurityService';
@@ -88,6 +93,11 @@ export interface OperationGate {
   required_flow?: string;
   reason?: string;
   blocked_until?: Date | null;
+}
+
+export interface SecurityEventsFilters {
+  channel?: SecurityEventChannel;
+  event_type?: SecurityEventType;
 }
 
 export const securityService = {
@@ -623,6 +633,29 @@ export const securityService = {
       return {
         allowed: true
       };
+    }
+  },
+
+  /**
+   * Fetch security events for a user.
+   */
+  listSecurityEvents: async (
+    phoneNumber: string,
+    filters?: SecurityEventsFilters
+  ): Promise<ISecurityEvent[]> => {
+    try {
+      return await mongoSecurityEventsService.listSecurityEvents({
+        user_id: phoneNumber,
+        channel: filters?.channel,
+        event_type: filters?.event_type
+      });
+    } catch (error) {
+      Logger.error('securityService', 'listSecurityEvents', 'Failed to list security events', {
+        error,
+        phoneNumber,
+        filters
+      });
+      return [];
     }
   }
 };

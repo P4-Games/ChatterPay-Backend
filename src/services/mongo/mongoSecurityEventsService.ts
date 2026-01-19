@@ -1,5 +1,6 @@
 import { Logger } from '../../helpers/loggerHelper';
 import {
+  type ISecurityEvent,
   type SecurityEventChannel,
   SecurityEventModel,
   type SecurityEventType
@@ -10,6 +11,12 @@ export interface SecurityEventInsert {
   event_type: SecurityEventType;
   channel?: SecurityEventChannel;
   metadata?: Record<string, unknown>;
+}
+
+export interface SecurityEventQuery {
+  user_id: string;
+  channel?: SecurityEventChannel;
+  event_type?: SecurityEventType;
 }
 
 export const mongoSecurityEventsService = {
@@ -32,6 +39,34 @@ export const mongoSecurityEventsService = {
         `Failed to log security event`,
         { event, error }
       );
+    }
+  },
+
+  /**
+   * Fetch security events for a user with optional filters.
+   */
+  listSecurityEvents: async (filters: SecurityEventQuery): Promise<ISecurityEvent[]> => {
+    try {
+      const query: Record<string, unknown> = { user_id: filters.user_id };
+
+      if (filters.channel) {
+        query.channel = filters.channel;
+      }
+
+      if (filters.event_type) {
+        query.event_type = filters.event_type;
+      }
+
+      // @ts-expect-error
+      return await SecurityEventModel.find(query).sort({ created_at: -1 }).lean();
+    } catch (error) {
+      Logger.error(
+        'mongoSecurityEventsService',
+        'listSecurityEvents',
+        'Failed to fetch security events',
+        { filters, error }
+      );
+      return [];
     }
   }
 };
