@@ -55,6 +55,7 @@ export interface SecurityQuestionDto {
 export interface SetPinResult {
   success: boolean;
   message: string;
+  error_code?: string;
   pin_status?: 'active';
   last_set_at?: Date;
 }
@@ -69,6 +70,7 @@ export interface VerifyPinResult {
 export interface SetRecoveryQuestionsResult {
   success: boolean;
   message: string;
+  error_code?: string;
   recovery_questions_set?: boolean;
   recovery_question_ids?: string[];
 }
@@ -76,6 +78,7 @@ export interface SetRecoveryQuestionsResult {
 export interface ResetPinResult {
   success: boolean;
   message: string;
+  error_code?: string;
   pin_status?: 'active';
   last_set_at?: Date;
 }
@@ -192,7 +195,8 @@ export const securityService = {
       if (!/^\d{6}$/.test(pin)) {
         return {
           success: false,
-          message: `PIN must be exactly ${SECURITY_PIN_LENGTH} digits`
+          message: `PIN must be exactly ${SECURITY_PIN_LENGTH} digits`,
+          error_code: 'PIN_LENGTH_INVALID'
         };
       }
 
@@ -202,7 +206,8 @@ export const securityService = {
         if (currentStatus.pin_status === 'active' || currentStatus.pin_status === 'blocked') {
           return {
             success: false,
-            message: 'PIN already set. Use reset flow to change it.'
+            message: 'PIN already set. Use reset flow to change it.',
+            error_code: 'PIN_ALREADY_SET'
           };
         }
       }
@@ -216,7 +221,8 @@ export const securityService = {
       if (!updated) {
         return {
           success: false,
-          message: 'Failed to set PIN'
+          message: 'Failed to set PIN',
+          error_code: 'PIN_SET_FAILED'
         };
       }
 
@@ -242,7 +248,8 @@ export const securityService = {
       Logger.error('securityService', 'setPin', 'Failed to set PIN', { error });
       return {
         success: false,
-        message: 'Internal error setting PIN'
+        message: 'Internal error setting PIN',
+        error_code: 'SETTING_PIN_INTERNAL_ERROR'
       };
     }
   },
@@ -353,7 +360,8 @@ export const securityService = {
       if (questions.length !== 3) {
         return {
           success: false,
-          message: 'Exactly 3 recovery questions are required'
+          message: 'Exactly 3 recovery questions are required',
+          error_code: 'RECOVERY_QUESTIONS_COUNT_INVALID'
         };
       }
 
@@ -363,13 +371,15 @@ export const securityService = {
         if (!q.question_id || typeof q.question_id !== 'string') {
           return {
             success: false,
-            message: `Question at index ${i} is missing or has invalid question_id`
+            message: `Question at index ${i} is missing or has invalid question_id`,
+            error_code: 'RECOVERY_QUESTION_ID_INVALID'
           };
         }
         if (!q.answer || typeof q.answer !== 'string' || q.answer.trim() === '') {
           return {
             success: false,
-            message: `Question at index ${i} is missing or has invalid answer`
+            message: `Question at index ${i} is missing or has invalid answer`,
+            error_code: 'RECOVERY_ANSWER_INVALID'
           };
         }
       }
@@ -379,7 +389,8 @@ export const securityService = {
       if (uniqueIds.size !== 3) {
         return {
           success: false,
-          message: 'Question IDs must be unique'
+          message: 'Question IDs must be unique',
+          error_code: 'RECOVERY_QUESTION_IDS_NOT_UNIQUE'
         };
       }
 
@@ -391,7 +402,8 @@ export const securityService = {
       if (!templates) {
         return {
           success: false,
-          message: 'Security questions templates not configured'
+          message: 'Security questions templates not configured',
+          error_code: 'RECOVERY_QUESTIONS_TEMPLATES_NOT_CONFIGURED'
         };
       }
 
@@ -402,7 +414,8 @@ export const securityService = {
         if (!questionsObj[q.question_id]) {
           return {
             success: false,
-            message: `Invalid question ID: ${q.question_id}`
+            message: `Invalid question ID: ${q.question_id}`,
+            error_code: 'RECOVERY_QUESTION_ID_UNKNOWN'
           };
         }
       }
@@ -450,7 +463,8 @@ export const securityService = {
       });
       return {
         success: false,
-        message: 'Internal error setting recovery questions'
+        message: 'Internal error setting recovery questions',
+        error_code: 'SETTING_RECOVERY_QUESTIONS_INTERNAL_ERROR'
       };
     }
   },
@@ -473,7 +487,8 @@ export const securityService = {
         // no need to log event here
         return {
           success: false,
-          message: 'Recovery questions not set'
+          message: 'Recovery questions not set',
+          error_code: 'RECOVERY_QUESTIONS_NOT_SET'
         };
       }
 
@@ -482,7 +497,8 @@ export const securityService = {
         // no need to log event here
         return {
           success: false,
-          message: 'All recovery answers must be provided'
+          message: 'All recovery answers must be provided',
+          error_code: 'RECOVERY_ANSWERS_INCOMPLETE'
         };
       }
 
@@ -518,7 +534,8 @@ export const securityService = {
         });
         return {
           success: false,
-          message: 'Recovery answers are incorrect'
+          message: 'Recovery answers are incorrect',
+          error_code: 'RECOVERY_ANSWERS_INCORRECT'
         };
       }
 
@@ -534,7 +551,8 @@ export const securityService = {
 
         return {
           success: false,
-          message: setPinResult.message
+          message: setPinResult.message,
+          error_code: setPinResult.error_code ?? 'PIN_RESET_SET_PIN_FAILED'
         };
       }
 
@@ -555,7 +573,8 @@ export const securityService = {
       Logger.error('securityService', 'resetPinWithRecovery', 'Failed to reset PIN', { error });
       return {
         success: false,
-        message: 'Internal error resetting PIN'
+        message: 'Internal error resetting PIN',
+        error_code: 'RESETTING_PIN_INTERNAL_ERROR'
       };
     }
   },
