@@ -7,10 +7,21 @@ import {
   returnSuccessResponse
 } from '../helpers/requestHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
-import type { SecurityEventChannel } from '../models/securityEventModel';
+import type { SecurityEventChannel, SecurityEventType } from '../models/securityEventModel';
 import type { IUser } from '../models/userModel';
 import { securityService } from '../services/securityService';
 import { getUser } from '../services/userService';
+
+const VALID_SECURITY_EVENT_CHANNELS: SecurityEventChannel[] = ['bot', 'frontend'];
+const VALID_SECURITY_EVENT_TYPES: SecurityEventType[] = [
+  'PIN_SET',
+  'PIN_RESET',
+  'PIN_RESET_FAILED',
+  'QUESTIONS_SET',
+  'QUESTIONS_UPDATED',
+  'PIN_VERIFY_FAILED',
+  'PIN_BLOCKED'
+];
 
 export const getSecurityStatus = async (
   request: FastifyRequest<{ Body: { channel_user_id: string } }>,
@@ -104,6 +115,87 @@ export const getSecurityQuestions = async (
     });
   } catch (error) {
     return returnErrorResponse('getSecurityQuestions', logKey, reply, 500, 'Internal Server Error');
+  }
+};
+
+export const getSecurityEvents = async (
+  request: FastifyRequest<{
+    Body: {
+      channel_user_id: string;
+      channel?: SecurityEventChannel;
+      event_type?: SecurityEventType;
+      eventt_type?: SecurityEventType;
+    };
+  }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  const logKey = '[op:getSecurityEvents]';
+  try {
+    if (!request.body) {
+      return await returnErrorResponse(
+        'getSecurityEvents',
+        logKey,
+        reply,
+        400,
+        'You have to send a body with this request'
+      );
+    }
+
+    const { channel_user_id, channel, event_type, eventt_type } = request.body;
+    const resolvedEventType = event_type ?? eventt_type;
+
+    if (!channel_user_id || !isValidPhoneNumber(channel_user_id)) {
+      return await returnErrorResponseAsSuccess(
+        'getSecurityEvents',
+        logKey,
+        reply,
+        'Missing channel_user_id in body',
+        false,
+        channel_user_id,
+        `'${channel_user_id}' is invalid. 'channel_user_id' parameter must be a phone number (without spaces or symbols)`
+      );
+    }
+
+    if (channel && !VALID_SECURITY_EVENT_CHANNELS.includes(channel)) {
+      return await returnErrorResponseAsSuccess(
+        'getSecurityEvents',
+        logKey,
+        reply,
+        'Invalid channel in body',
+        false,
+        channel_user_id,
+        `Invalid channel '${channel}'. Allowed values: bot, frontend.`
+      );
+    }
+
+    if (resolvedEventType && !VALID_SECURITY_EVENT_TYPES.includes(resolvedEventType)) {
+      return await returnErrorResponseAsSuccess(
+        'getSecurityEvents',
+        logKey,
+        reply,
+        'Invalid event_type in body',
+        false,
+        channel_user_id,
+        `Invalid event_type '${resolvedEventType}'.`
+      );
+    }
+
+    const user: IUser | null = await getUser(channel_user_id);
+    if (!user) {
+      Logger.info('getSecurityEvents', COMMON_REPLY_WALLET_NOT_CREATED);
+      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+    }
+
+    const events = await securityService.listSecurityEvents(channel_user_id, {
+      channel,
+      event_type: resolvedEventType
+    });
+
+    return await returnSuccessResponse(reply, 'Security events fetched successfully', {
+      events
+    });
+  } catch (error) {
+    return returnErrorResponse('getSecurityEvents', logKey, reply, 500, 'Internal Server Error');
   }
 };
 
