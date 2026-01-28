@@ -87,5 +87,142 @@ export const mongoNotificationService = {
       );
       throw error;
     }
+  },
+
+  /**
+   * Retrieves notifications with cursor-based pagination.
+   *
+   * @param {string} phoneNumber - The phone number to filter notifications by.
+   * @param {string | null} cursor - ISO timestamp cursor for pagination (sent_date).
+   * @param {number} limit - Number of items to return.
+   * @returns {Promise<{ notifications: INotification[]; has_more: boolean; next_cursor: string | null }>}
+   */
+  getNotificationsWithPagination: async (
+    phoneNumber: string,
+    cursor: string | null,
+    limit: number
+  ): Promise<{ notifications: INotification[]; has_more: boolean; next_cursor: string | null }> => {
+    try {
+      const query: {
+        to: string;
+        deleted_date: null;
+        sent_date?: { $lt: Date };
+      } = {
+        to: phoneNumber,
+        deleted_date: null
+      };
+
+      if (cursor) {
+        query.sent_date = { $lt: new Date(cursor) };
+      }
+
+      // Fetch limit + 1 to check if there are more results
+      const notifications = await NotificationModel.find(query)
+        .sort({ sent_date: -1 })
+        .limit(limit + 1)
+        .lean();
+
+      const has_more = notifications.length > limit;
+      const results = has_more ? notifications.slice(0, limit) : notifications;
+      const next_cursor = has_more && results.length > 0 ? results[results.length - 1].sent_date.toISOString() : null;
+
+      return {
+        // @ts-expect-error
+        notifications: results,
+        has_more,
+        next_cursor
+      };
+    } catch (error) {
+      Logger.error(
+        'getNotificationsWithPagination',
+        `Failed to fetch paginated notifications for ${phoneNumber}`,
+        (error as Error).message
+      );
+      throw error;
+    }
+  },
+
+  /**
+   * Counts unread notifications for a specific user.
+   *
+   * @param {string} phoneNumber - The phone number to count notifications for.
+   * @returns {Promise<number>} Count of unread notifications.
+   */
+  getUnreadCount: async (phoneNumber: string): Promise<number> => {
+    try {
+      return await NotificationModel.countDocuments({
+        to: phoneNumber,
+        deleted_date: null,
+        read_date: null
+      });
+    } catch (error) {
+      Logger.error(
+        'getUnreadCount',
+        `Failed to count unread notifications for ${phoneNumber}`,
+        (error as Error).message
+      );
+      throw error;
+    }
+  },
+
+  /**
+   * Marks all unread notifications as read for a specific user.
+   *
+   * @param {string} phoneNumber - The phone number to mark notifications for.
+   * @returns {Promise<number>} Number of modified documents.
+   */
+  markAllAsRead: async (phoneNumber: string): Promise<number> => {
+    try {
+      const result = await NotificationModel.updateMany(
+        {
+          to: phoneNumber,
+          deleted_date: null,
+          read_date: null
+        },
+        {
+          $set: { read_date: new Date() }
+        }
+      );
+
+      return result.modifiedCount ?? 0;
+    } catch (error) {
+      Logger.error(
+        'markAllAsRead',
+        `Failed to mark all notifications as read for ${phoneNumber}`,
+        (error as Error).message
+      );
+      throw error;
+    }
+  },
+
+  /**
+   * Soft deletes a notification with security check.
+   *
+   * @param {string} notificationId - The notification ID to delete.
+   * @param {string} phoneNumber - The phone number to verify ownership.
+   * @returns {Promise<number>} Number of modified documents (0 or 1).
+   */
+  softDeleteNotification: async (notificationId: string, phoneNumber: string): Promise<number> => {
+    try {
+      const result = await NotificationModel.updateOne(
+        {
+          _id: notificationId,
+          to: phoneNumber,
+          deleted_date: null
+        },
+        {
+          $set: { deleted_date: new Date() }
+        }
+      );
+
+      return result.modifiedCount ?? 0;
+    } catch (error) {
+      Logger.error(
+        'softDeleteNotification',
+        `Failed to soft delete notification ${notificationId}`,
+        (error as Error).message
+      );
+      throw error;
+    }
   }
 };
