@@ -1,6 +1,6 @@
 import { type Document, model, Schema } from 'mongoose';
 
-export type NotificationMedia = 'INTERNAL' | 'PUSH' | 'WHATSAPP';
+export type NotificationMedia = 'INTERNAL' | 'WHATSAPP';
 
 export interface INotification extends Document {
   to: string;
@@ -17,7 +17,7 @@ const NotificationSchema = new Schema<INotification>({
   message: { type: String, required: true },
   media: {
     type: String,
-    enum: ['INTERNAL', 'PUSH', 'WHATSAPP'],
+    enum: ['INTERNAL', 'WHATSAPP'],
     required: true
   },
   template: { type: String, required: true },

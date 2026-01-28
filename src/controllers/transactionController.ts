@@ -44,6 +44,7 @@ import {
   sendReceivedTransferNotification,
   sendUserInsufficientBalanceNotification
 } from '../services/notificationService';
+import { securityService } from '../services/securityService';
 import { sendTransferUserOperation } from '../services/transferService';
 import {
   closeOperation,
@@ -544,6 +545,22 @@ export const makeTransaction = async (
 
       // must return 200, so the bot displays the message instead of an error!
       return await returnSuccessResponse(reply, message);
+    }
+
+    /* ***************************************************** */
+    /* 3.1. makeTransaction: check security gate             */
+    /* ***************************************************** */
+    const operationGate = await securityService.getOperationGate(channel_user_id);
+    if (!operationGate.allowed) {
+      concurrentOperationSpan?.endSpan();
+      rootSpan?.endSpan();
+
+      return await returnSuccessResponse(reply, 'Security verification required', {
+        allowed: false,
+        required_flow: operationGate.required_flow,
+        reason: operationGate.reason,
+        blocked_until: operationGate.blocked_until
+      });
     }
 
     /* ***************************************************** */

@@ -57,18 +57,6 @@
 
 - /check_deposits, checkExternalDeposits, GET https://api.studio.thegraph.com/query/91286/balance-sepolia
 
-## Backend => Push
-
-- sendWalletCreationNotification => Push to Chatterpay Channel
-- sendSwapNotification => Push to Chatterpay Channel
-- sendMintNotification => Push to Chatterpay Channel
-- sendReceivedTransferNotification => Push to Chatterpay Channel
-- sendOutgoingTransferNotification => Push to Chatterpay Channel
-- sendUserInsufficientBalanceNotification => Push to Chatterpay Channel
-- sendNoValidBlockchainConditionsNotification => Push to Chatterpay Channel
-- sendInternalErrorNotification => Push to Chatterpay Channel
-- SendConcurrecyOperationNotification => Push to Chatterpay Channel
-
 ## Backend => Smart Contracts
 
 - Create Wallet (/create_wallet)
@@ -103,11 +91,6 @@
 - ramp-Off
 
 ## Backend => GCP
-
-- NFT: Mint Original => upload image to Bucket
-- NFT: Mint Copy => upload image to Bucket
-
-## Backend => ICP
 
 - NFT: Mint Original => upload image to Bucket
 - NFT: Mint Copy => upload image to Bucket

@@ -9,7 +9,6 @@ participant "userService" as UserService
 participant "formatHelper" as Formatter
 participant "walletService" as WalletService
 participant "userModel" as UserModel
-participant "pushService" as PushService
 participant "notificationHelper" as Notifier
 participant "requestHelper" as Response
 participant "walletService (dev only)" as TokenIssuer
@@ -36,10 +35,6 @@ UserService -> UserModel: new UserModel({ ... })
 UserModel -> UserModel: save()
 UserModel -> UserModel: update(manteca_user_id)
 UserModel -> UserModel: save()
-
-alt PUSH_ENABLED
-    UserService -> PushService: subscribeToPushChannel(privateKey, eoaAddress)
-end
 
 UserService -> Notifier: sendWalletCreationNotification(proxyAddress, phone)
 
