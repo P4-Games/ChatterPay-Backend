@@ -7,7 +7,6 @@ import {
   returnSuccessResponse
 } from '../helpers/requestHelper';
 import { isShortUrl } from '../helpers/validationHelper';
-import { icpService } from '../services/icp/icpService';
 import { downloadAndProcessImage } from '../services/imageService';
 import { ipfsService } from '../services/ipfs/ipfsService';
 import { getUser } from '../services/userService';
@@ -20,13 +19,12 @@ interface UploadBody {
 interface UploadResponse {
   success: boolean;
   message: string;
-  icp_url?: string;
   ipfs_url?: string;
   error?: string;
 }
 
 /**
- * Processes and uploads an image to ICP and IPFS.
+ * Processes and uploads an image to IPFS.
  * @param {string} imageUrl - The URL of the image to download and process.
  * @param {string} fileName - The file name to be used for the image upload.
  * @returns {Promise<UploadResponse>} The result of the upload operation.
@@ -35,13 +33,11 @@ async function processAndUploadImage(imageUrl: string, fileName: string): Promis
   try {
     const processedImageBuffer = await downloadAndProcessImage(imageUrl);
 
-    const icpUrl = await icpService.uploadToICP(processedImageBuffer, fileName);
     const ipfsUrl = await ipfsService.uploadToIpfs(processedImageBuffer, fileName);
 
     return {
       success: true,
-      message: 'Image successfully uploaded to ICP and IPFS',
-      icp_url: icpUrl,
+      message: 'Image successfully uploaded to IPFS',
       ipfs_url: ipfsUrl
     };
   } catch (error) {
@@ -103,7 +99,6 @@ export const uploadImage: RouteHandlerMethod = async (
 
       Logger.log('uploadImage', uploadResult);
       return await returnSuccessResponse(reply, 'Image uploaded successfully', {
-        icp_url: uploadResult.icp_url,
         ipfs_url: uploadResult.ipfs_url
       });
     }

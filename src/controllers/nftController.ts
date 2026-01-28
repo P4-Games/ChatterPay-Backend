@@ -22,7 +22,6 @@ import { NotificationEnum } from '../models/templateModel';
 import type { IUser, IUserWallet } from '../models/userModel';
 import { userReachedOperationLimit } from '../services/blockchainService';
 import { cacheService } from '../services/cache/cacheService';
-import { icpService } from '../services/icp/icpService';
 import { downloadAndProcessImage } from '../services/imageService';
 import { ipfsService } from '../services/ipfs/ipfsService';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
@@ -60,7 +59,6 @@ interface NFTMintData {
 const defaultMetadata: INFTMetadata = {
   image_url: {
     gcp: '',
-    icp: '',
     ipfs: ''
   },
   description: '',
@@ -354,7 +352,6 @@ export const generateNftOriginal = async (
       metadata: {
         image_url: {
           gcp: url || '',
-          icp: '',
           ipfs: ''
         },
         description: description || '',
@@ -414,7 +411,6 @@ export const generateNftOriginal = async (
 
   const fileName = `${channel_user_id.toString()}_${Date.now()}.jpg`;
   let ipfsImageUrl = '';
-  let icpImageUrl = '';
 
   try {
     ipfsImageUrl = await ipfsService.uploadToIpfs(processedImage, fileName);
@@ -428,26 +424,13 @@ export const generateNftOriginal = async (
     // No error is thrown here to continue with the process
   }
 
+  // Update IPFS URL in bdd
   try {
-    icpImageUrl = await icpService.uploadToICP(processedImage, fileName);
-  } catch (error) {
-    Logger.warn(
-      'generateNftOriginal',
-      logKey,
-      'Error uploading the image to ICP:',
-      (error as Error).message
-    );
-    // No error is thrown here to continue with the process
-  }
-
-  // Update IPFS & ICP urls in bdd
-  try {
-    Logger.info('generateNftOriginal', logKey, 'Updating IPFS and ICP URLs in the database');
+    Logger.info('generateNftOriginal', logKey, 'Updating IPFS URL in the database');
     await NFTModel.updateOne(
       { _id: mongoData._id },
       {
         $set: {
-          'metadata.image_url.icp': icpImageUrl || '',
           'metadata.image_url.ipfs': ipfsImageUrl || ''
         }
       }
@@ -954,10 +937,6 @@ export const getNftMetadataRequiredByOpenSea = async (
       {
         trait_type: 'IFPS Image',
         value: ''
-      },
-      {
-        trait_type: 'ICP Image',
-        value: ''
       }
     ]
   };
@@ -1034,10 +1013,6 @@ export const getNftMetadataRequiredByOpenSea = async (
         {
           trait_type: 'IFPS Image',
           value: nft.metadata.image_url.ipfs || ''
-        },
-        {
-          trait_type: 'ICP Image',
-          value: nft.metadata.image_url.icp || ''
         }
       ]
     };

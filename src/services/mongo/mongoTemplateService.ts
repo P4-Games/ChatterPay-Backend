@@ -1,7 +1,8 @@
 import { TemplateType } from '../../models/templateModel';
 
 export enum templateEnum {
-  NOTIFICATIONS = 'notifications' // Enum value for notifications template type
+  NOTIFICATIONS = 'notifications', // Enum value for notifications template type
+  SECURITY_QUESTIONS = 'security_questions' // Enum value for security questions template type
 }
 
 export const mongoTemplateService = {

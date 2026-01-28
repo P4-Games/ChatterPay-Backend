@@ -7,6 +7,7 @@ import nftRoutes from './nftRoutes';
 import { pingRoutes } from './pingRoutes';
 import { rampRoutes } from './rampRoutes';
 import referralRoutes from './referralRoutes';
+import securityRoutes from './securityRoutes';
 import supportRoutes from './supportRoutes';
 import swapRoutes from './swapRoutes';
 import telegramRoutes from './telegramRoutes';
@@ -28,6 +29,7 @@ export async function setupRoutes(server: FastifyInstance): Promise<void> {
   server.register(tokenRoutes);
   server.register(walletRouter);
   server.register(referralRoutes);
+  server.register(securityRoutes);
   server.register(balanceRoutes);
   server.register(swapRoutes);
   server.register(nftRoutes);

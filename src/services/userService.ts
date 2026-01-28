@@ -1,4 +1,4 @@
-import { DEFAULT_CHAIN_ID, PUSH_ENABLED } from '../config/constants';
+import { DEFAULT_CHAIN_ID } from '../config/constants';
 import { formatIdentifierWithOptionalName, getPhoneNumberFormatted } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
 import { generateReferralCode } from '../helpers/referralHelper';
@@ -7,7 +7,6 @@ import type { ComputedAddress, ConcurrentOperationsEnum } from '../types/commonT
 import { walletProvisioningService } from './alchemy/walletProvisioningService';
 import { mongoCountryService } from './mongo/mongoCountryService';
 import { mongoUserService } from './mongo/mongoUserService';
-import { pushService } from './push/pushService';
 import { computeWallet } from './web3/rpc/rpcService';
 
 /**
@@ -80,7 +79,7 @@ async function registerWalletWithAlchemy(
 
 /**
  * Creates a new user with a wallet for the given phone number.
- * This function handles user creation, wallet generation, and push notifications.
+ * This function handles user creation and wallet generation.
  *
  * @param {string} phoneNumber - The phone number to create the wallet for.
  * @param {string} chatterpayProxyAddress - The address of the ChatterPay Proxy smart contract.
@@ -124,6 +123,17 @@ export const createUserWithWallet = async (
     settings: {
       notifications: {
         language: detectedNotificationLng
+      },
+      security: {
+        pin: {
+          hash: '',
+          status: 'not_set',
+          failed_attempts: 0,
+          blocked_until: null,
+          last_set_at: null,
+          reset_required: false
+        },
+        recovery_questions: []
       }
     },
     lastOperationDate: null,
@@ -149,16 +159,6 @@ export const createUserWithWallet = async (
 
   user.manteca_user_id = `user-${user._id}`;
   await user.save();
-
-  if (PUSH_ENABLED) {
-    Logger.log('createUserWithWallet', 'Push protocol', phoneNumber, predictedWallet.EOAAddress);
-    await pushService.subscribeToPushChannel(predictedWallet.data, predictedWallet.EOAAddress);
-  } else {
-    Logger.info(
-      'createUserWithWallet',
-      `Skipped adding new wallet to the push channel because push notifications are disabled.`
-    );
-  }
 
   // Register wallet with Alchemy webhook system
   await registerWalletWithAlchemy(user, predictedWallet.proxyAddress, DEFAULT_CHAIN_ID);
