@@ -1,8 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import {
-  returnErrorResponse,
-  returnSuccessResponse
-} from '../helpers/requestHelper';
+import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { mongoNotificationService } from '../services/mongo/mongoNotificationServices';
 

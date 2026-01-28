@@ -124,7 +124,8 @@ export const mongoNotificationService = {
 
       const has_more = notifications.length > limit;
       const results = has_more ? notifications.slice(0, limit) : notifications;
-      const next_cursor = has_more && results.length > 0 ? results[results.length - 1].sent_date.toISOString() : null;
+      const next_cursor =
+        has_more && results.length > 0 ? results[results.length - 1].sent_date.toISOString() : null;
 
       return {
         // @ts-expect-error
