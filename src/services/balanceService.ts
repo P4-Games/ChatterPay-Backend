@@ -143,7 +143,7 @@ export async function getTokenPrices(
     'AUSDC',
     'AUSDT',
     'DAI',
-    'sUSX',
+    'SUSX',
     'USDC',
     'USDQ',
     'USDT',
@@ -367,6 +367,7 @@ export async function getTokenBalances(
         if (isSkippableTokenContractAddress(token.address)) {
           return { ...token, balance: parseFloat('0').toFixed(token.display_decimals) };
         }
+
         const rawBalance = await getContractBalance(token.address, bs, address);
         const formattedBalance = parseFloat(rawBalance).toFixed(token.display_decimals);
         return { ...token, balance: formattedBalance };
@@ -564,11 +565,12 @@ export async function getAddressBalanceWithNfts(
     const mergedTokenBalances = mergeSameTokenBalances(combinedTokenBalances);
 
     //  Now calculate balances with fiat conversions
-    const balances: BalanceInfo[] = calculateBalances(
+    const balancesWithZero: BalanceInfo[] = calculateBalances(
       mergedTokenBalances,
       fiatQuotes,
       networkConfig.name
     );
+    const balances = balancesWithZero.filter((balance) => balance.balance > 0);
 
     // Totals
     const totals: Record<Currency, number> = calculateBalancesTotals(balances);
