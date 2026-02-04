@@ -9,6 +9,7 @@ import {
   INFURA_API_KEY,
   INFURA_URL
 } from '../config/constants';
+import { areSamePhoneNumber } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
 import {
   returnErrorResponse,
@@ -112,7 +113,7 @@ const validateInputs = async (
     return 'Too many decimal places (maximum allowed is 18)';
   }
 
-  if (isValidPhoneNumber(channel_user_id.trim()) === isValidPhoneNumber(to.trim())) {
+  if (await areSamePhoneNumber(channel_user_id.trim(), to.trim())) {
     return 'You cannot send money to yourself';
   }
 
