@@ -89,6 +89,16 @@ export async function getTokenBalancesMulticall(
       `Fetching ${tokenAddresses.length} tokens with ${calls.length} calls (vs ${tokenAddresses.length * 2} without multicall)`
     );
 
+    const [network, code] = await Promise.all([
+      provider.getNetwork().catch(() => null),
+      provider.getCode(MULTICALL3_ADDRESS)
+    ]);
+
+    if (!code || code === '0x') {
+      const chainId = network?.chainId ?? 'unknown';
+      throw new Error(`Multicall3 not deployed at ${MULTICALL3_ADDRESS} on chainId ${chainId}`);
+    }
+
     // Execute multicall - use callStatic to force a read operation (not a transaction)
     const startTime = Date.now();
     const results: MulticallResult[] = await multicallContract.callStatic.aggregate3(calls);
