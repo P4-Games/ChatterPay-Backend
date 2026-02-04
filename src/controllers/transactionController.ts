@@ -112,7 +112,7 @@ const validateInputs = async (
     return 'Too many decimal places (maximum allowed is 18)';
   }
 
-  if (channel_user_id.trim() === to.trim()) {
+  if (isValidPhoneNumber(channel_user_id.trim())  === isValidPhoneNumber(to.trim())) {
     return 'You cannot send money to yourself';
   }
 
