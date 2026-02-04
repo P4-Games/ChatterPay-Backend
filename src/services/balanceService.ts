@@ -20,6 +20,18 @@ import { secService } from './secService';
 import { getERC20ABI } from './web3/abiService';
 import { getDecimalsCache, getTokenBalancesMulticall } from './web3/multicallService';
 
+const INVALID_TOKEN_ADDRESS_THRESHOLD = ethers.BigNumber.from(1);
+
+function isSkippableTokenContractAddress(address: string): boolean {
+  if (!ethers.utils.isAddress(address)) return true;
+
+  try {
+    return ethers.BigNumber.from(address).lte(INVALID_TOKEN_ADDRESS_THRESHOLD);
+  } catch {
+    return true;
+  }
+}
+
 /**
  * Maps chain IDs to DefiLlama chain prefixes
  * @param {number} chainId - Chain ID
@@ -228,11 +240,14 @@ export async function getTokenPrices(
 async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo[]> {
   const norm = (s: string) => String(s).trim().toUpperCase();
   const chainTokens = tokens.filter((token) => token.chain_id === chanId);
-  const symbols = [...new Set(chainTokens.map((token) => norm(token.symbol)))];
+  const priceEligibleTokens = chainTokens.filter(
+    (token) => !isSkippableTokenContractAddress(token.address)
+  );
+  const symbols = [...new Set(priceEligibleTokens.map((token) => norm(token.symbol)))];
 
   // Build address map for DefiLlama fallback
   const tokenAddresses = new Map<string, string>();
-  chainTokens.forEach((token) => {
+  priceEligibleTokens.forEach((token) => {
     tokenAddresses.set(norm(token.symbol), token.address);
   });
 
@@ -263,13 +278,35 @@ export async function getTokenBalances(
 ): Promise<TokenBalance[]> {
   const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
   const tokenInfo = await getTokenInfo(tokens, networkConfig.chainId);
+  const validTokenInfo = tokenInfo.filter(
+    (token) => !isSkippableTokenContractAddress(token.address)
+  );
+  const invalidTokenInfo = tokenInfo.filter((token) =>
+    isSkippableTokenContractAddress(token.address)
+  );
+
+  if (invalidTokenInfo.length > 0) {
+    Logger.warn(
+      'getTokenBalances',
+      `Skipping ${invalidTokenInfo.length} token(s) with invalid/non-contract addresses: ${invalidTokenInfo
+        .map((token) => `${token.symbol} (${token.address})`)
+        .join(', ')}`
+    );
+  }
 
   try {
-    const tokenAddresses = tokenInfo.map((t) => t.address);
+    const tokenAddresses = validTokenInfo.map((t) => t.address);
+
+    if (tokenAddresses.length === 0) {
+      return invalidTokenInfo.map((token) => ({
+        ...token,
+        balance: parseFloat('0').toFixed(token.display_decimals)
+      }));
+    }
 
     // Preload decimals cache from token metadata (if available)
     const cachedDecimals = getDecimalsCache();
-    tokenInfo.forEach((token) => {
+    validTokenInfo.forEach((token) => {
       // Try to use decimals from token metadata if available
       const key = token.address.toLowerCase();
       if (!cachedDecimals.has(key)) {
@@ -292,14 +329,24 @@ export async function getTokenBalances(
       `Multicall completed in ${elapsed}ms for ${tokenAddresses.length} tokens`
     );
 
-    // Map multicall results back to token info
-    return tokenInfo.map((token, index) => {
-      const result = multicallResults[index];
+    const resultByAddress = new Map(
+      multicallResults.map((result) => [result.tokenAddress.toLowerCase(), result])
+    );
 
-      if (!result.success) {
+    // Map multicall results back to original token order
+    return tokenInfo.map((token) => {
+      if (isSkippableTokenContractAddress(token.address)) {
+        return {
+          ...token,
+          balance: parseFloat('0').toFixed(token.display_decimals)
+        };
+      }
+
+      const result = resultByAddress.get(token.address.toLowerCase());
+      if (!result || !result.success) {
         Logger.warn(
           'getTokenBalances',
-          `Failed to get balance for ${token.symbol} (${token.address}): ${result.error || 'Unknown error'}`
+          `Failed to get balance for ${token.symbol} (${token.address}): ${result?.error || 'Unknown error'}`
         );
         return {
           ...token,
@@ -317,6 +364,9 @@ export async function getTokenBalances(
     const bs = secService.get_bs(provider);
     return Promise.all(
       tokenInfo.map(async (token) => {
+        if (isSkippableTokenContractAddress(token.address)) {
+          return { ...token, balance: parseFloat('0').toFixed(token.display_decimals) };
+        }
         const rawBalance = await getContractBalance(token.address, bs, address);
         const formattedBalance = parseFloat(rawBalance).toFixed(token.display_decimals);
         return { ...token, balance: formattedBalance };
