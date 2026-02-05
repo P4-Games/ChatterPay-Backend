@@ -1,24 +1,11 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import Token, { type IToken } from '../../src/models/tokenModel';
 
 describe('Token Model', () => {
-  let mongoServer: MongoMemoryServer;
-
   beforeEach(async () => {
-    mongoServer = await MongoMemoryServer.create();
-    const uri = mongoServer.getUri();
-
-    await mongoose.disconnect();
-    await mongoose.connect(uri, {});
     await Token.syncIndexes(); // Ensures unique indexes in the in-memory database
-  });
-
-  afterEach(async () => {
-    await mongoose.disconnect();
-    await mongoServer.stop();
   });
 
   it('should create and save a Token document successfully with operations limits', async () => {
