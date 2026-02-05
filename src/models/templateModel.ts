@@ -27,9 +27,16 @@ export interface LocalizedContentType {
   pt: string;
 }
 
+export interface NotificationUtilityConfigType {
+  enabled: boolean;
+  template_key: string;
+  param_order: string[];
+}
+
 export interface NotificationTemplateType {
   title: LocalizedContentType;
   message: LocalizedContentType;
+  utility?: NotificationUtilityConfigType;
 }
 
 export interface NotificationTemplatesTypes {
@@ -52,7 +59,18 @@ const localizedContentSchema = new Schema<LocalizedContentType>({
 
 const notificationSchema = new Schema<NotificationTemplateType>({
   title: { type: localizedContentSchema, required: true },
-  message: { type: localizedContentSchema, required: true }
+  message: { type: localizedContentSchema, required: true },
+  utility: {
+    type: new Schema<NotificationUtilityConfigType>(
+      {
+        enabled: { type: Boolean, required: true },
+        template_key: { type: String, required: true },
+        param_order: { type: [String], required: true }
+      },
+      { _id: false }
+    ),
+    required: false
+  }
 });
 
 const templateSchema = new Schema<ITemplateSchema>({
