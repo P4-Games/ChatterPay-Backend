@@ -1,7 +1,18 @@
 import dotenv from 'dotenv';
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import { afterAll, beforeAll } from 'vitest';
+import { afterAll, beforeAll, beforeEach, vi } from 'vitest';
+
+vi.mock('../src/helpers/loggerHelper', () => ({
+  Logger: {
+    error: vi.fn(),
+    warn: vi.fn(),
+    log: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fatal: vi.fn()
+  }
+}));
 
 // Load environment variables from .env
 dotenv.config();
@@ -23,30 +34,28 @@ global.console = {
   debug: () => {}
 };
 
-let mongoServer: MongoMemoryServer;
-
 beforeAll(async () => {
   try {
-    mongoServer = await MongoMemoryServer.create({
-      binary: {
-        version: '7.0.14'
-      },
-      instance: {
-        storageEngine: 'wiredTiger'
-      }
-    });
-    const uri = mongoServer.getUri();
-    await mongoose.connect(uri);
-    console.log('MongoDB Memory Server started successfully');
+    const uri = process.env.MONGO_MEMORY_SERVER_URI;
+    if (!uri) throw new Error('MongoDB Memory Server URI not available');
+
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(uri);
+    }
   } catch (error) {
     console.error('Failed to start MongoDB Memory Server:', error);
     throw error;
   }
 }, 120000); // Increase timeout to 120 seconds for MongoDB startup
 
+beforeEach(async () => {
+  if (mongoose.connection.readyState !== 1) return;
+  const collections = mongoose.connection.collections;
+  await Promise.all(Object.values(collections).map((collection) => collection.deleteMany({})));
+});
+
 afterAll(async () => {
-  await mongoose.disconnect();
-  if (mongoServer) {
-    await mongoServer.stop();
+  if (mongoose.connection.readyState === 1) {
+    await mongoose.disconnect();
   }
 });
