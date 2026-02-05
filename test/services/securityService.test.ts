@@ -1,6 +1,4 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
-import mongoose from 'mongoose';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { SECURITY_PIN_MAX_FAILED_ATTEMPTS } from '../../src/config/constants';
 import { TemplateType } from '../../src/models/templateModel';
@@ -8,15 +6,7 @@ import { UserModel } from '../../src/models/userModel';
 import { securityService } from '../../src/services/securityService';
 
 describe('securityService', () => {
-  let mongoServer: MongoMemoryServer;
-
   beforeEach(async () => {
-    mongoServer = await MongoMemoryServer.create();
-    const uri = mongoServer.getUri();
-
-    await mongoose.disconnect();
-    await mongoose.connect(uri, {});
-
     // Create a test user
     await UserModel.create({
       phone_number: '1234567890',
@@ -76,11 +66,6 @@ describe('securityService', () => {
         }
       }
     });
-  });
-
-  afterEach(async () => {
-    await mongoose.disconnect();
-    await mongoServer.stop();
   });
 
   describe('setPin', () => {
