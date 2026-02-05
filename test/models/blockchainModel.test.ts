@@ -1,24 +1,9 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import Blockchain, { type IBlockchain } from '../../src/models/blockchainModel';
 
 describe('Blockchain Model', () => {
-  let mongoServer: MongoMemoryServer;
-
-  beforeEach(async () => {
-    mongoServer = await MongoMemoryServer.create();
-    const uri = mongoServer.getUri();
-    await mongoose.disconnect();
-    await mongoose.connect(uri, {});
-  });
-
-  afterEach(async () => {
-    await mongoose.disconnect();
-    await mongoServer.stop();
-  });
-
   it('should fail to save without required fields', async () => {
     const invalidBlockchain: Partial<IBlockchain> = {
       chainId: 1,
