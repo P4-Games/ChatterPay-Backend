@@ -8,6 +8,37 @@ import { Logger } from '../../helpers/loggerHelper';
 import { isValidPhoneNumber } from '../../helpers/validationHelper';
 import type { chatizaloOperatorReply } from '../../types/chatizaloType';
 
+const getSafePayloadForLogs = (payload: chatizaloOperatorReply) => ({
+  ...payload,
+  data_token: '[REDACTED]'
+});
+
+const redactDataTokenInString = (value: string): string =>
+  value.replace(/("data_token"\s*:\s*")[^"]+(")/gi, '$1[REDACTED]$2');
+
+const redactDataToken = (value: unknown): unknown => {
+  if (typeof value === 'string') return redactDataTokenInString(value);
+  if (Array.isArray(value)) return value.map((item) => redactDataToken(item));
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const entries = Object.entries(obj).map(([key, val]) => [
+      key,
+      key === 'data_token' ? '[REDACTED]' : redactDataToken(val)
+    ]);
+    return Object.fromEntries(entries);
+  }
+  return value;
+};
+
+const stringifyErrorData = (data: unknown): string => {
+  if (typeof data === 'string') return redactDataTokenInString(data);
+  try {
+    return JSON.stringify(redactDataToken(data));
+  } catch {
+    return 'Unserializable response body';
+  }
+};
+
 export const chatizaloService = {
   /**
    * Sends an operator reply to the API.
@@ -20,11 +51,12 @@ export const chatizaloService = {
     payload: chatizaloOperatorReply,
     traceHeader?: string
   ): Promise<string> => {
+    const safePayload = getSafePayloadForLogs(payload);
     try {
       if (!BOT_NOTIFICATIONS_ENABLED) {
         Logger.info(
           'sendBotNotification',
-          `Bot notifications are disabled. Omitted payload: ${JSON.stringify(payload)}`
+          `Bot notifications are disabled. Omitted payload: ${JSON.stringify(safePayload)}`
         );
         return '';
       }
@@ -32,7 +64,7 @@ export const chatizaloService = {
       if (!isValidPhoneNumber(payload.channel_user_id)) {
         Logger.info(
           'sendBotNotification',
-          `Bot notifications are enabled, but ${payload.channel_user_id} is not a valid phone number!. Omitted payload: ${JSON.stringify(payload)}`
+          `Bot notifications are enabled, but ${payload.channel_user_id} is not a valid phone number!. Omitted payload: ${JSON.stringify(safePayload)}`
         );
         return '';
       }
@@ -49,16 +81,30 @@ export const chatizaloService = {
       const response = await axios.post(sendMsgEndpint, payload, {
         headers
       });
-      Logger.log(
-        'sendBotNotification',
-        'Chatizalo Response:',
-        payload.channel_user_id,
-        payload.message,
-        response.data
-      );
+      Logger.log('sendBotNotification', 'Chatizalo request/response:', {
+        requestBody: safePayload,
+        responseBody: response.data
+      });
       return response.data;
-    } catch (error) {
-      Logger.error('sendBotNotification', (error as Error).message);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status;
+        const responseBody = redactDataToken(error.response?.data);
+
+        Logger.error('sendBotNotification', 'Chatizalo request failed:', {
+          requestBody: safePayload,
+          statusCode,
+          responseBody
+        });
+
+        const responseBodyText = stringifyErrorData(responseBody);
+        throw new Error(`Chatizalo API error (${statusCode ?? 'NO_STATUS'}): ${responseBodyText}`);
+      }
+
+      Logger.error('sendBotNotification', 'Unexpected error sending Chatizalo notification:', {
+        requestBody: safePayload,
+        message: (error as Error).message
+      });
       throw error;
     }
   }
