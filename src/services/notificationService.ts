@@ -3,11 +3,13 @@ import { formatIdentifierWithOptionalName } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+
 import type { IBlockchain } from '../models/blockchainModel';
 import {
   type ITemplateSchema,
   NotificationEnum,
-  type NotificationTemplatesTypes
+  type NotificationTemplatesTypes,
+  type NotificationUtilityConfigType
 } from '../models/templateModel';
 import type { AaveSupplyInfo } from '../types/aaveType';
 import type { chatizaloOperatorReply } from '../types/chatizaloType';
@@ -19,6 +21,26 @@ import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { mongoNotificationService } from './mongo/mongoNotificationServices';
 import { mongoTemplateService, templateEnum } from './mongo/mongoTemplateService';
 import { mongoUserService } from './mongo/mongoUserService';
+
+function normalizePreferredLanguage(language: string | null | undefined): 'es' | 'pt' | 'en' {
+  const normalized = (language ?? '').trim().toLowerCase();
+  if (normalized.startsWith('es')) return 'es';
+  if (normalized.startsWith('pt')) return 'pt';
+  return 'en';
+}
+
+async function getNotificationUtilityConfig(
+  typeOfNotification: NotificationEnum
+): Promise<NotificationUtilityConfigType | undefined> {
+  const notificationTemplates: NotificationTemplatesTypes | null =
+    await mongoTemplateService.getTemplate<ITemplateSchema>(templateEnum.NOTIFICATIONS);
+  if (!notificationTemplates) return undefined;
+
+  // @ts-expect-error 'expected type error'
+  const template = notificationTemplates[typeOfNotification];
+
+  return template?.utility;
+}
 
 /**
  * Retrieves a notification template based on the user's channel ID and the specified notification type.
@@ -226,6 +248,21 @@ export async function sendReceivedTransferNotification(
     const formattedMessageBot = formatMessage(fromNumberAndName);
     const formattedMessagePush = formatMessage(fromNumberAndNameMasked);
 
+    const utilityConfig = await getNotificationUtilityConfig(NotificationEnum.incoming_transfer);
+    const utilityEnabled =
+      utilityConfig?.enabled === true &&
+      typeof utilityConfig.template_key === 'string' &&
+      utilityConfig.template_key.length > 0 &&
+      Array.isArray(utilityConfig.param_order) &&
+      utilityConfig.param_order.length > 0;
+
+    const from = nameFrom ? `${phoneNumberFrom} (${nameFrom})` : phoneNumberFrom;
+    const templateParamsValues: Record<string, string> = {
+      from,
+      amount,
+      token
+    };
+
     const sendAndPersistParams: SendAndPersistParams = {
       to: phoneNumberTo,
       messageBot: formattedMessageBot,
@@ -234,7 +271,19 @@ export async function sendReceivedTransferNotification(
       sendPush: true,
       sendBot: true,
       title,
-      traceHeader
+      traceHeader,
+      ...(utilityEnabled
+        ? {
+            message_kind: 'utility' as const,
+            preferred_language: normalizePreferredLanguage(
+              await mongoUserService.getUserSettingsLanguage(phoneNumberTo)
+            ),
+            template_key: utilityConfig.template_key,
+            template_params: utilityConfig.param_order.map(
+              (param) => templateParamsValues[param] ?? ''
+            )
+          }
+        : {})
     };
 
     const data = await persistAndSendNotification(sendAndPersistParams);
@@ -936,6 +985,10 @@ interface SendAndPersistParams {
   sendBot?: boolean;
   title?: string; // solo para push
   traceHeader?: string;
+  message_kind?: chatizaloOperatorReply['message_kind'];
+  preferred_language?: chatizaloOperatorReply['preferred_language'];
+  template_key?: chatizaloOperatorReply['template_key'];
+  template_params?: chatizaloOperatorReply['template_params'];
 }
 
 /**
@@ -961,7 +1014,11 @@ export async function persistAndSendNotification({
   sendPush = false,
   sendBot = false,
   title,
-  traceHeader
+  traceHeader,
+  message_kind,
+  preferred_language,
+  template_key,
+  template_params
 }: SendAndPersistParams): Promise<string | null> {
   const sent_date = new Date();
 
@@ -984,7 +1041,11 @@ export async function persistAndSendNotification({
       const payload: chatizaloOperatorReply = {
         data_token: BOT_DATA_TOKEN!,
         channel_user_id: to,
-        message: messageBot
+        message: messageBot,
+        ...(message_kind !== undefined ? { message_kind } : {}),
+        ...(preferred_language !== undefined ? { preferred_language } : {}),
+        ...(template_key !== undefined ? { template_key } : {}),
+        ...(template_params !== undefined ? { template_params } : {})
       };
       await chatizaloService.sendBotNotification(payload, traceHeader);
     }
