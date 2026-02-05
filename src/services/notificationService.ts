@@ -216,7 +216,7 @@ export async function sendReceivedTransferNotification(
   phoneNumberTo: string,
   amount: string,
   token: string,
-  user_notes: string,
+  notes: string,
   traceHeader?: string
 ): Promise<unknown> {
   try {
@@ -226,17 +226,19 @@ export async function sendReceivedTransferNotification(
     );
     if (!isValidPhoneNumber(phoneNumberTo)) return '';
 
-    const { title, message } = await getNotificationTemplate(
-      phoneNumberTo,
-      NotificationEnum.incoming_transfer
-    );
+    const hasNotes = notes.trim().length > 0;
+    const notificationType = hasNotes
+      ? NotificationEnum.incoming_transfer_w_note
+      : NotificationEnum.incoming_transfer;
+
+    const { title, message } = await getNotificationTemplate(phoneNumberTo, notificationType);
 
     const formatMessage = (fromNumberAndName: string) =>
       message
         .replaceAll('[FROM]', fromNumberAndName)
         .replaceAll('[AMOUNT]', amount)
         .replaceAll('[TOKEN]', token)
-        .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
+        .replaceAll('[NOTES]', hasNotes ? `\n('${notes}')` : '');
 
     const fromNumberAndName = formatIdentifierWithOptionalName(phoneNumberFrom, nameFrom, false);
     const fromNumberAndNameMasked = formatIdentifierWithOptionalName(
@@ -248,7 +250,7 @@ export async function sendReceivedTransferNotification(
     const formattedMessageBot = formatMessage(fromNumberAndName);
     const formattedMessagePush = formatMessage(fromNumberAndNameMasked);
 
-    const utilityConfig = await getNotificationUtilityConfig(NotificationEnum.incoming_transfer);
+    const utilityConfig = await getNotificationUtilityConfig(notificationType);
     const utilityEnabled =
       utilityConfig?.enabled === true &&
       typeof utilityConfig.template_key === 'string' &&
@@ -260,14 +262,19 @@ export async function sendReceivedTransferNotification(
     const templateParamsValues: Record<string, string> = {
       from,
       amount,
-      token
+      token,
+      ...(hasNotes ? { notes } : {})
     };
+
+    const utilityParamOrder = hasNotes
+      ? utilityConfig?.param_order
+      : utilityConfig?.param_order.filter((param) => param !== 'notes');
 
     const sendAndPersistParams: SendAndPersistParams = {
       to: phoneNumberTo,
       messageBot: formattedMessageBot,
       messagePush: formattedMessagePush,
-      template: NotificationEnum.incoming_transfer,
+      template: notificationType,
       sendPush: true,
       sendBot: true,
       title,

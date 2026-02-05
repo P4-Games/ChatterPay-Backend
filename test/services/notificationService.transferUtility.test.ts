@@ -29,9 +29,9 @@ describe('notificationService (transfer utility dual payload)', () => {
     notifications[NotificationEnum.incoming_transfer] = {
       title: { en: 'Incoming', es: 'Incoming', pt: 'Incoming' },
       message: {
-        en: 'From [FROM] sent [AMOUNT] [TOKEN][USER_NOTES]',
-        es: 'From [FROM] sent [AMOUNT] [TOKEN][USER_NOTES]',
-        pt: 'From [FROM] sent [AMOUNT] [TOKEN][USER_NOTES]'
+        en: 'From [FROM] sent [AMOUNT] [TOKEN][NOTES]',
+        es: 'From [FROM] sent [AMOUNT] [TOKEN][NOTES]',
+        pt: 'From [FROM] sent [AMOUNT] [TOKEN][NOTES]'
       },
       ...(opts.incomingUtilityEnabled
         ? {
