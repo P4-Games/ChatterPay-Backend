@@ -1,26 +1,11 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import Transaction, { type ITransaction } from '../../src/models/transactionModel';
 
 describe('Transaction Model', () => {
-  let mongoServer: MongoMemoryServer;
-
   beforeEach(async () => {
-    mongoServer = await MongoMemoryServer.create();
-    const uri = mongoServer.getUri();
-
-    await mongoose.disconnect();
-    await mongoose.connect(uri, {});
     await Transaction.syncIndexes(); // Ensures unique indexes
-  });
-
-  afterEach(async () => {
-    await mongoose.disconnect();
-    if (mongoServer) {
-      await mongoServer.stop();
-    }
   });
 
   it('should create and save a Transaction document successfully', async () => {
