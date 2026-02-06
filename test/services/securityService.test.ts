@@ -25,6 +25,7 @@ describe('securityService', () => {
     await TemplateType.create({
       notifications: {
         incoming_transfer: mockNotification,
+        incoming_transfer_w_note: mockNotification,
         incoming_transfer_external: mockNotification,
         swap: mockNotification,
         mint: mockNotification,

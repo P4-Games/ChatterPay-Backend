@@ -2,6 +2,7 @@ import { type Document, model, Schema } from 'mongoose';
 
 export enum NotificationEnum {
   incoming_transfer = 'incoming_transfer',
+  incoming_transfer_w_note = 'incoming_transfer_w_note',
   incoming_transfer_external = 'incoming_transfer_external',
   swap = 'swap',
   mint = 'mint',
@@ -76,6 +77,7 @@ const notificationSchema = new Schema<NotificationTemplateType>({
 const templateSchema = new Schema<ITemplateSchema>({
   notifications: {
     incoming_transfer: { type: notificationSchema, required: true },
+    incoming_transfer_w_note: { type: notificationSchema, required: true },
     incoming_transfer_external: { type: notificationSchema, required: true },
     swap: { type: notificationSchema, required: true },
     mint: { type: notificationSchema, required: true },

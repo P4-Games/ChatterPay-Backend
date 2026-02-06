@@ -26,6 +26,18 @@ describe('Template Model', () => {
             pt: 'Sua transferência foi bem-sucedida.'
           }
         },
+        incoming_transfer_w_note: {
+          title: {
+            en: 'Transfer completed',
+            es: 'Transferencia completada',
+            pt: 'Transferência concluída'
+          },
+          message: {
+            en: 'Your transfer was successful.',
+            es: 'Tu transferencia fue exitosa.',
+            pt: 'Sua transferência foi bem-sucedida.'
+          }
+        },
         incoming_transfer_external: {
           title: {
             en: 'External Transfer completed',

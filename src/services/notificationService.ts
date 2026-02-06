@@ -216,7 +216,7 @@ export async function sendReceivedTransferNotification(
   phoneNumberTo: string,
   amount: string,
   token: string,
-  user_notes: string,
+  notes: string,
   traceHeader?: string
 ): Promise<unknown> {
   try {
@@ -226,17 +226,19 @@ export async function sendReceivedTransferNotification(
     );
     if (!isValidPhoneNumber(phoneNumberTo)) return '';
 
-    const { title, message } = await getNotificationTemplate(
-      phoneNumberTo,
-      NotificationEnum.incoming_transfer
-    );
+    const hasNotes = notes.trim().length > 0;
+    const notificationType = hasNotes
+      ? NotificationEnum.incoming_transfer_w_note
+      : NotificationEnum.incoming_transfer;
+
+    const { title, message } = await getNotificationTemplate(phoneNumberTo, notificationType);
 
     const formatMessage = (fromNumberAndName: string) =>
       message
         .replaceAll('[FROM]', fromNumberAndName)
         .replaceAll('[AMOUNT]', amount)
         .replaceAll('[TOKEN]', token)
-        .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
+        .replaceAll('[NOTES]', hasNotes ? `\n('${notes}')` : '');
 
     const fromNumberAndName = formatIdentifierWithOptionalName(phoneNumberFrom, nameFrom, false);
     const fromNumberAndNameMasked = formatIdentifierWithOptionalName(
@@ -248,7 +250,7 @@ export async function sendReceivedTransferNotification(
     const formattedMessageBot = formatMessage(fromNumberAndName);
     const formattedMessagePush = formatMessage(fromNumberAndNameMasked);
 
-    const utilityConfig = await getNotificationUtilityConfig(NotificationEnum.incoming_transfer);
+    const utilityConfig = await getNotificationUtilityConfig(notificationType);
     const utilityEnabled =
       utilityConfig?.enabled === true &&
       typeof utilityConfig.template_key === 'string' &&
@@ -260,14 +262,19 @@ export async function sendReceivedTransferNotification(
     const templateParamsValues: Record<string, string> = {
       from,
       amount,
-      token
+      token,
+      ...(hasNotes ? { notes } : {})
     };
+
+    const utilityParamOrder = hasNotes
+      ? utilityConfig?.param_order
+      : utilityConfig?.param_order.filter((param) => param !== 'notes');
 
     const sendAndPersistParams: SendAndPersistParams = {
       to: phoneNumberTo,
       messageBot: formattedMessageBot,
       messagePush: formattedMessagePush,
-      template: NotificationEnum.incoming_transfer,
+      template: notificationType,
       sendPush: true,
       sendBot: true,
       title,
@@ -302,7 +309,6 @@ export async function sendReceivedTransferNotification(
  * @param phoneNumberTo - Recipient's phone number.
  * @param amount - Amount received.
  * @param token - Token symbol or identifier (e.g., ETH, USDT).
- * @param user_notes - User notes associated with the transaction.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  * @returns A Promise resolving to the result of the notification operation.
  */
@@ -312,7 +318,6 @@ export async function sendReceivedExternalTransferNotification(
   phoneNumberTo: string,
   amount: string,
   token: string,
-  user_notes: string,
   traceHeader?: string
 ): Promise<unknown> {
   try {
@@ -331,8 +336,7 @@ export async function sendReceivedExternalTransferNotification(
       message
         .replaceAll('[FROM]', fromNumberAndName)
         .replaceAll('[AMOUNT]', amount)
-        .replaceAll('[TOKEN]', token)
-        .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
+        .replaceAll('[TOKEN]', token);
 
     const fromNumberAndName = formatIdentifierWithOptionalName(phoneNumberFrom, nameFrom, false);
     const fromNumberAndNameMasked = formatIdentifierWithOptionalName(
@@ -344,6 +348,24 @@ export async function sendReceivedExternalTransferNotification(
     const formattedMessageBot = formatMessage(fromNumberAndName);
     const formattedMessagePush = formatMessage(fromNumberAndNameMasked);
 
+    const utilityConfig = await getNotificationUtilityConfig(
+      NotificationEnum.incoming_transfer_external
+    );
+    const utilityEnabled =
+      utilityConfig?.enabled === true &&
+      typeof utilityConfig.template_key === 'string' &&
+      utilityConfig.template_key.length > 0 &&
+      Array.isArray(utilityConfig.param_order) &&
+      utilityConfig.param_order.length > 0;
+
+    const from = nameFrom ? `${phoneNumberFrom} (${nameFrom})` : phoneNumberFrom;
+    const templateParamsValues: Record<string, string> = {
+      from,
+      amount,
+      token
+    };
+    const utilityParamOrder = utilityConfig?.param_order ?? [];
+
     const sendAndPersistParams: SendAndPersistParams = {
       to: phoneNumberTo,
       messageBot: formattedMessageBot,
@@ -352,7 +374,17 @@ export async function sendReceivedExternalTransferNotification(
       sendPush: true,
       sendBot: true,
       title,
-      traceHeader
+      traceHeader,
+      ...(utilityEnabled
+        ? {
+            message_kind: 'utility' as const,
+            preferred_language: normalizePreferredLanguage(
+              await mongoUserService.getUserSettingsLanguage(phoneNumberTo)
+            ),
+            template_key: utilityConfig.template_key,
+            template_params: utilityParamOrder.map((param) => templateParamsValues[param] ?? '')
+          }
+        : {})
     };
 
     const data = await persistAndSendNotification(sendAndPersistParams);
@@ -487,7 +519,7 @@ export async function sendMintNotification(
  * @param toName - Recipient's name.
  * @param amount - Amount transferred.
  * @param token - Token symbol or identifier (e.g., ETH, USDT).
- * @param user_notes - User notes associated with the transaction.
+ * @param notes - User notes associated with the transaction.
  * @param txHash - Blockchain transaction hash of the transfer.
  * @param chatterpointsOpResult - Chatterpoints operation result.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
@@ -499,7 +531,7 @@ export async function sendOutgoingTransferNotification(
   toName: string,
   amount: string,
   token: string,
-  user_notes: string,
+  notes: string,
   txHash: string,
   chatterpointsOpResult: RegisterOperationResult | null,
   traceHeader?: string
@@ -534,7 +566,7 @@ export async function sendOutgoingTransferNotification(
         .replaceAll('[TO]', toNumberAndName)
         .replaceAll('[EXPLORER]', networkConfig.explorer)
         .replaceAll('[TX_HASH]', txHash)
-        .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
+        .replaceAll('[NOTES]', notes ? `\n('${notes}')` : '');
       if (messageChp) {
         base = `${base}\n\n${messageChp}`;
       }

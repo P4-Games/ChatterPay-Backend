@@ -4,10 +4,7 @@ import { NotificationEnum, TemplateType } from '../../src/models/templateModel';
 import { UserModel } from '../../src/models/userModel';
 import { cacheService } from '../../src/services/cache/cacheService';
 import { chatizaloService } from '../../src/services/chatizalo/chatizaloService';
-import {
-  persistAndSendNotification,
-  sendReceivedTransferNotification
-} from '../../src/services/notificationService';
+import { sendReceivedExternalTransferNotification } from '../../src/services/notificationService';
 
 vi.mock('../../src/services/chatizalo/chatizaloService', () => ({
   chatizaloService: {
@@ -15,8 +12,8 @@ vi.mock('../../src/services/chatizalo/chatizaloService', () => ({
   }
 }));
 
-describe('notificationService (transfer utility dual payload)', () => {
-  const seedTemplates = async (opts: { incomingUtilityEnabled: boolean }) => {
+describe('notificationService (external deposit notification)', () => {
+  const seedTemplates = async (opts: { externalUtilityEnabled: boolean }) => {
     const baseNotification = {
       title: { en: 'Title', es: 'Title', pt: 'Title' },
       message: { en: 'Message', es: 'Message', pt: 'Message' }
@@ -26,26 +23,23 @@ describe('notificationService (transfer utility dual payload)', () => {
       Object.values(NotificationEnum).map((key) => [key, baseNotification])
     );
 
-    const incomingTransferNotification = {
+    notifications[NotificationEnum.incoming_transfer_external] = {
       title: { en: 'Incoming', es: 'Incoming', pt: 'Incoming' },
       message: {
-        en: 'From [FROM] sent [AMOUNT] [TOKEN][NOTES]',
-        es: 'From [FROM] sent [AMOUNT] [TOKEN][NOTES]',
-        pt: 'From [FROM] sent [AMOUNT] [TOKEN][NOTES]'
+        en: 'From [FROM] sent [AMOUNT] [TOKEN]',
+        es: 'From [FROM] sent [AMOUNT] [TOKEN]',
+        pt: 'From [FROM] sent [AMOUNT] [TOKEN]'
       },
-      ...(opts.incomingUtilityEnabled
+      ...(opts.externalUtilityEnabled
         ? {
             utility: {
               enabled: true,
-              template_key: 'transfer_update',
+              template_key: 'external_deposit_update',
               param_order: ['from', 'amount', 'token']
             }
           }
         : {})
     };
-
-    notifications[NotificationEnum.incoming_transfer] = incomingTransferNotification;
-    notifications[NotificationEnum.incoming_transfer_w_note] = incomingTransferNotification;
 
     await TemplateType.create({ notifications });
   };
@@ -55,79 +49,64 @@ describe('notificationService (transfer utility dual payload)', () => {
     cacheService.clearAllCaches();
   });
 
-  it('Case A: incoming_transfer with utility config sends dual payload', async () => {
+  it('Case A: incoming_transfer_external with utility config sends dual payload', async () => {
     await UserModel.create({
       phone_number: '2222222222',
       wallets: [],
       settings: { notifications: { language: 'es' } }
     });
-    await seedTemplates({ incomingUtilityEnabled: true });
+    await seedTemplates({ externalUtilityEnabled: true });
 
-    await sendReceivedTransferNotification(
+    await sendReceivedExternalTransferNotification(
       '1111111111',
       'Alice',
       '2222222222',
       '10.50',
-      'USDC',
-      'Thanks'
+      'USDC'
     );
 
     expect(chatizaloService.sendBotNotification).toHaveBeenCalledTimes(1);
 
     const payload = (chatizaloService.sendBotNotification as any).mock.calls[0][0];
     expect(payload.channel_user_id).toBe('2222222222');
-    expect(payload.message).toBe("From 1111111111 (Alice) sent 10.50 USDC\n('Thanks')");
+    expect(payload.message).toBe('From 1111111111 (Alice) sent 10.50 USDC');
 
     expect(payload.message_kind).toBe('utility');
     expect(payload.preferred_language).toBe('es');
-    expect(payload.template_key).toBe('transfer_update');
+    expect(payload.template_key).toBe('external_deposit_update');
     expect(payload.template_params).toEqual(['1111111111 (Alice)', '10.50', 'USDC']);
   });
 
-  it('Case B: incoming_transfer without utility config keeps legacy payload', async () => {
+  it('Case B: incoming_transfer_external without utility config keeps legacy payload', async () => {
     await UserModel.create({
       phone_number: '2222222222',
       wallets: [],
       settings: { notifications: { language: 'en' } }
     });
-    await seedTemplates({ incomingUtilityEnabled: false });
+    await seedTemplates({ externalUtilityEnabled: false });
 
-    await sendReceivedTransferNotification(
-      '1111111111',
-      'Alice',
+    await sendReceivedExternalTransferNotification(
+      '3333333333',
+      null,
       '2222222222',
       '10.50',
-      'USDC',
-      ''
+      'USDC'
     );
 
     expect(chatizaloService.sendBotNotification).toHaveBeenCalledTimes(1);
 
     const payload = (chatizaloService.sendBotNotification as any).mock.calls[0][0];
     expect(payload.channel_user_id).toBe('2222222222');
+    expect(payload.message).toBe('From 3333333333 sent 10.50 USDC');
     expect(payload).not.toHaveProperty('message_kind');
     expect(payload).not.toHaveProperty('preferred_language');
     expect(payload).not.toHaveProperty('template_key');
     expect(payload).not.toHaveProperty('template_params');
   });
 
-  it('Case C: outgoing_transfer payload remains text-only', async () => {
-    await persistAndSendNotification({
-      to: '2222222222',
-      messageBot: 'Outgoing transfer message',
-      messagePush: 'Outgoing transfer message',
-      template: NotificationEnum.outgoing_transfer,
-      sendBot: true
-    });
+  it('Case C: invalid recipient phone skips notification', async () => {
+    await sendReceivedExternalTransferNotification('1111111111', null, 'invalid', '10.50', 'USDC');
 
-    expect(chatizaloService.sendBotNotification).toHaveBeenCalledTimes(1);
-
-    const payload = (chatizaloService.sendBotNotification as any).mock.calls[0][0];
-    expect(payload.channel_user_id).toBe('2222222222');
-    expect(payload.message).toBe('Outgoing transfer message');
-    expect(payload).not.toHaveProperty('message_kind');
-    expect(payload).not.toHaveProperty('preferred_language');
-    expect(payload).not.toHaveProperty('template_key');
-    expect(payload).not.toHaveProperty('template_params');
+    expect(chatizaloService.sendBotNotification).not.toHaveBeenCalled();
   });
 });
