@@ -97,3 +97,60 @@ export const formatTokenAmount = (rawValue: string, decimals: number): number =>
   const divisor = 10 ** decimals;
   return Number(rawValue) / divisor;
 };
+
+/**
+ * Checks whether two phone numbers represent the same destination.
+ *
+ * It compares:
+ * 1) Exact match across normalized variants (handles regional quirks like AR 54/549, MX 52/521).
+ * 2) Suffix match for cases where one side is missing the country code (e.g. local numbers).
+ *
+ * @param {string} a - First phone number (raw; may include +, spaces, symbols).
+ * @param {string} b - Second phone number (raw; may include +, spaces, symbols).
+ * @returns {Promise<boolean>} True if both inputs likely refer to the same phone number.
+ */
+export async function areSamePhoneNumber(a: string, b: string): Promise<boolean> {
+  const aDigits = getPhoneNumberFormatted(a ?? '');
+  const bDigits = getPhoneNumberFormatted(b ?? '');
+
+  if (!aDigits || !bDigits) return false;
+
+  const aVariants = new Set<string>(await getPhoneNumberVariants(aDigits));
+  const bVariants = new Set<string>(await getPhoneNumberVariants(bDigits));
+
+  // 1) Exact match across variants
+  for (const v of aVariants) {
+    if (bVariants.has(v)) return true;
+  }
+
+  // 2) Suffix match (handles missing country code)
+  const suffixLengths: readonly number[] = [10, 11];
+
+  const aSuffixes = buildSuffixSet(aVariants, suffixLengths);
+  const bSuffixes = buildSuffixSet(bVariants, suffixLengths);
+
+  for (const s of aSuffixes) {
+    if (bSuffixes.has(s)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Builds a set of suffixes (last N digits) from the given phone variants.
+ *
+ * @param {ReadonlySet<string>} variants - Phone variants as digit-only strings.
+ * @param {readonly number[]} lengths - Suffix lengths to include (e.g. 10, 11).
+ * @returns {Set<string>} Set containing suffixes extracted from all variants.
+ */
+function buildSuffixSet(variants: ReadonlySet<string>, lengths: readonly number[]): Set<string> {
+  const out = new Set<string>();
+
+  for (const v of variants) {
+    for (const len of lengths) {
+      if (v.length >= len) out.add(v.slice(-len));
+    }
+  }
+
+  return out;
+}

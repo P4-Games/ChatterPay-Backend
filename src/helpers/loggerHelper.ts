@@ -40,13 +40,43 @@ const logger = pino(
 );
 
 export class Logger {
+  private static formatArg(arg: unknown): string {
+    if (typeof arg === 'string') {
+      return arg.replace(/(\r\n|\n|\r)/g, ' ');
+    }
+
+    if (arg instanceof Error) {
+      const anyErr = arg as Error & Record<string, unknown>;
+      const payload: Record<string, unknown> = {
+        name: anyErr.name,
+        message: anyErr.message
+      };
+
+      // Common metadata (ethers/axios/etc.)
+      const extraKeys = ['code', 'reason', 'method', 'data', 'error', 'stack'];
+      extraKeys.forEach((key) => {
+        if (anyErr[key] !== undefined) {
+          payload[key] = anyErr[key];
+        }
+      });
+
+      return JSON.stringify(payload).replace(/(\r\n|\n|\r)/g, ' ');
+    }
+
+    if (typeof arg === 'object') {
+      try {
+        return JSON.stringify(arg).replace(/(\r\n|\n|\r)/g, ' ');
+      } catch {
+        return '[Unserializable Object]';
+      }
+    }
+
+    return String(arg);
+  }
+
   private static logMessage(level: LogLevel, method: string, ...args: unknown[]): void {
     try {
-      const message = args
-        .map((arg) =>
-          typeof arg === 'string' ? arg.replace(/(\r\n|\n|\r)/g, ' ') : JSON.stringify(arg)
-        )
-        .join(' ');
+      const message = args.map((arg) => Logger.formatArg(arg)).join(' ');
 
       const finalMessage = IS_DEVELOPMENT
         ? { msg: `[${method}], ${message}` }
