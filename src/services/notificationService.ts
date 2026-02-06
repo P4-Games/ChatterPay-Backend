@@ -364,6 +364,7 @@ export async function sendReceivedExternalTransferNotification(
       amount,
       token
     };
+    const utilityParamOrder = utilityConfig?.param_order ?? [];
 
     const sendAndPersistParams: SendAndPersistParams = {
       to: phoneNumberTo,
@@ -381,9 +382,7 @@ export async function sendReceivedExternalTransferNotification(
               await mongoUserService.getUserSettingsLanguage(phoneNumberTo)
             ),
             template_key: utilityConfig.template_key,
-            template_params: (utilityParamOrder ?? []).map(
-              (param) => templateParamsValues[param] ?? ''
-            )
+            template_params: utilityParamOrder.map((param) => templateParamsValues[param] ?? '')
           }
         : {})
     };
