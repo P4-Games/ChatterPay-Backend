@@ -26,7 +26,7 @@ describe('notificationService (transfer utility dual payload)', () => {
       Object.values(NotificationEnum).map((key) => [key, baseNotification])
     );
 
-    notifications[NotificationEnum.incoming_transfer] = {
+    const incomingTransferNotification = {
       title: { en: 'Incoming', es: 'Incoming', pt: 'Incoming' },
       message: {
         en: 'From [FROM] sent [AMOUNT] [TOKEN][NOTES]',
@@ -43,6 +43,9 @@ describe('notificationService (transfer utility dual payload)', () => {
           }
         : {})
     };
+
+    notifications[NotificationEnum.incoming_transfer] = incomingTransferNotification;
+    notifications[NotificationEnum.incoming_transfer_w_note] = incomingTransferNotification;
 
     await TemplateType.create({ notifications });
   };
