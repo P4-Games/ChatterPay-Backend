@@ -3,11 +3,13 @@ import { formatIdentifierWithOptionalName } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+
 import type { IBlockchain } from '../models/blockchainModel';
 import {
   type ITemplateSchema,
   NotificationEnum,
-  type NotificationTemplatesTypes
+  type NotificationTemplatesTypes,
+  type NotificationUtilityConfigType
 } from '../models/templateModel';
 import type { AaveSupplyInfo } from '../types/aaveType';
 import type { chatizaloOperatorReply } from '../types/chatizaloType';
@@ -19,6 +21,26 @@ import { mongoBlockchainService } from './mongo/mongoBlockchainService';
 import { mongoNotificationService } from './mongo/mongoNotificationServices';
 import { mongoTemplateService, templateEnum } from './mongo/mongoTemplateService';
 import { mongoUserService } from './mongo/mongoUserService';
+
+function normalizePreferredLanguage(language: string | null | undefined): 'es' | 'pt' | 'en' {
+  const normalized = (language ?? '').trim().toLowerCase();
+  if (normalized.startsWith('es')) return 'es';
+  if (normalized.startsWith('pt')) return 'pt';
+  return 'en';
+}
+
+async function getNotificationUtilityConfig(
+  typeOfNotification: NotificationEnum
+): Promise<NotificationUtilityConfigType | undefined> {
+  const notificationTemplates: NotificationTemplatesTypes | null =
+    await mongoTemplateService.getTemplate<ITemplateSchema>(templateEnum.NOTIFICATIONS);
+  if (!notificationTemplates) return undefined;
+
+  // @ts-expect-error 'expected type error'
+  const template = notificationTemplates[typeOfNotification];
+
+  return template?.utility;
+}
 
 /**
  * Retrieves a notification template based on the user's channel ID and the specified notification type.
@@ -194,7 +216,7 @@ export async function sendReceivedTransferNotification(
   phoneNumberTo: string,
   amount: string,
   token: string,
-  user_notes: string,
+  notes: string,
   traceHeader?: string
 ): Promise<unknown> {
   try {
@@ -204,17 +226,19 @@ export async function sendReceivedTransferNotification(
     );
     if (!isValidPhoneNumber(phoneNumberTo)) return '';
 
-    const { title, message } = await getNotificationTemplate(
-      phoneNumberTo,
-      NotificationEnum.incoming_transfer
-    );
+    const hasNotes = notes.trim().length > 0;
+    const notificationType = hasNotes
+      ? NotificationEnum.incoming_transfer_w_note
+      : NotificationEnum.incoming_transfer;
+
+    const { title, message } = await getNotificationTemplate(phoneNumberTo, notificationType);
 
     const formatMessage = (fromNumberAndName: string) =>
       message
         .replaceAll('[FROM]', fromNumberAndName)
         .replaceAll('[AMOUNT]', amount)
         .replaceAll('[TOKEN]', token)
-        .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
+        .replaceAll('[NOTES]', hasNotes ? `\n('${notes}')` : '');
 
     const fromNumberAndName = formatIdentifierWithOptionalName(phoneNumberFrom, nameFrom, false);
     const fromNumberAndNameMasked = formatIdentifierWithOptionalName(
@@ -226,15 +250,47 @@ export async function sendReceivedTransferNotification(
     const formattedMessageBot = formatMessage(fromNumberAndName);
     const formattedMessagePush = formatMessage(fromNumberAndNameMasked);
 
+    const utilityConfig = await getNotificationUtilityConfig(notificationType);
+    const utilityEnabled =
+      utilityConfig?.enabled === true &&
+      typeof utilityConfig.template_key === 'string' &&
+      utilityConfig.template_key.length > 0 &&
+      Array.isArray(utilityConfig.param_order) &&
+      utilityConfig.param_order.length > 0;
+
+    const from = nameFrom ? `${phoneNumberFrom} (${nameFrom})` : phoneNumberFrom;
+    const templateParamsValues: Record<string, string> = {
+      from,
+      amount,
+      token,
+      ...(hasNotes ? { notes } : {})
+    };
+
+    const utilityParamOrder = hasNotes
+      ? utilityConfig?.param_order
+      : utilityConfig?.param_order.filter((param) => param !== 'notes');
+
     const sendAndPersistParams: SendAndPersistParams = {
       to: phoneNumberTo,
       messageBot: formattedMessageBot,
       messagePush: formattedMessagePush,
-      template: NotificationEnum.incoming_transfer,
+      template: notificationType,
       sendPush: true,
       sendBot: true,
       title,
-      traceHeader
+      traceHeader,
+      ...(utilityEnabled
+        ? {
+            message_kind: 'utility' as const,
+            preferred_language: normalizePreferredLanguage(
+              await mongoUserService.getUserSettingsLanguage(phoneNumberTo)
+            ),
+            template_key: utilityConfig.template_key,
+            template_params: utilityConfig.param_order.map(
+              (param) => templateParamsValues[param] ?? ''
+            )
+          }
+        : {})
     };
 
     const data = await persistAndSendNotification(sendAndPersistParams);
@@ -253,7 +309,6 @@ export async function sendReceivedTransferNotification(
  * @param phoneNumberTo - Recipient's phone number.
  * @param amount - Amount received.
  * @param token - Token symbol or identifier (e.g., ETH, USDT).
- * @param user_notes - User notes associated with the transaction.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
  * @returns A Promise resolving to the result of the notification operation.
  */
@@ -263,7 +318,6 @@ export async function sendReceivedExternalTransferNotification(
   phoneNumberTo: string,
   amount: string,
   token: string,
-  user_notes: string,
   traceHeader?: string
 ): Promise<unknown> {
   try {
@@ -282,8 +336,7 @@ export async function sendReceivedExternalTransferNotification(
       message
         .replaceAll('[FROM]', fromNumberAndName)
         .replaceAll('[AMOUNT]', amount)
-        .replaceAll('[TOKEN]', token)
-        .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
+        .replaceAll('[TOKEN]', token);
 
     const fromNumberAndName = formatIdentifierWithOptionalName(phoneNumberFrom, nameFrom, false);
     const fromNumberAndNameMasked = formatIdentifierWithOptionalName(
@@ -295,6 +348,24 @@ export async function sendReceivedExternalTransferNotification(
     const formattedMessageBot = formatMessage(fromNumberAndName);
     const formattedMessagePush = formatMessage(fromNumberAndNameMasked);
 
+    const utilityConfig = await getNotificationUtilityConfig(
+      NotificationEnum.incoming_transfer_external
+    );
+    const utilityEnabled =
+      utilityConfig?.enabled === true &&
+      typeof utilityConfig.template_key === 'string' &&
+      utilityConfig.template_key.length > 0 &&
+      Array.isArray(utilityConfig.param_order) &&
+      utilityConfig.param_order.length > 0;
+
+    const from = nameFrom ? `${phoneNumberFrom} (${nameFrom})` : phoneNumberFrom;
+    const templateParamsValues: Record<string, string> = {
+      from,
+      amount,
+      token
+    };
+    const utilityParamOrder = utilityConfig?.param_order ?? [];
+
     const sendAndPersistParams: SendAndPersistParams = {
       to: phoneNumberTo,
       messageBot: formattedMessageBot,
@@ -303,7 +374,17 @@ export async function sendReceivedExternalTransferNotification(
       sendPush: true,
       sendBot: true,
       title,
-      traceHeader
+      traceHeader,
+      ...(utilityEnabled
+        ? {
+            message_kind: 'utility' as const,
+            preferred_language: normalizePreferredLanguage(
+              await mongoUserService.getUserSettingsLanguage(phoneNumberTo)
+            ),
+            template_key: utilityConfig.template_key,
+            template_params: utilityParamOrder.map((param) => templateParamsValues[param] ?? '')
+          }
+        : {})
     };
 
     const data = await persistAndSendNotification(sendAndPersistParams);
@@ -438,7 +519,7 @@ export async function sendMintNotification(
  * @param toName - Recipient's name.
  * @param amount - Amount transferred.
  * @param token - Token symbol or identifier (e.g., ETH, USDT).
- * @param user_notes - User notes associated with the transaction.
+ * @param notes - User notes associated with the transaction.
  * @param txHash - Blockchain transaction hash of the transfer.
  * @param chatterpointsOpResult - Chatterpoints operation result.
  * @param traceHeader - (Optional) Trace identifier for debugging or logging purposes.
@@ -450,7 +531,7 @@ export async function sendOutgoingTransferNotification(
   toName: string,
   amount: string,
   token: string,
-  user_notes: string,
+  notes: string,
   txHash: string,
   chatterpointsOpResult: RegisterOperationResult | null,
   traceHeader?: string
@@ -485,7 +566,7 @@ export async function sendOutgoingTransferNotification(
         .replaceAll('[TO]', toNumberAndName)
         .replaceAll('[EXPLORER]', networkConfig.explorer)
         .replaceAll('[TX_HASH]', txHash)
-        .replaceAll('[USER_NOTES]', user_notes ? `\n('${user_notes}')` : '');
+        .replaceAll('[NOTES]', notes ? `\n('${notes}')` : '');
       if (messageChp) {
         base = `${base}\n\n${messageChp}`;
       }
@@ -936,6 +1017,10 @@ interface SendAndPersistParams {
   sendBot?: boolean;
   title?: string; // solo para push
   traceHeader?: string;
+  message_kind?: chatizaloOperatorReply['message_kind'];
+  preferred_language?: chatizaloOperatorReply['preferred_language'];
+  template_key?: chatizaloOperatorReply['template_key'];
+  template_params?: chatizaloOperatorReply['template_params'];
 }
 
 /**
@@ -961,7 +1046,11 @@ export async function persistAndSendNotification({
   sendPush = false,
   sendBot = false,
   title,
-  traceHeader
+  traceHeader,
+  message_kind,
+  preferred_language,
+  template_key,
+  template_params
 }: SendAndPersistParams): Promise<string | null> {
   const sent_date = new Date();
 
@@ -984,7 +1073,11 @@ export async function persistAndSendNotification({
       const payload: chatizaloOperatorReply = {
         data_token: BOT_DATA_TOKEN!,
         channel_user_id: to,
-        message: messageBot
+        message: messageBot,
+        ...(message_kind !== undefined ? { message_kind } : {}),
+        ...(preferred_language !== undefined ? { preferred_language } : {}),
+        ...(template_key !== undefined ? { template_key } : {}),
+        ...(template_params !== undefined ? { template_params } : {})
       };
       await chatizaloService.sendBotNotification(payload, traceHeader);
     }

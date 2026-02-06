@@ -1,6 +1,5 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   type ITemplateSchema,
@@ -10,27 +9,24 @@ import {
 } from '../../src/models/templateModel';
 
 describe('Template Model', () => {
-  let mongoServer: MongoMemoryServer;
-
-  beforeEach(async () => {
-    mongoServer = await MongoMemoryServer.create();
-    const uri = mongoServer.getUri();
-
-    await mongoose.disconnect();
-    await mongoose.connect(uri, {});
-  });
-
-  afterEach(async () => {
-    await mongoose.disconnect();
-    await mongoServer.stop();
-  });
-
   it('should create and save a Template document successfully', async () => {
     type TestTemplateSchema = Partial<ITemplateSchema>;
 
     const validTemplate: TestTemplateSchema = {
       notifications: {
         incoming_transfer: {
+          title: {
+            en: 'Transfer completed',
+            es: 'Transferencia completada',
+            pt: 'Transferência concluída'
+          },
+          message: {
+            en: 'Your transfer was successful.',
+            es: 'Tu transferencia fue exitosa.',
+            pt: 'Sua transferência foi bem-sucedida.'
+          }
+        },
+        incoming_transfer_w_note: {
           title: {
             en: 'Transfer completed',
             es: 'Transferencia completada',
