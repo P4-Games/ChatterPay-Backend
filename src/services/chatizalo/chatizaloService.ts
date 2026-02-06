@@ -69,14 +69,6 @@ export const chatizaloService = {
         return '';
       }
 
-      if (!isValidPhoneNumber(payload.channel_user_id)) {
-        Logger.info(
-          'sendBotNotification',
-          `Bot notifications are enabled, but ${payload.channel_user_id} is not a valid phone number!. Omitted payload: ${JSON.stringify(payload)}`
-        );
-        return '';
-      }
-
       const headers: { [key: string]: string } = {
         'Content-Type': 'application/json'
       };
