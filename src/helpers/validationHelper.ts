@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosResponse } from 'axios';
 import { ethers } from 'ethers';
 
 import { short_urls_domains } from '../config/shortUrlsDomains.json';
@@ -79,11 +79,12 @@ const getRedirectInfo = (response: unknown): { finalUrl: string; redirectCount: 
   };
 };
 
-const isNonImageContentType = (contentType?: string): boolean => {
-  if (!contentType) {
+const isNonImageContentType = (contentType?: string | string[]): boolean => {
+  const value = Array.isArray(contentType) ? contentType[0] : contentType;
+  if (!value) {
     return false;
   }
-  return !contentType.toLowerCase().startsWith('image/');
+  return !value.toLowerCase().startsWith('image/');
 };
 
 /**
@@ -105,11 +106,7 @@ export const isShortUrlByRedirect = async (url: string): Promise<boolean> => {
     return false;
   }
 
-  const checkResponse = async (response: {
-    status: number;
-    headers?: Record<string, string | string[]>;
-    data?: { destroy?: () => void };
-  }): Promise<boolean> => {
+  const checkResponse = async (response: AxiosResponse): Promise<boolean> => {
     const { finalUrl, redirectCount } = getRedirectInfo(response);
     if (finalUrl) {
       try {
@@ -122,9 +119,8 @@ export const isShortUrlByRedirect = async (url: string): Promise<boolean> => {
       }
     }
 
-    const contentTypeHeader = response.headers?.['content-type'];
-    const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader;
-    if (isNonImageContentType(contentType)) {
+    const contentTypeHeader = response.headers?.['content-type'] as string | string[] | undefined;
+    if (isNonImageContentType(contentTypeHeader)) {
       return true;
     }
 
