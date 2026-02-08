@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { ethers } from 'ethers';
 
 import { short_urls_domains } from '../config/shortUrlsDomains.json';
@@ -34,6 +35,13 @@ export const isValidUrl = (url: string): boolean => {
   return urlPattern.test(url);
 };
 
+const normalizeUrlForParsing = (url: string): string => {
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+  return `https://${url}`;
+};
+
 /**
  * Checks if a given URL is a short URL by comparing it with a predefined list.
  *
@@ -43,8 +51,117 @@ export const isValidUrl = (url: string): boolean => {
  * @param url - The URL string to be checked.
  * @returns `true` if the URL is a short URL, `false` otherwise.
  */
-export const isShortUrl = (url: string): boolean =>
-  short_urls_domains.some((domain) => new URL(url).hostname.includes(domain));
+export const isShortUrl = (url: string): boolean => {
+  let hostname = '';
+  try {
+    hostname = new URL(normalizeUrlForParsing(url)).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  const cleanHost = hostname.startsWith('www.') ? hostname.slice(4) : hostname;
+  return short_urls_domains.some(
+    (domain) => cleanHost === domain || cleanHost.endsWith(`.${domain}`)
+  );
+};
+
+const getRedirectInfo = (response: unknown): { finalUrl: string; redirectCount: number } => {
+  const anyResponse = response as {
+    request?: {
+      _redirectable?: { _redirectCount?: number };
+      res?: { responseUrl?: string };
+    };
+  };
+
+  return {
+    finalUrl: anyResponse.request?.res?.responseUrl ?? '',
+    redirectCount: anyResponse.request?._redirectable?._redirectCount ?? 0
+  };
+};
+
+const isNonImageContentType = (contentType?: string): boolean => {
+  if (!contentType) {
+    return false;
+  }
+  return !contentType.toLowerCase().startsWith('image/');
+};
+
+/**
+ * Attempts to detect short URLs by resolving redirects. This helps catch
+ * short domains not present in the static list.
+ *
+ * If the URL redirects to a different host, or the server blocks the request
+ * (4xx/5xx), it is treated as a short/blocked URL.
+ *
+ * @param url - The URL string to be checked.
+ * @returns `true` if the URL is likely a short URL or blocked, `false` otherwise.
+ */
+export const isShortUrlByRedirect = async (url: string): Promise<boolean> => {
+  let originalHost = '';
+  const normalizedUrl = normalizeUrlForParsing(url);
+  try {
+    originalHost = new URL(normalizedUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  const checkResponse = async (response: {
+    status: number;
+    headers?: Record<string, string | string[]>;
+    data?: { destroy?: () => void };
+  }): Promise<boolean> => {
+    const { finalUrl, redirectCount } = getRedirectInfo(response);
+    if (finalUrl) {
+      try {
+        const finalHost = new URL(finalUrl).hostname.toLowerCase();
+        if (redirectCount > 0 && finalHost !== originalHost) {
+          return true;
+        }
+      } catch {
+        return true;
+      }
+    }
+
+    const contentTypeHeader = response.headers?.['content-type'];
+    const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader;
+    if (isNonImageContentType(contentType)) {
+      return true;
+    }
+
+    if (response.status >= 400) {
+      return true;
+    }
+    return false;
+  };
+
+  try {
+    const headResponse = await axios.head(normalizedUrl, {
+      maxRedirects: 5,
+      timeout: 4000,
+      validateStatus: () => true
+    });
+    if (headResponse.status !== 405) {
+      return await checkResponse(headResponse);
+    }
+  } catch {
+    // Fall through to GET check
+  }
+
+  try {
+    const getResponse = await axios.get(normalizedUrl, {
+      maxRedirects: 5,
+      timeout: 4000,
+      responseType: 'stream',
+      validateStatus: () => true
+    });
+    if (getResponse.data?.destroy) {
+      getResponse.data.destroy();
+    }
+    return await checkResponse(getResponse);
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Validates if a given string is a valid Ethereum wallet address.
