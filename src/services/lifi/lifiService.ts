@@ -19,11 +19,13 @@ import { Logger } from '../../helpers/loggerHelper';
 
 import type {
   LifiApiError,
+  LifiChain,
   LifiParsedError,
   LifiQuoteRequest,
   LifiQuoteResponse,
   LifiStatusRequest,
-  LifiStatusResponse
+  LifiStatusResponse,
+  LifiToken
 } from './lifiTypes';
 
 // ============================================================================
@@ -376,4 +378,113 @@ export function validateLifiQuote(
   }
 
   return { valid: true };
+}
+
+// Re-export types from lifiTypes for convenience
+export type { LifiChain, LifiToken } from './lifiTypes';
+
+// ============================================================================
+// Chain & Token Lookup Functions
+// ============================================================================
+
+/**
+ * Fetch all supported chains from Li.Fi API
+ */
+export async function getLifiChains(logKey: string): Promise<LifiChain[]> {
+  const url = `${LIFI_API_BASE_URL}/chains`;
+
+  try {
+    const response: AxiosResponse<{ chains: LifiChain[] }> = await axios.get(url, {
+      timeout: 15000,
+      headers: { Accept: 'application/json' }
+    });
+
+    const chains = response.data.chains.filter((c: LifiChain) => c.mainnet);
+    Logger.info('getLifiChains', logKey, `Fetched ${chains.length} mainnet chains from Li.Fi`);
+    return chains;
+  } catch (error) {
+    const parsedError = parseLifiError(error);
+    Logger.error('getLifiChains', logKey, `Failed to fetch chains: ${parsedError.message}`);
+    throw new Error(`Li.Fi chains fetch failed: ${parsedError.message}`);
+  }
+}
+
+/**
+ * Lookup token by symbol on a specific chain
+ * Includes fallback for common symbol aliases (e.g., USDT/USDT0)
+ */
+export async function getLifiToken(
+  chainKey: string,
+  tokenSymbol: string,
+  logKey: string
+): Promise<LifiToken | null> {
+  const url = `${LIFI_API_BASE_URL}/token`;
+
+  // Token symbol aliases for fallback lookup
+  const TOKEN_ALIASES: Record<string, string[]> = {
+    USDT: ['USDT0'],
+    USDT0: ['USDT'],
+    WETH: ['ETH'],
+    ETH: ['WETH'],
+    WBTC: ['BTC'],
+    BTC: ['WBTC'],
+    WSOL: ['SOL'],
+    SOL: ['WSOL']
+  };
+
+  const symbolsToTry = [tokenSymbol, ...(TOKEN_ALIASES[tokenSymbol.toUpperCase()] || [])];
+
+  for (const symbol of symbolsToTry) {
+    try {
+      const response: AxiosResponse<LifiToken> = await axios.get(url, {
+        timeout: 10000,
+        headers: { Accept: 'application/json' },
+        params: { chain: chainKey, token: symbol }
+      });
+
+      Logger.info(
+        'getLifiToken',
+        logKey,
+        `Found token ${symbol} on ${chainKey}: ${response.data.address}`
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        Logger.debug(
+          'getLifiToken',
+          logKey,
+          `Token ${symbol} not found on ${chainKey}, trying next alias...`
+        );
+        continue;
+      }
+      const parsedError = parseLifiError(error);
+      Logger.error('getLifiToken', logKey, `Failed to lookup token: ${parsedError.message}`);
+      throw new Error(`Li.Fi token lookup failed: ${parsedError.message}`);
+    }
+  }
+
+  Logger.warn(
+    'getLifiToken',
+    logKey,
+    `Token ${tokenSymbol} (and aliases) not found on chain ${chainKey}`
+  );
+  return null;
+}
+
+/**
+ * Validate address format for a given chain type
+ */
+export function validateAddressForChainType(address: string, chainType: string): boolean {
+  switch (chainType) {
+    case 'EVM':
+      return /^0x[a-fA-F0-9]{40}$/.test(address);
+    case 'SVM':
+      return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+    case 'UTXO':
+      return (
+        /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(address) || /^bc1[a-z0-9]{39,59}$/i.test(address)
+      );
+    default:
+      return false;
+  }
 }

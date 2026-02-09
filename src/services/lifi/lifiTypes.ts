@@ -70,7 +70,28 @@ export interface LifiToken {
 }
 
 /**
+ * Chain information from Li.Fi /chains endpoint
+ */
+export interface LifiChain {
+  /** Short key used in API calls (e.g., "eth", "arb", "sol") */
+  key: string;
+  /** Chain type: "EVM", "SVM" (Solana), "UTXO" (Bitcoin) */
+  chainType: string;
+  /** Display name (e.g., "Ethereum", "Arbitrum") */
+  name: string;
+  /** Chain ID (for EVM chains) */
+  id: number;
+  /** Whether it's a mainnet */
+  mainnet: boolean;
+  /** Native token info */
+  coin: string;
+  /** Logo URL */
+  logoURI?: string;
+}
+
+/**
  * Gas cost breakdown
+
  */
 export interface LifiGasCost {
   type: 'SEND' | 'APPROVE' | 'BRIDGE';
