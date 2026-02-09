@@ -35,11 +35,7 @@ import {
 } from '../services/chatterpointsService';
 import { getChatterpayTokenFee } from '../services/commonService';
 import { executeCrossChainTransfer } from '../services/crossChainService';
-import {
-  getLifiChains,
-  type LifiChain,
-  validateAddressForChainType
-} from '../services/lifi/lifiService';
+import { getLifiChains, validateAddressForChainType } from '../services/lifi/lifiService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import {
@@ -769,61 +765,13 @@ export const makeTransaction = async (
       // Cross-chain transfer via Li.Fi
       Logger.info('makeTransaction', logKey, `Cross-chain transfer to ${network}`);
 
-      // Special chains not in Li.Fi /chains endpoint
-      const SPECIAL_CHAINS: Record<string, LifiChain> = {
-        sol: {
-          key: 'sol',
-          name: 'Solana',
-          chainType: 'SVM',
-          id: 1151111081099710,
-          mainnet: true,
-          coin: 'SOL'
-        },
-        solana: {
-          key: 'sol',
-          name: 'Solana',
-          chainType: 'SVM',
-          id: 1151111081099710,
-          mainnet: true,
-          coin: 'SOL'
-        },
-        btc: {
-          key: '20000000000001',
-          name: 'Bitcoin',
-          chainType: 'UTXO',
-          id: 20000000000001,
-          mainnet: true,
-          coin: 'BTC'
-        },
-        bitcoin: {
-          key: '20000000000001',
-          name: 'Bitcoin',
-          chainType: 'UTXO',
-          id: 20000000000001,
-          mainnet: true,
-          coin: 'BTC'
-        },
-        '20000000000001': {
-          key: '20000000000001',
-          name: 'Bitcoin',
-          chainType: 'UTXO',
-          id: 20000000000001,
-          mainnet: true,
-          coin: 'BTC'
-        }
-      };
-
-      // Check special chains first, then fallback to Li.Fi API
-      let destChain: LifiChain | undefined = SPECIAL_CHAINS[network.toLowerCase()];
-
-      if (!destChain) {
-        const chains = await getLifiChains(logKey);
-        destChain = chains.find(
-          (c) =>
-            c.key.toLowerCase() === network.toLowerCase() ||
-            c.name.toLowerCase() === network.toLowerCase()
-        );
-      }
+      // Lookup destination chain from Li.Fi (includes EVM, SVM, UTXO chains)
+      const chains = await getLifiChains(logKey);
+      const destChain = chains.find(
+        (c) =>
+          c.key.toLowerCase() === network.toLowerCase() ||
+          c.name.toLowerCase() === network.toLowerCase()
+      );
 
       if (!destChain) {
         await sendInternalErrorNotification(channel_user_id, lastBotMsgDelaySeconds, traceHeader);

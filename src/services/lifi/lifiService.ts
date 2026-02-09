@@ -389,6 +389,7 @@ export type { LifiChain, LifiToken } from './lifiTypes';
 
 /**
  * Fetch all supported chains from Li.Fi API
+ * Includes EVM, SVM (Solana), and UTXO (Bitcoin) chains
  */
 export async function getLifiChains(logKey: string): Promise<LifiChain[]> {
   const url = `${LIFI_API_BASE_URL}/chains`;
@@ -396,7 +397,8 @@ export async function getLifiChains(logKey: string): Promise<LifiChain[]> {
   try {
     const response: AxiosResponse<{ chains: LifiChain[] }> = await axios.get(url, {
       timeout: 15000,
-      headers: { Accept: 'application/json' }
+      headers: { Accept: 'application/json' },
+      params: { chainTypes: 'EVM,SVM,UTXO' }
     });
 
     const chains = response.data.chains.filter((c: LifiChain) => c.mainnet);
