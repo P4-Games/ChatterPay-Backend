@@ -140,3 +140,12 @@ ALCHEMY_VAR_TOKENS_ID=''
 # - Set to 'false' for free plan setups, since the value must be captured manually and may change if recreated.
 # - Set to 'true' in production or paid plans for stricter validation.
 ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY='false' | 'true'
+
+# LIFI/Jumper API
+# Set SWAP_USE_LIFI='true' to use LIFI/Jumper API for cross-chain transfers and swaps and fallback to Uniswap fork.
+# Set SWAP_USE_LIFI='false' to only use uniswap fork swap implementation.
+LIFI_API_BASE_URL='https://li.quest/v1'
+LIFI_INTEGRATOR_KEY='IntegratorKey'
+LIFI_INTEGRATOR_FEE='IntegratorFee'
+LIFI_DEFAULT_SLIPPAGE='0.5'
+SWAP_USE_LIFI='true' 
