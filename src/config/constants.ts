@@ -80,7 +80,11 @@ const {
   SECURITY_PIN_LENGTH: securityPinLength = 6,
   SECURITY_PIN_MAX_FAILED_ATTEMPTS: securityPinMaxFailedAttempts = 3,
   SECURITY_PIN_BLOCK_MINUTES: securityPinBlockMinutes = 60,
-  SECURITY_PIN_ENABLED: securityPinEnabled = 'true'
+  SECURITY_PIN_ENABLED: securityPinEnabled = 'true',
+  LIFI_API_BASE_URL: lifiApiBaseUrl = 'https://li.quest/v1',
+  LIFI_INTEGRATOR_KEY: lifiIntegratorKey = 'ChatterPay',
+  LIFI_DEFAULT_SLIPPAGE: lifiDefaultSlippage = '0.005',
+  SWAP_USE_LIFI: swapUseLifi = 'true'
 } = process.env;
 
 export {
@@ -275,3 +279,9 @@ export const SECURITY_PIN_LENGTH = Number(securityPinLength);
 export const SECURITY_PIN_MAX_FAILED_ATTEMPTS = Number(securityPinMaxFailedAttempts);
 export const SECURITY_PIN_BLOCK_MINUTES = Number(securityPinBlockMinutes);
 export const SECURITY_PIN_ENABLED: boolean = securityPinEnabled.toLowerCase() === 'true';
+
+// Li.Fi Configuration
+export const LIFI_API_BASE_URL: string = lifiApiBaseUrl;
+export const LIFI_INTEGRATOR_KEY: string = lifiIntegratorKey;
+export const LIFI_DEFAULT_SLIPPAGE: number = Number(lifiDefaultSlippage);
+export const SWAP_USE_LIFI: boolean = swapUseLifi.toLowerCase() === 'true';

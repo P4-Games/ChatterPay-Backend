@@ -6,6 +6,7 @@ import {
   SWAP_SLIPPAGE_CONFIG_DEFAULT,
   SWAP_SLIPPAGE_CONFIG_EXTRA,
   SWAP_SLIPPAGE_CONFIG_STABLE,
+  SWAP_USE_LIFI,
   SWAP_USE_QUOTER,
   SWAP_ZERO_FEE_MODE
 } from '../config/constants';
@@ -32,6 +33,8 @@ import {
   logPaymasterEntryPointDeposit
 } from './web3/paymasterService';
 import { executeUserOperationWithRetry } from './web3/userOpService';
+import { getLifiQuote, parseLifiError, validateLifiQuote } from './lifi';
+import type { LifiQuoteResponse } from './lifi';
 
 const SLIPPAGE_CONFIG = {
   STABLE: SWAP_SLIPPAGE_CONFIG_STABLE,
@@ -1889,11 +1892,292 @@ export async function executeSwapSimple(
 }
 
 /**
- * Main swap execution router that selects between simple and standard swap modes
+ * Execute swap via Li.Fi aggregator
  *
- * Determines the appropriate swap execution path based on the SWAP_EXECUTE_SIMPLE
- * environment variable. Routes to either the simple EOA transaction flow or the
- * standard UserOperation flow with Account Abstraction and gas sponsorship.
+ * Uses Li.Fi's /quote endpoint to get optimal routing across multiple DEXs and bridges,
+ * then forwards the transaction through ChatterPay's execute() function via UserOperations.
+ * Includes automatic retry with increasing slippage on failure.
+ *
+ * @param networkConfig - Blockchain network configuration containing contract addresses
+ * @param setupContractsResult - Setup results with provider, signer, backend signer, and proxy info
+ * @param entryPointContract - Initialized EntryPoint contract for UserOperation execution
+ * @param tokenAddresses - Input and output token addresses for the swap
+ * @param blockchainTokens - List of supported tokens with metadata
+ * @param amount - Input amount as a string (e.g., "100.0")
+ * @param recipient - Recipient address for the swapped tokens
+ * @param logKey - Unique identifier for operation tracing and logging
+ *
+ * @returns Object containing success status, transaction hashes, and Li.Fi details
+ */
+export async function executeSwapLiFi(
+  networkConfig: IBlockchain,
+  setupContractsResult: SetupContractReturn,
+  entryPointContract: ethers.Contract,
+  tokenAddresses: swapTokensData,
+  _blockchainTokens: IToken[],
+  amount: string,
+  recipient: string,
+  logKey: string
+): Promise<ExecuteSwapResult> {
+  Logger.info(
+    'executeSwapLiFi',
+    logKey,
+    `Starting Li.Fi swap. Amount: ${amount}, Recipient: ${recipient}`
+  );
+
+  const MAX_SLIPPAGE_MULTIPLIER = 4;
+  let slippageMultiplier = 1;
+  let lastError = '';
+  let quote: LifiQuoteResponse | null = null;
+
+  try {
+    const { chatterpayABI, erc20ABI } = await fetchRequiredABIs();
+    const { provider } = setupContractsResult;
+    const tokenIn = tokenAddresses.tokenInputAddress;
+    const tokenOut = tokenAddresses.tokenOutputAddress;
+    const proxyAddress = setupContractsResult.proxy.proxyAddress;
+
+    const tokenInContract = new ethers.Contract(tokenIn, erc20ABI, provider);
+    const tokenInDecimals = await tokenInContract.decimals();
+    const amountInBN = ethers.utils.parseUnits(amount, tokenInDecimals);
+
+    // Retry strategy: first try different providers, then increase slippage
+    const excludedTools: string[] = [];
+    const MAX_PROVIDER_RETRIES = 3; // Try up to 3 different providers per slippage level
+
+    while (slippageMultiplier <= MAX_SLIPPAGE_MULTIPLIER) {
+      let providerRetries = 0;
+
+      while (providerRetries < MAX_PROVIDER_RETRIES) {
+        try {
+          const slippage = 0.005 * slippageMultiplier;
+
+          Logger.info(
+            'executeSwapLiFi',
+            logKey,
+            `Requesting Li.Fi quote with slippage: ${(slippage * 100).toFixed(2)}%, ` +
+              `excluded tools: [${excludedTools.join(', ') || 'none'}]`
+          );
+
+          quote = await getLifiQuote(
+            {
+              fromChain: networkConfig.chainId,
+              toChain: networkConfig.chainId,
+              fromToken: tokenIn,
+              toToken: tokenOut,
+              fromAmount: amountInBN.toString(),
+              fromAddress: proxyAddress,
+              toAddress: recipient,
+              slippage,
+              denyExchanges: excludedTools.length > 0 ? excludedTools : undefined
+            },
+            logKey
+          );
+
+          const validation = validateLifiQuote(quote);
+          if (!validation.valid) {
+            throw new Error(`Invalid quote: ${validation.reason}`);
+          }
+
+          Logger.info(
+            'executeSwapLiFi',
+            logKey,
+            `Quote received: tool=${quote.tool}, toAmountMin=${quote.estimate.toAmountMin}`
+          );
+
+          // Success - exit both loops
+          break;
+        } catch (error) {
+          const parsedError = parseLifiError(error);
+          lastError = parsedError.message;
+
+          // If we got a failed tool, exclude it and try another provider
+          if (parsedError.failedTool && !excludedTools.includes(parsedError.failedTool)) {
+            excludedTools.push(parsedError.failedTool);
+            Logger.warn(
+              'executeSwapLiFi',
+              logKey,
+              `Tool ${parsedError.failedTool} failed, excluding and trying another provider...`
+            );
+            providerRetries++;
+            continue;
+          }
+
+          // If it's a retryable error without a specific tool, try next provider
+          if (parsedError.shouldRetry && providerRetries < MAX_PROVIDER_RETRIES - 1) {
+            Logger.warn(
+              'executeSwapLiFi',
+              logKey,
+              `Quote failed (${lastError}), trying another provider...`
+            );
+            providerRetries++;
+            continue;
+          }
+
+          // No more provider retries available at this slippage level
+          break;
+        }
+      }
+
+      // If we got a valid quote, exit the slippage loop
+      if (quote) {
+        break;
+      }
+
+      // All providers failed at this slippage level, increase slippage
+      if (slippageMultiplier < MAX_SLIPPAGE_MULTIPLIER) {
+        Logger.warn(
+          'executeSwapLiFi',
+          logKey,
+          `All providers failed at ${(0.005 * slippageMultiplier * 100).toFixed(2)}% slippage, increasing slippage...`
+        );
+        slippageMultiplier *= 2;
+        // Reset excluded tools for new slippage level (give providers another chance)
+        excludedTools.length = 0;
+      } else {
+        throw new Error(`Li.Fi quote failed after all retries: ${lastError}`);
+      }
+    }
+
+    if (!quote) {
+      throw new Error(`Failed to get Li.Fi quote after retries: ${lastError}`);
+    }
+
+    const paymasterDepositValuePrev = await getPaymasterEntryPointDepositValue(
+      entryPointContract,
+      networkConfig.contracts.paymasterAddress!
+    );
+
+    const chatterPayContract = new ethers.Contract(
+      networkConfig.contracts.chatterPayAddress,
+      chatterpayABI,
+      provider
+    );
+
+    let approveTransactionHash = '';
+    const approvalAddress = quote.estimate.approvalAddress;
+
+    if (approvalAddress && approvalAddress !== ethers.constants.AddressZero) {
+      Logger.info(
+        'executeSwapLiFi',
+        logKey,
+        `Checking approval for Li.Fi router: ${approvalAddress}`
+      );
+
+      const tokenContract = new ethers.Contract(tokenIn, erc20ABI, provider);
+      const currentAllowance = await tokenContract.allowance(proxyAddress, approvalAddress);
+
+      if (currentAllowance.lt(amountInBN)) {
+        Logger.info('executeSwapLiFi', logKey, 'Approving tokens for Li.Fi router...');
+
+        const approveCallData = tokenContract.interface.encodeFunctionData('approve', [
+          approvalAddress,
+          ethers.constants.MaxUint256
+        ]);
+
+        const executeApproveData = chatterPayContract.interface.encodeFunctionData('execute', [
+          tokenIn,
+          0,
+          approveCallData
+        ]);
+
+        const userOpGasConfig = networkConfig.gas.operations.swap;
+        const approveResult = await executeUserOperationWithRetry(
+          networkConfig,
+          provider,
+          setupContractsResult.userPrincipal,
+          entryPointContract,
+          executeApproveData,
+          proxyAddress,
+          'swap',
+          logKey,
+          userOpGasConfig.perGasInitialMultiplier,
+          userOpGasConfig.perGasIncrement,
+          userOpGasConfig.callDataInitialMultiplier,
+          userOpGasConfig.maxRetries,
+          userOpGasConfig.timeoutMsBetweenRetries
+        );
+
+        if (!approveResult.success) {
+          throw new Error(`Li.Fi approval failed: ${approveResult.error}`);
+        }
+
+        approveTransactionHash = approveResult.transactionHash;
+        Logger.info('executeSwapLiFi', logKey, `Approval tx: ${approveTransactionHash}`);
+      } else {
+        Logger.info('executeSwapLiFi', logKey, 'Sufficient allowance exists, skipping approval');
+      }
+    }
+
+    Logger.info('executeSwapLiFi', logKey, 'Executing Li.Fi swap transaction...');
+
+    const executeSwapData = chatterPayContract.interface.encodeFunctionData('execute', [
+      quote.transactionRequest.to,
+      quote.transactionRequest.value,
+      quote.transactionRequest.data
+    ]);
+
+    const userOpGasConfig = networkConfig.gas.operations.swap;
+    const swapResult = await executeUserOperationWithRetry(
+      networkConfig,
+      provider,
+      setupContractsResult.userPrincipal,
+      entryPointContract,
+      executeSwapData,
+      proxyAddress,
+      'swap',
+      logKey,
+      userOpGasConfig.perGasInitialMultiplier,
+      userOpGasConfig.perGasIncrement,
+      userOpGasConfig.callDataInitialMultiplier,
+      userOpGasConfig.maxRetries,
+      userOpGasConfig.timeoutMsBetweenRetries
+    );
+
+    if (!swapResult.success) {
+      throw new Error(`Li.Fi swap execution failed: ${swapResult.error}`);
+    }
+
+    await logPaymasterEntryPointDeposit(
+      entryPointContract,
+      networkConfig.contracts.paymasterAddress!,
+      paymasterDepositValuePrev
+    );
+
+    Logger.info(
+      'executeSwapLiFi',
+      logKey,
+      `Li.Fi swap completed successfully. Tx: ${swapResult.transactionHash}`
+    );
+
+    return {
+      success: true,
+      approveTransactionHash,
+      swapTransactionHash: swapResult.transactionHash,
+      lifiDetails: {
+        quoteId: quote.id,
+        tool: quote.tool,
+        toAmountMin: quote.estimate.toAmountMin
+      }
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    Logger.error('executeSwapLiFi', logKey, `Li.Fi swap failed: ${errorMessage}`);
+
+    return {
+      success: false,
+      swapTransactionHash: '',
+      approveTransactionHash: ''
+    };
+  }
+}
+
+/**
+ * Main swap execution router with Li.Fi-first strategy and Uniswap fallback
+ *
+ * Attempts to execute swaps via Li.Fi aggregator first for optimal routing.
+ * If Li.Fi fails, automatically falls back to the legacy Uniswap implementation
+ * (either simple EOA or standard UserOperation flow based on configuration).
  *
  * @param networkConfig - Blockchain network configuration containing contract addresses
  * @param setupContractsResult - Setup results with provider, signer, backend signer, and proxy info
@@ -1928,8 +2212,66 @@ export async function executeSwap(
   recipient: string,
   logKey: string
 ): Promise<ExecuteSwapResult> {
+  const useLifi = SWAP_USE_LIFI;
   const isSimple = String(SWAP_EXECUTE_SIMPLE || '').toLowerCase() === 'true';
-  Logger.info('executeSwap', logKey, `Routing swap. EXECUTE_SWAP_SIMPLE=${isSimple}`);
+
+  // Li.Fi only supports mainnet chains - check if this is a testnet
+  // Common testnet chain IDs: Sepolia (11155111), Goerli (5), Mumbai (80001), 
+  // Scroll Sepolia (534351), Arbitrum Sepolia (421614), Base Sepolia (84532)
+  const TESTNET_CHAIN_IDS = [
+    11155111, // Sepolia
+    5, // Goerli (deprecated)
+    80001, // Mumbai (deprecated)
+    80002, // Amoy
+    534351, // Scroll Sepolia
+    421614, // Arbitrum Sepolia
+    84532, // Base Sepolia
+    11155420, // Optimism Sepolia
+    44787, // Celo Alfajores
+    97 // BSC Testnet
+  ];
+  const isTestnet = TESTNET_CHAIN_IDS.includes(networkConfig.chainId);
+  const shouldUseLifi = useLifi && !isTestnet;
+
+  Logger.info(
+    'executeSwap',
+    logKey,
+    `Routing swap. USE_LIFI=${useLifi}, IS_TESTNET=${isTestnet}, EXECUTE_SIMPLE=${isSimple}`
+  );
+
+  // Try Li.Fi first if enabled and on mainnet
+  if (shouldUseLifi) {
+    Logger.info('executeSwap', logKey, 'Attempting Li.Fi swap...');
+
+    const lifiResult = await executeSwapLiFi(
+      networkConfig,
+      setupContractsResult,
+      entryPointContract,
+      tokenAddresses,
+      blockchainTokens,
+      amount,
+      recipient,
+      logKey
+    );
+
+    if (lifiResult.success) {
+      Logger.info(
+        'executeSwap',
+        logKey,
+        `Li.Fi swap successful. Tool: ${lifiResult.lifiDetails?.tool || 'unknown'}`
+      );
+      return lifiResult;
+    }
+
+    // Li.Fi failed, fallback to Uniswap
+    Logger.warn(
+      'executeSwap',
+      logKey,
+      'Li.Fi swap failed, falling back to Uniswap implementation...'
+    );
+  }
+
+  // Fallback to legacy Uniswap implementation
   if (isSimple) {
     return executeSwapSimple(
       networkConfig,
@@ -1942,6 +2284,7 @@ export async function executeSwap(
       logKey
     );
   }
+
   return executeSwapStandard(
     networkConfig,
     setupContractsResult,
