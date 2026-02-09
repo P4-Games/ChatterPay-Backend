@@ -57,7 +57,7 @@ steps:
       - LIFI_INTEGRATOR_KEY=${_LIFI_INTEGRATOR_KEY}
       - LIFI_INTEGRATOR_FEE=${_LIFI_INTEGRATOR_FEE}
       - LIFI_DEFAULT_SLIPPAGE=${_LIFI_DEFAULT_SLIPPAGE}
-      - SWAP_USE_LIFI=${_SWAP_USE_LIFI}
+      - USE_LIFI=${_USE_LIFI}
 
     secretEnv: [
       'CHATIZALO_TOKEN',
@@ -147,7 +147,7 @@ steps:
       '--build-arg=LIFI_INTEGRATOR_KEY=${_LIFI_INTEGRATOR_KEY}',
       '--build-arg=LIFI_INTEGRATOR_FEE=${_LIFI_INTEGRATOR_FEE}',
       '--build-arg=LIFI_DEFAULT_SLIPPAGE=${_LIFI_DEFAULT_SLIPPAGE}',
-      '--build-arg=SWAP_USE_LIFI=${_SWAP_USE_LIFI}',
+      '--build-arg=USE_LIFI=${_USE_LIFI}',
       '.'
     ]
     secretEnv: [

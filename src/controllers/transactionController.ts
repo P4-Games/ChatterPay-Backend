@@ -7,7 +7,8 @@ import {
   COMMON_REPLY_WALLET_NOT_CREATED,
   GCP_CLOUD_TRACE_ENABLED,
   INFURA_API_KEY,
-  INFURA_URL
+  INFURA_URL,
+  USE_LIFI
 } from '../config/constants';
 import { areSamePhoneNumber } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
@@ -541,6 +542,30 @@ export const makeTransaction = async (
       );
     }
 
+    // Validate cross-chain parameters when USE_LIFI is disabled
+    if (!USE_LIFI && (network || destination_token)) {
+      const isCrossChainNetwork = network && network.toLowerCase() !== 'scroll';
+      const isCrossChainToken =
+        destination_token && destination_token.toUpperCase() !== tokenSymbol.toUpperCase();
+
+      if (isCrossChainNetwork || isCrossChainToken) {
+        const { message: crossChainDisabledMsg } = await getNotificationTemplate(
+          channel_user_id,
+          NotificationEnum.cross_chain_disabled
+        );
+        rootSpan?.endSpan();
+        return await returnErrorResponseAsSuccess(
+          'makeTransaction',
+          logKey,
+          reply,
+          'Error making transaction',
+          false,
+          channel_user_id,
+          crossChainDisabledMsg
+        );
+      }
+    }
+
     /* ***************************************************** */
     /* 2. makeTransaction: check user has wallet             */
     /* ***************************************************** */
@@ -756,8 +781,8 @@ export const makeTransaction = async (
       : undefined;
 
     // Determine if this is a cross-chain transfer
-    // Cross-chain = network specified AND not 'scroll'
-    const isCrossChain = network && network.toLowerCase() !== 'scroll';
+    // Cross-chain = USE_LIFI enabled AND network specified AND not 'scroll'
+    const isCrossChain = USE_LIFI && network && network.toLowerCase() !== 'scroll';
 
     let executeTransactionResult: ExecueTransactionResult;
 

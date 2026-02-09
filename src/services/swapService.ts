@@ -6,9 +6,9 @@ import {
   SWAP_SLIPPAGE_CONFIG_DEFAULT,
   SWAP_SLIPPAGE_CONFIG_EXTRA,
   SWAP_SLIPPAGE_CONFIG_STABLE,
-  SWAP_USE_LIFI,
   SWAP_USE_QUOTER,
-  SWAP_ZERO_FEE_MODE
+  SWAP_ZERO_FEE_MODE,
+  USE_LIFI
 } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import type { IBlockchain } from '../models/blockchainModel';
@@ -2401,7 +2401,7 @@ export async function executeSwap(
   recipient: string,
   logKey: string
 ): Promise<ExecuteSwapResult> {
-  const useLifi = SWAP_USE_LIFI;
+  const useLifi = USE_LIFI;
   const isSimple = String(SWAP_EXECUTE_SIMPLE || '').toLowerCase() === 'true';
 
   // Li.Fi only supports mainnet chains - check if this is a testnet

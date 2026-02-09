@@ -69,5 +69,5 @@ docker build \
   --build-arg LIFI_INTEGRATOR_KEY="$LIFI_INTEGRATOR_KEY" \
   --build-arg LIFI_INTEGRATOR_FEE="$LIFI_INTEGRATOR_FEE" \
   --build-arg LIFI_DEFAULT_SLIPPAGE="$LIFI_DEFAULT_SLIPPAGE" \
-  --build-arg SWAP_USE_LIFI="$SWAP_USE_LIFI" \
+  --build-arg USE_LIFI="$USE_LIFI" \
   -t chatterpay-back-app ..

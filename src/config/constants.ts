@@ -85,7 +85,7 @@ const {
   LIFI_INTEGRATOR_KEY: lifiIntegratorKey = 'ChatterPay',
   LIFI_INTEGRATOR_FEE: lifiIntegratorFee = '0.0025',
   LIFI_DEFAULT_SLIPPAGE: lifiDefaultSlippage = '0.5',
-  SWAP_USE_LIFI: swapUseLifi = 'true'
+  USE_LIFI: useLifiEnv = 'true'
 } = process.env;
 
 export {
@@ -286,4 +286,4 @@ export const LIFI_API_BASE_URL: string = lifiApiBaseUrl;
 export const LIFI_INTEGRATOR_KEY: string = lifiIntegratorKey;
 export const LIFI_INTEGRATOR_FEE: number = Number(lifiIntegratorFee);
 export const LIFI_DEFAULT_SLIPPAGE: number = Number(lifiDefaultSlippage);
-export const SWAP_USE_LIFI: boolean = swapUseLifi.toLowerCase() === 'true';
+export const USE_LIFI: boolean = useLifiEnv.toLowerCase() === 'true';
