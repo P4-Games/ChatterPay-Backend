@@ -1,4 +1,4 @@
-import axios from 'axios';
+import type { AxiosResponse } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -7,10 +7,16 @@ import {
   validateAddressForChainType
 } from '../../../src/services/lifi/lifiService';
 
+// Mock axios module
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn(),
+    isAxiosError: vi.fn()
+  }
+}));
 
-// Mock axios
-vi.mock('axios');
-const mockedAxios = vi.mocked(axios);
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import axios from 'axios';
 
 describe('lifiService', () => {
   beforeEach(() => {
@@ -32,11 +38,11 @@ describe('lifiService', () => {
         ]
       };
 
-      mockedAxios.get.mockResolvedValueOnce({ data: mockChains });
+      vi.mocked(axios.get).mockResolvedValueOnce({ data: mockChains } as AxiosResponse);
 
       const chains = await getLifiChains('[test]');
 
-      expect(mockedAxios.get).toHaveBeenCalledWith(
+      expect(axios.get).toHaveBeenCalledWith(
         expect.stringContaining('/chains'),
         expect.objectContaining({
           params: { chainTypes: 'EVM,SVM,UTXO' }
@@ -47,8 +53,8 @@ describe('lifiService', () => {
     });
 
     it('should throw error on API failure', async () => {
-      mockedAxios.get.mockRejectedValueOnce(new Error('Network error'));
-      mockedAxios.isAxiosError = vi.fn().mockReturnValue(false);
+      vi.mocked(axios.get).mockRejectedValueOnce(new Error('Network error'));
+      vi.mocked(axios.isAxiosError).mockReturnValue(false);
 
       await expect(getLifiChains('[test]')).rejects.toThrow('Li.Fi chains fetch failed');
     });
@@ -63,11 +69,11 @@ describe('lifiService', () => {
         chainId: 1
       };
 
-      mockedAxios.get.mockResolvedValueOnce({ data: mockToken });
+      vi.mocked(axios.get).mockResolvedValueOnce({ data: mockToken } as AxiosResponse);
 
       const token = await getLifiToken('eth', 'USDC', '[test]');
 
-      expect(mockedAxios.get).toHaveBeenCalledWith(
+      expect(axios.get).toHaveBeenCalledWith(
         expect.stringContaining('/token'),
         expect.objectContaining({
           params: { chain: 'eth', token: 'USDC' }
@@ -86,19 +92,19 @@ describe('lifiService', () => {
       };
 
       // First call fails (USDT), second succeeds (USDT0)
-      mockedAxios.get.mockRejectedValueOnce({ response: { status: 404 } });
-      mockedAxios.isAxiosError = vi.fn().mockReturnValue(true);
-      mockedAxios.get.mockResolvedValueOnce({ data: mockToken });
+      vi.mocked(axios.get).mockRejectedValueOnce({ response: { status: 404 } });
+      vi.mocked(axios.isAxiosError).mockReturnValue(true);
+      vi.mocked(axios.get).mockResolvedValueOnce({ data: mockToken } as AxiosResponse);
 
       const token = await getLifiToken('arb', 'USDT', '[test]');
 
-      expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+      expect(axios.get).toHaveBeenCalledTimes(2);
       expect(token?.symbol).toBe('USDT0');
     });
 
     it('should return null when token and aliases not found', async () => {
-      mockedAxios.get.mockRejectedValue({ response: { status: 404 } });
-      mockedAxios.isAxiosError = vi.fn().mockReturnValue(true);
+      vi.mocked(axios.get).mockRejectedValue({ response: { status: 404 } });
+      vi.mocked(axios.isAxiosError).mockReturnValue(true);
 
       const token = await getLifiToken('eth', 'INVALID', '[test]');
 
