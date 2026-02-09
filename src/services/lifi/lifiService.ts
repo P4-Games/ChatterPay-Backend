@@ -9,7 +9,12 @@
 
 import axios, { type AxiosError, type AxiosResponse } from 'axios';
 
-import { LIFI_API_BASE_URL, LIFI_DEFAULT_SLIPPAGE, LIFI_INTEGRATOR_KEY } from '../../config/constants';
+import {
+  LIFI_API_BASE_URL,
+  LIFI_DEFAULT_SLIPPAGE,
+  LIFI_INTEGRATOR_FEE,
+  LIFI_INTEGRATOR_KEY
+} from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
 
 import type {
@@ -18,8 +23,7 @@ import type {
   LifiQuoteRequest,
   LifiQuoteResponse,
   LifiStatusRequest,
-  LifiStatusResponse,
-  LIFI_RECOVERABLE_ERRORS
+  LifiStatusResponse
 } from './lifiTypes';
 
 // ============================================================================
@@ -177,7 +181,8 @@ export async function getLifiQuote(
     fromAddress,
     toAddress: toAddress || fromAddress,
     slippage: String(slippage),
-    integrator: LIFI_INTEGRATOR_KEY
+    integrator: LIFI_INTEGRATOR_KEY,
+    fee: String(LIFI_INTEGRATOR_FEE)
   });
 
   if (denyExchanges?.length) {
@@ -301,11 +306,7 @@ export async function pollLifiStatus(
 
       // Terminal states
       if (status.status === 'DONE') {
-        Logger.info(
-          'pollLifiStatus',
-          logKey,
-          `Transfer completed: substatus=${status.substatus}`
-        );
+        Logger.info('pollLifiStatus', logKey, `Transfer completed: substatus=${status.substatus}`);
         return status;
       }
 
