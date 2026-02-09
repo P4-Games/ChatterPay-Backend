@@ -33,7 +33,14 @@ describe('lifiService', () => {
         chains: [
           { key: 'eth', name: 'Ethereum', chainType: 'EVM', id: 1, mainnet: true, coin: 'ETH' },
           { key: 'arb', name: 'Arbitrum', chainType: 'EVM', id: 42161, mainnet: true, coin: 'ETH' },
-          { key: 'sol', name: 'Solana', chainType: 'SVM', id: 1151111081099710, mainnet: true, coin: 'SOL' },
+          {
+            key: 'sol',
+            name: 'Solana',
+            chainType: 'SVM',
+            id: 1151111081099710,
+            mainnet: true,
+            coin: 'SOL'
+          },
           { key: 'gor', name: 'Goerli', chainType: 'EVM', id: 5, mainnet: false, coin: 'ETH' }
         ]
       };
@@ -115,7 +122,9 @@ describe('lifiService', () => {
   describe('validateAddressForChainType', () => {
     describe('EVM addresses', () => {
       it('should validate correct EVM address', () => {
-        expect(validateAddressForChainType('0xf080d5b40C370a5148a9848A869eb3Aaf7d5E146', 'EVM')).toBe(true);
+        expect(
+          validateAddressForChainType('0xf080d5b40C370a5148a9848A869eb3Aaf7d5E146', 'EVM')
+        ).toBe(true);
       });
 
       it('should reject invalid EVM address', () => {
@@ -127,12 +136,18 @@ describe('lifiService', () => {
 
     describe('SVM (Solana) addresses', () => {
       it('should validate correct Solana address', () => {
-        expect(validateAddressForChainType('BBahdTRW3vPYXkSZuXF2wJJoDrDK3gzSok4gqS4WFFsr', 'SVM')).toBe(true);
-        expect(validateAddressForChainType('7EYnhQoR9YM3N7UoaKRoA44Uy8JeaZV3qyouov87awMs', 'SVM')).toBe(true);
+        expect(
+          validateAddressForChainType('BBahdTRW3vPYXkSZuXF2wJJoDrDK3gzSok4gqS4WFFsr', 'SVM')
+        ).toBe(true);
+        expect(
+          validateAddressForChainType('7EYnhQoR9YM3N7UoaKRoA44Uy8JeaZV3qyouov87awMs', 'SVM')
+        ).toBe(true);
       });
 
       it('should reject invalid Solana address', () => {
-        expect(validateAddressForChainType('0xf080d5b40C370a5148a9848A869eb3Aaf7d5E146', 'SVM')).toBe(false);
+        expect(
+          validateAddressForChainType('0xf080d5b40C370a5148a9848A869eb3Aaf7d5E146', 'SVM')
+        ).toBe(false);
         expect(validateAddressForChainType('invalid', 'SVM')).toBe(false);
         expect(validateAddressForChainType('12345', 'SVM')).toBe(false);
       });
@@ -141,15 +156,23 @@ describe('lifiService', () => {
     describe('UTXO (Bitcoin) addresses', () => {
       it('should validate correct Bitcoin addresses', () => {
         // P2PKH (legacy)
-        expect(validateAddressForChainType('1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', 'UTXO')).toBe(true);
+        expect(validateAddressForChainType('1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', 'UTXO')).toBe(
+          true
+        );
         // P2SH
-        expect(validateAddressForChainType('3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy', 'UTXO')).toBe(true);
+        expect(validateAddressForChainType('3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy', 'UTXO')).toBe(
+          true
+        );
         // Bech32 (native segwit)
-        expect(validateAddressForChainType('bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq', 'UTXO')).toBe(true);
+        expect(
+          validateAddressForChainType('bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq', 'UTXO')
+        ).toBe(true);
       });
 
       it('should reject invalid Bitcoin address', () => {
-        expect(validateAddressForChainType('0xf080d5b40C370a5148a9848A869eb3Aaf7d5E146', 'UTXO')).toBe(false);
+        expect(
+          validateAddressForChainType('0xf080d5b40C370a5148a9848A869eb3Aaf7d5E146', 'UTXO')
+        ).toBe(false);
         expect(validateAddressForChainType('invalid', 'UTXO')).toBe(false);
       });
     });

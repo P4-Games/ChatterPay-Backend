@@ -71,7 +71,15 @@ describe('chainController', () => {
 
       const result = (await getChains(mockRequest, mockReply)) as {
         status: string;
-        data: { chains: Array<{ key: string; name: string; chainType: string; chainId: number; coin: string }> };
+        data: {
+          chains: Array<{
+            key: string;
+            name: string;
+            chainType: string;
+            chainId: number;
+            coin: string;
+          }>;
+        };
       };
 
       expect(lifiService.getLifiChains).toHaveBeenCalledWith('[op:get-chains]');
@@ -87,7 +95,9 @@ describe('chainController', () => {
     });
 
     it('should convert chain names to lowercase', async () => {
-      const mockChains = [{ key: 'eth', name: 'Ethereum', chainType: 'EVM', id: 1, mainnet: true, coin: 'ETH' }];
+      const mockChains = [
+        { key: 'eth', name: 'Ethereum', chainType: 'EVM', id: 1, mainnet: true, coin: 'ETH' }
+      ];
 
       vi.mocked(lifiService.getLifiChains).mockResolvedValueOnce(mockChains);
 
@@ -102,7 +112,11 @@ describe('chainController', () => {
     it('should return error on service failure', async () => {
       vi.mocked(lifiService.getLifiChains).mockRejectedValueOnce(new Error('API Error'));
 
-      const result = (await getChains(mockRequest, mockReply)) as { status: string; code: number; message: string };
+      const result = (await getChains(mockRequest, mockReply)) as {
+        status: string;
+        code: number;
+        message: string;
+      };
 
       expect(result.status).toBe('error');
       expect(result.code).toBe(500);
