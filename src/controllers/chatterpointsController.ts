@@ -252,7 +252,7 @@ export const stats = async (
     }
     const result = await chatterpointsService.getStats({ cycleId, userId: channel_user_id });
     Logger.debug('stats', 'fetched', { cycleId, userId: channel_user_id });
-    await reply.status(200).send({ status: 'ok', ...result });
+    await reply.status(200).send(result);
   } catch (err) {
     Logger.error('stats', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
@@ -299,7 +299,7 @@ export const social = async (
       granted: result.granted
     });
 
-    await reply.status(200).send({ status: 'ok', ...result });
+    await reply.status(200).send(result);
   } catch (err) {
     Logger.error('social', (err as Error).message);
     await reply.status(200).send({ status: 'error', error: (err as Error).message });
