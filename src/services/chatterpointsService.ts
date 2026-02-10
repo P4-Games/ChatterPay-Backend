@@ -1512,17 +1512,36 @@ export const chatterpointsService = {
    *   at: new Date()
    * });
    */
-  registerSocial: async (req: SocialRequest): Promise<{ granted: boolean }> => {
+  registerSocial: async (
+    req: SocialRequest
+  ): Promise<{
+    status: string;
+    periodClosed: boolean;
+    granted: boolean;
+    display_info?: Record<string, unknown>;
+  }> => {
     // Resolve to the last OPEN cycle (social points require an OPEN cycle)
     let { cycleId } = req;
     let cycle = null as IChatterpointsDocument | null;
+    const noOpenCycleReturn = {
+      status: 'ok',
+      periodClosed: true,
+      granted: false,
+      display_info: { message: 'No active cycle is currently open.' }
+    };
 
     if (cycleId) {
       cycle = await mongoChatterpointsService.getCycleById(cycleId);
-      if (!cycle || cycle.status !== 'OPEN') throw new Error('No OPEN cycle found');
+      if (!cycle || cycle.status !== 'OPEN') {
+        Logger.debug('play', 'no OPEN cycle found');
+        return noOpenCycleReturn;
+      }
     } else {
       cycle = await mongoChatterpointsService.getOpenCycle();
-      if (!cycle) throw new Error('No OPEN cycle found');
+      if (!cycle) {
+        Logger.debug('play', 'no OPEN cycle found');
+        return noOpenCycleReturn;
+      }
       ({ cycleId } = cycle); // destructuring assignment
     }
 
@@ -1532,7 +1551,14 @@ export const chatterpointsService = {
       at: new Date()
     });
 
-    return { granted };
+    return {
+      status: 'OK',
+      periodClosed: false,
+      granted,
+      display_info: granted
+        ? { message: 'Social action registered and points granted.' }
+        : { message: 'Social action already registered for this user.' }
+    };
   },
 
   /**
@@ -1830,19 +1856,19 @@ export const chatterpointsService = {
    * @async
    * @function getCycleGamesInfo
    * @returns {Promise<{
-   *   cycleId: string;
-   *   startAt: Date;
-   *   endAt: Date;
+   *   cycleId: string | null;
+   *   startAt: Date | null;
+   *   endAt: Date | null;
    *   games: Array<{ gameId: string; type: GameType; wordLength: number }>;
    *   periods: Array<{ periodId: string; gameId: string; startAt: Date; endAt: Date }>;
    * }>}
-   * @throws {Error} If no cycle is found.
+   * If no OPEN cycle exists, returns the same structure with null/default values.
    */
   getCycleGamesInfo: async (): Promise<{
-    cycleId: string;
-    status: CycleStatus;
-    startAt: Date;
-    endAt: Date;
+    cycleId: string | null;
+    status: CycleStatus | null;
+    startAt: Date | null;
+    endAt: Date | null;
     games: Array<{ gameId: string; type: GameType; wordLength: number }>;
     periods: Array<{
       periodId: string;
@@ -1851,10 +1877,20 @@ export const chatterpointsService = {
       endAt: Date;
       status: PeriodStatus;
     }>;
+    display_info?: Record<string, unknown>;
   }> => {
     const cycle = await mongoChatterpointsService.getOpenCycle();
-    if (!cycle) {
-      throw new Error('No OPEN cycle found');
+    if (!cycle || cycle.status !== 'OPEN') {
+      Logger.debug('gamesInfo', 'no OPEN cycle found');
+      return {
+        cycleId: null,
+        status: 'CLOSED',
+        startAt: null,
+        endAt: null,
+        games: [],
+        periods: [],
+        display_info: { message: 'No active cycle is currently open.' }
+      };
     }
 
     const games = cycle.games
