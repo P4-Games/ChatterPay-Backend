@@ -17,15 +17,16 @@ import {
 } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
 
-import type {
-  LifiApiError,
-  LifiChain,
-  LifiParsedError,
-  LifiQuoteRequest,
-  LifiQuoteResponse,
-  LifiStatusRequest,
-  LifiStatusResponse,
-  LifiToken
+import {
+  LIFI_RECOVERABLE_ERRORS,
+  type LifiApiError,
+  type LifiChain,
+  type LifiParsedError,
+  type LifiQuoteRequest,
+  type LifiQuoteResponse,
+  type LifiStatusRequest,
+  type LifiStatusResponse,
+  type LifiToken
 } from './lifiTypes';
 
 // ============================================================================
@@ -95,7 +96,12 @@ export function parseLifiError(error: unknown): LifiParsedError {
         shouldRetry: isRecoverable,
         errorCode,
         message: firstError.message || data.message || 'Li.Fi API error',
-        failedTool: firstError.tool ? String(Object.keys(firstError.tool)[0]) : undefined
+        failedTool: firstError.tool
+          ? String(
+              (firstError.tool as Record<string, unknown>)?.key ??
+                (firstError.tool as Record<string, unknown>)?.name
+            )
+          : undefined
       };
     }
 
@@ -117,17 +123,11 @@ export function parseLifiError(error: unknown): LifiParsedError {
 }
 
 /**
- * Check if an error code is recoverable
+ * Check if an error code is recoverable.
+ * Uses the canonical list from lifiTypes.ts as the single source of truth.
  */
 function isRecoverableErrorCode(code: string): boolean {
-  const recoverableCodes: readonly string[] = [
-    'SLIPPAGE_ERROR',
-    'INSUFFICIENT_LIQUIDITY',
-    'TIMEOUT',
-    'BRIDGE_ERROR',
-    'NO_POSSIBLE_ROUTE'
-  ];
-  return recoverableCodes.includes(code);
+  return (LIFI_RECOVERABLE_ERRORS as readonly string[]).includes(code);
 }
 
 // ============================================================================

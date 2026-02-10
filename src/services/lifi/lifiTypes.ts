@@ -280,7 +280,8 @@ export const LIFI_RECOVERABLE_ERRORS = [
   'SLIPPAGE_ERROR',
   'INSUFFICIENT_LIQUIDITY',
   'TIMEOUT',
-  'BRIDGE_ERROR'
+  'BRIDGE_ERROR',
+  'NO_POSSIBLE_ROUTE'
 ] as const;
 
 export type LifiRecoverableError = (typeof LIFI_RECOVERABLE_ERRORS)[number];

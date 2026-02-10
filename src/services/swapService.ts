@@ -8,6 +8,7 @@ import {
   SWAP_SLIPPAGE_CONFIG_STABLE,
   SWAP_USE_QUOTER,
   SWAP_ZERO_FEE_MODE,
+  TESTNET_CHAIN_IDS,
   USE_LIFI
 } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
@@ -1895,7 +1896,9 @@ export async function executeSwapSimple(
  * Execute swap via Li.Fi aggregator
  *
  * Uses Li.Fi's /quote endpoint to get optimal routing across multiple DEXs and bridges,
- * then forwards the transaction through ChatterPay's execute() function via UserOperations.
+ * then forwards the transaction through ChatterPay's execute() function using the
+ * backend signer directly (NOT via UserOperations or paymaster). Gas is paid from the
+ * backend signer's EOA balance.
  * Includes automatic retry with increasing slippage on failure.
  *
  * @param networkConfig - Blockchain network configuration containing contract addresses
@@ -1959,7 +1962,7 @@ export async function executeSwapLiFi(
               `excluded tools: [${excludedTools.join(', ') || 'none'}]`
           );
 
-          quote = await getLifiQuote(
+          const candidateQuote = await getLifiQuote(
             {
               fromChain: networkConfig.chainId,
               toChain: networkConfig.chainId,
@@ -1974,10 +1977,13 @@ export async function executeSwapLiFi(
             logKey
           );
 
-          const validation = validateLifiQuote(quote);
+          const validation = validateLifiQuote(candidateQuote);
           if (!validation.valid) {
             throw new Error(`Invalid quote: ${validation.reason}`);
           }
+
+          // Only assign to quote after validation passes
+          quote = candidateQuote;
 
           Logger.info(
             'executeSwapLiFi',
@@ -2043,8 +2049,11 @@ export async function executeSwapLiFi(
       throw new Error(`Failed to get Li.Fi quote after retries: ${lastError}`);
     }
 
-    // Use backend signer directly (owner of the wallet) to call execute()
-    // This bypasses the paymaster/UserOp flow and pays gas directly
+    // Execute the swap by calling execute() as the backend signer (owner of the wallet),
+    // NOT via a UserOperation or paymaster. This means:
+    // - The account-abstraction entry point and paymaster are not used in this path.
+    // - Gas is paid directly from the backend signer's EOA balance, not sponsored.
+    // - The entryPointContract parameter passed into this function is unused here.
     const backendSigner = setupContractsResult.backPrincipal;
 
     // Get current gas price from network (avoid overpaying)
@@ -2405,20 +2414,6 @@ export async function executeSwap(
   const isSimple = String(SWAP_EXECUTE_SIMPLE || '').toLowerCase() === 'true';
 
   // Li.Fi only supports mainnet chains - check if this is a testnet
-  // Common testnet chain IDs: Sepolia (11155111), Goerli (5), Mumbai (80001),
-  // Scroll Sepolia (534351), Arbitrum Sepolia (421614), Base Sepolia (84532)
-  const TESTNET_CHAIN_IDS = [
-    11155111, // Sepolia
-    5, // Goerli (deprecated)
-    80001, // Mumbai (deprecated)
-    80002, // Amoy
-    534351, // Scroll Sepolia
-    421614, // Arbitrum Sepolia
-    84532, // Base Sepolia
-    11155420, // Optimism Sepolia
-    44787, // Celo Alfajores
-    97 // BSC Testnet
-  ];
   const isTestnet = TESTNET_CHAIN_IDS.includes(networkConfig.chainId);
   const shouldUseLifi = useLifi && !isTestnet;
 

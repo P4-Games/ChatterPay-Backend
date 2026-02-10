@@ -175,6 +175,19 @@ export async function executeCrossChainTransfer(
 
       const approveReceipt = await approveTx.wait();
       approveTransactionHash = approveReceipt.transactionHash;
+
+      if (approveReceipt.status !== 1) {
+        Logger.error(
+          'executeCrossChainTransfer',
+          logKey,
+          `Approval transaction failed. Tx: ${approveTransactionHash}`
+        );
+        return {
+          success: false,
+          error: 'Token approval transaction failed'
+        };
+      }
+
       Logger.info('executeCrossChainTransfer', logKey, `Approval tx: ${approveTransactionHash}`);
     }
 
