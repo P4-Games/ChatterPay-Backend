@@ -291,7 +291,7 @@ describe('Template Model', () => {
             en: 'ChatterPay',
             es: 'ChatterPay',
             pt: 'ChatterPay'
-          },
+          }
         },
         cross_chain_disabled: {
           title: {
