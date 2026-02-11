@@ -291,6 +291,18 @@ describe('Template Model', () => {
             en: 'ChatterPay',
             es: 'ChatterPay',
             pt: 'ChatterPay'
+          },
+        },
+        cross_chain_disabled: {
+          title: {
+            en: 'Cross-chain transfers disabled',
+            es: 'Transferencias cross-chain deshabilitadas',
+            pt: 'Transferências cross-chain desativadas'
+          },
+          message: {
+            en: 'Cross-chain transfers are currently disabled.',
+            es: 'Las transferencias cross-chain están actualmente deshabilitadas.',
+            pt: 'As transferências cross-chain estão atualmente desativadas.'
           }
         }
       }

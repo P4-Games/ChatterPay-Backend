@@ -47,7 +47,8 @@ describe('securityService', () => {
         wallet_already_exists_intro: mockNotification,
         deposit_from_other_networks: mockNotification,
         deposit_info_intro: mockNotification,
-        wallet_next_steps: mockNotification
+        wallet_next_steps: mockNotification,
+        cross_chain_disabled: mockNotification
       },
       security_questions: {
         pet_name: {

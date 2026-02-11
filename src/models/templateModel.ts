@@ -24,7 +24,8 @@ export enum NotificationEnum {
   chatterpoints_operation = 'chatterpoints_operation',
   deposit_from_other_networks = 'deposit_from_other_networks',
   deposit_info_intro = 'deposit_info_intro',
-  wallet_next_steps = 'wallet_next_steps'
+  wallet_next_steps = 'wallet_next_steps',
+  cross_chain_disabled = 'cross_chain_disabled'
 }
 
 export interface LocalizedContentType {
@@ -123,7 +124,8 @@ const templateSchema = new Schema<ITemplateSchema>({
     chatterpoints_operation: { type: notificationSchema, required: true },
     deposit_from_other_networks: { type: notificationSchema, required: true },
     deposit_info_intro: { type: notificationSchema, required: true },
-    wallet_next_steps: { type: notificationSchema, required: true }
+    wallet_next_steps: { type: notificationSchema, required: true },
+    cross_chain_disabled: { type: notificationSchema, required: true }
   },
   security_questions: { type: Map, of: localizedContentSchema, required: false }
 });
