@@ -80,7 +80,12 @@ const {
   SECURITY_PIN_LENGTH: securityPinLength = 6,
   SECURITY_PIN_MAX_FAILED_ATTEMPTS: securityPinMaxFailedAttempts = 3,
   SECURITY_PIN_BLOCK_MINUTES: securityPinBlockMinutes = 60,
-  SECURITY_PIN_ENABLED: securityPinEnabled = 'true'
+  SECURITY_PIN_ENABLED: securityPinEnabled = 'true',
+  LIFI_API_BASE_URL: lifiApiBaseUrl = 'https://li.quest/v1',
+  LIFI_INTEGRATOR_KEY: lifiIntegratorKey = 'ChatterPay',
+  LIFI_INTEGRATOR_FEE: lifiIntegratorFee = '0.0025',
+  LIFI_DEFAULT_SLIPPAGE: lifiDefaultSlippage = '0.005', // fraction: 0.005 = 0.5%
+  USE_LIFI: useLifiEnv = 'true'
 } = process.env;
 
 export {
@@ -275,3 +280,27 @@ export const SECURITY_PIN_LENGTH = Number(securityPinLength);
 export const SECURITY_PIN_MAX_FAILED_ATTEMPTS = Number(securityPinMaxFailedAttempts);
 export const SECURITY_PIN_BLOCK_MINUTES = Number(securityPinBlockMinutes);
 export const SECURITY_PIN_ENABLED: boolean = securityPinEnabled.toLowerCase() === 'true';
+
+// Li.Fi Configuration
+// LIFI_INTEGRATOR_FEE and LIFI_DEFAULT_SLIPPAGE are fractional values (0-1), not percentages.
+//   - Example: 0.0025 = 0.25% fee, 0.005 = 0.5% slippage.
+export const LIFI_API_BASE_URL: string = lifiApiBaseUrl;
+export const LIFI_INTEGRATOR_KEY: string = lifiIntegratorKey;
+export const LIFI_INTEGRATOR_FEE: number = Number(lifiIntegratorFee);
+export const LIFI_DEFAULT_SLIPPAGE: number = Number(lifiDefaultSlippage);
+export const USE_LIFI: boolean = useLifiEnv.toLowerCase() === 'true';
+
+// Li.Fi does NOT support testnet chains. This list is used to fall back to Uniswap.
+// Source: manually curated. Update when adding new testnet deployments.
+export const TESTNET_CHAIN_IDS: readonly number[] = [
+  11155111, // Sepolia
+  5, // Goerli (deprecated)
+  80001, // Mumbai (deprecated)
+  80002, // Amoy
+  534351, // Scroll Sepolia
+  421614, // Arbitrum Sepolia
+  84532, // Base Sepolia
+  11155420, // Optimism Sepolia
+  44787, // Celo Alfajores
+  97 // BSC Testnet
+] as const;
