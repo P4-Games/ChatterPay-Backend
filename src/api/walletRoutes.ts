@@ -1,6 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 
-import { createWallet, createWalletSync, getRampWallet } from '../controllers/walletController';
+import {
+  createWallet,
+  createWalletSync,
+  getDepositInfo,
+  getMultichainDepositCta,
+  getRampWallet,
+  getWalletNextSteps
+} from '../controllers/walletController';
 
 /**
  * Configures routes related to wallets.
@@ -35,4 +42,25 @@ export const walletRouter = async (fastify: FastifyInstance): Promise<void> => {
    * @returns {Object} The details of the created wallet
    */
   fastify.post('/create_wallet/', createWallet);
+
+  /**
+   * Route to send deposit information
+   * @route POST /deposit_info/
+   * @returns {Object} Confirmation that deposit info was sent
+   */
+  fastify.post('/deposit_info/', getDepositInfo);
+
+  /**
+   * Route to send only the multichain deposit CTA
+   * @route POST /multichain_deposit_cta/
+   * @returns {Object} Confirmation that the multichain deposit CTA was sent
+   */
+  fastify.post('/multichain_deposit_cta/', getMultichainDepositCta);
+
+  /**
+   * Route to send wallet next-steps with quick-reply buttons
+   * @route POST /wallet_next_steps/
+   * @returns {Object} Confirmation that the next steps message was sent
+   */
+  fastify.post('/wallet_next_steps/', getWalletNextSteps);
 };

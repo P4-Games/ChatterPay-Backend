@@ -9,8 +9,10 @@ import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { NotificationEnum } from '../models/templateModel';
 import {
   getNotificationTemplate,
-  sendWalletAlreadyExistsNotification,
-  sendWalletCreationNotification
+  sendDepositCta,
+  sendDepositInfo,
+  sendWalletNextSteps,
+  sendWalletNotificationSequence
 } from '../services/notificationService';
 import { createOrReturnWallet, tryIssueTokens } from '../services/walletService';
 
@@ -144,15 +146,13 @@ export const createWallet = async (
           );
         }
       }
-      if (wasWalletCreated) {
-        await sendWalletCreationNotification(walletAddress, channel_user_id, networkConfig.name);
-      } else {
-        await sendWalletAlreadyExistsNotification(
-          walletAddress,
-          channel_user_id,
-          networkConfig.name
-        );
-      }
+      // Send the 3-message sequence
+      await sendWalletNotificationSequence(
+        walletAddress,
+        channel_user_id,
+        networkConfig.name,
+        wasWalletCreated
+      );
 
       if (
         wasWalletCreated &&
@@ -217,6 +217,13 @@ export const createWalletSync = async (
       notificationType
     );
 
+    await sendWalletNotificationSequence(
+      walletAddress,
+      channel_user_id,
+      networkConfig.name,
+      wasWalletCreated
+    );
+
     const notificationMessage = templateMessage
       .replace('[WALLET_ADDRESS]', walletAddress)
       .replace('[NETWORK_NAME]', networkConfig.name);
@@ -249,5 +256,166 @@ export const createWalletSync = async (
       status: 'error',
       message: err.message || 'Internal error'
     });
+  }
+};
+
+/**
+ * Sends deposit information for an existing wallet.
+ * Retrieves the user's wallet and sends a 3-message sequence with deposit instructions.
+ *
+ * @param {FastifyRequest} request - Fastify request.
+ * @param {FastifyReply} reply - Fastify reply.
+ * @returns {Promise<FastifyReply>} Response confirming the deposit info was sent.
+ */
+export const getDepositInfo = async (
+  request: FastifyRequest<{ Body: { channel_user_id: string } }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  const { channel_user_id } = request.body;
+  const logKey = `[op:getDepositInfo:${channel_user_id}]`;
+
+  try {
+    Logger.log('getDepositInfo', logKey, 'Sending deposit info');
+
+    if (!isValidPhoneNumber(channel_user_id)) {
+      return await returnErrorResponse(
+        'getDepositInfo',
+        logKey,
+        reply,
+        400,
+        `'${channel_user_id}' is not a valid phone number`
+      );
+    }
+
+    const { networkConfig } = request.server;
+
+    // Get or create wallet
+    const { walletAddress } = await createOrReturnWallet(channel_user_id, networkConfig, logKey);
+
+    // Send deposit info sequence
+    await sendDepositInfo(walletAddress, channel_user_id, networkConfig.name);
+
+    Logger.log('getDepositInfo', logKey, `Deposit info sent for ${walletAddress}`);
+
+    return await returnSuccessResponse(reply, 'Deposit information sent successfully', {
+      walletAddress
+    });
+  } catch (error) {
+    const err = error as Error;
+    return returnErrorResponse(
+      'getDepositInfo',
+      logKey,
+      reply,
+      500,
+      err.message || 'Internal Server Error'
+    );
+  }
+};
+
+/**
+ * Sends only the CTA interactive message to deposit from other networks (multichain).
+ *
+ * @param {FastifyRequest} request - Fastify request.
+ * @param {FastifyReply} reply - Fastify reply.
+ * @returns {Promise<FastifyReply>} Response confirming the multichain deposit CTA was sent.
+ */
+export const getMultichainDepositCta = async (
+  request: FastifyRequest<{ Body: { channel_user_id: string } }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  const { channel_user_id } = request.body;
+  const logKey = `[op:getMultichainDepositCta:${channel_user_id}]`;
+
+  try {
+    Logger.log('getMultichainDepositCta', logKey, 'Sending multichain deposit CTA');
+
+    if (!isValidPhoneNumber(channel_user_id)) {
+      return await returnErrorResponse(
+        'getMultichainDepositCta',
+        logKey,
+        reply,
+        400,
+        `'${channel_user_id}' is not a valid phone number`
+      );
+    }
+
+    const { networkConfig } = request.server;
+
+    // Get or create wallet
+    const { walletAddress } = await createOrReturnWallet(channel_user_id, networkConfig, logKey);
+
+    // Send only the CTA
+    await sendDepositCta(walletAddress, channel_user_id);
+
+    Logger.log(
+      'getMultichainDepositCta',
+      logKey,
+      `Multichain deposit CTA sent for ${walletAddress}`
+    );
+
+    return await returnSuccessResponse(reply, 'Multichain deposit CTA sent successfully', {
+      walletAddress
+    });
+  } catch (error) {
+    const err = error as Error;
+    return returnErrorResponse(
+      'getMultichainDepositCta',
+      logKey,
+      reply,
+      500,
+      err.message || 'Internal Server Error'
+    );
+  }
+};
+
+/**
+ * Sends the wallet next-steps interactive message with quick-reply buttons.
+ * Retrieves the user's wallet and sends a button message with options to deposit,
+ * buy crypto, or check balance.
+ *
+ * @param {FastifyRequest} request - Fastify request.
+ * @param {FastifyReply} reply - Fastify reply.
+ * @returns {Promise<FastifyReply>} Response confirming the next steps were sent.
+ */
+export const getWalletNextSteps = async (
+  request: FastifyRequest<{ Body: { channel_user_id: string } }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  const { channel_user_id } = request.body;
+  const logKey = `[op:getWalletNextSteps:${channel_user_id}]`;
+
+  try {
+    Logger.log('getWalletNextSteps', logKey, 'Sending wallet next steps');
+
+    if (!isValidPhoneNumber(channel_user_id)) {
+      return await returnErrorResponse(
+        'getWalletNextSteps',
+        logKey,
+        reply,
+        400,
+        `'${channel_user_id}' is not a valid phone number`
+      );
+    }
+
+    const { networkConfig } = request.server;
+
+    const { walletAddress } = await createOrReturnWallet(channel_user_id, networkConfig, logKey);
+
+    await sendWalletNextSteps(walletAddress, channel_user_id, networkConfig.name);
+
+    Logger.log('getWalletNextSteps', logKey, `Next steps sent for ${walletAddress}`);
+
+    return await returnSuccessResponse(reply, 'Wallet next steps sent successfully', {
+      walletAddress
+    });
+  } catch (error) {
+    const err = error as Error;
+    return returnErrorResponse(
+      'getWalletNextSteps',
+      logKey,
+      reply,
+      500,
+      err.message || 'Internal Server Error'
+    );
   }
 };
