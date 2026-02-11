@@ -263,6 +263,18 @@ describe('Template Model', () => {
             es: 'Depositar Ahora',
             pt: 'Depositar Agora'
           }
+        },
+        deposit_info_intro: {
+          title: {
+            en: 'Deposit Info',
+            es: 'Información de Depósito',
+            pt: 'Informações de Depósito'
+          },
+          message: {
+            en: 'Deposit information message.',
+            es: 'Mensaje de información de depósito.',
+            pt: 'Mensagem de informações de depósito.'
+          }
         }
       }
     };

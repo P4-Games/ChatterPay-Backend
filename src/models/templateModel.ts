@@ -22,7 +22,8 @@ export enum NotificationEnum {
   aave_supply_info_no_data = 'aave_supply_info_no_data',
   aave_supply_modified = 'aave_supply_modified',
   chatterpoints_operation = 'chatterpoints_operation',
-  deposit_from_other_networks = 'deposit_from_other_networks'
+  deposit_from_other_networks = 'deposit_from_other_networks',
+  deposit_info_intro = 'deposit_info_intro'
 }
 
 export interface LocalizedContentType {
@@ -104,7 +105,8 @@ const templateSchema = new Schema<ITemplateSchema>({
     aave_supply_info: { type: notificationSchema, required: true },
     aave_supply_info_no_data: { type: notificationSchema, required: true },
     chatterpoints_operation: { type: notificationSchema, required: true },
-    deposit_from_other_networks: { type: notificationSchema, required: true }
+    deposit_from_other_networks: { type: notificationSchema, required: true },
+    deposit_info_intro: { type: notificationSchema, required: true }
   },
   security_questions: { type: Map, of: localizedContentSchema, required: false }
 });

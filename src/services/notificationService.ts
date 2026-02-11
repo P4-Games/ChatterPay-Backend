@@ -191,6 +191,80 @@ export async function sendWalletNotificationSequence(
 }
 
 /**
+ * Sends a 3-message sequence with deposit information.
+ * 1. Deposit info intro message (translated)
+ * 2. Wallet address (for Scroll network)
+ * 3. CTA to deposit from other networks (EVM, Bitcoin, Solana, etc)
+ *
+ * @param user_wallet_proxy - The blockchain address of the wallet.
+ * @param channel_user_id - The user's identifier within the communication channel.
+ * @param network_name - The network name (e.g., "Scroll Sepolia").
+ */
+export async function sendDepositInfo(
+  user_wallet_proxy: string,
+  channel_user_id: string,
+  network_name: string
+) {
+  try {
+    Logger.log(
+      'sendDepositInfo',
+      `Sending deposit info sequence to ${channel_user_id}, ${user_wallet_proxy}`
+    );
+
+    // 1. Deposit Info Intro Message (translated from DB)
+    const { message: introMessage } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.deposit_info_intro
+    );
+    const formattedIntro = introMessage.replaceAll('[NETWORK_NAME]', network_name);
+
+    await chatizaloService.sendBotNotification({
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message: formattedIntro
+    });
+
+    // 2. Wallet Address (separate message for easy copying)
+    await chatizaloService.sendBotNotification({
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message: user_wallet_proxy
+    });
+
+    // 3. CTA Interactive Message (deposit from OTHER networks)
+    const { title, message, footer, button } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.deposit_from_other_networks
+    );
+
+    const depositUrl = `${CHATTERPAY_DOMAIN}/deposit?address=${user_wallet_proxy}`;
+
+    await chatizaloService.sendInteractiveMessage({
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message: {
+        type: 'url_cta',
+        header_text: title,
+        body_text: message,
+        footer_text: footer,
+        button_text: button ?? 'Depositar Ahora',
+        url: depositUrl
+      }
+    });
+
+    await persistNotification(
+      channel_user_id,
+      formattedIntro,
+      NotificationEnum.deposit_info_intro,
+      'Deposit info sequence: Intro, Address, CTA'
+    );
+  } catch (error) {
+    Logger.error('sendDepositInfo', error);
+    throw error;
+  }
+}
+
+/**
  * Sends a notification for a received transfer.
  *
  * @param phoneNumberFrom - Sender's phone number.

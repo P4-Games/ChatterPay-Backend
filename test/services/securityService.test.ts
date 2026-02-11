@@ -45,7 +45,8 @@ describe('securityService', () => {
         chatterpoints_operation: mockNotification,
         wallet_creation_intro: mockNotification,
         wallet_already_exists_intro: mockNotification,
-        deposit_from_other_networks: mockNotification
+        deposit_from_other_networks: mockNotification,
+        deposit_info_intro: mockNotification
       },
       security_questions: {
         pet_name: {

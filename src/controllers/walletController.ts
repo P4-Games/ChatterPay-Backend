@@ -9,6 +9,7 @@ import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { NotificationEnum } from '../models/templateModel';
 import {
   getNotificationTemplate,
+  sendDepositInfo,
   sendWalletNotificationSequence
 } from '../services/notificationService';
 import { createOrReturnWallet, tryIssueTokens } from '../services/walletService';
@@ -253,5 +254,58 @@ export const createWalletSync = async (
       status: 'error',
       message: err.message || 'Internal error'
     });
+  }
+};
+
+/**
+ * Sends deposit information for an existing wallet.
+ * Retrieves the user's wallet and sends a 3-message sequence with deposit instructions.
+ *
+ * @param {FastifyRequest} request - Fastify request.
+ * @param {FastifyReply} reply - Fastify reply.
+ * @returns {Promise<FastifyReply>} Response confirming the deposit info was sent.
+ */
+export const getDepositInfo = async (
+  request: FastifyRequest<{ Body: { channel_user_id: string } }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  const { channel_user_id } = request.body;
+  const logKey = `[op:getDepositInfo:${channel_user_id}]`;
+
+  try {
+    Logger.log('getDepositInfo', logKey, 'Sending deposit info');
+
+    if (!isValidPhoneNumber(channel_user_id)) {
+      return await returnErrorResponse(
+        'getDepositInfo',
+        logKey,
+        reply,
+        400,
+        `'${channel_user_id}' is not a valid phone number`
+      );
+    }
+
+    const { networkConfig } = request.server;
+
+    // Get or create wallet
+    const { walletAddress } = await createOrReturnWallet(channel_user_id, networkConfig, logKey);
+
+    // Send deposit info sequence
+    await sendDepositInfo(walletAddress, channel_user_id, networkConfig.name);
+
+    Logger.log('getDepositInfo', logKey, `Deposit info sent for ${walletAddress}`);
+
+    return await returnSuccessResponse(reply, 'Deposit information sent successfully', {
+      walletAddress
+    });
+  } catch (error) {
+    const err = error as Error;
+    return returnErrorResponse(
+      'getDepositInfo',
+      logKey,
+      reply,
+      500,
+      err.message || 'Internal Server Error'
+    );
   }
 };

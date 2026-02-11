@@ -1,6 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 
-import { createWallet, createWalletSync, getRampWallet } from '../controllers/walletController';
+import {
+  createWallet,
+  createWalletSync,
+  getDepositInfo,
+  getRampWallet
+} from '../controllers/walletController';
 
 /**
  * Configures routes related to wallets.
@@ -35,4 +40,11 @@ export const walletRouter = async (fastify: FastifyInstance): Promise<void> => {
    * @returns {Object} The details of the created wallet
    */
   fastify.post('/create_wallet/', createWallet);
+
+  /**
+   * Route to send deposit information
+   * @route POST /deposit_info/
+   * @returns {Object} Confirmation that deposit info was sent
+   */
+  fastify.post('/deposit_info/', getDepositInfo);
 };
