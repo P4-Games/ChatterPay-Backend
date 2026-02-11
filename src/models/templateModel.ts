@@ -23,7 +23,8 @@ export enum NotificationEnum {
   aave_supply_modified = 'aave_supply_modified',
   chatterpoints_operation = 'chatterpoints_operation',
   deposit_from_other_networks = 'deposit_from_other_networks',
-  deposit_info_intro = 'deposit_info_intro'
+  deposit_info_intro = 'deposit_info_intro',
+  wallet_next_steps = 'wallet_next_steps'
 }
 
 export interface LocalizedContentType {
@@ -38,11 +39,17 @@ export interface NotificationUtilityConfigType {
   param_order: string[];
 }
 
+export interface NotificationButtonType {
+  id: string;
+  title: LocalizedContentType;
+}
+
 export interface NotificationTemplateType {
   title: LocalizedContentType;
   message: LocalizedContentType;
   footer?: LocalizedContentType;
   button?: LocalizedContentType;
+  buttons?: NotificationButtonType[];
   utility?: NotificationUtilityConfigType;
 }
 
@@ -64,11 +71,20 @@ const localizedContentSchema = new Schema<LocalizedContentType>({
   pt: { type: String, required: true }
 });
 
+const notificationButtonSchema = new Schema<NotificationButtonType>(
+  {
+    id: { type: String, required: true },
+    title: { type: localizedContentSchema, required: true }
+  },
+  { _id: false }
+);
+
 const notificationSchema = new Schema<NotificationTemplateType>({
   title: { type: localizedContentSchema, required: true },
   message: { type: localizedContentSchema, required: true },
   footer: { type: localizedContentSchema, required: false },
   button: { type: localizedContentSchema, required: false },
+  buttons: { type: [notificationButtonSchema], required: false },
   utility: {
     type: new Schema<NotificationUtilityConfigType>(
       {
@@ -106,7 +122,8 @@ const templateSchema = new Schema<ITemplateSchema>({
     aave_supply_info_no_data: { type: notificationSchema, required: true },
     chatterpoints_operation: { type: notificationSchema, required: true },
     deposit_from_other_networks: { type: notificationSchema, required: true },
-    deposit_info_intro: { type: notificationSchema, required: true }
+    deposit_info_intro: { type: notificationSchema, required: true },
+    wallet_next_steps: { type: notificationSchema, required: true }
   },
   security_questions: { type: Map, of: localizedContentSchema, required: false }
 });

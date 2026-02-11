@@ -11,6 +11,7 @@ import {
   getNotificationTemplate,
   sendDepositCta,
   sendDepositInfo,
+  sendWalletNextSteps,
   sendWalletNotificationSequence
 } from '../services/notificationService';
 import { createOrReturnWallet, tryIssueTokens } from '../services/walletService';
@@ -359,6 +360,58 @@ export const getMultichainDepositCta = async (
     const err = error as Error;
     return returnErrorResponse(
       'getMultichainDepositCta',
+      logKey,
+      reply,
+      500,
+      err.message || 'Internal Server Error'
+    );
+  }
+};
+
+/**
+ * Sends the wallet next-steps interactive message with quick-reply buttons.
+ * Retrieves the user's wallet and sends a button message with options to deposit,
+ * buy crypto, or check balance.
+ *
+ * @param {FastifyRequest} request - Fastify request.
+ * @param {FastifyReply} reply - Fastify reply.
+ * @returns {Promise<FastifyReply>} Response confirming the next steps were sent.
+ */
+export const getWalletNextSteps = async (
+  request: FastifyRequest<{ Body: { channel_user_id: string } }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  const { channel_user_id } = request.body;
+  const logKey = `[op:getWalletNextSteps:${channel_user_id}]`;
+
+  try {
+    Logger.log('getWalletNextSteps', logKey, 'Sending wallet next steps');
+
+    if (!isValidPhoneNumber(channel_user_id)) {
+      return await returnErrorResponse(
+        'getWalletNextSteps',
+        logKey,
+        reply,
+        400,
+        `'${channel_user_id}' is not a valid phone number`
+      );
+    }
+
+    const { networkConfig } = request.server;
+
+    const { walletAddress } = await createOrReturnWallet(channel_user_id, networkConfig, logKey);
+
+    await sendWalletNextSteps(walletAddress, channel_user_id, networkConfig.name);
+
+    Logger.log('getWalletNextSteps', logKey, `Next steps sent for ${walletAddress}`);
+
+    return await returnSuccessResponse(reply, 'Wallet next steps sent successfully', {
+      walletAddress
+    });
+  } catch (error) {
+    const err = error as Error;
+    return returnErrorResponse(
+      'getWalletNextSteps',
       logKey,
       reply,
       500,

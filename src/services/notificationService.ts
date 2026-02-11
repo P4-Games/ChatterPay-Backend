@@ -7,6 +7,7 @@ import { isValidPhoneNumber } from '../helpers/validationHelper';
 import type { IBlockchain } from '../models/blockchainModel';
 import {
   type ITemplateSchema,
+  type LocalizedContentType,
   NotificationEnum,
   type NotificationTemplatesTypes,
   type NotificationUtilityConfigType
@@ -52,7 +53,13 @@ async function getNotificationUtilityConfig(
 export async function getNotificationTemplate(
   channelUserId: string,
   typeOfNotification: NotificationEnum
-): Promise<{ title: string; message: string; footer?: string; button?: string }> {
+): Promise<{
+  title: string;
+  message: string;
+  footer?: string;
+  button?: string;
+  buttons?: { id: string; title: string }[];
+}> {
   const defaultNotification = { title: 'Chatterpay Message', message: '' };
   try {
     if (!Object.values(NotificationEnum).includes(typeOfNotification)) {
@@ -67,7 +74,13 @@ export async function getNotificationTemplate(
     const cachedTemplate = cacheService.get(CacheNames.NOTIFICATION, `${cacheKey}`);
     if (cachedTemplate) {
       Logger.log('getNotificationTemplate', `getting ${cacheKey} from cache`);
-      return cachedTemplate as { title: string; message: string; footer?: string; button?: string };
+      return cachedTemplate as {
+        title: string;
+        message: string;
+        footer?: string;
+        button?: string;
+        buttons?: { id: string; title: string }[];
+      };
     }
 
     const notificationTemplates: NotificationTemplatesTypes | null =
@@ -93,12 +106,21 @@ export async function getNotificationTemplate(
     const fallbackLanguage =
       (Object.keys(template.title ?? {})[0] as NotificationLanguage | undefined) ?? userLanguage;
 
+    // Resolve localized buttons array
+    const resolvedButtons = template.buttons?.map(
+      (btn: { id: string; title: LocalizedContentType }) => ({
+        id: btn.id,
+        title: btn.title?.[userLanguage] ?? btn.title?.[fallbackLanguage] ?? btn.id
+      })
+    );
+
     const result = {
       title: availableTitle ?? template.title?.[fallbackLanguage] ?? defaultNotification.title,
       message:
         availableMessage ?? template.message?.[fallbackLanguage] ?? defaultNotification.message,
       footer: availableFooter ?? template.footer?.[fallbackLanguage],
-      button: availableButton ?? template.button?.[fallbackLanguage]
+      button: availableButton ?? template.button?.[fallbackLanguage],
+      buttons: resolvedButtons
     };
     cacheService.set(CacheNames.NOTIFICATION, `${cacheKey}`, result);
 
@@ -157,24 +179,33 @@ export async function sendWalletNotificationSequence(
       message: user_wallet_proxy
     });
 
-    // 3. CTA Interactive Message (deposit from OTHER networks)
-    const { title, message, footer, button } = await getNotificationTemplate(
-      channel_user_id,
-      NotificationEnum.deposit_from_other_networks
-    );
+    // 3. Next Steps Interactive Message (quick-reply buttons)
+    const {
+      title: nextTitle,
+      message: nextMessage,
+      footer: nextFooter,
+      buttons: nextButtons
+    } = await getNotificationTemplate(channel_user_id, NotificationEnum.wallet_next_steps);
 
-    const depositUrl = `${CHATTERPAY_DOMAIN}/deposit?address=${user_wallet_proxy}`;
+    const formattedNextMessage = nextMessage
+      .replaceAll('[NETWORK_NAME]', network_name)
+      .replaceAll('[WALLET_ADDRESS]', user_wallet_proxy);
+
+    const defaultButtons = [
+      { id: 'opt_deposit_other_networks', title: 'Quick deposit' },
+      { id: 'opt_buy_crypto', title: 'Buy crypto' },
+      { id: 'opt_get_balance', title: 'My balance' }
+    ];
 
     await chatizaloService.sendInteractiveMessage({
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message: {
-        type: 'url_cta',
-        header_text: title,
-        body_text: message,
-        footer_text: footer,
-        button_text: button ?? 'Depositar Ahora',
-        url: depositUrl
+        type: 'button',
+        header_text: nextTitle,
+        body_text: formattedNextMessage,
+        footer_text: nextFooter,
+        buttons: nextButtons?.length ? nextButtons : defaultButtons
       }
     });
 
@@ -182,10 +213,69 @@ export async function sendWalletNotificationSequence(
       channel_user_id,
       formattedIntro,
       introType,
-      'Wallet notification sequence: Intro, Address, CTA'
+      'Wallet notification sequence: Intro, Address, Next Steps'
     );
   } catch (error) {
     Logger.error('sendWalletNotificationSequence', error);
+    throw error;
+  }
+}
+
+/**
+ * Sends the wallet next-steps message with quick-reply buttons.
+ * Includes a reminder about using the correct network, deposit options,
+ * and the ability to buy crypto with local currency.
+ *
+ * @param user_wallet_proxy - The blockchain address of the wallet.
+ * @param channel_user_id - The user's identifier within the communication channel.
+ * @param network_name - The network name (e.g., "Scroll").
+ */
+export async function sendWalletNextSteps(
+  user_wallet_proxy: string,
+  channel_user_id: string,
+  network_name: string
+) {
+  try {
+    Logger.log(
+      'sendWalletNextSteps',
+      `Sending next steps to ${channel_user_id}, ${user_wallet_proxy}`
+    );
+
+    const { title, message, footer, buttons } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.wallet_next_steps
+    );
+
+    const formattedMessage = message
+      .replaceAll('[NETWORK_NAME]', network_name)
+      .replaceAll('[WALLET_ADDRESS]', user_wallet_proxy);
+
+    const defaultButtons = [
+      { id: 'opt_deposit_other_networks', title: 'Quick deposit' },
+      { id: 'opt_buy_crypto', title: 'Buy crypto' },
+      { id: 'opt_get_balance', title: 'My balance' }
+    ];
+
+    await chatizaloService.sendInteractiveMessage({
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message: {
+        type: 'button',
+        header_text: title,
+        body_text: formattedMessage,
+        footer_text: footer,
+        buttons: buttons?.length ? buttons : defaultButtons
+      }
+    });
+
+    await persistNotification(
+      channel_user_id,
+      formattedMessage,
+      NotificationEnum.wallet_next_steps,
+      'Wallet next steps: quick-reply buttons'
+    );
+  } catch (error) {
+    Logger.error('sendWalletNextSteps', error);
     throw error;
   }
 }
