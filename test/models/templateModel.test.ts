@@ -275,6 +275,23 @@ describe('Template Model', () => {
             es: 'Mensaje de información de depósito.',
             pt: 'Mensagem de informações de depósito.'
           }
+        },
+        wallet_next_steps: {
+          title: {
+            en: 'What would you like to do?',
+            es: '¿Qué te gustaría hacer?',
+            pt: 'O que você gostaria de fazer?'
+          },
+          message: {
+            en: 'Next steps message.',
+            es: 'Mensaje de próximos pasos.',
+            pt: 'Mensagem de próximos passos.'
+          },
+          footer: {
+            en: 'ChatterPay',
+            es: 'ChatterPay',
+            pt: 'ChatterPay'
+          }
         }
       }
     };
