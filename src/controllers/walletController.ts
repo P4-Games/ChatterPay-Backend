@@ -9,8 +9,7 @@ import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { NotificationEnum } from '../models/templateModel';
 import {
   getNotificationTemplate,
-  sendWalletAlreadyExistsNotification,
-  sendWalletCreationNotification
+  sendWalletNotificationSequence
 } from '../services/notificationService';
 import { createOrReturnWallet, tryIssueTokens } from '../services/walletService';
 
@@ -144,15 +143,13 @@ export const createWallet = async (
           );
         }
       }
-      if (wasWalletCreated) {
-        await sendWalletCreationNotification(walletAddress, channel_user_id, networkConfig.name);
-      } else {
-        await sendWalletAlreadyExistsNotification(
-          walletAddress,
-          channel_user_id,
-          networkConfig.name
-        );
-      }
+      // Send the 3-message sequence
+      await sendWalletNotificationSequence(
+        walletAddress,
+        channel_user_id,
+        networkConfig.name,
+        wasWalletCreated
+      );
 
       if (
         wasWalletCreated &&
@@ -215,6 +212,13 @@ export const createWalletSync = async (
     const { message: templateMessage } = await getNotificationTemplate(
       channel_user_id,
       notificationType
+    );
+
+    await sendWalletNotificationSequence(
+      walletAddress,
+      channel_user_id,
+      networkConfig.name,
+      wasWalletCreated
     );
 
     const notificationMessage = templateMessage

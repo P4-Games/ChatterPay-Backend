@@ -1,4 +1,4 @@
-import { BOT_DATA_TOKEN, CHATTERPAY_NFTS_SHARE_URL } from '../config/constants';
+import { BOT_DATA_TOKEN, CHATTERPAY_DOMAIN, CHATTERPAY_NFTS_SHARE_URL } from '../config/constants';
 import { formatIdentifierWithOptionalName } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
@@ -52,7 +52,7 @@ async function getNotificationUtilityConfig(
 export async function getNotificationTemplate(
   channelUserId: string,
   typeOfNotification: NotificationEnum
-): Promise<{ title: string; message: string }> {
+): Promise<{ title: string; message: string; footer?: string; button?: string }> {
   const defaultNotification = { title: 'Chatterpay Message', message: '' };
   try {
     if (!Object.values(NotificationEnum).includes(typeOfNotification)) {
@@ -67,7 +67,7 @@ export async function getNotificationTemplate(
     const cachedTemplate = cacheService.get(CacheNames.NOTIFICATION, `${cacheKey}`);
     if (cachedTemplate) {
       Logger.log('getNotificationTemplate', `getting ${cacheKey} from cache`);
-      return cachedTemplate as { title: string; message: string };
+      return cachedTemplate as { title: string; message: string; footer?: string; button?: string };
     }
 
     const notificationTemplates: NotificationTemplatesTypes | null =
@@ -87,13 +87,18 @@ export async function getNotificationTemplate(
 
     const availableTitle = template.title?.[userLanguage];
     const availableMessage = template.message?.[userLanguage];
+    const availableFooter = template.footer?.[userLanguage];
+    const availableButton = template.button?.[userLanguage];
+
     const fallbackLanguage =
       (Object.keys(template.title ?? {})[0] as NotificationLanguage | undefined) ?? userLanguage;
 
     const result = {
       title: availableTitle ?? template.title?.[fallbackLanguage] ?? defaultNotification.title,
       message:
-        availableMessage ?? template.message?.[fallbackLanguage] ?? defaultNotification.message
+        availableMessage ?? template.message?.[fallbackLanguage] ?? defaultNotification.message,
+      footer: availableFooter ?? template.footer?.[fallbackLanguage],
+      button: availableButton ?? template.button?.[fallbackLanguage]
     };
     cacheService.set(CacheNames.NOTIFICATION, `${cacheKey}`, result);
 
@@ -194,6 +199,90 @@ export async function sendWalletAlreadyExistsNotification(
     await persistAndSendNotification(sendAndPersistParams);
   } catch (error) {
     Logger.error('sendWalletAlreadyExistsNotification', error);
+    throw error;
+  }
+}
+
+/**
+ * Sends a notification with a deposit button when a wallet is created or needs funding.
+ *
+ * @param user_wallet_proxy - The blockchain address of the wallet.
+ * @param channel_user_id - The user's identifier within the communication channel.
+ * @returns A Promise resolving to the result of the notification operation.
+ */
+/**
+ * Sends a 3-message sequence when wallet is created or retrieved.
+ * 1. Intro message (translated, different for new vs existing wallet)
+ * 2. Wallet address (for Scroll network)
+ * 3. CTA to deposit from other networks (EVM, Bitcoin, Solana, etc)
+ *
+ * @param user_wallet_proxy - The blockchain address of the wallet.
+ * @param channel_user_id - The user's identifier within the communication channel.
+ * @param network_name - The network name (e.g., "Scroll Sepolia").
+ * @param was_created - Whether the wallet was just created (true) or already existed (false).
+ */
+export async function sendWalletNotificationSequence(
+  user_wallet_proxy: string,
+  channel_user_id: string,
+  network_name: string,
+  was_created: boolean
+) {
+  try {
+    Logger.log(
+      'sendWalletNotificationSequence',
+      `Sending wallet notification sequence to ${channel_user_id}, ${user_wallet_proxy}, wasCreated: ${was_created}`
+    );
+
+    // 1. Intro Message (translated from DB)
+    const introType = was_created
+      ? NotificationEnum.wallet_creation_intro
+      : NotificationEnum.wallet_already_exists_intro;
+
+    const { message: introMessage } = await getNotificationTemplate(channel_user_id, introType);
+    const formattedIntro = introMessage.replaceAll('[NETWORK_NAME]', network_name);
+
+    await chatizaloService.sendBotNotification({
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message: formattedIntro
+    });
+
+    // 2. Wallet Address (separate message for easy copying)
+    await chatizaloService.sendBotNotification({
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message: user_wallet_proxy
+    });
+
+    // 3. CTA Interactive Message (deposit from OTHER networks)
+    const { title, message, footer, button } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.deposit_from_other_networks
+    );
+
+    const depositUrl = `${CHATTERPAY_DOMAIN}/deposit?address=${user_wallet_proxy}`;
+
+    await chatizaloService.sendInteractiveMessage({
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message: {
+        type: 'url_cta',
+        header_text: title,
+        body_text: message,
+        footer_text: footer,
+        button_text: button ?? 'Depositar Ahora',
+        url: depositUrl
+      }
+    });
+
+    await persistNotification(
+      channel_user_id,
+      formattedIntro,
+      introType,
+      'Wallet notification sequence: Intro, Address, CTA'
+    );
+  } catch (error) {
+    Logger.error('sendWalletNotificationSequence', error);
     throw error;
   }
 }
@@ -1090,32 +1179,28 @@ export async function persistAndSendNotification({
 }
 
 /**
- * Persists a notification in MongoDB with media: 'INTERNAL',
- * without sending it via bot or push.
- *
- * @param {string} to - Recipient identifier (e.g., phone number).
- * @param {string} message - Message content to store.
- * @param {string} template - Template identifier.
- * @returns {Promise<void>}
+ * Persists a notification to the database.
+ * @param channelUserId - The recipient's ID.
+ * @param message - The message content.
+ * @param templateId - The template ID.
+ * @param internalMessage - Optional internal message for logging/admin.
  */
 export async function persistNotification(
-  to: string,
+  channelUserId: string,
   message: string,
-  template: string
-): Promise<void> {
-  const sent_date = new Date();
-
+  templateId: string,
+  internalMessage?: string
+) {
   try {
     await mongoNotificationService.createNotification({
-      to,
-      message,
-      template,
-      media: 'INTERNAL',
-      sent_date,
-      read_date: undefined,
-      deleted_date: undefined
+      to: channelUserId,
+      message: internalMessage || message,
+      media: 'WHATSAPP', // Or make it configurable if needed
+      template: templateId,
+      sent_date: new Date()
     });
   } catch (error) {
     Logger.error('persistNotification', error);
+    // Don't throw, just log. Notification sending shouldn't fail if persistence fails.
   }
 }
