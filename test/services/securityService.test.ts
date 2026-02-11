@@ -42,7 +42,10 @@ describe('securityService', () => {
         aave_supply_modified: mockNotification,
         aave_supply_info: mockNotification,
         aave_supply_info_no_data: mockNotification,
-        chatterpoints_operation: mockNotification
+        chatterpoints_operation: mockNotification,
+        wallet_creation_intro: mockNotification,
+        wallet_already_exists_intro: mockNotification,
+        deposit_from_other_networks: mockNotification
       },
       security_questions: {
         pet_name: {

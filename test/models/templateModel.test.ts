@@ -217,6 +217,52 @@ describe('Template Model', () => {
             es: '¡Con esta operación sumaste [POINTS] ChatterPoints! 🥳',
             pt: 'Com esta operação você ganhou [POINTS] ChatterPoints! 🥳'
           }
+        },
+        wallet_creation_intro: {
+          title: {
+            en: 'Wallet Created!',
+            es: '¡Billetera Creada!',
+            pt: 'Carteira Criada!'
+          },
+          message: {
+            en: 'Your wallet was successfully created and linked to your WhatsApp number!',
+            es: '¡Tu wallet fue creada y vinculada a tu número de WhatsApp con éxito!',
+            pt: 'Sua carteira foi criada e vinculada ao seu número do WhatsApp com sucesso!'
+          }
+        },
+        wallet_already_exists_intro: {
+          title: {
+            en: 'Your Wallet',
+            es: 'Tu Billetera',
+            pt: 'Sua Carteira'
+          },
+          message: {
+            en: 'You already have a wallet linked to your WhatsApp number.',
+            es: 'Ya tienes una wallet vinculada a tu número de WhatsApp.',
+            pt: 'Você já tem uma carteira vinculada ao seu número do WhatsApp.'
+          }
+        },
+        deposit_from_other_networks: {
+          title: {
+            en: 'Deposit from other networks',
+            es: 'Depositar desde otras redes',
+            pt: 'Depositar de outras redes'
+          },
+          message: {
+            en: 'Deposit from Ethereum, Bitcoin, Solana, Polygon, Arbitrum and more.',
+            es: 'Depositá desde Ethereum, Bitcoin, Solana, Polygon, Arbitrum y más.',
+            pt: 'Deposite de Ethereum, Bitcoin, Solana, Polygon, Arbitrum e mais.'
+          },
+          footer: {
+            en: 'ChatterPay Beta',
+            es: 'ChatterPay Beta',
+            pt: 'ChatterPay Beta'
+          },
+          button: {
+            en: 'Deposit Now',
+            es: 'Depositar Ahora',
+            pt: 'Depositar Agora'
+          }
         }
       }
     };
