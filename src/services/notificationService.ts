@@ -265,6 +265,48 @@ export async function sendDepositInfo(
 }
 
 /**
+ * Sends only the CTA interactive message to deposit from other networks.
+ *
+ * @param user_wallet_proxy - The blockchain address of the wallet.
+ * @param channel_user_id - The user's identifier within the communication channel.
+ */
+export async function sendDepositCta(user_wallet_proxy: string, channel_user_id: string) {
+  try {
+    Logger.log('sendDepositCta', `Sending deposit CTA to ${channel_user_id}, ${user_wallet_proxy}`);
+
+    const { title, message, footer, button } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.deposit_from_other_networks
+    );
+
+    const depositUrl = `${CHATTERPAY_DOMAIN}/deposit?address=${user_wallet_proxy}`;
+
+    await chatizaloService.sendInteractiveMessage({
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id,
+      message: {
+        type: 'url_cta',
+        header_text: title,
+        body_text: message,
+        footer_text: footer,
+        button_text: button ?? 'Depositar Ahora',
+        url: depositUrl
+      }
+    });
+
+    await persistNotification(
+      channel_user_id,
+      message,
+      NotificationEnum.deposit_from_other_networks,
+      'Deposit CTA sent'
+    );
+  } catch (error) {
+    Logger.error('sendDepositCta', error);
+    throw error;
+  }
+}
+
+/**
  * Sends a notification for a received transfer.
  *
  * @param phoneNumberFrom - Sender's phone number.

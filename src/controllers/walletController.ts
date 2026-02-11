@@ -9,6 +9,7 @@ import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { NotificationEnum } from '../models/templateModel';
 import {
   getNotificationTemplate,
+  sendDepositCta,
   sendDepositInfo,
   sendWalletNotificationSequence
 } from '../services/notificationService';
@@ -302,6 +303,62 @@ export const getDepositInfo = async (
     const err = error as Error;
     return returnErrorResponse(
       'getDepositInfo',
+      logKey,
+      reply,
+      500,
+      err.message || 'Internal Server Error'
+    );
+  }
+};
+
+/**
+ * Sends only the CTA interactive message to deposit from other networks (multichain).
+ *
+ * @param {FastifyRequest} request - Fastify request.
+ * @param {FastifyReply} reply - Fastify reply.
+ * @returns {Promise<FastifyReply>} Response confirming the multichain deposit CTA was sent.
+ */
+export const getMultichainDepositCta = async (
+  request: FastifyRequest<{ Body: { channel_user_id: string } }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  const { channel_user_id } = request.body;
+  const logKey = `[op:getMultichainDepositCta:${channel_user_id}]`;
+
+  try {
+    Logger.log('getMultichainDepositCta', logKey, 'Sending multichain deposit CTA');
+
+    if (!isValidPhoneNumber(channel_user_id)) {
+      return await returnErrorResponse(
+        'getMultichainDepositCta',
+        logKey,
+        reply,
+        400,
+        `'${channel_user_id}' is not a valid phone number`
+      );
+    }
+
+    const { networkConfig } = request.server;
+
+    // Get or create wallet
+    const { walletAddress } = await createOrReturnWallet(channel_user_id, networkConfig, logKey);
+
+    // Send only the CTA
+    await sendDepositCta(walletAddress, channel_user_id);
+
+    Logger.log(
+      'getMultichainDepositCta',
+      logKey,
+      `Multichain deposit CTA sent for ${walletAddress}`
+    );
+
+    return await returnSuccessResponse(reply, 'Multichain deposit CTA sent successfully', {
+      walletAddress
+    });
+  } catch (error) {
+    const err = error as Error;
+    return returnErrorResponse(
+      'getMultichainDepositCta',
       logKey,
       reply,
       500,
