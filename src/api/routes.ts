@@ -7,6 +7,7 @@ import { chatterpointsRoutes } from './chatterpointsRoutes';
 import nftRoutes from './nftRoutes';
 import notificationRoutes from './notificationRoutes';
 import { pingRoutes } from './pingRoutes';
+import polymarketRoutes from './polymarketRoutes';
 import { rampRoutes } from './rampRoutes';
 import referralRoutes from './referralRoutes';
 import securityRoutes from './securityRoutes';
@@ -44,4 +45,5 @@ export async function setupRoutes(server: FastifyInstance): Promise<void> {
   server.register(telegramRoutes);
   server.register(webhookRoutes);
   server.register(chainRoutes, { prefix: '/chains' });
+  server.register(polymarketRoutes);
 }

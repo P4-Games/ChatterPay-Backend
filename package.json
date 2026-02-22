@@ -53,6 +53,7 @@
     "@google-cloud/trace-agent": "^8.0.0",
     "@openzeppelin/contracts": "^5.0.2",
     "@pinata/sdk": "^2.1.0",
+    "@polymarket/clob-client": "^5.2.4",
     "@typechain/ethers-v5": "11.1.2",
     "@typechain/hardhat": "^9.1.0",
     "@types/chai": "^4.3.17",

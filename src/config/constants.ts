@@ -85,7 +85,14 @@ const {
   LIFI_INTEGRATOR_KEY: lifiIntegratorKey = 'ChatterPay',
   LIFI_INTEGRATOR_FEE: lifiIntegratorFee = '0.0025',
   LIFI_DEFAULT_SLIPPAGE: lifiDefaultSlippage = '0.005', // fraction: 0.005 = 0.5%
-  USE_LIFI: useLifiEnv = 'true'
+  USE_LIFI: useLifiEnv = 'true',
+  POLYMARKET_CLOB_API_URL: polymarketClobApiUrl = 'https://clob.polymarket.com',
+  POLYMARKET_GAMMA_API_URL: polymarketGammaApiUrl = 'https://gamma-api.polymarket.com',
+  POLYMARKET_DATA_API_URL: polymarketDataApiUrl = 'https://data-api.polymarket.com',
+  POLYMARKET_CHAIN_ID: polymarketChainId = 137,
+  POLYMARKET_ENABLED: polymarketEnabled = 'false',
+  POLYMARKET_TERMS_VERSION: polymarketTermsVersion = 1,
+  POLYMARKET_DEFAULT_SLIPPAGE: polymarketDefaultSlippage = '0.01'
 } = process.env;
 
 export {
@@ -304,3 +311,17 @@ export const TESTNET_CHAIN_IDS: readonly number[] = [
   44787, // Celo Alfajores
   97 // BSC Testnet
 ] as const;
+
+// Polymarket Configuration
+export const POLYMARKET_CLOB_API_URL: string = polymarketClobApiUrl;
+export const POLYMARKET_GAMMA_API_URL: string = polymarketGammaApiUrl;
+export const POLYMARKET_DATA_API_URL: string = polymarketDataApiUrl;
+export const POLYMARKET_CHAIN_ID: number = Number(polymarketChainId);
+export const POLYMARKET_ENABLED: boolean = polymarketEnabled.toLowerCase() === 'true';
+export const POLYMARKET_TERMS_VERSION: number = Number(polymarketTermsVersion);
+export const POLYMARKET_DEFAULT_SLIPPAGE: number = Number(polymarketDefaultSlippage);
+
+export const CACHE_POLYMARKET_MARKETS_TTL = 300; // 5 min
+export const CACHE_POLYMARKET_MARKETS_CHECK_PERIOD = 360; // 6 min
+export const CACHE_POLYMARKET_PRICES_TTL = 60; // 1 min
+export const CACHE_POLYMARKET_PRICES_CHECK_PERIOD = 120; // 2 min
