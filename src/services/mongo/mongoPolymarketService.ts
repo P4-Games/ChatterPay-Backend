@@ -45,9 +45,17 @@ export async function createTerms(
 // ============================================================================
 
 /** Record a new order */
-export async function createOrder(
-  data: Omit<IPolymarketOrder, keyof Document | 'created_at' | 'updated_at'>
-): Promise<IPolymarketOrder> {
+export async function createOrder(data: {
+  user_phone: string;
+  order_id: string;
+  market_condition_id: string;
+  market_slug?: string;
+  token_id: string;
+  side: 'BUY' | 'SELL';
+  price: number;
+  size: number;
+  status: string;
+}): Promise<IPolymarketOrder> {
   return PolymarketOrderModel.create({
     ...data,
     created_at: new Date(),

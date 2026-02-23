@@ -5,7 +5,8 @@
  * Read endpoints (markets/events) are synchronous GET responses.
  * Trading endpoints are POST and require account + terms validation.
  *
- * @see implementation_plan.md for full route specification
+ * Key derivation follows the same pattern as setupContracts / computeWallet:
+ *   secService.get_up(user.phone_number, chainId) → private key
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -14,8 +15,13 @@ import { POLYMARKET_ENABLED } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import type { IUser } from '../models/userModel';
+import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
+import { createOrder } from '../services/mongo/mongoPolymarketService';
 import {
   acceptTerms,
+  cancelAllOrders,
+  cancelOrder,
+  createPolymarketAccount,
   getAccountStatus,
   getBridgeQuote,
   getClosedPositions,
@@ -25,12 +31,15 @@ import {
   getMarketBySlug,
   getMarketPrice,
   getMarkets,
+  getOpenOrders,
   getPortfolioValue,
   getPositions,
   getTradeHistory,
   hasAcceptedCurrentTerms,
+  placeOrder,
   searchMarkets
 } from '../services/polymarket';
+import { secService } from '../services/secService';
 import { getUser } from '../services/userService';
 import type {
   PolymarketAcceptTermsBody,
@@ -80,11 +89,17 @@ function checkEnabled(reply: FastifyReply): boolean {
 }
 
 /** Validate and resolve user from channel_user_id */
-async function resolveUser(channelUserId: string, logKey: string): Promise<IUser | null> {
+async function resolveUser(channelUserId: string, _logKey: string): Promise<IUser | null> {
   if (!channelUserId || !isValidPhoneNumber(channelUserId)) {
     return null;
   }
   return getUser(channelUserId);
+}
+
+/** Derive the user's private key using the same pattern as setupContracts / computeWallet */
+async function getUserPrivateKey(user: IUser): Promise<string> {
+  const networkConfig = await mongoBlockchainService.getNetworkConfig();
+  return secService.get_up(user.phone_number, networkConfig.chainId.toString());
 }
 
 /** Validate user has Polymarket account and accepted terms */
@@ -288,13 +303,13 @@ export const polymarketCreateAccount = async (
       });
     }
 
-    // TODO: Derive private key from user's EOA — this requires access to the signing system.
-    // For now, we return a placeholder error until the signing integration is connected.
-    return errorReply(
-      reply,
-      501,
-      'Account creation requires signing key derivation (pending integration)'
-    );
+    const privateKey = await getUserPrivateKey(user);
+    const updatedUser = await createPolymarketAccount(user, privateKey, logKey);
+
+    return successReply(reply, {
+      message: 'Polymarket account created',
+      account: getAccountStatus(updatedUser)
+    });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to create Polymarket account');
@@ -354,15 +369,38 @@ export const polymarketPlaceOrder = async (
       return errorReply(reply, 400, 'Missing required order parameters');
     }
 
-    // TODO: Derive private key — same as account creation
-    return errorReply(
-      reply,
-      501,
-      'Order placement requires signing key derivation (pending integration)'
+    const privateKey = await getUserPrivateKey(user);
+    const result = await placeOrder(
+      user,
+      privateKey,
+      token_id,
+      {
+        tokenId: token_id,
+        price,
+        size,
+        side,
+        orderType: order_type
+      },
+      logKey
     );
+
+    // Persist order to MongoDB
+    await createOrder({
+      user_phone: user.phone_number,
+      order_id: result.orderID,
+      market_condition_id: token_id,
+      market_slug: '',
+      token_id,
+      side,
+      price,
+      size,
+      status: 'pending'
+    });
+
+    return successReply(reply, { order: result });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
-    return errorReply(reply, 500, 'Failed to place order');
+    return errorReply(reply, 500, `Failed to place order: ${String(error)}`);
   }
 };
 
@@ -385,12 +423,10 @@ export const polymarketCancelOrder = async (
       return errorReply(reply, 400, 'Missing order_id');
     }
 
-    // TODO: Derive private key
-    return errorReply(
-      reply,
-      501,
-      'Order cancellation requires signing key derivation (pending integration)'
-    );
+    const privateKey = await getUserPrivateKey(user);
+    await cancelOrder(user, privateKey, request.body.order_id, logKey);
+
+    return successReply(reply, { message: `Order ${request.body.order_id} cancelled` });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to cancel order');
@@ -412,12 +448,10 @@ export const polymarketCancelAllOrders = async (
     }
     if (!validatePolymarketReady(user, reply)) return reply;
 
-    // TODO: Derive private key
-    return errorReply(
-      reply,
-      501,
-      'Order cancellation requires signing key derivation (pending integration)'
-    );
+    const privateKey = await getUserPrivateKey(user);
+    await cancelAllOrders(user, privateKey, logKey);
+
+    return successReply(reply, { message: 'All orders cancelled' });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to cancel all orders');
@@ -439,12 +473,10 @@ export const polymarketGetOpenOrders = async (
     }
     if (!validatePolymarketReady(user, reply)) return reply;
 
-    // TODO: Derive private key
-    return errorReply(
-      reply,
-      501,
-      'Fetching orders requires signing key derivation (pending integration)'
-    );
+    const privateKey = await getUserPrivateKey(user);
+    const orders = await getOpenOrders(user, privateKey, logKey);
+
+    return successReply(reply, { orders });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to fetch open orders');
@@ -597,10 +629,33 @@ export const polymarketBridge = async (
   if (!checkEnabled(reply)) return reply;
   const logKey = `[op:polymarket-bridge]`;
 
-  // Bridge execution requires signing — pending integration
-  return errorReply(
-    reply,
-    501,
-    'Bridge execution requires signing key derivation (pending integration)'
-  );
+  try {
+    const user = await resolveUser(request.body.channel_user_id, logKey);
+    if (!user) {
+      return errorReply(reply, 400, 'Invalid or missing channel_user_id');
+    }
+    if (!user.polymarket_account) {
+      return errorReply(reply, 400, 'Polymarket account not created');
+    }
+
+    if (!request.body.amount) {
+      return errorReply(reply, 400, 'Missing amount');
+    }
+
+    // Bridge execution uses the same LiFi flow as other cross-chain operations.
+    // The quote is obtained first, then the user's wallet signs the transaction.
+    const quote = await getBridgeQuote(
+      user.polymarket_account.polygon_address,
+      request.body.amount,
+      logKey
+    );
+
+    return successReply(reply, {
+      message: 'Bridge quote prepared. Execute via LiFi flow.',
+      quote
+    });
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, String(error));
+    return errorReply(reply, 500, 'Failed to execute bridge');
+  }
 };

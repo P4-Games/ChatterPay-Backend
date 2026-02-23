@@ -20,7 +20,15 @@ export enum NotificationEnum {
   aave_supply_info_no_data = 'aave_supply_info_no_data',
   aave_supply_modified = 'aave_supply_modified',
   chatterpoints_operation = 'chatterpoints_operation',
-  cross_chain_disabled = 'cross_chain_disabled'
+  cross_chain_disabled = 'cross_chain_disabled',
+  polymarket_account_created = 'polymarket_account_created',
+  polymarket_order_placed = 'polymarket_order_placed',
+  polymarket_order_cancelled = 'polymarket_order_cancelled',
+  polymarket_order_failed = 'polymarket_order_failed',
+  polymarket_terms_not_accepted = 'polymarket_terms_not_accepted',
+  polymarket_account_not_found = 'polymarket_account_not_found',
+  polymarket_bridge_initiated = 'polymarket_bridge_initiated',
+  polymarket_disabled = 'polymarket_disabled'
 }
 
 export interface LocalizedContentType {
@@ -96,7 +104,15 @@ const templateSchema = new Schema<ITemplateSchema>({
     aave_supply_info: { type: notificationSchema, required: true },
     aave_supply_info_no_data: { type: notificationSchema, required: true },
     chatterpoints_operation: { type: notificationSchema, required: true },
-    cross_chain_disabled: { type: notificationSchema, required: true }
+    cross_chain_disabled: { type: notificationSchema, required: true },
+    polymarket_account_created: { type: notificationSchema, required: false },
+    polymarket_order_placed: { type: notificationSchema, required: false },
+    polymarket_order_cancelled: { type: notificationSchema, required: false },
+    polymarket_order_failed: { type: notificationSchema, required: false },
+    polymarket_terms_not_accepted: { type: notificationSchema, required: false },
+    polymarket_account_not_found: { type: notificationSchema, required: false },
+    polymarket_bridge_initiated: { type: notificationSchema, required: false },
+    polymarket_disabled: { type: notificationSchema, required: false }
   },
   security_questions: { type: Map, of: localizedContentSchema, required: false }
 });
