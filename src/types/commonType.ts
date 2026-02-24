@@ -70,6 +70,12 @@ export interface ExecuteSwapResult {
   success: boolean;
   approveTransactionHash: string;
   swapTransactionHash: string;
+  /** Li.Fi-specific details when swap was executed via Li.Fi aggregator */
+  lifiDetails?: {
+    quoteId: string;
+    tool: string;
+    toAmountMin: string;
+  };
 }
 
 export interface ExecueTransactionResult {

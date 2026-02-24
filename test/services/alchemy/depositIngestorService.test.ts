@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ALCHEMY_ERC20_TRANSFER_SIGNATURE } from '../../../src/config/constants';
+import { ALCHEMY_ERC20_TRANSFER_SIGNATURE, DEFAULT_CHAIN_ID } from '../../../src/config/constants';
 import { depositIngestorService } from '../../../src/services/alchemy/depositIngestorService';
 import type {
   AlchemyLog,
@@ -47,7 +47,7 @@ describe('depositIngestorService', () => {
       const events = await depositIngestorService.processWebhookPayload(payload);
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
-        chainId: 534351,
+        chainId: DEFAULT_CHAIN_ID,
         provider: 'alchemy',
         status: 'observed'
       });

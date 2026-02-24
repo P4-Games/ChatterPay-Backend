@@ -217,6 +217,18 @@ describe('Template Model', () => {
             es: '¡Con esta operación sumaste [POINTS] ChatterPoints! 🥳',
             pt: 'Com esta operação você ganhou [POINTS] ChatterPoints! 🥳'
           }
+        },
+        cross_chain_disabled: {
+          title: {
+            en: 'Cross-chain transfers disabled',
+            es: 'Transferencias cross-chain deshabilitadas',
+            pt: 'Transferências cross-chain desativadas'
+          },
+          message: {
+            en: 'Cross-chain transfers are currently disabled.',
+            es: 'Las transferencias cross-chain están actualmente deshabilitadas.',
+            pt: 'As transferências cross-chain estão atualmente desativadas.'
+          }
         }
       }
     };

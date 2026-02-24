@@ -7,7 +7,8 @@ import {
   COMMON_REPLY_WALLET_NOT_CREATED,
   GCP_CLOUD_TRACE_ENABLED,
   INFURA_API_KEY,
-  INFURA_URL
+  INFURA_URL,
+  USE_LIFI
 } from '../config/constants';
 import { areSamePhoneNumber } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
@@ -34,6 +35,8 @@ import {
   type RegisterOperationResult
 } from '../services/chatterpointsService';
 import { getChatterpayTokenFee } from '../services/commonService';
+import { executeCrossChainTransfer } from '../services/crossChainService';
+import { getLifiChains, validateAddressForChainType } from '../services/lifi/lifiService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import {
@@ -69,6 +72,8 @@ type MakeTransactionInputs = {
   token: string;
   amount: string;
   chain_id?: string;
+  network?: string; // Destination chain key for cross-chain (e.g., 'eth', 'arb', 'sol')
+  destination_token?: string; // Optional destination token symbol
   user_notes?: string;
 };
 
@@ -80,7 +85,7 @@ const validateInputs = async (
   currentChainId: number,
   tokenData: IToken | undefined
 ): Promise<string> => {
-  const { channel_user_id, to, token, amount, chain_id } = inputs;
+  const { channel_user_id, to, token, amount, chain_id, network } = inputs;
 
   if (!channel_user_id || !to || !token || !amount) {
     return 'One or more fields are empty';
@@ -122,7 +127,36 @@ const validateInputs = async (
   }
 
   if (!isValidEthereumWallet(to) && !isValidPhoneNumber(to)) {
-    return `'${to}' is invalid. 'to' parameter must be a Wallet or phone number (without spaces or symbols)`;
+    // For cross-chain transfers, non-EVM addresses are allowed
+    // but they MUST have a network specified - addresses will be validated later
+    if (!network) {
+      return `'${to}' is invalid. 'to' parameter must be a Wallet or phone number (without spaces or symbols)`;
+    }
+  }
+
+  // Cross-chain transfers require wallet addresses, not phone numbers
+  if (network && !isValidEthereumWallet(to)) {
+    // Validate the address format based on chain type using hardcoded chain info
+    // since we can't call async getLifiChains here
+    const CHAIN_TYPES: Record<string, string> = {
+      sol: 'SVM',
+      solana: 'SVM',
+      btc: 'UTXO',
+      bitcoin: 'UTXO',
+      '20000000000001': 'UTXO'
+    };
+    const chainType = CHAIN_TYPES[network.toLowerCase()];
+
+    if (chainType) {
+      if (!validateAddressForChainType(to, chainType)) {
+        return `Invalid address format for ${network}. Expected ${chainType} address format.`;
+      }
+    } else {
+      // Assume EVM for unknown chains
+      if (!isValidEthereumWallet(to)) {
+        return `Cross-chain transfers to ${network} require a valid wallet address, not a phone number.`;
+      }
+    }
   }
 
   if (token.length > 5) {
@@ -467,7 +501,15 @@ export const makeTransaction = async (
       );
     }
 
-    const { channel_user_id, to, token: tokenSymbol, amount, user_notes } = request.body;
+    const {
+      channel_user_id,
+      to,
+      token: tokenSymbol,
+      amount,
+      user_notes,
+      network,
+      destination_token
+    } = request.body;
     const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
     const { networkConfig, tokens: tokensConfig } = request.server as FastifyInstance;
     const santizedUserNotes = sanitizeUserNotesWhatsApp(user_notes || '', {
@@ -498,6 +540,30 @@ export const makeTransaction = async (
         channel_user_id,
         validationError
       );
+    }
+
+    // Validate cross-chain parameters when USE_LIFI is disabled
+    if (!USE_LIFI && (network || destination_token)) {
+      const isCrossChainNetwork = network && network.toLowerCase() !== 'scroll';
+      const isCrossChainToken =
+        destination_token && destination_token.toUpperCase() !== tokenSymbol.toUpperCase();
+
+      if (isCrossChainNetwork || isCrossChainToken) {
+        const { message: crossChainDisabledMsg } = await getNotificationTemplate(
+          channel_user_id,
+          NotificationEnum.cross_chain_disabled
+        );
+        rootSpan?.endSpan();
+        return await returnErrorResponseAsSuccess(
+          'makeTransaction',
+          logKey,
+          reply,
+          'Error making transaction',
+          false,
+          channel_user_id,
+          crossChainDisabledMsg
+        );
+      }
     }
 
     /* ***************************************************** */
@@ -694,6 +760,10 @@ export const makeTransaction = async (
     if (to.startsWith('0x')) {
       toAddress = to;
       toUser = null;
+    } else if (network) {
+      // Cross-chain transfer to non-EVM chain - use address as-is, no user creation
+      toAddress = to;
+      toUser = null;
     } else {
       const chatterpayProxyAddress: string = networkConfig.contracts.chatterPayAddress;
       const { factoryAddress } = networkConfig.contracts;
@@ -703,22 +773,72 @@ export const makeTransaction = async (
     userCreationSpan?.endSpan();
 
     /* ***************************************************** */
-    /* 10. makeTransaction: executeTransaction                */
+    /* 10. makeTransaction: check if cross-chain             */
     /* ***************************************************** */
+
     const transactionExecutionSpan = isTracingEnabled
       ? tracer?.createChildSpan({ name: 'executeTransaction' })
       : undefined;
 
-    const executeTransactionResult: ExecueTransactionResult = await sendTransferUserOperation(
-      networkConfig,
-      checkBlockchainConditionsResult.setupContractsResult!,
-      checkBlockchainConditionsResult.entryPointContract!,
-      userWallet.wallet_proxy,
-      toAddress,
-      tokenData!.address,
-      amount,
-      logKey
-    );
+    // Determine if this is a cross-chain transfer
+    // Cross-chain = USE_LIFI enabled AND network specified AND not 'scroll'
+    const isCrossChain = USE_LIFI && network && network.toLowerCase() !== 'scroll';
+
+    let executeTransactionResult: ExecueTransactionResult;
+
+    if (isCrossChain) {
+      // Cross-chain transfer via Li.Fi
+      Logger.info('makeTransaction', logKey, `Cross-chain transfer to ${network}`);
+
+      // Lookup destination chain from Li.Fi (includes EVM, SVM, UTXO chains)
+      const chains = await getLifiChains(logKey);
+      const destChain = chains.find(
+        (c) =>
+          c.key.toLowerCase() === network.toLowerCase() ||
+          c.name.toLowerCase() === network.toLowerCase()
+      );
+
+      if (!destChain) {
+        await sendInternalErrorNotification(channel_user_id, lastBotMsgDelaySeconds, traceHeader);
+        await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+        transactionExecutionSpan?.endSpan();
+        rootSpan?.endSpan();
+        Logger.error('makeTransaction', logKey, `Unsupported network: ${network}`);
+        return undefined;
+      }
+
+      const crossChainResult = await executeCrossChainTransfer({
+        networkConfig,
+        setupContractsResult: checkBlockchainConditionsResult.setupContractsResult!,
+        fromAddress: userWallet.wallet_proxy,
+        toAddress,
+        sourceTokenAddress: tokenData!.address,
+        sourceTokenSymbol: tokenSymbol,
+        amount,
+        sourceTokenDecimals: tokenData!.decimals,
+        destChain,
+        destTokenSymbol: destination_token,
+        logKey
+      });
+
+      executeTransactionResult = {
+        success: crossChainResult.success,
+        transactionHash: crossChainResult.transactionHash ?? '',
+        error: crossChainResult.error ?? ''
+      };
+    } else {
+      // Same-chain transfer (existing flow)
+      executeTransactionResult = await sendTransferUserOperation(
+        networkConfig,
+        checkBlockchainConditionsResult.setupContractsResult!,
+        checkBlockchainConditionsResult.entryPointContract!,
+        userWallet.wallet_proxy,
+        toAddress,
+        tokenData!.address,
+        amount,
+        logKey
+      );
+    }
 
     if (!executeTransactionResult.success) {
       await sendInternalErrorNotification(channel_user_id, lastBotMsgDelaySeconds, traceHeader);
