@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import mongoose, { type ObjectId } from 'mongoose';
 import {
@@ -16,7 +17,12 @@ import {
   returnSuccessResponse
 } from '../helpers/requestHelper';
 import { delaySeconds } from '../helpers/timeHelper';
-import { isShortUrl, isValidPhoneNumber, isValidUrl } from '../helpers/validationHelper';
+import {
+  isShortUrl,
+  isShortUrlByRedirect,
+  isValidPhoneNumber,
+  isValidUrl
+} from '../helpers/validationHelper';
 import NFTModel, { type INFT, type INFTMetadata } from '../models/nftModel';
 import { NotificationEnum } from '../models/templateModel';
 import type { IUser, IUserWallet } from '../models/userModel';
@@ -263,8 +269,8 @@ export const generateNftOriginal = async (
     );
   }
 
-  if (isShortUrl(url)) {
-    return returnErrorResponse('generateNftOriginal', logKey, reply, 400, 'Short Url not allowed');
+  if (isShortUrl(url) || (await isShortUrlByRedirect(url))) {
+    return returnSuccessResponse(reply, 'Short Url not allowed');
   }
 
   const fromUser: IUser | null = await getUser(channel_user_id);

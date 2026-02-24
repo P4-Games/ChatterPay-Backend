@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import aaveRoutes from './aaveRoutes';
 import webhookRoutes from './alchemyRoutes';
 import { balanceRoutes } from './balanceRoutes';
+import chainRoutes from './chainRoutes';
 import { chatterpointsRoutes } from './chatterpointsRoutes';
 import nftRoutes from './nftRoutes';
 import notificationRoutes from './notificationRoutes';
@@ -42,4 +43,5 @@ export async function setupRoutes(server: FastifyInstance): Promise<void> {
   server.register(chatterpointsRoutes);
   server.register(telegramRoutes);
   server.register(webhookRoutes);
+  server.register(chainRoutes, { prefix: '/chains' });
 }

@@ -42,6 +42,8 @@ describe('Validation Functions', () => {
     it('should return true for short URLs', () => {
       const shortUrl = `https://${short_urls_domains[0]}/short-url`;
       expect(isShortUrl(shortUrl)).toBe(true);
+      expect(isShortUrl(`www.${short_urls_domains[0]}/short-url`)).toBe(true);
+      expect(isShortUrl(`${short_urls_domains[0]}/short-url`)).toBe(true);
     });
 
     it('should return false for non-short URLs', () => {

@@ -7,7 +7,9 @@ import {
   SWAP_SLIPPAGE_CONFIG_EXTRA,
   SWAP_SLIPPAGE_CONFIG_STABLE,
   SWAP_USE_QUOTER,
-  SWAP_ZERO_FEE_MODE
+  SWAP_ZERO_FEE_MODE,
+  TESTNET_CHAIN_IDS,
+  USE_LIFI
 } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import type { IBlockchain } from '../models/blockchainModel';
@@ -20,6 +22,8 @@ import type {
 } from '../types/commonType';
 import { getTokenInfo } from './blockchainService';
 import { getTokenDecimals, getTokenSymbol } from './commonService';
+import type { LifiQuoteResponse } from './lifi';
+import { getLifiQuote, parseLifiError, validateLifiQuote } from './lifi';
 import {
   getChainlinkPriceFeedABI,
   getChatterpayABI,
@@ -1889,11 +1893,489 @@ export async function executeSwapSimple(
 }
 
 /**
- * Main swap execution router that selects between simple and standard swap modes
+ * Execute swap via Li.Fi aggregator
  *
- * Determines the appropriate swap execution path based on the SWAP_EXECUTE_SIMPLE
- * environment variable. Routes to either the simple EOA transaction flow or the
- * standard UserOperation flow with Account Abstraction and gas sponsorship.
+ * Uses Li.Fi's /quote endpoint to get optimal routing across multiple DEXs and bridges,
+ * then forwards the transaction through ChatterPay's execute() function using the
+ * backend signer directly (NOT via UserOperations or paymaster). Gas is paid from the
+ * backend signer's EOA balance.
+ * Includes automatic retry with increasing slippage on failure.
+ *
+ * @param networkConfig - Blockchain network configuration containing contract addresses
+ * @param setupContractsResult - Setup results with provider, signer, backend signer, and proxy info
+ * @param entryPointContract - Initialized EntryPoint contract for UserOperation execution
+ * @param tokenAddresses - Input and output token addresses for the swap
+ * @param blockchainTokens - List of supported tokens with metadata
+ * @param amount - Input amount as a string (e.g., "100.0")
+ * @param recipient - Recipient address for the swapped tokens
+ * @param logKey - Unique identifier for operation tracing and logging
+ *
+ * @returns Object containing success status, transaction hashes, and Li.Fi details
+ */
+export async function executeSwapLiFi(
+  networkConfig: IBlockchain,
+  setupContractsResult: SetupContractReturn,
+  entryPointContract: ethers.Contract,
+  tokenAddresses: swapTokensData,
+  _blockchainTokens: IToken[],
+  amount: string,
+  recipient: string,
+  logKey: string
+): Promise<ExecuteSwapResult> {
+  Logger.info(
+    'executeSwapLiFi',
+    logKey,
+    `Starting Li.Fi swap. Amount: ${amount}, Recipient: ${recipient}`
+  );
+
+  const MAX_SLIPPAGE_MULTIPLIER = 4;
+  let slippageMultiplier = 1;
+  let lastError = '';
+  let quote: LifiQuoteResponse | null = null;
+
+  try {
+    const { chatterpayABI, erc20ABI } = await fetchRequiredABIs();
+    const { provider } = setupContractsResult;
+    const tokenIn = tokenAddresses.tokenInputAddress;
+    const tokenOut = tokenAddresses.tokenOutputAddress;
+    const proxyAddress = setupContractsResult.proxy.proxyAddress;
+
+    const tokenInContract = new ethers.Contract(tokenIn, erc20ABI, provider);
+    const tokenInDecimals = await tokenInContract.decimals();
+    const amountInBN = ethers.utils.parseUnits(amount, tokenInDecimals);
+
+    // Retry strategy: first try different providers, then increase slippage
+    const excludedTools: string[] = [];
+    const MAX_PROVIDER_RETRIES = 3; // Try up to 3 different providers per slippage level
+
+    while (slippageMultiplier <= MAX_SLIPPAGE_MULTIPLIER) {
+      let providerRetries = 0;
+
+      while (providerRetries < MAX_PROVIDER_RETRIES) {
+        try {
+          const slippage = 0.005 * slippageMultiplier;
+
+          Logger.info(
+            'executeSwapLiFi',
+            logKey,
+            `Requesting Li.Fi quote with slippage: ${(slippage * 100).toFixed(2)}%, ` +
+              `excluded tools: [${excludedTools.join(', ') || 'none'}]`
+          );
+
+          const candidateQuote = await getLifiQuote(
+            {
+              fromChain: networkConfig.chainId,
+              toChain: networkConfig.chainId,
+              fromToken: tokenIn,
+              toToken: tokenOut,
+              fromAmount: amountInBN.toString(),
+              fromAddress: proxyAddress,
+              toAddress: recipient,
+              slippage,
+              denyExchanges: excludedTools.length > 0 ? excludedTools : undefined
+            },
+            logKey
+          );
+
+          const validation = validateLifiQuote(candidateQuote);
+          if (!validation.valid) {
+            throw new Error(`Invalid quote: ${validation.reason}`);
+          }
+
+          // Only assign to quote after validation passes
+          quote = candidateQuote;
+
+          Logger.info(
+            'executeSwapLiFi',
+            logKey,
+            `Quote received: tool=${quote.tool}, toAmountMin=${quote.estimate.toAmountMin}`
+          );
+
+          // Success - exit both loops
+          break;
+        } catch (error) {
+          const parsedError = parseLifiError(error);
+          lastError = parsedError.message;
+
+          // If we got a failed tool, exclude it and try another provider
+          if (parsedError.failedTool && !excludedTools.includes(parsedError.failedTool)) {
+            excludedTools.push(parsedError.failedTool);
+            Logger.warn(
+              'executeSwapLiFi',
+              logKey,
+              `Tool ${parsedError.failedTool} failed, excluding and trying another provider...`
+            );
+            providerRetries++;
+            continue;
+          }
+
+          // If it's a retryable error without a specific tool, try next provider
+          if (parsedError.shouldRetry && providerRetries < MAX_PROVIDER_RETRIES - 1) {
+            Logger.warn(
+              'executeSwapLiFi',
+              logKey,
+              `Quote failed (${lastError}), trying another provider...`
+            );
+            providerRetries++;
+            continue;
+          }
+
+          // No more provider retries available at this slippage level
+          break;
+        }
+      }
+
+      // If we got a valid quote, exit the slippage loop
+      if (quote) {
+        break;
+      }
+
+      // All providers failed at this slippage level, increase slippage
+      if (slippageMultiplier < MAX_SLIPPAGE_MULTIPLIER) {
+        Logger.warn(
+          'executeSwapLiFi',
+          logKey,
+          `All providers failed at ${(0.005 * slippageMultiplier * 100).toFixed(2)}% slippage, increasing slippage...`
+        );
+        slippageMultiplier *= 2;
+        // Reset excluded tools for new slippage level (give providers another chance)
+        excludedTools.length = 0;
+      } else {
+        throw new Error(`Li.Fi quote failed after all retries: ${lastError}`);
+      }
+    }
+
+    if (!quote) {
+      throw new Error(`Failed to get Li.Fi quote after retries: ${lastError}`);
+    }
+
+    // Execute the swap by calling execute() as the backend signer (owner of the wallet),
+    // NOT via a UserOperation or paymaster. This means:
+    // - The account-abstraction entry point and paymaster are not used in this path.
+    // - Gas is paid directly from the backend signer's EOA balance, not sponsored.
+    // - The entryPointContract parameter passed into this function is unused here.
+    const backendSigner = setupContractsResult.backPrincipal;
+
+    // Get current gas price from network (avoid overpaying)
+    const feeData = await provider.getFeeData();
+    const gasPrice = feeData.gasPrice || ethers.utils.parseUnits('0.001', 'gwei');
+    Logger.info(
+      'executeSwapLiFi',
+      logKey,
+      `Using gas price: ${ethers.utils.formatUnits(gasPrice, 'gwei')} gwei`
+    );
+
+    const chatterPayContract = new ethers.Contract(proxyAddress, chatterpayABI, backendSigner);
+
+    let approveTransactionHash = '';
+    const approvalAddress = quote.estimate.approvalAddress;
+
+    if (approvalAddress && approvalAddress !== ethers.constants.AddressZero) {
+      Logger.info(
+        'executeSwapLiFi',
+        logKey,
+        `Checking approval for Li.Fi router: ${approvalAddress}`
+      );
+
+      const tokenContract = new ethers.Contract(tokenIn, erc20ABI, provider);
+      const currentAllowance = await tokenContract.allowance(proxyAddress, approvalAddress);
+
+      if (currentAllowance.lt(amountInBN)) {
+        Logger.info(
+          'executeSwapLiFi',
+          logKey,
+          'Approving tokens for Li.Fi router via direct signer...'
+        );
+
+        const approveCallData = tokenContract.interface.encodeFunctionData('approve', [
+          approvalAddress,
+          ethers.constants.MaxUint256
+        ]);
+
+        // Call execute() directly on the ChatterPay wallet as owner
+        const approveTx = await chatterPayContract.execute(tokenIn, 0, approveCallData, {
+          gasLimit: 150000,
+          gasPrice
+        });
+
+        const approveReceipt = await approveTx.wait();
+
+        if (approveReceipt.status !== 1) {
+          throw new Error('Li.Fi approval transaction failed');
+        }
+
+        approveTransactionHash = approveReceipt.transactionHash;
+        Logger.info('executeSwapLiFi', logKey, `Approval tx: ${approveTransactionHash}`);
+      } else {
+        Logger.info('executeSwapLiFi', logKey, 'Sufficient allowance exists, skipping approval');
+      }
+    }
+
+    // Execute swap with retry on failure (get new quote and try again)
+    const MAX_SWAP_RETRIES = 3;
+    let swapTransactionHash = '';
+    const failedTools: string[] = []; // Track tools that failed during execution
+
+    for (let swapAttempt = 1; swapAttempt <= MAX_SWAP_RETRIES; swapAttempt++) {
+      try {
+        // Get fresh quote for retries (quotes expire quickly), excluding failed tools
+        if (swapAttempt > 1) {
+          Logger.info(
+            'executeSwapLiFi',
+            logKey,
+            `Swap attempt ${swapAttempt}/${MAX_SWAP_RETRIES}, getting fresh quote (excluding: ${failedTools.join(', ') || 'none'})...`
+          );
+
+          quote = await getLifiQuote(
+            {
+              fromChain: networkConfig.chainId,
+              toChain: networkConfig.chainId,
+              fromToken: tokenIn,
+              toToken: tokenOut,
+              fromAmount: amountInBN.toString(),
+              fromAddress: proxyAddress,
+              toAddress: recipient,
+              slippage: 0.005 * slippageMultiplier,
+              denyExchanges: failedTools.length > 0 ? failedTools : undefined
+            },
+            logKey
+          );
+
+          if (!quote) {
+            throw new Error('Failed to get fresh quote for retry');
+          }
+
+          Logger.info(
+            'executeSwapLiFi',
+            logKey,
+            `Fresh quote: tool=${quote.tool}, toAmountMin=${quote.estimate.toAmountMin}`
+          );
+        }
+
+        Logger.info(
+          'executeSwapLiFi',
+          logKey,
+          `Executing Li.Fi swap (attempt ${swapAttempt}, tool=${quote.tool})...`
+        );
+
+        // Simulate with eth_call first to catch revert reason
+        const callData = chatterPayContract.interface.encodeFunctionData('execute', [
+          quote.transactionRequest.to,
+          quote.transactionRequest.value || 0,
+          quote.transactionRequest.data
+        ]);
+
+        try {
+          await provider.call({
+            to: proxyAddress,
+            data: callData,
+            from: backendSigner.address,
+            gasLimit: 800000
+          });
+        } catch (simError) {
+          const simErrorMsg =
+            simError instanceof Error ? simError.message : 'Unknown simulation error';
+          Logger.error('executeSwapLiFi', logKey, `Simulation failed: ${simErrorMsg}`);
+          // Add failed tool to exclusion list
+          if (quote.tool && !failedTools.includes(quote.tool)) {
+            failedTools.push(quote.tool);
+          }
+          throw new Error(`Simulation failed for ${quote.tool}: ${simErrorMsg}`);
+        }
+
+        // Call execute() directly to forward the Li.Fi swap transaction
+        const swapTx = await chatterPayContract.execute(
+          quote.transactionRequest.to,
+          quote.transactionRequest.value || 0,
+          quote.transactionRequest.data,
+          {
+            gasLimit: 800000,
+            gasPrice
+          }
+        );
+
+        const swapReceipt = await swapTx.wait();
+
+        if (swapReceipt.status !== 1) {
+          // Try to get revert reason by replaying the call at the failed block
+          Logger.error(
+            'executeSwapLiFi',
+            logKey,
+            `Transaction reverted at block ${swapReceipt.blockNumber}. Attempting to decode revert reason...`
+          );
+
+          try {
+            await provider.call(
+              {
+                to: proxyAddress,
+                data: callData,
+                from: backendSigner.address,
+                gasLimit: 800000
+              },
+              swapReceipt.blockNumber
+            );
+          } catch (replayError) {
+            const replayMsg =
+              replayError instanceof Error ? replayError.message : 'Unknown replay error';
+            Logger.error('executeSwapLiFi', logKey, `Revert reason from replay: ${replayMsg}`);
+
+            // Try to decode common error selectors
+            if (replayMsg.includes('0x')) {
+              const errorMatch = replayMsg.match(/0x[a-fA-F0-9]{8}/);
+              if (errorMatch) {
+                Logger.error('executeSwapLiFi', logKey, `Error selector: ${errorMatch[0]}`);
+              }
+            }
+          }
+
+          // Add failed tool to exclusion list
+          if (quote.tool && !failedTools.includes(quote.tool)) {
+            failedTools.push(quote.tool);
+          }
+          throw new Error(
+            `Li.Fi swap transaction reverted (attempt ${swapAttempt}, tool=${quote.tool}, block=${swapReceipt.blockNumber})`
+          );
+        }
+
+        swapTransactionHash = swapReceipt.transactionHash;
+        Logger.info(
+          'executeSwapLiFi',
+          logKey,
+          `Li.Fi swap completed successfully. Tx: ${swapTransactionHash}`
+        );
+        break; // Success - exit retry loop
+      } catch (swapError) {
+        const errorMsg = swapError instanceof Error ? swapError.message : 'Unknown error';
+
+        // Try to extract error data from ethers exception
+        const ethersError = swapError as {
+          reason?: string;
+          data?: string;
+          code?: string;
+          errorName?: string;
+        };
+        if (ethersError.reason) {
+          Logger.error('executeSwapLiFi', logKey, `Ethers reason: ${ethersError.reason}`);
+        }
+        if (
+          ethersError.data &&
+          typeof ethersError.data === 'string' &&
+          ethersError.data.startsWith('0x')
+        ) {
+          Logger.error('executeSwapLiFi', logKey, `Ethers error data: ${ethersError.data}`);
+          // Try to decode 4-byte selector
+          const selector = ethersError.data.slice(0, 10);
+          Logger.error('executeSwapLiFi', logKey, `Error selector: ${selector}`);
+        }
+
+        // If error contains transaction hash, try to get more details
+        const txHashMatch = errorMsg.match(/transactionHash="(0x[a-fA-F0-9]{64})"/);
+        if (txHashMatch) {
+          try {
+            const failedTxHash = txHashMatch[1];
+            const failedReceipt = await provider.getTransactionReceipt(failedTxHash);
+            if (failedReceipt && failedReceipt.status === 0) {
+              Logger.error(
+                'executeSwapLiFi',
+                logKey,
+                `Failed tx details: block=${failedReceipt.blockNumber}, gasUsed=${failedReceipt.gasUsed.toString()}`
+              );
+
+              // Replay call at failed block to get revert reason
+              const replayCallData = chatterPayContract.interface.encodeFunctionData('execute', [
+                quote.transactionRequest.to,
+                quote.transactionRequest.value || 0,
+                quote.transactionRequest.data
+              ]);
+              try {
+                const result = await provider.call(
+                  {
+                    to: proxyAddress,
+                    data: replayCallData,
+                    from: backendSigner.address,
+                    gasLimit: 800000
+                  },
+                  failedReceipt.blockNumber
+                );
+                // If we get here, the call succeeded in simulation - log this
+                Logger.warn(
+                  'executeSwapLiFi',
+                  logKey,
+                  `Replay succeeded (state changed?): result=${result.slice(0, 66)}...`
+                );
+              } catch (replayError) {
+                const replayEthersError = replayError as {
+                  reason?: string;
+                  data?: string;
+                  message?: string;
+                };
+                if (replayEthersError.reason) {
+                  Logger.error(
+                    'executeSwapLiFi',
+                    logKey,
+                    `REVERT REASON: ${replayEthersError.reason}`
+                  );
+                }
+                if (replayEthersError.data) {
+                  Logger.error('executeSwapLiFi', logKey, `REVERT DATA: ${replayEthersError.data}`);
+                }
+                const replayMsg = replayError instanceof Error ? replayError.message : 'Unknown';
+                Logger.error('executeSwapLiFi', logKey, `Replay error: ${replayMsg.slice(0, 500)}`);
+              }
+            }
+          } catch (debugError) {
+            Logger.debug('executeSwapLiFi', logKey, `Debug logging failed: ${debugError}`);
+          }
+        }
+
+        Logger.warn(
+          'executeSwapLiFi',
+          logKey,
+          `Swap attempt ${swapAttempt} failed (tool=${quote.tool}): ${errorMsg}`
+        );
+
+        // Add failed tool to exclusion list for next retry
+        if (quote.tool && !failedTools.includes(quote.tool)) {
+          failedTools.push(quote.tool);
+        }
+
+        if (swapAttempt >= MAX_SWAP_RETRIES) {
+          throw new Error(`Li.Fi swap failed after ${MAX_SWAP_RETRIES} attempts: ${errorMsg}`);
+        }
+
+        // Wait before retry
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+
+    return {
+      success: true,
+      approveTransactionHash,
+      swapTransactionHash,
+      lifiDetails: {
+        quoteId: quote.id,
+        tool: quote.tool,
+        toAmountMin: quote.estimate.toAmountMin
+      }
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    Logger.error('executeSwapLiFi', logKey, `Li.Fi swap failed: ${errorMessage}`);
+
+    return {
+      success: false,
+      swapTransactionHash: '',
+      approveTransactionHash: ''
+    };
+  }
+}
+
+/**
+ * Main swap execution router with Li.Fi-first strategy and Uniswap fallback
+ *
+ * Attempts to execute swaps via Li.Fi aggregator first for optimal routing.
+ * If Li.Fi fails, automatically falls back to the legacy Uniswap implementation
+ * (either simple EOA or standard UserOperation flow based on configuration).
  *
  * @param networkConfig - Blockchain network configuration containing contract addresses
  * @param setupContractsResult - Setup results with provider, signer, backend signer, and proxy info
@@ -1928,8 +2410,52 @@ export async function executeSwap(
   recipient: string,
   logKey: string
 ): Promise<ExecuteSwapResult> {
+  const useLifi = USE_LIFI;
   const isSimple = String(SWAP_EXECUTE_SIMPLE || '').toLowerCase() === 'true';
-  Logger.info('executeSwap', logKey, `Routing swap. EXECUTE_SWAP_SIMPLE=${isSimple}`);
+
+  // Li.Fi only supports mainnet chains - check if this is a testnet
+  const isTestnet = TESTNET_CHAIN_IDS.includes(networkConfig.chainId);
+  const shouldUseLifi = useLifi && !isTestnet;
+
+  Logger.info(
+    'executeSwap',
+    logKey,
+    `Routing swap. USE_LIFI=${useLifi}, IS_TESTNET=${isTestnet}, EXECUTE_SIMPLE=${isSimple}`
+  );
+
+  // Try Li.Fi first if enabled and on mainnet
+  if (shouldUseLifi) {
+    Logger.info('executeSwap', logKey, 'Attempting Li.Fi swap...');
+
+    const lifiResult = await executeSwapLiFi(
+      networkConfig,
+      setupContractsResult,
+      entryPointContract,
+      tokenAddresses,
+      blockchainTokens,
+      amount,
+      recipient,
+      logKey
+    );
+
+    if (lifiResult.success) {
+      Logger.info(
+        'executeSwap',
+        logKey,
+        `Li.Fi swap successful. Tool: ${lifiResult.lifiDetails?.tool || 'unknown'}`
+      );
+      return lifiResult;
+    }
+
+    // Li.Fi failed, fallback to Uniswap
+    Logger.warn(
+      'executeSwap',
+      logKey,
+      'Li.Fi swap failed, falling back to Uniswap implementation...'
+    );
+  }
+
+  // Fallback to legacy Uniswap implementation
   if (isSimple) {
     return executeSwapSimple(
       networkConfig,
@@ -1942,6 +2468,7 @@ export async function executeSwap(
       logKey
     );
   }
+
   return executeSwapStandard(
     networkConfig,
     setupContractsResult,

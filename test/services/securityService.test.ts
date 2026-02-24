@@ -42,7 +42,8 @@ describe('securityService', () => {
         aave_supply_modified: mockNotification,
         aave_supply_info: mockNotification,
         aave_supply_info_no_data: mockNotification,
-        chatterpoints_operation: mockNotification
+        chatterpoints_operation: mockNotification,
+        cross_chain_disabled: mockNotification
       },
       security_questions: {
         pet_name: {
