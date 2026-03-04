@@ -70,6 +70,7 @@ export interface VerifyPinResult {
   status: 'active' | 'blocked' | 'not_set';
   blocked_until?: Date;
   remaining_attempts?: number;
+  message: string;
 }
 
 export interface SetRecoveryQuestionsResult {
@@ -265,7 +266,12 @@ export const securityService = {
   },
 
   /**
-   * Verify user's PIN
+   * Verify user's PIN.
+   *
+   * @param phoneNumber - User phone number (channel_user_id).
+   * @param pin - PIN provided by the user (plain text).
+   * @param channel - Source channel for auditing ("bot" | "frontend" | "unknown").
+   * @returns VerifyPinResult Verification outcome including status, message, and optional lock/attempt info.
    */
   verifyPin: async (
     phoneNumber: string,
@@ -280,7 +286,8 @@ export const securityService = {
       if (securityState.pin.status === 'not_set' || !securityState.pin.hash) {
         return {
           ok: false,
-          status: 'not_set'
+          status: 'not_set',
+          message: 'PIN verification error: PIN is not set'
         };
       }
 
@@ -293,7 +300,8 @@ export const securityService = {
         return {
           ok: false,
           status: 'blocked',
-          blocked_until: securityState.pin.blocked_until
+          blocked_until: securityState.pin.blocked_until,
+          message: 'PIN verification error: PIN is blocked'
         };
       }
 
@@ -308,7 +316,8 @@ export const securityService = {
 
         return {
           ok: true,
-          status: 'active'
+          status: 'active',
+          message: 'PIN verified successfully'
         };
       }
 
@@ -339,20 +348,25 @@ export const securityService = {
         return {
           ok: false,
           status: 'blocked',
-          blocked_until: blockedUntil
+          blocked_until: blockedUntil,
+          message: 'PIN verification error: invalid PIN. PIN blocked.'
         };
       }
+
+      const remainingAttempts = SECURITY_PIN_MAX_FAILED_ATTEMPTS - failed_attempts;
 
       return {
         ok: false,
         status: 'active',
-        remaining_attempts: SECURITY_PIN_MAX_FAILED_ATTEMPTS - failed_attempts
+        remaining_attempts: remainingAttempts,
+        message: `PIN verification error: invalid PIN. Remaining attempts: ${remainingAttempts}`
       };
-    } catch (error) {
-      Logger.error('securityService', 'verifyPin', 'Failed to verify PIN', { error });
+    } catch (error: unknown) {
+      Logger.error('securityService', 'verifyPin', 'Failed to verify PIN', error);
       return {
         ok: false,
-        status: 'active'
+        status: 'active',
+        message: 'PIN verification error: internal error'
       };
     }
   },
