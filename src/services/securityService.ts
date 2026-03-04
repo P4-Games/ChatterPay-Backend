@@ -287,7 +287,8 @@ export const securityService = {
         return {
           ok: false,
           status: 'not_set',
-          message: 'PIN verification error: PIN is not set'
+          message:
+            'Security PIN is not set. Please set it in your ChatterPay profile on the web dashboard.'
         };
       }
 
@@ -297,11 +298,15 @@ export const securityService = {
         securityState.pin.blocked_until > now &&
         securityState.pin.status === 'blocked'
       ) {
+        const blockedUntilIso = new Date(securityState.pin.blocked_until).toISOString();
+
         return {
           ok: false,
           status: 'blocked',
           blocked_until: securityState.pin.blocked_until,
-          message: 'PIN verification error: PIN is blocked'
+          message:
+            `Too many incorrect attempts. Your Security PIN is temporarily locked. ` +
+            `Please try again later. (Unlocks at: ${blockedUntilIso})`
         };
       }
 
@@ -317,7 +322,7 @@ export const securityService = {
         return {
           ok: true,
           status: 'active',
-          message: 'PIN verified successfully'
+          message: 'PIN verified successfully.'
         };
       }
 
@@ -349,7 +354,9 @@ export const securityService = {
           ok: false,
           status: 'blocked',
           blocked_until: blockedUntil,
-          message: 'PIN verification error: invalid PIN. PIN blocked.'
+          message:
+            `Too many incorrect attempts. Your Security PIN is temporarily locked. ` +
+            `Please try again later. (Unlocks at: ${blockedUntil.toISOString()})`
         };
       }
 
@@ -359,7 +366,7 @@ export const securityService = {
         ok: false,
         status: 'active',
         remaining_attempts: remainingAttempts,
-        message: `PIN verification error: invalid PIN. Remaining attempts: ${remainingAttempts}`
+        message: `Incorrect PIN. You have ${remainingAttempts} attempt(s) left.`
       };
     } catch (error: unknown) {
       Logger.error('securityService', 'verifyPin', 'Failed to verify PIN', error);
