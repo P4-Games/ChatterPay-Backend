@@ -328,7 +328,7 @@ export const verifySecurityPin = async (
 
     const result = await securityService.verifyPin(channel_user_id, pin, channel);
 
-    return await returnSuccessResponse(reply, 'PIN verification completed', {
+    return await returnSuccessResponse(reply, result.message, {
       ok: result.ok,
       pin_status: result.status,
       blocked_until: result.blocked_until,
