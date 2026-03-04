@@ -15,11 +15,12 @@ import type {
   SecurityEventChannel,
   SecurityEventType
 } from '../models/securityEventModel';
-import type { LocalizedContentType } from '../models/templateModel';
+import { type LocalizedContentType, NotificationEnum } from '../models/templateModel';
 import { mongoSecurityEventsService } from './mongo/mongoSecurityEventsService';
 import { mongoSecurityService, type RecoveryQuestionRecord } from './mongo/mongoSecurityService';
 import { mongoTemplateService, templateEnum } from './mongo/mongoTemplateService';
 import { mongoUserService } from './mongo/mongoUserService';
+import { getNotificationTemplate } from './notificationService';
 
 const HMAC_ALGORITHM = 'sha256';
 const DEFAULT_SALT_BYTES = 16;
@@ -287,8 +288,8 @@ export const securityService = {
         return {
           ok: false,
           status: 'not_set',
-          message:
-            'Security PIN is not set. Please set it in your ChatterPay profile on the web dashboard.'
+          message: (await getNotificationTemplate(phoneNumber, NotificationEnum.pin_not_set))
+            ?.message
         };
       }
 
@@ -304,9 +305,8 @@ export const securityService = {
           ok: false,
           status: 'blocked',
           blocked_until: securityState.pin.blocked_until,
-          message:
-            `Too many incorrect attempts. Your Security PIN is temporarily locked. ` +
-            `Please try again later. (Unlocks at: ${blockedUntilIso})`
+          message: (await getNotificationTemplate(phoneNumber, NotificationEnum.pin_blocked))
+            ?.message
         };
       }
 
@@ -322,7 +322,9 @@ export const securityService = {
         return {
           ok: true,
           status: 'active',
-          message: 'PIN verified successfully.'
+          message: (
+            await getNotificationTemplate(phoneNumber, NotificationEnum.pin_verified_success)
+          )?.message
         };
       }
 
@@ -354,9 +356,12 @@ export const securityService = {
           ok: false,
           status: 'blocked',
           blocked_until: blockedUntil,
-          message:
-            `Too many incorrect attempts. Your Security PIN is temporarily locked. ` +
-            `Please try again later. (Unlocks at: ${blockedUntil.toISOString()})`
+          message: (
+            await getNotificationTemplate(
+              phoneNumber,
+              NotificationEnum.pin_invalid_remaining_attempts
+            )
+          )?.message
         };
       }
 
@@ -373,7 +378,8 @@ export const securityService = {
       return {
         ok: false,
         status: 'active',
-        message: 'PIN verification error: internal error'
+        message: (await getNotificationTemplate(phoneNumber, NotificationEnum.pin_internal_error))
+          ?.message
       };
     }
   },
