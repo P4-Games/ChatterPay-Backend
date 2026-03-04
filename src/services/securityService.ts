@@ -152,10 +152,13 @@ export const securityService = {
           if (userLanguage) {
             language = userLanguage;
           }
-        } catch (error) {
-          Logger.warn('securityService', 'listSecurityQuestions', 'Could not get user language', {
+        } catch (error: unknown) {
+          Logger.warn(
+            'securityService',
+            'listSecurityQuestions',
+            'Could not get user language',
             error
-          });
+          );
         }
       }
 
@@ -182,10 +185,8 @@ export const securityService = {
           text
         };
       });
-    } catch (error) {
-      Logger.error('securityService', 'listSecurityQuestions', 'Failed to list questions', {
-        error
-      });
+    } catch (error: unknown) {
+      Logger.error('securityService', 'listSecurityQuestions', 'Failed to list questions', error);
       return [];
     }
   },
@@ -210,7 +211,6 @@ export const securityService = {
           error_code: 'PIN_LENGTH_INVALID'
         };
       }
-
       // Check if PIN is already set (unless explicitly allowing overwrite for reset)
       if (!allowOverwrite) {
         const currentStatus = await securityService.getSecurityStatus(phoneNumber);
@@ -255,8 +255,8 @@ export const securityService = {
         pin_status: 'active',
         last_set_at: status.last_set_at ?? new Date()
       };
-    } catch (error) {
-      Logger.error('securityService', 'setPin', 'Failed to set PIN', { error });
+    } catch (error: unknown) {
+      Logger.error('securityService.setPin', 'Failed to set PIN', error);
       return {
         success: false,
         message: 'Internal error setting PIN',
@@ -481,10 +481,13 @@ export const securityService = {
         recovery_questions_set: true,
         recovery_question_ids: questions.map((q) => q.question_id)
       };
-    } catch (error) {
-      Logger.error('securityService', 'setRecoveryQuestions', 'Failed to set recovery questions', {
+    } catch (error: unknown) {
+      Logger.error(
+        'securityService',
+        'setRecoveryQuestions',
+        'Failed to set recovery questions',
         error
-      });
+      );
       return {
         success: false,
         message: 'Internal error setting recovery questions',
@@ -593,8 +596,8 @@ export const securityService = {
         pin_status: 'active',
         last_set_at: setPinResult.last_set_at
       };
-    } catch (error) {
-      Logger.error('securityService', 'resetPinWithRecovery', 'Failed to reset PIN', { error });
+    } catch (error: unknown) {
+      Logger.error('securityService', 'resetPinWithRecovery', 'Failed to reset PIN', error);
       return {
         success: false,
         message: 'Internal error resetting PIN',
@@ -639,10 +642,8 @@ export const securityService = {
       return {
         allowed: true
       };
-    } catch (error) {
-      Logger.error('securityService', 'getOperationGate', 'Failed to check operation gate', {
-        error
-      });
+    } catch (error: unknown) {
+      Logger.error('securityService', 'getOperationGate', 'Failed to check operation gate', error);
       // In case of error, allow operation (fail open for now)
       return {
         allowed: true
@@ -663,7 +664,7 @@ export const securityService = {
         channel: filters?.channel,
         event_type: filters?.event_type
       });
-    } catch (error) {
+    } catch (error: unknown) {
       Logger.error('securityService', 'listSecurityEvents', 'Failed to list security events', {
         error,
         phoneNumber,
