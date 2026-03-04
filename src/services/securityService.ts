@@ -70,6 +70,7 @@ export interface VerifyPinResult {
   status: 'active' | 'blocked' | 'not_set';
   blocked_until?: Date;
   remaining_attempts?: number;
+  message: string;
 }
 
 export interface SetRecoveryQuestionsResult {
@@ -151,10 +152,13 @@ export const securityService = {
           if (userLanguage) {
             language = userLanguage;
           }
-        } catch (error) {
-          Logger.warn('securityService', 'listSecurityQuestions', 'Could not get user language', {
+        } catch (error: unknown) {
+          Logger.warn(
+            'securityService',
+            'listSecurityQuestions',
+            'Could not get user language',
             error
-          });
+          );
         }
       }
 
@@ -181,10 +185,8 @@ export const securityService = {
           text
         };
       });
-    } catch (error) {
-      Logger.error('securityService', 'listSecurityQuestions', 'Failed to list questions', {
-        error
-      });
+    } catch (error: unknown) {
+      Logger.error('securityService', 'listSecurityQuestions', 'Failed to list questions', error);
       return [];
     }
   },
@@ -209,7 +211,6 @@ export const securityService = {
           error_code: 'PIN_LENGTH_INVALID'
         };
       }
-
       // Check if PIN is already set (unless explicitly allowing overwrite for reset)
       if (!allowOverwrite) {
         const currentStatus = await securityService.getSecurityStatus(phoneNumber);
@@ -254,8 +255,8 @@ export const securityService = {
         pin_status: 'active',
         last_set_at: status.last_set_at ?? new Date()
       };
-    } catch (error) {
-      Logger.error('securityService', 'setPin', 'Failed to set PIN', { error });
+    } catch (error: unknown) {
+      Logger.error('securityService.setPin', 'Failed to set PIN', error);
       return {
         success: false,
         message: 'Internal error setting PIN',
@@ -265,7 +266,12 @@ export const securityService = {
   },
 
   /**
-   * Verify user's PIN
+   * Verify user's PIN.
+   *
+   * @param phoneNumber - User phone number (channel_user_id).
+   * @param pin - PIN provided by the user (plain text).
+   * @param channel - Source channel for auditing ("bot" | "frontend" | "unknown").
+   * @returns VerifyPinResult Verification outcome including status, message, and optional lock/attempt info.
    */
   verifyPin: async (
     phoneNumber: string,
@@ -280,7 +286,8 @@ export const securityService = {
       if (securityState.pin.status === 'not_set' || !securityState.pin.hash) {
         return {
           ok: false,
-          status: 'not_set'
+          status: 'not_set',
+          message: 'PIN verification error: PIN is not set'
         };
       }
 
@@ -293,7 +300,8 @@ export const securityService = {
         return {
           ok: false,
           status: 'blocked',
-          blocked_until: securityState.pin.blocked_until
+          blocked_until: securityState.pin.blocked_until,
+          message: 'PIN verification error: PIN is blocked'
         };
       }
 
@@ -308,7 +316,8 @@ export const securityService = {
 
         return {
           ok: true,
-          status: 'active'
+          status: 'active',
+          message: 'PIN verified successfully'
         };
       }
 
@@ -339,20 +348,25 @@ export const securityService = {
         return {
           ok: false,
           status: 'blocked',
-          blocked_until: blockedUntil
+          blocked_until: blockedUntil,
+          message: 'PIN verification error: invalid PIN. PIN blocked.'
         };
       }
+
+      const remainingAttempts = SECURITY_PIN_MAX_FAILED_ATTEMPTS - failed_attempts;
 
       return {
         ok: false,
         status: 'active',
-        remaining_attempts: SECURITY_PIN_MAX_FAILED_ATTEMPTS - failed_attempts
+        remaining_attempts: remainingAttempts,
+        message: `PIN verification error: invalid PIN. Remaining attempts: ${remainingAttempts}`
       };
-    } catch (error) {
-      Logger.error('securityService', 'verifyPin', 'Failed to verify PIN', { error });
+    } catch (error: unknown) {
+      Logger.error('securityService', 'verifyPin', 'Failed to verify PIN', error);
       return {
         ok: false,
-        status: 'active'
+        status: 'active',
+        message: 'PIN verification error: internal error'
       };
     }
   },
@@ -467,10 +481,13 @@ export const securityService = {
         recovery_questions_set: true,
         recovery_question_ids: questions.map((q) => q.question_id)
       };
-    } catch (error) {
-      Logger.error('securityService', 'setRecoveryQuestions', 'Failed to set recovery questions', {
+    } catch (error: unknown) {
+      Logger.error(
+        'securityService',
+        'setRecoveryQuestions',
+        'Failed to set recovery questions',
         error
-      });
+      );
       return {
         success: false,
         message: 'Internal error setting recovery questions',
@@ -579,8 +596,8 @@ export const securityService = {
         pin_status: 'active',
         last_set_at: setPinResult.last_set_at
       };
-    } catch (error) {
-      Logger.error('securityService', 'resetPinWithRecovery', 'Failed to reset PIN', { error });
+    } catch (error: unknown) {
+      Logger.error('securityService', 'resetPinWithRecovery', 'Failed to reset PIN', error);
       return {
         success: false,
         message: 'Internal error resetting PIN',
@@ -625,10 +642,8 @@ export const securityService = {
       return {
         allowed: true
       };
-    } catch (error) {
-      Logger.error('securityService', 'getOperationGate', 'Failed to check operation gate', {
-        error
-      });
+    } catch (error: unknown) {
+      Logger.error('securityService', 'getOperationGate', 'Failed to check operation gate', error);
       // In case of error, allow operation (fail open for now)
       return {
         allowed: true
@@ -649,7 +664,7 @@ export const securityService = {
         channel: filters?.channel,
         event_type: filters?.event_type
       });
-    } catch (error) {
+    } catch (error: unknown) {
       Logger.error('securityService', 'listSecurityEvents', 'Failed to list security events', {
         error,
         phoneNumber,
