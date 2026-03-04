@@ -32,13 +32,15 @@ function normalizePreferredLanguage(language: string | null | undefined): 'es' |
 async function getNotificationUtilityConfig(
   typeOfNotification: NotificationEnum
 ): Promise<NotificationUtilityConfigType | undefined> {
-  const notificationTemplates: NotificationTemplatesTypes | null =
-    await mongoTemplateService.getTemplate<ITemplateSchema>(templateEnum.NOTIFICATIONS);
-  if (!notificationTemplates) return undefined;
+  const templateDocument = await mongoTemplateService.getTemplate<ITemplateSchema>(
+    templateEnum.NOTIFICATIONS
+  );
 
-  // @ts-expect-error 'expected type error'
-  const template = notificationTemplates[typeOfNotification];
+  if (!templateDocument) {
+    return undefined;
+  }
 
+  const template = templateDocument.notifications[typeOfNotification];
   return template?.utility;
 }
 
