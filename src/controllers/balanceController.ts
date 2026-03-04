@@ -130,7 +130,7 @@ export const balanceByPhoneNumber = async (
     const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, chainId);
 
     if (!userWallet || !userWallet.wallet_proxy) {
-      return await returnErrorResponse('balanceByPhoneNumber', '', reply, 404, 'Wallet not found');
+      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
     }
 
     const data = await getAddressBalanceWithNfts(
