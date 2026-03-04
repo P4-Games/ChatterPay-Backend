@@ -361,7 +361,7 @@ export const securityService = {
               phoneNumber,
               NotificationEnum.pin_invalid_remaining_attempts
             )
-          )?.message
+          ).message.replace('[BLOCKED_UNTIL]', blockedUntil.toISOString())
         };
       }
 
@@ -371,7 +371,9 @@ export const securityService = {
         ok: false,
         status: 'active',
         remaining_attempts: remainingAttempts,
-        message: `Incorrect PIN. You have ${remainingAttempts} attempt(s) left.`
+        message: (
+          await getNotificationTemplate(phoneNumber, NotificationEnum.pin_internal_error)
+        ).message.replace('[REMAINING_ATTEMPTS]', remainingAttempts.toString())
       };
     } catch (error: unknown) {
       Logger.error('securityService', 'verifyPin', 'Failed to verify PIN', error);
