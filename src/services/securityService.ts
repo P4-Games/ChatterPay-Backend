@@ -15,11 +15,12 @@ import type {
   SecurityEventChannel,
   SecurityEventType
 } from '../models/securityEventModel';
-import type { LocalizedContentType } from '../models/templateModel';
+import { type LocalizedContentType, NotificationEnum } from '../models/templateModel';
 import { mongoSecurityEventsService } from './mongo/mongoSecurityEventsService';
 import { mongoSecurityService, type RecoveryQuestionRecord } from './mongo/mongoSecurityService';
 import { mongoTemplateService, templateEnum } from './mongo/mongoTemplateService';
 import { mongoUserService } from './mongo/mongoUserService';
+import { getNotificationTemplate } from './notificationService';
 
 const HMAC_ALGORITHM = 'sha256';
 const DEFAULT_SALT_BYTES = 16;
@@ -287,7 +288,8 @@ export const securityService = {
         return {
           ok: false,
           status: 'not_set',
-          message: 'PIN verification error: PIN is not set'
+          message: (await getNotificationTemplate(phoneNumber, NotificationEnum.pin_not_set))
+            ?.message
         };
       }
 
@@ -297,11 +299,25 @@ export const securityService = {
         securityState.pin.blocked_until > now &&
         securityState.pin.status === 'blocked'
       ) {
+        const blockedTemplate = await getNotificationTemplate(
+          phoneNumber,
+          NotificationEnum.pin_blocked
+        );
+        const remainingBlockMinutes = Math.max(
+          1,
+          Math.ceil(
+            (new Date(securityState.pin.blocked_until).getTime() - now.getTime()) / (60 * 1000)
+          )
+        );
+
         return {
           ok: false,
           status: 'blocked',
           blocked_until: securityState.pin.blocked_until,
-          message: 'PIN verification error: PIN is blocked'
+          message: blockedTemplate?.message.replace(
+            '[BLOCK_MINUTES]',
+            remainingBlockMinutes.toString()
+          )
         };
       }
 
@@ -311,20 +327,20 @@ export const securityService = {
       const isValid = secureCompareHex(expectedHash, securityState.pin.hash);
 
       if (isValid) {
-        // Reset failed attempts
         await mongoSecurityService.resetPinFailedAttempts(phoneNumber);
 
         return {
           ok: true,
           status: 'active',
-          message: 'PIN verified successfully'
+          message: (
+            await getNotificationTemplate(phoneNumber, NotificationEnum.pin_verified_success)
+          )?.message
         };
       }
 
       // PIN is incorrect - increment failed attempts
       const { failed_attempts } = await mongoSecurityService.incrementPinFailedAttempt(phoneNumber);
 
-      // Log failed attempt
       await mongoSecurityEventsService.logSecurityEvent({
         user_id: phoneNumber,
         event_type: 'PIN_VERIFY_FAILED',
@@ -337,7 +353,6 @@ export const securityService = {
         const blockedUntil = new Date(now.getTime() + SECURITY_PIN_BLOCK_MINUTES * 60 * 1000);
         await mongoSecurityService.setPinBlockedUntil(phoneNumber, blockedUntil);
 
-        // Log blocked event
         await mongoSecurityEventsService.logSecurityEvent({
           user_id: phoneNumber,
           event_type: 'PIN_BLOCKED',
@@ -345,28 +360,44 @@ export const securityService = {
           metadata: { blocked_until: blockedUntil.toISOString() }
         });
 
+        const blockedTemplate = await getNotificationTemplate(
+          phoneNumber,
+          NotificationEnum.pin_blocked
+        );
+
         return {
           ok: false,
           status: 'blocked',
           blocked_until: blockedUntil,
-          message: 'PIN verification error: invalid PIN. PIN blocked.'
+          message: blockedTemplate?.message.replace(
+            '[BLOCK_MINUTES]',
+            SECURITY_PIN_BLOCK_MINUTES.toString()
+          )
         };
       }
 
       const remainingAttempts = SECURITY_PIN_MAX_FAILED_ATTEMPTS - failed_attempts;
+      const invalidPinTemplate = await getNotificationTemplate(
+        phoneNumber,
+        NotificationEnum.pin_invalid_remaining_attempts
+      );
 
       return {
         ok: false,
         status: 'active',
         remaining_attempts: remainingAttempts,
-        message: `PIN verification error: invalid PIN. Remaining attempts: ${remainingAttempts}`
+        message: invalidPinTemplate?.message.replace(
+          '[REMAINING_ATTEMPTS]',
+          remainingAttempts.toString()
+        )
       };
     } catch (error: unknown) {
       Logger.error('securityService', 'verifyPin', 'Failed to verify PIN', error);
       return {
         ok: false,
         status: 'active',
-        message: 'PIN verification error: internal error'
+        message: (await getNotificationTemplate(phoneNumber, NotificationEnum.pin_internal_error))
+          ?.message
       };
     }
   },
