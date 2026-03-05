@@ -273,8 +273,7 @@ export const securityService = {
    * @param pin - PIN provided by the user (plain text).
    * @param channel - Source channel for auditing ("bot" | "frontend" | "unknown").
    * @returns VerifyPinResult Verification outcome including status, message, and optional lock/attempt info.
-   */
-  verifyPin: async (
+   */ verifyPin: async (
     phoneNumber: string,
     pin: string,
     channel?: string
@@ -300,13 +299,16 @@ export const securityService = {
         securityState.pin.status === 'blocked'
       ) {
         const blockedUntilIso = new Date(securityState.pin.blocked_until).toISOString();
+        const blockedTemplate = await getNotificationTemplate(
+          phoneNumber,
+          NotificationEnum.pin_blocked
+        );
 
         return {
           ok: false,
           status: 'blocked',
           blocked_until: securityState.pin.blocked_until,
-          message: (await getNotificationTemplate(phoneNumber, NotificationEnum.pin_blocked))
-            ?.message
+          message: blockedTemplate?.message.replace('[BLOCKED_UNTIL]', blockedUntilIso)
         };
       }
 
@@ -316,7 +318,6 @@ export const securityService = {
       const isValid = secureCompareHex(expectedHash, securityState.pin.hash);
 
       if (isValid) {
-        // Reset failed attempts
         await mongoSecurityService.resetPinFailedAttempts(phoneNumber);
 
         return {
@@ -331,7 +332,6 @@ export const securityService = {
       // PIN is incorrect - increment failed attempts
       const { failed_attempts } = await mongoSecurityService.incrementPinFailedAttempt(phoneNumber);
 
-      // Log failed attempt
       await mongoSecurityEventsService.logSecurityEvent({
         user_id: phoneNumber,
         event_type: 'PIN_VERIFY_FAILED',
@@ -344,7 +344,6 @@ export const securityService = {
         const blockedUntil = new Date(now.getTime() + SECURITY_PIN_BLOCK_MINUTES * 60 * 1000);
         await mongoSecurityService.setPinBlockedUntil(phoneNumber, blockedUntil);
 
-        // Log blocked event
         await mongoSecurityEventsService.logSecurityEvent({
           user_id: phoneNumber,
           event_type: 'PIN_BLOCKED',
@@ -352,28 +351,33 @@ export const securityService = {
           metadata: { blocked_until: blockedUntil.toISOString() }
         });
 
+        const blockedTemplate = await getNotificationTemplate(
+          phoneNumber,
+          NotificationEnum.pin_blocked
+        );
+
         return {
           ok: false,
           status: 'blocked',
           blocked_until: blockedUntil,
-          message: (
-            await getNotificationTemplate(
-              phoneNumber,
-              NotificationEnum.pin_invalid_remaining_attempts
-            )
-          ).message.replace('[BLOCKED_UNTIL]', blockedUntil.toISOString())
+          message: blockedTemplate?.message.replace('[BLOCKED_UNTIL]', blockedUntil.toISOString())
         };
       }
 
       const remainingAttempts = SECURITY_PIN_MAX_FAILED_ATTEMPTS - failed_attempts;
+      const invalidPinTemplate = await getNotificationTemplate(
+        phoneNumber,
+        NotificationEnum.pin_invalid_remaining_attempts
+      );
 
       return {
         ok: false,
         status: 'active',
         remaining_attempts: remainingAttempts,
-        message: (
-          await getNotificationTemplate(phoneNumber, NotificationEnum.pin_internal_error)
-        ).message.replace('[REMAINING_ATTEMPTS]', remainingAttempts.toString())
+        message: invalidPinTemplate?.message.replace(
+          '[REMAINING_ATTEMPTS]',
+          remainingAttempts.toString()
+        )
       };
     } catch (error: unknown) {
       Logger.error('securityService', 'verifyPin', 'Failed to verify PIN', error);
