@@ -273,7 +273,8 @@ export const securityService = {
    * @param pin - PIN provided by the user (plain text).
    * @param channel - Source channel for auditing ("bot" | "frontend" | "unknown").
    * @returns VerifyPinResult Verification outcome including status, message, and optional lock/attempt info.
-   */ verifyPin: async (
+   */
+  verifyPin: async (
     phoneNumber: string,
     pin: string,
     channel?: string
@@ -298,17 +299,25 @@ export const securityService = {
         securityState.pin.blocked_until > now &&
         securityState.pin.status === 'blocked'
       ) {
-        const blockedUntilIso = new Date(securityState.pin.blocked_until).toISOString();
         const blockedTemplate = await getNotificationTemplate(
           phoneNumber,
           NotificationEnum.pin_blocked
+        );
+        const remainingBlockMinutes = Math.max(
+          1,
+          Math.ceil(
+            (new Date(securityState.pin.blocked_until).getTime() - now.getTime()) / (60 * 1000)
+          )
         );
 
         return {
           ok: false,
           status: 'blocked',
           blocked_until: securityState.pin.blocked_until,
-          message: blockedTemplate?.message.replace('[BLOCKED_UNTIL]', blockedUntilIso)
+          message: blockedTemplate?.message.replace(
+            '[BLOCK_MINUTES]',
+            remainingBlockMinutes.toString()
+          )
         };
       }
 
@@ -360,7 +369,10 @@ export const securityService = {
           ok: false,
           status: 'blocked',
           blocked_until: blockedUntil,
-          message: blockedTemplate?.message.replace('[BLOCKED_UNTIL]', blockedUntil.toISOString())
+          message: blockedTemplate?.message.replace(
+            '[BLOCK_MINUTES]',
+            SECURITY_PIN_BLOCK_MINUTES.toString()
+          )
         };
       }
 
