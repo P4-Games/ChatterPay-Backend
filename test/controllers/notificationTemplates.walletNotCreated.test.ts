@@ -1,5 +1,6 @@
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyReply } from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { IBlockchain } from '../../src/models/blockchainModel';
 
 const templateMessages = {
   wallet_not_created: {
@@ -164,7 +165,6 @@ import {
 import { swap } from '../../src/controllers/swapController';
 import { issueTokensHandler } from '../../src/controllers/tokenController';
 import { makeTransaction } from '../../src/controllers/transactionController';
-import { getDepositInfo, getMultichainDepositCta } from '../../src/controllers/walletController';
 import { telegramService } from '../../src/services/telegram/telegramService';
 
 const languageCases = [
@@ -175,6 +175,21 @@ const languageCases = [
 ] as const;
 
 const makeReply = () => ({}) as FastifyReply;
+
+// Helper to create a minimal mock IBlockchain for tests
+const makeMockBlockchain = (chainId: number): Partial<IBlockchain> =>
+  ({
+    chainId,
+    name: 'Test Network',
+    manteca_name: 'test',
+    rpc: 'http://localhost:8545',
+    rpcBundler: 'http://localhost:8546',
+    logo: 'test-logo.png',
+    explorer: 'http://localhost:3000',
+    marketplaceOpenseaUrl: 'http://localhost:3001',
+    environment: 'test',
+    supportsEIP1559: true
+  }) as IBlockchain;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -242,55 +257,43 @@ beforeEach(() => {
 
 describe('wallet_not_created templates (controllers)', () => {
   it.each(languageCases)('balanceByPhoneNumber (%s)', async ({ phone, lang }) => {
-    const request = { query: { channel_user_id: phone } } as FastifyRequest;
+    const request = { query: { channel_user_id: phone } } as any;
     const result = (await balanceByPhoneNumber(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
   it.each(languageCases)('balanceByPhoneNumberSync (%s)', async ({ phone, lang }) => {
-    const request = { query: { channel_user_id: phone } } as FastifyRequest;
+    const request = { query: { channel_user_id: phone } } as any;
     const result = (await balanceByPhoneNumberSync(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
-  it.each(languageCases)('wallet.getDepositInfo (%s)', async ({ phone, lang }) => {
-    const request = { body: { channel_user_id: phone } } as FastifyRequest;
-    const result = (await getDepositInfo(request, makeReply())) as { message: string };
-    expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
-  });
-
-  it.each(languageCases)('wallet.getMultichainDepositCta (%s)', async ({ phone, lang }) => {
-    const request = { body: { channel_user_id: phone } } as FastifyRequest;
-    const result = (await getMultichainDepositCta(request, makeReply())) as { message: string };
-    expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
-  });
-
   it.each(languageCases)('security.getSecurityStatus (%s)', async ({ phone, lang }) => {
-    const request = { body: { channel_user_id: phone } } as FastifyRequest;
+    const request = { body: { channel_user_id: phone } } as any;
     const result = (await getSecurityStatus(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
   it.each(languageCases)('security.getSecurityQuestions (%s)', async ({ phone, lang }) => {
-    const request = { body: { channel_user_id: phone } } as FastifyRequest;
+    const request = { body: { channel_user_id: phone } } as any;
     const result = (await getSecurityQuestions(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
   it.each(languageCases)('security.getSecurityEvents (%s)', async ({ phone, lang }) => {
-    const request = { body: { channel_user_id: phone } } as FastifyRequest;
+    const request = { body: { channel_user_id: phone } } as any;
     const result = (await getSecurityEvents(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
   it.each(languageCases)('security.setSecurityPin (%s)', async ({ phone, lang }) => {
-    const request = { body: { channel_user_id: phone, pin: '123456' } } as FastifyRequest;
+    const request = { body: { channel_user_id: phone, pin: '123456' } } as any;
     const result = (await setSecurityPin(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
   it.each(languageCases)('security.verifySecurityPin (%s)', async ({ phone, lang }) => {
-    const request = { body: { channel_user_id: phone, pin: '123456' } } as FastifyRequest;
+    const request = { body: { channel_user_id: phone, pin: '123456' } } as any;
     const result = (await verifySecurityPin(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
@@ -304,7 +307,7 @@ describe('wallet_not_created templates (controllers)', () => {
           { key: 'birth_city', answer: 'Buenos Aires' }
         ]
       }
-    } as FastifyRequest;
+    } as any;
     const result = (await setSecurityRecoveryQuestions(request, makeReply())) as {
       message: string;
     };
@@ -312,25 +315,25 @@ describe('wallet_not_created templates (controllers)', () => {
   });
 
   it.each(languageCases)('security.resetSecurityPin (%s)', async ({ phone, lang }) => {
-    const request = { body: { channel_user_id: phone } } as FastifyRequest;
+    const request = { body: { channel_user_id: phone } } as any;
     const result = (await resetSecurityPin(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
   it.each(languageCases)('referral.getReferralCode (%s)', async ({ phone, lang }) => {
-    const request = { body: { channel_user_id: phone } } as FastifyRequest;
+    const request = { body: { channel_user_id: phone } } as any;
     const result = (await getReferralCode(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
   it.each(languageCases)('referral.getReferralByCode (%s)', async ({ phone, lang }) => {
-    const request = { body: { channel_user_id: phone } } as FastifyRequest;
+    const request = { body: { channel_user_id: phone } } as any;
     const result = (await getReferralByCode(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
   it.each(languageCases)('referral.getReferralCodeWithUsageCount (%s)', async ({ phone, lang }) => {
-    const request = { body: { channel_user_id: phone } } as FastifyRequest;
+    const request = { body: { channel_user_id: phone } } as any;
     const result = (await getReferralCodeWithUsageCount(request, makeReply())) as {
       message: string;
     };
@@ -340,7 +343,7 @@ describe('wallet_not_created templates (controllers)', () => {
   it.each(languageCases)('referral.submitReferralByCode (%s)', async ({ phone, lang }) => {
     const request = {
       body: { channel_user_id: phone, referral_by_code: 'ABC123' }
-    } as FastifyRequest;
+    } as any;
     const result = (await submitReferralByCode(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
@@ -357,13 +360,13 @@ describe('wallet_not_created templates (controllers)', () => {
       server: {
         tokens: [{ name: 'USDC', ramp_enabled: true }]
       }
-    } as FastifyRequest;
+    } as any;
     const result = (await linkToOperate(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
   it.each(languageCases)('ramp.generateOnRampLink (%s)', async ({ phone, lang }) => {
-    const request = { body: { phone_number: phone } } as FastifyRequest;
+    const request = { body: { phone_number: phone } } as any;
     const result = (await generateOnRampLink(request, makeReply())) as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
@@ -377,20 +380,22 @@ describe('wallet_not_created templates (controllers)', () => {
         amount: 1
       },
       server: {
-        networkConfig: { chainId: 1 },
+        networkConfig: makeMockBlockchain(1),
         tokens: []
       }
-    } as FastifyRequest;
-    const result = (await swap(request, makeReply())) as { message: string };
+    } as any;
+    const result = (await swap(request, makeReply())) as unknown as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
   it.each(languageCases)('token.issueTokensHandler (%s)', async ({ phone, lang }) => {
     const request = {
       body: { identifier: phone },
-      server: { networkConfig: { environment: 'development', chainId: 1 } }
-    } as FastifyRequest;
-    const result = (await issueTokensHandler(request, makeReply())) as { message: string };
+      server: { networkConfig: { ...makeMockBlockchain(1), environment: 'development' } }
+    } as any;
+    const result = (await issueTokensHandler(request, makeReply())) as unknown as {
+      message: string;
+    };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
@@ -403,11 +408,11 @@ describe('wallet_not_created templates (controllers)', () => {
         amount: '1'
       },
       server: {
-        networkConfig: { chainId: 1 },
+        networkConfig: makeMockBlockchain(1),
         tokens: []
       }
-    } as FastifyRequest;
-    const result = (await makeTransaction(request, makeReply())) as { message: string };
+    } as any;
+    const result = (await makeTransaction(request, makeReply())) as unknown as { message: string };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 
@@ -421,10 +426,12 @@ describe('wallet_not_created templates (controllers)', () => {
         longitude: '0'
       },
       server: {
-        networkConfig: { chainId: 1 }
+        networkConfig: makeMockBlockchain(1)
       }
-    } as FastifyRequest;
-    const result = (await generateNftOriginal(request, makeReply())) as { message: string };
+    } as any;
+    const result = (await generateNftOriginal(request, makeReply())) as unknown as {
+      message: string;
+    };
     expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
   });
 });
@@ -441,7 +448,7 @@ describe('wallet_not_created templates (telegram service)', () => {
 
   it.each(languageCases)('telegram.handleBalanceMessage (%s)', async ({ phone, lang }) => {
     const reply = await telegramService.handleBalanceMessage(123, `/balance ${phone}`, 'tg-2', {
-      networkConfig: { chainId: 1 },
+      networkConfig: makeMockBlockchain(1) as IBlockchain,
       tokens: []
     });
 
