@@ -86,6 +86,7 @@ const mockMarket = {
   closed: false,
   marketType: 'binary',
   clobTokenIds: '["token1","token2"]',
+  volume24hr: '1000',
   volumeNum: 1000000,
   liquidityNum: 500000,
   bestBid: 0.64,
@@ -180,6 +181,23 @@ describe('polymarketMarketService', () => {
         'Failed to fetch Polymarket markets'
       );
     });
+
+    it('should filter out markets with zero volume when filterZeroVolume is true', async () => {
+      const zeroVolumeMarket = { ...mockMarket, id: '2', volume24hr: '0' };
+      mockedAxios.get.mockResolvedValueOnce({
+        data: [mockMarket, zeroVolumeMarket],
+        status: 200,
+        statusText: 'OK'
+      } as AxiosResponse);
+
+      const result = await getMarkets(
+        { limit: 10, offset: 0, filterZeroVolume: true },
+        '[test]'
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('1');
+    });
   });
 
   describe('getMarketBySlug', () => {
@@ -235,6 +253,23 @@ describe('polymarketMarketService', () => {
       await expect(getEvents({}, '[test]')).rejects.toThrow(
         'Failed to fetch Polymarket events'
       );
+    });
+
+    it('should filter out events with zero volume when filterZeroVolume is true', async () => {
+      const zeroVolumeEvent = { ...mockEvent, id: '2', volume24hr: '0', volume: 0 };
+      mockedAxios.get.mockResolvedValueOnce({
+        data: [mockEvent, zeroVolumeEvent],
+        status: 200,
+        statusText: 'OK'
+      } as AxiosResponse);
+
+      const result = await getEvents(
+        { limit: 10, offset: 0, filterZeroVolume: true },
+        '[test]'
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('1');
     });
   });
 

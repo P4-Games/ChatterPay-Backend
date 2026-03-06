@@ -132,6 +132,10 @@ export const polymarketGetMarkets = async (
   const logKey = `[op:polymarket-markets]`;
 
   try {
+    const order = request.query.order ?? 'volume24hr';
+    const ascending = request.query.ascending ?? false;
+    const filterZeroVolume = request.query.filter_zero_volume ?? true;
+
     const markets = await getMarkets(
       {
         limit: request.query.limit,
@@ -139,7 +143,9 @@ export const polymarketGetMarkets = async (
         active: request.query.active,
         closed: request.query.closed,
         category: request.query.category,
-        order: request.query.order
+        order,
+        ascending,
+        filterZeroVolume
       },
       logKey
     );
@@ -193,13 +199,20 @@ export const polymarketGetEvents = async (
   const logKey = `[op:polymarket-events]`;
 
   try {
+    const order = request.query.order ?? 'volume24hr';
+    const ascending = request.query.ascending ?? false;
+    const filterZeroVolume = request.query.filter_zero_volume ?? true;
+
     const events = await getEvents(
       {
         limit: request.query.limit,
         offset: request.query.offset,
         active: request.query.active,
         closed: request.query.closed,
-        slug: request.query.slug
+        slug: request.query.slug,
+        order,
+        ascending,
+        filterZeroVolume
       },
       logKey
     );

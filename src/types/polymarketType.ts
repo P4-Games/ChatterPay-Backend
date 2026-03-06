@@ -74,6 +74,8 @@ export interface PolymarketMarketsQuery {
   closed?: boolean;
   category?: string;
   order?: string;
+  ascending?: boolean;
+  filter_zero_volume?: boolean;
 }
 
 /** Query params for listing events */
@@ -83,6 +85,9 @@ export interface PolymarketEventsQuery {
   active?: boolean;
   closed?: boolean;
   slug?: string;
+  order?: string;
+  ascending?: boolean;
+  filter_zero_volume?: boolean;
 }
 
 /** Query params for searching markets */

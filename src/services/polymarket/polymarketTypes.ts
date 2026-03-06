@@ -30,6 +30,7 @@ export interface GammaMarket {
   closed: boolean;
   marketType: string;
   clobTokenIds: string;
+  volume24hr?: string | number;
   volumeNum: number;
   liquidityNum: number;
   bestBid: number;
@@ -52,12 +53,12 @@ export interface GammaEvent {
   image: string;
   icon: string;
   active: boolean;
-  closed: boolean;
   volume: number;
   liquidity: number;
   markets?: GammaMarket[];
   enableNegRisk: boolean;
   commentCount: number;
+  volume24hr?: string | number;
 }
 
 /** Gamma API search result */
@@ -221,6 +222,8 @@ export interface MarketQueryParams {
   closed?: boolean;
   category?: string;
   order?: string;
+  ascending?: boolean;
+  filterZeroVolume?: boolean;
 }
 
 /** Event list query parameters for Gamma API */
@@ -230,6 +233,9 @@ export interface EventQueryParams {
   active?: boolean;
   closed?: boolean;
   slug?: string;
+  order?: string;
+  ascending?: boolean;
+  filterZeroVolume?: boolean;
 }
 
 /** Internal order placement params */

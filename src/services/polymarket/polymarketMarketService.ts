@@ -76,6 +76,7 @@ export async function getMarkets(
     if (params.closed !== undefined) queryParams.closed = params.closed;
     if (params.category) queryParams.category = params.category;
     if (params.order) queryParams.order = params.order;
+    if (params.ascending !== undefined) queryParams.ascending = params.ascending;
 
     // Filter for CLOB-enabled markets only
     queryParams.enableOrderBook = true;
@@ -85,8 +86,13 @@ export async function getMarkets(
       timeout: 10000
     });
 
-    marketsCache.set(cacheKey, response.data);
-    return response.data;
+    let markets = response.data;
+    if (params.filterZeroVolume) {
+      markets = markets.filter((market) => Number(market.volume24hr || 0) > 0);
+    }
+
+    marketsCache.set(cacheKey, markets);
+    return markets;
   } catch (error) {
     Logger.log('error', `[${LOG_PREFIX}:getMarkets]`, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to fetch Polymarket markets: ${String(error)}`);
@@ -140,14 +146,23 @@ export async function getEvents(params: EventQueryParams, logKey: string): Promi
     if (params.active !== undefined) queryParams.active = params.active;
     if (params.closed !== undefined) queryParams.closed = params.closed;
     if (params.slug) queryParams.slug = params.slug;
+    if (params.order) queryParams.order = params.order;
+    if (params.ascending !== undefined) queryParams.ascending = params.ascending;
 
     const response = await axios.get<GammaEvent[]>(`${POLYMARKET_GAMMA_API_URL}/events`, {
       params: queryParams,
       timeout: 10000
     });
 
-    marketsCache.set(cacheKey, response.data);
-    return response.data;
+    let events = response.data;
+    if (params.filterZeroVolume) {
+      events = events.filter(
+        (event) => Number(event.volume24hr || 0) > 0 || Number(event.volume || 0) > 0
+      );
+    }
+
+    marketsCache.set(cacheKey, events);
+    return events;
   } catch (error) {
     Logger.log('error', `[${LOG_PREFIX}:getEvents]`, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to fetch Polymarket events: ${String(error)}`);
