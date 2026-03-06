@@ -67,9 +67,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: setup
     env:
-      NODE_ENV: test
+      NODE_ENV: development
+      BUN_ENV: development
       APP_ENV: development
-      BLOCKCHAIN_ENV: development
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

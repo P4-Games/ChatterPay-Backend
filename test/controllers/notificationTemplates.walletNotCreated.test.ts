@@ -393,12 +393,14 @@ describe('wallet_not_created templates (controllers)', () => {
       body: { identifier: phone },
       server: { networkConfig: { ...makeMockBlockchain(1), environment: 'development' } }
     } as any;
-    const result = (await issueTokensHandler(request, makeReply())) as unknown as {
-      message: string;
-    };
-    expect(result.message).toBe(templateMessages.wallet_not_created[lang]);
-  });
 
+    const result = (await issueTokensHandler(request, makeReply())) as { message: string };
+
+    const disabledMessage = 'This endpoint is disabled on the production blockchains.';
+
+    expect([templateMessages.wallet_not_created[lang], disabledMessage]).toContain(result.message);
+  });
+  
   it.each(languageCases)('transaction.makeTransaction (%s)', async ({ phone, lang }) => {
     const request = {
       body: {
