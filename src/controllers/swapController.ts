@@ -1,9 +1,5 @@
 import { ethers } from 'ethers';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import {
-  COMMON_REPLY_OPERATION_IN_PROGRESS,
-  COMMON_REPLY_WALLET_NOT_CREATED
-} from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { delaySeconds } from '../helpers/timeHelper';
@@ -146,9 +142,13 @@ export const swap = async (
     logKey = `[op:swap:${channel_user_id}:${inputCurrency}:${outputCurrency}:${amount}]`;
     const fromUser: IUser | null = await getUser(channel_user_id);
     if (!fromUser) {
-      Logger.info('swap', logKey, COMMON_REPLY_WALLET_NOT_CREATED);
+      const { message: walletNotCreatedMessage } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
+      Logger.info('swap', logKey, walletNotCreatedMessage);
       // must return 200, so the bot displays the message instead of an error!
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+      return await returnSuccessResponse(reply, walletNotCreatedMessage);
     }
 
     /* ***************************************************** */
@@ -238,7 +238,11 @@ export const swap = async (
     // optimistic response
     await openOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
     Logger.log('swap', logKey, 'sending notification: operation in progress');
-    await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
+    const { message: operationInProgressMessage } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.operation_in_progress
+    );
+    await returnSuccessResponse(reply, operationInProgressMessage);
 
     /* ***************************************************** */
     /* 7. swap: check user balance                           */
