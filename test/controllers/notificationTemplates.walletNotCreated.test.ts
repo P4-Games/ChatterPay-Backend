@@ -400,7 +400,7 @@ describe('wallet_not_created templates (controllers)', () => {
 
     expect([templateMessages.wallet_not_created[lang], disabledMessage]).toContain(result.message);
   });
-  
+
   it.each(languageCases)('transaction.makeTransaction (%s)', async ({ phone, lang }) => {
     const request = {
       body: {
