@@ -1,7 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import {
   CHATIZALO_PHONE_NUMBER,
-  COMMON_REPLY_WALLET_NOT_CREATED,
   FIAT_CURRENCIES,
   MANTECA_MOCK_UPLOAD_DOCUMENTS_URL,
   ONRAMP_APP_ID,
@@ -15,12 +14,14 @@ import {
   returnErrorResponse500,
   returnSuccessResponse
 } from '../helpers/requestHelper';
+import { NotificationEnum } from '../models/templateModel';
 import type { IToken } from '../models/tokenModel';
 import type { IUser } from '../models/userModel';
 import { mantecaPriceService } from '../services/manteca/market/mantecaPriceService';
 import { mantecaBalanceService } from '../services/manteca/user/mantecaBalanceService';
 import { mantecaUserService } from '../services/manteca/user/mantecaUserService';
 import { mantecaWidgetService } from '../services/manteca/user/mantecaWidgetService';
+import { getNotificationTemplate } from '../services/notificationService';
 import { getUser } from '../services/userService';
 import type {
   MantecaOperationSide,
@@ -38,6 +39,7 @@ interface widgetLinkToOperateBody {
 
 interface ValidateInputsLinkToOperateParams {
   fromUser: IUser | null;
+  phoneNumber: string;
   operation: string;
   asset: string;
   against: string;
@@ -48,10 +50,14 @@ interface ValidateInputsLinkToOperateParams {
 async function validateInputsLinkToOperate(
   params: ValidateInputsLinkToOperateParams
 ): Promise<string | null> {
-  const { fromUser, operation, asset, against, tokens, assetAmount } = params;
+  const { fromUser, phoneNumber, operation, asset, against, tokens, assetAmount } = params;
 
   if (!fromUser) {
-    return COMMON_REPLY_WALLET_NOT_CREATED;
+    const { message } = await getNotificationTemplate(
+      phoneNumber,
+      NotificationEnum.wallet_not_created
+    );
+    return message;
   }
 
   if (!FIAT_CURRENCIES.includes(against)) {
@@ -96,6 +102,7 @@ export const linkToOperate = async (
 
   const errorMessage = await validateInputsLinkToOperate({
     fromUser,
+    phoneNumber: channel_user_id,
     operation,
     asset,
     against,
@@ -682,13 +689,11 @@ export const generateOnRampLink = async (
   const fromUser: IUser | null = await getUser(phone_number);
 
   if (!fromUser) {
-    return returnErrorResponse(
-      'generateOnRampLink',
+    const { message } = await getNotificationTemplate(
       phone_number,
-      reply,
-      404,
-      COMMON_REPLY_WALLET_NOT_CREATED
+      NotificationEnum.wallet_not_created
     );
+    return returnErrorResponse('generateOnRampLink', phone_number, reply, 404, message);
   }
 
   if (!fromUser.wallets || fromUser.wallets.length === 0) {
