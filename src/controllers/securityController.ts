@@ -1,5 +1,4 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import {
   returnErrorResponse,
@@ -8,7 +7,9 @@ import {
 } from '../helpers/requestHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import type { SecurityEventChannel, SecurityEventType } from '../models/securityEventModel';
+import { NotificationEnum } from '../models/templateModel';
 import type { IUser } from '../models/userModel';
+import { getNotificationTemplate } from '../services/notificationService';
 import { securityService } from '../services/securityService';
 import { getUser } from '../services/userService';
 
@@ -55,8 +56,12 @@ export const getSecurityStatus = async (
 
     const user: IUser | null = await getUser(channel_user_id);
     if (!user) {
-      Logger.info('getSecurityStatus', COMMON_REPLY_WALLET_NOT_CREATED);
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
+      Logger.info('getSecurityStatus', message);
+      return await returnSuccessResponse(reply, message);
     }
 
     const status = await securityService.getSecurityStatus(channel_user_id);
@@ -101,8 +106,12 @@ export const getSecurityQuestions = async (
 
     const user: IUser | null = await getUser(channel_user_id);
     if (!user) {
-      Logger.info('getSecurityStatus', COMMON_REPLY_WALLET_NOT_CREATED);
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
+      Logger.info('getSecurityStatus', message);
+      return await returnSuccessResponse(reply, message);
     }
 
     const questions = await securityService.listSecurityQuestions(
@@ -182,8 +191,12 @@ export const getSecurityEvents = async (
 
     const user: IUser | null = await getUser(channel_user_id);
     if (!user) {
-      Logger.info('getSecurityEvents', COMMON_REPLY_WALLET_NOT_CREATED);
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
+      Logger.info('getSecurityEvents', message);
+      return await returnSuccessResponse(reply, message);
     }
 
     const events = await securityService.listSecurityEvents(channel_user_id, {
@@ -236,8 +249,12 @@ export const setSecurityPin = async (
 
     const user: IUser | null = await getUser(channel_user_id);
     if (!user) {
-      Logger.info('setSecurityPin', COMMON_REPLY_WALLET_NOT_CREATED);
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
+      Logger.info('setSecurityPin', message);
+      return await returnSuccessResponse(reply, message);
     }
 
     if (!pin) {
@@ -311,8 +328,12 @@ export const verifySecurityPin = async (
 
     const user: IUser | null = await getUser(channel_user_id);
     if (!user) {
-      Logger.info('verifySecurityPin', COMMON_REPLY_WALLET_NOT_CREATED);
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
+      Logger.info('verifySecurityPin', message);
+      return await returnSuccessResponse(reply, message);
     }
 
     if (!pin) {
@@ -386,8 +407,12 @@ export const setSecurityRecoveryQuestions = async (
 
     const user: IUser | null = await getUser(channel_user_id);
     if (!user) {
-      Logger.info('setSecurityRecoveryQuestions', COMMON_REPLY_WALLET_NOT_CREATED);
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
+      Logger.info('setSecurityRecoveryQuestions', message);
+      return await returnSuccessResponse(reply, message);
     }
 
     if (!questions || !Array.isArray(questions)) {
@@ -472,8 +497,12 @@ export const resetSecurityPin = async (
 
     const user: IUser | null = await getUser(channel_user_id);
     if (!user) {
-      Logger.info('resetSecurityPin', COMMON_REPLY_WALLET_NOT_CREATED);
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
+      Logger.info('resetSecurityPin', message);
+      return await returnSuccessResponse(reply, message);
     }
 
     if (!new_pin) {

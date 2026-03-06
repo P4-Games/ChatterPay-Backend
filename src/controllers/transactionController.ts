@@ -2,14 +2,7 @@ import { get } from '@google-cloud/trace-agent';
 import type { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Web3 } from 'web3';
-import {
-  COMMON_REPLY_OPERATION_IN_PROGRESS,
-  COMMON_REPLY_WALLET_NOT_CREATED,
-  GCP_CLOUD_TRACE_ENABLED,
-  INFURA_API_KEY,
-  INFURA_URL,
-  USE_LIFI
-} from '../config/constants';
+import { GCP_CLOUD_TRACE_ENABLED, INFURA_API_KEY, INFURA_URL, USE_LIFI } from '../config/constants';
 import { areSamePhoneNumber } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
 import {
@@ -573,9 +566,13 @@ export const makeTransaction = async (
     const fromUser: IUser | null = await getUser(channel_user_id);
     if (!fromUser) {
       rootSpan?.endSpan();
-      Logger.info('makeTransaction', logKey, COMMON_REPLY_WALLET_NOT_CREATED);
+      const { message: walletNotCreatedMessage } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
+      Logger.info('makeTransaction', logKey, walletNotCreatedMessage);
       // must return 200, so the bot displays the message instead of an error!
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+      return await returnSuccessResponse(reply, walletNotCreatedMessage);
     }
 
     const userWallet: IUserWallet | null = getUserWalletByChainId(
@@ -692,7 +689,11 @@ export const makeTransaction = async (
     concurrentOperationSpan?.endSpan();
     // optimistic response
     Logger.log('makeTransaction', logKey, 'sending notification: operation in progress');
-    await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
+    const { message: operationInProgressMessage } = await getNotificationTemplate(
+      fromUser.phone_number,
+      NotificationEnum.operation_in_progress
+    );
+    await returnSuccessResponse(reply, operationInProgressMessage);
 
     /* ***************************************************** */
     /* 7. makeTransaction: check user balance                */

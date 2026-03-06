@@ -1,11 +1,12 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
 import {
   returnErrorResponse,
   returnErrorResponseAsSuccess,
   returnSuccessResponse
 } from '../helpers/requestHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { NotificationEnum } from '../models/templateModel';
+import { getNotificationTemplate } from '../services/notificationService';
 import { referralService } from '../services/referralService';
 
 export const getReferralCode = async (
@@ -41,11 +42,15 @@ export const getReferralCode = async (
     const referralCode = await referralService.getOrGenerateReferralCode(channel_user_id);
 
     if (!referralCode) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
       return await returnErrorResponseAsSuccess(
         'getReferralCode',
         logKey,
         reply,
-        COMMON_REPLY_WALLET_NOT_CREATED,
+        message,
         false,
         channel_user_id
       );
@@ -92,11 +97,15 @@ export const getReferralByCode = async (
     const referralByCode = await referralService.getReferralByCode(channel_user_id);
 
     if (referralByCode === null) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
       return await returnErrorResponseAsSuccess(
         'getReferralByCode',
         logKey,
         reply,
-        COMMON_REPLY_WALLET_NOT_CREATED,
+        message,
         false,
         channel_user_id
       );
@@ -155,11 +164,15 @@ export const getReferralCodeWithUsageCount = async (
 
     const result = await referralService.getReferralCodeWithUsageCount(channel_user_id);
     if (!result) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
       return await returnErrorResponseAsSuccess(
         'getReferralCodeWithUsageCount',
         logKey,
         reply,
-        COMMON_REPLY_WALLET_NOT_CREATED,
+        message,
         false,
         channel_user_id
       );
@@ -229,11 +242,15 @@ export const submitReferralByCode = async (
     const result = await referralService.submitReferrerCode(channel_user_id, code);
 
     if (result.status === 'user_not_found') {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
       return await returnErrorResponseAsSuccess(
         'submitReferralByCode',
         logKey,
         reply,
-        COMMON_REPLY_WALLET_NOT_CREATED,
+        message,
         false,
         channel_user_id
       );

@@ -288,6 +288,30 @@ it('should create and save a Template document successfully', async () => {
           es: 'Error al verificar el PIN: error interno.',
           pt: 'Erro ao verificar o PIN: erro interno.'
         }
+      },
+      operation_in_progress: {
+        title: {
+          en: 'ChatterPay: Operation in progress',
+          es: 'ChatterPay: Operación en proceso',
+          pt: 'ChatterPay: Operação em andamento'
+        },
+        message: {
+          en: 'The operation is being processed. We will notify you once it is completed or if any issues arise.',
+          es: 'La operación está siendo procesada. Te notificaremos una vez que se complete o si surge algún inconveniente.',
+          pt: 'A operação está sendo processada. Avisaremos você assim que for concluída ou se ocorrer algum problema.'
+        }
+      },
+      wallet_not_created: {
+        title: {
+          en: 'ChatterPay: Wallet not created',
+          es: 'ChatterPay: Wallet no creada',
+          pt: 'ChatterPay: Carteira não criada'
+        },
+        message: {
+          en: "A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.",
+          es: 'Aún no se creó una wallet vinculada a tu número de teléfono. Por favor, creá una para continuar con la operación.',
+          pt: 'Uma carteira vinculada ao seu número de telefone ainda não foi criada. Por favor, crie uma para continuar com a operação.'
+        }
       }
     }
   };

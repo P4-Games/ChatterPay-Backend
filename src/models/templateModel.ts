@@ -25,7 +25,9 @@ export enum NotificationEnum {
   pin_invalid_remaining_attempts = 'pin_invalid_remaining_attempts',
   pin_blocked = 'pin_blocked',
   pin_verified_success = 'pin_verified_success',
-  pin_internal_error = 'pin_internal_error'
+  pin_internal_error = 'pin_internal_error',
+  operation_in_progress = 'operation_in_progress',
+  wallet_not_created = 'wallet_not_created'
 }
 
 export interface LocalizedContentType {
@@ -105,7 +107,9 @@ const templateSchema = new Schema<ITemplateSchema>({
     pin_invalid_remaining_attempts: { type: notificationSchema, required: true },
     pin_blocked: { type: notificationSchema, required: true },
     pin_verified_success: { type: notificationSchema, required: true },
-    pin_internal_error: { type: notificationSchema, required: true }
+    pin_internal_error: { type: notificationSchema, required: true },
+    operation_in_progress: { type: notificationSchema, required: true },
+    wallet_not_created: { type: notificationSchema, required: true }
   },
   security_questions: { type: Map, of: localizedContentSchema, required: false }
 });

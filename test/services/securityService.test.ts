@@ -48,7 +48,9 @@ describe('securityService', () => {
         pin_not_set: mockNotification,
         pin_invalid_remaining_attempts: mockNotification,
         pin_verified_success: mockNotification,
-        pin_internal_error: mockNotification
+        pin_internal_error: mockNotification,
+        operation_in_progress: mockNotification,
+        wallet_not_created: mockNotification
       },
       security_questions: {
         pet_name: {
