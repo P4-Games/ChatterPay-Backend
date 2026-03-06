@@ -1,5 +1,6 @@
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyReply } from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { IBlockchain } from '../../src/models/blockchainModel';
 
 const templateMessages = {
   operation_in_progress: {
@@ -144,6 +145,21 @@ const makeReply = () =>
     raw: { writableFinished: true }
   }) as unknown as FastifyReply;
 
+// Helper to create a minimal mock IBlockchain for tests
+const makeMockBlockchain = (chainId: number): Partial<IBlockchain> =>
+  ({
+    chainId,
+    name: 'Test Network',
+    manteca_name: 'test',
+    rpc: 'http://localhost:8545',
+    rpcBundler: 'http://localhost:8546',
+    logo: 'test-logo.png',
+    explorer: 'http://localhost:3000',
+    marketplaceOpenseaUrl: 'http://localhost:3001',
+    environment: 'test',
+    supportsEIP1559: true
+  }) as IBlockchain;
+
 beforeEach(() => {
   vi.clearAllMocks();
 
@@ -228,7 +244,7 @@ describe('operation_in_progress templates', () => {
   it.each(languageCases)('aaveCreateSupply (%s)', async ({ phone, lang }) => {
     const reply = makeReply();
     await aaveCreateSupply(
-      { body: { channel_user_id: phone, amount: '1', token: 'USDC' } } as FastifyRequest,
+      { body: { channel_user_id: phone, amount: '1', token: 'USDC' } } as any,
       reply
     );
 
@@ -242,7 +258,7 @@ describe('operation_in_progress templates', () => {
   it.each(languageCases)('aaveUpdateSupply (%s)', async ({ phone, lang }) => {
     const reply = makeReply();
     await aaveUpdateSupply(
-      { body: { channel_user_id: phone, amount: '1', token: 'USDC' } } as FastifyRequest,
+      { body: { channel_user_id: phone, amount: '1', token: 'USDC' } } as any,
       reply
     );
 
@@ -255,10 +271,7 @@ describe('operation_in_progress templates', () => {
 
   it.each(languageCases)('aaveRemoveSupply (%s)', async ({ phone, lang }) => {
     const reply = makeReply();
-    await aaveRemoveSupply(
-      { body: { channel_user_id: phone, token: 'USDC' } } as FastifyRequest,
-      reply
-    );
+    await aaveRemoveSupply({ body: { channel_user_id: phone, token: 'USDC' } } as any, reply);
 
     expect(reply.send).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -269,7 +282,7 @@ describe('operation_in_progress templates', () => {
 
   it.each(languageCases)('aaveGetSupplyInfo (%s)', async ({ phone, lang }) => {
     const reply = makeReply();
-    await aaveGetSupplyInfo({ body: { channel_user_id: phone } } as FastifyRequest, reply);
+    await aaveGetSupplyInfo({ body: { channel_user_id: phone } } as any, reply);
 
     expect(reply.send).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -292,10 +305,10 @@ describe('operation_in_progress templates', () => {
         amount: 1
       },
       server: {
-        networkConfig: { chainId: 1, rpc: 'http://localhost' },
+        networkConfig: makeMockBlockchain(1),
         tokens: []
       }
-    } as FastifyRequest;
+    } as any;
 
     await swap(request, {} as FastifyReply);
 
@@ -319,10 +332,10 @@ describe('operation_in_progress templates', () => {
         amount: '1'
       },
       server: {
-        networkConfig: { chainId: 1 },
+        networkConfig: makeMockBlockchain(1),
         tokens: []
       }
-    } as FastifyRequest;
+    } as any;
 
     await makeTransaction(request, {} as FastifyReply);
 
@@ -345,9 +358,9 @@ describe('operation_in_progress templates', () => {
         longitude: '0'
       },
       server: {
-        networkConfig: { chainId: 1 }
+        networkConfig: makeMockBlockchain(1)
       }
-    } as FastifyRequest;
+    } as any;
 
     await generateNftOriginal(request, {} as FastifyReply);
 
@@ -362,8 +375,8 @@ describe('operation_in_progress templates', () => {
 
     const request = {
       body: { channel_user_id: phone, id: 'nft-1' },
-      server: { networkConfig: { chainId: 1, contracts: {} } }
-    } as FastifyRequest;
+      server: { networkConfig: { ...makeMockBlockchain(1), contracts: {} } }
+    } as any;
 
     const nftModule = await import('../../src/models/nftModel');
     vi.spyOn(nftModule.default, 'find').mockResolvedValueOnce([{ id: 'nft-1' }] as any);
