@@ -61,6 +61,13 @@ export interface GammaEvent {
   volume24hr?: string | number;
 }
 
+/** Gamma API category response */
+export interface GammaCategory {
+  id: string;
+  name: string;
+  count: number;
+}
+
 /** Gamma API search result */
 export interface GammaSearchResult {
   id: string;
@@ -232,6 +239,7 @@ export interface EventQueryParams {
   offset?: number;
   active?: boolean;
   closed?: boolean;
+  category?: string;
   slug?: string;
   order?: string;
   ascending?: boolean;

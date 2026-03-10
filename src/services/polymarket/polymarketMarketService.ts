@@ -22,6 +22,7 @@ import { createPublicClobClient } from './polymarketClientService';
 import type {
   ClobOrderBook,
   EventQueryParams,
+  GammaCategory,
   GammaEvent,
   GammaMarket,
   GammaSearchResult,
@@ -145,6 +146,7 @@ export async function getEvents(params: EventQueryParams, logKey: string): Promi
 
     if (params.active !== undefined) queryParams.active = params.active;
     if (params.closed !== undefined) queryParams.closed = params.closed;
+    if (params.category) queryParams.category = params.category;
     if (params.slug) queryParams.slug = params.slug;
     if (params.order) queryParams.order = params.order;
     if (params.ascending !== undefined) queryParams.ascending = params.ascending;
@@ -192,6 +194,27 @@ export async function getEventBySlug(slug: string, logKey: string): Promise<Gamm
   } catch (error) {
     Logger.log('error', `[${LOG_PREFIX}:getEventBySlug]`, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to fetch event by slug: ${String(error)}`);
+  }
+}
+
+/**
+ * Fetch categories from Gamma API.
+ */
+export async function getCategories(logKey: string): Promise<GammaCategory[]> {
+  const cacheKey = 'categories';
+  const cached = marketsCache.get<GammaCategory[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const response = await axios.get<GammaCategory[]>(`${POLYMARKET_GAMMA_API_URL}/categories`, {
+      timeout: 10000
+    });
+
+    marketsCache.set(cacheKey, response.data);
+    return response.data;
+  } catch (error) {
+    Logger.log('error', `[${LOG_PREFIX}:getCategories]`, `${logKey} Failed: ${String(error)}`);
+    throw new Error(`Failed to fetch Polymarket categories: ${String(error)}`);
   }
 }
 

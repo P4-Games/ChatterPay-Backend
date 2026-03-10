@@ -84,6 +84,7 @@ export interface PolymarketEventsQuery {
   offset?: number;
   active?: boolean;
   closed?: boolean;
+  category?: string;
   slug?: string;
   order?: string;
   ascending?: boolean;
@@ -135,6 +136,13 @@ export interface PolymarketMarketDetail extends PolymarketMarketSummary {
   spread: number;
   minimum_tick_size: string;
   neg_risk: boolean;
+}
+
+/** Category summary */
+export interface PolymarketCategory {
+  id: string;
+  name: string;
+  count: number;
 }
 
 /** Event summary */

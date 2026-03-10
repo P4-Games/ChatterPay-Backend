@@ -30,6 +30,7 @@ export {
 } from './polymarketClientService';
 // Market data (read-only)
 export {
+  getCategories,
   getClobMarketInfo,
   getEventBySlug,
   getEvents,

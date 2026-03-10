@@ -24,6 +24,7 @@ import {
   createPolymarketAccount,
   getAccountStatus,
   getBridgeQuote,
+  getCategories,
   getClosedPositions,
   getCurrentTerms,
   getEventBySlug,
@@ -209,6 +210,7 @@ export const polymarketGetEvents = async (
         offset: request.query.offset,
         active: request.query.active,
         closed: request.query.closed,
+        category: request.query.category,
         slug: request.query.slug,
         order,
         ascending,
@@ -242,6 +244,23 @@ export const polymarketGetEventDetail = async (
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to fetch event detail');
+  }
+};
+
+/** GET /polymarket/categories */
+export const polymarketGetCategories = async (
+  _request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  if (!checkEnabled(reply)) return reply;
+  const logKey = `[op:polymarket-categories]`;
+
+  try {
+    const categories = await getCategories(logKey);
+    return successReply(reply, { categories });
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, String(error));
+    return errorReply(reply, 500, 'Failed to fetch categories');
   }
 };
 

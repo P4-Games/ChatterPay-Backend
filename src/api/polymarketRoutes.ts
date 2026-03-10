@@ -14,6 +14,7 @@ import {
   polymarketCancelOrder,
   polymarketCreateAccount,
   polymarketGetAccountStatus,
+  polymarketGetCategories,
   polymarketGetClosedPositions,
   polymarketGetEventDetail,
   polymarketGetEvents,
@@ -33,6 +34,7 @@ export default async function polymarketRoutes(fastify: FastifyInstance): Promis
   fastify.get('/polymarket/markets/:slug', polymarketGetMarketDetail);
   fastify.get('/polymarket/events', polymarketGetEvents);
   fastify.get('/polymarket/events/:slug', polymarketGetEventDetail);
+  fastify.get('/polymarket/categories', polymarketGetCategories);
   fastify.get('/polymarket/search', polymarketSearchMarkets);
 
   // ── Account ─────────────────────────────────────────────────────────────
