@@ -11,12 +11,14 @@
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
+import { randomUUID } from 'crypto';
+
 import { POLYMARKET_ENABLED } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import type { IUser } from '../models/userModel';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
-import { createOrder } from '../services/mongo/mongoPolymarketService';
+import { createOrder, createPurchase, getPurchaseById } from '../services/mongo/mongoPolymarketService';
 import {
   acceptTerms,
   cancelAllOrders,
@@ -40,6 +42,7 @@ import {
   placeOrder,
   searchMarkets
 } from '../services/polymarket';
+import { executePurchase } from '../services/polymarket/polymarketPurchaseService';
 import { secService } from '../services/secService';
 import { getUser } from '../services/userService';
 import type {
@@ -51,6 +54,8 @@ import type {
   PolymarketEventsQuery,
   PolymarketMarketsQuery,
   PolymarketPlaceOrderBody,
+  PolymarketPurchaseBody,
+  PolymarketPurchaseStatusBody,
   PolymarketSearchQuery,
   PolymarketSlugParams,
   PolymarketUserDataBody
@@ -357,13 +362,18 @@ export const polymarketAcceptTerms = async (
   const logKey = `[op:polymarket-accept-terms]`;
 
   try {
-    const user = await resolveUser(request.body.channel_user_id, logKey);
+    let user = await resolveUser(request.body.channel_user_id, logKey);
     if (!user) {
       return errorReply(reply, 400, 'Invalid or missing channel_user_id');
     }
 
+    // Auto-create the Polymarket account if it doesn't exist yet.
+    // This allows the terms overlay to be the single entry point — the user
+    // accepts terms and their account is created in one step.
     if (!user.polymarket_account) {
-      return errorReply(reply, 400, 'Polymarket account not created');
+      Logger.log('info', LOG_PREFIX, `${logKey} No account found — auto-creating before terms acceptance`);
+      const privateKey = await getUserPrivateKey(user);
+      user = await createPolymarketAccount(user, privateKey, logKey);
     }
 
     const updatedUser = await acceptTerms(user, request.body.terms_version, logKey);
@@ -689,5 +699,127 @@ export const polymarketBridge = async (
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to execute bridge');
+  }
+};
+
+// ============================================================================
+// Purchase Endpoints (unified flow)
+// ============================================================================
+
+/** POST /polymarket/purchase */
+export const polymarketPurchase = async (
+  request: FastifyRequest<{ Body: PolymarketPurchaseBody }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  if (!checkEnabled(reply)) return reply;
+  const logKey = `[op:polymarket-purchase]`;
+
+  try {
+    const user = await resolveUser(request.body.channel_user_id, logKey);
+    if (!user) {
+      return errorReply(reply, 400, 'Invalid or missing channel_user_id');
+    }
+
+    const { token_id, price, size, side, order_type, bridge_amount, terms_version } = request.body;
+    if (!token_id || price == null || size == null || !side || !bridge_amount) {
+      return errorReply(reply, 400, 'Missing required parameters (token_id, price, size, side, bridge_amount)');
+    }
+
+    // Terms validation:
+    // - Account exists + terms accepted → proceed
+    // - Account exists + terms NOT accepted → error
+    // - No account → terms_version required in body (will create account + accept terms)
+    if (user.polymarket_account) {
+      if (!hasAcceptedCurrentTerms(user)) {
+        return errorReply(reply, 403, 'Terms not accepted. Call /polymarket/account/accept_terms first.');
+      }
+    } else {
+      if (!terms_version) {
+        return errorReply(
+          reply,
+          400,
+          'Polymarket account does not exist. Provide terms_version to create account during purchase.'
+        );
+      }
+    }
+
+    const privateKey = await getUserPrivateKey(user);
+    const purchaseId = randomUUID();
+
+    // Create purchase record
+    await createPurchase({
+      purchase_id: purchaseId,
+      user_phone: user.phone_number,
+      token_id,
+      price,
+      size,
+      side,
+      order_type,
+      bridge_amount,
+      terms_version
+    });
+
+    // Fire-and-forget: execute the purchase flow in background
+    executePurchase(user, privateKey, purchaseId, {
+      tokenId: token_id,
+      price,
+      size,
+      side,
+      orderType: order_type,
+      bridgeAmount: bridge_amount,
+      termsVersion: terms_version
+    }, logKey).catch((error) => {
+      Logger.error(LOG_PREFIX, logKey, `Background purchase failed: ${String(error)}`);
+    });
+
+    return successReply(reply, { purchase_id: purchaseId });
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, String(error));
+    return errorReply(reply, 500, `Failed to initiate purchase: ${String(error)}`);
+  }
+};
+
+/** POST /polymarket/purchase/status */
+export const polymarketPurchaseStatus = async (
+  request: FastifyRequest<{ Body: PolymarketPurchaseStatusBody }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  if (!checkEnabled(reply)) return reply;
+  const logKey = `[op:polymarket-purchase-status]`;
+
+  try {
+    const user = await resolveUser(request.body.channel_user_id, logKey);
+    if (!user) {
+      return errorReply(reply, 400, 'Invalid or missing channel_user_id');
+    }
+
+    if (!request.body.purchase_id) {
+      return errorReply(reply, 400, 'Missing purchase_id');
+    }
+
+    const purchase = await getPurchaseById(request.body.purchase_id);
+    if (!purchase) {
+      return errorReply(reply, 404, 'Purchase not found');
+    }
+
+    // Ensure the purchase belongs to the requesting user
+    if (purchase.user_phone !== user.phone_number) {
+      return errorReply(reply, 403, 'Purchase does not belong to this user');
+    }
+
+    return successReply(reply, {
+      purchase_id: purchase.purchase_id,
+      status: purchase.status,
+      current_step: purchase.current_step,
+      steps: purchase.steps,
+      order_id: purchase.order_id,
+      bridge_tx_hash: purchase.bridge_tx_hash,
+      error: purchase.error,
+      created_at: purchase.created_at,
+      updated_at: purchase.updated_at
+    });
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, String(error));
+    return errorReply(reply, 500, 'Failed to get purchase status');
   }
 };

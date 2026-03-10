@@ -62,6 +62,24 @@ export interface PolymarketBridgeBody {
   token?: string;
 }
 
+/** Body for unified purchase flow */
+export interface PolymarketPurchaseBody {
+  channel_user_id: string;
+  token_id: string;
+  price: number;
+  size: number;
+  side: PolymarketOrderSide;
+  order_type?: PolymarketOrderType;
+  bridge_amount: string;
+  terms_version?: number;
+}
+
+/** Body for checking purchase status */
+export interface PolymarketPurchaseStatusBody {
+  channel_user_id: string;
+  purchase_id: string;
+}
+
 // ============================================================================
 // Query Parameters
 // ============================================================================
@@ -141,8 +159,9 @@ export interface PolymarketMarketDetail extends PolymarketMarketSummary {
 /** Category summary */
 export interface PolymarketCategory {
   id: string;
-  name: string;
-  count: number;
+  label: string;
+  slug: string;
+  parentCategory?: string;
 }
 
 /** Event summary */

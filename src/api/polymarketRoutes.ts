@@ -25,6 +25,8 @@ import {
   polymarketGetPositions,
   polymarketGetTradeHistory,
   polymarketPlaceOrder,
+  polymarketPurchase,
+  polymarketPurchaseStatus,
   polymarketSearchMarkets
 } from '../controllers/polymarketController';
 
@@ -55,4 +57,8 @@ export default async function polymarketRoutes(fastify: FastifyInstance): Promis
   // ── Bridge ──────────────────────────────────────────────────────────────
   fastify.post('/polymarket/bridge/quote', polymarketBridgeQuote);
   fastify.post('/polymarket/bridge/execute', polymarketBridge);
+
+  // ── Purchase (unified flow) ────────────────────────────────────────────
+  fastify.post('/polymarket/purchase', polymarketPurchase);
+  fastify.post('/polymarket/purchase/status', polymarketPurchaseStatus);
 }

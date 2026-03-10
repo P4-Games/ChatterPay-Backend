@@ -64,8 +64,9 @@ export interface GammaEvent {
 /** Gamma API category response */
 export interface GammaCategory {
   id: string;
-  name: string;
-  count: number;
+  label: string;
+  slug: string;
+  parentCategory?: string;
 }
 
 /** Gamma API search result */

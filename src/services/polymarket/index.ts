@@ -15,6 +15,7 @@ export {
 // Bridge (Scroll → Polygon)
 export {
   checkBridgeStatus,
+  executeBridge,
   getBridgeQuote,
   validateBridgeQuote
 } from './polymarketBridgeService';
@@ -51,6 +52,9 @@ export {
   getTradeHistory,
   placeOrder
 } from './polymarketTradingService';
+// Purchase (unified flow)
+export { executePurchase } from './polymarketPurchaseService';
+export type { PurchaseParams } from './polymarketPurchaseService';
 
 // Types
 export type {

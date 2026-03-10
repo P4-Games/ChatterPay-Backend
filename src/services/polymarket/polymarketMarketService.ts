@@ -146,7 +146,7 @@ export async function getEvents(params: EventQueryParams, logKey: string): Promi
 
     if (params.active !== undefined) queryParams.active = params.active;
     if (params.closed !== undefined) queryParams.closed = params.closed;
-    if (params.category) queryParams.category = params.category;
+    if (params.category) queryParams.tag_slug = params.category;
     if (params.slug) queryParams.slug = params.slug;
     if (params.order) queryParams.order = params.order;
     if (params.ascending !== undefined) queryParams.ascending = params.ascending;
