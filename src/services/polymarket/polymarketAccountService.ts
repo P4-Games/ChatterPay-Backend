@@ -11,11 +11,8 @@ import { Logger } from '../../helpers/loggerHelper';
 import { PolymarketTermsModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
 import { UserModel } from '../../models/userModel';
-import {
-  derivePolygonAddress,
-  encryptApiCredentials,
-  getOrCreateApiCredentials
-} from './polymarketClientService';
+import { encryptApiCredentials, getOrCreateApiCredentials } from './polymarketClientService';
+import { deploySafeWallet, setupGaslessTrading } from './polymarketRelayerService';
 
 const LOG_PREFIX = 'polymarketAccountService';
 
@@ -27,6 +24,10 @@ const LOG_PREFIX = 'polymarketAccountService';
  * Create a Polymarket account for a user.
  * Derives the Polygon address from the user's EOA key,
  * creates CLOB API credentials, encrypts them, and stores in MongoDB.
+ *
+ * Also sets up gasless trading via the Polymarket Relayer:
+ * - Deploys a Safe wallet for the user (if not already deployed)
+ * - Approves USDC.e for CTF Exchange and Neg Risk CTF Exchange
  *
  * @param user - User document
  * @param privateKey - User's EOA private key
@@ -47,14 +48,19 @@ export async function createPolymarketAccount(
   try {
     Logger.log('info', fnLog, `${logKey} Creating Polymarket account`);
 
-    // Derive Polygon address
-    const polygonAddress = derivePolygonAddress(privateKey);
+    // 1. Setup gasless trading (deploy Safe + approve tokens via Relayer)
+    // This is a one-time setup that enables trading without MATIC/POL.
+    // We do this BEFORE deriving API keys so the keys are associated with the Safe.
+    const { proxyAddress } = await deploySafeWallet(privateKey, logKey);
+    await setupGaslessTrading(privateKey, logKey);
 
-    // Create/derive API credentials
-    const credentials = await getOrCreateApiCredentials(privateKey);
+    // 2. Create/derive API credentials for the Safe
+    const credentials = await getOrCreateApiCredentials(privateKey, proxyAddress);
 
-    // Encrypt credentials
+    // 3. Encrypt credentials
     const encryptedCreds = encryptApiCredentials(credentials);
+
+    const polygonAddress = proxyAddress;
 
     // Update user document
     const updatedUser = await UserModel.findByIdAndUpdate(

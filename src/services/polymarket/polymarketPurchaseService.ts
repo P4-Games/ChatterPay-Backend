@@ -100,7 +100,12 @@ export async function executePurchase(
     await updatePurchaseStep(purchaseId, 'bridge', { status: 'in_progress' }, logKey);
 
     try {
-      const bridgeResult = await executeBridge(currentUser, params.bridgeAmount, logKey);
+      const bridgeResult = await executeBridge(
+        currentUser,
+        privateKey,
+        params.bridgeAmount,
+        logKey
+      );
 
       await updatePurchaseStep(
         purchaseId,
@@ -119,12 +124,7 @@ export async function executePurchase(
     } catch (error) {
       const errorMsg = `Bridge failed: ${String(error)}`;
       Logger.log('error', fnLog, `${logKey} ${errorMsg}`);
-      await updatePurchaseStep(
-        purchaseId,
-        'bridge',
-        { status: 'failed', error: errorMsg },
-        logKey
-      );
+      await updatePurchaseStep(purchaseId, 'bridge', { status: 'failed', error: errorMsg }, logKey);
       await updatePurchaseStatus(purchaseId, 'failed', 'bridge', { error: errorMsg }, logKey);
       return;
     }
@@ -143,7 +143,6 @@ export async function executePurchase(
       const orderResult = await placeOrder(
         freshUser,
         privateKey,
-        params.tokenId,
         {
           tokenId: params.tokenId,
           price: params.price,

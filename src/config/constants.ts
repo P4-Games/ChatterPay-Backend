@@ -92,7 +92,12 @@ const {
   POLYMARKET_CHAIN_ID: polymarketChainId = 137,
   POLYMARKET_ENABLED: polymarketEnabled = 'false',
   POLYMARKET_TERMS_VERSION: polymarketTermsVersion = 1,
-  POLYMARKET_DEFAULT_SLIPPAGE: polymarketDefaultSlippage = '0.01'
+  POLYMARKET_DEFAULT_SLIPPAGE: polymarketDefaultSlippage = '0.01',
+  POLYMARKET_RELAYER_URL: polymarketRelayerUrl = 'https://relayer-v2.polymarket.com',
+  POLYMARKET_BUILDER_API_KEY: polymarketBuilderApiKey = '',
+  POLYMARKET_BUILDER_SECRET: polymarketBuilderSecret = '',
+  POLYMARKET_BUILDER_PASSPHRASE: polymarketBuilderPassphrase = '',
+  POLYMARKET_POLYGON_RPC_URL: polymarketPolygonRpcUrl = 'https://polygon-rpc.com'
 } = process.env;
 
 export {
@@ -320,6 +325,11 @@ export const POLYMARKET_CHAIN_ID: number = Number(polymarketChainId);
 export const POLYMARKET_ENABLED: boolean = polymarketEnabled.toLowerCase() === 'true';
 export const POLYMARKET_TERMS_VERSION: number = Number(polymarketTermsVersion);
 export const POLYMARKET_DEFAULT_SLIPPAGE: number = Number(polymarketDefaultSlippage);
+export const POLYMARKET_RELAYER_URL: string = polymarketRelayerUrl;
+export const POLYMARKET_BUILDER_API_KEY: string = polymarketBuilderApiKey;
+export const POLYMARKET_BUILDER_SECRET: string = polymarketBuilderSecret;
+export const POLYMARKET_BUILDER_PASSPHRASE: string = polymarketBuilderPassphrase;
+export const POLYMARKET_POLYGON_RPC_URL: string = polymarketPolygonRpcUrl;
 
 export const CACHE_POLYMARKET_MARKETS_TTL = 300; // 5 min
 export const CACHE_POLYMARKET_MARKETS_CHECK_PERIOD = 360; // 6 min

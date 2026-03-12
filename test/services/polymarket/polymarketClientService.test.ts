@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  encryptApiCredentials,
   decryptApiCredentials,
-  derivePolygonAddress
+  derivePolygonAddress,
+  encryptApiCredentials
 } from '../../../src/services/polymarket/polymarketClientService';
 
 // Mock constants
@@ -77,9 +77,7 @@ describe('polymarketClientService', () => {
       // IVs should be different (random)
       expect(encrypted1.split(':')[0]).not.toBe(encrypted2.split(':')[0]);
       // But both should decrypt to the same value
-      expect(decryptApiCredentials(encrypted1)).toEqual(
-        decryptApiCredentials(encrypted2)
-      );
+      expect(decryptApiCredentials(encrypted1)).toEqual(decryptApiCredentials(encrypted2));
     });
 
     it('should throw on tampered ciphertext', () => {
@@ -99,8 +97,7 @@ describe('polymarketClientService', () => {
   describe('derivePolygonAddress', () => {
     it('should derive a valid Ethereum address from a private key', () => {
       // Known test private key (DO NOT use in production)
-      const testPrivateKey =
-        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+      const testPrivateKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
       const address = derivePolygonAddress(testPrivateKey);
 
       expect(address).toBeTruthy();
@@ -110,10 +107,8 @@ describe('polymarketClientService', () => {
     });
 
     it('should derive different addresses for different keys', () => {
-      const key1 =
-        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-      const key2 =
-        '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
+      const key1 = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+      const key2 = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
 
       const address1 = derivePolygonAddress(key1);
       const address2 = derivePolygonAddress(key2);

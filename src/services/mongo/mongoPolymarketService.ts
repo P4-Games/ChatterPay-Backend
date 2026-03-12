@@ -156,7 +156,11 @@ export async function updatePurchaseStep(
     if (update.status === 'in_progress') {
       setFields['steps.$[elem].started_at'] = new Date();
     }
-    if (update.status === 'completed' || update.status === 'failed' || update.status === 'skipped') {
+    if (
+      update.status === 'completed' ||
+      update.status === 'failed' ||
+      update.status === 'skipped'
+    ) {
       setFields['steps.$[elem].completed_at'] = new Date();
     }
     if (update.error) setFields['steps.$[elem].error'] = update.error;
@@ -169,11 +173,7 @@ export async function updatePurchaseStep(
       { new: true, arrayFilters: [{ 'elem.name': stepName }] }
     );
   } catch (error) {
-    Logger.log(
-      'error',
-      `[${LOG_PREFIX}:updatePurchaseStep]`,
-      `${logKey} Failed: ${String(error)}`
-    );
+    Logger.log('error', `[${LOG_PREFIX}:updatePurchaseStep]`, `${logKey} Failed: ${String(error)}`);
     return null;
   }
 }

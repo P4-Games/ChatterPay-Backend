@@ -9,11 +9,15 @@
 
 import type { ApiKeyCreds } from '@polymarket/clob-client';
 import { ClobClient } from '@polymarket/clob-client';
+import { SignatureType } from '@polymarket/order-utils';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 import { Wallet } from 'ethers';
+
 import { $S, POLYMARKET_CHAIN_ID, POLYMARKET_CLOB_API_URL } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
 import type { IUser } from '../../models/userModel';
+import { UserModel } from '../../models/userModel';
+import { deriveSafeAddress } from './polymarketRelayerService';
 
 const LOG_PREFIX = 'polymarketClientService';
 
@@ -81,11 +85,20 @@ export function createPublicClobClient(): ClobClient {
  */
 export function createAuthenticatedClobClient(
   privateKey: string,
-  credentials: ApiKeyCreds
+  credentials: ApiKeyCreds,
+  funderAddress?: string
 ): ClobClient {
   const signer = new Wallet(privateKey);
+  const signatureType = funderAddress ? SignatureType.POLY_GNOSIS_SAFE : SignatureType.EOA;
 
-  return new ClobClient(POLYMARKET_CLOB_API_URL, POLYMARKET_CHAIN_ID, signer, credentials);
+  return new ClobClient(
+    POLYMARKET_CLOB_API_URL,
+    POLYMARKET_CHAIN_ID,
+    signer,
+    credentials,
+    signatureType,
+    funderAddress
+  );
 }
 
 /**
@@ -95,14 +108,29 @@ export function createAuthenticatedClobClient(
  * @param privateKey - User's EOA private key
  * @returns API credentials (apiKey, secret, passphrase)
  */
-export async function getOrCreateApiCredentials(privateKey: string): Promise<ApiKeyCreds> {
+export async function getOrCreateApiCredentials(
+  privateKey: string,
+  funderAddress?: string
+): Promise<ApiKeyCreds> {
   const logKey = `[${LOG_PREFIX}:getOrCreateApiCredentials]`;
 
   try {
     const signer = new Wallet(privateKey);
-    const client = new ClobClient(POLYMARKET_CLOB_API_URL, POLYMARKET_CHAIN_ID, signer);
+    const signatureType = funderAddress ? SignatureType.POLY_GNOSIS_SAFE : SignatureType.EOA;
+    const client = new ClobClient(
+      POLYMARKET_CLOB_API_URL,
+      POLYMARKET_CHAIN_ID,
+      signer,
+      undefined,
+      signatureType,
+      funderAddress
+    );
 
-    Logger.log('info', logKey, 'Creating/deriving API credentials');
+    Logger.log(
+      'info',
+      logKey,
+      `Creating/deriving API credentials${funderAddress ? ` for Safe ${funderAddress}` : ''}`
+    );
     const credentials = await client.createOrDeriveApiKey();
 
     return credentials;
@@ -120,7 +148,10 @@ export async function getOrCreateApiCredentials(privateKey: string): Promise<Api
  * @param privateKey - User's EOA private key
  * @returns Authenticated ClobClient
  */
-export function getAuthenticatedClientForUser(user: IUser, privateKey: string): ClobClient {
+export async function getAuthenticatedClientForUser(
+  user: IUser,
+  privateKey: string
+): Promise<ClobClient> {
   const logKey = `[${LOG_PREFIX}:getAuthenticatedClientForUser]`;
 
   if (!user.polymarket_account) {
@@ -128,8 +159,38 @@ export function getAuthenticatedClientForUser(user: IUser, privateKey: string): 
   }
 
   try {
-    const credentials = decryptApiCredentials(user.polymarket_account.api_credentials_encrypted);
-    return createAuthenticatedClobClient(privateKey, credentials);
+    // Derive the Safe address (deposit address) to use as the funder/maker
+    const wallet = new Wallet(privateKey);
+    const safeAddress = deriveSafeAddress(wallet.address);
+
+    let credentialsEncrypted = user.polymarket_account.api_credentials_encrypted;
+
+    // MIGRATION: If the stored address is still the EOA (or any other address),
+    // we need to re-derive API credentials for the Safe address to avoid "invalid signature" errors.
+    if (user.polymarket_account.polygon_address.toLowerCase() !== safeAddress.toLowerCase()) {
+      Logger.log(
+        'info',
+        logKey,
+        `Migrating user ${user.phone_number} to Safe-linked API credentials at ${safeAddress}`
+      );
+
+      const newCredentials = await getOrCreateApiCredentials(privateKey, safeAddress);
+      credentialsEncrypted = encryptApiCredentials(newCredentials);
+
+      await UserModel.findByIdAndUpdate(user._id, {
+        $set: {
+          'polymarket_account.polygon_address': safeAddress,
+          'polymarket_account.api_credentials_encrypted': credentialsEncrypted
+        }
+      });
+
+      // Update the local object for the current request
+      user.polymarket_account.polygon_address = safeAddress;
+      user.polymarket_account.api_credentials_encrypted = credentialsEncrypted;
+    }
+
+    const credentials = decryptApiCredentials(credentialsEncrypted);
+    return createAuthenticatedClobClient(privateKey, credentials, safeAddress);
   } catch (error) {
     Logger.log('error', logKey, `Failed to get authenticated client: ${String(error)}`);
     throw new Error(`Failed to initialize Polymarket client: ${String(error)}`);

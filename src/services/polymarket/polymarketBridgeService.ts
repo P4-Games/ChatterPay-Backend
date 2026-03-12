@@ -20,8 +20,10 @@ import { setupContracts } from '../web3/contractSetupService';
 
 const LOG_PREFIX = 'polymarketBridgeService';
 
-// Polygon USDC address
-const POLYGON_USDC_ADDRESS = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
+// Polygon USDC.e (Bridged USDC) — Polymarket's collateral token
+// IMPORTANT: Polymarket uses USDC.e (0x2791...), NOT native USDC (0x3c49...)
+// @see https://docs.polymarket.com/resources/contract-addresses
+const POLYGON_USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
 
 // Default scroll chain ID (will be user's current chain in practice)
 const SCROLL_CHAIN_ID = 534352; // Scroll Mainnet
@@ -55,7 +57,8 @@ export async function getBridgeQuote(
         fromToken: 'USDC',
         toToken: POLYGON_USDC_ADDRESS,
         fromAmount: amount,
-        fromAddress
+        fromAddress,
+        toAddress: fromAddress // Default to fromAddress if not specified
       },
       logKey
     );
@@ -109,6 +112,114 @@ export async function checkBridgeStatus(
   }
 }
 
+import { deploySafeWallet } from './polymarketRelayerService';
+
+// ============================================================================
+// Stablecoin Detection on Scroll
+// ============================================================================
+
+import Token from '../../models/tokenModel';
+
+/** Stablecoin symbols to check, in priority order */
+const BRIDGE_STABLECOIN_SYMBOLS = ['USDC', 'USDT'];
+
+const ERC20_BALANCE_ABI = ['function balanceOf(address account) view returns (uint256)'];
+
+/**
+ * Find the first stablecoin in the proxy wallet with sufficient balance.
+ *
+ * Looks up token addresses from the DB (tokens collection) for the Scroll chain,
+ * then checks on-chain balances. Returns the first token with enough balance.
+ *
+ * @param proxyAddress - The user's proxy wallet address on Scroll
+ * @param requiredAmount - Minimum amount needed (in smallest units, 6 decimals)
+ * @param provider - Ethereum provider for Scroll
+ * @param chainId - Scroll chain ID
+ * @param logKey - Logging identifier
+ */
+async function findAvailableStablecoin(
+  proxyAddress: string,
+  requiredAmount: string,
+  provider: ethers.providers.Provider,
+  chainId: number,
+  logKey: string
+): Promise<{
+  symbol: string;
+  address: string;
+  decimals: number;
+  balance: ethers.BigNumber;
+} | null> {
+  const fnLog = `[${LOG_PREFIX}:findAvailableStablecoin]`;
+  const requiredBN = ethers.BigNumber.from(requiredAmount);
+
+  // Look up stablecoin tokens from the DB for this chain
+  const dbTokens = await Token.find({
+    chain_id: chainId,
+    symbol: { $in: BRIDGE_STABLECOIN_SYMBOLS }
+  }).lean();
+
+  if (dbTokens.length === 0) {
+    Logger.log('warn', fnLog, `${logKey} No stablecoins found in DB for chain ${chainId}`);
+    return null;
+  }
+
+  // Sort by priority order (USDC first, then USDT)
+  const sortedTokens = BRIDGE_STABLECOIN_SYMBOLS.map((sym) =>
+    dbTokens.find((t) => t.symbol === sym)
+  ).filter(Boolean);
+
+  for (const token of sortedTokens) {
+    if (!token) continue;
+
+    try {
+      const contract = new ethers.Contract(token.address, ERC20_BALANCE_ABI, provider);
+      const balance: ethers.BigNumber = await contract.balanceOf(proxyAddress);
+
+      const balanceHuman = ethers.utils.formatUnits(balance, token.decimals);
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} ${token.symbol} (${token.address}) balance: ${balanceHuman}`
+      );
+
+      if (balance.gte(requiredBN)) {
+        Logger.log('info', fnLog, `${logKey} Using ${token.symbol} (${balanceHuman}) for bridge`);
+        return { symbol: token.symbol, address: token.address, decimals: token.decimals, balance };
+      }
+    } catch (error) {
+      Logger.log('warn', fnLog, `${logKey} Failed to check ${token.symbol}: ${String(error)}`);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Get a summary of all stablecoin balances for error messages.
+ */
+async function getStablecoinBalanceSummary(
+  proxyAddress: string,
+  provider: ethers.providers.Provider,
+  chainId: number
+): Promise<string[]> {
+  const dbTokens = await Token.find({
+    chain_id: chainId,
+    symbol: { $in: BRIDGE_STABLECOIN_SYMBOLS }
+  }).lean();
+
+  const results: string[] = [];
+  for (const token of dbTokens) {
+    try {
+      const contract = new ethers.Contract(token.address, ERC20_BALANCE_ABI, provider);
+      const bal = await contract.balanceOf(proxyAddress);
+      results.push(`${token.symbol}: ${ethers.utils.formatUnits(bal, token.decimals)}`);
+    } catch {
+      results.push(`${token.symbol}: error`);
+    }
+  }
+  return results;
+}
+
 // ============================================================================
 // Bridge Execution (server-side)
 // ============================================================================
@@ -117,47 +228,96 @@ export interface ExecuteBridgeResult {
   success: boolean;
   txHash: string;
   approveTransactionHash?: string;
+  /** The token actually used on Scroll (e.g. 'USDC' or 'USDT') */
+  fromToken?: string;
 }
 
 /**
  * Execute a bridge transaction server-side (approve + send + poll).
  *
- * Follows the same pattern as executeSwapLiFi in swapService.ts:
- * 1. Get a LiFi bridge quote
- * 2. Approve the LiFi router to spend USDC from the user's proxy wallet
- * 3. Forward the bridge tx through the proxy wallet via execute()
- * 4. Poll LiFi for bridge completion
+ * Automatically detects which stablecoin the user has on Scroll (USDC or USDT)
+ * and bridges it to USDC.e on Polygon via LiFi cross-chain swap.
+ *
+ * Flow:
+ * 1. Setup contracts to get proxy wallet and signer
+ * 2. Check stablecoin balances (USDC, USDT) on Scroll
+ * 3. Get a LiFi quote for the available stablecoin → USDC.e on Polygon
+ * 4. Approve the LiFi router if needed
+ * 5. Forward the bridge tx through the proxy wallet via execute()
+ * 6. Poll LiFi for bridge completion
  *
  * @param user - User with wallet info
- * @param amount - USDC amount in smallest unit (6 decimals)
+ * @param amount - Amount in smallest unit (6 decimals)
  * @param logKey - Logging identifier
  * @returns Bridge execution result with tx hash
  */
 export async function executeBridge(
   user: IUser,
+  privateKey: string,
   amount: string,
   logKey: string
 ): Promise<ExecuteBridgeResult> {
   const fnLog = `[${LOG_PREFIX}:executeBridge]`;
 
   try {
-    Logger.log('info', fnLog, `${logKey} Executing bridge: ${amount} USDC Scroll→Polygon`);
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Executing bridge: ${amount} (smallest units) Scroll→Polygon`
+    );
 
     // 1. Setup contracts to get proxy wallet and signer
     const blockchain = await mongoBlockchainService.getNetworkConfig();
     const contracts = await setupContracts(blockchain, user);
     const proxyAddress = contracts.proxy.proxyAddress;
     const backendSigner = contracts.backPrincipal;
+    const provider = contracts.provider;
 
-    // 2. Get bridge quote using proxy address as source
+    // Get the Polygon Safe (deposit address) to ensure funds land in the right place
+    const { proxyAddress: polygonSafeAddress } = await deploySafeWallet(privateKey, logKey);
+
+    // 2. Find which stablecoin the user has with enough balance
+    const sourceToken = await findAvailableStablecoin(
+      proxyAddress,
+      amount,
+      provider,
+      SCROLL_CHAIN_ID,
+      logKey
+    );
+
+    if (!sourceToken) {
+      // Collect all balances for the error message
+      const balanceSummary = await getStablecoinBalanceSummary(
+        proxyAddress,
+        provider,
+        SCROLL_CHAIN_ID
+      );
+
+      const requiredHuman = ethers.utils.formatUnits(amount, 6);
+      throw new Error(
+        `Insufficient stablecoin balance on Scroll. ` +
+          `Need ${requiredHuman} USDC/USDT. ` +
+          `Available: ${balanceSummary.join(', ')}`
+      );
+    }
+
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Bridging ${sourceToken.symbol} from Scroll → USDC.e on Polygon`
+    );
+
+    // 3. Get bridge/swap quote using the available stablecoin
     const quote = await getLifiQuote(
       {
         fromChain: SCROLL_CHAIN_ID,
         toChain: POLYMARKET_CHAIN_ID,
-        fromToken: 'USDC',
+        fromToken: sourceToken.address,
         toToken: POLYGON_USDC_ADDRESS,
         fromAmount: amount,
-        fromAddress: proxyAddress
+        fromAddress: proxyAddress,
+        toAddress: polygonSafeAddress,
+        slippage: 0.03 // Increased slippage for reliability
       },
       logKey
     );
@@ -169,28 +329,31 @@ export async function executeBridge(
 
     Logger.log('info', fnLog, `${logKey} Bridge quote received: tool=${quote.tool}`);
 
-    // 3. Setup ChatterPay contract on proxy for execute() calls
+    // 4. Setup ChatterPay contract on proxy for execute() calls
     const chatterpayABI = await getChatterpayABI();
     const erc20ABI = await getERC20ABI();
     const chatterPayContract = new ethers.Contract(proxyAddress, chatterpayABI, backendSigner);
 
-    const provider = contracts.provider;
     const feeData = await provider.getFeeData();
     const gasPrice = feeData.gasPrice || ethers.utils.parseUnits('0.001', 'gwei');
 
-    // 4. Approve LiFi router to spend USDC if needed
+    // 5. Approve LiFi router to spend the source token if needed
     let approveTransactionHash = '';
     const approvalAddress = quote.estimate.approvalAddress;
 
     if (approvalAddress && approvalAddress !== ethers.constants.AddressZero) {
-      // Resolve the actual USDC token address on Scroll from the quote
       const fromTokenAddress = quote.action.fromToken.address;
       const tokenContract = new ethers.Contract(fromTokenAddress, erc20ABI, provider);
       const amountBN = ethers.BigNumber.from(amount);
       const currentAllowance = await tokenContract.allowance(proxyAddress, approvalAddress);
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} Current ${sourceToken.symbol} allowance for Li.Fi: ${ethers.utils.formatUnits(currentAllowance, sourceToken.decimals)}`
+      );
 
       if (currentAllowance.lt(amountBN)) {
-        Logger.log('info', fnLog, `${logKey} Approving LiFi router for bridge`);
+        Logger.log('info', fnLog, `${logKey} Approving LiFi router for ${sourceToken.symbol}`);
 
         const approveCallData = tokenContract.interface.encodeFunctionData('approve', [
           approvalAddress,
@@ -198,8 +361,7 @@ export async function executeBridge(
         ]);
 
         const approveTx = await chatterPayContract.execute(fromTokenAddress, 0, approveCallData, {
-          gasLimit: 150000,
-          gasPrice
+          gasLimit: 200000
         });
 
         const approveReceipt = await approveTx.wait();
@@ -214,16 +376,58 @@ export async function executeBridge(
       }
     }
 
-    // 5. Execute the bridge transaction through the proxy wallet
-    Logger.log('info', fnLog, `${logKey} Sending bridge transaction`);
+    // 6. Fund the proxy account with ETH if it needs to pay a native bridge fee
+    // Li.Fi quotes may require native ETH (value) for protocol fees (e.g. Across).
+    // The execute() function is non-payable (receives no ETH from caller),
+    // but it forwards its internal balance to the destination.
+    const requiredValue = ethers.BigNumber.from(quote.transactionRequest.value || 0);
+
+    if (requiredValue.gt(0)) {
+      const proxyBalance = await provider.getBalance(proxyAddress);
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} Required bridge fee (ETH): ${ethers.utils.formatEther(requiredValue)}. Proxy balance: ${ethers.utils.formatEther(proxyBalance)}`
+      );
+
+      if (proxyBalance.lt(requiredValue)) {
+        const missing = requiredValue.sub(proxyBalance);
+        // Add a small buffer for safety
+        const fundAmount = missing.add(ethers.utils.parseUnits('0.001', 'ether'));
+
+        Logger.log(
+          'info',
+          fnLog,
+          `${logKey} Funding proxy with ${ethers.utils.formatEther(fundAmount)} ETH from backend`
+        );
+        const fundTx = await backendSigner.sendTransaction({
+          to: proxyAddress,
+          value: fundAmount,
+          gasLimit: 50000 // Increased from 21000 to handle contract receive logic
+        });
+        await fundTx.wait();
+        Logger.log('info', fnLog, `${logKey} Proxy funded successfully`);
+      }
+    }
+
+    // 7. Execute the bridge transaction through the proxy wallet
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Sending bridge transaction to ${quote.transactionRequest.to}`
+    );
+    Logger.log(
+      'debug',
+      fnLog,
+      `${logKey} Bridge Request: ${JSON.stringify(quote.transactionRequest)}`
+    );
 
     const bridgeTx = await chatterPayContract.execute(
       quote.transactionRequest.to,
-      quote.transactionRequest.value || 0,
+      requiredValue,
       quote.transactionRequest.data,
       {
-        gasLimit: 800000,
-        gasPrice
+        gasLimit: 1000000
       }
     );
 
@@ -235,7 +439,7 @@ export async function executeBridge(
     const txHash = bridgeReceipt.transactionHash;
     Logger.log('info', fnLog, `${logKey} Bridge tx sent: ${txHash}`);
 
-    // 6. Poll for bridge completion
+    // 8. Poll for bridge completion
     Logger.log('info', fnLog, `${logKey} Polling bridge status`);
     const status = await pollLifiStatus(
       {
@@ -255,7 +459,8 @@ export async function executeBridge(
     return {
       success: true,
       txHash,
-      approveTransactionHash: approveTransactionHash || undefined
+      approveTransactionHash: approveTransactionHash || undefined,
+      fromToken: sourceToken.symbol
     };
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Bridge execution failed: ${String(error)}`);

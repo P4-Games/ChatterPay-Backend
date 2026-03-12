@@ -41,6 +41,17 @@ export {
   getOrderBook,
   searchMarkets
 } from './polymarketMarketService';
+export type { PurchaseParams } from './polymarketPurchaseService';
+// Purchase (unified flow)
+export { executePurchase } from './polymarketPurchaseService';
+// Relayer (gasless on-chain operations)
+export {
+  createRelayClient,
+  deploySafeWallet,
+  deriveSafeAddress,
+  ensureTokenApprovals,
+  setupGaslessTrading
+} from './polymarketRelayerService';
 // Trading
 export {
   cancelAllOrders,
@@ -52,9 +63,6 @@ export {
   getTradeHistory,
   placeOrder
 } from './polymarketTradingService';
-// Purchase (unified flow)
-export { executePurchase } from './polymarketPurchaseService';
-export type { PurchaseParams } from './polymarketPurchaseService';
 
 // Types
 export type {

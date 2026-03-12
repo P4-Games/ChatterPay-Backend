@@ -9,16 +9,19 @@
  *   secService.get_up(user.phone_number, chainId) → private key
  */
 
-import type { FastifyReply, FastifyRequest } from 'fastify';
-
 import { randomUUID } from 'crypto';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { POLYMARKET_ENABLED } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import type { IUser } from '../models/userModel';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
-import { createOrder, createPurchase, getPurchaseById } from '../services/mongo/mongoPolymarketService';
+import {
+  createOrder,
+  createPurchase,
+  getPurchaseById
+} from '../services/mongo/mongoPolymarketService';
 import {
   acceptTerms,
   cancelAllOrders,
@@ -42,6 +45,7 @@ import {
   placeOrder,
   searchMarkets
 } from '../services/polymarket';
+import { executeBridge } from '../services/polymarket/polymarketBridgeService';
 import { executePurchase } from '../services/polymarket/polymarketPurchaseService';
 import { secService } from '../services/secService';
 import { getUser } from '../services/userService';
@@ -371,7 +375,11 @@ export const polymarketAcceptTerms = async (
     // This allows the terms overlay to be the single entry point — the user
     // accepts terms and their account is created in one step.
     if (!user.polymarket_account) {
-      Logger.log('info', LOG_PREFIX, `${logKey} No account found — auto-creating before terms acceptance`);
+      Logger.log(
+        'info',
+        LOG_PREFIX,
+        `${logKey} No account found — auto-creating before terms acceptance`
+      );
       const privateKey = await getUserPrivateKey(user);
       user = await createPolymarketAccount(user, privateKey, logKey);
     }
@@ -412,10 +420,39 @@ export const polymarketPlaceOrder = async (
     }
 
     const privateKey = await getUserPrivateKey(user);
+
+    // ── Auto-bridge: Scroll → Polygon ────────────────────────────────────
+    // The user's USDC lives on Scroll. We need to bridge it to Polygon
+    // before placing the order on Polymarket.
+    //
+    // Required USDC = price × size (e.g. 0.55 × 10 = 5.5 USDC)
+    // We add a small buffer (2%) to cover bridge fees / slippage.
+    const requiredUsdc = price * size;
+    const bridgeBuffer = 1.02; // 2% buffer for bridge fees
+    const bridgeAmountHuman = requiredUsdc * bridgeBuffer;
+    // Convert to smallest units (USDC has 6 decimals)
+    const bridgeAmountSmallest = Math.ceil(bridgeAmountHuman * 1_000_000).toString();
+
+    Logger.log(
+      'info',
+      LOG_PREFIX,
+      `${logKey} Auto-bridging ${bridgeAmountHuman.toFixed(2)} USDC (Scroll→Polygon) for order`
+    );
+
+    try {
+      const bridgeResult = await executeBridge(user, privateKey, bridgeAmountSmallest, logKey);
+      Logger.log('info', LOG_PREFIX, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
+    } catch (bridgeError) {
+      Logger.log('error', LOG_PREFIX, `${logKey} Bridge failed: ${String(bridgeError)}`);
+      return errorReply(reply, 500, `Bridge from Scroll to Polygon failed: ${String(bridgeError)}`);
+    }
+
+    // ── Place order (using the bridged amount as the actual order size) ──
+    // The bridge output may differ slightly from the input due to fees.
+    // We use the original requested size since the buffer should cover it.
     const result = await placeOrder(
       user,
       privateKey,
-      token_id,
       {
         tokenId: token_id,
         price,
@@ -426,10 +463,14 @@ export const polymarketPlaceOrder = async (
       logKey
     );
 
+    // The CLOB SDK response may use different field names for the order ID.
+    const raw = result as unknown as Record<string, unknown>;
+    const orderId = raw.orderID ?? raw.id ?? raw.order_id ?? randomUUID();
+
     // Persist order to MongoDB
     await createOrder({
       user_phone: user.phone_number,
-      order_id: result.orderID,
+      order_id: String(orderId),
       market_condition_id: token_id,
       market_slug: '',
       token_id,
@@ -722,7 +763,11 @@ export const polymarketPurchase = async (
 
     const { token_id, price, size, side, order_type, bridge_amount, terms_version } = request.body;
     if (!token_id || price == null || size == null || !side || !bridge_amount) {
-      return errorReply(reply, 400, 'Missing required parameters (token_id, price, size, side, bridge_amount)');
+      return errorReply(
+        reply,
+        400,
+        'Missing required parameters (token_id, price, size, side, bridge_amount)'
+      );
     }
 
     // Terms validation:
@@ -731,7 +776,11 @@ export const polymarketPurchase = async (
     // - No account → terms_version required in body (will create account + accept terms)
     if (user.polymarket_account) {
       if (!hasAcceptedCurrentTerms(user)) {
-        return errorReply(reply, 403, 'Terms not accepted. Call /polymarket/account/accept_terms first.');
+        return errorReply(
+          reply,
+          403,
+          'Terms not accepted. Call /polymarket/account/accept_terms first.'
+        );
       }
     } else {
       if (!terms_version) {
@@ -760,15 +809,21 @@ export const polymarketPurchase = async (
     });
 
     // Fire-and-forget: execute the purchase flow in background
-    executePurchase(user, privateKey, purchaseId, {
-      tokenId: token_id,
-      price,
-      size,
-      side,
-      orderType: order_type,
-      bridgeAmount: bridge_amount,
-      termsVersion: terms_version
-    }, logKey).catch((error) => {
+    executePurchase(
+      user,
+      privateKey,
+      purchaseId,
+      {
+        tokenId: token_id,
+        price,
+        size,
+        side,
+        orderType: order_type,
+        bridgeAmount: bridge_amount,
+        termsVersion: terms_version
+      },
+      logKey
+    ).catch((error) => {
       Logger.error(LOG_PREFIX, logKey, `Background purchase failed: ${String(error)}`);
     });
 

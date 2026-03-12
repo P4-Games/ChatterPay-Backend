@@ -1,12 +1,12 @@
 import type { AxiosResponse } from 'axios';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  getMarkets,
-  getMarketBySlug,
   getEvents,
-  searchMarkets,
-  getMarketPrice
+  getMarketBySlug,
+  getMarketPrice,
+  getMarkets,
+  searchMarkets
 } from '../../../src/services/polymarket/polymarketMarketService';
 
 // Mock axios module
@@ -155,10 +155,7 @@ describe('polymarketMarketService', () => {
         statusText: 'OK'
       } as AxiosResponse);
 
-      await getMarkets(
-        { limit: 5, offset: 10, active: true, category: 'Crypto' },
-        '[test]'
-      );
+      await getMarkets({ limit: 5, offset: 10, active: true, category: 'Crypto' }, '[test]');
 
       expect(mockedAxios.get).toHaveBeenCalledWith(
         'https://gamma-api.polymarket.com/markets',
@@ -177,9 +174,7 @@ describe('polymarketMarketService', () => {
     it('should throw on API error', async () => {
       mockedAxios.get.mockRejectedValueOnce(new Error('Network error'));
 
-      await expect(getMarkets({}, '[test]')).rejects.toThrow(
-        'Failed to fetch Polymarket markets'
-      );
+      await expect(getMarkets({}, '[test]')).rejects.toThrow('Failed to fetch Polymarket markets');
     });
 
     it('should filter out markets with zero volume when filterZeroVolume is true', async () => {
@@ -190,10 +185,7 @@ describe('polymarketMarketService', () => {
         statusText: 'OK'
       } as AxiosResponse);
 
-      const result = await getMarkets(
-        { limit: 10, offset: 0, filterZeroVolume: true },
-        '[test]'
-      );
+      const result = await getMarkets({ limit: 10, offset: 0, filterZeroVolume: true }, '[test]');
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('1');
@@ -250,9 +242,7 @@ describe('polymarketMarketService', () => {
     it('should throw on API error', async () => {
       mockedAxios.get.mockRejectedValueOnce(new Error('Timeout'));
 
-      await expect(getEvents({}, '[test]')).rejects.toThrow(
-        'Failed to fetch Polymarket events'
-      );
+      await expect(getEvents({}, '[test]')).rejects.toThrow('Failed to fetch Polymarket events');
     });
 
     it('should filter out events with zero volume when filterZeroVolume is true', async () => {
@@ -263,10 +253,7 @@ describe('polymarketMarketService', () => {
         statusText: 'OK'
       } as AxiosResponse);
 
-      const result = await getEvents(
-        { limit: 10, offset: 0, filterZeroVolume: true },
-        '[test]'
-      );
+      const result = await getEvents({ limit: 10, offset: 0, filterZeroVolume: true }, '[test]');
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('1');
