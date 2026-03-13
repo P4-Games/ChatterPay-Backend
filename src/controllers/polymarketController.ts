@@ -43,9 +43,12 @@ import {
   getTradeHistory,
   hasAcceptedCurrentTerms,
   placeOrder,
-  searchMarkets
+  resolveMaxSize,
+  searchMarkets,
+  withdrawSellProceeds
 } from '../services/polymarket';
-import { executeBridge } from '../services/polymarket/polymarketBridgeService';
+import { executeBridge, withdrawToScroll } from '../services/polymarket/polymarketBridgeService';
+import { executeGaslessWithdrawal } from '../services/polymarket/polymarketRelayerService';
 import { executePurchase } from '../services/polymarket/polymarketPurchaseService';
 import { secService } from '../services/secService';
 import { getUser } from '../services/userService';
@@ -62,7 +65,8 @@ import type {
   PolymarketPurchaseStatusBody,
   PolymarketSearchQuery,
   PolymarketSlugParams,
-  PolymarketUserDataBody
+  PolymarketUserDataBody,
+  PolymarketWithdrawBody
 } from '../types/polymarketType';
 
 const LOG_PREFIX = 'polymarketController';
@@ -414,12 +418,25 @@ export const polymarketPlaceOrder = async (
     }
     if (!validatePolymarketReady(user, reply)) return reply;
 
-    const { token_id, price, size, side, order_type } = request.body;
-    if (!token_id || price == null || size == null || !side) {
+    const { token_id, price, size: rawSize, side, order_type } = request.body;
+    if (!token_id || price == null || rawSize == null || !side) {
       return errorReply(reply, 400, 'Missing required order parameters');
     }
 
+    if (rawSize === 'max' && side !== 'SELL') {
+      return errorReply(reply, 400, 'size=max is only supported for SELL orders');
+    }
+
     const privateKey = await getUserPrivateKey(user);
+
+    // Resolve 'max' size for SELL orders by querying the CLOB balance
+    let size: number;
+    if (rawSize === 'max') {
+      size = await resolveMaxSize(user, privateKey, token_id, logKey);
+      Logger.log('info', LOG_PREFIX, `${logKey} Resolved max size: ${size} shares`);
+    } else {
+      size = rawSize;
+    }
 
     // ── Auto-bridge: Scroll → Polygon ────────────────────────────────────
     // The user's USDC lives on Scroll. We need to bridge it to Polygon
@@ -427,24 +444,28 @@ export const polymarketPlaceOrder = async (
     //
     // Required USDC = price × size (e.g. 0.55 × 10 = 5.5 USDC)
     // We add a small buffer (2%) to cover bridge fees / slippage.
-    const requiredUsdc = price * size;
-    const bridgeBuffer = 1.02; // 2% buffer for bridge fees
-    const bridgeAmountHuman = requiredUsdc * bridgeBuffer;
-    // Convert to smallest units (USDC has 6 decimals)
-    const bridgeAmountSmallest = Math.ceil(bridgeAmountHuman * 1_000_000).toString();
+    if (side === 'BUY') {
+      const requiredUsdc = price * size;
+      const bridgeBuffer = 1.02; // 2% buffer for bridge fees
+      const bridgeAmountHuman = requiredUsdc * bridgeBuffer;
+      // Convert to smallest units (USDC has 6 decimals)
+      const bridgeAmountSmallest = Math.ceil(bridgeAmountHuman * 1_000_000).toString();
 
-    Logger.log(
-      'info',
-      LOG_PREFIX,
-      `${logKey} Auto-bridging ${bridgeAmountHuman.toFixed(2)} USDC (Scroll→Polygon) for order`
-    );
+      Logger.log(
+        'info',
+        LOG_PREFIX,
+        `${logKey} Auto-bridging ${bridgeAmountHuman.toFixed(2)} USDC (Scroll→Polygon) for order`
+      );
 
-    try {
-      const bridgeResult = await executeBridge(user, privateKey, bridgeAmountSmallest, logKey);
-      Logger.log('info', LOG_PREFIX, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
-    } catch (bridgeError) {
-      Logger.log('error', LOG_PREFIX, `${logKey} Bridge failed: ${String(bridgeError)}`);
-      return errorReply(reply, 500, `Bridge from Scroll to Polygon failed: ${String(bridgeError)}`);
+      try {
+        const bridgeResult = await executeBridge(user, privateKey, bridgeAmountSmallest, logKey);
+        Logger.log('info', LOG_PREFIX, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
+      } catch (bridgeError) {
+        Logger.log('error', LOG_PREFIX, `${logKey} Bridge failed: ${String(bridgeError)}`);
+        return errorReply(reply, 500, `Bridge from Scroll to Polygon failed: ${String(bridgeError)}`);
+      }
+    } else {
+      Logger.log('info', LOG_PREFIX, `${logKey} SELL order detected. Skipping Scroll→Polygon bridge.`);
     }
 
     // ── Place order (using the bridged amount as the actual order size) ──
@@ -479,6 +500,14 @@ export const polymarketPlaceOrder = async (
       size,
       status: 'pending'
     });
+
+    // Auto-withdraw SELL proceeds from Polygon Safe → Scroll proxy.
+    // Fire-and-forget so the API response isn't delayed.
+    if (side === 'SELL') {
+      withdrawSellProceeds(user, privateKey, logKey).catch((err) => {
+        Logger.log('error', LOG_PREFIX, `${logKey} Background withdrawal failed: ${String(err)}`);
+      });
+    }
 
     return successReply(reply, { order: result });
   } catch (error) {
@@ -743,6 +772,72 @@ export const polymarketBridge = async (
   }
 };
 
+/** POST /polymarket/bridge/withdraw */
+export const polymarketWithdraw = async (
+  request: FastifyRequest<{ Body: PolymarketWithdrawBody }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  if (!checkEnabled(reply)) return reply;
+  const logKey = `[op:polymarket-withdraw]`;
+
+  try {
+    const user = await resolveUser(request.body.channel_user_id, logKey);
+    if (!user) {
+      return errorReply(reply, 400, 'Invalid or missing channel_user_id');
+    }
+    if (!user.polymarket_account) {
+      return errorReply(reply, 400, 'Polymarket account not created');
+    }
+    
+    // Ensure the wallet was derived properly so we can transact for them
+    const privateKey = await getUserPrivateKey(user);
+
+    if (!request.body.amount || Number(request.body.amount) <= 0) {
+      return errorReply(reply, 400, 'Missing or invalid amount');
+    }
+
+    // Step 1: Generate Withdrawal Quote from LiFi
+    // withdrawToScroll takes (polygonSafeAddress, scrollProxyAddress, amount, logKey)
+    const proxyAddress = user.wallets[0]?.wallet_proxy || '';
+    if (!proxyAddress) {
+      return errorReply(reply, 400, 'User missing proxy wallet');
+    }
+
+    const quote = await withdrawToScroll(
+      user.polymarket_account.polygon_address,
+      proxyAddress,
+      request.body.amount,
+      logKey
+    );
+
+    // Step 2: Push quote payloads into Relayer for gasless execution
+    // executeGaslessWithdrawal takes (privateKey, withdrawData, amount, logKey)
+    await executeGaslessWithdrawal(
+      privateKey,
+      {
+        approvalAddress: quote.approvalAddress,
+        to: quote.to,
+        data: quote.data,
+        value: quote.value
+      },
+      request.body.amount,
+      logKey
+    );
+
+    return successReply(reply, {
+      message: 'Withdrawal to Scroll initiated via Relayer gaslessly',
+      quote_details: {
+        to: quote.to,
+        amount: quote.value
+      }
+    });
+
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, `Withdrawal failed: ${String(error)}`);
+    return errorReply(reply, 500, `Failed to execute withdrawal: ${String(error)}`);
+  }
+};
+
 // ============================================================================
 // Purchase Endpoints (unified flow)
 // ============================================================================
@@ -761,12 +856,25 @@ export const polymarketPurchase = async (
       return errorReply(reply, 400, 'Invalid or missing channel_user_id');
     }
 
-    const { token_id, price, size, side, order_type, bridge_amount, terms_version } = request.body;
-    if (!token_id || price == null || size == null || !side || !bridge_amount) {
+    const { token_id, price, size: rawSize, side, order_type, bridge_amount, terms_version } = request.body;
+    if (!token_id || price == null || rawSize == null || !side) {
       return errorReply(
         reply,
         400,
-        'Missing required parameters (token_id, price, size, side, bridge_amount)'
+        'Missing required parameters (token_id, price, size, side)'
+      );
+    }
+
+    if (rawSize === 'max' && side !== 'SELL') {
+      return errorReply(reply, 400, 'size=max is only supported for SELL orders');
+    }
+
+    const safeBridgeAmount = bridge_amount ?? '0';
+    if (side === 'BUY' && (!bridge_amount || bridge_amount === '0')) {
+      return errorReply(
+        reply,
+        400,
+        'Missing required parameter (bridge_amount) for BUY order'
       );
     }
 
@@ -793,6 +901,16 @@ export const polymarketPurchase = async (
     }
 
     const privateKey = await getUserPrivateKey(user);
+
+    // Resolve 'max' size for SELL orders by querying the CLOB balance
+    let size: number;
+    if (rawSize === 'max') {
+      size = await resolveMaxSize(user, privateKey, token_id, logKey);
+      Logger.log('info', LOG_PREFIX, `${logKey} Resolved max size: ${size} shares`);
+    } else {
+      size = rawSize;
+    }
+
     const purchaseId = randomUUID();
 
     // Create purchase record
@@ -804,7 +922,7 @@ export const polymarketPurchase = async (
       size,
       side,
       order_type,
-      bridge_amount,
+      bridge_amount: safeBridgeAmount,
       terms_version
     });
 
@@ -819,7 +937,7 @@ export const polymarketPurchase = async (
         size,
         side,
         orderType: order_type,
-        bridgeAmount: bridge_amount,
+        bridgeAmount: safeBridgeAmount,
         termsVersion: terms_version
       },
       logKey

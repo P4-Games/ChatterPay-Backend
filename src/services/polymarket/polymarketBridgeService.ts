@@ -467,3 +467,71 @@ export async function executeBridge(
     throw new Error(`Bridge execution failed: ${String(error)}`);
   }
 }
+
+// ============================================================================
+// Withdraw to Scroll (Relayer Sponsored)
+// ============================================================================
+
+/**
+ * Get a bridge quote and necessary transactions for withdrawing USDC.e from Polygon back to Scroll.
+ *
+ * @param polygonSafeAddress - Sender address on Polygon (the user's Safe)
+ * @param scrollProxyAddress - Destination address on Scroll (the user's Proxy)
+ * @param amount - Amount to withdraw in smallest unit (wei/6 decimals for USDC.e)
+ * @param logKey - Logging identifier
+ * @returns An object containing the quote, approval address, to, data, and value for the Relayer.
+ */
+export async function withdrawToScroll(
+  polygonSafeAddress: string,
+  scrollProxyAddress: string,
+  amount: string,
+  logKey: string
+): Promise<{
+  quote: LifiQuoteResponse;
+  approvalAddress: string;
+  to: string;
+  data: string;
+  value: string;
+}> {
+  const fnLog = `[${LOG_PREFIX}:withdrawToScroll]`;
+
+  try {
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Getting withdraw quote: ${amount} USDC.e Polygon→Scroll`
+    );
+
+    const quote = await getLifiQuote(
+      {
+        fromChain: POLYMARKET_CHAIN_ID,
+        toChain: SCROLL_CHAIN_ID,
+        fromToken: POLYGON_USDC_ADDRESS,
+        toToken: 'USDC', // Li.Fi will route to USDC or USDT on Scroll
+        fromAmount: amount,
+        fromAddress: polygonSafeAddress,
+        toAddress: scrollProxyAddress
+      },
+      logKey
+    );
+
+    const validation = validateLifiQuote(quote);
+    if (!validation.valid) {
+      throw new Error(`Invalid withdraw quote: ${validation.reason}`);
+    }
+
+    const { approvalAddress } = quote.estimate;
+    const { to, data, value } = quote.transactionRequest;
+
+    return {
+      quote,
+      approvalAddress: approvalAddress || ethers.constants.AddressZero,
+      to: to || ethers.constants.AddressZero,
+      data: data || '0x',
+      value: value?.toString() || '0'
+    };
+  } catch (error) {
+    Logger.log('error', fnLog, `${logKey} Failed getting withdraw quote: ${String(error)}`);
+    throw new Error(`Failed to get withdraw quote: ${String(error)}`);
+  }
+}

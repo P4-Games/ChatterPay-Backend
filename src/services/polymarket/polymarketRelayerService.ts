@@ -196,6 +196,7 @@ export async function deploySafeWallet(
  * 3. USDC.e → Neg Risk Adapter (required for neg risk market participation)
  * 4. CTF (ERC-1155) setApprovalForAll → CTF Exchange (required for selling positions)
  * 5. CTF (ERC-1155) setApprovalForAll → Neg Risk CTF Exchange (required for selling neg risk positions)
+ * 6. CTF (ERC-1155) setApprovalForAll → Neg Risk Adapter (required for selling neg risk positions)
  *
  * @param privateKey - User's EOA private key
  * @param logKey - Logging identifier
@@ -244,12 +245,19 @@ export async function ensureTokenApprovals(privateKey: string, logKey: string): 
       true
     ]);
 
+    // 6. CTF setApprovalForAll → Neg Risk Adapter (needed to sell neg risk positions)
+    const ctfApproveNegRiskAdapterData = erc1155Iface.encodeFunctionData('setApprovalForAll', [
+      NEG_RISK_ADAPTER_ADDRESS,
+      true
+    ]);
+
     const transactions = [
       { to: USDC_E_ADDRESS, data: approveCtfData, value: '0' },
       { to: USDC_E_ADDRESS, data: approveNegRiskData, value: '0' },
       { to: USDC_E_ADDRESS, data: approveNegRiskAdapterData, value: '0' },
       { to: CTF_ADDRESS, data: ctfApproveExchangeData, value: '0' },
-      { to: CTF_ADDRESS, data: ctfApproveNegRiskData, value: '0' }
+      { to: CTF_ADDRESS, data: ctfApproveNegRiskData, value: '0' },
+      { to: CTF_ADDRESS, data: ctfApproveNegRiskAdapterData, value: '0' }
     ];
 
     Logger.log(
@@ -325,5 +333,63 @@ export async function setupGaslessTrading(privateKey: string, logKey: string): P
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Setup failed: ${String(error)}`);
     throw new Error(`Gasless trading setup failed: ${String(error)}`);
+  }
+}
+
+// ============================================================================
+// Gasless Withdrawal
+// ============================================================================
+
+/**
+ * Executes a gasless withdrawal from Polygon to Scroll using the Polymarket Relayer.
+ *
+ * @param privateKey - User's EOA private key
+ * @param withdrawData - Object containing LiFi bridge transaction details
+ * @param amount - Amount being bridged (for the approval)
+ * @param logKey - Logging identifier
+ */
+export async function executeGaslessWithdrawal(
+  privateKey: string,
+  withdrawData: { approvalAddress: string; to: string; data: string; value: string },
+  amount: string,
+  logKey: string
+): Promise<void> {
+  const fnLog = `[${LOG_PREFIX}:executeGaslessWithdrawal]`;
+
+  try {
+    Logger.log('info', fnLog, `${logKey} Initiating gasless withdrawal via Polymarket Relayer`);
+    const client = createRelayClient(privateKey);
+    const erc20ABI = ['function approve(address spender, uint256 amount) public returns (bool)'];
+    const usdcInterface = new ethers.utils.Interface(erc20ABI);
+
+    const transactions = [];
+
+    // 1. Approve LiFi router to spend USDC.e
+    if (withdrawData.approvalAddress && withdrawData.approvalAddress !== ethers.constants.AddressZero) {
+      Logger.log('info', fnLog, `${logKey} Adding approval tx for LiFi router`);
+      transactions.push({
+        to: USDC_E_ADDRESS,
+        data: usdcInterface.encodeFunctionData('approve', [
+          withdrawData.approvalAddress,
+          amount
+        ]),
+        value: '0'
+      });
+    }
+
+    // 2. The actual LiFi bridge tx
+    Logger.log('info', fnLog, `${logKey} Adding LiFi bridge tx`);
+    transactions.push({
+      to: withdrawData.to,
+      data: withdrawData.data,
+      value: withdrawData.value
+    });
+
+    Logger.log('info', fnLog, `${logKey} Executing transactions via Relayer`);
+    await client.execute(transactions, "Withdraw to Scroll");
+    Logger.log('info', fnLog, `${logKey} Gasless withdrawal execution completed`);
+  } catch (error) {
+    Logger.log('error', fnLog, `${logKey} Gasless withdrawal failed: ${String(error)}`);
+    throw new Error(`Gasless withdrawal failed: ${String(error)}`);
   }
 }

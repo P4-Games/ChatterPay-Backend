@@ -10,6 +10,8 @@
  * endpoint can return real-time progress.
  */
 
+import { AssetType } from '@polymarket/clob-client';
+
 import { Logger } from '../../helpers/loggerHelper';
 import type { IUser } from '../../models/userModel';
 import {
@@ -19,10 +21,82 @@ import {
 } from '../mongo/mongoPolymarketService';
 import { getUser } from '../userService';
 import { acceptTerms, createPolymarketAccount } from './polymarketAccountService';
-import { executeBridge } from './polymarketBridgeService';
+import { executeBridge, withdrawToScroll } from './polymarketBridgeService';
+import { getAuthenticatedClientForUser } from './polymarketClientService';
+import { executeGaslessWithdrawal } from './polymarketRelayerService';
 import { placeOrder } from './polymarketTradingService';
 
 const LOG_PREFIX = 'polymarketPurchaseService';
+
+/**
+ * Withdraw USDC.e sell proceeds from Polygon Safe back to Scroll proxy.
+ *
+ * Queries the Safe's COLLATERAL balance, and if > 0, bridges it all
+ * back to the user's Scroll proxy address via LiFi + Polymarket Relayer.
+ *
+ * This is best-effort: failures are logged but do not propagate.
+ */
+export async function withdrawSellProceeds(
+  user: IUser,
+  privateKey: string,
+  logKey: string
+): Promise<void> {
+  const fnLog = `[${LOG_PREFIX}:withdrawSellProceeds]`;
+
+  try {
+    if (!user.polymarket_account) {
+      Logger.log('warn', fnLog, `${logKey} No Polymarket account — skipping withdrawal`);
+      return;
+    }
+
+    const proxyAddress = user.wallets[0]?.wallet_proxy || '';
+    if (!proxyAddress) {
+      Logger.log('warn', fnLog, `${logKey} No proxy wallet — skipping withdrawal`);
+      return;
+    }
+
+    // Wait for the CLOB/exchange to settle the fill
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    // Query USDC.e balance in the Polygon Safe
+    const client = await getAuthenticatedClientForUser(user, privateKey);
+    await client.updateBalanceAllowance({ asset_type: AssetType.COLLATERAL });
+    const status = await client.getBalanceAllowance({ asset_type: AssetType.COLLATERAL });
+    const rawBalance = Number(status?.balance ?? 0);
+
+    Logger.log('info', fnLog, `${logKey} Safe USDC.e balance: ${rawBalance} (${rawBalance / 1_000_000} USDC)`);
+
+    if (rawBalance <= 0) {
+      Logger.log('info', fnLog, `${logKey} No USDC.e to withdraw (order may be pending fill)`);
+      return;
+    }
+
+    const amount = String(rawBalance);
+    const safeAddress = user.polymarket_account.polygon_address;
+
+    Logger.log('info', fnLog, `${logKey} Withdrawing ${rawBalance / 1_000_000} USDC.e from Polygon Safe to Scroll proxy`);
+
+    // Get LiFi bridge quote (Polygon → Scroll)
+    const quote = await withdrawToScroll(safeAddress, proxyAddress, amount, logKey);
+
+    // Execute via Relayer (gasless from the Safe)
+    await executeGaslessWithdrawal(
+      privateKey,
+      {
+        approvalAddress: quote.approvalAddress,
+        to: quote.to,
+        data: quote.data,
+        value: quote.value
+      },
+      amount,
+      logKey
+    );
+
+    Logger.log('info', fnLog, `${logKey} Withdrawal initiated: ${rawBalance / 1_000_000} USDC.e → Scroll`);
+  } catch (error) {
+    Logger.log('error', fnLog, `${logKey} Withdrawal failed (non-fatal): ${String(error)}`);
+  }
+}
 
 export interface PurchaseParams {
   tokenId: string;
@@ -95,38 +169,44 @@ export async function executePurchase(
     }
 
     // ── Step 2: Bridge ────────────────────────────────────────────────────
-    Logger.log('info', fnLog, `${logKey} Starting bridge`);
-    await updatePurchaseStatus(purchaseId, 'processing', 'bridge', undefined, logKey);
-    await updatePurchaseStep(purchaseId, 'bridge', { status: 'in_progress' }, logKey);
+    if (params.side === 'BUY') {
+      Logger.log('info', fnLog, `${logKey} Starting bridge`);
+      await updatePurchaseStatus(purchaseId, 'processing', 'bridge', undefined, logKey);
+      await updatePurchaseStep(purchaseId, 'bridge', { status: 'in_progress' }, logKey);
 
-    try {
-      const bridgeResult = await executeBridge(
-        currentUser,
-        privateKey,
-        params.bridgeAmount,
-        logKey
-      );
+      try {
+        const bridgeResult = await executeBridge(
+          currentUser,
+          privateKey,
+          params.bridgeAmount,
+          logKey
+        );
 
-      await updatePurchaseStep(
-        purchaseId,
-        'bridge',
-        { status: 'completed', tx_hash: bridgeResult.txHash },
-        logKey
-      );
-      await updatePurchaseStatus(
-        purchaseId,
-        'processing',
-        'order_placement',
-        { bridge_tx_hash: bridgeResult.txHash },
-        logKey
-      );
-      Logger.log('info', fnLog, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
-    } catch (error) {
-      const errorMsg = `Bridge failed: ${String(error)}`;
-      Logger.log('error', fnLog, `${logKey} ${errorMsg}`);
-      await updatePurchaseStep(purchaseId, 'bridge', { status: 'failed', error: errorMsg }, logKey);
-      await updatePurchaseStatus(purchaseId, 'failed', 'bridge', { error: errorMsg }, logKey);
-      return;
+        await updatePurchaseStep(
+          purchaseId,
+          'bridge',
+          { status: 'completed', tx_hash: bridgeResult.txHash },
+          logKey
+        );
+        await updatePurchaseStatus(
+          purchaseId,
+          'processing',
+          'order_placement',
+          { bridge_tx_hash: bridgeResult.txHash },
+          logKey
+        );
+        Logger.log('info', fnLog, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
+      } catch (error) {
+        const errorMsg = `Bridge failed: ${String(error)}`;
+        Logger.log('error', fnLog, `${logKey} ${errorMsg}`);
+        await updatePurchaseStep(purchaseId, 'bridge', { status: 'failed', error: errorMsg }, logKey);
+        await updatePurchaseStatus(purchaseId, 'failed', 'bridge', { error: errorMsg }, logKey);
+        return;
+      }
+    } else {
+      Logger.log('info', fnLog, `${logKey} SELL order detected. Skipping bridge step.`);
+      await updatePurchaseStep(purchaseId, 'bridge', { status: 'skipped' }, logKey);
+      await updatePurchaseStatus(purchaseId, 'processing', 'order_placement', undefined, logKey);
     }
 
     // ── Step 3: Order Placement ───────────────────────────────────────────
@@ -165,6 +245,13 @@ export async function executePurchase(
         size: params.size,
         status: 'pending'
       });
+
+      // Auto-withdraw SELL proceeds from Polygon Safe → Scroll proxy.
+      // After a SELL fills, USDC.e lands in the Safe. The user's wallet is
+      // on Scroll, so we bridge it back automatically.
+      if (params.side === 'SELL') {
+        await withdrawSellProceeds(freshUser, privateKey, logKey);
+      }
 
       await updatePurchaseStep(
         purchaseId,

@@ -43,7 +43,7 @@ export {
 } from './polymarketMarketService';
 export type { PurchaseParams } from './polymarketPurchaseService';
 // Purchase (unified flow)
-export { executePurchase } from './polymarketPurchaseService';
+export { executePurchase, withdrawSellProceeds } from './polymarketPurchaseService';
 // Relayer (gasless on-chain operations)
 export {
   createRelayClient,
@@ -61,7 +61,8 @@ export {
   getPortfolioValue,
   getPositions,
   getTradeHistory,
-  placeOrder
+  placeOrder,
+  resolveMaxSize
 } from './polymarketTradingService';
 
 // Types

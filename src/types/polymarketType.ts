@@ -34,7 +34,7 @@ export interface PolymarketPlaceOrderBody {
   channel_user_id: string;
   token_id: string;
   price: number;
-  size: number;
+  size: number | 'max';
   side: PolymarketOrderSide;
   order_type?: PolymarketOrderType;
 }
@@ -62,12 +62,18 @@ export interface PolymarketBridgeBody {
   token?: string;
 }
 
+/** Body for withdraw operations (Polygon to Scroll) */
+export interface PolymarketWithdrawBody {
+  channel_user_id: string;
+  amount: string;
+}
+
 /** Body for unified purchase flow */
 export interface PolymarketPurchaseBody {
   channel_user_id: string;
   token_id: string;
   price: number;
-  size: number;
+  size: number | 'max';
   side: PolymarketOrderSide;
   order_type?: PolymarketOrderType;
   bridge_amount: string;

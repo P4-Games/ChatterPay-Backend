@@ -5,7 +5,8 @@
       "WebFetch(domain:docs.polymarket.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(npm ls:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
