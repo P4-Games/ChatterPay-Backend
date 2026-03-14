@@ -27,7 +27,8 @@ import {
   polymarketPlaceOrder,
   polymarketPurchase,
   polymarketPurchaseStatus,
-  polymarketSearchMarkets
+  polymarketSearchMarkets,
+  polymarketWithdraw
 } from '../controllers/polymarketController';
 
 export default async function polymarketRoutes(fastify: FastifyInstance): Promise<void> {
@@ -57,6 +58,7 @@ export default async function polymarketRoutes(fastify: FastifyInstance): Promis
   // ── Bridge ──────────────────────────────────────────────────────────────
   fastify.post('/polymarket/bridge/quote', polymarketBridgeQuote);
   fastify.post('/polymarket/bridge/execute', polymarketBridge);
+  fastify.post('/polymarket/bridge/withdraw', polymarketWithdraw);
 
   // ── Purchase (unified flow) ────────────────────────────────────────────
   fastify.post('/polymarket/purchase', polymarketPurchase);

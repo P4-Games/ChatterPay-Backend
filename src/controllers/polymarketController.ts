@@ -20,6 +20,8 @@ import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService
 import {
   createOrder,
   createPurchase,
+  getActivePurchases,
+  getPendingOrders,
   getPurchaseById
 } from '../services/mongo/mongoPolymarketService';
 import {
@@ -45,9 +47,10 @@ import {
   placeOrder,
   resolveMaxSize,
   searchMarkets,
+  syncOpenOrders,
   withdrawSellProceeds
 } from '../services/polymarket';
-import { executeBridge, withdrawToScroll } from '../services/polymarket/polymarketBridgeService';
+import { executeBridge, getPreferredScrollStablecoin, withdrawToScroll } from '../services/polymarket/polymarketBridgeService';
 import { executeGaslessWithdrawal } from '../services/polymarket/polymarketRelayerService';
 import { executePurchase } from '../services/polymarket/polymarketPurchaseService';
 import { secService } from '../services/secService';
@@ -489,7 +492,7 @@ export const polymarketPlaceOrder = async (
     const orderId = raw.orderID ?? raw.id ?? raw.order_id ?? randomUUID();
 
     // Persist order to MongoDB
-    await createOrder({
+    const orderRecord = await createOrder({
       user_phone: user.phone_number,
       order_id: String(orderId),
       market_condition_id: token_id,
@@ -509,7 +512,17 @@ export const polymarketPlaceOrder = async (
       });
     }
 
-    return successReply(reply, { order: result });
+    return successReply(reply, {
+      order: result,
+      order_id: String(orderId),
+      status: 'pending',
+      side,
+      price,
+      size,
+      token_id,
+      withdrawal_pending: side === 'SELL',
+      created_at: orderRecord.created_at
+    });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, `Failed to place order: ${String(error)}`);
@@ -586,9 +599,44 @@ export const polymarketGetOpenOrders = async (
     if (!validatePolymarketReady(user, reply)) return reply;
 
     const privateKey = await getUserPrivateKey(user);
-    const orders = await getOpenOrders(user, privateKey, logKey);
 
-    return successReply(reply, { orders });
+    // Fetch CLOB live orders, active purchases, and pending local orders in parallel
+    const [orders, activePurchases, pendingOrders] = await Promise.all([
+      getOpenOrders(user, privateKey, logKey),
+      getActivePurchases(user.phone_number),
+      getPendingOrders(user.phone_number)
+    ]);
+
+    // Sync local DB orders with CLOB state (fire-and-forget)
+    syncOpenOrders(user, privateKey, logKey).catch((err) => {
+      Logger.log('warn', LOG_PREFIX, `${logKey} Background order sync failed: ${String(err)}`);
+    });
+
+    return successReply(reply, {
+      orders,
+      active_purchases: activePurchases.map((p) => ({
+        purchase_id: p.purchase_id,
+        token_id: p.token_id,
+        side: p.side,
+        price: p.price,
+        size: p.size,
+        status: p.status,
+        current_step: p.current_step,
+        steps: p.steps,
+        order_id: p.order_id,
+        created_at: p.created_at,
+        updated_at: p.updated_at
+      })),
+      pending_orders: pendingOrders.map((o) => ({
+        order_id: o.order_id,
+        token_id: o.token_id,
+        side: o.side,
+        price: o.price,
+        size: o.size,
+        status: o.status,
+        created_at: o.created_at
+      }))
+    });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to fetch open orders');
@@ -612,8 +660,34 @@ export const polymarketGetPositions = async (
       return errorReply(reply, 400, 'Polymarket account not created');
     }
 
-    const positions = await getPositions(user.polymarket_account.polygon_address, logKey);
-    return successReply(reply, { positions });
+    const [positions, activePurchases] = await Promise.all([
+      getPositions(user.polymarket_account.polygon_address, logKey),
+      getActivePurchases(user.phone_number)
+    ]);
+
+    // Sync local DB order statuses with CLOB in the background
+    getUserPrivateKey(user).then((pk) =>
+      syncOpenOrders(user, pk, logKey).catch((err) => {
+        Logger.log('warn', LOG_PREFIX, `${logKey} Background order sync failed: ${String(err)}`);
+      })
+    ).catch(() => { /* key derivation failed — skip sync */ });
+
+    return successReply(reply, {
+      positions,
+      active_purchases: activePurchases.map((p) => ({
+        purchase_id: p.purchase_id,
+        token_id: p.token_id,
+        side: p.side,
+        price: p.price,
+        size: p.size,
+        status: p.status,
+        current_step: p.current_step,
+        steps: p.steps,
+        order_id: p.order_id,
+        created_at: p.created_at,
+        updated_at: p.updated_at
+      }))
+    });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to fetch positions');
@@ -720,10 +794,17 @@ export const polymarketBridgeQuote = async (
       return errorReply(reply, 400, 'Missing amount');
     }
 
+    // Determine which stablecoin the user holds on Scroll (USDC or USDT)
+    const proxyAddress = user.wallets[0]?.wallet_proxy || '';
+    const fromToken = proxyAddress
+      ? await getPreferredScrollStablecoin(proxyAddress, logKey)
+      : 'USDC';
+
     const quote = await getBridgeQuote(
       user.polymarket_account.polygon_address,
       request.body.amount,
-      logKey
+      logKey,
+      fromToken
     );
 
     return successReply(reply, { quote });
@@ -754,12 +835,19 @@ export const polymarketBridge = async (
       return errorReply(reply, 400, 'Missing amount');
     }
 
+    // Determine which stablecoin the user holds on Scroll (USDC or USDT)
+    const proxyAddress = user.wallets[0]?.wallet_proxy || '';
+    const fromToken = proxyAddress
+      ? await getPreferredScrollStablecoin(proxyAddress, logKey)
+      : 'USDC';
+
     // Bridge execution uses the same LiFi flow as other cross-chain operations.
     // The quote is obtained first, then the user's wallet signs the transaction.
     const quote = await getBridgeQuote(
       user.polymarket_account.polygon_address,
       request.body.amount,
-      logKey
+      logKey,
+      fromToken
     );
 
     return successReply(reply, {
@@ -796,18 +884,24 @@ export const polymarketWithdraw = async (
       return errorReply(reply, 400, 'Missing or invalid amount');
     }
 
-    // Step 1: Generate Withdrawal Quote from LiFi
-    // withdrawToScroll takes (polygonSafeAddress, scrollProxyAddress, amount, logKey)
     const proxyAddress = user.wallets[0]?.wallet_proxy || '';
     if (!proxyAddress) {
       return errorReply(reply, 400, 'User missing proxy wallet');
     }
 
+    // Amount comes from frontend as human-readable (e.g. "6.59")
+    // Convert to smallest units (USDC.e has 6 decimals)
+    const amountSmallest = Math.floor(Number(request.body.amount) * 1_000_000).toString();
+
+    // Determine which stablecoin the user holds on Scroll (USDC or USDT)
+    const toToken = await getPreferredScrollStablecoin(proxyAddress, logKey);
+
     const quote = await withdrawToScroll(
       user.polymarket_account.polygon_address,
       proxyAddress,
-      request.body.amount,
-      logKey
+      amountSmallest,
+      logKey,
+      toToken
     );
 
     // Step 2: Push quote payloads into Relayer for gasless execution
@@ -820,7 +914,7 @@ export const polymarketWithdraw = async (
         data: quote.data,
         value: quote.value
       },
-      request.body.amount,
+      amountSmallest,
       logKey
     );
 

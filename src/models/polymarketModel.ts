@@ -73,7 +73,7 @@ export const PolymarketOrderModel = model<IPolymarketOrder>(
 // Polymarket Purchase (unified purchase flow)
 // ============================================================================
 
-export type PurchaseStepName = 'account_creation' | 'bridge' | 'order_placement';
+export type PurchaseStepName = 'account_creation' | 'bridge' | 'order_placement' | 'withdrawal';
 export type PurchaseStepStatus = 'pending' | 'in_progress' | 'completed' | 'skipped' | 'failed';
 export type PurchaseStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
@@ -109,7 +109,7 @@ export interface IPolymarketPurchase extends Document {
 
 const purchaseStepSchema = new Schema<IPurchaseStep>(
   {
-    name: { type: String, required: true, enum: ['account_creation', 'bridge', 'order_placement'] },
+    name: { type: String, required: true, enum: ['account_creation', 'bridge', 'order_placement', 'withdrawal'] },
     status: {
       type: String,
       required: true,

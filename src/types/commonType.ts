@@ -165,4 +165,9 @@ export type AddressBalanceWithNfts = {
   totals: Record<Currency, number>;
   certificates: unknown[];
   wallets: string[];
+  polymarket?: {
+    idle_usdc: number;
+    positions_value: number;
+    total_usd: number;
+  };
 };

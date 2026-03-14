@@ -17,6 +17,7 @@ export {
   checkBridgeStatus,
   executeBridge,
   getBridgeQuote,
+  getPreferredScrollStablecoin,
   validateBridgeQuote
 } from './polymarketBridgeService';
 // Client management
@@ -58,11 +59,13 @@ export {
   cancelOrder,
   getClosedPositions,
   getOpenOrders,
+  getPolymarketBalanceSummary,
   getPortfolioValue,
   getPositions,
   getTradeHistory,
   placeOrder,
-  resolveMaxSize
+  resolveMaxSize,
+  syncOpenOrders
 } from './polymarketTradingService';
 
 // Types

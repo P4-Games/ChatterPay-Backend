@@ -9,8 +9,13 @@
 
 import { AssetType, OrderType, Side } from '@polymarket/clob-client';
 import axios from 'axios';
+import { ethers } from 'ethers';
 
-import { POLYMARKET_DATA_API_URL, POLYMARKET_GAMMA_API_URL } from '../../config/constants';
+import {
+  POLYMARKET_DATA_API_URL,
+  POLYMARKET_GAMMA_API_URL,
+  POLYMARKET_POLYGON_RPC_URL
+} from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
 import { PolymarketOrderModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
@@ -235,7 +240,7 @@ export async function placeOrder(
           `${logKey} SELL rejected (${errorDetail}). Setting fresh approvals and retrying...`
         );
         await ensureTokenApprovals(privateKey, logKey);
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await new Promise((resolve) => setTimeout(resolve, 5000));
 
         // Refresh both asset type caches after approvals
         await Promise.all([
@@ -248,8 +253,11 @@ export async function placeOrder(
         // After retry, check again — might reveal a different error (e.g. min size)
         if (!response.orderID) {
           const retryDetail = String(response.error || response.message || '');
-          if (params.side === 'SELL' && retryDetail.includes('lower than the minimum') && params.orderType !== 'FOK') {
-            Logger.log('warn', fnLog, `${logKey} GTC SELL below minimum after retry. Falling back to FOK market order.`);
+
+          // If GTC still fails, fall back to FOK market order (works for both
+          // balance/allowance and minimum-size errors)
+          if (params.orderType !== 'FOK') {
+            Logger.log('warn', fnLog, `${logKey} GTC SELL failed after retry (${retryDetail}). Falling back to FOK market order.`);
             response = await client.createAndPostMarketOrder({
               tokenID: params.tokenId,
               price: params.price,
@@ -507,6 +515,53 @@ export async function getPortfolioValue(
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to fetch portfolio value: ${String(error)}`);
+  }
+}
+
+// Polymarket's USDC.e (Bridged USDC) on Polygon
+const USDC_E_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+
+/**
+ * Get a summary of the user's Polymarket balances: idle USDC.e + active positions.
+ *
+ * - idle_usdc: USDC.e sitting in the Polygon Safe (not in any position)
+ * - positions_value: total current value of all active positions (in USD)
+ *
+ * This is best-effort: failures return zeroes so the balance endpoint stays resilient.
+ */
+export async function getPolymarketBalanceSummary(
+  polygonAddress: string,
+  logKey: string
+): Promise<{ idle_usdc: number; positions_value: number }> {
+  const fnLog = `[${LOG_PREFIX}:getPolymarketBalanceSummary]`;
+
+  try {
+    // Query idle USDC.e balance on Polygon and active positions in parallel
+    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+    const usdc = new ethers.Contract(
+      USDC_E_ADDRESS,
+      ['function balanceOf(address) view returns (uint256)'],
+      provider
+    );
+
+    const [rawBalance, positions] = await Promise.all([
+      usdc.balanceOf(polygonAddress) as Promise<ethers.BigNumber>,
+      getPositions(polygonAddress, logKey).catch(() => [] as DataPosition[])
+    ]);
+
+    const idle_usdc = Number(ethers.utils.formatUnits(rawBalance, 6));
+    const positions_value = positions.reduce((sum, p) => sum + (p.currentValue || 0), 0);
+
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Polymarket balances — idle USDC.e: $${idle_usdc.toFixed(2)}, positions: $${positions_value.toFixed(2)}`
+    );
+
+    return { idle_usdc, positions_value };
+  } catch (error) {
+    Logger.log('warn', fnLog, `${logKey} Failed to fetch Polymarket balances: ${String(error)}`);
+    return { idle_usdc: 0, positions_value: 0 };
   }
 }
 

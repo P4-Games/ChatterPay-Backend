@@ -122,13 +122,25 @@ export async function createPurchase(data: {
   terms_version?: number;
 }): Promise<IPolymarketPurchase> {
   const now = new Date();
+
+  // SELL orders: skip bridge, add withdrawal step
+  // BUY orders:  bridge → order_placement (no withdrawal)
+  const steps =
+    data.side === 'SELL'
+      ? [
+          { name: 'account_creation' as const, status: 'pending' as const },
+          { name: 'order_placement' as const, status: 'pending' as const },
+          { name: 'withdrawal' as const, status: 'pending' as const }
+        ]
+      : [
+          { name: 'account_creation' as const, status: 'pending' as const },
+          { name: 'bridge' as const, status: 'pending' as const },
+          { name: 'order_placement' as const, status: 'pending' as const }
+        ];
+
   return PolymarketPurchaseModel.create({
     ...data,
-    steps: [
-      { name: 'account_creation', status: 'pending' },
-      { name: 'bridge', status: 'pending' },
-      { name: 'order_placement', status: 'pending' }
-    ],
+    steps,
     current_step: 'account_creation',
     status: 'pending',
     created_at: now,
@@ -224,4 +236,20 @@ export async function getPurchasesByUser(
   return PolymarketPurchaseModel.find({ user_phone: userPhone })
     .sort({ created_at: -1 })
     .limit(limit);
+}
+
+/** Get active (pending/processing) purchases for a user */
+export async function getActivePurchases(userPhone: string): Promise<IPolymarketPurchase[]> {
+  return PolymarketPurchaseModel.find({
+    user_phone: userPhone,
+    status: { $in: ['pending', 'processing'] }
+  }).sort({ created_at: -1 });
+}
+
+/** Get pending orders from local DB for a user */
+export async function getPendingOrders(userPhone: string): Promise<IPolymarketOrder[]> {
+  return PolymarketOrderModel.find({
+    user_phone: userPhone,
+    status: 'pending'
+  }).sort({ created_at: -1 });
 }

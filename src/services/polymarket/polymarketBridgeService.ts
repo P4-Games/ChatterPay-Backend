@@ -43,18 +43,19 @@ const SCROLL_CHAIN_ID = 534352; // Scroll Mainnet
 export async function getBridgeQuote(
   fromAddress: string,
   amount: string,
-  logKey: string
+  logKey: string,
+  fromTokenSymbol: string = 'USDC'
 ): Promise<LifiQuoteResponse> {
   const fnLog = `[${LOG_PREFIX}:getBridgeQuote]`;
 
   try {
-    Logger.log('info', fnLog, `${logKey} Getting bridge quote: ${amount} USDC Scroll→Polygon`);
+    Logger.log('info', fnLog, `${logKey} Getting bridge quote: ${amount} ${fromTokenSymbol} Scroll→Polygon`);
 
     const quote = await getLifiQuote(
       {
         fromChain: SCROLL_CHAIN_ID,
         toChain: POLYMARKET_CHAIN_ID,
-        fromToken: 'USDC',
+        fromToken: fromTokenSymbol,
         toToken: POLYGON_USDC_ADDRESS,
         fromAmount: amount,
         fromAddress,
@@ -192,6 +193,57 @@ async function findAvailableStablecoin(
   }
 
   return null;
+}
+
+/**
+ * Determine which stablecoin the user predominantly holds on Scroll.
+ *
+ * Checks on-chain balances of USDC and USDT on Scroll and returns the
+ * symbol of the one with the highest balance. Defaults to 'USDC' if
+ * no stablecoin balance is found.
+ */
+export async function getPreferredScrollStablecoin(
+  scrollProxyAddress: string,
+  logKey: string
+): Promise<string> {
+  const fnLog = `[${LOG_PREFIX}:getPreferredScrollStablecoin]`;
+
+  try {
+    const networkConfig = await mongoBlockchainService.getNetworkConfig();
+    const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
+
+    const dbTokens = await Token.find({
+      chain_id: networkConfig.chainId,
+      symbol: { $in: BRIDGE_STABLECOIN_SYMBOLS }
+    }).lean();
+
+    if (dbTokens.length === 0) return 'USDC';
+
+    let bestSymbol = 'USDC';
+    let bestBalance = ethers.BigNumber.from(0);
+
+    for (const token of dbTokens) {
+      try {
+        const contract = new ethers.Contract(token.address, ERC20_BALANCE_ABI, provider);
+        const balance: ethers.BigNumber = await contract.balanceOf(scrollProxyAddress);
+
+        Logger.log('info', fnLog, `${logKey} ${token.symbol}: ${ethers.utils.formatUnits(balance, token.decimals)}`);
+
+        if (balance.gt(bestBalance)) {
+          bestBalance = balance;
+          bestSymbol = token.symbol;
+        }
+      } catch {
+        // Skip tokens we can't query
+      }
+    }
+
+    Logger.log('info', fnLog, `${logKey} Preferred stablecoin: ${bestSymbol}`);
+    return bestSymbol;
+  } catch (error) {
+    Logger.log('warn', fnLog, `${logKey} Failed to determine preferred stablecoin: ${String(error)}`);
+    return 'USDC';
+  }
 }
 
 /**
@@ -485,7 +537,8 @@ export async function withdrawToScroll(
   polygonSafeAddress: string,
   scrollProxyAddress: string,
   amount: string,
-  logKey: string
+  logKey: string,
+  toTokenSymbol: string = 'USDC'
 ): Promise<{
   quote: LifiQuoteResponse;
   approvalAddress: string;
@@ -499,7 +552,7 @@ export async function withdrawToScroll(
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Getting withdraw quote: ${amount} USDC.e Polygon→Scroll`
+      `${logKey} Getting withdraw quote: ${amount} USDC.e Polygon→Scroll (→${toTokenSymbol})`
     );
 
     const quote = await getLifiQuote(
@@ -507,7 +560,7 @@ export async function withdrawToScroll(
         fromChain: POLYMARKET_CHAIN_ID,
         toChain: SCROLL_CHAIN_ID,
         fromToken: POLYGON_USDC_ADDRESS,
-        toToken: 'USDC', // Li.Fi will route to USDC or USDT on Scroll
+        toToken: toTokenSymbol,
         fromAmount: amount,
         fromAddress: polygonSafeAddress,
         toAddress: scrollProxyAddress
