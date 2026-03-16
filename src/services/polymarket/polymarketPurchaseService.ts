@@ -11,6 +11,7 @@
  */
 
 import { ethers } from 'ethers';
+import PQueue from 'p-queue';
 
 import { POLYMARKET_POLYGON_RPC_URL } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
@@ -28,8 +29,63 @@ import { placeOrder } from './polymarketTradingService';
 
 const LOG_PREFIX = 'polymarketPurchaseService';
 
+// ============================================================================
+// Per-user order placement lock
+// ============================================================================
+//
+// Serializes ONLY the order placement step (not bridges) so concurrent
+// purchases for the same user don't race on CLOB balance.
+// Also tracks committed USDC.e for GTC orders where on-chain balance
+// doesn't change until the order is matched/filled.
+
+interface UserOrderLock {
+  queue: PQueue;
+  committedUsdce: number;
+}
+
+const userOrderLocks = new Map<string, UserOrderLock>();
+
+function getOrderLock(userId: string): UserOrderLock {
+  let entry = userOrderLocks.get(userId);
+  if (!entry) {
+    const queue = new PQueue({ concurrency: 1 });
+    entry = { queue, committedUsdce: 0 };
+    userOrderLocks.set(userId, entry);
+    queue.on('idle', () => userOrderLocks.delete(userId));
+  }
+  return entry;
+}
+
 // Polygon USDC.e address
 const USDC_E_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+
+// 2% buffer applied to bridged amounts to cover LiFi/bridge fees and slippage
+const BRIDGE_FEE_BUFFER = 1.02;
+
+/**
+ * Read the on-chain USDC.e balance of a Polygon address.
+ *
+ * @param address - Polygon address to check (typically the user's Safe)
+ * @param logKey - Logging identifier
+ * @returns Balance as a human-readable number (e.g. 15.50 for $15.50)
+ */
+async function getPolygonUsdceBalance(address: string, logKey: string): Promise<number> {
+  const fnLog = `[${LOG_PREFIX}:getPolygonUsdceBalance]`;
+
+  const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+  const usdc = new ethers.Contract(
+    USDC_E_ADDRESS,
+    ['function balanceOf(address) view returns (uint256)'],
+    provider
+  );
+
+  const rawBalance: ethers.BigNumber = await usdc.balanceOf(address);
+  const balance = Number(ethers.utils.formatUnits(rawBalance, 6));
+
+  Logger.log('info', fnLog, `${logKey} USDC.e balance for ${address}: $${balance.toFixed(2)}`);
+
+  return balance;
+}
 
 /**
  * Withdraw ALL USDC.e from the Polygon Safe back to Scroll proxy.
@@ -214,33 +270,72 @@ export async function executePurchase(
     }
 
     // ── Step 2: Bridge (BUY only) ───────────────────────────────────────
+    // Check existing USDC.e in the Polygon Safe and bridge only the deficit.
+    // If the Safe already holds enough, the bridge is skipped entirely.
     if (params.side === 'BUY') {
-      Logger.log('info', fnLog, `${logKey} Starting bridge`);
+      Logger.log('info', fnLog, `${logKey} Starting bridge step`);
       await updatePurchaseStatus(purchaseId, 'processing', 'bridge', undefined, logKey);
       await updatePurchaseStep(purchaseId, 'bridge', { status: 'in_progress' }, logKey);
 
       try {
-        const bridgeResult = await executeBridge(
-          currentUser,
-          privateKey,
-          params.bridgeAmount,
-          logKey
+        const safeAddress = currentUser.polymarket_account!.polygon_address;
+        const existingBalance = await getPolygonUsdceBalance(safeAddress, logKey);
+        const requiredUsdc = params.price * params.size;
+        const deficit = requiredUsdc - existingBalance;
+
+        Logger.log(
+          'info',
+          fnLog,
+          `${logKey} Bridge check — required: $${requiredUsdc.toFixed(2)}, ` +
+          `existing: $${existingBalance.toFixed(2)}, deficit: $${deficit.toFixed(2)}`
         );
 
-        await updatePurchaseStep(
-          purchaseId,
-          'bridge',
-          { status: 'completed', tx_hash: bridgeResult.txHash },
-          logKey
-        );
-        await updatePurchaseStatus(
-          purchaseId,
-          'processing',
-          'order_placement',
-          { bridge_tx_hash: bridgeResult.txHash },
-          logKey
-        );
-        Logger.log('info', fnLog, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
+        if (deficit <= 0) {
+          // Existing balance covers the full purchase — skip bridge
+          Logger.log(
+            'info',
+            fnLog,
+            `${logKey} Skipping bridge: existing balance ($${existingBalance.toFixed(2)}) ` +
+            `covers required ($${requiredUsdc.toFixed(2)})`
+          );
+          await updatePurchaseStep(purchaseId, 'bridge', { status: 'skipped' }, logKey);
+          await updatePurchaseStatus(purchaseId, 'processing', 'order_placement', undefined, logKey);
+        } else {
+          // Bridge only the deficit (+ 2% buffer for fees/slippage),
+          // but never exceed the client-authorized bridge amount.
+          const deficitRaw = Math.ceil(deficit * BRIDGE_FEE_BUFFER * 1_000_000);
+          const maxAllowed = Number(params.bridgeAmount);
+          const actualBridgeAmount = Math.min(deficitRaw, maxAllowed).toString();
+
+          Logger.log(
+            'info',
+            fnLog,
+            `${logKey} Bridging deficit: $${(deficit * BRIDGE_FEE_BUFFER).toFixed(2)} ` +
+            `(${actualBridgeAmount} smallest units, max allowed: ${params.bridgeAmount})`
+          );
+
+          const bridgeResult = await executeBridge(
+            currentUser,
+            privateKey,
+            actualBridgeAmount,
+            logKey
+          );
+
+          await updatePurchaseStep(
+            purchaseId,
+            'bridge',
+            { status: 'completed', tx_hash: bridgeResult.txHash },
+            logKey
+          );
+          await updatePurchaseStatus(
+            purchaseId,
+            'processing',
+            'order_placement',
+            { bridge_tx_hash: bridgeResult.txHash },
+            logKey
+          );
+          Logger.log('info', fnLog, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
+        }
       } catch (error) {
         const errorMsg = `Bridge failed: ${String(error)}`;
         Logger.log('error', fnLog, `${logKey} ${errorMsg}`);
@@ -255,6 +350,9 @@ export async function executePurchase(
     }
 
     // ── Step 3: Order Placement ───────────────────────────────────────────
+    // Serialized per-user via order lock so concurrent purchases don't race
+    // on CLOB balance. Bridges still run fully in parallel — only this step
+    // is serialized (~3-5s per order).
     Logger.log('info', fnLog, `${logKey} Placing order`);
     await updatePurchaseStep(purchaseId, 'order_placement', { status: 'in_progress' }, logKey);
 
@@ -266,22 +364,72 @@ export async function executePurchase(
         throw new Error('User or Polymarket account not found after bridge');
       }
 
-      const orderResult = await placeOrder(
-        freshUser,
-        privateKey,
-        {
-          tokenId: params.tokenId,
-          price: params.price,
-          size: params.size,
-          side: params.side,
-          orderType: params.orderType
-        },
-        logKey
-      );
+      const lock = getOrderLock(freshUser.phone_number);
+
+      const { orderResult, effectiveSize } = await lock.queue.add(async () => {
+        let effectiveSize = params.size;
+
+        // For BUY orders, check actual on-chain USDC.e balance and adjust
+        // order size to account for bridge slippage and concurrent orders.
+        if (params.side === 'BUY') {
+          const safeAddress = freshUser.polymarket_account!.polygon_address;
+          const onChainBalance = await getPolygonUsdceBalance(safeAddress, logKey);
+          const available = Math.max(onChainBalance - lock.committedUsdce, 0);
+          const requiredUsdc = params.price * params.size;
+          const maxAffordableSize = Math.floor((available / params.price) * 100) / 100;
+
+          Logger.log(
+            'info',
+            fnLog,
+            `${logKey} Balance check — on-chain: $${onChainBalance.toFixed(2)}, ` +
+            `committed: $${lock.committedUsdce.toFixed(2)}, available: $${available.toFixed(2)}, ` +
+            `required: $${requiredUsdc.toFixed(2)}`
+          );
+
+          if (available < requiredUsdc) {
+            effectiveSize = maxAffordableSize;
+
+            if (effectiveSize <= 0) {
+              throw new Error(
+                `Insufficient USDC.e after bridge: $${available.toFixed(2)} available, ` +
+                `need $${requiredUsdc.toFixed(2)} for ${params.size} shares @ $${params.price}`
+              );
+            }
+
+            Logger.log(
+              'warn',
+              fnLog,
+              `${logKey} Adjusted order size: ${params.size} → ${effectiveSize} ` +
+              `(available $${available.toFixed(2)} < required $${requiredUsdc.toFixed(2)})`
+            );
+          }
+        }
+
+        const orderResult = await placeOrder(
+          freshUser,
+          privateKey,
+          {
+            tokenId: params.tokenId,
+            price: params.price,
+            size: effectiveSize,
+            side: params.side,
+            orderType: params.orderType
+          },
+          logKey
+        );
+
+        // Track committed funds for subsequent orders in the same batch
+        // (GTC orders don't change on-chain balance until matched)
+        if (params.side === 'BUY') {
+          lock.committedUsdce += effectiveSize * params.price;
+        }
+
+        return { orderResult, effectiveSize };
+      }) as { orderResult: { orderID: string }; effectiveSize: number };
 
       orderID = orderResult.orderID;
 
-      // Persist order record
+      // Persist order record with the effective (possibly adjusted) size
       await createOrder({
         user_phone: freshUser.phone_number,
         order_id: orderID,
@@ -290,7 +438,7 @@ export async function executePurchase(
         token_id: params.tokenId,
         side: params.side,
         price: params.price,
-        size: params.size,
+        size: effectiveSize,
         status: 'pending'
       });
 
@@ -300,7 +448,7 @@ export async function executePurchase(
         { status: 'completed', order_id: orderID },
         logKey
       );
-      Logger.log('info', fnLog, `${logKey} Order placed: ${orderID}`);
+      Logger.log('info', fnLog, `${logKey} Order placed: ${orderID} (size: ${effectiveSize})`);
 
       // ── Step 4 (SELL only): Withdrawal ──────────────────────────────────
       // After a SELL fills, USDC.e lands in the Polygon Safe. Bridge it back

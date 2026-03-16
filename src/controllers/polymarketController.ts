@@ -1030,7 +1030,7 @@ export const polymarketPurchase = async (
         price,
         size,
         side,
-        orderType: order_type,
+        orderType: order_type ?? 'FOK',
         bridgeAmount: safeBridgeAmount,
         termsVersion: terms_version
       },

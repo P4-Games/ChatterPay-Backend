@@ -31,6 +31,11 @@ import type {
 
 const LOG_PREFIX = 'polymarketTradingService';
 
+// FOK (market) orders accept up to 20% slippage from the requested price.
+// BUY: willing to pay up to 20% more per share.
+// SELL: willing to accept up to 20% less per share.
+const FOK_SLIPPAGE_TOLERANCE = 0.20;
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -192,15 +197,28 @@ export async function placeOrder(
 
     const submitOrder = async (): Promise<Record<string, unknown>> => {
       if (params.orderType === 'FOK') {
-        // FOK orders use createAndPostMarketOrder.
+        // FOK orders use createAndPostMarketOrder (fill-or-kill).
         // SDK UserMarketOrder.amount semantics:
         //   BUY  → dollar amount to spend (price × size)
         //   SELL → number of shares to sell (size)
+        //
+        // `price` is the worst acceptable price (slippage protection).
+        // `amount` stays based on the original price so we don't overspend.
         const amount = params.side === 'BUY' ? params.price * params.size : params.size;
+        const slippagePrice = params.side === 'BUY'
+          ? Math.min(params.price * (1 + FOK_SLIPPAGE_TOLERANCE), 1)
+          : Math.max(params.price * (1 - FOK_SLIPPAGE_TOLERANCE), 0.01);
+
+        Logger.log(
+          'info',
+          fnLog,
+          `${logKey} FOK order: amount=${amount.toFixed(2)}, ` +
+          `price=${params.price} → slippagePrice=${slippagePrice.toFixed(4)}`
+        );
 
         return client.createAndPostMarketOrder({
           tokenID: params.tokenId,
-          price: params.price,
+          price: slippagePrice,
           amount,
           side
         });
