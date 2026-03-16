@@ -1831,7 +1831,6 @@ export async function executeSwapSimple(
     );
 
     const gasPrice = await provider.getGasPrice();
-    Logger.debug('executeSwapSimple', logKey, `gasPrice: ${gasPrice.toString()}`);
     const signerAddress = await signer.getAddress();
 
     // 4) Ensure signer has gas for SWAP transaction
@@ -2052,13 +2051,7 @@ export async function executeSwapLiFi(
     // - The entryPointContract parameter passed into this function is unused here.
     const backendSigner = setupContractsResult.backPrincipal;
 
-    // Get current gas price from network (avoid overpaying)
     const gasPrice = await provider.getGasPrice();
-    Logger.info(
-      'executeSwapLiFi',
-      logKey,
-      `Using gas price: ${ethers.utils.formatUnits(gasPrice, 'gwei')} gwei`
-    );
 
     const chatterPayContract = new ethers.Contract(proxyAddress, chatterpayABI, backendSigner);
 
@@ -2112,6 +2105,10 @@ export async function executeSwapLiFi(
     const failedTools: string[] = []; // Track tools that failed during execution
 
     for (let swapAttempt = 1; swapAttempt <= MAX_SWAP_RETRIES; swapAttempt++) {
+      let lifiGasLimit = quote.transactionRequest.gasLimit
+        ? Math.ceil(Number(quote.transactionRequest.gasLimit) * 1.2)
+        : 800000;
+
       try {
         // Get fresh quote for retries (quotes expire quickly), excluding failed tools
         if (swapAttempt > 1) {
@@ -2147,10 +2144,15 @@ export async function executeSwapLiFi(
           );
         }
 
+        // Recalculate gas limit after fresh quote (may have changed)
+        lifiGasLimit = quote.transactionRequest.gasLimit
+          ? Math.ceil(Number(quote.transactionRequest.gasLimit) * 1.2)
+          : 800000;
+
         Logger.info(
           'executeSwapLiFi',
           logKey,
-          `Executing Li.Fi swap (attempt ${swapAttempt}, tool=${quote.tool})...`
+          `Executing Li.Fi swap (attempt ${swapAttempt}, tool=${quote.tool}, gasLimit=${lifiGasLimit})...`
         );
 
         // Simulate with eth_call first to catch revert reason
@@ -2165,7 +2167,7 @@ export async function executeSwapLiFi(
             to: proxyAddress,
             data: callData,
             from: backendSigner.address,
-            gasLimit: 800000
+            gasLimit: lifiGasLimit
           });
         } catch (simError) {
           const simErrorMsg =
@@ -2184,7 +2186,7 @@ export async function executeSwapLiFi(
           quote.transactionRequest.value || 0,
           quote.transactionRequest.data,
           {
-            gasLimit: 800000,
+            gasLimit: lifiGasLimit,
             gasPrice
           }
         );
@@ -2205,7 +2207,7 @@ export async function executeSwapLiFi(
                 to: proxyAddress,
                 data: callData,
                 from: backendSigner.address,
-                gasLimit: 800000
+                gasLimit: lifiGasLimit
               },
               swapReceipt.blockNumber
             );
@@ -2288,7 +2290,7 @@ export async function executeSwapLiFi(
                     to: proxyAddress,
                     data: replayCallData,
                     from: backendSigner.address,
-                    gasLimit: 800000
+                    gasLimit: lifiGasLimit
                   },
                   failedReceipt.blockNumber
                 );
