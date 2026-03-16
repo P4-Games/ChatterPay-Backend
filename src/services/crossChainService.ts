@@ -140,8 +140,9 @@ export async function executeCrossChainTransfer(
       logKey
     );
 
-    // 4. Get ChatterPay ABI dynamically
+    // 4. Get ChatterPay ABI and Gas Price
     const chatterpayABI = await getChatterpayABI();
+    const gasPrice = await provider.getGasPrice();
 
     // 5. Check if approval is needed and execute
     const erc20ABI = ['function allowance(address,address) view returns (uint256)'];
@@ -170,7 +171,8 @@ export async function executeCrossChainTransfer(
       const chatterPayContract = new ethers.Contract(proxyAddress, chatterpayABI, backendSigner);
 
       const approveTx = await chatterPayContract.execute(sourceTokenAddress, 0, approveData, {
-        gasLimit: 100000
+        gasLimit: 100000,
+        gasPrice
       });
 
       const approveReceipt = await approveTx.wait();
@@ -197,8 +199,6 @@ export async function executeCrossChainTransfer(
       logKey,
       `Executing cross-chain transfer via ${quote.tool}`
     );
-
-    const gasPrice = await provider.getGasPrice();
 
     const chatterPayContract = new ethers.Contract(proxyAddress, chatterpayABI, backendSigner);
 

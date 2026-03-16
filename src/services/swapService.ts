@@ -568,7 +568,7 @@ export async function ensureRecipientHasGas({
     `Top-up required: ${ethers.utils.formatEther(topUp)} ETH (shortfall ${ethers.utils.formatEther(shortfall)})`
   );
 
-  const topUpTx = await backendSigner.sendTransaction({ to: signerAddress, value: topUp });
+  const topUpTx = await backendSigner.sendTransaction({ to: signerAddress, value: topUp, gasPrice });
   const r = await topUpTx.wait();
 
   if (!r || r.status !== 1) {
@@ -2053,8 +2053,7 @@ export async function executeSwapLiFi(
     const backendSigner = setupContractsResult.backPrincipal;
 
     // Get current gas price from network (avoid overpaying)
-    const feeData = await provider.getFeeData();
-    const gasPrice = feeData.gasPrice || ethers.utils.parseUnits('0.001', 'gwei');
+    const gasPrice = await provider.getGasPrice();
     Logger.info(
       'executeSwapLiFi',
       logKey,
