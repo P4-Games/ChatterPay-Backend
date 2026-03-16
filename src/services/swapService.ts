@@ -568,7 +568,8 @@ export async function ensureRecipientHasGas({
     `Top-up required: ${ethers.utils.formatEther(topUp)} ETH (shortfall ${ethers.utils.formatEther(shortfall)})`
   );
 
-  const topUpTx = await backendSigner.sendTransaction({ to: signerAddress, value: topUp });
+  // Pass gasPrice explicitly to avoid ethers.js v5 getFeeData() overpaying on L2s
+  const topUpTx = await backendSigner.sendTransaction({ to: signerAddress, value: topUp, gasPrice: perUnitGas });
   const r = await topUpTx.wait();
 
   if (!r || r.status !== 1) {
