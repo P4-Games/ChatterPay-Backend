@@ -198,8 +198,9 @@ export async function executeCrossChainTransfer(
       `Executing cross-chain transfer via ${quote.tool}`
     );
 
-    const feeData = await provider.getFeeData();
-    const gasPrice = feeData.gasPrice || ethers.utils.parseUnits('0.001', 'gwei');
+    // NOTE: Use getGasPrice() instead of getFeeData().gasPrice because ethers.js v5
+    // hardcodes maxPriorityFeePerGas=1.5 gwei in getFeeData(), which massively overpays on L2s.
+    const gasPrice = await provider.getGasPrice();
 
     const chatterPayContract = new ethers.Contract(proxyAddress, chatterpayABI, backendSigner);
 

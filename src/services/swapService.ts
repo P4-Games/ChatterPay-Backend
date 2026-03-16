@@ -661,7 +661,9 @@ async function handleTokenApproval(
       approveGasLimit = ethers.BigNumber.from('100000');
     }
 
-    const feeData = await provider.getFeeData();
+    // NOTE: Use getGasPrice() instead of getFeeData().gasPrice because ethers.js v5
+    // hardcodes maxPriorityFeePerGas=1.5 gwei in getFeeData(), which massively overpays on L2s.
+    const gasPrice = await provider.getGasPrice();
     const signerAddress = await signer.getAddress();
 
     // Ensure funds for the APPROVAL transaction
@@ -670,13 +672,10 @@ async function handleTokenApproval(
       backendSigner,
       signerAddress,
       gasLimit: approveGasLimit,
-      gasPrice: feeData.gasPrice ?? undefined,
-      maxFeePerGas: feeData.maxFeePerGas ?? undefined,
+      gasPrice,
       bufferBps: 500,
       logKey
     });
-
-    const gasPrice = feeData.gasPrice || (await provider.getGasPrice());
     const approveTx = await signer.sendTransaction({
       to: recipient,
       data: approveCallData,
@@ -1832,8 +1831,10 @@ export async function executeSwapSimple(
       ethers.BigNumber.from('500000')
     );
 
-    const feeData = await provider.getFeeData();
-    Logger.debug('executeSwapSimple', logKey, `feeData: ${JSON.stringify(feeData)}`);
+    // NOTE: Use getGasPrice() instead of getFeeData().gasPrice because ethers.js v5
+    // hardcodes maxPriorityFeePerGas=1.5 gwei in getFeeData(), which massively overpays on L2s.
+    const feeData_gasPrice = await provider.getGasPrice();
+    Logger.debug('executeSwapSimple', logKey, `gasPrice: ${ethers.utils.formatUnits(feeData_gasPrice, 'gwei')} gwei`);
     const signerAddress = await signer.getAddress();
 
     // 4) Ensure signer has gas for SWAP transaction
@@ -1842,8 +1843,7 @@ export async function executeSwapSimple(
       backendSigner,
       signerAddress,
       gasLimit,
-      gasPrice: feeData.gasPrice ?? undefined,
-      maxFeePerGas: feeData.maxFeePerGas ?? undefined,
+      gasPrice: feeData_gasPrice,
       bufferBps: 500,
       logKey
     });
@@ -2057,8 +2057,9 @@ export async function executeSwapLiFi(
     const backendSigner = setupContractsResult.backPrincipal;
 
     // Get current gas price from network (avoid overpaying)
-    const feeData = await provider.getFeeData();
-    const gasPrice = feeData.gasPrice || ethers.utils.parseUnits('0.001', 'gwei');
+    // NOTE: Use getGasPrice() instead of getFeeData().gasPrice because ethers.js v5
+    // hardcodes maxPriorityFeePerGas=1.5 gwei in getFeeData(), which massively overpays on L2s.
+    const gasPrice = await provider.getGasPrice();
     Logger.info(
       'executeSwapLiFi',
       logKey,

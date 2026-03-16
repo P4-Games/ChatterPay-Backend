@@ -386,8 +386,9 @@ export async function executeBridge(
     const erc20ABI = await getERC20ABI();
     const chatterPayContract = new ethers.Contract(proxyAddress, chatterpayABI, backendSigner);
 
-    const feeData = await provider.getFeeData();
-    const gasPrice = feeData.gasPrice || ethers.utils.parseUnits('0.001', 'gwei');
+    // NOTE: Use getGasPrice() instead of getFeeData().gasPrice because ethers.js v5
+    // hardcodes maxPriorityFeePerGas=1.5 gwei in getFeeData(), which massively overpays on L2s.
+    const gasPrice = await provider.getGasPrice();
 
     // 5. Approve LiFi router to spend the source token if needed
     let approveTransactionHash = '';
@@ -413,7 +414,8 @@ export async function executeBridge(
         ]);
 
         const approveTx = await chatterPayContract.execute(fromTokenAddress, 0, approveCallData, {
-          gasLimit: 200000
+          gasLimit: 200000,
+          gasPrice
         });
 
         const approveReceipt = await approveTx.wait();
@@ -455,7 +457,8 @@ export async function executeBridge(
         const fundTx = await backendSigner.sendTransaction({
           to: proxyAddress,
           value: fundAmount,
-          gasLimit: 50000 // Increased from 21000 to handle contract receive logic
+          gasLimit: 50000, // Increased from 21000 to handle contract receive logic
+          gasPrice
         });
         await fundTx.wait();
         Logger.log('info', fnLog, `${logKey} Proxy funded successfully`);
@@ -479,7 +482,8 @@ export async function executeBridge(
       requiredValue,
       quote.transactionRequest.data,
       {
-        gasLimit: 1000000
+        gasLimit: 1000000,
+        gasPrice
       }
     );
 
