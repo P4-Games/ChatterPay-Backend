@@ -198,8 +198,7 @@ export async function executeCrossChainTransfer(
       `Executing cross-chain transfer via ${quote.tool}`
     );
 
-    const feeData = await provider.getFeeData();
-    const gasPrice = feeData.gasPrice || ethers.utils.parseUnits('0.001', 'gwei');
+    const gasPrice = await provider.getGasPrice();
 
     const chatterPayContract = new ethers.Contract(proxyAddress, chatterpayABI, backendSigner);
 
