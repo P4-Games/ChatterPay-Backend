@@ -1,17 +1,15 @@
-import {
-  COMMON_REPLY_WALLET_NOT_CREATED,
-  IS_DEVELOPMENT,
-  ISSUER_TOKENS_ENABLED
-} from '../../config/constants';
+import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../../config/constants';
 import { getPhoneNumberVariants } from '../../helpers/formatHelper';
 import { Logger } from '../../helpers/loggerHelper';
 import { isValidPhoneNumber } from '../../helpers/validationHelper';
 import type { IBlockchain } from '../../models/blockchainModel';
+import { NotificationEnum } from '../../models/templateModel';
 import type { IToken } from '../../models/tokenModel';
 import type { IUser, IUserWallet } from '../../models/userModel';
 import type { BalanceInfo, Currency } from '../../types/commonType';
 import { getAddressBalanceWithNfts } from '../balanceService';
 import { chatizaloService } from '../chatizalo/chatizaloService';
+import { getNotificationTemplate } from '../notificationService';
 import {
   clearUserVerificationCode,
   getUser,
@@ -182,12 +180,16 @@ export const telegramService = {
         'telegramWallet',
         `Checking phone variants for ${candidate}: ${variants.join(', ')}`
       );
+      const { message } = await getNotificationTemplate(
+        candidate,
+        NotificationEnum.wallet_not_created
+      );
       return {
         ok: false,
         reply: {
           method: 'sendMessage',
           chat_id: chatId,
-          text: COMMON_REPLY_WALLET_NOT_CREATED,
+          text: message,
           parse_mode: 'Markdown'
         }
       };
@@ -375,20 +377,28 @@ export const telegramService = {
     const phoneCandidate = isValidPhoneNumber(maybePhone) ? maybePhone : linkedPhone;
 
     if (!phoneCandidate || !isValidPhoneNumber(phoneCandidate)) {
+      const { message } = await getNotificationTemplate(
+        phoneCandidate || maybePhone || linkedPhone || '',
+        NotificationEnum.wallet_not_created
+      );
       return {
         method: 'sendMessage',
         chat_id: chatId,
-        text: COMMON_REPLY_WALLET_NOT_CREATED,
+        text: message,
         parse_mode: 'Markdown'
       };
     }
 
     const user: IUser | null = await getUser(phoneCandidate);
     if (!user) {
+      const { message } = await getNotificationTemplate(
+        phoneCandidate,
+        NotificationEnum.wallet_not_created
+      );
       return {
         method: 'sendMessage',
         chat_id: chatId,
-        text: COMMON_REPLY_WALLET_NOT_CREATED,
+        text: message,
         parse_mode: 'Markdown'
       };
     }

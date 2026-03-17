@@ -43,7 +43,14 @@ describe('securityService', () => {
         aave_supply_info: mockNotification,
         aave_supply_info_no_data: mockNotification,
         chatterpoints_operation: mockNotification,
-        cross_chain_disabled: mockNotification
+        cross_chain_disabled: mockNotification,
+        pin_blocked: mockNotification,
+        pin_not_set: mockNotification,
+        pin_invalid_remaining_attempts: mockNotification,
+        pin_verified_success: mockNotification,
+        pin_internal_error: mockNotification,
+        operation_in_progress: mockNotification,
+        wallet_not_created: mockNotification
       },
       security_questions: {
         pet_name: {

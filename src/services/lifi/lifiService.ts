@@ -105,6 +105,16 @@ export function parseLifiError(error: unknown): LifiParsedError {
       };
     }
 
+    // 404 "No available quotes" can be transient (bridge temporarily unavailable)
+    if (status === 404) {
+      return {
+        isRecoverable: true,
+        shouldRetry: true,
+        errorCode: `CLIENT_ERROR_404`,
+        message: data?.message || 'No available quotes for the requested transfer'
+      };
+    }
+
     // Generic client error
     return {
       isRecoverable: false,

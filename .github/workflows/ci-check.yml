@@ -66,6 +66,10 @@ jobs:
     name: Test Application
     runs-on: ubuntu-latest
     needs: setup
+    env:
+      NODE_ENV: development
+      BUN_ENV: development
+      APP_ENV: development
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
