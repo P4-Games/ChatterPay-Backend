@@ -1,11 +1,13 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { COMMON_REPLY_WALLET_NOT_CREATED, IS_DEVELOPMENT } from '../config/constants';
+import { IS_DEVELOPMENT } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidEthereumWallet, isValidPhoneNumber } from '../helpers/validationHelper';
+import { NotificationEnum } from '../models/templateModel';
 import Token, { type IToken } from '../models/tokenModel';
 import type { IUser, IUserWallet } from '../models/userModel';
 import { coingeckoService } from '../services/coingecko/coingeckoService';
+import { getNotificationTemplate } from '../services/notificationService';
 import { getUser, getUserWalletByChainId } from '../services/userService';
 import { issueTokens } from '../services/walletService';
 
@@ -250,9 +252,13 @@ export const issueTokensHandler = async (
     if (!identifier.toLowerCase().startsWith('0x')) {
       const fromUser: IUser | null = await getUser(identifier);
       if (!fromUser) {
-        Logger.info('issueTokensHandler', COMMON_REPLY_WALLET_NOT_CREATED);
+        const { message: walletNotCreatedMessage } = await getNotificationTemplate(
+          identifier,
+          NotificationEnum.wallet_not_created
+        );
+        Logger.info('issueTokensHandler', walletNotCreatedMessage);
         // must return 200, so the bot displays the message instead of an error!
-        return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+        return await returnSuccessResponse(reply, walletNotCreatedMessage);
       }
       const userWallet: IUserWallet | null = getUserWalletByChainId(
         fromUser?.wallets,

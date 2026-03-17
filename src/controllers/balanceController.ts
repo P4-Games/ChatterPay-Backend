@@ -1,13 +1,14 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { COMMON_REPLY_WALLET_NOT_CREATED } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidEthereumWallet, isValidPhoneNumber } from '../helpers/validationHelper';
 import type { IBlockchain } from '../models/blockchainModel';
+import { NotificationEnum } from '../models/templateModel';
 import type { IToken } from '../models/tokenModel';
 import type { IUser, IUserWallet } from '../models/userModel';
 import { getAddressBalanceWithNfts } from '../services/balanceService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
+import { getNotificationTemplate } from '../services/notificationService';
 import { getUser, getUserWalletByChainId } from '../services/userService';
 import type { BalanceInfo, Currency } from '../types/commonType';
 
@@ -117,8 +118,9 @@ export const balanceByPhoneNumber = async (
   try {
     const user: IUser | null = await getUser(phone);
     if (!user) {
-      Logger.info('balanceByPhoneNumber', COMMON_REPLY_WALLET_NOT_CREATED);
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+      const { message } = await getNotificationTemplate(phone, NotificationEnum.wallet_not_created);
+      Logger.info('balanceByPhoneNumber', message);
+      return await returnSuccessResponse(reply, message);
     }
 
     const { networkConfig, tokens } = request.server as {
@@ -130,7 +132,8 @@ export const balanceByPhoneNumber = async (
     const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, chainId);
 
     if (!userWallet || !userWallet.wallet_proxy) {
-      return await returnErrorResponse('balanceByPhoneNumber', '', reply, 404, 'Wallet not found');
+      const { message } = await getNotificationTemplate(phone, NotificationEnum.wallet_not_created);
+      return await returnSuccessResponse(reply, message);
     }
 
     const data = await getAddressBalanceWithNfts(
@@ -178,7 +181,8 @@ export const balanceByPhoneNumberSync = async (
   try {
     const user: IUser | null = await getUser(phone);
     if (!user) {
-      return await returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+      const { message } = await getNotificationTemplate(phone, NotificationEnum.wallet_not_created);
+      return await returnSuccessResponse(reply, message);
     }
 
     const { networkConfig, tokens } = request.server as {
