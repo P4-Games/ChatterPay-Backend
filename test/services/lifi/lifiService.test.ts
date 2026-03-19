@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getLifiChains,
   getLifiToken,
+  parseLifiError,
   validateAddressForChainType
 } from '../../../src/services/lifi/lifiService';
 
@@ -116,6 +117,66 @@ describe('lifiService', () => {
       const token = await getLifiToken('eth', 'INVALID', '[test]');
 
       expect(token).toBeNull();
+    });
+  });
+
+  describe('parseLifiError', () => {
+    it('should treat 404 as retryable (transient "no quotes")', () => {
+      const axiosError = {
+        response: {
+          status: 404,
+          data: { message: 'No available quotes for the requested transfer' }
+        },
+        isAxiosError: true
+      };
+      vi.mocked(axios.isAxiosError).mockReturnValue(true);
+
+      const result = parseLifiError(axiosError);
+
+      expect(result.shouldRetry).toBe(true);
+      expect(result.isRecoverable).toBe(true);
+      expect(result.errorCode).toBe('CLIENT_ERROR_404');
+      expect(result.message).toBe('No available quotes for the requested transfer');
+    });
+
+    it('should treat 429 as retryable (rate limited)', () => {
+      const axiosError = {
+        response: { status: 429, data: {} },
+        isAxiosError: true
+      };
+      vi.mocked(axios.isAxiosError).mockReturnValue(true);
+
+      const result = parseLifiError(axiosError);
+
+      expect(result.shouldRetry).toBe(true);
+      expect(result.errorCode).toBe('RATE_LIMITED');
+    });
+
+    it('should treat 400 as non-retryable', () => {
+      const axiosError = {
+        response: { status: 400, data: { message: 'Bad request' } },
+        message: 'Request failed',
+        isAxiosError: true
+      };
+      vi.mocked(axios.isAxiosError).mockReturnValue(true);
+
+      const result = parseLifiError(axiosError);
+
+      expect(result.shouldRetry).toBe(false);
+      expect(result.isRecoverable).toBe(false);
+    });
+
+    it('should treat 5xx as retryable', () => {
+      const axiosError = {
+        response: { status: 502, data: { message: 'Bad Gateway' } },
+        isAxiosError: true
+      };
+      vi.mocked(axios.isAxiosError).mockReturnValue(true);
+
+      const result = parseLifiError(axiosError);
+
+      expect(result.shouldRetry).toBe(true);
+      expect(result.errorCode).toBe('SERVER_ERROR_502');
     });
   });
 

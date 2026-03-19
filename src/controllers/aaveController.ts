@@ -1,17 +1,15 @@
 import { once as onceEvent } from 'events';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { IncomingMessage, ServerResponse } from 'http';
-import {
-  COMMON_REPLY_OPERATION_IN_PROGRESS,
-  COMMON_REPLY_WALLET_NOT_CREATED
-} from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
+import { NotificationEnum } from '../models/templateModel';
 import type { IUser, IUserWallet } from '../models/userModel';
 import { aaveService } from '../services/aave/aaveService';
 import { checkBlockchainConditions } from '../services/blockchainService';
 import {
+  getNotificationTemplate,
   sendAAVECreateSuplyNotification,
   sendAAVERemoveSuplyNotification,
   sendAaveSupplyInfoNotification,
@@ -45,11 +43,16 @@ export const aaveCreateSupply = async (
   request: FastifyRequest<{ Body: AaveSupplyBody; Querystring?: AaveCommonQuery }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
+  const channelUserId = request.body?.channel_user_id ?? '';
+  const { message: operationInProgressMessage } = await getNotificationTemplate(
+    channelUserId,
+    NotificationEnum.operation_in_progress
+  );
   // Immediate response to the user
   reply.send({
     status: 'success',
     data: {
-      message: COMMON_REPLY_OPERATION_IN_PROGRESS
+      message: operationInProgressMessage
     },
     timestamp: new Date().toISOString()
   });
@@ -91,8 +94,12 @@ export const aaveCreateSupply = async (
 
       const fromUser: IUser | null = await getUser(channel_user_id);
       if (!fromUser) {
-        Logger.info(keyName, logKey, COMMON_REPLY_WALLET_NOT_CREATED);
-        throw new Error(COMMON_REPLY_WALLET_NOT_CREATED);
+        const { message: walletNotCreatedMessage } = await getNotificationTemplate(
+          channel_user_id,
+          NotificationEnum.wallet_not_created
+        );
+        Logger.info(keyName, logKey, walletNotCreatedMessage);
+        throw new Error(walletNotCreatedMessage);
       }
 
       const userWallet: IUserWallet | null = getUserWalletByChainId(
@@ -162,11 +169,16 @@ export const aaveUpdateSupply = async (
   request: FastifyRequest<{ Body: AaveSupplyBody; Querystring?: AaveCommonQuery }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
+  const channelUserId = request.body?.channel_user_id ?? '';
+  const { message: operationInProgressMessage } = await getNotificationTemplate(
+    channelUserId,
+    NotificationEnum.operation_in_progress
+  );
   // Immediate response to the user
   reply.send({
     status: 'success',
     data: {
-      message: COMMON_REPLY_OPERATION_IN_PROGRESS
+      message: operationInProgressMessage
     },
     timestamp: new Date().toISOString()
   });
@@ -208,8 +220,12 @@ export const aaveUpdateSupply = async (
 
       const fromUser: IUser | null = await getUser(channel_user_id);
       if (!fromUser) {
-        Logger.info(keyName, logKey, COMMON_REPLY_WALLET_NOT_CREATED);
-        throw new Error(COMMON_REPLY_WALLET_NOT_CREATED);
+        const { message: walletNotCreatedMessage } = await getNotificationTemplate(
+          channel_user_id,
+          NotificationEnum.wallet_not_created
+        );
+        Logger.info(keyName, logKey, walletNotCreatedMessage);
+        throw new Error(walletNotCreatedMessage);
       }
 
       const userWallet: IUserWallet | null = getUserWalletByChainId(
@@ -278,11 +294,16 @@ export const aaveRemoveSupply = async (
   request: FastifyRequest<{ Body: AaveRemoveBody; Querystring?: AaveCommonQuery }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
+  const channelUserId = request.body?.channel_user_id ?? '';
+  const { message: operationInProgressMessage } = await getNotificationTemplate(
+    channelUserId,
+    NotificationEnum.operation_in_progress
+  );
   // Immediate response to the user
   reply.send({
     status: 'success',
     data: {
-      message: COMMON_REPLY_OPERATION_IN_PROGRESS
+      message: operationInProgressMessage
     },
     timestamp: new Date().toISOString()
   });
@@ -320,8 +341,12 @@ export const aaveRemoveSupply = async (
 
       const fromUser: IUser | null = await getUser(channel_user_id);
       if (!fromUser) {
-        Logger.info(keyName, logKey, COMMON_REPLY_WALLET_NOT_CREATED);
-        throw new Error(COMMON_REPLY_WALLET_NOT_CREATED);
+        const { message: walletNotCreatedMessage } = await getNotificationTemplate(
+          channel_user_id,
+          NotificationEnum.wallet_not_created
+        );
+        Logger.info(keyName, logKey, walletNotCreatedMessage);
+        throw new Error(walletNotCreatedMessage);
       }
 
       const userWallet: IUserWallet | null = getUserWalletByChainId(
@@ -394,11 +419,16 @@ export const aaveGetSupplyInfo = async (
   request: FastifyRequest<{ Body: AaaveInfoBody; Querystring?: AaveCommonQuery }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
+  const channelUserId = request.body?.channel_user_id ?? '';
+  const { message: operationInProgressMessage } = await getNotificationTemplate(
+    channelUserId,
+    NotificationEnum.operation_in_progress
+  );
   // Immediate response to the user
   reply.send({
     status: 'success',
     data: {
-      message: COMMON_REPLY_OPERATION_IN_PROGRESS
+      message: operationInProgressMessage
     },
     timestamp: new Date().toISOString()
   });
@@ -432,8 +462,12 @@ export const aaveGetSupplyInfo = async (
 
       const fromUser: IUser | null = await getUser(channel_user_id);
       if (!fromUser) {
-        Logger.info(keyName, logKey, COMMON_REPLY_WALLET_NOT_CREATED);
-        throw new Error(COMMON_REPLY_WALLET_NOT_CREATED);
+        const { message: walletNotCreatedMessage } = await getNotificationTemplate(
+          channel_user_id,
+          NotificationEnum.wallet_not_created
+        );
+        Logger.info(keyName, logKey, walletNotCreatedMessage);
+        throw new Error(walletNotCreatedMessage);
       }
       const userWallet: IUserWallet | null = getUserWalletByChainId(
         fromUser?.wallets,

@@ -4,8 +4,6 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import mongoose, { type ObjectId } from 'mongoose';
 import {
   CHATIZALO_PHONE_NUMBER,
-  COMMON_REPLY_OPERATION_IN_PROGRESS,
-  COMMON_REPLY_WALLET_NOT_CREATED,
   DEFAULT_CHAIN_ID,
   defaultNftImage,
   WHATSAPP_API_URL
@@ -279,9 +277,13 @@ export const generateNftOriginal = async (
     DEFAULT_CHAIN_ID
   );
   if (!fromUser || !userWalletByChainId) {
-    Logger.info('generateNftOriginal', logKey, COMMON_REPLY_WALLET_NOT_CREATED);
+    const { message: walletNotCreatedMessage } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.wallet_not_created
+    );
+    Logger.info('generateNftOriginal', logKey, walletNotCreatedMessage);
     // must return 200, so the bot displays the message instead of an error!
-    return returnSuccessResponse(reply, COMMON_REPLY_WALLET_NOT_CREATED);
+    return returnSuccessResponse(reply, walletNotCreatedMessage);
   }
 
   const userOperations = await hasPhoneAnyOperationInProgress(channel_user_id);
@@ -321,7 +323,11 @@ export const generateNftOriginal = async (
 
   // optimistic response
   Logger.log('generateNftOriginal', logKey, 'sending notification: operation in progress');
-  await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
+  const { message: operationInProgressMessage } = await getNotificationTemplate(
+    channel_user_id,
+    NotificationEnum.operation_in_progress
+  );
+  await returnSuccessResponse(reply, operationInProgressMessage);
 
   let processedImage;
   try {
@@ -561,7 +567,11 @@ export const generateNftCopy = async (
 
     // optimistic response
     Logger.log('generateNftOriginal', logKey, 'sending notification: operation in progress');
-    await returnSuccessResponse(reply, COMMON_REPLY_OPERATION_IN_PROGRESS);
+    const { message: operationInProgressMessage } = await getNotificationTemplate(
+      channel_user_id,
+      NotificationEnum.operation_in_progress
+    );
+    await returnSuccessResponse(reply, operationInProgressMessage);
 
     await openOperation(channel_user_id, ConcurrentOperationsEnum.MintNftCopy);
 
