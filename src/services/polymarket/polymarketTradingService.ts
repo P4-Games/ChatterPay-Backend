@@ -34,7 +34,7 @@ const LOG_PREFIX = 'polymarketTradingService';
 // FOK (market) orders accept up to 20% slippage from the requested price.
 // BUY: willing to pay up to 20% more per share.
 // SELL: willing to accept up to 20% less per share.
-const FOK_SLIPPAGE_TOLERANCE = 0.20;
+const FOK_SLIPPAGE_TOLERANCE = 0.2;
 
 // ============================================================================
 // Helpers
@@ -138,13 +138,13 @@ export async function placeOrder(
         if (currentBalance === 0) {
           throw new Error(
             `No shares found for this token in your Polymarket account. ` +
-            `Check your positions before selling.`
+              `Check your positions before selling.`
           );
         }
         if (balanceHuman < params.size) {
           throw new Error(
             `Insufficient shares: you have ${balanceHuman} but trying to sell ${params.size}. ` +
-            `Reduce size to ${balanceHuman} or less.`
+              `Reduce size to ${balanceHuman} or less.`
           );
         }
       } else {
@@ -205,15 +205,16 @@ export async function placeOrder(
         // `price` is the worst acceptable price (slippage protection).
         // `amount` stays based on the original price so we don't overspend.
         const amount = params.side === 'BUY' ? params.price * params.size : params.size;
-        const slippagePrice = params.side === 'BUY'
-          ? Math.min(params.price * (1 + FOK_SLIPPAGE_TOLERANCE), 1)
-          : Math.max(params.price * (1 - FOK_SLIPPAGE_TOLERANCE), 0.01);
+        const slippagePrice =
+          params.side === 'BUY'
+            ? Math.min(params.price * (1 + FOK_SLIPPAGE_TOLERANCE), 1)
+            : Math.max(params.price * (1 - FOK_SLIPPAGE_TOLERANCE), 0.01);
 
         Logger.log(
           'info',
           fnLog,
           `${logKey} FOK order: amount=${amount.toFixed(2)}, ` +
-          `price=${params.price} → slippagePrice=${slippagePrice.toFixed(4)}`
+            `price=${params.price} → slippagePrice=${slippagePrice.toFixed(4)}`
         );
 
         return client.createAndPostMarketOrder({
@@ -248,7 +249,8 @@ export async function placeOrder(
       // For SELL orders that fail with allowance errors, retry once after
       // setting fresh approvals. The CLOB cache for ERC-1155 (CONDITIONAL)
       // is unreliable — the on-chain approval may exist but not be cached.
-      const isAllowanceError = errorDetail.includes('not enough balance') || errorDetail.includes('allowance');
+      const isAllowanceError =
+        errorDetail.includes('not enough balance') || errorDetail.includes('allowance');
       const isMinSizeError = errorDetail.includes('lower than the minimum');
 
       if (params.side === 'SELL' && isAllowanceError) {
@@ -262,7 +264,10 @@ export async function placeOrder(
 
         // Refresh both asset type caches after approvals
         await Promise.all([
-          client.updateBalanceAllowance({ asset_type: AssetType.CONDITIONAL, token_id: params.tokenId }),
+          client.updateBalanceAllowance({
+            asset_type: AssetType.CONDITIONAL,
+            token_id: params.tokenId
+          }),
           client.updateBalanceAllowance({ asset_type: AssetType.COLLATERAL })
         ]);
 
@@ -275,7 +280,11 @@ export async function placeOrder(
           // If GTC still fails, fall back to FOK market order (works for both
           // balance/allowance and minimum-size errors)
           if (params.orderType !== 'FOK') {
-            Logger.log('warn', fnLog, `${logKey} GTC SELL failed after retry (${retryDetail}). Falling back to FOK market order.`);
+            Logger.log(
+              'warn',
+              fnLog,
+              `${logKey} GTC SELL failed after retry (${retryDetail}). Falling back to FOK market order.`
+            );
             response = await client.createAndPostMarketOrder({
               tokenID: params.tokenId,
               price: params.price,
@@ -287,7 +296,9 @@ export async function placeOrder(
               throw new Error(`CLOB rejected FOK fallback: ${fokError}`);
             }
           } else {
-            throw new Error(`CLOB rejected order after retry: ${retryDetail || 'no orderID in response'}`);
+            throw new Error(
+              `CLOB rejected order after retry: ${retryDetail || 'no orderID in response'}`
+            );
           }
         }
       } else if (params.side === 'SELL' && isMinSizeError && params.orderType !== 'FOK') {
@@ -390,18 +401,22 @@ export async function getOpenOrders(
 // ============================================================================
 
 import NodeCache from 'node-cache';
+
 const tokenMarketCache = new NodeCache({ stdTTL: 3600 });
 
-async function enrichWithMarketData(tokenId: string, logKey: string): Promise<{ market_title: string; market_slug: string }> {
+async function enrichWithMarketData(
+  tokenId: string,
+  logKey: string
+): Promise<{ market_title: string; market_slug: string }> {
   const cached = tokenMarketCache.get<{ market_title: string; market_slug: string }>(tokenId);
   if (cached) return cached;
-  
+
   try {
     const response = await axios.get(`${POLYMARKET_GAMMA_API_URL}/markets`, {
       params: { clobTokenIds: tokenId },
       timeout: 5000
     });
-    
+
     if (response.data && response.data.length > 0) {
       const market = response.data[0];
       const result = {
@@ -412,27 +427,43 @@ async function enrichWithMarketData(tokenId: string, logKey: string): Promise<{ 
       return result;
     }
   } catch (err) {
-    Logger.log('warn', `[${LOG_PREFIX}:enrichment]`, `Failed to enrich token ${tokenId} from Gamma: ${String(err)}`);
+    Logger.log(
+      'warn',
+      `[${LOG_PREFIX}:enrichment]`,
+      `Failed to enrich token ${tokenId} from Gamma: ${String(err)}`
+    );
   }
-  
+
   // Best-effort local DB fallback
   try {
-    const localOrder = await PolymarketOrderModel.findOne({ token_id: tokenId }).select('market_slug').lean();
+    const localOrder = await PolymarketOrderModel.findOne({ token_id: tokenId })
+      .select('market_slug')
+      .lean();
     if (localOrder && localOrder.market_slug) {
-      const result = { market_title: 'Unknown Market (Local)', market_slug: localOrder.market_slug };
+      const result = {
+        market_title: 'Unknown Market (Local)',
+        market_slug: localOrder.market_slug
+      };
       tokenMarketCache.set(tokenId, result);
       return result;
     }
   } catch (dbErr) {
-    Logger.log('warn', `[${LOG_PREFIX}:enrichment]`, `Failed local fallback for token ${tokenId}: ${String(dbErr)}`);
+    Logger.log(
+      'warn',
+      `[${LOG_PREFIX}:enrichment]`,
+      `Failed local fallback for token ${tokenId}: ${String(dbErr)}`
+    );
   }
-  
+
   const defaultResult = { market_title: 'Unknown Market', market_slug: '' };
   tokenMarketCache.set(tokenId, defaultResult);
   return defaultResult;
 }
 
-async function enrichItems<T extends { asset?: string; token_id?: string }>(items: T[], logKey: string): Promise<(T & { market_title?: string; market_slug?: string })[]> {
+async function enrichItems<T extends { asset?: string; token_id?: string }>(
+  items: T[],
+  logKey: string
+): Promise<(T & { market_title?: string; market_slug?: string })[]> {
   return Promise.all(
     items.map(async (item) => {
       const tokenId = item.asset || item.token_id;
@@ -594,8 +625,12 @@ export async function syncOpenOrders(
 ): Promise<void> {
   const fnLog = `[${LOG_PREFIX}:syncOpenOrders]`;
   try {
-    Logger.log('info', fnLog, `${logKey} Starting local vs remote order state reconciliation for user ${user.phone_number}`);
-    
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Starting local vs remote order state reconciliation for user ${user.phone_number}`
+    );
+
     // Fetch live open orders from CLOB
     const clobOrders = await getOpenOrders(user, privateKey, logKey);
     const liveOrderIds = new Set(clobOrders.map((o) => o.id || (o as any).orderID));
@@ -625,9 +660,17 @@ export async function syncOpenOrders(
           }
           pendingOrder.status = newStatus as any;
           await pendingOrder.save();
-          Logger.log('info', fnLog, `${logKey} Synced order ${pendingOrder.order_id}: pending -> ${newStatus}`);
+          Logger.log(
+            'info',
+            fnLog,
+            `${logKey} Synced order ${pendingOrder.order_id}: pending -> ${newStatus}`
+          );
         } catch (getOrderError) {
-          Logger.log('warn', fnLog, `${logKey} Could not fetch closed order ${pendingOrder.order_id} from CLOB. Marking as cancelled.`);
+          Logger.log(
+            'warn',
+            fnLog,
+            `${logKey} Could not fetch closed order ${pendingOrder.order_id} from CLOB. Marking as cancelled.`
+          );
           pendingOrder.status = 'cancelled' as any;
           await pendingOrder.save();
         }

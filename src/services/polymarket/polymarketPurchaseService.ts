@@ -23,7 +23,11 @@ import {
 } from '../mongo/mongoPolymarketService';
 import { getUser } from '../userService';
 import { acceptTerms, createPolymarketAccount } from './polymarketAccountService';
-import { executeBridge, getPreferredScrollStablecoin, withdrawToScroll } from './polymarketBridgeService';
+import {
+  executeBridge,
+  getPreferredScrollStablecoin,
+  withdrawToScroll
+} from './polymarketBridgeService';
 import { executeGaslessWithdrawal } from './polymarketRelayerService';
 import { placeOrder } from './polymarketTradingService';
 
@@ -150,7 +154,11 @@ export async function withdrawSellProceeds(
     }
 
     if (rawBalance.lte(0)) {
-      Logger.log('info', fnLog, `${logKey} No USDC.e after ${retryDelays.length} attempts. GTC order may still be pending.`);
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} No USDC.e after ${retryDelays.length} attempts. GTC order may still be pending.`
+      );
       if (purchaseId) {
         await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'skipped' }, logKey);
       }
@@ -163,7 +171,11 @@ export async function withdrawSellProceeds(
     // Determine which stablecoin the user holds on Scroll (USDC or USDT)
     const toToken = await getPreferredScrollStablecoin(proxyAddress, logKey);
 
-    Logger.log('info', fnLog, `${logKey} Withdrawing $${balanceHuman.toFixed(2)} USDC.e from Polygon Safe to Scroll proxy (→${toToken})`);
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Withdrawing $${balanceHuman.toFixed(2)} USDC.e from Polygon Safe to Scroll proxy (→${toToken})`
+    );
 
     // Get LiFi bridge quote (Polygon → Scroll)
     const quote = await withdrawToScroll(safeAddress, proxyAddress, amount, logKey, toToken);
@@ -181,7 +193,11 @@ export async function withdrawSellProceeds(
       logKey
     );
 
-    Logger.log('info', fnLog, `${logKey} Withdrawal initiated: $${balanceHuman.toFixed(2)} USDC.e → Scroll`);
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Withdrawal initiated: $${balanceHuman.toFixed(2)} USDC.e → Scroll`
+    );
 
     if (purchaseId) {
       await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'completed' }, logKey);
@@ -287,7 +303,7 @@ export async function executePurchase(
           'info',
           fnLog,
           `${logKey} Bridge check — required: $${requiredUsdc.toFixed(2)}, ` +
-          `existing: $${existingBalance.toFixed(2)}, deficit: $${deficit.toFixed(2)}`
+            `existing: $${existingBalance.toFixed(2)}, deficit: $${deficit.toFixed(2)}`
         );
 
         if (deficit <= 0) {
@@ -296,10 +312,16 @@ export async function executePurchase(
             'info',
             fnLog,
             `${logKey} Skipping bridge: existing balance ($${existingBalance.toFixed(2)}) ` +
-            `covers required ($${requiredUsdc.toFixed(2)})`
+              `covers required ($${requiredUsdc.toFixed(2)})`
           );
           await updatePurchaseStep(purchaseId, 'bridge', { status: 'skipped' }, logKey);
-          await updatePurchaseStatus(purchaseId, 'processing', 'order_placement', undefined, logKey);
+          await updatePurchaseStatus(
+            purchaseId,
+            'processing',
+            'order_placement',
+            undefined,
+            logKey
+          );
         } else {
           // Bridge only the deficit (+ 2% buffer for fees/slippage),
           // but never exceed the client-authorized bridge amount.
@@ -311,7 +333,7 @@ export async function executePurchase(
             'info',
             fnLog,
             `${logKey} Bridging deficit: $${(deficit * BRIDGE_FEE_BUFFER).toFixed(2)} ` +
-            `(${actualBridgeAmount} smallest units, max allowed: ${params.bridgeAmount})`
+              `(${actualBridgeAmount} smallest units, max allowed: ${params.bridgeAmount})`
           );
 
           const bridgeResult = await executeBridge(
@@ -339,13 +361,22 @@ export async function executePurchase(
       } catch (error) {
         const errorMsg = `Bridge failed: ${String(error)}`;
         Logger.log('error', fnLog, `${logKey} ${errorMsg}`);
-        await updatePurchaseStep(purchaseId, 'bridge', { status: 'failed', error: errorMsg }, logKey);
+        await updatePurchaseStep(
+          purchaseId,
+          'bridge',
+          { status: 'failed', error: errorMsg },
+          logKey
+        );
         await updatePurchaseStatus(purchaseId, 'failed', 'bridge', { error: errorMsg }, logKey);
         return;
       }
     } else {
       // SELL: no bridge needed — go straight to order placement
-      Logger.log('info', fnLog, `${logKey} SELL order — skipping bridge, proceeding to order placement`);
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} SELL order — skipping bridge, proceeding to order placement`
+      );
       await updatePurchaseStatus(purchaseId, 'processing', 'order_placement', undefined, logKey);
     }
 
@@ -366,7 +397,7 @@ export async function executePurchase(
 
       const lock = getOrderLock(freshUser.phone_number);
 
-      const { orderResult, effectiveSize } = await lock.queue.add(async () => {
+      const { orderResult, effectiveSize } = (await lock.queue.add(async () => {
         let effectiveSize = params.size;
 
         // For BUY orders, check actual on-chain USDC.e balance and adjust
@@ -382,8 +413,8 @@ export async function executePurchase(
             'info',
             fnLog,
             `${logKey} Balance check — on-chain: $${onChainBalance.toFixed(2)}, ` +
-            `committed: $${lock.committedUsdce.toFixed(2)}, available: $${available.toFixed(2)}, ` +
-            `required: $${requiredUsdc.toFixed(2)}`
+              `committed: $${lock.committedUsdce.toFixed(2)}, available: $${available.toFixed(2)}, ` +
+              `required: $${requiredUsdc.toFixed(2)}`
           );
 
           if (available < requiredUsdc) {
@@ -392,7 +423,7 @@ export async function executePurchase(
             if (effectiveSize <= 0) {
               throw new Error(
                 `Insufficient USDC.e after bridge: $${available.toFixed(2)} available, ` +
-                `need $${requiredUsdc.toFixed(2)} for ${params.size} shares @ $${params.price}`
+                  `need $${requiredUsdc.toFixed(2)} for ${params.size} shares @ $${params.price}`
               );
             }
 
@@ -400,7 +431,7 @@ export async function executePurchase(
               'warn',
               fnLog,
               `${logKey} Adjusted order size: ${params.size} → ${effectiveSize} ` +
-              `(available $${available.toFixed(2)} < required $${requiredUsdc.toFixed(2)})`
+                `(available $${available.toFixed(2)} < required $${requiredUsdc.toFixed(2)})`
             );
           }
         }
@@ -425,7 +456,7 @@ export async function executePurchase(
         }
 
         return { orderResult, effectiveSize };
-      }) as { orderResult: { orderID: string }; effectiveSize: number };
+      })) as { orderResult: { orderID: string }; effectiveSize: number };
 
       orderID = orderResult.orderID;
 
@@ -462,13 +493,7 @@ export async function executePurchase(
       }
 
       // Mark entire purchase as completed
-      await updatePurchaseStatus(
-        purchaseId,
-        'completed',
-        'done',
-        { order_id: orderID },
-        logKey
-      );
+      await updatePurchaseStatus(purchaseId, 'completed', 'done', { order_id: orderID }, logKey);
       Logger.log('info', fnLog, `${logKey} Purchase completed. Order: ${orderID}`);
     } catch (error) {
       const errorMsg = `Order placement failed: ${String(error)}`;

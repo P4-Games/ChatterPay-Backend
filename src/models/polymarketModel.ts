@@ -109,7 +109,11 @@ export interface IPolymarketPurchase extends Document {
 
 const purchaseStepSchema = new Schema<IPurchaseStep>(
   {
-    name: { type: String, required: true, enum: ['account_creation', 'bridge', 'order_placement', 'withdrawal'] },
+    name: {
+      type: String,
+      required: true,
+      enum: ['account_creation', 'bridge', 'order_placement', 'withdrawal']
+    },
     status: {
       type: String,
       required: true,

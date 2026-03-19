@@ -365,14 +365,14 @@ export async function executeGaslessWithdrawal(
     const transactions = [];
 
     // 1. Approve LiFi router to spend USDC.e
-    if (withdrawData.approvalAddress && withdrawData.approvalAddress !== ethers.constants.AddressZero) {
+    if (
+      withdrawData.approvalAddress &&
+      withdrawData.approvalAddress !== ethers.constants.AddressZero
+    ) {
       Logger.log('info', fnLog, `${logKey} Adding approval tx for LiFi router`);
       transactions.push({
         to: USDC_E_ADDRESS,
-        data: usdcInterface.encodeFunctionData('approve', [
-          withdrawData.approvalAddress,
-          amount
-        ]),
+        data: usdcInterface.encodeFunctionData('approve', [withdrawData.approvalAddress, amount]),
         value: '0'
       });
     }
@@ -386,7 +386,7 @@ export async function executeGaslessWithdrawal(
     });
 
     Logger.log('info', fnLog, `${logKey} Executing transactions via Relayer`);
-    await client.execute(transactions, "Withdraw to Scroll");
+    await client.execute(transactions, 'Withdraw to Scroll');
     Logger.log('info', fnLog, `${logKey} Gasless withdrawal execution completed`);
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Gasless withdrawal failed: ${String(error)}`);

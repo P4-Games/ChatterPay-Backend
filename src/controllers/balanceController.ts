@@ -8,10 +8,14 @@ import type { IToken } from '../models/tokenModel';
 import type { IUser, IUserWallet } from '../models/userModel';
 import { getAddressBalanceWithNfts } from '../services/balanceService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
-import { getPolymarketBalanceSummary } from '../services/polymarket';
-import { getUser, getUserByWalletAndChainid, getUserWalletByChainId } from '../services/userService';
-import type { AddressBalanceWithNfts, BalanceInfo, Currency } from '../types/commonType';
 import { getNotificationTemplate } from '../services/notificationService';
+import { getPolymarketBalanceSummary } from '../services/polymarket';
+import {
+  getUser,
+  getUserByWalletAndChainid,
+  getUserWalletByChainId
+} from '../services/userService';
+import type { AddressBalanceWithNfts, BalanceInfo, Currency } from '../types/commonType';
 
 type CheckExternalDepositsQuery = {
   sendNotification?: string;
@@ -31,7 +35,10 @@ async function enrichWithPolymarketBalances(
   const logKey = `balance-${user.phone_number}`;
 
   try {
-    const { idle_usdc, positions_value } = await getPolymarketBalanceSummary(polygonAddress, logKey);
+    const { idle_usdc, positions_value } = await getPolymarketBalanceSummary(
+      polygonAddress,
+      logKey
+    );
     const total_usd = idle_usdc + positions_value;
     if (total_usd <= 0) return data;
 
@@ -43,7 +50,11 @@ async function enrichWithPolymarketBalances(
       data.totals[USD] = (data.totals[USD] ?? 0) + total_usd;
     }
   } catch (error) {
-    Logger.log('warn', 'balanceController', `Polymarket balance enrichment failed: ${String(error)}`);
+    Logger.log(
+      'warn',
+      'balanceController',
+      `Polymarket balance enrichment failed: ${String(error)}`
+    );
   }
 
   return data;
@@ -280,7 +291,9 @@ export const balanceByPhoneNumberSync = async (
         tokenLines.push(`Polymarket Positions: ~ $${pm.positions_value.toFixed(2)}`);
       }
       if (pm.idle_usdc > 0) {
-        tokenLines.push(`Polymarket USDC.e: ${pm.idle_usdc.toFixed(2)} (~ $${pm.idle_usdc.toFixed(2)})`);
+        tokenLines.push(
+          `Polymarket USDC.e: ${pm.idle_usdc.toFixed(2)} (~ $${pm.idle_usdc.toFixed(2)})`
+        );
       }
     }
 

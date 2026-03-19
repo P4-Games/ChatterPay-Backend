@@ -50,9 +50,13 @@ import {
   syncOpenOrders,
   withdrawSellProceeds
 } from '../services/polymarket';
-import { executeBridge, getPreferredScrollStablecoin, withdrawToScroll } from '../services/polymarket/polymarketBridgeService';
-import { executeGaslessWithdrawal } from '../services/polymarket/polymarketRelayerService';
+import {
+  executeBridge,
+  getPreferredScrollStablecoin,
+  withdrawToScroll
+} from '../services/polymarket/polymarketBridgeService';
 import { executePurchase } from '../services/polymarket/polymarketPurchaseService';
+import { executeGaslessWithdrawal } from '../services/polymarket/polymarketRelayerService';
 import { secService } from '../services/secService';
 import { getUser } from '../services/userService';
 import type {
@@ -465,10 +469,18 @@ export const polymarketPlaceOrder = async (
         Logger.log('info', LOG_PREFIX, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
       } catch (bridgeError) {
         Logger.log('error', LOG_PREFIX, `${logKey} Bridge failed: ${String(bridgeError)}`);
-        return errorReply(reply, 500, `Bridge from Scroll to Polygon failed: ${String(bridgeError)}`);
+        return errorReply(
+          reply,
+          500,
+          `Bridge from Scroll to Polygon failed: ${String(bridgeError)}`
+        );
       }
     } else {
-      Logger.log('info', LOG_PREFIX, `${logKey} SELL order detected. Skipping Scroll→Polygon bridge.`);
+      Logger.log(
+        'info',
+        LOG_PREFIX,
+        `${logKey} SELL order detected. Skipping Scroll→Polygon bridge.`
+      );
     }
 
     // ── Place order (using the bridged amount as the actual order size) ──
@@ -666,11 +678,15 @@ export const polymarketGetPositions = async (
     ]);
 
     // Sync local DB order statuses with CLOB in the background
-    getUserPrivateKey(user).then((pk) =>
-      syncOpenOrders(user, pk, logKey).catch((err) => {
-        Logger.log('warn', LOG_PREFIX, `${logKey} Background order sync failed: ${String(err)}`);
-      })
-    ).catch(() => { /* key derivation failed — skip sync */ });
+    getUserPrivateKey(user)
+      .then((pk) =>
+        syncOpenOrders(user, pk, logKey).catch((err) => {
+          Logger.log('warn', LOG_PREFIX, `${logKey} Background order sync failed: ${String(err)}`);
+        })
+      )
+      .catch(() => {
+        /* key derivation failed — skip sync */
+      });
 
     return successReply(reply, {
       positions,
@@ -876,7 +892,7 @@ export const polymarketWithdraw = async (
     if (!user.polymarket_account) {
       return errorReply(reply, 400, 'Polymarket account not created');
     }
-    
+
     // Ensure the wallet was derived properly so we can transact for them
     const privateKey = await getUserPrivateKey(user);
 
@@ -925,7 +941,6 @@ export const polymarketWithdraw = async (
         amount: quote.value
       }
     });
-
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, `Withdrawal failed: ${String(error)}`);
     return errorReply(reply, 500, `Failed to execute withdrawal: ${String(error)}`);
@@ -950,13 +965,17 @@ export const polymarketPurchase = async (
       return errorReply(reply, 400, 'Invalid or missing channel_user_id');
     }
 
-    const { token_id, price, size: rawSize, side, order_type, bridge_amount, terms_version } = request.body;
+    const {
+      token_id,
+      price,
+      size: rawSize,
+      side,
+      order_type,
+      bridge_amount,
+      terms_version
+    } = request.body;
     if (!token_id || price == null || rawSize == null || !side) {
-      return errorReply(
-        reply,
-        400,
-        'Missing required parameters (token_id, price, size, side)'
-      );
+      return errorReply(reply, 400, 'Missing required parameters (token_id, price, size, side)');
     }
 
     if (rawSize === 'max' && side !== 'SELL') {
@@ -965,11 +984,7 @@ export const polymarketPurchase = async (
 
     const safeBridgeAmount = bridge_amount ?? '0';
     if (side === 'BUY' && (!bridge_amount || bridge_amount === '0')) {
-      return errorReply(
-        reply,
-        400,
-        'Missing required parameter (bridge_amount) for BUY order'
-      );
+      return errorReply(reply, 400, 'Missing required parameter (bridge_amount) for BUY order');
     }
 
     // Terms validation:

@@ -49,7 +49,11 @@ export async function getBridgeQuote(
   const fnLog = `[${LOG_PREFIX}:getBridgeQuote]`;
 
   try {
-    Logger.log('info', fnLog, `${logKey} Getting bridge quote: ${amount} ${fromTokenSymbol} Scroll→Polygon`);
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Getting bridge quote: ${amount} ${fromTokenSymbol} Scroll→Polygon`
+    );
 
     const quote = await getLifiQuote(
       {
@@ -227,7 +231,11 @@ export async function getPreferredScrollStablecoin(
         const contract = new ethers.Contract(token.address, ERC20_BALANCE_ABI, provider);
         const balance: ethers.BigNumber = await contract.balanceOf(scrollProxyAddress);
 
-        Logger.log('info', fnLog, `${logKey} ${token.symbol}: ${ethers.utils.formatUnits(balance, token.decimals)}`);
+        Logger.log(
+          'info',
+          fnLog,
+          `${logKey} ${token.symbol}: ${ethers.utils.formatUnits(balance, token.decimals)}`
+        );
 
         if (balance.gt(bestBalance)) {
           bestBalance = balance;
@@ -241,7 +249,11 @@ export async function getPreferredScrollStablecoin(
     Logger.log('info', fnLog, `${logKey} Preferred stablecoin: ${bestSymbol}`);
     return bestSymbol;
   } catch (error) {
-    Logger.log('warn', fnLog, `${logKey} Failed to determine preferred stablecoin: ${String(error)}`);
+    Logger.log(
+      'warn',
+      fnLog,
+      `${logKey} Failed to determine preferred stablecoin: ${String(error)}`
+    );
     return 'USDC';
   }
 }
