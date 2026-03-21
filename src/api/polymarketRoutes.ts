@@ -21,9 +21,11 @@ import {
   polymarketGetMarketDetail,
   polymarketGetMarkets,
   polymarketGetOpenOrders,
+  polymarketGetPnlHistory,
   polymarketGetPortfolioValue,
   polymarketGetPositions,
   polymarketGetTradeHistory,
+  polymarketGetTradesHistory,
   polymarketPlaceOrder,
   polymarketPurchase,
   polymarketPurchaseStatus,
@@ -53,7 +55,9 @@ export default async function polymarketRoutes(fastify: FastifyInstance): Promis
   fastify.post('/polymarket/positions', polymarketGetPositions);
   fastify.post('/polymarket/positions/closed', polymarketGetClosedPositions);
   fastify.post('/polymarket/history', polymarketGetTradeHistory);
+  fastify.post('/polymarket/trades', polymarketGetTradesHistory);
   fastify.post('/polymarket/portfolio', polymarketGetPortfolioValue);
+  fastify.post('/polymarket/pnl/history', polymarketGetPnlHistory);
 
   // ── Bridge ──────────────────────────────────────────────────────────────
   fastify.post('/polymarket/bridge/quote', polymarketBridgeQuote);

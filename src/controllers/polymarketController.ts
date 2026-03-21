@@ -40,9 +40,11 @@ import {
   getMarketPrice,
   getMarkets,
   getOpenOrders,
+  getPnlHistory,
   getPortfolioValue,
   getPositions,
   getTradeHistory,
+  getTradesHistory,
   hasAcceptedCurrentTerms,
   placeOrder,
   resolveMaxSize,
@@ -68,10 +70,12 @@ import type {
   PolymarketEventsQuery,
   PolymarketMarketsQuery,
   PolymarketPlaceOrderBody,
+  PolymarketPnlHistoryBody,
   PolymarketPurchaseBody,
   PolymarketPurchaseStatusBody,
   PolymarketSearchQuery,
   PolymarketSlugParams,
+  PolymarketTradeHistoryBody,
   PolymarketUserDataBody,
   PolymarketWithdrawBody
 } from '../types/polymarketType';
@@ -782,6 +786,65 @@ export const polymarketGetPortfolioValue = async (
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to fetch portfolio value');
+  }
+};
+
+/** POST /polymarket/trades */
+export const polymarketGetTradesHistory = async (
+  request: FastifyRequest<{ Body: PolymarketTradeHistoryBody }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  if (!checkEnabled(reply)) return reply;
+  const logKey = `[op:polymarket-trades-history]`;
+
+  try {
+    const user = await resolveUser(request.body.channel_user_id, logKey);
+    if (!user) {
+      return errorReply(reply, 400, 'Invalid or missing channel_user_id');
+    }
+    if (!user.polymarket_account) {
+      return errorReply(reply, 400, 'Polymarket account not created');
+    }
+
+    const { market, limit, offset, side } = request.body;
+    const trades = await getTradesHistory(
+      user.polymarket_account.polygon_address,
+      { market, limit, offset, side },
+      logKey
+    );
+    return successReply(reply, { trades });
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, String(error));
+    return errorReply(reply, 500, 'Failed to fetch trades history');
+  }
+};
+
+/** POST /polymarket/pnl/history */
+export const polymarketGetPnlHistory = async (
+  request: FastifyRequest<{ Body: PolymarketPnlHistoryBody }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  if (!checkEnabled(reply)) return reply;
+  const logKey = `[op:polymarket-pnl-history]`;
+
+  try {
+    const user = await resolveUser(request.body.channel_user_id, logKey);
+    if (!user) {
+      return errorReply(reply, 400, 'Invalid or missing channel_user_id');
+    }
+    if (!user.polymarket_account) {
+      return errorReply(reply, 400, 'Polymarket account not created');
+    }
+
+    const history = await getPnlHistory(
+      user.polymarket_account.polygon_address,
+      logKey,
+      request.body.limit
+    );
+    return successReply(reply, { history });
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, String(error));
+    return errorReply(reply, 500, 'Failed to fetch PNL history');
   }
 };
 

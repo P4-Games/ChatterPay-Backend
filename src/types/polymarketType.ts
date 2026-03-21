@@ -55,6 +55,21 @@ export interface PolymarketUserDataBody {
   channel_user_id: string;
 }
 
+/** Body for fetching trade history (with optional market filter) */
+export interface PolymarketTradeHistoryBody {
+  channel_user_id: string;
+  market?: string;
+  limit?: number;
+  offset?: number;
+  side?: 'BUY' | 'SELL';
+}
+
+/** Body for fetching PNL history chart data */
+export interface PolymarketPnlHistoryBody {
+  channel_user_id: string;
+  limit?: number;
+}
+
 /** Body for bridge operations */
 export interface PolymarketBridgeBody {
   channel_user_id: string;

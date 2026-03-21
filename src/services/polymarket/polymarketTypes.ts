@@ -218,6 +218,40 @@ export interface DataPortfolioValue {
   positions: DataPosition[];
 }
 
+/** Data API trade (from /trades endpoint) */
+export interface DataTrade {
+  proxyWallet: string;
+  side: 'BUY' | 'SELL';
+  asset: string;
+  conditionId: string;
+  size: string;
+  price: string;
+  timestamp: string;
+  title: string;
+  slug: string;
+  icon: string;
+  eventSlug: string;
+  outcome: string;
+  outcomeIndex: number;
+  transactionHash: string;
+}
+
+/** A single point in the PNL history time series */
+export interface PnlHistoryPoint {
+  timestamp: string;
+  cumulativePnl: number;
+  totalInvested: number;
+  totalProceeds: number;
+}
+
+/** Query parameters for the /trades endpoint */
+export interface TradeHistoryQuery {
+  market?: string;
+  limit?: number;
+  offset?: number;
+  side?: 'BUY' | 'SELL';
+}
+
 // ============================================================================
 // Internal Service Types
 // ============================================================================

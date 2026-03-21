@@ -25,8 +25,11 @@ import type {
   ClobOpenOrder,
   ClobOrderResponse,
   DataPosition,
+  DataTrade,
   DataTradeActivity,
-  PlaceOrderParams
+  PlaceOrderParams,
+  PnlHistoryPoint,
+  TradeHistoryQuery
 } from './polymarketTypes';
 
 const LOG_PREFIX = 'polymarketTradingService';
@@ -479,12 +482,19 @@ async function enrichItems<T extends { asset?: string; token_id?: string }>(
 /**
  * Get current positions for a user address.
  */
-export async function getPositions(userAddress: string, logKey: string): Promise<DataPosition[]> {
+export async function getPositions(
+  userAddress: string,
+  logKey: string,
+  market?: string
+): Promise<DataPosition[]> {
   const fnLog = `[${LOG_PREFIX}:getPositions]`;
 
   try {
+    const params: Record<string, unknown> = { user: userAddress };
+    if (market) params.market = market;
+
     const response = await axios.get<DataPosition[]>(`${POLYMARKET_DATA_API_URL}/positions`, {
-      params: { user: userAddress },
+      params,
       timeout: 10000
     });
 
@@ -501,15 +511,19 @@ export async function getPositions(userAddress: string, logKey: string): Promise
  */
 export async function getClosedPositions(
   userAddress: string,
-  logKey: string
+  logKey: string,
+  market?: string
 ): Promise<DataPosition[]> {
   const fnLog = `[${LOG_PREFIX}:getClosedPositions]`;
 
   try {
+    const params: Record<string, unknown> = { user: userAddress };
+    if (market) params.market = market;
+
     const response = await axios.get<DataPosition[]>(
       `${POLYMARKET_DATA_API_URL}/closed-positions`,
       {
-        params: { user: userAddress },
+        params,
         timeout: 10000
       }
     );
@@ -527,13 +541,17 @@ export async function getClosedPositions(
  */
 export async function getTradeHistory(
   userAddress: string,
-  logKey: string
+  logKey: string,
+  market?: string
 ): Promise<DataTradeActivity[]> {
   const fnLog = `[${LOG_PREFIX}:getTradeHistory]`;
 
   try {
+    const params: Record<string, unknown> = { user: userAddress };
+    if (market) params.market = market;
+
     const response = await axios.get<DataTradeActivity[]>(`${POLYMARKET_DATA_API_URL}/activity`, {
-      params: { user: userAddress },
+      params,
       timeout: 10000
     });
 
@@ -564,6 +582,103 @@ export async function getPortfolioValue(
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to fetch portfolio value: ${String(error)}`);
+  }
+}
+
+/**
+ * Get trades history for a user address with optional filters.
+ * Uses the /trades endpoint which supports market, side, limit, offset.
+ */
+export async function getTradesHistory(
+  userAddress: string,
+  query: TradeHistoryQuery,
+  logKey: string
+): Promise<DataTrade[]> {
+  const fnLog = `[${LOG_PREFIX}:getTradesHistory]`;
+
+  try {
+    const params: Record<string, unknown> = { user: userAddress };
+    if (query.market) params.market = query.market;
+    if (query.limit) params.limit = query.limit;
+    if (query.offset) params.offset = query.offset;
+    if (query.side) params.side = query.side;
+
+    const response = await axios.get<DataTrade[]>(`${POLYMARKET_DATA_API_URL}/trades`, {
+      params,
+      timeout: 15000
+    });
+
+    return response.data;
+  } catch (error) {
+    Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
+    throw new Error(`Failed to fetch trades history: ${String(error)}`);
+  }
+}
+
+/**
+ * Compute cumulative PNL history from all user trades, suitable for charting.
+ *
+ * Fetches all trades via /trades, sorts by timestamp ascending, and computes
+ * a running total of cost (BUYs) vs proceeds (SELLs).
+ *
+ * If `limit` is provided, the resulting points are downsampled to that count.
+ */
+export async function getPnlHistory(
+  userAddress: string,
+  logKey: string,
+  limit?: number
+): Promise<PnlHistoryPoint[]> {
+  const fnLog = `[${LOG_PREFIX}:getPnlHistory]`;
+
+  try {
+    // Fetch all trades (max 10000)
+    const response = await axios.get<DataTrade[]>(`${POLYMARKET_DATA_API_URL}/trades`, {
+      params: { user: userAddress, limit: 10000 },
+      timeout: 30000
+    });
+
+    const trades = response.data;
+    if (!trades.length) return [];
+
+    // Sort by timestamp ascending (oldest first)
+    trades.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    // Compute cumulative PNL
+    let cumulativeCost = 0;
+    let cumulativeProceeds = 0;
+
+    const points: PnlHistoryPoint[] = trades.map((trade) => {
+      const amount = parseFloat(trade.price) * parseFloat(trade.size);
+      if (trade.side === 'BUY') {
+        cumulativeCost += amount;
+      } else {
+        cumulativeProceeds += amount;
+      }
+
+      return {
+        timestamp: trade.timestamp,
+        cumulativePnl: cumulativeProceeds - cumulativeCost,
+        totalInvested: cumulativeCost,
+        totalProceeds: cumulativeProceeds
+      };
+    });
+
+    // Downsample if limit is specified
+    if (limit && limit > 0 && points.length > limit) {
+      const step = points.length / limit;
+      const sampled: PnlHistoryPoint[] = [];
+      for (let i = 0; i < limit; i++) {
+        sampled.push(points[Math.floor(i * step)]);
+      }
+      // Always include the last point
+      sampled[sampled.length - 1] = points[points.length - 1];
+      return sampled;
+    }
+
+    return points;
+  } catch (error) {
+    Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
+    throw new Error(`Failed to compute PNL history: ${String(error)}`);
   }
 }
 

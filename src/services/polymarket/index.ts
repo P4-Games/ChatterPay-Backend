@@ -59,10 +59,12 @@ export {
   cancelOrder,
   getClosedPositions,
   getOpenOrders,
+  getPnlHistory,
   getPolymarketBalanceSummary,
   getPortfolioValue,
   getPositions,
   getTradeHistory,
+  getTradesHistory,
   placeOrder,
   resolveMaxSize,
   syncOpenOrders
@@ -75,11 +77,14 @@ export type {
   ClobOrderBook,
   ClobOrderResponse,
   DataPosition,
+  DataTrade,
   DataTradeActivity,
   EventQueryParams,
   GammaEvent,
   GammaMarket,
   GammaSearchResult,
   MarketQueryParams,
-  PlaceOrderParams
+  PlaceOrderParams,
+  PnlHistoryPoint,
+  TradeHistoryQuery
 } from './polymarketTypes';
