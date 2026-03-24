@@ -21,6 +21,7 @@ import {
   updatePurchaseStatus,
   updatePurchaseStep
 } from '../mongo/mongoPolymarketService';
+import { mongoTransactionService } from '../mongo/mongoTransactionService';
 import { getUser } from '../userService';
 import { acceptTerms, createPolymarketAccount } from './polymarketAccountService';
 import {
@@ -357,6 +358,21 @@ export async function executePurchase(
             logKey
           );
           Logger.log('info', fnLog, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
+
+          // Save bridge to transaction history
+          const bridgeAmountHuman = Number(actualBridgeAmount) / 1_000_000;
+          await mongoTransactionService.saveTransaction({
+            tx: bridgeResult.txHash,
+            walletFrom: currentUser.wallets[0]?.wallet_proxy || '',
+            walletTo: safeAddress,
+            amount: bridgeAmountHuman,
+            fee: 0,
+            token: bridgeResult.fromToken || 'USDC',
+            type: 'polymarket_bridge',
+            status: 'completed',
+            chain_id: 534352,
+            user_notes: `Polymarket ${params.side} bridge`
+          });
         }
       } catch (error) {
         const errorMsg = `Bridge failed: ${String(error)}`;
@@ -480,6 +496,20 @@ export async function executePurchase(
         logKey
       );
       Logger.log('info', fnLog, `${logKey} Order placed: ${orderID} (size: ${effectiveSize})`);
+
+      // Save order to transaction history
+      await mongoTransactionService.saveTransaction({
+        tx: orderID,
+        walletFrom: freshUser.polymarket_account!.polygon_address,
+        walletTo: 'polymarket',
+        amount: params.price * effectiveSize,
+        fee: 0,
+        token: 'USDC',
+        type: 'polymarket_order',
+        status: 'completed',
+        chain_id: 137,
+        user_notes: `Polymarket ${params.side} order`
+      });
 
       // ── Step 4 (SELL only): Withdrawal ──────────────────────────────────
       // After a SELL fills, USDC.e lands in the Polygon Safe. Bridge it back

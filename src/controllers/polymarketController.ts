@@ -17,6 +17,7 @@ import { Logger } from '../helpers/loggerHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import type { IUser } from '../models/userModel';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
+import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import {
   createOrder,
   createPurchase,
@@ -471,6 +472,21 @@ export const polymarketPlaceOrder = async (
       try {
         const bridgeResult = await executeBridge(user, privateKey, bridgeAmountSmallest, logKey);
         Logger.log('info', LOG_PREFIX, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
+
+        // Save bridge to transaction history
+        const bridgeAmountHuman = Number(bridgeAmountSmallest) / 1_000_000;
+        await mongoTransactionService.saveTransaction({
+          tx: bridgeResult.txHash,
+          walletFrom: user.wallets[0]?.wallet_proxy || '',
+          walletTo: user.polymarket_account!.polygon_address,
+          amount: bridgeAmountHuman,
+          fee: 0,
+          token: bridgeResult.fromToken || 'USDC',
+          type: 'polymarket_bridge',
+          status: 'completed',
+          chain_id: 534352,
+          user_notes: `Polymarket ${side} bridge`
+        });
       } catch (bridgeError) {
         Logger.log('error', LOG_PREFIX, `${logKey} Bridge failed: ${String(bridgeError)}`);
         return errorReply(
@@ -518,6 +534,20 @@ export const polymarketPlaceOrder = async (
       price,
       size,
       status: 'pending'
+    });
+
+    // Save order to transaction history
+    await mongoTransactionService.saveTransaction({
+      tx: String(orderId),
+      walletFrom: user.polymarket_account!.polygon_address,
+      walletTo: 'polymarket',
+      amount: price * size,
+      fee: 0,
+      token: 'USDC',
+      type: 'polymarket_order',
+      status: 'completed',
+      chain_id: 137,
+      user_notes: `Polymarket ${side} order`
     });
 
     // Auto-withdraw SELL proceeds from Polygon Safe → Scroll proxy.
