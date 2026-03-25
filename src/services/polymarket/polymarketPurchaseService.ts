@@ -200,6 +200,20 @@ export async function withdrawSellProceeds(
       `${logKey} Withdrawal initiated: $${balanceHuman.toFixed(2)} USDC.e → Scroll`
     );
 
+    // Save withdrawal to transaction history
+    await mongoTransactionService.saveTransaction({
+      tx: `withdraw-${Date.now()}`,
+      walletFrom: safeAddress,
+      walletTo: proxyAddress,
+      amount: balanceHuman,
+      fee: 0,
+      token: toToken,
+      type: 'polymarket_withdraw',
+      status: 'completed',
+      chain_id: 137,
+      user_notes: 'Polymarket withdrawal to Scroll'
+    });
+
     if (purchaseId) {
       await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'completed' }, logKey);
     }

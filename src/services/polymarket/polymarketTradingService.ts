@@ -210,8 +210,8 @@ export async function placeOrder(
         const amount = params.side === 'BUY' ? params.price * params.size : params.size;
         const slippagePrice =
           params.side === 'BUY'
-            ? Math.min(params.price * (1 + FOK_SLIPPAGE_TOLERANCE), 1)
-            : Math.max(params.price * (1 - FOK_SLIPPAGE_TOLERANCE), 0.01);
+            ? Math.min(params.price * (1 + FOK_SLIPPAGE_TOLERANCE), 0.999)
+            : Math.max(params.price * (1 - FOK_SLIPPAGE_TOLERANCE), 0.001);
 
         Logger.log(
           'info',

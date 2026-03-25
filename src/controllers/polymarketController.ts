@@ -450,6 +450,17 @@ export const polymarketPlaceOrder = async (
       size = rawSize;
     }
 
+    // ── Price validation ──────────────────────────────────────────────────
+    // Polymarket requires prices in (0.001, 0.999). Reject early before
+    // wasting gas on a bridge for an impossible order (e.g. resolved market).
+    if (price < 0.001 || price > 0.999) {
+      return errorReply(
+        reply,
+        400,
+        `Invalid price ${price}: must be between 0.001 and 0.999. The market may have already been resolved.`
+      );
+    }
+
     // ── Auto-bridge: Scroll → Polygon ────────────────────────────────────
     // The user's USDC lives on Scroll. We need to bridge it to Polygon
     // before placing the order on Polymarket.
@@ -474,7 +485,6 @@ export const polymarketPlaceOrder = async (
         Logger.log('info', LOG_PREFIX, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
 
         // Save bridge to transaction history
-        const bridgeAmountHuman = Number(bridgeAmountSmallest) / 1_000_000;
         await mongoTransactionService.saveTransaction({
           tx: bridgeResult.txHash,
           walletFrom: user.wallets[0]?.wallet_proxy || '',
@@ -1027,6 +1037,21 @@ export const polymarketWithdraw = async (
       logKey
     );
 
+    // Save withdrawal to transaction history
+    const withdrawAmountHuman = Number(request.body.amount);
+    await mongoTransactionService.saveTransaction({
+      tx: `withdraw-${Date.now()}`,
+      walletFrom: user.polymarket_account.polygon_address,
+      walletTo: proxyAddress,
+      amount: withdrawAmountHuman,
+      fee: 0,
+      token: toToken,
+      type: 'polymarket_withdraw',
+      status: 'completed',
+      chain_id: 137,
+      user_notes: 'Polymarket withdrawal to Scroll'
+    });
+
     return successReply(reply, {
       message: 'Withdrawal to Scroll initiated via Relayer gaslessly',
       quote_details: {
@@ -1073,6 +1098,16 @@ export const polymarketPurchase = async (
 
     if (rawSize === 'max' && side !== 'SELL') {
       return errorReply(reply, 400, 'size=max is only supported for SELL orders');
+    }
+
+    // Polymarket requires prices in (0.001, 0.999). Reject early before
+    // wasting gas on a bridge for an impossible order (e.g. resolved market).
+    if (price < 0.001 || price > 0.999) {
+      return errorReply(
+        reply,
+        400,
+        `Invalid price ${price}: must be between 0.001 and 0.999. The market may have already been resolved.`
+      );
     }
 
     const safeBridgeAmount = bridge_amount ?? '0';
