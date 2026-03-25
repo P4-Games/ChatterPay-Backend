@@ -128,6 +128,8 @@ export interface PolymarketEventsQuery {
   order?: string;
   ascending?: boolean;
   filter_zero_volume?: boolean;
+  /** Optional phone number to prioritize region-specific events */
+  user_channel_id?: string;
 }
 
 /** Query params for searching markets */

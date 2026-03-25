@@ -17,7 +17,7 @@ import { Logger } from '../helpers/loggerHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import type { IUser } from '../models/userModel';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
-import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
+import { mongoCountryService } from '../services/mongo/mongoCountryService';
 import {
   createOrder,
   createPurchase,
@@ -25,6 +25,7 @@ import {
   getPendingOrders,
   getPurchaseById
 } from '../services/mongo/mongoPolymarketService';
+import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import {
   acceptTerms,
   cancelAllOrders,
@@ -49,6 +50,7 @@ import {
   hasAcceptedCurrentTerms,
   placeOrder,
   resolveMaxSize,
+  searchEvents,
   searchMarkets,
   syncOpenOrders,
   withdrawSellProceeds
@@ -228,21 +230,56 @@ export const polymarketGetEvents = async (
     const order = request.query.order ?? 'volume24hr';
     const ascending = request.query.ascending ?? false;
     const filterZeroVolume = request.query.filter_zero_volume ?? true;
+    const userChannelId = request.query.user_channel_id;
 
-    const events = await getEvents(
-      {
-        limit: request.query.limit,
-        offset: request.query.offset,
-        active: request.query.active,
-        closed: request.query.closed,
-        category: request.query.category,
-        slug: request.query.slug,
-        order,
-        ascending,
-        filterZeroVolume
-      },
-      logKey
-    );
+    // Resolve country name from phone number for region-specific events
+    // Skip country-based search when filtering by category
+    let countryName: string | null = null;
+    if (userChannelId && !request.query.category) {
+      try {
+        const country = await mongoCountryService.getCountryByPhoneNumber(userChannelId);
+        if (country?.name) {
+          countryName = country.name;
+          Logger.log(
+            'info',
+            LOG_PREFIX,
+            `${logKey} Resolved country "${countryName}" from phone ${userChannelId}`
+          );
+        }
+      } catch {
+        // Country lookup is best-effort; fall through to regular events
+      }
+    }
+
+    // Only prepend regional events on the first page (offset 0).
+    // Subsequent pages return only regular events for proper infinite scrolling.
+    const isFirstPage = !Number(request.query.offset);
+    const COUNTRY_EVENTS_COUNT = 3;
+
+    const [countryEvents, regularEvents] = await Promise.all([
+      countryName && isFirstPage
+        ? searchEvents(countryName, COUNTRY_EVENTS_COUNT, logKey)
+        : Promise.resolve([]),
+      getEvents(
+        {
+          limit: request.query.limit,
+          offset: request.query.offset,
+          active: request.query.active,
+          closed: request.query.closed,
+          category: request.query.category,
+          slug: request.query.slug,
+          order,
+          ascending,
+          filterZeroVolume
+        },
+        logKey
+      )
+    ]);
+
+    // Deduplicate: remove country events from the regular list, then prepend them
+    const countryEventIds = new Set(countryEvents.map((e) => e.id));
+    const dedupedRegular = regularEvents.filter((e) => !countryEventIds.has(e.id));
+    const events = [...countryEvents, ...dedupedRegular];
 
     return successReply(reply, { events });
   } catch (error) {

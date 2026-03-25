@@ -134,10 +134,15 @@ export async function withdrawSellProceeds(
       provider
     );
 
-    // Wait for USDC.e to arrive after the sell fill, with retries.
+    // Snapshot idle balance before sell proceeds arrive
+    const initialRawBalance: ethers.BigNumber = await usdc.balanceOf(safeAddress);
+    const initialHuman = Number(ethers.utils.formatUnits(initialRawBalance, 6));
+    Logger.log('info', fnLog, `${logKey} Initial idle USDC.e balance: $${initialHuman.toFixed(2)}`);
+
+    // Wait for sell proceeds to arrive (balance must INCREASE above the idle amount).
     // Intervals: 3s → 10s → 20s → 30s (total ~63s max wait)
     const retryDelays = [3000, 10000, 20000, 30000];
-    let rawBalance: ethers.BigNumber = ethers.BigNumber.from(0);
+    let rawBalance = initialRawBalance;
 
     for (let i = 0; i < retryDelays.length; i++) {
       await new Promise((resolve) => setTimeout(resolve, retryDelays[i]));
@@ -151,7 +156,8 @@ export async function withdrawSellProceeds(
         `${logKey} Safe USDC.e on-chain balance (attempt ${i + 1}/${retryDelays.length}): ${rawBalance.toString()} ($${balanceHuman.toFixed(2)})`
       );
 
-      if (rawBalance.gt(0)) break;
+      // Break when balance increases above initial (sell proceeds arrived)
+      if (rawBalance.gt(initialRawBalance)) break;
     }
 
     if (rawBalance.lte(0)) {
@@ -166,6 +172,23 @@ export async function withdrawSellProceeds(
       return;
     }
 
+    // Log whether we're including idle balance alongside sell proceeds
+    if (initialRawBalance.gt(0) && rawBalance.gt(initialRawBalance)) {
+      const proceedsOnly = rawBalance.sub(initialRawBalance);
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} Bridging sell proceeds ($${Number(ethers.utils.formatUnits(proceedsOnly, 6)).toFixed(2)}) ` +
+          `+ idle balance ($${initialHuman.toFixed(2)}) = $${Number(ethers.utils.formatUnits(rawBalance, 6)).toFixed(2)} total`
+      );
+    } else if (!rawBalance.gt(initialRawBalance) && rawBalance.gt(0)) {
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} Sell proceeds not yet arrived (GTC pending?). Bridging idle balance: $${initialHuman.toFixed(2)}`
+      );
+    }
+
     const amount = rawBalance.toString();
     const balanceHuman = Number(ethers.utils.formatUnits(rawBalance, 6));
 
@@ -178,21 +201,29 @@ export async function withdrawSellProceeds(
       `${logKey} Withdrawing $${balanceHuman.toFixed(2)} USDC.e from Polygon Safe to Scroll proxy (→${toToken})`
     );
 
-    // Get LiFi bridge quote (Polygon → Scroll)
-    const quote = await withdrawToScroll(safeAddress, proxyAddress, amount, logKey, toToken);
+    // Bridge with one retry after 10s on failure
+    const attemptBridge = async () => {
+      const quote = await withdrawToScroll(safeAddress, proxyAddress, amount, logKey, toToken);
+      await executeGaslessWithdrawal(
+        privateKey,
+        {
+          approvalAddress: quote.approvalAddress,
+          to: quote.to,
+          data: quote.data,
+          value: quote.value
+        },
+        amount,
+        logKey
+      );
+    };
 
-    // Execute via Relayer (gasless from the Safe)
-    await executeGaslessWithdrawal(
-      privateKey,
-      {
-        approvalAddress: quote.approvalAddress,
-        to: quote.to,
-        data: quote.data,
-        value: quote.value
-      },
-      amount,
-      logKey
-    );
+    try {
+      await attemptBridge();
+    } catch (bridgeError) {
+      Logger.log('warn', fnLog, `${logKey} Bridge failed, retrying in 10s: ${String(bridgeError)}`);
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+      await attemptBridge();
+    }
 
     Logger.log(
       'info',

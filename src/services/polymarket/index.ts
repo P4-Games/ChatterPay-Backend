@@ -40,6 +40,7 @@ export {
   getMarketPrice,
   getMarkets,
   getOrderBook,
+  searchEvents,
   searchMarkets
 } from './polymarketMarketService';
 export type { PurchaseParams } from './polymarketPurchaseService';

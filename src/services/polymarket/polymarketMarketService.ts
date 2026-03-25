@@ -218,6 +218,52 @@ export async function getCategories(logKey: string): Promise<GammaCategory[]> {
   }
 }
 
+/**
+ * Search events by keyword using Gamma's /public-search endpoint.
+ * This performs full-text search across event titles, descriptions,
+ * market questions, outcomes, and resolution rules.
+ * Used to find region-specific events (e.g. "Argentina") sorted by liquidity.
+ */
+export async function searchEvents(
+  query: string,
+  limit: number = 3,
+  logKey: string
+): Promise<GammaEvent[]> {
+  const cacheKey = `events-search:${query}:${limit}`;
+  const cached = marketsCache.get<GammaEvent[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const response = await axios.get<{ events: GammaEvent[] }>(
+      `${POLYMARKET_GAMMA_API_URL}/public-search`,
+      {
+        params: {
+          q: query,
+          limit_per_type: limit,
+          events_status: 'active',
+          sort: 'liquidity',
+          ascending: false
+        },
+        timeout: 10000
+      }
+    );
+
+    const events = (response.data.events ?? []).filter(
+      (event) => Number(event.volume24hr || 0) > 0 || Number(event.volume || 0) > 0
+    );
+
+    marketsCache.set(cacheKey, events);
+    return events;
+  } catch (error) {
+    Logger.log(
+      'error',
+      `[${LOG_PREFIX}:searchEvents]`,
+      `${logKey} Failed to search events for "${query}": ${String(error)}`
+    );
+    return [];
+  }
+}
+
 // ============================================================================
 // Gamma API — Search
 // ============================================================================
