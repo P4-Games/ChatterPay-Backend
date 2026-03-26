@@ -30,8 +30,13 @@ import {
   getPreferredScrollStablecoin,
   withdrawToScroll
 } from './polymarketBridgeService';
+import {
+  sendPolymarketOrderFailedNotification,
+  sendPolymarketOrderPlacedNotification,
+  sendPolymarketSettlementClaimedNotification
+} from '../notificationService';
 import { executeGaslessWithdrawal } from './polymarketRelayerService';
-import { placeOrder } from './polymarketTradingService';
+import { getPolymarketBalanceSummary, placeOrder } from './polymarketTradingService';
 
 const LOG_PREFIX = 'polymarketPurchaseService';
 
@@ -250,6 +255,12 @@ export async function withdrawSellProceeds(
     if (purchaseId) {
       await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'completed' }, logKey);
     }
+
+    // WhatsApp notification — settlement claimed
+    sendPolymarketSettlementClaimedNotification(
+      user.phone_number,
+      balanceHuman.toFixed(2)
+    ).catch((err) => Logger.log('warn', fnLog, `${logKey} Settlement notification failed: ${String(err)}`));
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Withdrawal failed (non-fatal): ${String(error)}`);
     if (purchaseId) {
@@ -567,6 +578,15 @@ export async function executePurchase(
         user_notes: `Polymarket ${params.side} order`
       });
 
+      // WhatsApp notification — fire-and-forget (don't block the flow)
+      sendPolymarketOrderPlacedNotification(
+        freshUser.phone_number,
+        params.side,
+        effectiveSize.toString(),
+        params.price.toString(),
+        orderID
+      ).catch((err) => Logger.log('warn', fnLog, `${logKey} Order placed notification failed: ${String(err)}`));
+
       // ── Step 4 (SELL only): Withdrawal ──────────────────────────────────
       // After a SELL fills, USDC.e lands in the Polygon Safe. Bridge it back
       // to the user's Scroll proxy automatically, tracking the step progress.
@@ -597,6 +617,26 @@ export async function executePurchase(
         { error: errorMsg },
         logKey
       );
+
+      // WhatsApp notification with balance — fire-and-forget
+      (async () => {
+        try {
+          const polygonAddr = currentUser.polymarket_account?.polygon_address;
+          let balanceStr = 'unknown';
+          if (polygonAddr) {
+            const { idle_usdc, positions_value } = await getPolymarketBalanceSummary(polygonAddr, logKey);
+            balanceStr = `${(idle_usdc + positions_value).toFixed(2)}`;
+          }
+          await sendPolymarketOrderFailedNotification(
+            currentUser.phone_number,
+            params.side,
+            String(error),
+            balanceStr
+          );
+        } catch (notifErr) {
+          Logger.log('warn', fnLog, `${logKey} Order failed notification error: ${String(notifErr)}`);
+        }
+      })();
     }
   } catch (error) {
     // Catch-all for unexpected errors

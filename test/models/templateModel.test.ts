@@ -369,6 +369,18 @@ it('should create and save a Template document successfully', async () => {
           pt: 'Polymarket está desativado.'
         }
       },
+      polymarket_settlement_claimed: {
+        title: {
+          en: 'Settlement Claimed',
+          es: 'Liquidación Reclamada',
+          pt: 'Liquidação Reivindicada'
+        },
+        message: {
+          en: 'Your sell has settled!',
+          es: 'Tu venta se liquidó!',
+          pt: 'Sua venda foi liquidada!'
+        }
+      },
       operation_in_progress: {
         title: {
           en: 'ChatterPay: Operation in progress',

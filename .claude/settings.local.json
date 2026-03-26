@@ -7,7 +7,10 @@
       "Bash(npm ls:*)",
       "WebFetch(domain:github.com)",
       "Bash(npx tsc:*)",
-      "Bash(npx next build:*)"
+      "Bash(npx next build:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx biome lint:*)",
+      "Bash(npx tsx:*)"
     ]
   }
 }
