@@ -20,6 +20,7 @@ import { Logger } from '../../helpers/loggerHelper';
 import { PolymarketOrderModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
 import { getAuthenticatedClientForUser } from './polymarketClientService';
+import { FOK_SLIPPAGE_TOLERANCE, USDC_E_ADDRESS } from './polymarketConstants';
 import { ensureTokenApprovals } from './polymarketRelayerService';
 import type {
   ClobOpenOrder,
@@ -34,10 +35,6 @@ import type {
 
 const LOG_PREFIX = 'polymarketTradingService';
 
-// FOK (market) orders accept up to 20% slippage from the requested price.
-// BUY: willing to pay up to 20% more per share.
-// SELL: willing to accept up to 20% less per share.
-const FOK_SLIPPAGE_TOLERANCE = 0.2;
 
 // ============================================================================
 // Helpers
@@ -682,8 +679,6 @@ export async function getPnlHistory(
   }
 }
 
-// Polymarket's USDC.e (Bridged USDC) on Polygon
-const USDC_E_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
 
 /**
  * Get a summary of the user's Polymarket balances: idle USDC.e + active positions.
@@ -748,23 +743,36 @@ export async function syncOpenOrders(
 
     // Fetch live open orders from CLOB
     const clobOrders = await getOpenOrders(user, privateKey, logKey);
-    const liveOrderIds = new Set(clobOrders.map((o) => o.id || (o as any).orderID));
+    const liveOrderIds = new Set(
+      clobOrders
+        .map((o) => o.id || (o as any).orderID)
+        .filter((id): id is string => {
+          if (!id) {
+            Logger.log('warn', fnLog, `${logKey} CLOB order missing both id and orderID fields`);
+          }
+          return !!id;
+        })
+    );
 
     // Fetch local pending orders from DB
     const localPendingOrders = await PolymarketOrderModel.find({
       user_phone: user.phone_number,
       status: 'pending'
-    });
+    }).lean();
 
     const client = await getAuthenticatedClientForUser(user, privateKey);
+
+    // Collect bulk updates instead of sequential saves
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bulkOps: any[] = [];
 
     for (const pendingOrder of localPendingOrders) {
       if (!liveOrderIds.has(pendingOrder.order_id)) {
         // It's no longer open on CLOB
+        let newStatus = 'cancelled';
         try {
           // getOrder returns the order details including status and matched size
           const orderData = await client.getOrder(pendingOrder.order_id);
-          let newStatus = 'cancelled';
           if (orderData) {
             const sizeMatched = Number((orderData as any).size_matched || 0);
             if (sizeMatched >= pendingOrder.size) {
@@ -773,25 +781,33 @@ export async function syncOpenOrders(
               newStatus = 'partial';
             }
           }
-          pendingOrder.status = newStatus as any;
-          await pendingOrder.save();
-          Logger.log(
-            'info',
-            fnLog,
-            `${logKey} Synced order ${pendingOrder.order_id}: pending -> ${newStatus}`
-          );
         } catch (getOrderError) {
           Logger.log(
             'warn',
             fnLog,
             `${logKey} Could not fetch closed order ${pendingOrder.order_id} from CLOB. Marking as cancelled.`
           );
-          pendingOrder.status = 'cancelled' as any;
-          await pendingOrder.save();
         }
+
+        bulkOps.push({
+          updateOne: {
+            filter: { _id: pendingOrder._id },
+            update: { $set: { status: newStatus, updated_at: new Date() } }
+          }
+        });
+
+        Logger.log(
+          'info',
+          fnLog,
+          `${logKey} Synced order ${pendingOrder.order_id}: pending -> ${newStatus}`
+        );
       }
     }
-    Logger.log('info', fnLog, `${logKey} Reconciliation complete`);
+
+    if (bulkOps.length > 0) {
+      await PolymarketOrderModel.bulkWrite(bulkOps);
+    }
+    Logger.log('info', fnLog, `${logKey} Reconciliation complete (${bulkOps.length} orders updated)`);
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Reconciliation failed: ${String(error)}`);
     throw new Error(`Failed to sync orders: ${String(error)}`);

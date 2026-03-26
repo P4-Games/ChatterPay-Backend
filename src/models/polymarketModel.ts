@@ -63,6 +63,11 @@ const polymarketOrderSchema = new Schema<IPolymarketOrder>({
   updated_at: { type: Date, required: true, default: Date.now }
 });
 
+// Composite indexes for common query patterns
+polymarketOrderSchema.index({ user_phone: 1, status: 1 });
+polymarketOrderSchema.index({ token_id: 1 });
+polymarketOrderSchema.index({ user_phone: 1, created_at: -1 });
+
 export const PolymarketOrderModel = model<IPolymarketOrder>(
   'PolymarketOrder',
   polymarketOrderSchema,

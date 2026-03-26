@@ -11,6 +11,7 @@ import { ethers } from 'ethers';
 
 import { POLYMARKET_CHAIN_ID } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
+import { USDC_E_ADDRESS } from './polymarketConstants';
 import type { IUser } from '../../models/userModel';
 import { getLifiQuote, pollLifiStatus, validateLifiQuote } from '../lifi/lifiService';
 import type { LifiQuoteResponse, LifiStatusResponse } from '../lifi/lifiTypes';
@@ -20,10 +21,6 @@ import { setupContracts } from '../web3/contractSetupService';
 
 const LOG_PREFIX = 'polymarketBridgeService';
 
-// Polygon USDC.e (Bridged USDC) — Polymarket's collateral token
-// IMPORTANT: Polymarket uses USDC.e (0x2791...), NOT native USDC (0x3c49...)
-// @see https://docs.polymarket.com/resources/contract-addresses
-const POLYGON_USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
 
 // Default scroll chain ID (will be user's current chain in practice)
 const SCROLL_CHAIN_ID = 534352; // Scroll Mainnet
@@ -60,7 +57,7 @@ export async function getBridgeQuote(
         fromChain: SCROLL_CHAIN_ID,
         toChain: POLYMARKET_CHAIN_ID,
         fromToken: fromTokenSymbol,
-        toToken: POLYGON_USDC_ADDRESS,
+        toToken: USDC_E_ADDRESS,
         fromAmount: amount,
         fromAddress,
         toAddress: fromAddress // Default to fromAddress if not specified
@@ -377,7 +374,7 @@ export async function executeBridge(
         fromChain: SCROLL_CHAIN_ID,
         toChain: POLYMARKET_CHAIN_ID,
         fromToken: sourceToken.address,
-        toToken: POLYGON_USDC_ADDRESS,
+        toToken: USDC_E_ADDRESS,
         fromAmount: amount,
         fromAddress: proxyAddress,
         toAddress: polygonSafeAddress,
@@ -575,7 +572,7 @@ export async function withdrawToScroll(
       {
         fromChain: POLYMARKET_CHAIN_ID,
         toChain: SCROLL_CHAIN_ID,
-        fromToken: POLYGON_USDC_ADDRESS,
+        fromToken: USDC_E_ADDRESS,
         toToken: toTokenSymbol,
         fromAmount: amount,
         fromAddress: polygonSafeAddress,

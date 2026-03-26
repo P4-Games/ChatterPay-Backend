@@ -29,28 +29,15 @@ import {
   POLYMARKET_RELAYER_URL
 } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
+import {
+  CTF_ADDRESS,
+  CTF_EXCHANGE_ADDRESS,
+  NEG_RISK_ADAPTER_ADDRESS,
+  NEG_RISK_CTF_EXCHANGE_ADDRESS,
+  USDC_E_ADDRESS
+} from './polymarketConstants';
 
 const LOG_PREFIX = 'polymarketRelayerService';
-
-// ============================================================================
-// Polymarket Contract Addresses (Polygon Mainnet)
-// @see https://docs.polymarket.com/resources/contract-addresses
-// ============================================================================
-
-/** USDC.e (Bridged USDC) on Polygon — used as collateral */
-const USDC_E_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
-
-/** CTF Exchange — the main order matching/settlement contract */
-const CTF_EXCHANGE_ADDRESS = '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E';
-
-/** Neg Risk CTF Exchange — for negative risk (multi-outcome) markets */
-const NEG_RISK_CTF_EXCHANGE_ADDRESS = '0xC5d563A36AE78145C45a50134d48A1215220f80a';
-
-/** Conditional Token Framework — ERC1155 conditional tokens */
-const CTF_ADDRESS = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045';
-
-/** Neg Risk Adapter */
-const NEG_RISK_ADAPTER_ADDRESS = '0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296';
 
 // ============================================================================
 // ABI fragments for on-chain approvals

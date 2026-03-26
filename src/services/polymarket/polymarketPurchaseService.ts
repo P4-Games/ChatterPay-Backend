@@ -15,6 +15,7 @@ import PQueue from 'p-queue';
 
 import { POLYMARKET_POLYGON_RPC_URL } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
+import { BRIDGE_FEE_BUFFER, USDC_E_ADDRESS } from './polymarketConstants';
 import type { IUser } from '../../models/userModel';
 import {
   createOrder,
@@ -56,16 +57,19 @@ function getOrderLock(userId: string): UserOrderLock {
     const queue = new PQueue({ concurrency: 1 });
     entry = { queue, committedUsdce: 0 };
     userOrderLocks.set(userId, entry);
-    queue.on('idle', () => userOrderLocks.delete(userId));
+    queue.on('idle', () => {
+      // Delayed cleanup: wait 60s before deleting so rapid successive orders
+      // don't lose committedUsdce tracking (fixes race condition).
+      setTimeout(() => {
+        if (queue.size === 0 && queue.pending === 0) {
+          userOrderLocks.delete(userId);
+        }
+      }, 60_000);
+    });
   }
   return entry;
 }
 
-// Polygon USDC.e address
-const USDC_E_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
-
-// 2% buffer applied to bridged amounts to cover LiFi/bridge fees and slippage
-const BRIDGE_FEE_BUFFER = 1.02;
 
 /**
  * Read the on-chain USDC.e balance of a Polygon address.
@@ -160,7 +164,7 @@ export async function withdrawSellProceeds(
       if (rawBalance.gt(initialRawBalance)) break;
     }
 
-    if (rawBalance.lte(0)) {
+    if (rawBalance.lte(initialRawBalance)) {
       Logger.log(
         'info',
         fnLog,
@@ -497,23 +501,30 @@ export async function executePurchase(
           }
         }
 
-        const orderResult = await placeOrder(
-          freshUser,
-          privateKey,
-          {
-            tokenId: params.tokenId,
-            price: params.price,
-            size: effectiveSize,
-            side: params.side,
-            orderType: params.orderType
-          },
-          logKey
-        );
+        // Optimistically commit funds BEFORE placing the order so that
+        // concurrent queued orders see the reserved amount even if the
+        // service crashes after placeOrder succeeds but before returning.
+        const commitAmount = params.side === 'BUY' ? effectiveSize * params.price : 0;
+        lock.committedUsdce += commitAmount;
 
-        // Track committed funds for subsequent orders in the same batch
-        // (GTC orders don't change on-chain balance until matched)
-        if (params.side === 'BUY') {
-          lock.committedUsdce += effectiveSize * params.price;
+        let orderResult: { orderID: string };
+        try {
+          orderResult = await placeOrder(
+            freshUser,
+            privateKey,
+            {
+              tokenId: params.tokenId,
+              price: params.price,
+              size: effectiveSize,
+              side: params.side,
+              orderType: params.orderType
+            },
+            logKey
+          );
+        } catch (orderError) {
+          // Roll back the optimistic commitment on failure
+          lock.committedUsdce -= commitAmount;
+          throw orderError;
         }
 
         return { orderResult, effectiveSize };
