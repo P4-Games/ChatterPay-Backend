@@ -690,6 +690,72 @@ export async function getTradesHistory(
 }
 
 /**
+ * LTTB (Largest Triangle Three Buckets) downsampling.
+ *
+ * Reduces a time-series to `target` points while preserving visually significant
+ * peaks and valleys — much better than uniform stride-based sampling for charts.
+ *
+ * @see https://skemman.is/bitstream/1946/15343/3/SS_MSthesis.pdf
+ */
+function lttbDownsample(points: PnlHistoryPoint[], target: number): PnlHistoryPoint[] {
+  const len = points.length;
+  if (target >= len || target < 3) return points.slice();
+
+  const sampled: PnlHistoryPoint[] = [points[0]]; // Always keep first point
+  const bucketSize = (len - 2) / (target - 2);
+
+  let prevIndex = 0;
+
+  for (let bucket = 1; bucket < target - 1; bucket++) {
+    // Current bucket boundaries
+    const bucketStart = Math.floor((bucket - 1) * bucketSize) + 1;
+    const bucketEnd = Math.min(Math.floor(bucket * bucketSize) + 1, len - 1);
+
+    // Next bucket boundaries (for computing the average point)
+    const nextBucketStart = Math.floor(bucket * bucketSize) + 1;
+    const nextBucketEnd = Math.min(Math.floor((bucket + 1) * bucketSize) + 1, len - 1);
+
+    // Average of the NEXT bucket (used as the third vertex of the triangle)
+    let avgX = 0;
+    let avgY = 0;
+    const nextBucketLen = nextBucketEnd - nextBucketStart + 1;
+    for (let j = nextBucketStart; j <= nextBucketEnd; j++) {
+      avgX += new Date(points[j].timestamp).getTime();
+      avgY += points[j].cumulativePnl;
+    }
+    avgX /= nextBucketLen;
+    avgY /= nextBucketLen;
+
+    // Previous selected point (first vertex)
+    const prevX = new Date(points[prevIndex].timestamp).getTime();
+    const prevY = points[prevIndex].cumulativePnl;
+
+    // Find the point in current bucket that maximizes triangle area
+    let maxArea = -1;
+    let bestIndex = bucketStart;
+
+    for (let j = bucketStart; j <= bucketEnd; j++) {
+      const currX = new Date(points[j].timestamp).getTime();
+      const currY = points[j].cumulativePnl;
+      // Triangle area formula (doubled, sign doesn't matter — we want max absolute)
+      const area = Math.abs(
+        (prevX - avgX) * (currY - prevY) - (prevX - currX) * (avgY - prevY)
+      );
+      if (area > maxArea) {
+        maxArea = area;
+        bestIndex = j;
+      }
+    }
+
+    sampled.push(points[bestIndex]);
+    prevIndex = bestIndex;
+  }
+
+  sampled.push(points[len - 1]); // Always keep last point
+  return sampled;
+}
+
+/**
  * Compute cumulative PNL history from all user trades, suitable for charting.
  *
  * Fetches all trades via /trades, sorts by timestamp ascending, and computes
@@ -737,16 +803,10 @@ export async function getPnlHistory(
       };
     });
 
-    // Downsample if limit is specified
+    // Downsample using LTTB (Largest Triangle Three Buckets) algorithm.
+    // Unlike uniform sampling, LTTB preserves visually significant peaks and valleys.
     if (limit && limit > 0 && points.length > limit) {
-      const step = points.length / limit;
-      const sampled: PnlHistoryPoint[] = [];
-      for (let i = 0; i < limit; i++) {
-        sampled.push(points[Math.floor(i * step)]);
-      }
-      // Always include the last point
-      sampled[sampled.length - 1] = points[points.length - 1];
-      return sampled;
+      return lttbDownsample(points, limit);
     }
 
     return points;

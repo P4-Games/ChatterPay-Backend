@@ -107,16 +107,35 @@ const processAlchemyExternalDeposits = async (
           return { inserted: acc.inserted, skipped: acc.skipped + 1 };
         }
 
+        const normalizedFrom = dep.from.toLowerCase();
         const normalizedTo = dep.to.toLowerCase();
 
-        // Find users with at least one wallet_proxy that matches (case-insensitive)
-        const candidates = await UserModel.find({
-          'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') }
+        // 1. Skip if sender is a ChatterPay user (internal transfer from proxy or Safe)
+        const isInternalSender = await UserModel.exists({
+          $or: [
+            { 'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedFrom}$`, 'i') } },
+            {
+              'polymarket_account.polygon_address': { $regex: new RegExp(`^${normalizedFrom}$`, 'i') }
+            }
+          ]
         });
 
-        const user = candidates.find((u) =>
-          u.wallets.some((w) => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
-        );
+        if (isInternalSender) {
+          Logger.info(
+            'processAlchemyExternalDeposit',
+            `Skipping internal transfer: ${dep.from} → ${dep.to}, hash: ${dep.txHash}`
+          );
+          await mongoExternalDepositsService.markAsProcessedById(String(dep._id));
+          return { inserted: acc.inserted, skipped: acc.skipped + 1 };
+        }
+
+        // 2. Resolve recipient user (match by proxy or Polymarket Safe)
+        const user = await UserModel.findOne({
+          $or: [
+            { 'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') } },
+            { 'polymarket_account.polygon_address': { $regex: new RegExp(`^${normalizedTo}$`, 'i') } }
+          ]
+        });
 
         if (!user) {
           Logger.warn(
@@ -237,13 +256,14 @@ async function processTheGraphExternalDeposit(
     const normalizedTo = transfer.to.toLowerCase();
     const txHash = transfer.transactionHash;
 
-    // Skip if sender is a ChatterPay user (internal transfer)
-    const senderCandidates = await UserModel.find({
-      'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedFrom}$`, 'i') }
+    // Skip if sender is a ChatterPay user (internal transfer from proxy or Safe)
+    const isInternalSender = await UserModel.exists({
+      $or: [
+        { 'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedFrom}$`, 'i') } },
+        { 'polymarket_account.polygon_address': { $regex: new RegExp(`^${normalizedFrom}$`, 'i') } }
+      ]
     });
-    const isInternalSender = senderCandidates.some((u) =>
-      u.wallets.some((w) => w.wallet_proxy?.toLowerCase() === normalizedFrom)
-    );
+
     if (isInternalSender) {
       Logger.info(
         'processExternalDeposit',
@@ -269,15 +289,13 @@ async function processTheGraphExternalDeposit(
       return;
     }
 
-    // Find users with at least one wallet_proxy that matches (case-insensitive)
-    const candidates = await UserModel.find({
-      'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') }
+    // Resolve recipient user (match by proxy or Polymarket Safe)
+    const user = await UserModel.findOne({
+      $or: [
+        { 'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') } },
+        { 'polymarket_account.polygon_address': { $regex: new RegExp(`^${normalizedTo}$`, 'i') } }
+      ]
     });
-
-    // Filter in memory to ensure exact lowercase match
-    const user = candidates.find((u) =>
-      u.wallets.some((w) => w.wallet_proxy && w.wallet_proxy.toLowerCase() === normalizedTo)
-    );
 
     if (!user) {
       Logger.info(

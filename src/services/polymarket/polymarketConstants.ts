@@ -25,3 +25,9 @@ export const BRIDGE_FEE_BUFFER = 1.02;
 
 /** Slippage tolerance for Fill-or-Kill market order fallbacks (20%) */
 export const FOK_SLIPPAGE_TOLERANCE = 0.2;
+
+/** Polymarket minimum allowed price (exclusive lower bound) */
+export const POLYMARKET_MIN_PRICE = 0.001;
+
+/** Polymarket maximum allowed price (exclusive upper bound) */
+export const POLYMARKET_MAX_PRICE = 0.999;

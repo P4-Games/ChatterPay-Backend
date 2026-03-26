@@ -29,6 +29,7 @@ import {
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import {
   acceptTerms,
+  BRIDGE_FEE_BUFFER,
   cancelAllOrders,
   cancelOrder,
   createPolymarketAccount,
@@ -44,6 +45,8 @@ import {
   getMarkets,
   getOpenOrders,
   getPnlHistory,
+  POLYMARKET_MAX_PRICE,
+  POLYMARKET_MIN_PRICE,
   getPortfolioValue,
   getPositions,
   getTradeHistory,
@@ -491,11 +494,11 @@ export const polymarketPlaceOrder = async (
     // ── Price validation ──────────────────────────────────────────────────
     // Polymarket requires prices in (0.001, 0.999). Reject early before
     // wasting gas on a bridge for an impossible order (e.g. resolved market).
-    if (price < 0.001 || price > 0.999) {
+    if (price < POLYMARKET_MIN_PRICE || price > POLYMARKET_MAX_PRICE) {
       return errorReply(
         reply,
         400,
-        `Invalid price ${price}: must be between 0.001 and 0.999. The market may have already been resolved.`
+        `Invalid price ${price}: must be between ${POLYMARKET_MIN_PRICE} and ${POLYMARKET_MAX_PRICE}. The market may have already been resolved.`
       );
     }
 
@@ -507,8 +510,7 @@ export const polymarketPlaceOrder = async (
     // We add a small buffer (2%) to cover bridge fees / slippage.
     if (side === 'BUY') {
       const requiredUsdc = price * size;
-      const bridgeBuffer = 1.02; // 2% buffer for bridge fees
-      const bridgeAmountHuman = requiredUsdc * bridgeBuffer;
+      const bridgeAmountHuman = requiredUsdc * BRIDGE_FEE_BUFFER;
       // Convert to smallest units (USDC has 6 decimals)
       const bridgeAmountSmallest = Math.ceil(bridgeAmountHuman * 1_000_000).toString();
 

@@ -192,86 +192,131 @@ export async function ensureTokenApprovals(privateKey: string, logKey: string): 
   const fnLog = `[${LOG_PREFIX}:ensureTokenApprovals]`;
 
   try {
-    Logger.log('info', fnLog, `${logKey} Setting up token approvals via Relayer`);
-
     const client = createRelayClient(privateKey);
+    const wallet = new ethers.Wallet(privateKey);
+    const signerAddress = wallet.address;
+
+    // Derived Safe address is the one that needs the approvals
+    const contractConfig = getContractConfig(POLYMARKET_CHAIN_ID);
+    const safeAddress = deriveSafe(signerAddress, contractConfig.SafeContracts.SafeFactory);
+
+    Logger.log('info', fnLog, `${logKey} Checking existing approvals for Safe ${safeAddress}`);
+
+    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+    const usdc = new ethers.Contract(
+      USDC_E_ADDRESS,
+      ['function allowance(address,address) view returns (uint256)'],
+      provider
+    );
+    const ctf = new ethers.Contract(
+      CTF_ADDRESS,
+      ['function isApprovedForAll(address,address) view returns (bool)'],
+      provider
+    );
+
+    // Parallel check of all 6 required approvals/allowances
+    const [
+      allowanceCtf,
+      allowanceNegRisk,
+      allowanceNegRiskAdapter,
+      isApprovedCtf,
+      isApprovedNegRisk,
+      isApprovedNegRiskAdapter
+    ] = await Promise.all([
+      usdc.allowance(safeAddress, CTF_EXCHANGE_ADDRESS) as Promise<ethers.BigNumber>,
+      usdc.allowance(safeAddress, NEG_RISK_CTF_EXCHANGE_ADDRESS) as Promise<ethers.BigNumber>,
+      usdc.allowance(safeAddress, NEG_RISK_ADAPTER_ADDRESS) as Promise<ethers.BigNumber>,
+      ctf.isApprovedForAll(safeAddress, CTF_EXCHANGE_ADDRESS) as Promise<boolean>,
+      ctf.isApprovedForAll(safeAddress, NEG_RISK_CTF_EXCHANGE_ADDRESS) as Promise<boolean>,
+      ctf.isApprovedForAll(safeAddress, NEG_RISK_ADAPTER_ADDRESS) as Promise<boolean>
+    ]);
+
     const erc20Iface = new ethers.utils.Interface(ERC20_APPROVE_ABI);
     const erc1155Iface = new ethers.utils.Interface(ERC1155_APPROVE_ALL_ABI);
+    const transactions = [];
 
-    // --- ERC-20 approvals (USDC.e) ---
+    // --- ERC-20 checks (USDC.e) ---
+    if (allowanceCtf.lt(ethers.constants.MaxUint256.div(2))) {
+      transactions.push({
+        to: USDC_E_ADDRESS,
+        data: erc20Iface.encodeFunctionData('approve', [
+          CTF_EXCHANGE_ADDRESS,
+          ethers.constants.MaxUint256
+        ]),
+        value: '0'
+      });
+    }
+    if (allowanceNegRisk.lt(ethers.constants.MaxUint256.div(2))) {
+      transactions.push({
+        to: USDC_E_ADDRESS,
+        data: erc20Iface.encodeFunctionData('approve', [
+          NEG_RISK_CTF_EXCHANGE_ADDRESS,
+          ethers.constants.MaxUint256
+        ]),
+        value: '0'
+      });
+    }
+    if (allowanceNegRiskAdapter.lt(ethers.constants.MaxUint256.div(2))) {
+      transactions.push({
+        to: USDC_E_ADDRESS,
+        data: erc20Iface.encodeFunctionData('approve', [
+          NEG_RISK_ADAPTER_ADDRESS,
+          ethers.constants.MaxUint256
+        ]),
+        value: '0'
+      });
+    }
 
-    // 1. USDC.e → CTF Exchange
-    const approveCtfData = erc20Iface.encodeFunctionData('approve', [
-      CTF_EXCHANGE_ADDRESS,
-      ethers.constants.MaxUint256
-    ]);
+    // --- ERC-1155 checks (Conditional Tokens) ---
+    if (!isApprovedCtf) {
+      transactions.push({
+        to: CTF_ADDRESS,
+        data: erc1155Iface.encodeFunctionData('setApprovalForAll', [CTF_EXCHANGE_ADDRESS, true]),
+        value: '0'
+      });
+    }
+    if (!isApprovedNegRisk) {
+      transactions.push({
+        to: CTF_ADDRESS,
+        data: erc1155Iface.encodeFunctionData('setApprovalForAll', [
+          NEG_RISK_CTF_EXCHANGE_ADDRESS,
+          true
+        ]),
+        value: '0'
+      });
+    }
+    if (!isApprovedNegRiskAdapter) {
+      transactions.push({
+        to: CTF_ADDRESS,
+        data: erc1155Iface.encodeFunctionData('setApprovalForAll', [
+          NEG_RISK_ADAPTER_ADDRESS,
+          true
+        ]),
+        value: '0'
+      });
+    }
 
-    // 2. USDC.e → Neg Risk CTF Exchange
-    const approveNegRiskData = erc20Iface.encodeFunctionData('approve', [
-      NEG_RISK_CTF_EXCHANGE_ADDRESS,
-      ethers.constants.MaxUint256
-    ]);
-
-    // 3. USDC.e → Neg Risk Adapter
-    const approveNegRiskAdapterData = erc20Iface.encodeFunctionData('approve', [
-      NEG_RISK_ADAPTER_ADDRESS,
-      ethers.constants.MaxUint256
-    ]);
-
-    // --- ERC-1155 approvals (Conditional Tokens) ---
-
-    // 4. CTF setApprovalForAll → CTF Exchange (needed to sell outcome tokens)
-    const ctfApproveExchangeData = erc1155Iface.encodeFunctionData('setApprovalForAll', [
-      CTF_EXCHANGE_ADDRESS,
-      true
-    ]);
-
-    // 5. CTF setApprovalForAll → Neg Risk CTF Exchange (needed to sell neg risk tokens)
-    const ctfApproveNegRiskData = erc1155Iface.encodeFunctionData('setApprovalForAll', [
-      NEG_RISK_CTF_EXCHANGE_ADDRESS,
-      true
-    ]);
-
-    // 6. CTF setApprovalForAll → Neg Risk Adapter (needed to sell neg risk positions)
-    const ctfApproveNegRiskAdapterData = erc1155Iface.encodeFunctionData('setApprovalForAll', [
-      NEG_RISK_ADAPTER_ADDRESS,
-      true
-    ]);
-
-    const transactions = [
-      { to: USDC_E_ADDRESS, data: approveCtfData, value: '0' },
-      { to: USDC_E_ADDRESS, data: approveNegRiskData, value: '0' },
-      { to: USDC_E_ADDRESS, data: approveNegRiskAdapterData, value: '0' },
-      { to: CTF_ADDRESS, data: ctfApproveExchangeData, value: '0' },
-      { to: CTF_ADDRESS, data: ctfApproveNegRiskData, value: '0' },
-      { to: CTF_ADDRESS, data: ctfApproveNegRiskAdapterData, value: '0' }
-    ];
+    if (transactions.length === 0) {
+      Logger.log('info', fnLog, `${logKey} All Polymarket approvals already set. Skipping...`);
+      return;
+    }
 
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Submitting ${transactions.length} approval txs to Relayer`
+      `${logKey} Submitting ${transactions.length} missing approval txs to Relayer`
     );
 
-    const response = await client.execute(
-      transactions,
-      'Approve USDC.e + CTF for Polymarket trading'
-    );
+    const response = await client.execute(transactions, 'Set missing Polymarket approvals');
     const result = await response.wait();
 
-    if (!result) {
-      throw new Error('Relayer returned no result for approval transaction');
+    if (!result || result.state === RelayerTransactionState.STATE_FAILED) {
+      throw new Error(
+        `Relayer approval transaction failed (tx: ${result?.transactionHash || 'N/A'})`
+      );
     }
 
-    if (result.state === RelayerTransactionState.STATE_FAILED) {
-      throw new Error(`Relayer approval transaction failed: ${result.transactionHash}`);
-    }
-
-    Logger.log(
-      'info',
-      fnLog,
-      `${logKey} Token approvals confirmed (tx: ${result.transactionHash}, state: ${result.state})`
-    );
+    Logger.log('info', fnLog, `${logKey} Missing approvals confirmed (tx: ${result.transactionHash})`);
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to ensure token approvals: ${String(error)}`);

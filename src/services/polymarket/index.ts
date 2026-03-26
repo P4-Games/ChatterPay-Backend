@@ -4,6 +4,19 @@
  * Re-exports all Polymarket service modules for convenient imports.
  */
 
+// Constants and Magic Numbers
+export {
+  BRIDGE_FEE_BUFFER,
+  CTF_ADDRESS,
+  CTF_EXCHANGE_ADDRESS,
+  FOK_SLIPPAGE_TOLERANCE,
+  NEG_RISK_ADAPTER_ADDRESS,
+  NEG_RISK_CTF_EXCHANGE_ADDRESS,
+  POLYMARKET_MAX_PRICE,
+  POLYMARKET_MIN_PRICE,
+  USDC_E_ADDRESS
+} from './polymarketConstants';
+
 // Account lifecycle
 export {
   acceptTerms,

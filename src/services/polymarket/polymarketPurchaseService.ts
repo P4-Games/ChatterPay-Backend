@@ -164,11 +164,15 @@ export async function withdrawSellProceeds(
       if (rawBalance.gt(initialRawBalance)) break;
     }
 
+    const totalWaitSec = retryDelays.reduce((s, d) => s + d, 0) / 1000;
+
     if (rawBalance.lte(initialRawBalance)) {
       Logger.log(
-        'info',
+        'warn',
         fnLog,
-        `${logKey} No USDC.e after ${retryDelays.length} attempts. GTC order may still be pending.`
+        `${logKey} No sell proceeds detected after ${retryDelays.length} polls (~${totalWaitSec}s). ` +
+          `Balance unchanged at $${initialHuman.toFixed(2)}. This is expected for GTC orders that take longer to fill. ` +
+          `Proceeds will remain safe in the Polygon Safe and will be bridged back automatically on the next purchase or via manual sync.`
       );
       if (purchaseId) {
         await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'skipped' }, logKey);
@@ -177,19 +181,13 @@ export async function withdrawSellProceeds(
     }
 
     // Log whether we're including idle balance alongside sell proceeds
-    if (initialRawBalance.gt(0) && rawBalance.gt(initialRawBalance)) {
+    if (initialRawBalance.gt(0)) {
       const proceedsOnly = rawBalance.sub(initialRawBalance);
       Logger.log(
         'info',
         fnLog,
         `${logKey} Bridging sell proceeds ($${Number(ethers.utils.formatUnits(proceedsOnly, 6)).toFixed(2)}) ` +
           `+ idle balance ($${initialHuman.toFixed(2)}) = $${Number(ethers.utils.formatUnits(rawBalance, 6)).toFixed(2)} total`
-      );
-    } else if (!rawBalance.gt(initialRawBalance) && rawBalance.gt(0)) {
-      Logger.log(
-        'info',
-        fnLog,
-        `${logKey} Sell proceeds not yet arrived (GTC pending?). Bridging idle balance: $${initialHuman.toFixed(2)}`
       );
     }
 
