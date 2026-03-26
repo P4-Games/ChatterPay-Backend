@@ -36,6 +36,17 @@ import type {
 const LOG_PREFIX = 'polymarketTradingService';
 
 
+// CLOB error detection patterns — extracted to avoid brittle inline string matching
+const CLOB_ERROR_PATTERNS = {
+  ALLOWANCE: ['not enough balance', 'allowance'],
+  MIN_SIZE: ['lower than the minimum']
+} as const;
+
+function matchesClobError(detail: string, patterns: readonly string[]): boolean {
+  const lower = detail.toLowerCase();
+  return patterns.some((p) => lower.includes(p));
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -255,9 +266,8 @@ export async function placeOrder(
       // For SELL orders that fail with allowance errors, retry once after
       // setting fresh approvals. The CLOB cache for ERC-1155 (CONDITIONAL)
       // is unreliable — the on-chain approval may exist but not be cached.
-      const isAllowanceError =
-        errorDetail.includes('not enough balance') || errorDetail.includes('allowance');
-      const isMinSizeError = errorDetail.includes('lower than the minimum');
+      const isAllowanceError = matchesClobError(errorDetail, CLOB_ERROR_PATTERNS.ALLOWANCE);
+      const isMinSizeError = matchesClobError(errorDetail, CLOB_ERROR_PATTERNS.MIN_SIZE);
 
       if (params.side === 'SELL' && isAllowanceError) {
         Logger.log(
@@ -408,7 +418,7 @@ export async function getOpenOrders(
 
 import NodeCache from 'node-cache';
 
-const tokenMarketCache = new NodeCache({ stdTTL: 3600 });
+const tokenMarketCache = new NodeCache({ stdTTL: 3600, maxKeys: 2000 });
 
 async function enrichWithMarketData(
   tokenId: string,

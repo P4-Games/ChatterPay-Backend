@@ -472,7 +472,9 @@ export async function executePurchase(
           const onChainBalance = await getPolygonUsdceBalance(safeAddress, logKey);
           const available = Math.max(onChainBalance - lock.committedUsdce, 0);
           const requiredUsdc = params.price * params.size;
-          const maxAffordableSize = Math.floor((available / params.price) * 100) / 100;
+          // Truncate to 4 decimal places to safely cover all Polymarket tick sizes
+          // (standard markets use 0.01, some use 0.001 or finer granularity).
+          const maxAffordableSize = Math.floor((available / params.price) * 10000) / 10000;
 
           Logger.log(
             'info',

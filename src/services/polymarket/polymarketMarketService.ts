@@ -37,13 +37,24 @@ const LOG_PREFIX = 'polymarketMarketService';
 
 const marketsCache = new NodeCache({
   stdTTL: CACHE_POLYMARKET_MARKETS_TTL,
-  checkperiod: CACHE_POLYMARKET_MARKETS_CHECK_PERIOD
+  checkperiod: CACHE_POLYMARKET_MARKETS_CHECK_PERIOD,
+  maxKeys: 500
 });
 
 const pricesCache = new NodeCache({
   stdTTL: CACHE_POLYMARKET_PRICES_TTL,
-  checkperiod: CACHE_POLYMARKET_PRICES_CHECK_PERIOD
+  checkperiod: CACHE_POLYMARKET_PRICES_CHECK_PERIOD,
+  maxKeys: 500
 });
+
+/** Build a deterministic cache key from sorted param fields */
+function buildCacheKey(prefix: string, params: Record<string, unknown>): string {
+  const parts = Object.keys(params)
+    .sort()
+    .filter((k) => params[k] !== undefined)
+    .map((k) => `${k}=${String(params[k])}`);
+  return `${prefix}:${parts.join(',')}`;
+}
 
 // ============================================================================
 // Gamma API — Markets
@@ -60,7 +71,7 @@ export async function getMarkets(
   params: MarketQueryParams,
   logKey: string
 ): Promise<GammaMarket[]> {
-  const cacheKey = `markets:${JSON.stringify(params)}`;
+  const cacheKey = buildCacheKey('markets', params as unknown as Record<string, unknown>);
   const cached = marketsCache.get<GammaMarket[]>(cacheKey);
   if (cached) {
     Logger.log('debug', `[${LOG_PREFIX}:getMarkets]`, `${logKey} Cache hit for markets`);
@@ -134,7 +145,7 @@ export async function getMarketBySlug(slug: string, logKey: string): Promise<Gam
  * Fetch events from Gamma API with optional filtering.
  */
 export async function getEvents(params: EventQueryParams, logKey: string): Promise<GammaEvent[]> {
-  const cacheKey = `events:${JSON.stringify(params)}`;
+  const cacheKey = buildCacheKey('events', params as unknown as Record<string, unknown>);
   const cached = marketsCache.get<GammaEvent[]>(cacheKey);
   if (cached) return cached;
 

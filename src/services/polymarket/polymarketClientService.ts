@@ -49,9 +49,16 @@ export function encryptApiCredentials(credentials: ApiKeyCreds): string {
 
 /** Decrypt API credentials from MongoDB storage */
 export function decryptApiCredentials(encryptedData: string): ApiKeyCreds {
-  const key = deriveEncryptionKey();
-  const [ivHex, authTagHex, ciphertext] = encryptedData.split(':');
+  const parts = encryptedData.split(':');
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+    throw new Error(
+      'Corrupted Polymarket credentials: expected format "iv:authTag:ciphertext" ' +
+        `but got ${parts.length} segment(s)`
+    );
+  }
 
+  const [ivHex, authTagHex, ciphertext] = parts;
+  const key = deriveEncryptionKey();
   const iv = Buffer.from(ivHex, 'hex');
   const authTag = Buffer.from(authTagHex, 'hex');
   const decipher = createDecipheriv('aes-256-gcm', key, iv);
@@ -60,7 +67,12 @@ export function decryptApiCredentials(encryptedData: string): ApiKeyCreds {
   let decrypted = decipher.update(ciphertext, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
 
-  return JSON.parse(decrypted) as ApiKeyCreds;
+  const parsed = JSON.parse(decrypted);
+  if (!parsed || !parsed.key || !parsed.secret || !parsed.passphrase) {
+    throw new Error('Decrypted Polymarket credentials missing required fields (key, secret, passphrase)');
+  }
+
+  return parsed as ApiKeyCreds;
 }
 
 // ============================================================================
