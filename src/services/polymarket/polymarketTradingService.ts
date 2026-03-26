@@ -119,10 +119,16 @@ export async function placeOrder(
         const conditionalParams = { asset_type: AssetType.CONDITIONAL, token_id: params.tokenId };
 
         Logger.log('info', fnLog, `${logKey} Refreshing CLOB cache for CONDITIONAL + COLLATERAL`);
-        await Promise.all([
+        const [conditionalResult, collateralResult] = await Promise.allSettled([
           client.updateBalanceAllowance(conditionalParams),
           client.updateBalanceAllowance({ asset_type: AssetType.COLLATERAL })
         ]);
+        if (conditionalResult.status === 'rejected') {
+          throw new Error(`Failed to refresh CONDITIONAL balance: ${String(conditionalResult.reason)}`);
+        }
+        if (collateralResult.status === 'rejected') {
+          Logger.log('warn', fnLog, `${logKey} COLLATERAL refresh failed (non-critical): ${String(collateralResult.reason)}`);
+        }
 
         const allowanceStatus = await client.getBalanceAllowance(conditionalParams);
         const currentBalance = Number(allowanceStatus?.balance ?? 0);
@@ -464,6 +470,67 @@ async function enrichItems<T extends { asset?: string; token_id?: string }>(
   items: T[],
   logKey: string
 ): Promise<(T & { market_title?: string; market_slug?: string })[]> {
+  // Collect unique uncached tokenIds to batch-fetch from Gamma
+  const uncachedIds = new Set<string>();
+  for (const item of items) {
+    const tokenId = item.asset || item.token_id;
+    if (tokenId && tokenId !== 'USDC' && !tokenMarketCache.get(tokenId)) {
+      uncachedIds.add(tokenId);
+    }
+  }
+
+  // Batch-fetch uncached tokens from Gamma (up to 20 per request)
+  if (uncachedIds.size > 0) {
+    const batches: string[][] = [];
+    const ids = [...uncachedIds];
+    for (let i = 0; i < ids.length; i += 20) {
+      batches.push(ids.slice(i, i + 20));
+    }
+
+    await Promise.all(
+      batches.map(async (batch) => {
+        try {
+          const response = await axios.get(`${POLYMARKET_GAMMA_API_URL}/markets`, {
+            params: { clobTokenIds: batch.join(',') },
+            timeout: 10000
+          });
+
+          if (response.data && Array.isArray(response.data)) {
+            for (const market of response.data) {
+              // Gamma returns markets with tokens[].token_id — match against our batch
+              const marketTokenIds: string[] = (market.tokens || [])
+                .map((t: { token_id?: string }) => t.token_id)
+                .filter(Boolean);
+
+              const result = {
+                market_title: market.question || market.title || 'Unknown Market',
+                market_slug: market.slug || ''
+              };
+
+              for (const tid of marketTokenIds) {
+                if (uncachedIds.has(tid)) {
+                  tokenMarketCache.set(tid, result);
+                }
+              }
+
+              // Also cache by condition_id if it matches a batch ID directly
+              if (market.condition_id && uncachedIds.has(market.condition_id)) {
+                tokenMarketCache.set(market.condition_id, result);
+              }
+            }
+          }
+        } catch (err) {
+          Logger.log(
+            'warn',
+            `[${LOG_PREFIX}:enrichment]`,
+            `${logKey} Batch Gamma fetch failed for ${batch.length} tokens: ${String(err)}`
+          );
+        }
+      })
+    );
+  }
+
+  // Now enrich each item from cache (with fallback for any still-uncached)
   return Promise.all(
     items.map(async (item) => {
       const tokenId = item.asset || item.token_id;

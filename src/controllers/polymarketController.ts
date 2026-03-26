@@ -23,7 +23,8 @@ import {
   createPurchase,
   getActivePurchases,
   getPendingOrders,
-  getPurchaseById
+  getPurchaseById,
+  updatePurchaseStatus
 } from '../services/mongo/mongoPolymarketService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import {
@@ -1215,8 +1216,16 @@ export const polymarketPurchase = async (
         termsVersion: terms_version
       },
       logKey
-    ).catch((error) => {
+    ).catch(async (error) => {
       Logger.error(LOG_PREFIX, logKey, `Background purchase failed: ${String(error)}`);
+      // Ensure the purchase record is marked as failed so it doesn't stay
+      // stuck in "processing" forever if the error occurred before
+      // executePurchase had a chance to update the status itself.
+      try {
+        await updatePurchaseStatus(purchaseId, 'failed', 'done', { error: String(error) }, logKey);
+      } catch (statusError) {
+        Logger.error(LOG_PREFIX, logKey, `Failed to mark purchase as failed: ${String(statusError)}`);
+      }
     });
 
     return successReply(reply, { purchase_id: purchaseId });

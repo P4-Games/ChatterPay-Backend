@@ -127,6 +127,34 @@ const BRIDGE_STABLECOIN_SYMBOLS = ['USDC', 'USDT'];
 
 const ERC20_BALANCE_ABI = ['function balanceOf(address account) view returns (uint256)'];
 
+// Cache stablecoin token records from DB (10-minute TTL).
+// This data is near-static (token addresses don't change), so caching
+// eliminates 2-3 redundant DB queries per bridge execution.
+const stablecoinCacheByChain: Map<number, { tokens: Array<{ symbol: string; address: string; decimals: number }>; expiresAt: number }> = new Map();
+const STABLECOIN_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+async function getStablecoinTokens(chainId: number): Promise<Array<{ symbol: string; address: string; decimals: number }>> {
+  const cached = stablecoinCacheByChain.get(chainId);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.tokens;
+  }
+
+  const dbTokens = await Token.find({
+    chain_id: chainId,
+    symbol: { $in: BRIDGE_STABLECOIN_SYMBOLS }
+  }).lean();
+
+  const tokens = dbTokens.map((t) => ({ symbol: t.symbol, address: t.address, decimals: t.decimals }));
+
+  // Sort by priority order (USDC first, then USDT)
+  const sorted = BRIDGE_STABLECOIN_SYMBOLS
+    .map((sym) => tokens.find((t) => t.symbol === sym))
+    .filter((t): t is { symbol: string; address: string; decimals: number } => !!t);
+
+  stablecoinCacheByChain.set(chainId, { tokens: sorted, expiresAt: Date.now() + STABLECOIN_CACHE_TTL_MS });
+  return sorted;
+}
+
 /**
  * Find the first stablecoin in the proxy wallet with sufficient balance.
  *
@@ -154,24 +182,14 @@ async function findAvailableStablecoin(
   const fnLog = `[${LOG_PREFIX}:findAvailableStablecoin]`;
   const requiredBN = ethers.BigNumber.from(requiredAmount);
 
-  // Look up stablecoin tokens from the DB for this chain
-  const dbTokens = await Token.find({
-    chain_id: chainId,
-    symbol: { $in: BRIDGE_STABLECOIN_SYMBOLS }
-  }).lean();
+  const sortedTokens = await getStablecoinTokens(chainId);
 
-  if (dbTokens.length === 0) {
+  if (sortedTokens.length === 0) {
     Logger.log('warn', fnLog, `${logKey} No stablecoins found in DB for chain ${chainId}`);
     return null;
   }
 
-  // Sort by priority order (USDC first, then USDT)
-  const sortedTokens = BRIDGE_STABLECOIN_SYMBOLS.map((sym) =>
-    dbTokens.find((t) => t.symbol === sym)
-  ).filter(Boolean);
-
   for (const token of sortedTokens) {
-    if (!token) continue;
 
     try {
       const contract = new ethers.Contract(token.address, ERC20_BALANCE_ABI, provider);
@@ -213,17 +231,13 @@ export async function getPreferredScrollStablecoin(
     const networkConfig = await mongoBlockchainService.getNetworkConfig();
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
 
-    const dbTokens = await Token.find({
-      chain_id: networkConfig.chainId,
-      symbol: { $in: BRIDGE_STABLECOIN_SYMBOLS }
-    }).lean();
-
-    if (dbTokens.length === 0) return 'USDC';
+    const tokens = await getStablecoinTokens(networkConfig.chainId);
+    if (tokens.length === 0) return 'USDC';
 
     let bestSymbol = 'USDC';
     let bestBalance = ethers.BigNumber.from(0);
 
-    for (const token of dbTokens) {
+    for (const token of tokens) {
       try {
         const contract = new ethers.Contract(token.address, ERC20_BALANCE_ABI, provider);
         const balance: ethers.BigNumber = await contract.balanceOf(scrollProxyAddress);
@@ -263,13 +277,10 @@ async function getStablecoinBalanceSummary(
   provider: ethers.providers.Provider,
   chainId: number
 ): Promise<string[]> {
-  const dbTokens = await Token.find({
-    chain_id: chainId,
-    symbol: { $in: BRIDGE_STABLECOIN_SYMBOLS }
-  }).lean();
+  const tokens = await getStablecoinTokens(chainId);
 
   const results: string[] = [];
-  for (const token of dbTokens) {
+  for (const token of tokens) {
     try {
       const contract = new ethers.Contract(token.address, ERC20_BALANCE_ABI, provider);
       const bal = await contract.balanceOf(proxyAddress);
@@ -327,15 +338,14 @@ export async function executeBridge(
       `${logKey} Executing bridge: ${amount} (smallest units) Scroll→Polygon`
     );
 
-    // 1. Setup contracts to get proxy wallet and signer
-    const blockchain = await mongoBlockchainService.getNetworkConfig();
-    const contracts = await setupContracts(blockchain, user);
+    // 1. Setup contracts + deploy Safe in parallel (independent operations)
+    const [contracts, { proxyAddress: polygonSafeAddress }] = await Promise.all([
+      mongoBlockchainService.getNetworkConfig().then((blockchain) => setupContracts(blockchain, user)),
+      deploySafeWallet(privateKey, logKey)
+    ]);
     const proxyAddress = contracts.proxy.proxyAddress;
     const backendSigner = contracts.backPrincipal;
     const provider = contracts.provider;
-
-    // Get the Polygon Safe (deposit address) to ensure funds land in the right place
-    const { proxyAddress: polygonSafeAddress } = await deploySafeWallet(privateKey, logKey);
 
     // 2. Find which stablecoin the user has with enough balance
     const sourceToken = await findAvailableStablecoin(
