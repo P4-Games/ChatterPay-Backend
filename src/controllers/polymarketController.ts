@@ -12,7 +12,7 @@
 import { randomUUID } from 'crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import { POLYMARKET_ENABLED } from '../config/constants';
+import { POLYMARKET_ENABLED, POLYMARKET_TERMS_VERSION } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import type { IUser } from '../models/userModel';
@@ -68,6 +68,10 @@ import { executePurchase } from '../services/polymarket/polymarketPurchaseServic
 import { executeGaslessWithdrawal } from '../services/polymarket/polymarketRelayerService';
 import { secService } from '../services/secService';
 import { getUser } from '../services/userService';
+import {
+  sendPolymarketDisabledNotification,
+  sendPolymarketTermsNotAcceptedNotification
+} from '../services/notificationService';
 import type {
   PolymarketAcceptTermsBody,
   PolymarketAccountBody,
@@ -111,9 +115,12 @@ function successReply(reply: FastifyReply, data: unknown): FastifyReply {
   });
 }
 
-/** Check if Polymarket is enabled */
-function checkEnabled(reply: FastifyReply): boolean {
+/** Check if Polymarket is enabled. If a channelUserId is provided, sends a WhatsApp notification. */
+function checkEnabled(reply: FastifyReply, channelUserId?: string): boolean {
   if (!POLYMARKET_ENABLED) {
+    if (channelUserId) {
+      sendPolymarketDisabledNotification(channelUserId).catch(() => {});
+    }
     errorReply(reply, 503, 'Polymarket integration is disabled');
     return false;
   }
@@ -145,6 +152,10 @@ function validatePolymarketReady(user: IUser, reply: FastifyReply): boolean {
     return false;
   }
   if (!hasAcceptedCurrentTerms(user)) {
+    sendPolymarketTermsNotAcceptedNotification(
+      user.phone_number,
+      String(POLYMARKET_TERMS_VERSION)
+    ).catch(() => {});
     errorReply(reply, 403, 'Terms not accepted. Call /polymarket/account/accept_terms first.');
     return false;
   }

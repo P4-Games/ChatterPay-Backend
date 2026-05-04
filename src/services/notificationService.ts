@@ -1111,6 +1111,63 @@ export async function sendPolymarketSettlementClaimedNotification(
   }
 }
 
+/**
+ * Sends a WhatsApp notification when the Polymarket feature is disabled.
+ * This is shown when the user tries to use Polymarket while POLYMARKET_ENABLED=false.
+ */
+export async function sendPolymarketDisabledNotification(
+  channelUserId: string
+): Promise<void> {
+  try {
+    const { title, message } = await getNotificationTemplate(
+      channelUserId,
+      NotificationEnum.polymarket_disabled
+    );
+
+    await persistAndSendNotification({
+      to: channelUserId,
+      messageBot: message,
+      messagePush: message,
+      template: NotificationEnum.polymarket_disabled,
+      sendPush: true,
+      sendBot: true,
+      title
+    });
+  } catch (error) {
+    Logger.error('sendPolymarketDisabledNotification', error);
+  }
+}
+
+/**
+ * Sends a WhatsApp notification when the user hasn't accepted the current terms.
+ * Includes the required terms version so the user knows what to do.
+ */
+export async function sendPolymarketTermsNotAcceptedNotification(
+  channelUserId: string,
+  termsVersion: string
+): Promise<void> {
+  try {
+    const { title, message } = await getNotificationTemplate(
+      channelUserId,
+      NotificationEnum.polymarket_terms_not_accepted
+    );
+
+    const formattedMessage = message.replace('{0}', termsVersion);
+
+    await persistAndSendNotification({
+      to: channelUserId,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.polymarket_terms_not_accepted,
+      sendPush: true,
+      sendBot: true,
+      title
+    });
+  } catch (error) {
+    Logger.error('sendPolymarketTermsNotAcceptedNotification', error);
+  }
+}
+
 /* ----------------------------------------------------------------------------------------- */
 /* ----------------------------------------------------------------------------------------- */
 
