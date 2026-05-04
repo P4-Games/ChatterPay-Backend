@@ -316,7 +316,11 @@ export async function ensureTokenApprovals(privateKey: string, logKey: string): 
       );
     }
 
-    Logger.log('info', fnLog, `${logKey} Missing approvals confirmed (tx: ${result.transactionHash})`);
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Missing approvals confirmed (tx: ${result.transactionHash})`
+    );
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to ensure token approvals: ${String(error)}`);

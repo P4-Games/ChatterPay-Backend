@@ -69,7 +69,9 @@ export function decryptApiCredentials(encryptedData: string): ApiKeyCreds {
 
   const parsed = JSON.parse(decrypted);
   if (!parsed || !parsed.key || !parsed.secret || !parsed.passphrase) {
-    throw new Error('Decrypted Polymarket credentials missing required fields (key, secret, passphrase)');
+    throw new Error(
+      'Decrypted Polymarket credentials missing required fields (key, secret, passphrase)'
+    );
   }
 
   return parsed as ApiKeyCreds;

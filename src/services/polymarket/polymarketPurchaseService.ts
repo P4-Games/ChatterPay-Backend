@@ -15,7 +15,6 @@ import PQueue from 'p-queue';
 
 import { POLYMARKET_POLYGON_RPC_URL } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
-import { BRIDGE_FEE_BUFFER, USDC_E_ADDRESS } from './polymarketConstants';
 import type { IUser } from '../../models/userModel';
 import {
   createOrder,
@@ -23,6 +22,11 @@ import {
   updatePurchaseStep
 } from '../mongo/mongoPolymarketService';
 import { mongoTransactionService } from '../mongo/mongoTransactionService';
+import {
+  sendPolymarketOrderFailedNotification,
+  sendPolymarketOrderPlacedNotification,
+  sendPolymarketSettlementClaimedNotification
+} from '../notificationService';
 import { getUser } from '../userService';
 import { acceptTerms, createPolymarketAccount } from './polymarketAccountService';
 import {
@@ -30,11 +34,7 @@ import {
   getPreferredScrollStablecoin,
   withdrawToScroll
 } from './polymarketBridgeService';
-import {
-  sendPolymarketOrderFailedNotification,
-  sendPolymarketOrderPlacedNotification,
-  sendPolymarketSettlementClaimedNotification
-} from '../notificationService';
+import { BRIDGE_FEE_BUFFER, USDC_E_ADDRESS } from './polymarketConstants';
 import { executeGaslessWithdrawal } from './polymarketRelayerService';
 import { getPolymarketBalanceSummary, placeOrder } from './polymarketTradingService';
 
@@ -74,7 +74,6 @@ function getOrderLock(userId: string): UserOrderLock {
   }
   return entry;
 }
-
 
 /**
  * Read the on-chain USDC.e balance of a Polygon address.
@@ -257,10 +256,9 @@ export async function withdrawSellProceeds(
     }
 
     // WhatsApp notification — settlement claimed
-    sendPolymarketSettlementClaimedNotification(
-      user.phone_number,
-      balanceHuman.toFixed(2)
-    ).catch((err) => Logger.log('warn', fnLog, `${logKey} Settlement notification failed: ${String(err)}`));
+    sendPolymarketSettlementClaimedNotification(user.phone_number, balanceHuman.toFixed(2)).catch(
+      (err) => Logger.log('warn', fnLog, `${logKey} Settlement notification failed: ${String(err)}`)
+    );
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Withdrawal failed (non-fatal): ${String(error)}`);
     if (purchaseId) {
@@ -585,7 +583,9 @@ export async function executePurchase(
         effectiveSize.toString(),
         params.price.toString(),
         orderID
-      ).catch((err) => Logger.log('warn', fnLog, `${logKey} Order placed notification failed: ${String(err)}`));
+      ).catch((err) =>
+        Logger.log('warn', fnLog, `${logKey} Order placed notification failed: ${String(err)}`)
+      );
 
       // ── Step 4 (SELL only): Withdrawal ──────────────────────────────────
       // After a SELL fills, USDC.e lands in the Polygon Safe. Bridge it back
@@ -624,7 +624,10 @@ export async function executePurchase(
           const polygonAddr = currentUser.polymarket_account?.polygon_address;
           let balanceStr = 'unknown';
           if (polygonAddr) {
-            const { idle_usdc, positions_value } = await getPolymarketBalanceSummary(polygonAddr, logKey);
+            const { idle_usdc, positions_value } = await getPolymarketBalanceSummary(
+              polygonAddr,
+              logKey
+            );
             balanceStr = `${(idle_usdc + positions_value).toFixed(2)}`;
           }
           await sendPolymarketOrderFailedNotification(
@@ -634,7 +637,11 @@ export async function executePurchase(
             balanceStr
           );
         } catch (notifErr) {
-          Logger.log('warn', fnLog, `${logKey} Order failed notification error: ${String(notifErr)}`);
+          Logger.log(
+            'warn',
+            fnLog,
+            `${logKey} Order failed notification error: ${String(notifErr)}`
+          );
         }
       })();
     }

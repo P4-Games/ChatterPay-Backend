@@ -115,7 +115,9 @@ const processAlchemyExternalDeposits = async (
           $or: [
             { 'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedFrom}$`, 'i') } },
             {
-              'polymarket_account.polygon_address': { $regex: new RegExp(`^${normalizedFrom}$`, 'i') }
+              'polymarket_account.polygon_address': {
+                $regex: new RegExp(`^${normalizedFrom}$`, 'i')
+              }
             }
           ]
         });
@@ -133,7 +135,9 @@ const processAlchemyExternalDeposits = async (
         const user = await UserModel.findOne({
           $or: [
             { 'wallets.wallet_proxy': { $regex: new RegExp(`^${normalizedTo}$`, 'i') } },
-            { 'polymarket_account.polygon_address': { $regex: new RegExp(`^${normalizedTo}$`, 'i') } }
+            {
+              'polymarket_account.polygon_address': { $regex: new RegExp(`^${normalizedTo}$`, 'i') }
+            }
           ]
         });
 

@@ -1115,9 +1115,7 @@ export async function sendPolymarketSettlementClaimedNotification(
  * Sends a WhatsApp notification when the Polymarket feature is disabled.
  * This is shown when the user tries to use Polymarket while POLYMARKET_ENABLED=false.
  */
-export async function sendPolymarketDisabledNotification(
-  channelUserId: string
-): Promise<void> {
+export async function sendPolymarketDisabledNotification(channelUserId: string): Promise<void> {
   try {
     const { title, message } = await getNotificationTemplate(
       channelUserId,

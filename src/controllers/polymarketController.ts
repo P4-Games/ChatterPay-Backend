@@ -28,6 +28,10 @@ import {
 } from '../services/mongo/mongoPolymarketService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import {
+  sendPolymarketDisabledNotification,
+  sendPolymarketTermsNotAcceptedNotification
+} from '../services/notificationService';
+import {
   acceptTerms,
   BRIDGE_FEE_BUFFER,
   cancelAllOrders,
@@ -45,13 +49,13 @@ import {
   getMarkets,
   getOpenOrders,
   getPnlHistory,
-  POLYMARKET_MAX_PRICE,
-  POLYMARKET_MIN_PRICE,
   getPortfolioValue,
   getPositions,
   getTradeHistory,
   getTradesHistory,
   hasAcceptedCurrentTerms,
+  POLYMARKET_MAX_PRICE,
+  POLYMARKET_MIN_PRICE,
   placeOrder,
   resolveMaxSize,
   searchEvents,
@@ -68,10 +72,6 @@ import { executePurchase } from '../services/polymarket/polymarketPurchaseServic
 import { executeGaslessWithdrawal } from '../services/polymarket/polymarketRelayerService';
 import { secService } from '../services/secService';
 import { getUser } from '../services/userService';
-import {
-  sendPolymarketDisabledNotification,
-  sendPolymarketTermsNotAcceptedNotification
-} from '../services/notificationService';
 import type {
   PolymarketAcceptTermsBody,
   PolymarketAccountBody,
@@ -1237,7 +1237,11 @@ export const polymarketPurchase = async (
       try {
         await updatePurchaseStatus(purchaseId, 'failed', 'done', { error: String(error) }, logKey);
       } catch (statusError) {
-        Logger.error(LOG_PREFIX, logKey, `Failed to mark purchase as failed: ${String(statusError)}`);
+        Logger.error(
+          LOG_PREFIX,
+          logKey,
+          `Failed to mark purchase as failed: ${String(statusError)}`
+        );
       }
     });
 

@@ -207,8 +207,7 @@ export const depositIngestorService = {
             }
 
             // Also skip if sender is a Polymarket Safe (belongs to a ChatterPay user)
-            const polymarketUser =
-              await mongoUserService.getUserByPolymarketSafeInsensitive(from);
+            const polymarketUser = await mongoUserService.getUserByPolymarketSafeInsensitive(from);
             if (polymarketUser) {
               Logger.debug('DepositIngestor', 'Skipped internal Polymarket Safe transfer', {
                 reason: 'Sender is a Polymarket Safe wallet',

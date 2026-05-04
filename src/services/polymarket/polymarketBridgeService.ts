@@ -11,16 +11,15 @@ import { ethers } from 'ethers';
 
 import { POLYMARKET_CHAIN_ID } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
-import { USDC_E_ADDRESS } from './polymarketConstants';
 import type { IUser } from '../../models/userModel';
 import { getLifiQuote, pollLifiStatus, validateLifiQuote } from '../lifi/lifiService';
 import type { LifiQuoteResponse, LifiStatusResponse } from '../lifi/lifiTypes';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
 import { getChatterpayABI, getERC20ABI } from '../web3/abiService';
 import { setupContracts } from '../web3/contractSetupService';
+import { USDC_E_ADDRESS } from './polymarketConstants';
 
 const LOG_PREFIX = 'polymarketBridgeService';
-
 
 // Default scroll chain ID (will be user's current chain in practice)
 const SCROLL_CHAIN_ID = 534352; // Scroll Mainnet
@@ -130,10 +129,15 @@ const ERC20_BALANCE_ABI = ['function balanceOf(address account) view returns (ui
 // Cache stablecoin token records from DB (10-minute TTL).
 // This data is near-static (token addresses don't change), so caching
 // eliminates 2-3 redundant DB queries per bridge execution.
-const stablecoinCacheByChain: Map<number, { tokens: Array<{ symbol: string; address: string; decimals: number }>; expiresAt: number }> = new Map();
+const stablecoinCacheByChain: Map<
+  number,
+  { tokens: Array<{ symbol: string; address: string; decimals: number }>; expiresAt: number }
+> = new Map();
 const STABLECOIN_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
-async function getStablecoinTokens(chainId: number): Promise<Array<{ symbol: string; address: string; decimals: number }>> {
+async function getStablecoinTokens(
+  chainId: number
+): Promise<Array<{ symbol: string; address: string; decimals: number }>> {
   const cached = stablecoinCacheByChain.get(chainId);
   if (cached && Date.now() < cached.expiresAt) {
     return cached.tokens;
@@ -144,14 +148,21 @@ async function getStablecoinTokens(chainId: number): Promise<Array<{ symbol: str
     symbol: { $in: BRIDGE_STABLECOIN_SYMBOLS }
   }).lean();
 
-  const tokens = dbTokens.map((t) => ({ symbol: t.symbol, address: t.address, decimals: t.decimals }));
+  const tokens = dbTokens.map((t) => ({
+    symbol: t.symbol,
+    address: t.address,
+    decimals: t.decimals
+  }));
 
   // Sort by priority order (USDC first, then USDT)
-  const sorted = BRIDGE_STABLECOIN_SYMBOLS
-    .map((sym) => tokens.find((t) => t.symbol === sym))
-    .filter((t): t is { symbol: string; address: string; decimals: number } => !!t);
+  const sorted = BRIDGE_STABLECOIN_SYMBOLS.map((sym) =>
+    tokens.find((t) => t.symbol === sym)
+  ).filter((t): t is { symbol: string; address: string; decimals: number } => !!t);
 
-  stablecoinCacheByChain.set(chainId, { tokens: sorted, expiresAt: Date.now() + STABLECOIN_CACHE_TTL_MS });
+  stablecoinCacheByChain.set(chainId, {
+    tokens: sorted,
+    expiresAt: Date.now() + STABLECOIN_CACHE_TTL_MS
+  });
   return sorted;
 }
 
@@ -190,7 +201,6 @@ async function findAvailableStablecoin(
   }
 
   for (const token of sortedTokens) {
-
     try {
       const contract = new ethers.Contract(token.address, ERC20_BALANCE_ABI, provider);
       const balance: ethers.BigNumber = await contract.balanceOf(proxyAddress);
@@ -340,7 +350,9 @@ export async function executeBridge(
 
     // 1. Setup contracts + deploy Safe in parallel (independent operations)
     const [contracts, { proxyAddress: polygonSafeAddress }] = await Promise.all([
-      mongoBlockchainService.getNetworkConfig().then((blockchain) => setupContracts(blockchain, user)),
+      mongoBlockchainService
+        .getNetworkConfig()
+        .then((blockchain) => setupContracts(blockchain, user)),
       deploySafeWallet(privateKey, logKey)
     ]);
     const proxyAddress = contracts.proxy.proxyAddress;

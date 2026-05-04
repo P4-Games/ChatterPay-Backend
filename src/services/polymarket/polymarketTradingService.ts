@@ -35,7 +35,6 @@ import type {
 
 const LOG_PREFIX = 'polymarketTradingService';
 
-
 // CLOB error detection patterns — extracted to avoid brittle inline string matching
 const CLOB_ERROR_PATTERNS = {
   ALLOWANCE: ['not enough balance', 'allowance'],
@@ -135,10 +134,16 @@ export async function placeOrder(
           client.updateBalanceAllowance({ asset_type: AssetType.COLLATERAL })
         ]);
         if (conditionalResult.status === 'rejected') {
-          throw new Error(`Failed to refresh CONDITIONAL balance: ${String(conditionalResult.reason)}`);
+          throw new Error(
+            `Failed to refresh CONDITIONAL balance: ${String(conditionalResult.reason)}`
+          );
         }
         if (collateralResult.status === 'rejected') {
-          Logger.log('warn', fnLog, `${logKey} COLLATERAL refresh failed (non-critical): ${String(collateralResult.reason)}`);
+          Logger.log(
+            'warn',
+            fnLog,
+            `${logKey} COLLATERAL refresh failed (non-critical): ${String(collateralResult.reason)}`
+          );
         }
 
         const allowanceStatus = await client.getBalanceAllowance(conditionalParams);
@@ -738,9 +743,7 @@ function lttbDownsample(points: PnlHistoryPoint[], target: number): PnlHistoryPo
       const currX = new Date(points[j].timestamp).getTime();
       const currY = points[j].cumulativePnl;
       // Triangle area formula (doubled, sign doesn't matter — we want max absolute)
-      const area = Math.abs(
-        (prevX - avgX) * (currY - prevY) - (prevX - currX) * (avgY - prevY)
-      );
+      const area = Math.abs((prevX - avgX) * (currY - prevY) - (prevX - currX) * (avgY - prevY));
       if (area > maxArea) {
         maxArea = area;
         bestIndex = j;
@@ -815,7 +818,6 @@ export async function getPnlHistory(
     throw new Error(`Failed to compute PNL history: ${String(error)}`);
   }
 }
-
 
 /**
  * Get a summary of the user's Polymarket balances: idle USDC.e + active positions.
@@ -944,7 +946,11 @@ export async function syncOpenOrders(
     if (bulkOps.length > 0) {
       await PolymarketOrderModel.bulkWrite(bulkOps);
     }
-    Logger.log('info', fnLog, `${logKey} Reconciliation complete (${bulkOps.length} orders updated)`);
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Reconciliation complete (${bulkOps.length} orders updated)`
+    );
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Reconciliation failed: ${String(error)}`);
     throw new Error(`Failed to sync orders: ${String(error)}`);
