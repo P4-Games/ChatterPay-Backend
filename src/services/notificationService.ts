@@ -328,7 +328,7 @@ export async function sendDepositInfo(
       NotificationEnum.deposit_from_other_networks
     );
 
-    const depositUrl = `${CHATTERPAY_DOMAIN}/deposit?address=${user_wallet_proxy}`;
+    const depositUrl = `${CHATTERPAY_DOMAIN}/deposit?address=${encodeURIComponent(user_wallet_proxy)}`;
 
     await chatizaloService.sendInteractiveMessage({
       data_token: BOT_DATA_TOKEN!,
