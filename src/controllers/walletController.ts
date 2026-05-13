@@ -271,6 +271,15 @@ export const getDepositInfo = async (
   request: FastifyRequest<{ Body: { channel_user_id: string } }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
+  if (!request.body || !request.body.channel_user_id) {
+    return returnErrorResponse(
+      'getDepositInfo',
+      '[op:getDepositInfo]',
+      reply,
+      400,
+      'Missing channel_user_id in body'
+    );
+  }
   const { channel_user_id } = request.body;
   const logKey = `[op:getDepositInfo:${channel_user_id}]`;
 
@@ -323,6 +332,15 @@ export const getMultichainDepositCta = async (
   request: FastifyRequest<{ Body: { channel_user_id: string } }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
+  if (!request.body || !request.body.channel_user_id) {
+    return returnErrorResponse(
+      'getMultichainDepositCta',
+      '[op:getMultichainDepositCta]',
+      reply,
+      400,
+      'Missing channel_user_id in body'
+    );
+  }
   const { channel_user_id } = request.body;
   const logKey = `[op:getMultichainDepositCta:${channel_user_id}]`;
 
@@ -381,6 +399,15 @@ export const getWalletNextSteps = async (
   request: FastifyRequest<{ Body: { channel_user_id: string } }>,
   reply: FastifyReply
 ): Promise<FastifyReply> => {
+  if (!request.body || !request.body.channel_user_id) {
+    return returnErrorResponse(
+      'getWalletNextSteps',
+      '[op:getWalletNextSteps]',
+      reply,
+      400,
+      'Missing channel_user_id in body'
+    );
+  }
   const { channel_user_id } = request.body;
   const logKey = `[op:getWalletNextSteps:${channel_user_id}]`;
 

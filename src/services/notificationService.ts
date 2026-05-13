@@ -210,12 +210,7 @@ export async function sendWalletNotificationSequence(
       }
     });
 
-    await persistNotification(
-      channel_user_id,
-      formattedIntro,
-      introType,
-      'Wallet notification sequence: Intro, Address, Next Steps'
-    );
+    await persistNotification(channel_user_id, formattedIntro, introType);
   } catch (error) {
     Logger.error('sendWalletNotificationSequence', error);
     throw error;
@@ -272,8 +267,7 @@ export async function sendWalletNextSteps(
     await persistNotification(
       channel_user_id,
       formattedMessage,
-      NotificationEnum.wallet_next_steps,
-      'Wallet next steps: quick-reply buttons'
+      NotificationEnum.wallet_next_steps
     );
   } catch (error) {
     Logger.error('sendWalletNextSteps', error);
@@ -343,12 +337,7 @@ export async function sendDepositInfo(
       }
     });
 
-    await persistNotification(
-      channel_user_id,
-      formattedIntro,
-      NotificationEnum.deposit_info_intro,
-      'Deposit info sequence: Intro, Address, CTA'
-    );
+    await persistNotification(channel_user_id, formattedIntro, NotificationEnum.deposit_info_intro);
   } catch (error) {
     Logger.error('sendDepositInfo', error);
     throw error;
@@ -388,8 +377,7 @@ export async function sendDepositCta(user_wallet_proxy: string, channel_user_id:
     await persistNotification(
       channel_user_id,
       message,
-      NotificationEnum.deposit_from_other_networks,
-      'Deposit CTA sent'
+      NotificationEnum.deposit_from_other_networks
     );
   } catch (error) {
     Logger.error('sendDepositCta', error);
@@ -1298,14 +1286,13 @@ export async function persistAndSendNotification({
 export async function persistNotification(
   channelUserId: string,
   message: string,
-  templateId: string,
-  internalMessage?: string
+  templateId: string
 ) {
   try {
     await mongoNotificationService.createNotification({
       to: channelUserId,
-      message: internalMessage || message,
-      media: 'WHATSAPP', // Or make it configurable if needed
+      message,
+      media: 'INTERNAL',
       template: templateId,
       sent_date: new Date()
     });
