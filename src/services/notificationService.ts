@@ -338,7 +338,7 @@ export async function sendDepositInfo(
         header_text: title,
         body_text: message,
         footer_text: footer,
-        button_text: button ?? 'Depositar Ahora',
+        button_text: button ?? 'Deposit now',
         url: depositUrl
       }
     });
