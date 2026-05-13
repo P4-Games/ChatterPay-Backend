@@ -6,7 +6,6 @@ import { isValidPhoneNumber } from '../helpers/validationHelper';
 
 import type { IBlockchain } from '../models/blockchainModel';
 import {
-  type ITemplateSchema,
   type LocalizedContentType,
   NotificationEnum,
   type NotificationTemplatesTypes,
@@ -33,13 +32,13 @@ function normalizePreferredLanguage(language: string | null | undefined): 'es' |
 async function getNotificationUtilityConfig(
   typeOfNotification: NotificationEnum
 ): Promise<NotificationUtilityConfigType | undefined> {
-  const notificationTemplates: NotificationTemplatesTypes | null =
-    await mongoTemplateService.getTemplate<ITemplateSchema>(templateEnum.NOTIFICATIONS);
+  const notificationTemplates = await mongoTemplateService.getTemplate<NotificationTemplatesTypes>(
+    templateEnum.NOTIFICATIONS
+  );
+
   if (!notificationTemplates) return undefined;
 
-  // @ts-expect-error 'expected type error'
   const template = notificationTemplates[typeOfNotification];
-
   return template?.utility;
 }
 
@@ -83,14 +82,16 @@ export async function getNotificationTemplate(
       };
     }
 
-    const notificationTemplates: NotificationTemplatesTypes | null =
-      await mongoTemplateService.getTemplate<ITemplateSchema>(templateEnum.NOTIFICATIONS);
+    const notificationTemplates =
+      await mongoTemplateService.getTemplate<NotificationTemplatesTypes>(
+        templateEnum.NOTIFICATIONS
+      );
+
     if (!notificationTemplates) {
       Logger.warn('getNotificationTemplate', 'Notifications Templates not found');
       return defaultNotification;
     }
 
-    // @ts-expect-error 'expected type error'
     const template = notificationTemplates[typeOfNotification];
 
     if (!template) {

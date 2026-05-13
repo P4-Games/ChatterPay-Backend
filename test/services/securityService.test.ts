@@ -48,7 +48,14 @@ describe('securityService', () => {
         deposit_from_other_networks: mockNotification,
         deposit_info_intro: mockNotification,
         wallet_next_steps: mockNotification,
-        cross_chain_disabled: mockNotification
+        cross_chain_disabled: mockNotification,
+        pin_blocked: mockNotification,
+        pin_not_set: mockNotification,
+        pin_invalid_remaining_attempts: mockNotification,
+        pin_verified_success: mockNotification,
+        pin_internal_error: mockNotification,
+        operation_in_progress: mockNotification,
+        wallet_not_created: mockNotification
       },
       security_questions: {
         pet_name: {

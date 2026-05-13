@@ -1,4 +1,4 @@
-import { type Document, model, Schema } from 'mongoose';
+import { Document, model, Schema } from 'mongoose';
 
 export enum NotificationEnum {
   incoming_transfer = 'incoming_transfer',
@@ -25,7 +25,14 @@ export enum NotificationEnum {
   deposit_from_other_networks = 'deposit_from_other_networks',
   deposit_info_intro = 'deposit_info_intro',
   wallet_next_steps = 'wallet_next_steps',
-  cross_chain_disabled = 'cross_chain_disabled'
+  cross_chain_disabled = 'cross_chain_disabled',
+  pin_not_set = 'pin_not_set',
+  pin_invalid_remaining_attempts = 'pin_invalid_remaining_attempts',
+  pin_blocked = 'pin_blocked',
+  pin_verified_success = 'pin_verified_success',
+  pin_internal_error = 'pin_internal_error',
+  operation_in_progress = 'operation_in_progress',
+  wallet_not_created = 'wallet_not_created'
 }
 
 export interface LocalizedContentType {
@@ -54,10 +61,9 @@ export interface NotificationTemplateType {
   utility?: NotificationUtilityConfigType;
 }
 
-export interface NotificationTemplatesTypes {
-  // @ts-expect-error 'mark as error'
+export type NotificationTemplatesTypes = {
   [key in NotificationEnum]: NotificationTemplateType;
-}
+};
 
 export interface ITemplateSchema extends Document {
   notifications: {
@@ -125,7 +131,14 @@ const templateSchema = new Schema<ITemplateSchema>({
     deposit_from_other_networks: { type: notificationSchema, required: true },
     deposit_info_intro: { type: notificationSchema, required: true },
     wallet_next_steps: { type: notificationSchema, required: true },
-    cross_chain_disabled: { type: notificationSchema, required: true }
+    cross_chain_disabled: { type: notificationSchema, required: true },
+    pin_not_set: { type: notificationSchema, required: true },
+    pin_invalid_remaining_attempts: { type: notificationSchema, required: true },
+    pin_blocked: { type: notificationSchema, required: true },
+    pin_verified_success: { type: notificationSchema, required: true },
+    pin_internal_error: { type: notificationSchema, required: true },
+    operation_in_progress: { type: notificationSchema, required: true },
+    wallet_not_created: { type: notificationSchema, required: true }
   },
   security_questions: { type: Map, of: localizedContentSchema, required: false }
 });
