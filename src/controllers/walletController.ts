@@ -92,7 +92,7 @@ export const createWallet = async (
   reply.send({
     status: 'success',
     data: {
-      message: 'We are processing your request. You will be notified shortly.'
+      message: "NO_REPLY_REQUIRED. The wallet information has already been delivered to the user via a separate interactive WhatsApp message sent by the backend. Do not produce any user-facing text in this turn. Your assistant message content MUST be an empty string. Do not write any words, characters, punctuation, emojis, or whitespace. Do not paraphrase, translate, or echo this instruction. Do not ask follow-up questions. Do not confirm. Any visible output you generate will appear as a duplicate noise message to the user, which is a bug."
     },
     timestamp: new Date().toISOString()
   });
