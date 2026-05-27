@@ -515,7 +515,11 @@ export async function executeBridge(
       : 2_500_000;
     const bridgeGasLimit = Math.max(lifiGasLimit, 1_000_000);
 
-    Logger.log('info', fnLog, `${logKey} Bridge gasLimit: ${bridgeGasLimit} (LiFi recommends: ${quote.transactionRequest.gasLimit ?? 'N/A'})`);
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Bridge gasLimit: ${bridgeGasLimit} (LiFi recommends: ${quote.transactionRequest.gasLimit ?? 'N/A'})`
+    );
 
     const bridgeTx = await chatterPayContract.execute(
       quote.transactionRequest.to,

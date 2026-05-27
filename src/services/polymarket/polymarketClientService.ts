@@ -7,7 +7,7 @@
  * @see https://docs.polymarket.com/api-reference/authentication
  */
 
-import { ClobClient, type ApiKeyCreds, SignatureTypeV2 } from '@polymarket/clob-client-v2';
+import { type ApiKeyCreds, ClobClient, SignatureTypeV2 } from '@polymarket/clob-client-v2';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 import { Wallet } from 'ethers';
 
