@@ -603,6 +603,8 @@ export async function withdrawToScroll(
       `${logKey} Getting withdraw quote: ${amount} USDC.e Polygon→Scroll (→${toTokenSymbol})`
     );
 
+    // Deny Squid (Axelar-based): requires native MATIC as msg.value for cross-chain gas.
+    // The Polygon Safe has no MATIC, so any bridge that sets value > 0 would revert on-chain.
     const quote = await getLifiQuote(
       {
         fromChain: POLYMARKET_CHAIN_ID,
@@ -611,7 +613,8 @@ export async function withdrawToScroll(
         toToken: toTokenSymbol,
         fromAmount: amount,
         fromAddress: polygonSafeAddress,
-        toAddress: scrollProxyAddress
+        toAddress: scrollProxyAddress,
+        denyBridges: ['squid']
       },
       logKey
     );
@@ -623,6 +626,22 @@ export async function withdrawToScroll(
 
     const { approvalAddress } = quote.estimate;
     const { to, data, value } = quote.transactionRequest;
+
+    // Guard: if the route still requires native MATIC, fail fast with a clear error
+    // rather than submitting a tx that will revert on-chain (Safe has no MATIC).
+    const nativeValue = BigInt(value ?? '0');
+    if (nativeValue > 0n) {
+      throw new Error(
+        `Withdraw route '${quote.tool}' requires native MATIC (value=${value}). ` +
+          `The Polygon Safe has no MATIC. Choose a bridge that deducts fees from the token amount.`
+      );
+    }
+
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Withdraw quote ok: tool=${quote.tool}, value=0, toAmount=${quote.estimate.toAmount}`
+    );
 
     return {
       quote,

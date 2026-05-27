@@ -11,7 +11,7 @@
  * @see https://docs.polymarket.com/resources/contract-addresses
  */
 
-import { RelayClient, RelayerTransactionState } from '@polymarket/builder-relayer-client';
+import { RelayClient } from '@polymarket/builder-relayer-client';
 import { deriveSafe } from '@polymarket/builder-relayer-client/dist/builder/derive';
 import { getContractConfig } from '@polymarket/builder-relayer-client/dist/config';
 import { BuilderConfig } from '@polymarket/builder-signing-sdk';
@@ -308,18 +308,17 @@ export async function ensureTokenApprovals(privateKey: string, logKey: string): 
     );
 
     const response = await client.execute(transactions, 'Set missing Polymarket approvals');
+    const relayerId = response.transactionID;
     const result = await response.wait();
 
-    if (!result || result.state === RelayerTransactionState.STATE_FAILED) {
-      throw new Error(
-        `Relayer approval transaction failed (tx: ${result?.transactionHash || 'N/A'})`
-      );
+    if (!result) {
+      throw new Error(`Relayer approval transaction failed on-chain (relayer_id: ${relayerId})`);
     }
 
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Missing approvals confirmed (tx: ${result.transactionHash})`
+      `${logKey} Missing approvals confirmed (tx: ${result.transactionHash}, relayer_id: ${relayerId})`
     );
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
@@ -422,8 +421,22 @@ export async function executeGaslessWithdrawal(
     });
 
     Logger.log('info', fnLog, `${logKey} Executing transactions via Relayer`);
-    await client.execute(transactions, 'Withdraw to Scroll');
-    Logger.log('info', fnLog, `${logKey} Gasless withdrawal execution completed`);
+    const response = await client.execute(transactions, 'Withdraw to Scroll');
+    const relayerId = response.transactionID;
+    const result = await response.wait();
+
+    if (!result) {
+      throw new Error(
+        `Relayer withdrawal transaction failed on-chain (relayer_id: ${relayerId}). ` +
+          `Check Polygon explorer for the tx hash printed above.`
+      );
+    }
+
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} Gasless withdrawal confirmed on-chain (tx: ${result.transactionHash}, relayer_id: ${relayerId})`
+    );
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Gasless withdrawal failed: ${String(error)}`);
     throw new Error(`Gasless withdrawal failed: ${String(error)}`);

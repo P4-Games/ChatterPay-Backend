@@ -28,6 +28,20 @@ export const NEG_RISK_ADAPTER_ADDRESS = '0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35
 /** 2% buffer applied to bridged amounts to cover LiFi/bridge fees and slippage */
 export const BRIDGE_FEE_BUFFER = 1.02;
 
+/**
+ * Minimum bridge amount in USD (human-readable).
+ * LiFi cross-chain routes reject amounts below ~$1. If the deficit is smaller,
+ * skip the bridge and let the order placement use the existing Safe balance.
+ */
+export const MIN_BRIDGE_AMOUNT_USD = 1.0;
+
+/**
+ * Fraction of available balance used for order size calculation.
+ * Reserves 3% headroom for the CLOB taker fee (2%) + rounding to avoid
+ * "not enough balance / allowance" rejections from the CLOB.
+ */
+export const CLOB_FEE_RESERVE = 0.97;
+
 /** Slippage tolerance for Fill-or-Kill market order fallbacks (20%) */
 export const FOK_SLIPPAGE_TOLERANCE = 0.2;
 

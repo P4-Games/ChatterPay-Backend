@@ -175,7 +175,9 @@ export async function getLifiQuote(
     toAddress,
     slippage = LIFI_DEFAULT_SLIPPAGE,
     denyExchanges,
-    allowExchanges
+    allowExchanges,
+    denyBridges,
+    allowBridges
   } = params;
 
   Logger.info(
@@ -202,6 +204,12 @@ export async function getLifiQuote(
   }
   if (allowExchanges?.length) {
     queryParams.set('allowExchanges', allowExchanges.join(','));
+  }
+  if (denyBridges?.length) {
+    queryParams.set('denyBridges', denyBridges.join(','));
+  }
+  if (allowBridges?.length) {
+    queryParams.set('allowBridges', allowBridges.join(','));
   }
 
   const url = `${LIFI_API_BASE_URL}/quote?${queryParams.toString()}`;

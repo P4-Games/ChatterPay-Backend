@@ -34,7 +34,12 @@ import {
   getPreferredScrollStablecoin,
   withdrawToScroll
 } from './polymarketBridgeService';
-import { BRIDGE_FEE_BUFFER, PUSD_ADDRESS } from './polymarketConstants';
+import {
+  BRIDGE_FEE_BUFFER,
+  CLOB_FEE_RESERVE,
+  MIN_BRIDGE_AMOUNT_USD,
+  PUSD_ADDRESS
+} from './polymarketConstants';
 import { executeGaslessWithdrawal } from './polymarketRelayerService';
 import { getPolymarketBalanceSummary, placeOrder } from './polymarketTradingService';
 
@@ -379,6 +384,23 @@ export async function executePurchase(
             undefined,
             logKey
           );
+        } else if (deficit < MIN_BRIDGE_AMOUNT_USD) {
+          // Deficit below LiFi minimum — skip bridge, let order placement use the existing
+          // balance with automatic size reduction to fit what's available.
+          Logger.log(
+            'info',
+            fnLog,
+            `${logKey} Skipping bridge: deficit $${deficit.toFixed(4)} < min $${MIN_BRIDGE_AMOUNT_USD}. ` +
+              `Order will be size-adjusted to available balance ($${existingBalance.toFixed(2)}).`
+          );
+          await updatePurchaseStep(purchaseId, 'bridge', { status: 'skipped' }, logKey);
+          await updatePurchaseStatus(
+            purchaseId,
+            'processing',
+            'order_placement',
+            undefined,
+            logKey
+          );
         } else {
           // Bridge only the deficit (+ 2% buffer for fees/slippage),
           // but never exceed the client-authorized bridge amount.
@@ -399,6 +421,21 @@ export async function executePurchase(
             actualBridgeAmount,
             logKey
           );
+
+          // LiFi may report DONE before the Polygon RPC reflects the new balance.
+          // Poll until balance increases from pre-bridge level (max 30s).
+          const expectedMinBalance =
+            existingBalance + (Number(actualBridgeAmount) / 1_000_000) * 0.85;
+          for (let attempt = 0; attempt < 6; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+            const confirmedBalance = await getPolygonUsdceBalance(safeAddress, logKey);
+            if (confirmedBalance >= expectedMinBalance) break;
+            Logger.log(
+              'warn',
+              fnLog,
+              `${logKey} Bridge DONE but balance not yet reflected ($${confirmedBalance.toFixed(2)} < $${expectedMinBalance.toFixed(2)}), waiting...`
+            );
+          }
 
           await updatePurchaseStep(
             purchaseId,
@@ -479,9 +516,11 @@ export async function executePurchase(
           const onChainBalance = await getPolygonUsdceBalance(safeAddress, logKey);
           const available = Math.max(onChainBalance - lock.committedUsdce, 0);
           const requiredUsdc = params.price * params.size;
-          // Truncate to 4 decimal places to safely cover all Polymarket tick sizes
-          // (standard markets use 0.01, some use 0.001 or finer granularity).
-          const maxAffordableSize = Math.floor((available / params.price) * 10000) / 10000;
+          // Reserve CLOB_FEE_RESERVE (3%) headroom for the 2% CLOB taker fee + rounding.
+          // Without this, placing an order for the exact balance causes "not enough balance/
+          // allowance" because CLOB requires amount + fee_estimate <= balance.
+          const maxAffordableSize =
+            Math.floor(((available * CLOB_FEE_RESERVE) / params.price) * 10000) / 10000;
 
           Logger.log(
             'info',
