@@ -34,7 +34,7 @@ import {
   CTF_EXCHANGE_ADDRESS,
   NEG_RISK_ADAPTER_ADDRESS,
   NEG_RISK_CTF_EXCHANGE_ADDRESS,
-  USDC_E_ADDRESS
+  PUSD_ADDRESS
 } from './polymarketConstants';
 
 const LOG_PREFIX = 'polymarketRelayerService';
@@ -204,7 +204,7 @@ export async function ensureTokenApprovals(privateKey: string, logKey: string): 
 
     const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
     const usdc = new ethers.Contract(
-      USDC_E_ADDRESS,
+      PUSD_ADDRESS,
       ['function allowance(address,address) view returns (uint256)'],
       provider
     );
@@ -238,7 +238,7 @@ export async function ensureTokenApprovals(privateKey: string, logKey: string): 
     // --- ERC-20 checks (USDC.e) ---
     if (allowanceCtf.lt(ethers.constants.MaxUint256.div(2))) {
       transactions.push({
-        to: USDC_E_ADDRESS,
+        to: PUSD_ADDRESS,
         data: erc20Iface.encodeFunctionData('approve', [
           CTF_EXCHANGE_ADDRESS,
           ethers.constants.MaxUint256
@@ -248,7 +248,7 @@ export async function ensureTokenApprovals(privateKey: string, logKey: string): 
     }
     if (allowanceNegRisk.lt(ethers.constants.MaxUint256.div(2))) {
       transactions.push({
-        to: USDC_E_ADDRESS,
+        to: PUSD_ADDRESS,
         data: erc20Iface.encodeFunctionData('approve', [
           NEG_RISK_CTF_EXCHANGE_ADDRESS,
           ethers.constants.MaxUint256
@@ -258,7 +258,7 @@ export async function ensureTokenApprovals(privateKey: string, logKey: string): 
     }
     if (allowanceNegRiskAdapter.lt(ethers.constants.MaxUint256.div(2))) {
       transactions.push({
-        to: USDC_E_ADDRESS,
+        to: PUSD_ADDRESS,
         data: erc20Iface.encodeFunctionData('approve', [
           NEG_RISK_ADAPTER_ADDRESS,
           ethers.constants.MaxUint256
@@ -407,7 +407,7 @@ export async function executeGaslessWithdrawal(
     ) {
       Logger.log('info', fnLog, `${logKey} Adding approval tx for LiFi router`);
       transactions.push({
-        to: USDC_E_ADDRESS,
+        to: PUSD_ADDRESS,
         data: usdcInterface.encodeFunctionData('approve', [withdrawData.approvalAddress, amount]),
         value: '0'
       });

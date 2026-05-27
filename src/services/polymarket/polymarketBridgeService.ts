@@ -17,7 +17,7 @@ import type { LifiQuoteResponse, LifiStatusResponse } from '../lifi/lifiTypes';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
 import { getChatterpayABI, getERC20ABI } from '../web3/abiService';
 import { setupContracts } from '../web3/contractSetupService';
-import { USDC_E_ADDRESS } from './polymarketConstants';
+import { PUSD_ADDRESS } from './polymarketConstants';
 
 const LOG_PREFIX = 'polymarketBridgeService';
 
@@ -56,7 +56,7 @@ export async function getBridgeQuote(
         fromChain: SCROLL_CHAIN_ID,
         toChain: POLYMARKET_CHAIN_ID,
         fromToken: fromTokenSymbol,
-        toToken: USDC_E_ADDRESS,
+        toToken: PUSD_ADDRESS,
         fromAmount: amount,
         fromAddress,
         toAddress: fromAddress // Default to fromAddress if not specified
@@ -396,7 +396,7 @@ export async function executeBridge(
         fromChain: SCROLL_CHAIN_ID,
         toChain: POLYMARKET_CHAIN_ID,
         fromToken: sourceToken.address,
-        toToken: USDC_E_ADDRESS,
+        toToken: PUSD_ADDRESS,
         fromAmount: amount,
         fromAddress: proxyAddress,
         toAddress: polygonSafeAddress,
@@ -508,12 +508,21 @@ export async function executeBridge(
       `${logKey} Bridge Request: ${JSON.stringify(quote.transactionRequest)}`
     );
 
+    // Use LiFi's recommended gasLimit + 15% buffer for proxy execute() overhead.
+    // LiFi complex routes (e.g. relaydepository) need 2M+ gas; 1M is insufficient.
+    const lifiGasLimit = quote.transactionRequest.gasLimit
+      ? Math.ceil(Number(quote.transactionRequest.gasLimit) * 1.15)
+      : 2_500_000;
+    const bridgeGasLimit = Math.max(lifiGasLimit, 1_000_000);
+
+    Logger.log('info', fnLog, `${logKey} Bridge gasLimit: ${bridgeGasLimit} (LiFi recommends: ${quote.transactionRequest.gasLimit ?? 'N/A'})`);
+
     const bridgeTx = await chatterPayContract.execute(
       quote.transactionRequest.to,
       requiredValue,
       quote.transactionRequest.data,
       {
-        gasLimit: 1000000,
+        gasLimit: bridgeGasLimit,
         gasPrice
       }
     );
@@ -594,7 +603,7 @@ export async function withdrawToScroll(
       {
         fromChain: POLYMARKET_CHAIN_ID,
         toChain: SCROLL_CHAIN_ID,
-        fromToken: USDC_E_ADDRESS,
+        fromToken: PUSD_ADDRESS,
         toToken: toTokenSymbol,
         fromAmount: amount,
         fromAddress: polygonSafeAddress,

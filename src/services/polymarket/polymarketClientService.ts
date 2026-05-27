@@ -7,9 +7,7 @@
  * @see https://docs.polymarket.com/api-reference/authentication
  */
 
-import type { ApiKeyCreds } from '@polymarket/clob-client';
-import { ClobClient } from '@polymarket/clob-client';
-import { SignatureType } from '@polymarket/order-utils';
+import { ClobClient, type ApiKeyCreds, SignatureTypeV2 } from '@polymarket/clob-client-v2';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 import { Wallet } from 'ethers';
 
@@ -86,7 +84,7 @@ export function decryptApiCredentials(encryptedData: string): ApiKeyCreds {
  * Used for market data queries that don't require API credentials.
  */
 export function createPublicClobClient(): ClobClient {
-  return new ClobClient(POLYMARKET_CLOB_API_URL, POLYMARKET_CHAIN_ID);
+  return new ClobClient({ host: POLYMARKET_CLOB_API_URL, chain: POLYMARKET_CHAIN_ID });
 }
 
 /**
@@ -103,16 +101,16 @@ export function createAuthenticatedClobClient(
   funderAddress?: string
 ): ClobClient {
   const signer = new Wallet(privateKey);
-  const signatureType = funderAddress ? SignatureType.POLY_GNOSIS_SAFE : SignatureType.EOA;
+  const signatureType = funderAddress ? SignatureTypeV2.POLY_GNOSIS_SAFE : SignatureTypeV2.EOA;
 
-  return new ClobClient(
-    POLYMARKET_CLOB_API_URL,
-    POLYMARKET_CHAIN_ID,
+  return new ClobClient({
+    host: POLYMARKET_CLOB_API_URL,
+    chain: POLYMARKET_CHAIN_ID,
     signer,
-    credentials,
+    creds: credentials,
     signatureType,
     funderAddress
-  );
+  });
 }
 
 /**
@@ -130,15 +128,14 @@ export async function getOrCreateApiCredentials(
 
   try {
     const signer = new Wallet(privateKey);
-    const signatureType = funderAddress ? SignatureType.POLY_GNOSIS_SAFE : SignatureType.EOA;
-    const client = new ClobClient(
-      POLYMARKET_CLOB_API_URL,
-      POLYMARKET_CHAIN_ID,
+    const signatureType = funderAddress ? SignatureTypeV2.POLY_GNOSIS_SAFE : SignatureTypeV2.EOA;
+    const client = new ClobClient({
+      host: POLYMARKET_CLOB_API_URL,
+      chain: POLYMARKET_CHAIN_ID,
       signer,
-      undefined,
       signatureType,
       funderAddress
-    );
+    });
 
     Logger.log(
       'info',

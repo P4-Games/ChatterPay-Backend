@@ -3,21 +3,26 @@
  * @see https://docs.polymarket.com/resources/contract-addresses
  *
  * Single source of truth — all Polymarket services import from here.
+ *
+ * CLOB V2 migration (April 28, 2026):
+ * - Collateral changed from USDC.e to pUSD (Polymarket USD, 1:1 USDC-backed)
+ * - New CTF Exchange and Neg Risk CTF Exchange contracts (new EIP-712 domain)
+ * - CTF (ERC-1155) and Neg Risk Adapter addresses unchanged
  */
 
-/** USDC.e (Bridged USDC) on Polygon — used as collateral */
-export const USDC_E_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+/** pUSD (Polymarket USD) on Polygon — collateral since CLOB V2 (April 2026). Backed 1:1 by USDC. */
+export const PUSD_ADDRESS = '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB';
 
-/** CTF Exchange — the main order matching/settlement contract */
-export const CTF_EXCHANGE_ADDRESS = '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E';
+/** CTF Exchange — main order matching/settlement contract (V2 address) */
+export const CTF_EXCHANGE_ADDRESS = '0xE111180000d2663C0091e4f400237545B87B996B';
 
-/** Neg Risk CTF Exchange — for negative risk (multi-outcome) markets */
-export const NEG_RISK_CTF_EXCHANGE_ADDRESS = '0xC5d563A36AE78145C45a50134d48A1215220f80a';
+/** Neg Risk CTF Exchange — for negative risk (multi-outcome) markets (V2 address) */
+export const NEG_RISK_CTF_EXCHANGE_ADDRESS = '0xe2222d279d744050d28e00520010520000310F59';
 
-/** Conditional Token Framework — ERC1155 conditional tokens */
+/** Conditional Token Framework — ERC-1155 conditional tokens (unchanged in V2) */
 export const CTF_ADDRESS = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045';
 
-/** Neg Risk Adapter */
+/** Neg Risk Adapter (unchanged in V2) */
 export const NEG_RISK_ADAPTER_ADDRESS = '0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296';
 
 /** 2% buffer applied to bridged amounts to cover LiFi/bridge fees and slippage */

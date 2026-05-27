@@ -7,7 +7,7 @@
  * @see https://docs.polymarket.com/trading/quickstart
  */
 
-import { AssetType, OrderType, Side } from '@polymarket/clob-client';
+import { AssetType, OrderType, Side } from '@polymarket/clob-client-v2';
 import axios from 'axios';
 import { ethers } from 'ethers';
 
@@ -20,7 +20,7 @@ import { Logger } from '../../helpers/loggerHelper';
 import { PolymarketOrderModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
 import { getAuthenticatedClientForUser } from './polymarketClientService';
-import { FOK_SLIPPAGE_TOLERANCE, USDC_E_ADDRESS } from './polymarketConstants';
+import { FOK_SLIPPAGE_TOLERANCE, PUSD_ADDRESS } from './polymarketConstants';
 import { ensureTokenApprovals } from './polymarketRelayerService';
 import type {
   ClobOpenOrder,
@@ -170,7 +170,7 @@ export async function placeOrder(
           );
         }
       } else {
-        // BUY: Check COLLATERAL (USDC.e) balance/allowance.
+        // BUY: Check COLLATERAL (pUSD) balance/allowance.
         // ERC-20 allowances ARE reported correctly by the CLOB.
         const collateralParams = { asset_type: AssetType.COLLATERAL };
 
@@ -178,16 +178,17 @@ export async function placeOrder(
         await client.updateBalanceAllowance(collateralParams);
 
         const allowanceStatus = await client.getBalanceAllowance(collateralParams);
-        const currentAllowance = Number(allowanceStatus?.allowance ?? 0);
         const currentBalance = Number(allowanceStatus?.balance ?? 0);
+        const allowances = allowanceStatus?.allowances ?? {};
+        const hasAnyAllowance = Object.values(allowances).some((v) => Number(v) > 0);
 
         Logger.log(
           'info',
           fnLog,
-          `${logKey} COLLATERAL balance=${currentBalance}, allowance=${currentAllowance}`
+          `${logKey} COLLATERAL balance=${currentBalance}, allowances=${JSON.stringify(allowances)}`
         );
 
-        if (currentAllowance === 0) {
+        if (!hasAnyAllowance) {
           Logger.log(
             'info',
             fnLog,
@@ -227,6 +228,16 @@ export async function placeOrder(
         // `price` is the worst acceptable price (slippage protection).
         // `amount` stays based on the original price so we don't overspend.
         const amount = params.side === 'BUY' ? params.price * params.size : params.size;
+
+        // CLOB V2 enforces $1 minimum for marketable BUY orders.
+        // Fail fast with a helpful message rather than letting the CLOB reject.
+        if (params.side === 'BUY' && amount < 1.0) {
+          const minShares = Math.ceil((1.0 / params.price) * 10000) / 10000;
+          throw new Error(
+            `FOK BUY order amount $${amount.toFixed(4)} is below Polymarket's $1.00 minimum. ` +
+              `At price $${params.price}, use at least ${minShares} shares.`
+          );
+        }
         const slippagePrice =
           params.side === 'BUY'
             ? Math.min(params.price * (1 + FOK_SLIPPAGE_TOLERANCE), 0.999)
@@ -834,10 +845,10 @@ export async function getPolymarketBalanceSummary(
   const fnLog = `[${LOG_PREFIX}:getPolymarketBalanceSummary]`;
 
   try {
-    // Query idle USDC.e balance on Polygon and active positions in parallel
+    // Query idle pUSD balance on Polygon and active positions in parallel
     const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
     const usdc = new ethers.Contract(
-      USDC_E_ADDRESS,
+      PUSD_ADDRESS,
       ['function balanceOf(address) view returns (uint256)'],
       provider
     );

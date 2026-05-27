@@ -40,7 +40,7 @@ export {
   NEG_RISK_CTF_EXCHANGE_ADDRESS,
   POLYMARKET_MAX_PRICE,
   POLYMARKET_MIN_PRICE,
-  USDC_E_ADDRESS
+  PUSD_ADDRESS
 } from './polymarketConstants';
 // Market data (read-only)
 export {

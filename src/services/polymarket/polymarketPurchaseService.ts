@@ -34,7 +34,7 @@ import {
   getPreferredScrollStablecoin,
   withdrawToScroll
 } from './polymarketBridgeService';
-import { BRIDGE_FEE_BUFFER, USDC_E_ADDRESS } from './polymarketConstants';
+import { BRIDGE_FEE_BUFFER, PUSD_ADDRESS } from './polymarketConstants';
 import { executeGaslessWithdrawal } from './polymarketRelayerService';
 import { getPolymarketBalanceSummary, placeOrder } from './polymarketTradingService';
 
@@ -87,7 +87,7 @@ async function getPolygonUsdceBalance(address: string, logKey: string): Promise<
 
   const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
   const usdc = new ethers.Contract(
-    USDC_E_ADDRESS,
+    PUSD_ADDRESS,
     ['function balanceOf(address) view returns (uint256)'],
     provider
   );
@@ -137,7 +137,7 @@ export async function withdrawSellProceeds(
     // On-chain USDC.e balance check (catches sell proceeds + any idle balance)
     const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
     const usdc = new ethers.Contract(
-      USDC_E_ADDRESS,
+      PUSD_ADDRESS,
       ['function balanceOf(address) view returns (uint256)'],
       provider
     );
@@ -496,8 +496,19 @@ export async function executePurchase(
 
             if (effectiveSize <= 0) {
               throw new Error(
-                `Insufficient USDC.e after bridge: $${available.toFixed(2)} available, ` +
+                `Insufficient pUSD after bridge: $${available.toFixed(2)} available, ` +
                   `need $${requiredUsdc.toFixed(2)} for ${params.size} shares @ $${params.price}`
+              );
+            }
+
+            // For FOK orders, CLOB V2 requires minimum $1 per marketable BUY.
+            // If bridge slippage reduced effectiveSize below that, fail now.
+            const isFok = params.orderType === 'FOK';
+            const effectiveAmount = effectiveSize * params.price;
+            if (isFok && effectiveAmount < 1.0) {
+              throw new Error(
+                `After bridge, available pUSD ($${available.toFixed(2)}) is below Polymarket's $1.00 minimum ` +
+                  `for FOK orders. Bridge delivered less than expected — try again or increase the amount.`
               );
             }
 
