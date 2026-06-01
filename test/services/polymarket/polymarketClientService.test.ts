@@ -7,11 +7,15 @@ import {
 } from '../../../src/services/polymarket/polymarketClientService';
 
 // Mock constants
-vi.mock('../../../src/config/constants', () => ({
-  POLYMARKET_CLOB_API_URL: 'https://clob.polymarket.com',
-  POLYMARKET_CHAIN_ID: 137,
-  $S: 'test-encryption-salt-value'
-}));
+vi.mock('../../../src/config/constants', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/config/constants')>();
+  return {
+    ...actual,
+    POLYMARKET_CLOB_API_URL: 'https://clob.polymarket.com',
+    POLYMARKET_CHAIN_ID: 137,
+    $S: 'test-encryption-salt-value'
+  };
+});
 
 // Mock Logger
 vi.mock('../../../src/helpers/loggerHelper', () => ({
