@@ -35,6 +35,7 @@ coverage/
 # Temporary files
 *.tmp
 *.temp
+.claude
 
 # Backup files
 *.bak
@@ -51,3 +52,4 @@ yarn.lock
 
 # Test coverage
 coverage
+
