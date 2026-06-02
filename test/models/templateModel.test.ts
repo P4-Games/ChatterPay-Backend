@@ -289,6 +289,98 @@ it('should create and save a Template document successfully', async () => {
           pt: 'Erro ao verificar o PIN: erro interno.'
         }
       },
+      polymarket_account_created: {
+        title: {
+          en: 'Polymarket Account Created',
+          es: 'Cuenta de Polymarket Creada',
+          pt: 'Conta Polymarket Criada'
+        },
+        message: {
+          en: 'Your Polymarket account has been created.',
+          es: 'Tu cuenta de Polymarket fue creada.',
+          pt: 'Sua conta Polymarket foi criada.'
+        }
+      },
+      polymarket_order_placed: {
+        title: { en: 'Order Placed', es: 'Orden Ejecutada', pt: 'Ordem Colocada' },
+        message: {
+          en: 'Your order has been placed.',
+          es: 'Tu orden fue ejecutada.',
+          pt: 'Sua ordem foi colocada.'
+        }
+      },
+      polymarket_order_cancelled: {
+        title: { en: 'Order Cancelled', es: 'Orden Cancelada', pt: 'Ordem Cancelada' },
+        message: {
+          en: 'Your order has been cancelled.',
+          es: 'Tu orden fue cancelada.',
+          pt: 'Sua ordem foi cancelada.'
+        }
+      },
+      polymarket_order_failed: {
+        title: { en: 'Order Failed', es: 'Orden Fallida', pt: 'Ordem Falhou' },
+        message: {
+          en: 'Your order could not be placed.',
+          es: 'Tu orden no pudo ser ejecutada.',
+          pt: 'Sua ordem não pôde ser colocada.'
+        }
+      },
+      polymarket_terms_not_accepted: {
+        title: {
+          en: 'Terms Not Accepted',
+          es: 'Términos No Aceptados',
+          pt: 'Termos Não Aceitos'
+        },
+        message: {
+          en: 'Accept terms before trading.',
+          es: 'Aceptá los términos antes de operar.',
+          pt: 'Aceite os termos antes de negociar.'
+        }
+      },
+      polymarket_account_not_found: {
+        title: {
+          en: 'No Polymarket Account',
+          es: 'Sin Cuenta de Polymarket',
+          pt: 'Sem Conta Polymarket'
+        },
+        message: {
+          en: 'Create an account first.',
+          es: 'Creá una cuenta primero.',
+          pt: 'Crie uma conta primeiro.'
+        }
+      },
+      polymarket_bridge_initiated: {
+        title: { en: 'Bridge Initiated', es: 'Puente Iniciado', pt: 'Ponte Iniciada' },
+        message: {
+          en: 'Bridging USDC to Polygon.',
+          es: 'Transfiriendo USDC a Polygon.',
+          pt: 'Transferindo USDC para Polygon.'
+        }
+      },
+      polymarket_disabled: {
+        title: {
+          en: 'Polymarket Unavailable',
+          es: 'Polymarket No Disponible',
+          pt: 'Polymarket Indisponível'
+        },
+        message: {
+          en: 'Polymarket is currently disabled.',
+          es: 'Polymarket está deshabilitado.',
+          pt: 'Polymarket está desativado.'
+        }
+      },
+      polymarket_settlement_claimed: {
+        title: {
+          en: 'Settlement Claimed',
+          es: 'Liquidación Reclamada',
+          pt: 'Liquidação Reivindicada'
+        },
+        message: {
+          en: 'Your sell has settled!',
+          es: 'Tu venta se liquidó!',
+          pt: 'Sua venda foi liquidada!'
+        }
+      },
       operation_in_progress: {
         title: {
           en: 'ChatterPay: Operation in progress',

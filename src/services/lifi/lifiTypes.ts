@@ -31,10 +31,14 @@ export interface LifiQuoteRequest {
   slippage?: number;
   /** Integrator identifier for analytics */
   integrator?: string;
-  /** DEXs/bridges to exclude */
+  /** DEXs to exclude */
   denyExchanges?: string[];
-  /** DEXs/bridges to prefer */
+  /** DEXs to prefer */
   allowExchanges?: string[];
+  /** Bridges to exclude (e.g. ['squid'] for routes requiring native MATIC) */
+  denyBridges?: string[];
+  /** Bridges to prefer */
+  allowBridges?: string[];
 }
 
 /**

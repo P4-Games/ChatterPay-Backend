@@ -9,12 +9,56 @@ import type { IUser, IUserWallet } from '../models/userModel';
 import { getAddressBalanceWithNfts } from '../services/balanceService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { getNotificationTemplate } from '../services/notificationService';
-import { getUser, getUserWalletByChainId } from '../services/userService';
-import type { BalanceInfo, Currency } from '../types/commonType';
+import { getPolymarketBalanceSummary } from '../services/polymarket';
+import {
+  getUser,
+  getUserByWalletAndChainid,
+  getUserWalletByChainId
+} from '../services/userService';
+import type { AddressBalanceWithNfts, BalanceInfo, Currency } from '../types/commonType';
 
 type CheckExternalDepositsQuery = {
   sendNotification?: string;
 };
+
+/**
+ * Enrich balance data with Polymarket balances (idle USDC.e + active positions value).
+ * Best-effort: if the user has no Polymarket account or the query fails, data is unchanged.
+ */
+async function enrichWithPolymarketBalances(
+  data: AddressBalanceWithNfts,
+  user: IUser | null
+): Promise<AddressBalanceWithNfts> {
+  if (!user?.polymarket_account?.polygon_address) return data;
+
+  const polygonAddress = user.polymarket_account.polygon_address;
+  const logKey = `balance-${user.phone_number}`;
+
+  try {
+    const { idle_usdc, positions_value } = await getPolymarketBalanceSummary(
+      polygonAddress,
+      logKey
+    );
+    const total_usd = idle_usdc + positions_value;
+    if (total_usd <= 0) return data;
+
+    data.polymarket = { idle_usdc, positions_value, total_usd };
+
+    // Add Polymarket total to USD totals
+    if (data.totals) {
+      const USD = 'USD' as const satisfies Currency;
+      data.totals[USD] = (data.totals[USD] ?? 0) + total_usd;
+    }
+  } catch (error) {
+    Logger.log(
+      'warn',
+      'balanceController',
+      `Polymarket balance enrichment failed: ${String(error)}`
+    );
+  }
+
+  return data;
+}
 
 /**
  * Handles the request to check external deposits.
@@ -77,8 +121,14 @@ export const walletBalance = async (
       tokens: IToken[];
     };
 
+    Logger.log('walletBalance', `Tokens: ${tokens?.length}, Chain: ${networkConfig?.chainId}`);
+
     // phoneNumber and eoaAddress not provided here
     const data = await getAddressBalanceWithNfts(null, wallet, '', networkConfig, tokens);
+
+    // Enrich with Polymarket balances if the user has a Polymarket account
+    const user = await getUserByWalletAndChainid(wallet, networkConfig.chainId);
+    await enrichWithPolymarketBalances(data, user);
 
     return await returnSuccessResponse(reply, 'Wallet balance fetched successfully', data);
   } catch (err) {
@@ -144,6 +194,8 @@ export const balanceByPhoneNumber = async (
       tokens
     );
 
+    await enrichWithPolymarketBalances(data, user);
+
     return await returnSuccessResponse(reply, 'Wallet balance fetched successfully', data);
   } catch (err) {
     return returnErrorResponse(
@@ -207,6 +259,8 @@ export const balanceByPhoneNumberSync = async (
       tokens
     );
 
+    await enrichWithPolymarketBalances(data, user);
+
     const USD = 'USD' as const satisfies Currency;
 
     const balances: BalanceInfo[] = Array.isArray(data.balances) ? data.balances : [];
@@ -229,6 +283,19 @@ export const balanceByPhoneNumberSync = async (
 
       return `${symbol}: ${amount}`;
     });
+
+    // Include Polymarket balance in the text summary
+    if (data.polymarket && data.polymarket.total_usd > 0) {
+      const pm = data.polymarket;
+      if (pm.positions_value > 0) {
+        tokenLines.push(`Polymarket Positions: ~ $${pm.positions_value.toFixed(2)}`);
+      }
+      if (pm.idle_usdc > 0) {
+        tokenLines.push(
+          `Polymarket USDC.e: ${pm.idle_usdc.toFixed(2)} (~ $${pm.idle_usdc.toFixed(2)})`
+        );
+      }
+    }
 
     const totalUsdRaw = data.totals?.[USD] ?? 0;
     const totalUsdFormatted = Number(totalUsdRaw).toFixed(2);

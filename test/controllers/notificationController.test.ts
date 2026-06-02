@@ -42,7 +42,7 @@ describe('notificationController', () => {
 
     it('returns 400 if limit is invalid', async () => {
       const mockRequest = {
-        query: { channel_user_id: '5492233049354', limit: 'invalid' }
+        query: { channel_user_id: '5492231111111', limit: 'invalid' }
       } as any;
       await getNotifications(mockRequest, mockReply);
       expect(mockReply.status).toHaveBeenCalledWith(400);
@@ -50,7 +50,7 @@ describe('notificationController', () => {
 
     it('returns 200 and data on success', async () => {
       const mockRequest = {
-        query: { channel_user_id: '5492233049354' }
+        query: { channel_user_id: '5492231111111' }
       } as any;
 
       (mongoNotificationService.getNotificationsWithPagination as any).mockResolvedValue({
@@ -75,7 +75,7 @@ describe('notificationController', () => {
   describe('markAllNotificationsAsRead', () => {
     it('returns 200 and modified count', async () => {
       const mockRequest = {
-        query: { channel_user_id: '5492233049354' }
+        query: { channel_user_id: '5492231111111' }
       } as any;
 
       (mongoNotificationService.markAllAsRead as any).mockResolvedValue(10);
@@ -95,7 +95,7 @@ describe('notificationController', () => {
     it('returns 400 if notification_id is not a valid ObjectId', async () => {
       const mockRequest = {
         params: { notification_id: 'invalid-id' },
-        query: { channel_user_id: '5492233049354' }
+        query: { channel_user_id: '5492231111111' }
       } as any;
 
       await deleteNotification(mockRequest, mockReply);
@@ -106,7 +106,7 @@ describe('notificationController', () => {
     it('returns 404 if softDelete returns 0', async () => {
       const mockRequest = {
         params: { notification_id: '507f1f77bcf86cd799439011' },
-        query: { channel_user_id: '5492233049354' }
+        query: { channel_user_id: '5492231111111' }
       } as any;
 
       (mongoNotificationService.softDeleteNotification as any).mockResolvedValue(0);
@@ -119,7 +119,7 @@ describe('notificationController', () => {
     it('returns 200 on successful delete', async () => {
       const mockRequest = {
         params: { notification_id: '507f1f77bcf86cd799439011' },
-        query: { channel_user_id: '5492233049354' }
+        query: { channel_user_id: '5492231111111' }
       } as any;
 
       (mongoNotificationService.softDeleteNotification as any).mockResolvedValue(1);

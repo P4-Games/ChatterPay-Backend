@@ -1193,6 +1193,166 @@ export async function sendOperationOutsideLimitsNotification(
 }
 
 /* ----------------------------------------------------------------------------------------- */
+/* Polymarket Notifications                                                                  */
+/* ----------------------------------------------------------------------------------------- */
+
+/**
+ * Sends a WhatsApp notification when a Polymarket order is placed successfully.
+ */
+export async function sendPolymarketOrderPlacedNotification(
+  channelUserId: string,
+  side: string,
+  size: string,
+  price: string,
+  orderId: string
+): Promise<void> {
+  try {
+    const { title, message } = await getNotificationTemplate(
+      channelUserId,
+      NotificationEnum.polymarket_order_placed
+    );
+
+    const formattedMessage = message
+      .replace('{0}', side)
+      .replace('{1}', size)
+      .replace('{2}', price)
+      .replace('{3}', orderId);
+
+    await persistAndSendNotification({
+      to: channelUserId,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.polymarket_order_placed,
+      sendPush: true,
+      sendBot: true,
+      title
+    });
+  } catch (error) {
+    Logger.error('sendPolymarketOrderPlacedNotification', error);
+  }
+}
+
+/**
+ * Sends a WhatsApp notification when a Polymarket order fails.
+ * Includes the user's current Polymarket balance so they can see available funds.
+ */
+export async function sendPolymarketOrderFailedNotification(
+  channelUserId: string,
+  side: string,
+  errorReason: string,
+  balance: string
+): Promise<void> {
+  try {
+    const { title, message } = await getNotificationTemplate(
+      channelUserId,
+      NotificationEnum.polymarket_order_failed
+    );
+
+    const formattedMessage = message
+      .replace('{0}', side)
+      .replace('{1}', errorReason)
+      .replace('{2}', balance);
+
+    await persistAndSendNotification({
+      to: channelUserId,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.polymarket_order_failed,
+      sendPush: true,
+      sendBot: true,
+      title
+    });
+  } catch (error) {
+    Logger.error('sendPolymarketOrderFailedNotification', error);
+  }
+}
+
+/**
+ * Sends a WhatsApp notification when sell proceeds have been settled
+ * (bridged from Polygon back to the user's Scroll wallet).
+ */
+export async function sendPolymarketSettlementClaimedNotification(
+  channelUserId: string,
+  amount: string
+): Promise<void> {
+  try {
+    const { title, message } = await getNotificationTemplate(
+      channelUserId,
+      NotificationEnum.polymarket_settlement_claimed
+    );
+
+    const formattedMessage = message.replace('{0}', amount);
+
+    await persistAndSendNotification({
+      to: channelUserId,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.polymarket_settlement_claimed,
+      sendPush: true,
+      sendBot: true,
+      title
+    });
+  } catch (error) {
+    Logger.error('sendPolymarketSettlementClaimedNotification', error);
+  }
+}
+
+/**
+ * Sends a WhatsApp notification when the Polymarket feature is disabled.
+ * This is shown when the user tries to use Polymarket while POLYMARKET_ENABLED=false.
+ */
+export async function sendPolymarketDisabledNotification(channelUserId: string): Promise<void> {
+  try {
+    const { title, message } = await getNotificationTemplate(
+      channelUserId,
+      NotificationEnum.polymarket_disabled
+    );
+
+    await persistAndSendNotification({
+      to: channelUserId,
+      messageBot: message,
+      messagePush: message,
+      template: NotificationEnum.polymarket_disabled,
+      sendPush: true,
+      sendBot: true,
+      title
+    });
+  } catch (error) {
+    Logger.error('sendPolymarketDisabledNotification', error);
+  }
+}
+
+/**
+ * Sends a WhatsApp notification when the user hasn't accepted the current terms.
+ * Includes the required terms version so the user knows what to do.
+ */
+export async function sendPolymarketTermsNotAcceptedNotification(
+  channelUserId: string,
+  termsVersion: string
+): Promise<void> {
+  try {
+    const { title, message } = await getNotificationTemplate(
+      channelUserId,
+      NotificationEnum.polymarket_terms_not_accepted
+    );
+
+    const formattedMessage = message.replace('{0}', termsVersion);
+
+    await persistAndSendNotification({
+      to: channelUserId,
+      messageBot: formattedMessage,
+      messagePush: formattedMessage,
+      template: NotificationEnum.polymarket_terms_not_accepted,
+      sendPush: true,
+      sendBot: true,
+      title
+    });
+  } catch (error) {
+    Logger.error('sendPolymarketTermsNotAcceptedNotification', error);
+  }
+}
+
+/* ----------------------------------------------------------------------------------------- */
 /* ----------------------------------------------------------------------------------------- */
 
 interface SendAndPersistParams {

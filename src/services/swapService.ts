@@ -678,7 +678,6 @@ async function handleTokenApproval(
       bufferBps: 500,
       logKey
     });
-
     const approveTx = await signer.sendTransaction({
       to: recipient,
       data: approveCallData,
