@@ -381,6 +381,18 @@ it('should create and save a Template document successfully', async () => {
           pt: 'Sua venda foi liquidada!'
         }
       },
+      polymarket_terms_request: {
+        title: {
+          en: 'Polymarket Terms',
+          es: 'Términos de Polymarket',
+          pt: 'Termos da Polymarket'
+        },
+        message: {
+          en: 'To place predictions on Polymarket you must accept their Terms of Service (v{0}). Read them at: {1}',
+          es: 'Para realizar predicciones en Polymarket debes aceptar sus Términos de Servicio (v{0}). Léelos en: {1}',
+          pt: 'Para fazer previsões no Polymarket você deve aceitar os Termos de Serviço (v{0}). Leia-os em: {1}'
+        }
+      },
       operation_in_progress: {
         title: {
           en: 'ChatterPay: Operation in progress',
