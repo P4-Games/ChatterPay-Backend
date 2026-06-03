@@ -1161,9 +1161,19 @@ export const polymarketPurchase = async (
       );
     }
 
-    const safeBridgeAmount = bridge_amount ?? '0';
-    if (side === 'BUY' && (!bridge_amount || bridge_amount === '0')) {
-      return errorReply(reply, 400, 'Missing required parameter (bridge_amount) for BUY order');
+    // Auto-compute bridge_amount when not provided for BUY orders.
+    // Computed as: ceil(price * size * BRIDGE_FEE_BUFFER * 1_000_000) to cover fees/slippage.
+    // This avoids requiring the caller (e.g. an LLM) to do floating-point arithmetic.
+    let safeBridgeAmount: string;
+    if (side === 'BUY') {
+      if (bridge_amount && bridge_amount !== '0') {
+        safeBridgeAmount = bridge_amount;
+      } else {
+        const sizeNum = rawSize === 'max' ? 0 : (rawSize as number);
+        safeBridgeAmount = String(Math.ceil(price * sizeNum * BRIDGE_FEE_BUFFER * 1_000_000));
+      }
+    } else {
+      safeBridgeAmount = bridge_amount ?? '0';
     }
 
     // Terms validation:
