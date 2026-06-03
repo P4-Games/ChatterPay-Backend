@@ -24,12 +24,14 @@ import {
   polymarketGetPnlHistory,
   polymarketGetPortfolioValue,
   polymarketGetPositions,
+  polymarketGetPublicTerms,
   polymarketGetTradeHistory,
   polymarketGetTradesHistory,
   polymarketPlaceOrder,
   polymarketPurchase,
   polymarketPurchaseStatus,
   polymarketSearchMarkets,
+  polymarketSendTerms,
   polymarketWithdraw
 } from '../controllers/polymarketController';
 
@@ -41,6 +43,10 @@ export default async function polymarketRoutes(fastify: FastifyInstance): Promis
   fastify.get('/polymarket/events/:slug', polymarketGetEventDetail);
   fastify.get('/polymarket/categories', polymarketGetCategories);
   fastify.get('/polymarket/search', polymarketSearchMarkets);
+
+  // ── Terms ────────────────────────────────────────────────────────────────
+  fastify.get('/polymarket/terms', polymarketGetPublicTerms);
+  fastify.post('/polymarket/terms/send', polymarketSendTerms);
 
   // ── Account ─────────────────────────────────────────────────────────────
   fastify.post('/polymarket/account/status', polymarketGetAccountStatus);

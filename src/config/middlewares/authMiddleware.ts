@@ -53,7 +53,8 @@ const PUBLIC_ROUTES = [
   '/nft/<id>',
   '/last_nft*',
   '/nft_info*',
-  '/balance/*'
+  '/balance/*',
+  '/polymarket/terms'
 ];
 
 /**
