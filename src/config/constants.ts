@@ -236,7 +236,7 @@ export const ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY: boolean =
 export const TELEGRAM_WEBHOOK_PATH = '/telegram/webhook';
 
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
-export const CORS_ORIGINS_EXCEPTIONS: string = `/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH}`;
+export const CORS_ORIGINS_EXCEPTIONS: string = `/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH},/polymarket/terms`;
 
 export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/price';
 export const TOKEN_IDS = ['usd-coin', 'tether', 'ethereum', 'bitcoin', 'wrapped-bitcoin', 'dai'];

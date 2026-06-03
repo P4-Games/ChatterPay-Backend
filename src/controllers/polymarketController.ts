@@ -12,7 +12,11 @@
 import { randomUUID } from 'crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import { POLYMARKET_ENABLED, POLYMARKET_TERMS_VERSION } from '../config/constants';
+import {
+  CHATTERPAY_DOMAIN,
+  POLYMARKET_ENABLED,
+  POLYMARKET_TERMS_VERSION
+} from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import type { IUser } from '../models/userModel';
@@ -29,7 +33,8 @@ import {
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import {
   sendPolymarketDisabledNotification,
-  sendPolymarketTermsNotAcceptedNotification
+  sendPolymarketTermsNotAcceptedNotification,
+  sendPolymarketTermsRequest
 } from '../services/notificationService';
 import {
   acceptTerms,
@@ -460,6 +465,66 @@ export const polymarketAcceptTerms = async (
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, `Failed to accept terms: ${String(error)}`);
+  }
+};
+
+// ============================================================================
+// Terms Endpoints
+// ============================================================================
+
+/** GET /polymarket/terms — public, no auth required */
+export const polymarketGetPublicTerms = async (
+  _request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  if (!checkEnabled(reply)) return reply;
+  const logKey = `[op:polymarket-public-terms]`;
+
+  try {
+    const terms = await getCurrentTerms(logKey);
+    if (!terms) {
+      return errorReply(reply, 404, 'Terms not found');
+    }
+
+    return successReply(reply, {
+      version: terms.version,
+      content: terms.content,
+      effective_date: terms.effective_date,
+      terms_url: `${CHATTERPAY_DOMAIN}/polymarket/terms`
+    });
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, String(error));
+    return errorReply(reply, 500, 'Failed to fetch terms');
+  }
+};
+
+/** POST /polymarket/terms/send — sends WhatsApp interactive Accept/Decline button to user */
+export const polymarketSendTerms = async (
+  request: FastifyRequest<{ Body: PolymarketAccountBody }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  if (!checkEnabled(reply)) return reply;
+  const logKey = `[op:polymarket-send-terms]`;
+
+  try {
+    const user = await resolveUser(request.body.channel_user_id, logKey);
+    if (!user) {
+      return errorReply(reply, 400, 'Invalid or missing channel_user_id');
+    }
+
+    const terms = await getCurrentTerms(logKey);
+    if (!terms) {
+      return errorReply(reply, 404, 'Terms not found');
+    }
+
+    const termsUrl = `${CHATTERPAY_DOMAIN}/polymarket/terms`;
+
+    await sendPolymarketTermsRequest(user.phone_number, String(terms.version), termsUrl);
+
+    return successReply(reply, { message: 'NO_REPLY_REQUIRED' });
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, String(error));
+    return errorReply(reply, 500, 'Failed to send terms request');
   }
 };
 

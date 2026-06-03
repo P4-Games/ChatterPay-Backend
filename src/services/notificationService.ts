@@ -1323,6 +1323,58 @@ export async function sendPolymarketDisabledNotification(channelUserId: string):
 }
 
 /**
+ * Sends an interactive WhatsApp button message asking the user to accept or decline
+ * Polymarket's Terms of Service before placing their first prediction.
+ * Buttons: "Accept Terms" / "Decline"
+ */
+export async function sendPolymarketTermsRequest(
+  channelUserId: string,
+  termsVersion: string,
+  termsUrl: string
+): Promise<void> {
+  try {
+    const DEFAULT_TITLE = 'Polymarket Terms';
+    const DEFAULT_MESSAGE =
+      `To place predictions on Polymarket you must accept their Terms of Service (v${termsVersion}). ` +
+      `Read them at: ${termsUrl}`;
+
+    let title = DEFAULT_TITLE;
+    let bodyText = DEFAULT_MESSAGE;
+
+    try {
+      const template = await getNotificationTemplate(
+        channelUserId,
+        NotificationEnum.polymarket_terms_request
+      );
+      if (template.message) {
+        title = template.title || DEFAULT_TITLE;
+        bodyText = template.message.replace('{0}', termsVersion).replace('{1}', termsUrl);
+      }
+    } catch {
+      // Template not in DB yet — use hardcoded fallback above
+    }
+
+    await chatizaloService.sendInteractiveMessage({
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id: channelUserId,
+      message: {
+        type: 'button',
+        header_text: title,
+        body_text: bodyText,
+        buttons: [
+          { id: 'polymarket_terms_accept', title: 'Accept Terms' },
+          { id: 'polymarket_terms_decline', title: 'Decline' }
+        ]
+      }
+    });
+
+    await persistNotification(channelUserId, bodyText, NotificationEnum.polymarket_terms_request);
+  } catch (error) {
+    Logger.error('sendPolymarketTermsRequest', error);
+  }
+}
+
+/**
  * Sends a WhatsApp notification when the user hasn't accepted the current terms.
  * Includes the required terms version so the user knows what to do.
  */
