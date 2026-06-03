@@ -1,37 +1,31 @@
 /**
- * Polymarket EU Proxy Helper
+ * Polymarket API Adapter
  *
- * In geo-restricted regions the Polymarket APIs (CLOB, Gamma, Data) are reached
- * through an authenticated EU proxy. In production the proxy URL replaces the
- * upstream URL in the corresponding env vars (`POLYMARKET_CLOB_API_URL`,
- * `POLYMARKET_GAMMA_API_URL`, `POLYMARKET_DATA_API_URL`); this module attaches
- * the proxy bearer token to every outbound request that targets one of those
- * configured base URLs. The proxy validates the token, strips it, and forwards
- * the request upstream transparently.
- *
- * A single global Axios request interceptor covers both the direct Gamma/Data
- * calls and the CLOB SDK (`@polymarket/clob-client-v2`), since the SDK shares
- * the same hoisted Axios singleton. The token is only added to URLs matching a
- * configured Polymarket base URL, so unrelated traffic (LiFi, Manteca, Alchemy,
- * The Graph, ...) is never touched. When `EU_PROXY_TOKEN` is unset the
- * interceptor is never registered, so behaviour is unchanged.
+ * Attaches a bearer token to every outbound request targeting the configured
+ * Polymarket base URLs (`POLYMARKET_CLOB_API_URL`, `POLYMARKET_GAMMA_API_URL`,
+ * `POLYMARKET_DATA_API_URL`). A single global Axios request handler covers both
+ * direct Gamma/Data calls and the CLOB SDK (`@polymarket/clob-client-v2`),
+ * since the SDK shares the same hoisted Axios singleton. Only requests whose
+ * URL matches a configured Polymarket base URL are touched; unrelated traffic
+ * (LiFi, Manteca, Alchemy, The Graph, ...) is never modified. When
+ * `POLYMARKET_ADAPTER_TOKEN` is unset the adapter is never registered.
  */
 
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 
 import {
-  EU_PROXY_TOKEN,
+  POLYMARKET_ADAPTER_TOKEN,
   POLYMARKET_CLOB_API_URL,
   POLYMARKET_DATA_API_URL,
   POLYMARKET_GAMMA_API_URL
 } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
 
-const LOG_PREFIX = 'polymarketProxyHelper';
+const LOG_PREFIX = 'polymarketAdapterHelper';
 
-let interceptorRegistered = false;
+let adapterRegistered = false;
 
-/** Base URLs routed through the EU proxy (whatever the env vars currently point to). */
+/** Polymarket base URLs that require authenticated requests. */
 function getProxiedBaseUrls(): string[] {
   return [POLYMARKET_CLOB_API_URL, POLYMARKET_GAMMA_API_URL, POLYMARKET_DATA_API_URL].filter(
     (url): url is string => Boolean(url)
@@ -51,28 +45,24 @@ function targetsProxiedHost(requestUrl: string): boolean {
 }
 
 /**
- * Register the global Axios interceptor that injects the EU proxy bearer token
+ * Register the global Axios adapter that injects the bearer token
  * into Polymarket-bound requests.
  *
  * Idempotent: safe to call multiple times, registers at most once. No-op when
- * `EU_PROXY_TOKEN` is empty, so non-proxied deployments are unaffected.
+ * `POLYMARKET_ADAPTER_TOKEN` is empty.
  */
-export function registerPolymarketProxyInterceptor(): void {
-  if (interceptorRegistered) return;
-  if (!EU_PROXY_TOKEN) return;
+export function registerPolymarketApiAdapter(): void {
+  if (adapterRegistered) return;
+  if (!POLYMARKET_ADAPTER_TOKEN) return;
 
   axios.interceptors.request.use((config) => {
     const requestUrl = resolveRequestUrl(config);
     if (requestUrl && targetsProxiedHost(requestUrl)) {
-      config.headers.set('Authorization', `Bearer ${EU_PROXY_TOKEN}`);
+      config.headers.set('Authorization', `Bearer ${POLYMARKET_ADAPTER_TOKEN}`);
     }
     return config;
   });
 
-  interceptorRegistered = true;
-  Logger.log(
-    'info',
-    `[${LOG_PREFIX}:register]`,
-    'EU proxy interceptor registered for Polymarket requests'
-  );
+  adapterRegistered = true;
+  Logger.log('info', `[${LOG_PREFIX}:register]`, 'Polymarket API adapter registered');
 }

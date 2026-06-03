@@ -98,7 +98,7 @@ const {
   POLYMARKET_BUILDER_SECRET: polymarketBuilderSecret = '',
   POLYMARKET_BUILDER_PASSPHRASE: polymarketBuilderPassphrase = '',
   POLYMARKET_POLYGON_RPC_URL: polymarketPolygonRpcUrl = 'https://polygon-rpc.com',
-  EU_PROXY_TOKEN: euProxyToken = ''
+  POLYMARKET_ADAPTER_TOKEN: polymarketApiToken = ''
 } = process.env;
 
 export {
@@ -332,13 +332,8 @@ export const POLYMARKET_BUILDER_SECRET: string = polymarketBuilderSecret;
 export const POLYMARKET_BUILDER_PASSPHRASE: string = polymarketBuilderPassphrase;
 export const POLYMARKET_POLYGON_RPC_URL: string = polymarketPolygonRpcUrl;
 
-/**
- * Bearer token for the EU proxy that fronts the Polymarket APIs (CLOB, Gamma, Data)
- * in geo-restricted regions. When set, it is attached as `Authorization: Bearer`
- * to every outbound request whose URL matches a configured Polymarket base URL.
- * Empty string disables proxy auth (requests go out unchanged).
- */
-export const EU_PROXY_TOKEN: string = euProxyToken;
+/** Bearer token attached to outbound Polymarket API requests. Empty string disables auth. */
+export const POLYMARKET_ADAPTER_TOKEN: string = polymarketApiToken;
 
 export const CACHE_POLYMARKET_MARKETS_TTL = 300; // 5 min
 export const CACHE_POLYMARKET_MARKETS_CHECK_PERIOD = 360; // 6 min
