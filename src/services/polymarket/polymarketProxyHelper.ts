@@ -32,15 +32,21 @@ function getProxiedBaseUrls(): string[] {
   );
 }
 
-/** Resolve the absolute target URL of a request for prefix matching. */
-function resolveRequestUrl(config: InternalAxiosRequestConfig): string {
+/**
+ * Resolve the absolute target URL of a request for prefix matching.
+ * Exported for unit testing.
+ */
+export function resolveRequestUrl(config: InternalAxiosRequestConfig): string {
   const url = config.url ?? '';
   if (/^https?:\/\//i.test(url)) return url;
   return `${config.baseURL ?? ''}${url}`;
 }
 
-/** True when the request targets one of the configured Polymarket base URLs. */
-function targetsProxiedHost(requestUrl: string): boolean {
+/**
+ * True when the request targets one of the configured Polymarket base URLs.
+ * Exported for unit testing.
+ */
+export function targetsProxiedHost(requestUrl: string): boolean {
   return getProxiedBaseUrls().some((base) => requestUrl.startsWith(base));
 }
 
@@ -65,4 +71,15 @@ export function registerPolymarketApiAdapter(): void {
 
   adapterRegistered = true;
   Logger.log('info', `[${LOG_PREFIX}:register]`, 'Polymarket API adapter registered');
+}
+
+/**
+ * Reset the adapter registration flag.
+ * **For use in tests only** – allows re-registering the adapter in isolated
+ * test cases without reloading the module.
+ * @internal
+ */
+export function _resetAdapterForTesting(): void {
+  if (process.env.NODE_ENV !== 'test') return;
+  adapterRegistered = false;
 }
