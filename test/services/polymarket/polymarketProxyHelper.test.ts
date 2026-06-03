@@ -130,8 +130,10 @@ describe('targetsProxiedHost', () => {
 // ---------------------------------------------------------------------------
 describe('registerPolymarketApiAdapter', () => {
   let mock: MockAdapter;
+  const originalNodeEnv = process.env.NODE_ENV;
 
   beforeEach(() => {
+    process.env.NODE_ENV = 'test';
     // Clear any interceptors left by a previous test and reset the flag
     // @ts-expect-error – accessing internal Axios property for test isolation
     axios.interceptors.request.handlers = [];
@@ -142,6 +144,7 @@ describe('registerPolymarketApiAdapter', () => {
   afterEach(() => {
     mock.restore();
     vi.restoreAllMocks();
+    process.env.NODE_ENV = originalNodeEnv;
   });
 
   // ── Idempotency ──────────────────────────────────────────────────────────
