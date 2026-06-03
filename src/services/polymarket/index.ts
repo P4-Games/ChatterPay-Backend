@@ -57,6 +57,8 @@ export {
   searchEvents,
   searchMarkets
 } from './polymarketMarketService';
+// EU proxy (geo-restriction)
+export { registerPolymarketProxyInterceptor } from './polymarketProxyHelper';
 export type { PurchaseParams } from './polymarketPurchaseService';
 // Purchase (unified flow)
 export { executePurchase, withdrawSellProceeds } from './polymarketPurchaseService';

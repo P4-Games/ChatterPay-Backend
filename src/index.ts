@@ -5,6 +5,7 @@ import { $B, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
 import { connectToDatabase } from './config/database';
 import { startServer } from './config/server';
 import { Logger } from './helpers/loggerHelper';
+import { registerPolymarketProxyInterceptor } from './services/polymarket/polymarketProxyHelper';
 
 /**
  * Sets up a graceful shutdown process for the server and database connection.
@@ -58,6 +59,7 @@ function initializeCloudTrace(): void {
 async function main(): Promise<void> {
   try {
     initializeCloudTrace();
+    registerPolymarketProxyInterceptor();
     await connectToDatabase();
     const server = await startServer();
     setupGracefulShutdown(server);
