@@ -78,11 +78,6 @@ steps:
       'ALCHEMY_AUTH_TOKEN',
       'ALCHEMY_SIGNING_KEY',
       'ALCHEMY_WEBHOOK_HEADER_API_KEY',
-      'POLYMARKET_BUILDER_API_KEY',
-      'POLYMARKET_BUILDER_SECRET',
-      'POLYMARKET_BUILDER_PASSPHRASE',
-      'POLYMARKET_ADAPTER_TOKEN',
-      'POLYMARKET_POLYGON_RPC_URL'
     ]
 
   - name: 'gcr.io/cloud-builders/docker'
@@ -181,11 +176,6 @@ steps:
       'ALCHEMY_AUTH_TOKEN',
       'ALCHEMY_SIGNING_KEY',
       'ALCHEMY_WEBHOOK_HEADER_API_KEY',
-      'POLYMARKET_BUILDER_API_KEY',
-      'POLYMARKET_BUILDER_SECRET',
-      'POLYMARKET_BUILDER_PASSPHRASE',
-      'POLYMARKET_ADAPTER_TOKEN',
-      'POLYMARKET_POLYGON_RPC_URL'
     ]
 
   - name: 'gcr.io/cloud-builders/docker'
@@ -211,7 +201,9 @@ steps:
       '--labels',
       'managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID',
       '--quiet',
-      '--allow-unauthenticated'
+      '--allow-unauthenticated',
+      '--set-secrets',
+      'POLYMARKET_ADAPTER_TOKEN=projects/$PROJECT_ID/secrets/${_POLYMARKET_ADAPTER_TOKEN_NAME}:latest,POLYMARKET_POLYGON_RPC_URL=projects/$PROJECT_ID/secrets/${_POLYMARKET_POLYGON_RPC_URL_NAME}:latest,POLYMARKET_BUILDER_API_KEY=projects/$PROJECT_ID/secrets/${_POLYMARKET_BUILDER_API_KEY_NAME}:latest,POLYMARKET_BUILDER_SECRET=projects/$PROJECT_ID/secrets/${_POLYMARKET_BUILDER_SECRET_NAME}:latest,POLYMARKET_BUILDER_PASSPHRASE=projects/$PROJECT_ID/secrets/${_POLYMARKET_BUILDER_PASSPHRASE_NAME}:latest'
     ]
 
 availableSecrets:
@@ -238,16 +230,6 @@ availableSecrets:
       env: 'ALCHEMY_SIGNING_KEY'
     - versionName: projects/$PROJECT_ID/secrets/${_ALCHEMY_WEBHOOK_HEADER_API_KEY_NAME}/versions/latest
       env: 'ALCHEMY_WEBHOOK_HEADER_API_KEY'
-    - versionName: projects/$PROJECT_ID/secrets/${_POLYMARKET_BUILDER_API_KEY_NAME}/versions/latest
-      env: 'POLYMARKET_BUILDER_API_KEY'
-    - versionName: projects/$PROJECT_ID/secrets/${_POLYMARKET_BUILDER_SECRET_NAME}/versions/latest
-      env: 'POLYMARKET_BUILDER_SECRET'
-    - versionName: projects/$PROJECT_ID/secrets/${_POLYMARKET_BUILDER_PASSPHRASE_NAME}/versions/latest
-      env: 'POLYMARKET_BUILDER_PASSPHRASE'
-    - versionName: projects/$PROJECT_ID/secrets/${_POLYMARKET_ADAPTER_TOKEN_NAME}/versions/latest
-      env: 'POLYMARKET_ADAPTER_TOKEN'
-    - versionName: projects/$PROJECT_ID/secrets/${_POLYMARKET_POLYGON_RPC_URL_NAME}/versions/latest
-      env: 'POLYMARKET_POLYGON_RPC_URL'
 
 images:
   - $_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
