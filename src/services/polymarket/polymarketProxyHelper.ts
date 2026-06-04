@@ -59,6 +59,12 @@ export function targetsProxiedHost(requestUrl: string): boolean {
  */
 export function registerPolymarketApiAdapter(): void {
   if (adapterRegistered) return;
+  // TEMP DIAGNOSTIC: log token length (not value) to confirm runtime injection. Remove after debug.
+  Logger.log(
+    'warn',
+    `[${LOG_PREFIX}:diag]`,
+    `POLYMARKET_ADAPTER_TOKEN length=${POLYMARKET_ADAPTER_TOKEN?.length ?? 'undefined'}`
+  );
   if (!POLYMARKET_ADAPTER_TOKEN) return;
 
   axios.interceptors.request.use((config) => {
