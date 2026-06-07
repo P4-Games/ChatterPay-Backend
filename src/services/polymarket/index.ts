@@ -57,6 +57,8 @@ export {
   searchEvents,
   searchMarkets
 } from './polymarketMarketService';
+// API authentication adapter
+export { registerPolymarketApiAdapter } from './polymarketProxyHelper';
 export type { PurchaseParams } from './polymarketPurchaseService';
 // Purchase (unified flow)
 export { executePurchase, withdrawSellProceeds } from './polymarketPurchaseService';

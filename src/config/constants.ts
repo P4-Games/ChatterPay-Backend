@@ -97,7 +97,8 @@ const {
   POLYMARKET_BUILDER_API_KEY: polymarketBuilderApiKey = '',
   POLYMARKET_BUILDER_SECRET: polymarketBuilderSecret = '',
   POLYMARKET_BUILDER_PASSPHRASE: polymarketBuilderPassphrase = '',
-  POLYMARKET_POLYGON_RPC_URL: polymarketPolygonRpcUrl = 'https://polygon-rpc.com'
+  POLYMARKET_POLYGON_RPC_URL: polymarketPolygonRpcUrl = 'https://polygon-rpc.com',
+  POLYMARKET_ADAPTER_TOKEN: polymarketApiToken = ''
 } = process.env;
 
 export {
@@ -330,6 +331,9 @@ export const POLYMARKET_BUILDER_API_KEY: string = polymarketBuilderApiKey;
 export const POLYMARKET_BUILDER_SECRET: string = polymarketBuilderSecret;
 export const POLYMARKET_BUILDER_PASSPHRASE: string = polymarketBuilderPassphrase;
 export const POLYMARKET_POLYGON_RPC_URL: string = polymarketPolygonRpcUrl;
+
+/** Bearer token attached to outbound Polymarket API requests. Empty string disables auth. */
+export const POLYMARKET_ADAPTER_TOKEN: string = polymarketApiToken;
 
 export const CACHE_POLYMARKET_MARKETS_TTL = 300; // 5 min
 export const CACHE_POLYMARKET_MARKETS_CHECK_PERIOD = 360; // 6 min
