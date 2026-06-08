@@ -310,8 +310,8 @@ export interface PurchaseParams {
   size: number;
   side: 'BUY' | 'SELL';
   orderType?: 'GTC' | 'FOK' | 'GTD';
-  /** Max bridge amount in human-readable USD (e.g. "5.00") */
-  bridgeAmountUsd: string;
+  /** Max bridge amount in human-readable USD (e.g. "5.00"). No cap applied if omitted. */
+  bridgeAmountUsd?: string;
   /** Scroll token symbol to bridge from (e.g. "WETH"). Auto-detects stablecoin if omitted. */
   bridgeToken?: string;
   termsVersion?: number;
@@ -432,17 +432,17 @@ export async function executePurchase(
             logKey
           );
         } else {
-          // Bridge only the deficit (+ 2% buffer for fees/slippage),
-          // but never exceed the client-authorized bridge amount (both in USD).
+          // Bridge the deficit + fee buffer, capped at client-authorized amount if provided.
           const deficitWithBuffer = deficit * BRIDGE_FEE_BUFFER;
-          const maxAllowed = Number(params.bridgeAmountUsd);
-          const actualBridgeAmountUsd = Math.min(deficitWithBuffer, maxAllowed).toFixed(6);
+          const actualBridgeAmountUsd = params.bridgeAmountUsd
+            ? Math.min(deficitWithBuffer, Number(params.bridgeAmountUsd)).toFixed(6)
+            : deficitWithBuffer.toFixed(6);
 
           Logger.log(
             'info',
             fnLog,
             `${logKey} Bridging deficit: $${deficitWithBuffer.toFixed(2)} USD ` +
-              `(capped at $${maxAllowed.toFixed(2)}, actual: $${actualBridgeAmountUsd})`
+              `(cap: ${params.bridgeAmountUsd ? `$${Number(params.bridgeAmountUsd).toFixed(2)}` : 'none'}, actual: $${actualBridgeAmountUsd})`
           );
 
           const bridgeResult = await executeBridge(

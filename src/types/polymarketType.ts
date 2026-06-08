@@ -91,8 +91,8 @@ export interface PolymarketPurchaseBody {
   size: number | 'max';
   side: PolymarketOrderSide;
   order_type?: PolymarketOrderType;
-  /** Max bridge amount in human-readable USD (e.g. "5.00") */
-  bridge_amount: string;
+  /** Max bridge amount in human-readable USD (e.g. "5.00"). Auto-computed from price × size if omitted. */
+  bridge_amount?: string;
   /** Scroll token symbol to bridge from (e.g. "WETH"). Auto-detects stablecoin if omitted. */
   bridge_token?: string;
   terms_version?: number;

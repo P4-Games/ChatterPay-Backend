@@ -1263,11 +1263,13 @@ export const polymarketPurchase = async (
       if (bridge_amount && bridge_amount !== '0') {
         safeBridgeAmount = bridge_amount;
       } else {
+        // Auto-compute: bridge enough to cover the full order + fee buffer.
+        // size=max is resolved later, so use 0 here — executePurchase will use the actual deficit.
         const sizeNum = rawSize === 'max' ? 0 : (rawSize as number);
-        safeBridgeAmount = String(Math.ceil(price * sizeNum * BRIDGE_FEE_BUFFER * 1_000_000));
+        safeBridgeAmount = (price * sizeNum * BRIDGE_FEE_BUFFER).toFixed(6);
       }
     } else {
-      safeBridgeAmount = bridge_amount ?? '0';
+      safeBridgeAmount = '0';
     }
 
     // Terms validation:
@@ -1303,12 +1305,17 @@ export const polymarketPurchase = async (
       size = rawSize;
     }
 
-    // Early balance check for BUY: fail fast before starting async flow
-    if (side === 'BUY' && Number(safeBridgeAmount) > 0) {
+    // Early balance check for BUY: fail fast before starting async flow.
+    // Skipped when bridge_token is a non-stablecoin (e.g. WETH) — resolveSourceToken
+    // validates that balance later with the correct USD conversion.
+    const SCROLL_STABLECOINS = new Set(['USDC', 'USDT']);
+    const bridgeTokenIsStablecoin =
+      !bridge_token || SCROLL_STABLECOINS.has(bridge_token.toUpperCase());
+    if (side === 'BUY' && bridgeTokenIsStablecoin) {
       const proxyAddress = user.wallets[0]?.wallet_proxy || '';
       if (proxyAddress) {
+        const requiredUsd = price * size;
         const scrollBalance = await getScrollStablecoinTotal(proxyAddress, logKey);
-        const requiredUsd = Number(safeBridgeAmount);
         if (scrollBalance < requiredUsd) {
           return errorReply(
             reply,
