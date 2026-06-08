@@ -680,12 +680,68 @@ export async function sweepSafeToDepositWallet(
 }
 
 // ============================================================================
-// Deposit Wallet Gasless Withdrawal
+// Deposit Wallet pUSD Transfer
 // ============================================================================
 
 /**
- * Execute a gasless withdrawal from Polygon to Scroll via the deposit wallet batch.
- * Mirrors executeGaslessWithdrawal but uses executeDepositWalletBatch instead of Safe execute().
+ * Transfer pUSD from a deposit wallet to another Polygon address via the relayer.
+ *
+ * Uses a plain ERC-20 transfer() call (no approval needed, allowed by relayer).
+ * Intended as step 1 of withdrawal: move funds to Safe so the Safe can approve
+ * LiFi and bridge to Scroll without hitting the deposit wallet's spender allowlist.
+ *
+ * @param privateKey - User's EOA private key
+ * @param depositWalletAddress - Source deposit wallet
+ * @param recipientAddress - Destination address (typically the user's Safe)
+ * @param amount - Amount in smallest units (6 decimals for pUSD)
+ * @param logKey - Logging identifier
+ */
+export async function transferPusdFromDepositWallet(
+  privateKey: string,
+  depositWalletAddress: string,
+  recipientAddress: string,
+  amount: string,
+  logKey: string
+): Promise<void> {
+  const fnLog = `[${LOG_PREFIX}:transferPusdFromDepositWallet]`;
+
+  Logger.log(
+    'info',
+    fnLog,
+    `${logKey} Transferring ${amount} pUSD from deposit wallet ${depositWalletAddress} → ${recipientAddress}`
+  );
+
+  const client = createRelayClient(privateKey);
+  const erc20Iface = new ethers.utils.Interface([
+    'function transfer(address to, uint256 amount) returns (bool)'
+  ]);
+
+  const calls: DepositWalletCall[] = [
+    {
+      target: PUSD_ADDRESS,
+      data: erc20Iface.encodeFunctionData('transfer', [recipientAddress, amount]),
+      value: '0'
+    }
+  ];
+
+  const deadline = Math.floor(Date.now() / 1000 + 3600).toString();
+  const response = await client.executeDepositWalletBatch(calls, depositWalletAddress, deadline);
+  const result = await response.wait();
+
+  if (!result) {
+    throw new Error('pUSD transfer from deposit wallet failed on-chain');
+  }
+
+  Logger.log('info', fnLog, `${logKey} Transfer confirmed (tx: ${result.transactionHash})`);
+}
+
+// ============================================================================
+// Deposit Wallet Gasless Withdrawal (deprecated — use Safe routing instead)
+// ============================================================================
+
+/**
+ * @deprecated Relayer blocks LiFi spender approval from deposit wallets.
+ * Use transferPusdFromDepositWallet + executeGaslessWithdrawal instead.
  *
  * @param privateKey - User's EOA private key
  * @param depositWalletAddress - The user's deposit wallet address

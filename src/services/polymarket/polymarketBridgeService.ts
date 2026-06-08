@@ -302,6 +302,41 @@ async function getStablecoinBalanceSummary(
   return results;
 }
 
+/**
+ * Return total stablecoin balance (USDC + USDT) on Scroll for a proxy wallet.
+ * Used for early balance validation before starting an async purchase flow.
+ *
+ * @returns Human-readable total (e.g. 14.50 for $14.50)
+ */
+export async function getScrollStablecoinTotal(
+  proxyAddress: string,
+  logKey: string
+): Promise<number> {
+  const fnLog = `[${LOG_PREFIX}:getScrollStablecoinTotal]`;
+  try {
+    const networkConfig = await mongoBlockchainService.getNetworkConfig();
+    const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
+    const tokens = await getStablecoinTokens(networkConfig.chainId);
+
+    let total = 0;
+    for (const token of tokens) {
+      try {
+        const contract = new ethers.Contract(token.address, ERC20_BALANCE_ABI, provider);
+        const bal: ethers.BigNumber = await contract.balanceOf(proxyAddress);
+        total += Number(ethers.utils.formatUnits(bal, token.decimals));
+      } catch {
+        // count as 0
+      }
+    }
+
+    Logger.log('info', fnLog, `${logKey} Total Scroll stablecoin: $${total.toFixed(2)}`);
+    return total;
+  } catch (error) {
+    Logger.log('warn', fnLog, `${logKey} Balance check failed: ${String(error)}`);
+    return 0;
+  }
+}
+
 // ============================================================================
 // Bridge Execution (server-side)
 // ============================================================================

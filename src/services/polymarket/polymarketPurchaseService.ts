@@ -41,8 +41,9 @@ import {
   PUSD_ADDRESS
 } from './polymarketConstants';
 import {
-  executeDepositWalletWithdrawal,
-  executeGaslessWithdrawal
+  deriveSafeAddress,
+  executeGaslessWithdrawal,
+  transferPusdFromDepositWallet
 } from './polymarketRelayerService';
 import { getPolymarketBalanceSummary, placeOrder } from './polymarketTradingService';
 
@@ -216,41 +217,42 @@ export async function withdrawSellProceeds(
       `${logKey} Withdrawing $${balanceHuman.toFixed(2)} USDC.e from Polygon ${walletType} wallet to Scroll proxy (→${toToken})`
     );
 
-    // Bridge with one retry after 10s on failure
+    // Bridge with one retry after 10s on failure.
+    // Deposit wallet users: transfer pUSD to Safe first (relayer blocks LiFi approval
+    // from deposit wallets), then bridge from Safe via the standard gasless path.
     const attemptBridge = async () => {
+      let bridgeSourceAddress = polygonWalletAddress;
+
+      if (walletType === 'deposit') {
+        const safeAddress = deriveSafeAddress(new ethers.Wallet(privateKey).address);
+        await transferPusdFromDepositWallet(
+          privateKey,
+          polygonWalletAddress,
+          safeAddress,
+          amount,
+          logKey
+        );
+        bridgeSourceAddress = safeAddress;
+      }
+
       const quote = await withdrawToScroll(
-        polygonWalletAddress,
+        bridgeSourceAddress,
         proxyAddress,
         amount,
         logKey,
         toToken
       );
-      if (walletType === 'deposit') {
-        await executeDepositWalletWithdrawal(
-          privateKey,
-          polygonWalletAddress,
-          {
-            approvalAddress: quote.approvalAddress,
-            to: quote.to,
-            data: quote.data,
-            value: quote.value
-          },
-          amount,
-          logKey
-        );
-      } else {
-        await executeGaslessWithdrawal(
-          privateKey,
-          {
-            approvalAddress: quote.approvalAddress,
-            to: quote.to,
-            data: quote.data,
-            value: quote.value
-          },
-          amount,
-          logKey
-        );
-      }
+      await executeGaslessWithdrawal(
+        privateKey,
+        {
+          approvalAddress: quote.approvalAddress,
+          to: quote.to,
+          data: quote.data,
+          value: quote.value
+        },
+        amount,
+        logKey
+      );
     };
 
     try {

@@ -67,12 +67,14 @@ import {
 import {
   executeBridge,
   getPreferredScrollStablecoin,
+  getScrollStablecoinTotal,
   withdrawToScroll
 } from '../services/polymarket/polymarketBridgeService';
 import { executePurchase } from '../services/polymarket/polymarketPurchaseService';
 import {
-  executeDepositWalletWithdrawal,
-  executeGaslessWithdrawal
+  deriveSafeAddress,
+  executeGaslessWithdrawal,
+  transferPusdFromDepositWallet
 } from '../services/polymarket/polymarketRelayerService';
 import { secService } from '../services/secService';
 import { getUser } from '../services/userService';
@@ -1074,32 +1076,42 @@ export const polymarketWithdraw = async (
     // Determine which stablecoin the user holds on Scroll (USDC or USDT)
     const toToken = await getPreferredScrollStablecoin(proxyAddress, logKey);
 
+    const walletType = user.polymarket_account.wallet_type ?? 'safe';
+
+    // Deposit wallet: relayer blocks LiFi spender approval.
+    // Transfer pUSD to Safe first, then bridge from Safe (no spender restrictions).
+    let bridgeSourceAddress = user.polymarket_account.polygon_address;
+    if (walletType === 'deposit') {
+      const { Wallet } = await import('ethers');
+      const safeAddress = deriveSafeAddress(new Wallet(privateKey).address);
+      await transferPusdFromDepositWallet(
+        privateKey,
+        user.polymarket_account.polygon_address,
+        safeAddress,
+        amountSmallest,
+        logKey
+      );
+      bridgeSourceAddress = safeAddress;
+    }
+
     const quote = await withdrawToScroll(
-      user.polymarket_account.polygon_address,
+      bridgeSourceAddress,
       proxyAddress,
       amountSmallest,
       logKey,
       toToken
     );
-
-    const walletType = user.polymarket_account.wallet_type ?? 'safe';
-    const withdrawData = {
-      approvalAddress: quote.approvalAddress,
-      to: quote.to,
-      data: quote.data,
-      value: quote.value
-    };
-    if (walletType === 'deposit') {
-      await executeDepositWalletWithdrawal(
-        privateKey,
-        user.polymarket_account.polygon_address,
-        withdrawData,
-        amountSmallest,
-        logKey
-      );
-    } else {
-      await executeGaslessWithdrawal(privateKey, withdrawData, amountSmallest, logKey);
-    }
+    await executeGaslessWithdrawal(
+      privateKey,
+      {
+        approvalAddress: quote.approvalAddress,
+        to: quote.to,
+        data: quote.data,
+        value: quote.value
+      },
+      amountSmallest,
+      logKey
+    );
 
     // Save withdrawal to transaction history
     const withdrawAmountHuman = Number(request.body.amount);
@@ -1210,6 +1222,22 @@ export const polymarketPurchase = async (
       Logger.log('info', LOG_PREFIX, `${logKey} Resolved max size: ${size} shares`);
     } else {
       size = rawSize;
+    }
+
+    // Early balance check for BUY: fail fast before starting async flow
+    if (side === 'BUY' && Number(safeBridgeAmount) > 0) {
+      const proxyAddress = user.wallets[0]?.wallet_proxy || '';
+      if (proxyAddress) {
+        const scrollBalance = await getScrollStablecoinTotal(proxyAddress, logKey);
+        const requiredUsd = Number(safeBridgeAmount) / 1_000_000;
+        if (scrollBalance < requiredUsd) {
+          return errorReply(
+            reply,
+            400,
+            `Insufficient balance: $${scrollBalance.toFixed(2)} available, need $${requiredUsd.toFixed(2)}`
+          );
+        }
+      }
     }
 
     const purchaseId = randomUUID();
