@@ -528,8 +528,6 @@ export const polymarketPlaceOrder = async (
     if (side === 'BUY') {
       const requiredUsdc = price * size;
       const bridgeAmountHuman = requiredUsdc * BRIDGE_FEE_BUFFER;
-      // Convert to smallest units (USDC has 6 decimals)
-      const bridgeAmountSmallest = Math.ceil(bridgeAmountHuman * 1_000_000).toString();
 
       Logger.log(
         'info',
@@ -538,7 +536,12 @@ export const polymarketPlaceOrder = async (
       );
 
       try {
-        const bridgeResult = await executeBridge(user, privateKey, bridgeAmountSmallest, logKey);
+        const bridgeResult = await executeBridge(
+          user,
+          privateKey,
+          bridgeAmountHuman.toFixed(6),
+          logKey
+        );
         Logger.log('info', LOG_PREFIX, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
 
         // Save bridge to transaction history
@@ -1166,6 +1169,7 @@ export const polymarketPurchase = async (
       side,
       order_type,
       bridge_amount,
+      bridge_token,
       terms_version
     } = request.body;
     if (!token_id || price == null || rawSize == null || !side) {
@@ -1229,7 +1233,7 @@ export const polymarketPurchase = async (
       const proxyAddress = user.wallets[0]?.wallet_proxy || '';
       if (proxyAddress) {
         const scrollBalance = await getScrollStablecoinTotal(proxyAddress, logKey);
-        const requiredUsd = Number(safeBridgeAmount) / 1_000_000;
+        const requiredUsd = Number(safeBridgeAmount);
         if (scrollBalance < requiredUsd) {
           return errorReply(
             reply,
@@ -1266,7 +1270,8 @@ export const polymarketPurchase = async (
         size,
         side,
         orderType: order_type ?? 'FOK',
-        bridgeAmount: safeBridgeAmount,
+        bridgeAmountUsd: safeBridgeAmount,
+        bridgeToken: bridge_token,
         termsVersion: terms_version
       },
       logKey

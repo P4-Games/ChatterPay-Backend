@@ -310,7 +310,10 @@ export interface PurchaseParams {
   size: number;
   side: 'BUY' | 'SELL';
   orderType?: 'GTC' | 'FOK' | 'GTD';
-  bridgeAmount: string;
+  /** Max bridge amount in human-readable USD (e.g. "5.00") */
+  bridgeAmountUsd: string;
+  /** Scroll token symbol to bridge from (e.g. "WETH"). Auto-detects stablecoin if omitted. */
+  bridgeToken?: string;
   termsVersion?: number;
 }
 
@@ -430,29 +433,29 @@ export async function executePurchase(
           );
         } else {
           // Bridge only the deficit (+ 2% buffer for fees/slippage),
-          // but never exceed the client-authorized bridge amount.
-          const deficitRaw = Math.ceil(deficit * BRIDGE_FEE_BUFFER * 1_000_000);
-          const maxAllowed = Number(params.bridgeAmount);
-          const actualBridgeAmount = Math.min(deficitRaw, maxAllowed).toString();
+          // but never exceed the client-authorized bridge amount (both in USD).
+          const deficitWithBuffer = deficit * BRIDGE_FEE_BUFFER;
+          const maxAllowed = Number(params.bridgeAmountUsd);
+          const actualBridgeAmountUsd = Math.min(deficitWithBuffer, maxAllowed).toFixed(6);
 
           Logger.log(
             'info',
             fnLog,
-            `${logKey} Bridging deficit: $${(deficit * BRIDGE_FEE_BUFFER).toFixed(2)} ` +
-              `(${actualBridgeAmount} smallest units, max allowed: ${params.bridgeAmount})`
+            `${logKey} Bridging deficit: $${deficitWithBuffer.toFixed(2)} USD ` +
+              `(capped at $${maxAllowed.toFixed(2)}, actual: $${actualBridgeAmountUsd})`
           );
 
           const bridgeResult = await executeBridge(
             currentUser,
             privateKey,
-            actualBridgeAmount,
-            logKey
+            actualBridgeAmountUsd,
+            logKey,
+            params.bridgeToken
           );
 
           // LiFi may report DONE before the Polygon RPC reflects the new balance.
           // Poll until balance increases from pre-bridge level (max 30s).
-          const expectedMinBalance =
-            existingBalance + (Number(actualBridgeAmount) / 1_000_000) * 0.85;
+          const expectedMinBalance = existingBalance + Number(actualBridgeAmountUsd) * 0.85;
           for (let attempt = 0; attempt < 6; attempt++) {
             await new Promise((resolve) => setTimeout(resolve, 5000));
             const confirmedBalance = await getPolygonUsdceBalance(safeAddress, logKey);
@@ -480,7 +483,7 @@ export async function executePurchase(
           Logger.log('info', fnLog, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
 
           // Save bridge to transaction history
-          const bridgeAmountHuman = Number(actualBridgeAmount) / 1_000_000;
+          const bridgeAmountHuman = Number(actualBridgeAmountUsd);
           await mongoTransactionService.saveTransaction({
             tx: bridgeResult.txHash,
             walletFrom: currentUser.wallets[0]?.wallet_proxy || '',
