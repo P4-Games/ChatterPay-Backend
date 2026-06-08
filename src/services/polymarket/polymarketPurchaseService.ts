@@ -40,7 +40,11 @@ import {
   MIN_BRIDGE_AMOUNT_USD,
   PUSD_ADDRESS
 } from './polymarketConstants';
-import { executeGaslessWithdrawal } from './polymarketRelayerService';
+import {
+  deriveSafeAddress,
+  executeGaslessWithdrawal,
+  transferPusdFromDepositWallet
+} from './polymarketRelayerService';
 import { getPolymarketBalanceSummary, placeOrder } from './polymarketTradingService';
 
 const LOG_PREFIX = 'polymarketPurchaseService';
@@ -137,7 +141,8 @@ export async function withdrawSellProceeds(
       return;
     }
 
-    const safeAddress = user.polymarket_account.polygon_address;
+    const walletType = user.polymarket_account.wallet_type ?? 'safe';
+    const polygonWalletAddress = user.polymarket_account.polygon_address;
 
     // On-chain USDC.e balance check (catches sell proceeds + any idle balance)
     const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
@@ -148,7 +153,7 @@ export async function withdrawSellProceeds(
     );
 
     // Snapshot idle balance before sell proceeds arrive
-    const initialRawBalance: ethers.BigNumber = await usdc.balanceOf(safeAddress);
+    const initialRawBalance: ethers.BigNumber = await usdc.balanceOf(polygonWalletAddress);
     const initialHuman = Number(ethers.utils.formatUnits(initialRawBalance, 6));
     Logger.log('info', fnLog, `${logKey} Initial idle USDC.e balance: $${initialHuman.toFixed(2)}`);
 
@@ -160,13 +165,13 @@ export async function withdrawSellProceeds(
     for (let i = 0; i < retryDelays.length; i++) {
       await new Promise((resolve) => setTimeout(resolve, retryDelays[i]));
 
-      rawBalance = await usdc.balanceOf(safeAddress);
+      rawBalance = await usdc.balanceOf(polygonWalletAddress);
       const balanceHuman = Number(ethers.utils.formatUnits(rawBalance, 6));
 
       Logger.log(
         'info',
         fnLog,
-        `${logKey} Safe USDC.e on-chain balance (attempt ${i + 1}/${retryDelays.length}): ${rawBalance.toString()} ($${balanceHuman.toFixed(2)})`
+        `${logKey} Polygon wallet USDC.e balance (attempt ${i + 1}/${retryDelays.length}): ${rawBalance.toString()} ($${balanceHuman.toFixed(2)})`
       );
 
       // Break when balance increases above initial (sell proceeds arrived)
@@ -181,7 +186,7 @@ export async function withdrawSellProceeds(
         fnLog,
         `${logKey} No sell proceeds detected after ${retryDelays.length} polls (~${totalWaitSec}s). ` +
           `Balance unchanged at $${initialHuman.toFixed(2)}. This is expected for GTC orders that take longer to fill. ` +
-          `Proceeds will remain safe in the Polygon Safe and will be bridged back automatically on the next purchase or via manual sync.`
+          `Proceeds will remain in the Polygon wallet and will be bridged back automatically on the next purchase or via manual sync.`
       );
       if (purchaseId) {
         await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'skipped' }, logKey);
@@ -209,12 +214,34 @@ export async function withdrawSellProceeds(
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Withdrawing $${balanceHuman.toFixed(2)} USDC.e from Polygon Safe to Scroll proxy (→${toToken})`
+      `${logKey} Withdrawing $${balanceHuman.toFixed(2)} USDC.e from Polygon ${walletType} wallet to Scroll proxy (→${toToken})`
     );
 
-    // Bridge with one retry after 10s on failure
+    // Bridge with one retry after 10s on failure.
+    // Deposit wallet users: transfer pUSD to Safe first (relayer blocks LiFi approval
+    // from deposit wallets), then bridge from Safe via the standard gasless path.
     const attemptBridge = async () => {
-      const quote = await withdrawToScroll(safeAddress, proxyAddress, amount, logKey, toToken);
+      let bridgeSourceAddress = polygonWalletAddress;
+
+      if (walletType === 'deposit') {
+        const safeAddress = deriveSafeAddress(new ethers.Wallet(privateKey).address);
+        await transferPusdFromDepositWallet(
+          privateKey,
+          polygonWalletAddress,
+          safeAddress,
+          amount,
+          logKey
+        );
+        bridgeSourceAddress = safeAddress;
+      }
+
+      const quote = await withdrawToScroll(
+        bridgeSourceAddress,
+        proxyAddress,
+        amount,
+        logKey,
+        toToken
+      );
       await executeGaslessWithdrawal(
         privateKey,
         {
@@ -245,7 +272,7 @@ export async function withdrawSellProceeds(
     // Save withdrawal to transaction history
     await mongoTransactionService.saveTransaction({
       tx: `withdraw-${Date.now()}`,
-      walletFrom: safeAddress,
+      walletFrom: polygonWalletAddress,
       walletTo: proxyAddress,
       amount: balanceHuman,
       fee: 0,
@@ -283,7 +310,10 @@ export interface PurchaseParams {
   size: number;
   side: 'BUY' | 'SELL';
   orderType?: 'GTC' | 'FOK' | 'GTD';
-  bridgeAmount: string;
+  /** Max bridge amount in human-readable USD (e.g. "5.00") */
+  bridgeAmountUsd: string;
+  /** Scroll token symbol to bridge from (e.g. "WETH"). Auto-detects stablecoin if omitted. */
+  bridgeToken?: string;
   termsVersion?: number;
 }
 
@@ -403,29 +433,29 @@ export async function executePurchase(
           );
         } else {
           // Bridge only the deficit (+ 2% buffer for fees/slippage),
-          // but never exceed the client-authorized bridge amount.
-          const deficitRaw = Math.ceil(deficit * BRIDGE_FEE_BUFFER * 1_000_000);
-          const maxAllowed = Number(params.bridgeAmount);
-          const actualBridgeAmount = Math.min(deficitRaw, maxAllowed).toString();
+          // but never exceed the client-authorized bridge amount (both in USD).
+          const deficitWithBuffer = deficit * BRIDGE_FEE_BUFFER;
+          const maxAllowed = Number(params.bridgeAmountUsd);
+          const actualBridgeAmountUsd = Math.min(deficitWithBuffer, maxAllowed).toFixed(6);
 
           Logger.log(
             'info',
             fnLog,
-            `${logKey} Bridging deficit: $${(deficit * BRIDGE_FEE_BUFFER).toFixed(2)} ` +
-              `(${actualBridgeAmount} smallest units, max allowed: ${params.bridgeAmount})`
+            `${logKey} Bridging deficit: $${deficitWithBuffer.toFixed(2)} USD ` +
+              `(capped at $${maxAllowed.toFixed(2)}, actual: $${actualBridgeAmountUsd})`
           );
 
           const bridgeResult = await executeBridge(
             currentUser,
             privateKey,
-            actualBridgeAmount,
-            logKey
+            actualBridgeAmountUsd,
+            logKey,
+            params.bridgeToken
           );
 
           // LiFi may report DONE before the Polygon RPC reflects the new balance.
           // Poll until balance increases from pre-bridge level (max 30s).
-          const expectedMinBalance =
-            existingBalance + (Number(actualBridgeAmount) / 1_000_000) * 0.85;
+          const expectedMinBalance = existingBalance + Number(actualBridgeAmountUsd) * 0.85;
           for (let attempt = 0; attempt < 6; attempt++) {
             await new Promise((resolve) => setTimeout(resolve, 5000));
             const confirmedBalance = await getPolygonUsdceBalance(safeAddress, logKey);
@@ -453,7 +483,7 @@ export async function executePurchase(
           Logger.log('info', fnLog, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
 
           // Save bridge to transaction history
-          const bridgeAmountHuman = Number(actualBridgeAmount) / 1_000_000;
+          const bridgeAmountHuman = Number(actualBridgeAmountUsd);
           await mongoTransactionService.saveTransaction({
             tx: bridgeResult.txHash,
             walletFrom: currentUser.wallets[0]?.wallet_proxy || '',

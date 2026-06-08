@@ -258,6 +258,43 @@ export async function getLifiQuote(
 }
 
 /**
+ * Fetch the current USD price for a token from Li.Fi.
+ *
+ * @param chainId - Chain ID where the token lives
+ * @param tokenAddress - Token contract address
+ * @param logKey - Logging identifier
+ * @returns Price in USD (e.g. 2450.50 for wETH), or null if unavailable
+ */
+export async function getLifiTokenPrice(
+  chainId: number,
+  tokenAddress: string,
+  logKey: string
+): Promise<number | null> {
+  try {
+    const url = `${LIFI_API_BASE_URL}/token`;
+    const response = await axios.get<LifiToken>(url, {
+      params: { chain: chainId, token: tokenAddress },
+      timeout: 10000,
+      headers: { Accept: 'application/json' }
+    });
+    const price = response.data.priceUSD ? Number(response.data.priceUSD) : null;
+    Logger.info(
+      'getLifiTokenPrice',
+      logKey,
+      `Token ${tokenAddress} on chain ${chainId}: $${price ?? 'unknown'}`
+    );
+    return price;
+  } catch (error) {
+    Logger.warn(
+      'getLifiTokenPrice',
+      logKey,
+      `Failed to fetch token price: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return null;
+  }
+}
+
+/**
  * Check the status of a cross-chain transfer
  *
  * @param params - Status request parameters

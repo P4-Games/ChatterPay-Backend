@@ -54,6 +54,7 @@ import {
   getMarkets,
   getOpenOrders,
   getPnlHistory,
+  getPolymarketBalanceSummary,
   getPortfolioValue,
   getPositions,
   getTradeHistory,
@@ -71,10 +72,15 @@ import {
 import {
   executeBridge,
   getPreferredScrollStablecoin,
+  getScrollStablecoinTotal,
   withdrawToScroll
 } from '../services/polymarket/polymarketBridgeService';
 import { executePurchase } from '../services/polymarket/polymarketPurchaseService';
-import { executeGaslessWithdrawal } from '../services/polymarket/polymarketRelayerService';
+import {
+  deriveSafeAddress,
+  executeGaslessWithdrawal,
+  transferPusdFromDepositWallet
+} from '../services/polymarket/polymarketRelayerService';
 import { secService } from '../services/secService';
 import { getUser } from '../services/userService';
 import type {
@@ -587,8 +593,6 @@ export const polymarketPlaceOrder = async (
     if (side === 'BUY') {
       const requiredUsdc = price * size;
       const bridgeAmountHuman = requiredUsdc * BRIDGE_FEE_BUFFER;
-      // Convert to smallest units (USDC has 6 decimals)
-      const bridgeAmountSmallest = Math.ceil(bridgeAmountHuman * 1_000_000).toString();
 
       Logger.log(
         'info',
@@ -597,7 +601,12 @@ export const polymarketPlaceOrder = async (
       );
 
       try {
-        const bridgeResult = await executeBridge(user, privateKey, bridgeAmountSmallest, logKey);
+        const bridgeResult = await executeBridge(
+          user,
+          privateKey,
+          bridgeAmountHuman.toFixed(6),
+          logKey
+        );
         Logger.log('info', LOG_PREFIX, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
 
         // Save bridge to transaction history
@@ -937,8 +946,12 @@ export const polymarketGetPortfolioValue = async (
       return errorReply(reply, 400, 'Polymarket account not created');
     }
 
-    const portfolio = await getPortfolioValue(user.polymarket_account.polygon_address, logKey);
-    return successReply(reply, { portfolio });
+    const polygonAddress = user.polymarket_account.polygon_address;
+    const [portfolio, { idle_usdc }] = await Promise.all([
+      getPortfolioValue(polygonAddress, logKey),
+      getPolymarketBalanceSummary(polygonAddress, logKey)
+    ]);
+    return successReply(reply, { portfolio, idle_usdc });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to fetch portfolio value');
@@ -1131,16 +1144,31 @@ export const polymarketWithdraw = async (
     // Determine which stablecoin the user holds on Scroll (USDC or USDT)
     const toToken = await getPreferredScrollStablecoin(proxyAddress, logKey);
 
+    const walletType = user.polymarket_account.wallet_type ?? 'safe';
+
+    // Deposit wallet: relayer blocks LiFi spender approval.
+    // Transfer pUSD to Safe first, then bridge from Safe (no spender restrictions).
+    let bridgeSourceAddress = user.polymarket_account.polygon_address;
+    if (walletType === 'deposit') {
+      const { Wallet } = await import('ethers');
+      const safeAddress = deriveSafeAddress(new Wallet(privateKey).address);
+      await transferPusdFromDepositWallet(
+        privateKey,
+        user.polymarket_account.polygon_address,
+        safeAddress,
+        amountSmallest,
+        logKey
+      );
+      bridgeSourceAddress = safeAddress;
+    }
+
     const quote = await withdrawToScroll(
-      user.polymarket_account.polygon_address,
+      bridgeSourceAddress,
       proxyAddress,
       amountSmallest,
       logKey,
       toToken
     );
-
-    // Step 2: Push quote payloads into Relayer for gasless execution
-    // executeGaslessWithdrawal takes (privateKey, withdrawData, amount, logKey)
     await executeGaslessWithdrawal(
       privateKey,
       {
@@ -1206,6 +1234,7 @@ export const polymarketPurchase = async (
       side,
       order_type,
       bridge_amount,
+      bridge_token,
       terms_version
     } = request.body;
     if (!token_id || price == null || rawSize == null || !side) {
@@ -1274,6 +1303,22 @@ export const polymarketPurchase = async (
       size = rawSize;
     }
 
+    // Early balance check for BUY: fail fast before starting async flow
+    if (side === 'BUY' && Number(safeBridgeAmount) > 0) {
+      const proxyAddress = user.wallets[0]?.wallet_proxy || '';
+      if (proxyAddress) {
+        const scrollBalance = await getScrollStablecoinTotal(proxyAddress, logKey);
+        const requiredUsd = Number(safeBridgeAmount);
+        if (scrollBalance < requiredUsd) {
+          return errorReply(
+            reply,
+            400,
+            `Insufficient balance: $${scrollBalance.toFixed(2)} available, need $${requiredUsd.toFixed(2)}`
+          );
+        }
+      }
+    }
+
     const purchaseId = randomUUID();
 
     // Create purchase record
@@ -1300,7 +1345,8 @@ export const polymarketPurchase = async (
         size,
         side,
         orderType: order_type ?? 'FOK',
-        bridgeAmount: safeBridgeAmount,
+        bridgeAmountUsd: safeBridgeAmount,
+        bridgeToken: bridge_token,
         termsVersion: terms_version
       },
       logKey

@@ -12,7 +12,7 @@ import { PolymarketTermsModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
 import { UserModel } from '../../models/userModel';
 import { encryptApiCredentials, getOrCreateApiCredentials } from './polymarketClientService';
-import { deploySafeWallet, setupGaslessTrading } from './polymarketRelayerService';
+import { deployDepositWallet, setupDepositWalletApprovals } from './polymarketRelayerService';
 
 const LOG_PREFIX = 'polymarketAccountService';
 
@@ -48,19 +48,15 @@ export async function createPolymarketAccount(
   try {
     Logger.log('info', fnLog, `${logKey} Creating Polymarket account`);
 
-    // 1. Setup gasless trading (deploy Safe + approve tokens via Relayer)
-    // This is a one-time setup that enables trading without MATIC/POL.
-    // We do this BEFORE deriving API keys so the keys are associated with the Safe.
-    const { proxyAddress } = await deploySafeWallet(privateKey, logKey);
-    await setupGaslessTrading(privateKey, logKey);
+    // 1. Deploy deposit wallet and set approvals (gasless, no MATIC/POL required)
+    const { address: depositWalletAddress } = await deployDepositWallet(privateKey, logKey);
+    await setupDepositWalletApprovals(privateKey, depositWalletAddress, logKey);
 
-    // 2. Create/derive API credentials for the Safe
-    const credentials = await getOrCreateApiCredentials(privateKey, proxyAddress);
+    // 2. Create/derive API credentials — signed by EOA (L1), not the deposit wallet
+    const credentials = await getOrCreateApiCredentials(privateKey);
 
     // 3. Encrypt credentials
     const encryptedCreds = encryptApiCredentials(credentials);
-
-    const polygonAddress = proxyAddress;
 
     // Update user document
     const updatedUser = await UserModel.findByIdAndUpdate(
@@ -68,11 +64,12 @@ export async function createPolymarketAccount(
       {
         $set: {
           polymarket_account: {
-            polygon_address: polygonAddress,
+            polygon_address: depositWalletAddress,
             api_credentials_encrypted: encryptedCreds,
             terms_accepted_version: 0,
             terms_accepted_at: null,
-            created_at: new Date()
+            created_at: new Date(),
+            wallet_type: 'deposit'
           }
         }
       },
@@ -83,7 +80,7 @@ export async function createPolymarketAccount(
       throw new Error('Failed to update user with Polymarket account');
     }
 
-    Logger.log('info', fnLog, `${logKey} Polymarket account created for ${polygonAddress}`);
+    Logger.log('info', fnLog, `${logKey} Polymarket account created for ${depositWalletAddress}`);
     return updatedUser;
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);

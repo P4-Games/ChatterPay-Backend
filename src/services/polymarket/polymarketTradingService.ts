@@ -21,7 +21,7 @@ import { PolymarketOrderModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
 import { getAuthenticatedClientForUser } from './polymarketClientService';
 import { FOK_SLIPPAGE_TOLERANCE, PUSD_ADDRESS } from './polymarketConstants';
-import { ensureTokenApprovals } from './polymarketRelayerService';
+import { ensureTokenApprovals, setupDepositWalletApprovals } from './polymarketRelayerService';
 import type {
   ClobOpenOrder,
   ClobOrderResponse,
@@ -44,6 +44,16 @@ const CLOB_ERROR_PATTERNS = {
 function matchesClobError(detail: string, patterns: readonly string[]): boolean {
   const lower = detail.toLowerCase();
   return patterns.some((p) => lower.includes(p));
+}
+
+async function ensureApprovals(user: IUser, privateKey: string, logKey: string): Promise<void> {
+  const walletType = user.polymarket_account?.wallet_type ?? 'safe';
+  if (walletType === 'deposit') {
+    const depositWallet = user.polymarket_account!.polygon_address;
+    await setupDepositWalletApprovals(privateKey, depositWallet, logKey);
+  } else {
+    await ensureTokenApprovals(privateKey, logKey);
+  }
 }
 
 // ============================================================================
@@ -194,7 +204,7 @@ export async function placeOrder(
             fnLog,
             `${logKey} No COLLATERAL allowance — setting up approvals via Relayer`
           );
-          await ensureTokenApprovals(privateKey, logKey);
+          await ensureApprovals(user, privateKey, logKey);
           await new Promise((resolve) => setTimeout(resolve, 2000));
           await client.updateBalanceAllowance(collateralParams);
           Logger.log('info', fnLog, `${logKey} Approvals set and CLOB cache refreshed`);
@@ -291,7 +301,7 @@ export async function placeOrder(
           fnLog,
           `${logKey} SELL rejected (${errorDetail}). Setting fresh approvals and retrying...`
         );
-        await ensureTokenApprovals(privateKey, logKey);
+        await ensureApprovals(user, privateKey, logKey);
         await new Promise((resolve) => setTimeout(resolve, 5000));
 
         // Refresh both asset type caches after approvals
