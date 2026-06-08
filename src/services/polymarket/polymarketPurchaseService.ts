@@ -40,7 +40,10 @@ import {
   MIN_BRIDGE_AMOUNT_USD,
   PUSD_ADDRESS
 } from './polymarketConstants';
-import { executeGaslessWithdrawal } from './polymarketRelayerService';
+import {
+  executeDepositWalletWithdrawal,
+  executeGaslessWithdrawal
+} from './polymarketRelayerService';
 import { getPolymarketBalanceSummary, placeOrder } from './polymarketTradingService';
 
 const LOG_PREFIX = 'polymarketPurchaseService';
@@ -137,7 +140,8 @@ export async function withdrawSellProceeds(
       return;
     }
 
-    const safeAddress = user.polymarket_account.polygon_address;
+    const walletType = user.polymarket_account.wallet_type ?? 'safe';
+    const polygonWalletAddress = user.polymarket_account.polygon_address;
 
     // On-chain USDC.e balance check (catches sell proceeds + any idle balance)
     const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
@@ -148,7 +152,7 @@ export async function withdrawSellProceeds(
     );
 
     // Snapshot idle balance before sell proceeds arrive
-    const initialRawBalance: ethers.BigNumber = await usdc.balanceOf(safeAddress);
+    const initialRawBalance: ethers.BigNumber = await usdc.balanceOf(polygonWalletAddress);
     const initialHuman = Number(ethers.utils.formatUnits(initialRawBalance, 6));
     Logger.log('info', fnLog, `${logKey} Initial idle USDC.e balance: $${initialHuman.toFixed(2)}`);
 
@@ -160,13 +164,13 @@ export async function withdrawSellProceeds(
     for (let i = 0; i < retryDelays.length; i++) {
       await new Promise((resolve) => setTimeout(resolve, retryDelays[i]));
 
-      rawBalance = await usdc.balanceOf(safeAddress);
+      rawBalance = await usdc.balanceOf(polygonWalletAddress);
       const balanceHuman = Number(ethers.utils.formatUnits(rawBalance, 6));
 
       Logger.log(
         'info',
         fnLog,
-        `${logKey} Safe USDC.e on-chain balance (attempt ${i + 1}/${retryDelays.length}): ${rawBalance.toString()} ($${balanceHuman.toFixed(2)})`
+        `${logKey} Polygon wallet USDC.e balance (attempt ${i + 1}/${retryDelays.length}): ${rawBalance.toString()} ($${balanceHuman.toFixed(2)})`
       );
 
       // Break when balance increases above initial (sell proceeds arrived)
@@ -181,7 +185,7 @@ export async function withdrawSellProceeds(
         fnLog,
         `${logKey} No sell proceeds detected after ${retryDelays.length} polls (~${totalWaitSec}s). ` +
           `Balance unchanged at $${initialHuman.toFixed(2)}. This is expected for GTC orders that take longer to fill. ` +
-          `Proceeds will remain safe in the Polygon Safe and will be bridged back automatically on the next purchase or via manual sync.`
+          `Proceeds will remain in the Polygon wallet and will be bridged back automatically on the next purchase or via manual sync.`
       );
       if (purchaseId) {
         await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'skipped' }, logKey);
@@ -209,23 +213,44 @@ export async function withdrawSellProceeds(
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Withdrawing $${balanceHuman.toFixed(2)} USDC.e from Polygon Safe to Scroll proxy (→${toToken})`
+      `${logKey} Withdrawing $${balanceHuman.toFixed(2)} USDC.e from Polygon ${walletType} wallet to Scroll proxy (→${toToken})`
     );
 
     // Bridge with one retry after 10s on failure
     const attemptBridge = async () => {
-      const quote = await withdrawToScroll(safeAddress, proxyAddress, amount, logKey, toToken);
-      await executeGaslessWithdrawal(
-        privateKey,
-        {
-          approvalAddress: quote.approvalAddress,
-          to: quote.to,
-          data: quote.data,
-          value: quote.value
-        },
+      const quote = await withdrawToScroll(
+        polygonWalletAddress,
+        proxyAddress,
         amount,
-        logKey
+        logKey,
+        toToken
       );
+      if (walletType === 'deposit') {
+        await executeDepositWalletWithdrawal(
+          privateKey,
+          polygonWalletAddress,
+          {
+            approvalAddress: quote.approvalAddress,
+            to: quote.to,
+            data: quote.data,
+            value: quote.value
+          },
+          amount,
+          logKey
+        );
+      } else {
+        await executeGaslessWithdrawal(
+          privateKey,
+          {
+            approvalAddress: quote.approvalAddress,
+            to: quote.to,
+            data: quote.data,
+            value: quote.value
+          },
+          amount,
+          logKey
+        );
+      }
     };
 
     try {
@@ -245,7 +270,7 @@ export async function withdrawSellProceeds(
     // Save withdrawal to transaction history
     await mongoTransactionService.saveTransaction({
       tx: `withdraw-${Date.now()}`,
-      walletFrom: safeAddress,
+      walletFrom: polygonWalletAddress,
       walletTo: proxyAddress,
       amount: balanceHuman,
       fee: 0,

@@ -49,6 +49,7 @@ import {
   getMarkets,
   getOpenOrders,
   getPnlHistory,
+  getPolymarketBalanceSummary,
   getPortfolioValue,
   getPositions,
   getTradeHistory,
@@ -69,7 +70,10 @@ import {
   withdrawToScroll
 } from '../services/polymarket/polymarketBridgeService';
 import { executePurchase } from '../services/polymarket/polymarketPurchaseService';
-import { executeGaslessWithdrawal } from '../services/polymarket/polymarketRelayerService';
+import {
+  executeDepositWalletWithdrawal,
+  executeGaslessWithdrawal
+} from '../services/polymarket/polymarketRelayerService';
 import { secService } from '../services/secService';
 import { getUser } from '../services/userService';
 import type {
@@ -872,8 +876,12 @@ export const polymarketGetPortfolioValue = async (
       return errorReply(reply, 400, 'Polymarket account not created');
     }
 
-    const portfolio = await getPortfolioValue(user.polymarket_account.polygon_address, logKey);
-    return successReply(reply, { portfolio });
+    const polygonAddress = user.polymarket_account.polygon_address;
+    const [portfolio, { idle_usdc }] = await Promise.all([
+      getPortfolioValue(polygonAddress, logKey),
+      getPolymarketBalanceSummary(polygonAddress, logKey)
+    ]);
+    return successReply(reply, { portfolio, idle_usdc });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to fetch portfolio value');
@@ -1074,19 +1082,24 @@ export const polymarketWithdraw = async (
       toToken
     );
 
-    // Step 2: Push quote payloads into Relayer for gasless execution
-    // executeGaslessWithdrawal takes (privateKey, withdrawData, amount, logKey)
-    await executeGaslessWithdrawal(
-      privateKey,
-      {
-        approvalAddress: quote.approvalAddress,
-        to: quote.to,
-        data: quote.data,
-        value: quote.value
-      },
-      amountSmallest,
-      logKey
-    );
+    const walletType = user.polymarket_account.wallet_type ?? 'safe';
+    const withdrawData = {
+      approvalAddress: quote.approvalAddress,
+      to: quote.to,
+      data: quote.data,
+      value: quote.value
+    };
+    if (walletType === 'deposit') {
+      await executeDepositWalletWithdrawal(
+        privateKey,
+        user.polymarket_account.polygon_address,
+        withdrawData,
+        amountSmallest,
+        logKey
+      );
+    } else {
+      await executeGaslessWithdrawal(privateKey, withdrawData, amountSmallest, logKey);
+    }
 
     // Save withdrawal to transaction history
     const withdrawAmountHuman = Number(request.body.amount);

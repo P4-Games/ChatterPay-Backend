@@ -113,7 +113,7 @@ export async function checkBridgeStatus(
   }
 }
 
-import { deploySafeWallet } from './polymarketRelayerService';
+import { deploySafeWallet, sweepSafeToDepositWallet } from './polymarketRelayerService';
 
 // ============================================================================
 // Stablecoin Detection on Scroll
@@ -348,13 +348,50 @@ export async function executeBridge(
       `${logKey} Executing bridge: ${amount} (smallest units) Scroll→Polygon`
     );
 
-    // 1. Setup contracts + deploy Safe in parallel (independent operations)
-    const [contracts, { proxyAddress: polygonSafeAddress }] = await Promise.all([
-      mongoBlockchainService
+    const walletType = user.polymarket_account?.wallet_type ?? 'safe';
+
+    // For deposit wallet users: don't deploy/use Safe — send funds directly to deposit wallet.
+    // For safe users: deploy Safe (idempotent) and use it as the bridge destination.
+    let polygonDestinationAddress: string;
+    let contracts: Awaited<ReturnType<typeof setupContracts>>;
+
+    if (walletType === 'deposit') {
+      if (!user.polymarket_account?.polygon_address) {
+        throw new Error('Deposit wallet address not found in polymarket_account');
+      }
+      polygonDestinationAddress = user.polymarket_account.polygon_address;
+      contracts = await mongoBlockchainService
         .getNetworkConfig()
-        .then((blockchain) => setupContracts(blockchain, user)),
-      deploySafeWallet(privateKey, logKey)
-    ]);
+        .then((blockchain) => setupContracts(blockchain, user));
+
+      // Sweep any existing funds from Safe to deposit wallet (best-effort)
+      try {
+        const swept = await sweepSafeToDepositWallet(privateKey, polygonDestinationAddress, logKey);
+        if (swept > 0) {
+          Logger.log(
+            'info',
+            fnLog,
+            `${logKey} Swept $${swept.toFixed(2)} from old Safe to deposit wallet before bridge`
+          );
+        }
+      } catch (sweepError) {
+        Logger.log(
+          'warn',
+          fnLog,
+          `${logKey} Pre-bridge Safe sweep failed (non-fatal): ${String(sweepError)}`
+        );
+      }
+    } else {
+      const [c, { proxyAddress: safeAddr }] = await Promise.all([
+        mongoBlockchainService
+          .getNetworkConfig()
+          .then((blockchain) => setupContracts(blockchain, user)),
+        deploySafeWallet(privateKey, logKey)
+      ]);
+      contracts = c;
+      polygonDestinationAddress = safeAddr;
+    }
+
     const proxyAddress = contracts.proxy.proxyAddress;
     const backendSigner = contracts.backPrincipal;
     const provider = contracts.provider;
@@ -399,7 +436,7 @@ export async function executeBridge(
         toToken: PUSD_ADDRESS,
         fromAmount: amount,
         fromAddress: proxyAddress,
-        toAddress: polygonSafeAddress,
+        toAddress: polygonDestinationAddress,
         slippage: 0.03 // Increased slippage for reliability
       },
       logKey

@@ -89,19 +89,27 @@ export function createPublicClobClient(): ClobClient {
 
 /**
  * Create an authenticated CLOB client for a user.
- * Requires the user's private key and stored API credentials.
  *
  * @param privateKey - User's EOA private key
  * @param credentials - Decrypted API credentials
- * @returns Authenticated ClobClient instance
+ * @param funderAddress - Safe or deposit wallet address (omit for EOA)
+ * @param walletType - 'deposit' → POLY_1271; 'safe'/undefined → POLY_GNOSIS_SAFE
  */
 export function createAuthenticatedClobClient(
   privateKey: string,
   credentials: ApiKeyCreds,
-  funderAddress?: string
+  funderAddress?: string,
+  walletType?: 'safe' | 'deposit'
 ): ClobClient {
   const signer = new Wallet(privateKey);
-  const signatureType = funderAddress ? SignatureTypeV2.POLY_GNOSIS_SAFE : SignatureTypeV2.EOA;
+  let signatureType: SignatureTypeV2;
+  if (!funderAddress) {
+    signatureType = SignatureTypeV2.EOA;
+  } else if (walletType === 'deposit') {
+    signatureType = SignatureTypeV2.POLY_1271;
+  } else {
+    signatureType = SignatureTypeV2.POLY_GNOSIS_SAFE;
+  }
 
   return new ClobClient({
     host: POLYMARKET_CLOB_API_URL,
@@ -122,13 +130,21 @@ export function createAuthenticatedClobClient(
  */
 export async function getOrCreateApiCredentials(
   privateKey: string,
-  funderAddress?: string
+  funderAddress?: string,
+  walletType?: 'safe' | 'deposit'
 ): Promise<ApiKeyCreds> {
   const logKey = `[${LOG_PREFIX}:getOrCreateApiCredentials]`;
 
   try {
     const signer = new Wallet(privateKey);
-    const signatureType = funderAddress ? SignatureTypeV2.POLY_GNOSIS_SAFE : SignatureTypeV2.EOA;
+    let signatureType: SignatureTypeV2;
+    if (!funderAddress) {
+      signatureType = SignatureTypeV2.EOA;
+    } else if (walletType === 'deposit') {
+      signatureType = SignatureTypeV2.POLY_1271;
+    } else {
+      signatureType = SignatureTypeV2.POLY_GNOSIS_SAFE;
+    }
     const client = new ClobClient({
       host: POLYMARKET_CLOB_API_URL,
       chain: POLYMARKET_CHAIN_ID,
@@ -140,7 +156,7 @@ export async function getOrCreateApiCredentials(
     Logger.log(
       'info',
       logKey,
-      `Creating/deriving API credentials${funderAddress ? ` for Safe ${funderAddress}` : ''}`
+      `Creating/deriving API credentials${funderAddress ? ` for ${funderAddress}` : ' (EOA)'}`
     );
     const credentials = await client.createOrDeriveApiKey();
 
@@ -169,15 +185,28 @@ export async function getAuthenticatedClientForUser(
     throw new Error('User does not have a Polymarket account');
   }
 
+  const walletType = user.polymarket_account.wallet_type ?? 'safe';
+
   try {
-    // Derive the Safe address (deposit address) to use as the funder/maker
+    if (walletType === 'deposit') {
+      // Deposit wallet flow: funder = stored deposit wallet address, sigType = POLY_1271
+      const depositWalletAddress = user.polymarket_account.polygon_address;
+      const credentials = decryptApiCredentials(user.polymarket_account.api_credentials_encrypted);
+      return createAuthenticatedClobClient(
+        privateKey,
+        credentials,
+        depositWalletAddress,
+        'deposit'
+      );
+    }
+
+    // Safe flow (legacy accounts): derive Safe address, migrate if needed
     const wallet = new Wallet(privateKey);
     const safeAddress = deriveSafeAddress(wallet.address);
 
     let credentialsEncrypted = user.polymarket_account.api_credentials_encrypted;
 
-    // MIGRATION: If the stored address is still the EOA (or any other address),
-    // we need to re-derive API credentials for the Safe address to avoid "invalid signature" errors.
+    // MIGRATION: re-derive API credentials for the Safe address if stored address differs.
     if (user.polymarket_account.polygon_address.toLowerCase() !== safeAddress.toLowerCase()) {
       Logger.log(
         'info',
@@ -195,13 +224,12 @@ export async function getAuthenticatedClientForUser(
         }
       });
 
-      // Update the local object for the current request
       user.polymarket_account.polygon_address = safeAddress;
       user.polymarket_account.api_credentials_encrypted = credentialsEncrypted;
     }
 
     const credentials = decryptApiCredentials(credentialsEncrypted);
-    return createAuthenticatedClobClient(privateKey, credentials, safeAddress);
+    return createAuthenticatedClobClient(privateKey, credentials, safeAddress, 'safe');
   } catch (error) {
     Logger.log('error', logKey, `Failed to get authenticated client: ${String(error)}`);
     throw new Error(`Failed to initialize Polymarket client: ${String(error)}`);
