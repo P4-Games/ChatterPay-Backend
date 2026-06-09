@@ -1237,6 +1237,7 @@ export const polymarketPurchase = async (
       bridge_token,
       terms_version
     } = request.body;
+
     if (!token_id || price == null || rawSize == null || !side) {
       return errorReply(reply, 400, 'Missing required parameters (token_id, price, size, side)');
     }

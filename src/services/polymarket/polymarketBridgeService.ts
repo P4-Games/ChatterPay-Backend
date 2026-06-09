@@ -378,9 +378,9 @@ async function resolveSourceToken(
 
   if (preferredSymbol) {
     const symbolUpper = preferredSymbol.toUpperCase();
-    const dbToken = await Token.findOne({ chain_id: chainId, symbol: preferredSymbol }).lean();
+    const dbToken = await Token.findOne({ chain_id: chainId, symbol: symbolUpper }).lean();
     if (!dbToken) {
-      throw new Error(`Token ${preferredSymbol} not found in DB for chain ${chainId}`);
+      throw new Error(`Token ${symbolUpper} not found in DB for chain ${chainId}`);
     }
 
     let fromAmount: string;
