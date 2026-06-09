@@ -388,22 +388,26 @@ export async function executePurchase(
       try {
         const safeAddress = currentUser.polymarket_account!.polygon_address;
         const existingBalance = await getPolygonUsdceBalance(safeAddress, logKey);
+        // Subtract committed funds (GTC orders in flight) so bridge decision
+        // matches the actual available balance at order placement time.
+        const committedAtBridge = getOrderLock(currentUser.phone_number).committedUsdce;
+        const availableBalance = Math.max(existingBalance - committedAtBridge, 0);
         const requiredUsdc = params.price * params.size;
-        const deficit = requiredUsdc - existingBalance;
+        const deficit = requiredUsdc - availableBalance;
 
         Logger.log(
           'info',
           fnLog,
           `${logKey} Bridge check — required: $${requiredUsdc.toFixed(2)}, ` +
-            `existing: $${existingBalance.toFixed(2)}, deficit: $${deficit.toFixed(2)}`
+            `on-chain: $${existingBalance.toFixed(2)}, committed: $${committedAtBridge.toFixed(2)}, ` +
+            `available: $${availableBalance.toFixed(2)}, deficit: $${deficit.toFixed(2)}`
         );
 
         if (deficit <= 0) {
-          // Existing balance covers the full purchase — skip bridge
           Logger.log(
             'info',
             fnLog,
-            `${logKey} Skipping bridge: existing balance ($${existingBalance.toFixed(2)}) ` +
+            `${logKey} Skipping bridge: available balance ($${availableBalance.toFixed(2)}) ` +
               `covers required ($${requiredUsdc.toFixed(2)})`
           );
           await updatePurchaseStep(purchaseId, 'bridge', { status: 'skipped' }, logKey);
@@ -549,6 +553,10 @@ export async function executePurchase(
           // Reserve CLOB_FEE_RESERVE (3%) headroom for the 2% CLOB taker fee + rounding.
           // Without this, placing an order for the exact balance causes "not enough balance/
           // allowance" because CLOB requires amount + fee_estimate <= balance.
+          // Always cap at maxAffordableSize so CLOB fee (≈2-3%) never causes rejection.
+          // Condition "available < requiredUsdc" alone is insufficient: even when balance
+          // nominally covers the order amount, the CLOB adds a fee on top and rejects
+          // if amount + fee_estimate > balance.
           const maxAffordableSize =
             Math.floor(((available * CLOB_FEE_RESERVE) / params.price) * 10000) / 10000;
 
@@ -557,10 +565,10 @@ export async function executePurchase(
             fnLog,
             `${logKey} Balance check — on-chain: $${onChainBalance.toFixed(2)}, ` +
               `committed: $${lock.committedUsdce.toFixed(2)}, available: $${available.toFixed(2)}, ` +
-              `required: $${requiredUsdc.toFixed(2)}`
+              `required: $${requiredUsdc.toFixed(2)}, max affordable: ${maxAffordableSize}`
           );
 
-          if (available < requiredUsdc) {
+          if (params.size > maxAffordableSize) {
             effectiveSize = maxAffordableSize;
 
             if (effectiveSize <= 0) {
@@ -571,13 +579,13 @@ export async function executePurchase(
             }
 
             // For FOK orders, CLOB V2 requires minimum $1 per marketable BUY.
-            // If bridge slippage reduced effectiveSize below that, fail now.
             const isFok = params.orderType === 'FOK';
             const effectiveAmount = effectiveSize * params.price;
             if (isFok && effectiveAmount < 1.0) {
               throw new Error(
-                `After bridge, available pUSD ($${available.toFixed(2)}) is below Polymarket's $1.00 minimum ` +
-                  `for FOK orders. Bridge delivered less than expected — try again or increase the amount.`
+                `Insufficient pUSD for FOK order: $${available.toFixed(2)} available ` +
+                  `(of $${onChainBalance.toFixed(2)} on-chain, $${lock.committedUsdce.toFixed(2)} committed). ` +
+                  `Polymarket requires minimum $1.00 per FOK order.`
               );
             }
 
@@ -585,7 +593,7 @@ export async function executePurchase(
               'warn',
               fnLog,
               `${logKey} Adjusted order size: ${params.size} → ${effectiveSize} ` +
-                `(available $${available.toFixed(2)} < required $${requiredUsdc.toFixed(2)})`
+                `(max affordable with fee reserve: $${(maxAffordableSize * params.price).toFixed(2)})`
             );
           }
         }
