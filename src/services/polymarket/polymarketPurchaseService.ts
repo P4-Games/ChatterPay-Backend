@@ -42,6 +42,7 @@ import {
   MIN_BRIDGE_AMOUNT_USD,
   PUSD_ADDRESS
 } from './polymarketConstants';
+import { getMarketByClobTokenId, getOutcomeForToken } from './polymarketMarketService';
 import {
   deriveSafeAddress,
   executeGaslessWithdrawal,
@@ -685,14 +686,37 @@ export async function executePurchase(
         user_notes: `Polymarket ${params.side} order`
       });
 
-      // WhatsApp notification — fire-and-forget (don't block the flow)
-      sendPolymarketOrderPlacedNotification(
-        freshUser.phone_number,
-        params.side,
-        effectiveSize.toString(),
-        params.price.toString(),
-        orderID
-      ).catch((err) =>
+      // WhatsApp notification — fire-and-forget (don't block the flow).
+      // Market question/outcome are fetched best-effort to make the message
+      // identifiable ("Will X happen? — Yes") instead of just a token ID.
+      (async () => {
+        let marketQuestion = '';
+        let outcome = '';
+        try {
+          const market = await getMarketByClobTokenId(params.tokenId, logKey);
+          if (market) {
+            marketQuestion = market.question;
+            outcome = getOutcomeForToken(market, params.tokenId);
+          }
+        } catch (marketError) {
+          Logger.log(
+            'warn',
+            fnLog,
+            `${logKey} Market lookup for notification failed: ${String(marketError)}`
+          );
+        }
+
+        await sendPolymarketOrderPlacedNotification(
+          freshUser.phone_number,
+          params.side,
+          effectiveSize.toString(),
+          params.price.toString(),
+          orderID,
+          marketQuestion,
+          outcome,
+          (effectiveSize * params.price).toFixed(2)
+        );
+      })().catch((err) =>
         Logger.log('warn', fnLog, `${logKey} Order placed notification failed: ${String(err)}`)
       );
 

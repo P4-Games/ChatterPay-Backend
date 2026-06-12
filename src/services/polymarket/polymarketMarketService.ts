@@ -137,6 +137,55 @@ export async function getMarketBySlug(slug: string, logKey: string): Promise<Gam
   }
 }
 
+/**
+ * Fetch the market that contains a given CLOB token ID.
+ * Used to enrich notifications with the market question and outcome label.
+ */
+export async function getMarketByClobTokenId(
+  tokenId: string,
+  logKey: string
+): Promise<GammaMarket | null> {
+  const cacheKey = `marketByToken:${tokenId}`;
+  const cached = marketsCache.get<GammaMarket>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const response = await axios.get<GammaMarket[]>(`${POLYMARKET_GAMMA_API_URL}/markets`, {
+      params: { clob_token_ids: tokenId },
+      timeout: 10000
+    });
+
+    if (response.data.length > 0) {
+      marketsCache.set(cacheKey, response.data[0]);
+      return response.data[0];
+    }
+
+    return null;
+  } catch (error) {
+    Logger.log(
+      'error',
+      `[${LOG_PREFIX}:getMarketByClobTokenId]`,
+      `${logKey} Failed: ${String(error)}`
+    );
+    return null;
+  }
+}
+
+/**
+ * Resolve the outcome label (e.g. "Yes" / "No") for a token within a market.
+ * Gamma returns `clobTokenIds` and `outcomes` as parallel JSON-encoded arrays.
+ */
+export function getOutcomeForToken(market: GammaMarket, tokenId: string): string {
+  try {
+    const tokenIds: string[] = JSON.parse(market.clobTokenIds || '[]');
+    const outcomes: string[] = JSON.parse(market.outcomes || '[]');
+    const idx = tokenIds.indexOf(tokenId);
+    return idx >= 0 ? (outcomes[idx] ?? '') : '';
+  } catch {
+    return '';
+  }
+}
+
 // ============================================================================
 // Gamma API — Events
 // ============================================================================

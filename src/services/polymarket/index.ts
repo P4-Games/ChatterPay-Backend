@@ -51,10 +51,12 @@ export {
   getClobMarketInfo,
   getEventBySlug,
   getEvents,
+  getMarketByClobTokenId,
   getMarketBySlug,
   getMarketPrice,
   getMarkets,
   getOrderBook,
+  getOutcomeForToken,
   searchEvents,
   searchMarkets
 } from './polymarketMarketService';
