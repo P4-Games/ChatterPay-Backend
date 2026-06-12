@@ -710,22 +710,37 @@ export async function executeBridge(
     const txHash = bridgeReceipt.transactionHash;
     Logger.log('info', fnLog, `${logKey} Bridge tx sent: ${txHash}`);
 
-    // 8. Poll for bridge completion
+    // 8. Poll for bridge completion.
+    // A polling timeout is NOT a failure: LiFi's status API can lag the actual
+    // transfer. Callers confirm arrival via the on-chain destination balance,
+    // which is authoritative. Only an explicit FAILED status aborts.
     Logger.log('info', fnLog, `${logKey} Polling bridge status`);
-    const status = await pollLifiStatus(
-      {
-        txHash,
-        fromChain: SCROLL_CHAIN_ID,
-        toChain: POLYMARKET_CHAIN_ID
-      },
-      logKey
-    );
+    let status: LifiStatusResponse | undefined;
+    try {
+      status = await pollLifiStatus(
+        {
+          txHash,
+          fromChain: SCROLL_CHAIN_ID,
+          toChain: POLYMARKET_CHAIN_ID
+        },
+        logKey
+      );
+    } catch (pollError) {
+      Logger.log(
+        'warn',
+        fnLog,
+        `${logKey} LiFi status polling did not complete (tx ${txHash}): ${String(pollError)}. ` +
+          `Transfer may still be in flight — deferring to on-chain balance confirmation.`
+      );
+    }
 
-    if (status.status === 'FAILED') {
+    if (status?.status === 'FAILED') {
       throw new Error(`Bridge failed: ${status.substatusMessage || 'Unknown reason'}`);
     }
 
-    Logger.log('info', fnLog, `${logKey} Bridge completed successfully`);
+    if (status?.status === 'DONE') {
+      Logger.log('info', fnLog, `${logKey} Bridge completed successfully`);
+    }
 
     return {
       success: true,

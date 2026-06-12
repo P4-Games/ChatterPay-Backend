@@ -36,6 +36,24 @@ export const BRIDGE_FEE_BUFFER = 1.02;
 export const MIN_BRIDGE_AMOUNT_USD = 1.0;
 
 /**
+ * Minimum BUY order value in USD (price × size), enforced at API entry.
+ * Polymarket's CLOB requires $1.00 minimum for marketable (FOK) BUY orders.
+ * $1.50 gives headroom so bridge fees/slippage can't push the deliverable
+ * amount below the CLOB's $1.00 floor after bridging.
+ */
+export const MIN_BUY_ORDER_USD = 1.5;
+
+/** Interval between on-chain balance checks after a bridge completes */
+export const BRIDGE_BALANCE_POLL_INTERVAL_MS = 5000;
+
+/**
+ * Max time to wait for bridged funds to be reflected on-chain (Polygon).
+ * LiFi may report DONE before the RPC reflects the balance, or its status
+ * API may lag the actual transfer entirely.
+ */
+export const BRIDGE_BALANCE_POLL_TIMEOUT_MS = 180000;
+
+/**
  * Fraction of available balance used for order size calculation.
  * Reserves 3% headroom for the CLOB taker fee (2%) + rounding to avoid
  * "not enough balance / allowance" rejections from the CLOB.

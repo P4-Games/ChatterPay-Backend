@@ -35,6 +35,8 @@ import {
   withdrawToScroll
 } from './polymarketBridgeService';
 import {
+  BRIDGE_BALANCE_POLL_INTERVAL_MS,
+  BRIDGE_BALANCE_POLL_TIMEOUT_MS,
   BRIDGE_FEE_BUFFER,
   CLOB_FEE_RESERVE,
   MIN_BRIDGE_AMOUNT_USD,
@@ -457,17 +459,51 @@ export async function executePurchase(
             params.bridgeToken
           );
 
-          // LiFi may report DONE before the Polygon RPC reflects the new balance.
-          // Poll until balance increases from pre-bridge level (max 30s).
+          // Save bridge to transaction history immediately — the tx is on-chain
+          // even if the balance confirmation below times out.
+          await mongoTransactionService.saveTransaction({
+            tx: bridgeResult.txHash,
+            walletFrom: currentUser.wallets[0]?.wallet_proxy || '',
+            walletTo: safeAddress,
+            amount: Number(actualBridgeAmountUsd),
+            fee: 0,
+            token: bridgeResult.fromToken || 'USDC',
+            type: 'polymarket_bridge',
+            status: 'completed',
+            chain_id: 534352,
+            user_notes: `Polymarket ${params.side} bridge`
+          });
+
+          // LiFi may report DONE before the Polygon RPC reflects the new balance,
+          // or its status API may lag the actual transfer. The on-chain balance
+          // is the authoritative confirmation — poll it until the funds arrive.
+          // If they never do within the window, fail here instead of proceeding
+          // to order placement with $0 available.
           const expectedMinBalance = existingBalance + Number(actualBridgeAmountUsd) * 0.85;
-          for (let attempt = 0; attempt < 6; attempt++) {
-            await new Promise((resolve) => setTimeout(resolve, 5000));
+          const pollDeadline = Date.now() + BRIDGE_BALANCE_POLL_TIMEOUT_MS;
+          let balanceConfirmed = false;
+          while (Date.now() < pollDeadline) {
+            await new Promise((resolve) => {
+              setTimeout(resolve, BRIDGE_BALANCE_POLL_INTERVAL_MS);
+            });
             const confirmedBalance = await getPolygonUsdceBalance(safeAddress, logKey);
-            if (confirmedBalance >= expectedMinBalance) break;
+            if (confirmedBalance >= expectedMinBalance) {
+              balanceConfirmed = true;
+              break;
+            }
             Logger.log(
               'warn',
               fnLog,
-              `${logKey} Bridge DONE but balance not yet reflected ($${confirmedBalance.toFixed(2)} < $${expectedMinBalance.toFixed(2)}), waiting...`
+              `${logKey} Bridge sent but balance not yet reflected ($${confirmedBalance.toFixed(2)} < $${expectedMinBalance.toFixed(2)}), waiting...`
+            );
+          }
+
+          if (!balanceConfirmed) {
+            throw new Error(
+              `Bridged funds (tx ${bridgeResult.txHash}) have not arrived on Polygon after ` +
+                `${Math.round(BRIDGE_BALANCE_POLL_TIMEOUT_MS / 1000)}s. The transfer is still in transit — ` +
+                `the funds will be credited to your Polymarket balance shortly. ` +
+                `Retry the order once they arrive (no new bridge will be needed).`
             );
           }
 
@@ -485,21 +521,6 @@ export async function executePurchase(
             logKey
           );
           Logger.log('info', fnLog, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
-
-          // Save bridge to transaction history
-          const bridgeAmountHuman = Number(actualBridgeAmountUsd);
-          await mongoTransactionService.saveTransaction({
-            tx: bridgeResult.txHash,
-            walletFrom: currentUser.wallets[0]?.wallet_proxy || '',
-            walletTo: safeAddress,
-            amount: bridgeAmountHuman,
-            fee: 0,
-            token: bridgeResult.fromToken || 'USDC',
-            type: 'polymarket_bridge',
-            status: 'completed',
-            chain_id: 534352,
-            user_notes: `Polymarket ${params.side} bridge`
-          });
         }
       } catch (error) {
         const errorMsg = `Bridge failed: ${String(error)}`;

@@ -60,6 +60,7 @@ import {
   getTradeHistory,
   getTradesHistory,
   hasAcceptedCurrentTerms,
+  MIN_BUY_ORDER_USD,
   POLYMARKET_MAX_PRICE,
   POLYMARKET_MIN_PRICE,
   placeOrder,
@@ -581,6 +582,19 @@ export const polymarketPlaceOrder = async (
         reply,
         400,
         `Invalid price ${price}: must be between ${POLYMARKET_MIN_PRICE} and ${POLYMARKET_MAX_PRICE}. The market may have already been resolved.`
+      );
+    }
+
+    // ── Minimum order value (BUY) ─────────────────────────────────────────
+    // Enforced above Polymarket's $1.00 FOK minimum so bridge fees/slippage
+    // can't push the deliverable amount below the CLOB's floor.
+    if (side === 'BUY' && price * size < MIN_BUY_ORDER_USD) {
+      const minShares = Math.ceil((MIN_BUY_ORDER_USD / price) * 100) / 100;
+      return errorReply(
+        reply,
+        400,
+        `Order value $${(price * size).toFixed(2)} is below the $${MIN_BUY_ORDER_USD.toFixed(2)} minimum for BUY orders. ` +
+          `At price $${price}, buy at least ${minShares} shares.`
       );
     }
 
@@ -1253,6 +1267,19 @@ export const polymarketPurchase = async (
         reply,
         400,
         `Invalid price ${price}: must be between 0.001 and 0.999. The market may have already been resolved.`
+      );
+    }
+
+    // Minimum order value for BUY: enforced above Polymarket's $1.00 FOK
+    // minimum so bridge fees/slippage can't push the deliverable below it.
+    // (BUY size is always numeric — size=max is rejected above for BUY.)
+    if (side === 'BUY' && price * (rawSize as number) < MIN_BUY_ORDER_USD) {
+      const minShares = Math.ceil((MIN_BUY_ORDER_USD / price) * 100) / 100;
+      return errorReply(
+        reply,
+        400,
+        `Order value $${(price * (rawSize as number)).toFixed(2)} is below the $${MIN_BUY_ORDER_USD.toFixed(2)} minimum for BUY orders. ` +
+          `At price $${price}, buy at least ${minShares} shares.`
       );
     }
 
