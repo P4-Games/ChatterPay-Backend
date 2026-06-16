@@ -162,7 +162,7 @@ describe('registerPolymarketApiAdapter', () => {
   it('does not register any interceptor when POLYMARKET_ADAPTER_TOKEN is empty', async () => {
     // Temporarily override the token to empty
     const constants = await import('../../../src/config/constants');
-    const original = constants.POLYMARKET_ADAPTER_TOKEN;
+    const original = constants.POLYMARKET_ADAPTER_AUTH_TOKEN;
     (constants as Record<string, unknown>).POLYMARKET_ADAPTER_TOKEN = '';
 
     registerPolymarketApiAdapter();

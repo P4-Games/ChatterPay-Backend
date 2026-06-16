@@ -14,7 +14,7 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 
 import {
-  POLYMARKET_ADAPTER_TOKEN,
+  POLYMARKET_ADAPTER_AUTH_TOKEN,
   POLYMARKET_CLOB_API_URL,
   POLYMARKET_DATA_API_URL,
   POLYMARKET_GAMMA_API_URL
@@ -63,14 +63,14 @@ export function registerPolymarketApiAdapter(): void {
   Logger.log(
     'warn',
     `[${LOG_PREFIX}:diag]`,
-    `POLYMARKET_ADAPTER_TOKEN length=${POLYMARKET_ADAPTER_TOKEN?.length ?? 'undefined'}`
+    `POLYMARKET_ADAPTER_TOKEN length=${POLYMARKET_ADAPTER_AUTH_TOKEN?.length ?? 'undefined'}`
   );
-  if (!POLYMARKET_ADAPTER_TOKEN) return;
+  if (!POLYMARKET_ADAPTER_AUTH_TOKEN) return;
 
   axios.interceptors.request.use((config) => {
     const requestUrl = resolveRequestUrl(config);
     if (requestUrl && targetsProxiedHost(requestUrl)) {
-      config.headers.set('Authorization', `Bearer ${POLYMARKET_ADAPTER_TOKEN}`);
+      config.headers.set('Authorization', `Bearer ${POLYMARKET_ADAPTER_AUTH_TOKEN}`);
     }
     return config;
   });
