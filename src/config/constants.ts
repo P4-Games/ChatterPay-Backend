@@ -1,9 +1,5 @@
-import {
-  type gamesLanguage,
-  type NotificationLanguage,
-  notificationLanguages
-} from '../types/commonType';
-import { type LogLevel, validLogLevels } from '../types/loggerType';
+import { gamesLanguage, NotificationLanguage, notificationLanguages } from '../types/commonType';
+import { LogLevel, validLogLevels } from '../types/loggerType';
 
 interface ABIs {
   [key: string]: string;
