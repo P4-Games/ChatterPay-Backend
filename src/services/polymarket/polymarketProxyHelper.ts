@@ -8,17 +8,12 @@
  * since the SDK shares the same hoisted Axios singleton. Only requests whose
  * URL matches a configured Polymarket base URL are touched; unrelated traffic
  * (LiFi, Manteca, Alchemy, The Graph, ...) is never modified. When
- * `POLYMARKET_ADAPTER_TOKEN` is unset the adapter is never registered.
+ * `POLYMARKET_ADAPTER_AUTH_TOKEN` is unset the adapter is never registered.
  */
 
-import axios, { type InternalAxiosRequestConfig } from 'axios';
+import axios, { InternalAxiosRequestConfig } from 'axios';
 
-import {
-  POLYMARKET_ADAPTER_AUTH_TOKEN,
-  POLYMARKET_CLOB_API_URL,
-  POLYMARKET_DATA_API_URL,
-  POLYMARKET_GAMMA_API_URL
-} from '../../config/constants';
+import * as constants from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
 
 const LOG_PREFIX = 'polymarketAdapterHelper';
@@ -27,9 +22,11 @@ let adapterRegistered = false;
 
 /** Polymarket base URLs that require authenticated requests. */
 function getProxiedBaseUrls(): string[] {
-  return [POLYMARKET_CLOB_API_URL, POLYMARKET_GAMMA_API_URL, POLYMARKET_DATA_API_URL].filter(
-    (url): url is string => Boolean(url)
-  );
+  return [
+    constants.POLYMARKET_CLOB_API_URL,
+    constants.POLYMARKET_GAMMA_API_URL,
+    constants.POLYMARKET_DATA_API_URL
+  ].filter((url): url is string => Boolean(url));
 }
 
 /**
@@ -55,22 +52,17 @@ export function targetsProxiedHost(requestUrl: string): boolean {
  * into Polymarket-bound requests.
  *
  * Idempotent: safe to call multiple times, registers at most once. No-op when
- * `POLYMARKET_ADAPTER_TOKEN` is empty.
+ * `POLYMARKET_ADAPTER_AUTH_TOKEN` is empty.
  */
 export function registerPolymarketApiAdapter(): void {
   if (adapterRegistered) return;
-  // TEMP DIAGNOSTIC: log token length (not value) to confirm runtime injection. Remove after debug.
-  Logger.log(
-    'warn',
-    `[${LOG_PREFIX}:diag]`,
-    `POLYMARKET_ADAPTER_TOKEN length=${POLYMARKET_ADAPTER_AUTH_TOKEN?.length ?? 'undefined'}`
-  );
-  if (!POLYMARKET_ADAPTER_AUTH_TOKEN) return;
+  const adapterToken = constants.POLYMARKET_ADAPTER_AUTH_TOKEN;
+  if (!adapterToken) return;
 
   axios.interceptors.request.use((config) => {
     const requestUrl = resolveRequestUrl(config);
     if (requestUrl && targetsProxiedHost(requestUrl)) {
-      config.headers.set('Authorization', `Bearer ${POLYMARKET_ADAPTER_AUTH_TOKEN}`);
+      config.headers.set('Authorization', `Bearer ${adapterToken}`);
     }
     return config;
   });
