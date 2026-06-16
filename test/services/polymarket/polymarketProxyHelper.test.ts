@@ -11,7 +11,7 @@
  *     d. Authorization header NOT injected for unrelated hosts
  */
 
-import axios, { type InternalAxiosRequestConfig } from 'axios';
+import axios, { InternalAxiosRequestConfig } from 'axios';
 import MockAdapter from 'axios-mock-adapter';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Module mock (applied before any import of the module under test)
 // ---------------------------------------------------------------------------
 vi.mock('../../../src/config/constants', () => ({
-  POLYMARKET_ADAPTER_TOKEN: 'test-adapter-token',
+  POLYMARKET_ADAPTER_AUTH_TOKEN: 'test-adapter-token',
   POLYMARKET_CLOB_API_URL: 'https://clob.polymarket.com',
   POLYMARKET_GAMMA_API_URL: 'https://gamma-api.polymarket.com',
   POLYMARKET_DATA_API_URL: 'https://data-api.polymarket.com'
@@ -159,11 +159,11 @@ describe('registerPolymarketApiAdapter', () => {
   });
 
   // ── No-op without token ───────────────────────────────────────────────────
-  it('does not register any interceptor when POLYMARKET_ADAPTER_TOKEN is empty', async () => {
+  it('does not register any interceptor when POLYMARKET_ADAPTER_AUTH_TOKEN is empty', async () => {
     // Temporarily override the token to empty
     const constants = await import('../../../src/config/constants');
     const original = constants.POLYMARKET_ADAPTER_AUTH_TOKEN;
-    (constants as Record<string, unknown>).POLYMARKET_ADAPTER_TOKEN = '';
+    (constants as Record<string, unknown>).POLYMARKET_ADAPTER_AUTH_TOKEN = '';
 
     registerPolymarketApiAdapter();
 
@@ -172,7 +172,7 @@ describe('registerPolymarketApiAdapter', () => {
     expect(active).toHaveLength(0);
 
     // Restore
-    (constants as Record<string, unknown>).POLYMARKET_ADAPTER_TOKEN = original;
+    (constants as Record<string, unknown>).POLYMARKET_ADAPTER_AUTH_TOKEN = original;
   });
 
   // ── Header injection ──────────────────────────────────────────────────────
