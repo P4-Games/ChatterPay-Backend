@@ -575,26 +575,36 @@ export const polymarketPlaceOrder = async (
     }
 
     // ── Price validation ──────────────────────────────────────────────────
-    // Polymarket requires prices in (0.001, 0.999). Reject early before
-    // wasting gas on a bridge for an impossible order (e.g. resolved market).
-    if (price < POLYMARKET_MIN_PRICE || price > POLYMARKET_MAX_PRICE) {
-      return errorReply(
-        reply,
-        400,
-        `Invalid price ${price}: must be between ${POLYMARKET_MIN_PRICE} and ${POLYMARKET_MAX_PRICE}. The market may have already been resolved.`
+    // Polymarket requires prices strictly in (0.001, 0.999). A price of exactly
+    // 0 or 1 means the market has resolved; clamp to the boundary and let the
+    // CLOB reject with its own error if the market is truly closed.
+    let effectivePrice = price;
+    if (price >= POLYMARKET_MAX_PRICE) {
+      effectivePrice = POLYMARKET_MAX_PRICE;
+      Logger.log(
+        'warn',
+        LOG_PREFIX,
+        `${logKey} Price ${price} clamped to ${POLYMARKET_MAX_PRICE} — market may be near resolution`
+      );
+    } else if (price <= POLYMARKET_MIN_PRICE) {
+      effectivePrice = POLYMARKET_MIN_PRICE;
+      Logger.log(
+        'warn',
+        LOG_PREFIX,
+        `${logKey} Price ${price} clamped to ${POLYMARKET_MIN_PRICE} — market may be near resolution`
       );
     }
 
     // ── Minimum order value (BUY) ─────────────────────────────────────────
     // Enforced above Polymarket's $1.00 FOK minimum so bridge fees/slippage
     // can't push the deliverable amount below the CLOB's floor.
-    if (side === 'BUY' && price * size < MIN_BUY_ORDER_USD) {
-      const minShares = Math.ceil((MIN_BUY_ORDER_USD / price) * 100) / 100;
+    if (side === 'BUY' && effectivePrice * size < MIN_BUY_ORDER_USD) {
+      const minShares = Math.ceil((MIN_BUY_ORDER_USD / effectivePrice) * 100) / 100;
       return errorReply(
         reply,
         400,
-        `Order value $${(price * size).toFixed(2)} is below the $${MIN_BUY_ORDER_USD.toFixed(2)} minimum for BUY orders. ` +
-          `At price $${price}, buy at least ${minShares} shares.`
+        `Order value $${(effectivePrice * size).toFixed(2)} is below the $${MIN_BUY_ORDER_USD.toFixed(2)} minimum for BUY orders. ` +
+          `At price $${effectivePrice}, buy at least ${minShares} shares.`
       );
     }
 
@@ -605,7 +615,7 @@ export const polymarketPlaceOrder = async (
     // Required USDC = price × size (e.g. 0.55 × 10 = 5.5 USDC)
     // We add a small buffer (2%) to cover bridge fees / slippage.
     if (side === 'BUY') {
-      const requiredUsdc = price * size;
+      const requiredUsdc = effectivePrice * size;
       const bridgeAmountHuman = requiredUsdc * BRIDGE_FEE_BUFFER;
 
       Logger.log(
@@ -660,7 +670,7 @@ export const polymarketPlaceOrder = async (
       privateKey,
       {
         tokenId: token_id,
-        price,
+        price: effectivePrice,
         size,
         side,
         orderType: order_type
@@ -680,7 +690,7 @@ export const polymarketPlaceOrder = async (
       market_slug: '',
       token_id,
       side,
-      price,
+      price: effectivePrice,
       size,
       status: 'pending'
     });
@@ -690,7 +700,7 @@ export const polymarketPlaceOrder = async (
       tx: String(orderId),
       walletFrom: user.polymarket_account!.polygon_address,
       walletTo: 'polymarket',
-      amount: price * size,
+      amount: effectivePrice * size,
       fee: 0,
       token: 'USDC',
       type: 'polymarket_order',
@@ -712,7 +722,7 @@ export const polymarketPlaceOrder = async (
       order_id: String(orderId),
       status: 'pending',
       side,
-      price,
+      price: effectivePrice,
       size,
       token_id,
       withdrawal_pending: side === 'SELL',

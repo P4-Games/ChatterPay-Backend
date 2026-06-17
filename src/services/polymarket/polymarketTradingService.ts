@@ -868,13 +868,22 @@ export async function getPolymarketBalanceSummary(
       getPositions(polygonAddress, logKey).catch(() => [] as DataPosition[])
     ]);
 
-    const idle_usdc = Number(ethers.utils.formatUnits(rawBalance, 6));
+    const onchain_usdc = Number(ethers.utils.formatUnits(rawBalance, 6));
     const positions_value = positions.reduce((sum, p) => sum + (p.currentValue || 0), 0);
+
+    // Positions with curPrice >= 0.999 are in resolved markets where the user won.
+    // Their CTF tokens are worth ~$1/share and haven't been redeemed yet — include
+    // them in idle_usdc so callers see the full withdrawable amount.
+    const redeemable = positions
+      .filter((p) => (p.curPrice ?? 0) >= 0.999)
+      .reduce((sum, p) => sum + (p.currentValue || 0), 0);
+
+    const idle_usdc = onchain_usdc + redeemable;
 
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Polymarket balances — idle USDC.e: $${idle_usdc.toFixed(2)}, positions: $${positions_value.toFixed(2)}`
+      `${logKey} Polymarket balances — idle USDC.e: $${onchain_usdc.toFixed(2)}, redeemable: $${redeemable.toFixed(2)}, positions: $${positions_value.toFixed(2)}`
     );
 
     return { idle_usdc, positions_value };
