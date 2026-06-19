@@ -853,7 +853,7 @@ export async function executeGaslessWithdrawal(
   amount: string,
   logKey: string,
   tokenAddress: string = PUSD_ADDRESS
-): Promise<void> {
+): Promise<string> {
   const fnLog = `[${LOG_PREFIX}:executeGaslessWithdrawal]`;
 
   try {
@@ -906,6 +906,7 @@ export async function executeGaslessWithdrawal(
       fnLog,
       `${logKey} Gasless withdrawal confirmed on-chain (tx: ${result.transactionHash}, relayer_id: ${relayerId})`
     );
+    return result.transactionHash;
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Gasless withdrawal failed: ${String(error)}`);
     throw new Error(`Gasless withdrawal failed: ${String(error)}`);

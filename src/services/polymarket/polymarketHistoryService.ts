@@ -243,9 +243,21 @@ export async function recordWithdraw(p: {
   walletTo: string;
   amount: number;
   token: string;
+  linkedOrderTrxHash?: string;
 }): Promise<void> {
+  const txHash = p.txHash || `withdraw-${randomUUID()}`;
+
+  if (p.linkedOrderTrxHash) {
+    await mongoTransactionService.patchTransactionFields(p.linkedOrderTrxHash, {
+      polymarket_bridge_tx_hash: txHash,
+      polymarket_bridge_amount: p.amount,
+      polymarket_bridge_token: p.token
+    });
+    return;
+  }
+
   await mongoTransactionService.saveTransaction({
-    tx: p.txHash || `withdraw-${randomUUID()}`,
+    tx: txHash,
     walletFrom: p.walletFrom,
     walletTo: p.walletTo,
     amount: p.amount,

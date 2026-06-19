@@ -286,7 +286,7 @@ export async function withdrawSellProceeds(
         toToken,
         fromTokenAddress
       );
-      await executeGaslessWithdrawal(
+      return await executeGaslessWithdrawal(
         privateKey,
         {
           approvalAddress: quote.approvalAddress,
@@ -300,26 +300,29 @@ export async function withdrawSellProceeds(
       );
     };
 
+    let txHash: string | undefined;
     try {
-      await attemptBridge();
+      txHash = await attemptBridge();
     } catch (bridgeError) {
       Logger.log('warn', fnLog, `${logKey} Bridge failed, retrying in 10s: ${String(bridgeError)}`);
       await new Promise((resolve) => setTimeout(resolve, 10000));
-      await attemptBridge();
+      txHash = await attemptBridge();
     }
 
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Withdrawal initiated: $${balanceHuman.toFixed(2)} ${withdrawable.symbol} → Scroll`
+      `${logKey} Withdrawal initiated: $${balanceHuman.toFixed(2)} ${withdrawable.symbol} → Scroll (tx: ${txHash})`
     );
 
     // Save withdrawal to transaction history
     await recordWithdraw({
+      txHash,
       walletFrom: polygonWalletAddress,
       walletTo: proxyAddress,
       amount: balanceHuman,
-      token: toToken
+      token: toToken,
+      linkedOrderTrxHash: sellTrxHash
     });
 
     // Refine the linked sell order record to show the Scroll-side token/amount
