@@ -517,18 +517,25 @@ export async function executePurchase(
 
           // Save bridge to transaction history immediately — the tx is on-chain
           // even if the balance confirmation below times out.
+          // Passing `linkedOrderTrxHash` makes this patch the existing buy record
+          // (as bridge sub-step fields) instead of inserting a separate bridge row.
           await recordBridge({
             txHash: bridgeResult.txHash,
             walletFrom: currentUser.wallets[0]?.wallet_proxy || '',
             walletTo: safeAddress,
             amount: Number(actualBridgeAmountUsd),
             token: bridgeResult.fromToken || 'USDC',
-            side: params.side
+            side: params.side,
+            linkedOrderTrxHash: orderTrx
           });
 
           // Refine the buy order record to show the Scroll-side token/amount
           // (what the user actually spent), replacing the initial pUSD estimate.
-          void refineBuyToken(orderTrx, bridgeResult.fromToken || 'pUSD', Number(actualBridgeAmountUsd));
+          void refineBuyToken(
+            orderTrx,
+            bridgeResult.fromToken || 'pUSD',
+            Number(actualBridgeAmountUsd)
+          );
 
           // LiFi may report DONE before the Polygon RPC reflects the new balance,
           // or its status API may lag the actual transfer. The on-chain balance

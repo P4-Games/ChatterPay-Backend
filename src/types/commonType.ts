@@ -117,6 +117,16 @@ export interface TransactionData {
   polymarket_market_slug?: string;
   /** Number of shares bought/sold (Polymarket orders only). */
   polymarket_size?: number;
+  /**
+   * Polymarket BUY — bridge sub-step data (Scroll → Polygon).
+   * Stored inline on the buy record so the bridge is a detail of the
+   * purchase, not a separate history row.
+   */
+  polymarket_bridge_tx_hash?: string;
+  /** Amount (human-readable) that left the user's Scroll wallet for the bridge. */
+  polymarket_bridge_amount?: number;
+  /** Scroll-side stablecoin used for the bridge (e.g. 'USDT', 'USDC'). */
+  polymarket_bridge_token?: string;
 }
 
 export interface ConversionRates {

@@ -23,7 +23,10 @@ export const mongoTransactionService = {
         polymarket_order_id,
         polymarket_purchase_id,
         polymarket_market_slug,
-        polymarket_size
+        polymarket_size,
+        polymarket_bridge_tx_hash,
+        polymarket_bridge_amount,
+        polymarket_bridge_token
       } = transactionData;
 
       await Transaction.create({
@@ -41,7 +44,10 @@ export const mongoTransactionService = {
         polymarket_order_id,
         polymarket_purchase_id,
         polymarket_market_slug,
-        polymarket_size
+        polymarket_size,
+        polymarket_bridge_tx_hash,
+        polymarket_bridge_amount,
+        polymarket_bridge_token
       });
     } catch (error: unknown) {
       // avoid throw error
@@ -79,7 +85,10 @@ export const mongoTransactionService = {
       polymarket_order_id,
       polymarket_purchase_id,
       polymarket_market_slug,
-      polymarket_size
+      polymarket_size,
+      polymarket_bridge_tx_hash,
+      polymarket_bridge_amount,
+      polymarket_bridge_token
     } = transactionData;
 
     const key = { trx_hash: tx, wallet_from: walletFrom, wallet_to: walletTo };
@@ -90,6 +99,12 @@ export const mongoTransactionService = {
     if (polymarket_market_slug !== undefined)
       mutable.polymarket_market_slug = polymarket_market_slug;
     if (polymarket_size !== undefined) mutable.polymarket_size = polymarket_size;
+    if (polymarket_bridge_tx_hash !== undefined)
+      mutable.polymarket_bridge_tx_hash = polymarket_bridge_tx_hash;
+    if (polymarket_bridge_amount !== undefined)
+      mutable.polymarket_bridge_amount = polymarket_bridge_amount;
+    if (polymarket_bridge_token !== undefined)
+      mutable.polymarket_bridge_token = polymarket_bridge_token;
 
     const onInsert = { type, token, chain_id, date: date || new Date() };
 
@@ -231,7 +246,15 @@ export const mongoTransactionService = {
    */
   patchTransactionFields: async (
     trxHash: string,
-    patch: Partial<{ token: string; amount: number; polymarket_size: number; user_notes: string }>
+    patch: Partial<{
+      token: string;
+      amount: number;
+      polymarket_size: number;
+      user_notes: string;
+      polymarket_bridge_tx_hash: string;
+      polymarket_bridge_amount: number;
+      polymarket_bridge_token: string;
+    }>
   ): Promise<void> => {
     try {
       await Transaction.findOneAndUpdate({ trx_hash: trxHash }, { $set: patch });

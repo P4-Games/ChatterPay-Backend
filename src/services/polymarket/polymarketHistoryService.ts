@@ -190,7 +190,16 @@ export async function recordClaim(p: {
   });
 }
 
-/** Record the Scroll→Polygon bridge that funds a purchase. */
+/** Record the Scroll→Polygon bridge that funds a purchase.
+ *
+ * When `linkedOrderTrxHash` is provided (purchase flow), the bridge data is
+ * attached inline to the existing buy/sell order record as `polymarket_bridge_*`
+ * fields — **no separate history row is created**. This keeps the user's history
+ * clean: one purchase = one row with expandable bridge detail.
+ *
+ * When `linkedOrderTrxHash` is omitted (manual bridge endpoint), the legacy
+ * behaviour is preserved and a standalone `polymarket_bridge` record is inserted.
+ */
 export async function recordBridge(p: {
   txHash: string;
   walletFrom: string;
@@ -198,7 +207,21 @@ export async function recordBridge(p: {
   amount: number;
   token: string;
   side: OrderSide;
+  /** trx_hash of the buy/sell order record to attach the bridge data to. */
+  linkedOrderTrxHash?: string;
 }): Promise<void> {
+  if (p.linkedOrderTrxHash) {
+    // Purchase flow: patch the order record with bridge detail instead of
+    // creating a separate polymarket_bridge row.
+    await mongoTransactionService.patchTransactionFields(p.linkedOrderTrxHash, {
+      polymarket_bridge_tx_hash: p.txHash,
+      polymarket_bridge_amount: p.amount,
+      polymarket_bridge_token: p.token
+    });
+    return;
+  }
+
+  // Manual bridge endpoint: create a standalone bridge record (legacy behaviour).
   await mongoTransactionService.saveTransaction({
     tx: p.txHash,
     walletFrom: p.walletFrom,

@@ -20,6 +20,16 @@ export interface ITransaction extends Document {
   polymarket_market_slug?: string;
   /** Number of shares bought/sold in a Polymarket order (distinct from amount which is cost in stablecoin). */
   polymarket_size?: number;
+  /**
+   * Polymarket BUY — bridge sub-step (Scroll → Polygon).
+   * Stored inline on the buy record; no separate `polymarket_bridge` row is created
+   * for purchases that go through the unified purchase flow.
+   */
+  polymarket_bridge_tx_hash?: string;
+  /** Human-readable amount that left the user's Scroll wallet for the bridge. */
+  polymarket_bridge_amount?: number;
+  /** Scroll-side stablecoin used for the bridge (e.g. 'USDT', 'USDC'). */
+  polymarket_bridge_token?: string;
 }
 
 const transactionSchema = new Schema<ITransaction>({
@@ -37,7 +47,10 @@ const transactionSchema = new Schema<ITransaction>({
   polymarket_order_id: { type: String, required: false },
   polymarket_purchase_id: { type: String, required: false },
   polymarket_market_slug: { type: String, required: false },
-  polymarket_size: { type: Number, required: false }
+  polymarket_size: { type: Number, required: false },
+  polymarket_bridge_tx_hash: { type: String, required: false },
+  polymarket_bridge_amount: { type: Number, required: false },
+  polymarket_bridge_token: { type: String, required: false }
 });
 
 transactionSchema.index(
