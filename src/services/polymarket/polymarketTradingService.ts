@@ -19,8 +19,10 @@ import {
 import { Logger } from '../../helpers/loggerHelper';
 import { PolymarketOrderModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
+import { mongoTransactionService } from '../mongo/mongoTransactionService';
 import { getAuthenticatedClientForUser } from './polymarketClientService';
 import { FOK_SLIPPAGE_TOLERANCE, WITHDRAWABLE_STABLECOINS } from './polymarketConstants';
+import { mapClobStatusToTxStatus } from './polymarketHistoryService';
 import { ensureTokenApprovals, setupDepositWalletApprovals } from './polymarketRelayerService';
 import type {
   ClobOpenOrder,
@@ -951,11 +953,12 @@ export async function syncOpenOrders(
       if (!liveOrderIds.has(pendingOrder.order_id)) {
         // It's no longer open on CLOB
         let newStatus = 'cancelled';
+        let sizeMatched = 0;
         try {
           // getOrder returns the order details including status and matched size
           const orderData = await client.getOrder(pendingOrder.order_id);
           if (orderData) {
-            const sizeMatched = Number((orderData as any).size_matched || 0);
+            sizeMatched = Number((orderData as any).size_matched || 0);
             if (sizeMatched >= pendingOrder.size) {
               newStatus = 'filled';
             } else if (sizeMatched > 0) {
@@ -976,6 +979,16 @@ export async function syncOpenOrders(
             update: { $set: { status: newStatus, updated_at: new Date() } }
           }
         });
+
+        // Propagate the fill state onto the linked transaction-history record.
+        // For partial fills, patch the amount to the matched portion.
+        const txStatus = mapClobStatusToTxStatus(newStatus);
+        const txPatch = newStatus === 'partial' ? { amount: sizeMatched * pendingOrder.price } : {};
+        await mongoTransactionService.updateStatusByPolymarketOrderId(
+          pendingOrder.order_id,
+          txStatus,
+          txPatch
+        );
 
         Logger.log(
           'info',

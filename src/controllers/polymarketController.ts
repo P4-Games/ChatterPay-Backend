@@ -32,7 +32,6 @@ import {
   getPurchaseById,
   updatePurchaseStatus
 } from '../services/mongo/mongoPolymarketService';
-import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import {
   sendPolymarketDisabledNotification,
   sendPolymarketTermsNotAcceptedNotification,
@@ -79,6 +78,15 @@ import {
   getScrollStablecoinTotal,
   withdrawToScroll
 } from '../services/polymarket/polymarketBridgeService';
+import {
+  markOrderInProgress,
+  recordBridge,
+  recordOrderCancelled,
+  recordOrderFailed,
+  recordOrderIntent,
+  recordOrderPlaced,
+  recordWithdraw
+} from '../services/polymarket/polymarketHistoryService';
 import {
   claimWinningPositions,
   executePurchase
@@ -552,6 +560,9 @@ export const polymarketPlaceOrder = async (
 ): Promise<FastifyReply> => {
   if (!checkEnabled(reply)) return reply;
   const logKey = `[op:polymarket-place-order]`;
+  // Stable id for the order lifecycle history record (declared here so the
+  // outer catch can mark it failed). Assigned once the account/price are known.
+  let orderTrx: string | undefined;
 
   try {
     const user = await resolveUser(request.body.channel_user_id, logKey);
@@ -618,6 +629,18 @@ export const polymarketPlaceOrder = async (
       );
     }
 
+    // Record the order intent (status `submitted`) before any bridge so a
+    // failure at the bridge step still leaves a `failed` order row in history.
+    orderTrx = await recordOrderIntent({
+      side,
+      refId: randomUUID(),
+      userProxy: user.wallets[0]?.wallet_proxy || '',
+      price: effectivePrice,
+      size,
+      tokenId: token_id,
+      logKey
+    });
+
     // ── Auto-bridge: Scroll → Polygon ────────────────────────────────────
     // The user's USDC lives on Scroll. We need to bridge it to Polygon
     // before placing the order on Polymarket.
@@ -644,20 +667,17 @@ export const polymarketPlaceOrder = async (
         Logger.log('info', LOG_PREFIX, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
 
         // Save bridge to transaction history
-        await mongoTransactionService.saveTransaction({
-          tx: bridgeResult.txHash,
+        await recordBridge({
+          txHash: bridgeResult.txHash,
           walletFrom: user.wallets[0]?.wallet_proxy || '',
           walletTo: user.polymarket_account!.polygon_address,
           amount: bridgeAmountHuman,
-          fee: 0,
           token: bridgeResult.fromToken || 'USDC',
-          type: 'polymarket_bridge',
-          status: 'completed',
-          chain_id: 534352,
-          user_notes: `Polymarket ${side} bridge`
+          side
         });
       } catch (bridgeError) {
         Logger.log('error', LOG_PREFIX, `${logKey} Bridge failed: ${String(bridgeError)}`);
+        await recordOrderFailed(orderTrx, `Bridge failed: ${String(bridgeError)}`);
         return errorReply(
           reply,
           500,
@@ -679,6 +699,9 @@ export const polymarketPlaceOrder = async (
     // If the SELL order fails after the price was clamped to the max boundary,
     // the market is almost certainly resolved — fall back to CTF redemption
     // instead of surfacing a confusing CLOB error to the caller.
+    // Placement underway — move the order history record to in_progress.
+    await markOrderInProgress(orderTrx);
+
     let result;
     try {
       result = await placeOrder(
@@ -702,6 +725,9 @@ export const polymarketPlaceOrder = async (
         );
         const claimResult = await claimWinningPositions(user, privateKey, logKey);
         if (claimResult.claimed > 0) {
+          // The SELL was superseded by a CTF claim (recorded inside
+          // claimWinningPositions) — mark the sell intent cancelled, not failed.
+          await recordOrderCancelled(orderTrx, 'SELL superseded by claim (market resolved)');
           return successReply(reply, {
             claimed: claimResult.claimed,
             tx_hash: claimResult.txHash,
@@ -730,18 +756,12 @@ export const polymarketPlaceOrder = async (
       status: 'pending'
     });
 
-    // Save order to transaction history
-    await mongoTransactionService.saveTransaction({
-      tx: String(orderId),
-      walletFrom: user.polymarket_account!.polygon_address,
-      walletTo: 'polymarket',
-      amount: effectivePrice * size,
-      fee: 0,
-      token: 'USDC',
-      type: 'polymarket_order',
-      status: 'completed',
-      chain_id: 137,
-      user_notes: `Polymarket ${side} order`
+    // Order accepted by the CLOB — evolve the history record to completed and
+    // attach the real CLOB order id (async fills refine it via syncOpenOrders).
+    await recordOrderPlaced(orderTrx, {
+      orderId: String(orderId),
+      price: effectivePrice,
+      effectiveSize: size
     });
 
     // Auto-withdraw SELL proceeds from Polygon Safe → Scroll proxy.
@@ -765,6 +785,7 @@ export const polymarketPlaceOrder = async (
     });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
+    if (orderTrx) await recordOrderFailed(orderTrx, String(error));
     return errorReply(reply, 500, `Failed to place order: ${String(error)}`);
   }
 };
@@ -1285,17 +1306,11 @@ export const polymarketWithdraw = async (
 
     // Save withdrawal to transaction history (use actual bridged amount)
     const withdrawAmountHuman = Number(bridgeAmountSmallest) / 1_000_000;
-    await mongoTransactionService.saveTransaction({
-      tx: `withdraw-${Date.now()}`,
+    await recordWithdraw({
       walletFrom: user.polymarket_account.polygon_address,
       walletTo: proxyAddress,
       amount: withdrawAmountHuman,
-      fee: 0,
-      token: toToken,
-      type: 'polymarket_withdraw',
-      status: 'completed',
-      chain_id: 137,
-      user_notes: 'Polymarket withdrawal to Scroll'
+      token: toToken
     });
 
     return successReply(reply, {

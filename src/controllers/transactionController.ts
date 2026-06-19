@@ -191,6 +191,13 @@ export const checkTransactionStatus = async (
       );
     }
 
+    // Polymarket order/withdraw records use synthetic, off-chain trx_hashes
+    // (e.g. `pm-order-…`, `withdraw-…`). They have no on-chain receipt — return
+    // the stored status instead of looking one up (which would wrongly fail them).
+    if (!trx_hash.startsWith('0x')) {
+      return await returnSuccessResponse(reply, transaction.status);
+    }
+
     const receipt = await web3.eth.getTransactionReceipt(trx_hash);
     if (!receipt) {
       return await returnSuccessResponse(reply, 'pending');

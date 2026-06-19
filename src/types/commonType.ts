@@ -112,6 +112,9 @@ export interface TransactionData {
   chain_id: number;
   date?: Date;
   user_notes?: string;
+  polymarket_order_id?: string;
+  polymarket_purchase_id?: string;
+  polymarket_market_slug?: string;
 }
 
 export interface ConversionRates {

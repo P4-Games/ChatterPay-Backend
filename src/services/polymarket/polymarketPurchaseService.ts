@@ -21,7 +21,6 @@ import {
   updatePurchaseStatus,
   updatePurchaseStep
 } from '../mongo/mongoPolymarketService';
-import { mongoTransactionService } from '../mongo/mongoTransactionService';
 import {
   sendPolymarketOrderFailedNotification,
   sendPolymarketOrderPlacedNotification,
@@ -44,6 +43,15 @@ import {
   PUSD_ADDRESS,
   WITHDRAWABLE_STABLECOINS
 } from './polymarketConstants';
+import {
+  markOrderInProgress,
+  recordBridge,
+  recordClaim,
+  recordOrderFailed,
+  recordOrderIntent,
+  recordOrderPlaced,
+  recordWithdraw
+} from './polymarketHistoryService';
 import {
   getClobMarketInfo,
   getMarketByClobTokenId,
@@ -302,17 +310,11 @@ export async function withdrawSellProceeds(
     );
 
     // Save withdrawal to transaction history
-    await mongoTransactionService.saveTransaction({
-      tx: `withdraw-${Date.now()}`,
+    await recordWithdraw({
       walletFrom: polygonWalletAddress,
       walletTo: proxyAddress,
       amount: balanceHuman,
-      fee: 0,
-      token: toToken,
-      type: 'polymarket_withdraw',
-      status: 'completed',
-      chain_id: 137,
-      user_notes: 'Polymarket withdrawal to Scroll'
+      token: toToken
     });
 
     if (purchaseId) {
@@ -409,6 +411,21 @@ export async function executePurchase(
       }
     }
 
+    // Record the order intent now that the Polymarket account (and its Polygon
+    // address) is known. Status starts at `submitted` so a failure at the bridge
+    // step still leaves a `failed` order row in the transaction history.
+    // trx_hash is keyed on the purchaseId and stays stable across status updates.
+    const orderTrx = await recordOrderIntent({
+      side: params.side,
+      refId: purchaseId,
+      purchaseId,
+      userProxy: currentUser.wallets[0]?.wallet_proxy || '',
+      price: params.price,
+      size: params.size,
+      tokenId: params.tokenId,
+      logKey
+    });
+
     // ── Step 2: Bridge (BUY only) ───────────────────────────────────────
     // Check existing USDC.e in the Polygon Safe and bridge only the deficit.
     // If the Safe already holds enough, the bridge is skipped entirely.
@@ -491,17 +508,13 @@ export async function executePurchase(
 
           // Save bridge to transaction history immediately — the tx is on-chain
           // even if the balance confirmation below times out.
-          await mongoTransactionService.saveTransaction({
-            tx: bridgeResult.txHash,
+          await recordBridge({
+            txHash: bridgeResult.txHash,
             walletFrom: currentUser.wallets[0]?.wallet_proxy || '',
             walletTo: safeAddress,
             amount: Number(actualBridgeAmountUsd),
-            fee: 0,
             token: bridgeResult.fromToken || 'USDC',
-            type: 'polymarket_bridge',
-            status: 'completed',
-            chain_id: 534352,
-            user_notes: `Polymarket ${params.side} bridge`
+            side: params.side
           });
 
           // LiFi may report DONE before the Polygon RPC reflects the new balance,
@@ -562,6 +575,8 @@ export async function executePurchase(
           logKey
         );
         await updatePurchaseStatus(purchaseId, 'failed', 'bridge', { error: errorMsg }, logKey);
+        // The order never reached the CLOB — mark its history record failed.
+        await recordOrderFailed(orderTrx, errorMsg);
         return;
       }
     } else {
@@ -655,6 +670,9 @@ export async function executePurchase(
         const commitAmount = params.side === 'BUY' ? effectiveSize * params.price : 0;
         lock.committedUsdce += commitAmount;
 
+        // Placement is now underway — move the order history record to in_progress.
+        await markOrderInProgress(orderTrx);
+
         let orderResult: { orderID: string };
         try {
           orderResult = await placeOrder(
@@ -701,18 +719,13 @@ export async function executePurchase(
       );
       Logger.log('info', fnLog, `${logKey} Order placed: ${orderID} (size: ${effectiveSize})`);
 
-      // Save order to transaction history
-      await mongoTransactionService.saveTransaction({
-        tx: orderID,
-        walletFrom: freshUser.polymarket_account!.polygon_address,
-        walletTo: 'polymarket',
-        amount: params.price * effectiveSize,
-        fee: 0,
-        token: 'USDC',
-        type: 'polymarket_order',
-        status: 'completed',
-        chain_id: 137,
-        user_notes: `Polymarket ${params.side} order`
+      // Order accepted by the CLOB — evolve the history record to completed,
+      // attach the real CLOB order id, and rewrite the amount to the effective
+      // (possibly auto-reduced) size. Async fills refine this later via syncOpenOrders.
+      await recordOrderPlaced(orderTrx, {
+        orderId: orderID,
+        price: params.price,
+        effectiveSize
       });
 
       // WhatsApp notification — fire-and-forget (don't block the flow).
@@ -779,6 +792,7 @@ export async function executePurchase(
         { error: errorMsg },
         logKey
       );
+      await recordOrderFailed(orderTrx, errorMsg);
 
       // WhatsApp notification with balance — fire-and-forget
       (async () => {
@@ -954,6 +968,15 @@ export async function claimWinningPositions(
   }
 
   const txHash = await executeRedeemPositions(privateKey, polygonAddress, toRedeem, logKey);
+
+  // Record the claim in transaction history (IN: proceeds land on Polygon).
+  // Amount is the USD value of the winning positions being redeemed.
+  const claimedValue = winning.reduce((sum, p) => sum + (p.currentValue ?? 0), 0);
+  await recordClaim({
+    userProxy: user.wallets[0]?.wallet_proxy || '',
+    amount: claimedValue,
+    txHash
+  });
 
   // Auto-withdraw redeemed proceeds back to Scroll (fire-and-forget, same as SELL flow)
   sweepProceeds();
