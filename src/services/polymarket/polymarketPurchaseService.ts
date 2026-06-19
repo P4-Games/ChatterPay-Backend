@@ -44,13 +44,17 @@ import {
   WITHDRAWABLE_STABLECOINS
 } from './polymarketConstants';
 import {
+  enrichOrderModelSlug,
   markOrderInProgress,
   recordBridge,
   recordClaim,
   recordOrderFailed,
   recordOrderIntent,
   recordOrderPlaced,
-  recordWithdraw
+  recordWithdraw,
+  refineBuyToken,
+  refineSellToken,
+  USDCE_SYMBOL
 } from './polymarketHistoryService';
 import {
   getClobMarketInfo,
@@ -185,7 +189,8 @@ export async function withdrawSellProceeds(
   user: IUser,
   privateKey: string,
   logKey: string,
-  purchaseId?: string
+  purchaseId?: string,
+  sellTrxHash?: string
 ): Promise<void> {
   const fnLog = `[${LOG_PREFIX}:withdrawSellProceeds]`;
 
@@ -316,6 +321,10 @@ export async function withdrawSellProceeds(
       amount: balanceHuman,
       token: toToken
     });
+
+    // Refine the linked sell order record to show the Scroll-side token/amount
+    // (what the user actually received), replacing the initial pUSD estimate.
+    if (sellTrxHash) void refineSellToken(sellTrxHash, toToken, balanceHuman);
 
     if (purchaseId) {
       await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'completed' }, logKey);
@@ -517,6 +526,10 @@ export async function executePurchase(
             side: params.side
           });
 
+          // Refine the buy order record to show the Scroll-side token/amount
+          // (what the user actually spent), replacing the initial pUSD estimate.
+          void refineBuyToken(orderTrx, bridgeResult.fromToken || 'pUSD', Number(actualBridgeAmountUsd));
+
           // LiFi may report DONE before the Polygon RPC reflects the new balance,
           // or its status API may lag the actual transfer. The on-chain balance
           // is the authoritative confirmation — poll it until the funds arrive.
@@ -703,13 +716,13 @@ export async function executePurchase(
         user_phone: freshUser.phone_number,
         order_id: orderID,
         market_condition_id: params.tokenId,
-        market_slug: '',
         token_id: params.tokenId,
         side: params.side,
         price: params.price,
         size: effectiveSize,
         status: 'pending'
       });
+      void enrichOrderModelSlug(orderID, params.tokenId, logKey);
 
       await updatePurchaseStep(
         purchaseId,
@@ -770,7 +783,7 @@ export async function executePurchase(
         await updatePurchaseStatus(purchaseId, 'processing', 'withdrawal', undefined, logKey);
         await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'in_progress' }, logKey);
 
-        await withdrawSellProceeds(freshUser, privateKey, logKey, purchaseId);
+        await withdrawSellProceeds(freshUser, privateKey, logKey, purchaseId, orderTrx);
       }
 
       // Mark entire purchase as completed
@@ -971,11 +984,14 @@ export async function claimWinningPositions(
 
   // Record the claim in transaction history (IN: proceeds land on Polygon).
   // Amount is the USD value of the winning positions being redeemed.
+  // Token: legacy neg-risk markets redeem to USDC.e; standard CLOB V2 markets redeem to pUSD.
   const claimedValue = winning.reduce((sum, p) => sum + (p.currentValue ?? 0), 0);
+  const claimToken = toRedeem.some((r) => r.negRisk) ? USDCE_SYMBOL : undefined;
   await recordClaim({
     userProxy: user.wallets[0]?.wallet_proxy || '',
     amount: claimedValue,
-    txHash
+    txHash,
+    token: claimToken
   });
 
   // Auto-withdraw redeemed proceeds back to Scroll (fire-and-forget, same as SELL flow)

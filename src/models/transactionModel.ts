@@ -18,6 +18,8 @@ export interface ITransaction extends Document {
   polymarket_purchase_id?: string;
   /** Market slug for Polymarket order transactions (lets the frontend deep-link the market). */
   polymarket_market_slug?: string;
+  /** Number of shares bought/sold in a Polymarket order (distinct from amount which is cost in stablecoin). */
+  polymarket_size?: number;
 }
 
 const transactionSchema = new Schema<ITransaction>({
@@ -34,7 +36,8 @@ const transactionSchema = new Schema<ITransaction>({
   user_notes: { type: String, required: false },
   polymarket_order_id: { type: String, required: false },
   polymarket_purchase_id: { type: String, required: false },
-  polymarket_market_slug: { type: String, required: false }
+  polymarket_market_slug: { type: String, required: false },
+  polymarket_size: { type: Number, required: false }
 });
 
 transactionSchema.index(

@@ -79,13 +79,15 @@ import {
   withdrawToScroll
 } from '../services/polymarket/polymarketBridgeService';
 import {
+  enrichOrderModelSlug,
   markOrderInProgress,
   recordBridge,
   recordOrderCancelled,
   recordOrderFailed,
   recordOrderIntent,
   recordOrderPlaced,
-  recordWithdraw
+  recordWithdraw,
+  refineBuyToken
 } from '../services/polymarket/polymarketHistoryService';
 import {
   claimWinningPositions,
@@ -675,6 +677,9 @@ export const polymarketPlaceOrder = async (
           token: bridgeResult.fromToken || 'USDC',
           side
         });
+
+        // Refine the buy order record to show the Scroll-side token/amount.
+        void refineBuyToken(orderTrx!, bridgeResult.fromToken || 'pUSD', bridgeAmountHuman);
       } catch (bridgeError) {
         Logger.log('error', LOG_PREFIX, `${logKey} Bridge failed: ${String(bridgeError)}`);
         await recordOrderFailed(orderTrx, `Bridge failed: ${String(bridgeError)}`);
@@ -748,13 +753,13 @@ export const polymarketPlaceOrder = async (
       user_phone: user.phone_number,
       order_id: String(orderId),
       market_condition_id: token_id,
-      market_slug: '',
       token_id,
       side,
       price: effectivePrice,
       size,
       status: 'pending'
     });
+    void enrichOrderModelSlug(String(orderId), token_id, logKey);
 
     // Order accepted by the CLOB — evolve the history record to completed and
     // attach the real CLOB order id (async fills refine it via syncOpenOrders).
@@ -767,7 +772,7 @@ export const polymarketPlaceOrder = async (
     // Auto-withdraw SELL proceeds from Polygon Safe → Scroll proxy.
     // Fire-and-forget so the API response isn't delayed.
     if (side === 'SELL') {
-      withdrawSellProceeds(user, privateKey, logKey).catch((err) => {
+      withdrawSellProceeds(user, privateKey, logKey, undefined, orderTrx).catch((err) => {
         Logger.log('error', LOG_PREFIX, `${logKey} Background withdrawal failed: ${String(err)}`);
       });
     }

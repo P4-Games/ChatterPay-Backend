@@ -22,7 +22,8 @@ export const mongoTransactionService = {
         user_notes,
         polymarket_order_id,
         polymarket_purchase_id,
-        polymarket_market_slug
+        polymarket_market_slug,
+        polymarket_size
       } = transactionData;
 
       await Transaction.create({
@@ -39,7 +40,8 @@ export const mongoTransactionService = {
         user_notes: user_notes || '',
         polymarket_order_id,
         polymarket_purchase_id,
-        polymarket_market_slug
+        polymarket_market_slug,
+        polymarket_size
       });
     } catch (error: unknown) {
       // avoid throw error
@@ -76,7 +78,8 @@ export const mongoTransactionService = {
       user_notes,
       polymarket_order_id,
       polymarket_purchase_id,
-      polymarket_market_slug
+      polymarket_market_slug,
+      polymarket_size
     } = transactionData;
 
     const key = { trx_hash: tx, wallet_from: walletFrom, wallet_to: walletTo };
@@ -86,6 +89,7 @@ export const mongoTransactionService = {
       mutable.polymarket_purchase_id = polymarket_purchase_id;
     if (polymarket_market_slug !== undefined)
       mutable.polymarket_market_slug = polymarket_market_slug;
+    if (polymarket_size !== undefined) mutable.polymarket_size = polymarket_size;
 
     const onInsert = { type, token, chain_id, date: date || new Date() };
 
@@ -130,6 +134,7 @@ export const mongoTransactionService = {
       fee: number;
       user_notes: string;
       polymarket_order_id: string;
+      polymarket_size: number;
     }> = {}
   ): Promise<void> => {
     try {
@@ -183,7 +188,7 @@ export const mongoTransactionService = {
   updateStatusByPolymarketOrderId: async (
     orderId: string,
     status: string,
-    patch: Partial<{ amount: number }> = {}
+    patch: Partial<{ amount: number; polymarket_size: number }> = {}
   ): Promise<void> => {
     try {
       await Transaction.findOneAndUpdate(
@@ -216,6 +221,26 @@ export const mongoTransactionService = {
         (error as Error).message
       );
       return false;
+    }
+  },
+
+  /**
+   * Patches arbitrary fields on a transaction record by hash. Used for post-bridge
+   * or post-withdrawal corrections (e.g. updating token/amount to the Scroll-side
+   * values after the actual transfer is known). Non-throwing.
+   */
+  patchTransactionFields: async (
+    trxHash: string,
+    patch: Partial<{ token: string; amount: number; polymarket_size: number; user_notes: string }>
+  ): Promise<void> => {
+    try {
+      await Transaction.findOneAndUpdate({ trx_hash: trxHash }, { $set: patch });
+    } catch (error: unknown) {
+      Logger.error(
+        'patchTransactionFields',
+        `Error patching transaction ${trxHash}:`,
+        (error as Error).message
+      );
     }
   },
 

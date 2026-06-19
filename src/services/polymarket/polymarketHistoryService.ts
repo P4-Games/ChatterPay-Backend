@@ -25,11 +25,17 @@
 
 import { randomUUID } from 'crypto';
 
+import { updateOrderSlug } from '../mongo/mongoPolymarketService';
 import { mongoTransactionService } from '../mongo/mongoTransactionService';
 import { getMarketByClobTokenId, getOutcomeForToken } from './polymarketMarketService';
 
 const POLYGON_CHAIN_ID = 137;
 const SCROLL_CHAIN_ID = 534352;
+
+/** Collateral token for standard Polymarket CLOB V2 orders (pUSD on Polygon). */
+export const PUSD_SYMBOL = 'pUSD';
+/** Legacy neg-risk market collateral (bridged USDC on Polygon). */
+export const USDCE_SYMBOL = 'USDC.e';
 
 /** Counterparty placeholder used as wallet_from/wallet_to for the Polymarket side. */
 export const POLYMARKET_COUNTERPARTY = 'polymarket';
@@ -107,12 +113,13 @@ export async function recordOrderIntent(p: OrderIntentParams): Promise<string> {
     walletTo: isBuy ? POLYMARKET_COUNTERPARTY : p.userProxy,
     amount: p.price * p.size,
     fee: 0,
-    token: 'USDC',
+    token: PUSD_SYMBOL,
     type: isBuy ? 'polymarket_buy' : 'polymarket_sell',
     status: 'submitted',
     chain_id: POLYGON_CHAIN_ID,
     user_notes: placeholderNote(p.side),
-    polymarket_purchase_id: p.purchaseId
+    polymarket_purchase_id: p.purchaseId,
+    polymarket_size: p.size
   });
 
   // Fire-and-forget: enrich with the market name without blocking the order path.
@@ -136,7 +143,8 @@ export async function recordOrderPlaced(
 ): Promise<void> {
   await mongoTransactionService.updateTransactionStatus(trxHash, p.status ?? 'completed', {
     amount: p.price * p.effectiveSize,
-    polymarket_order_id: p.orderId
+    polymarket_order_id: p.orderId,
+    polymarket_size: p.effectiveSize
   });
 }
 
@@ -165,6 +173,8 @@ export async function recordClaim(p: {
   userProxy: string;
   amount: number;
   txHash: string;
+  /** Stablecoin received: 'pUSD' for standard CLOB V2, 'USDC.e' for legacy neg-risk markets. */
+  token?: string;
 }): Promise<void> {
   await mongoTransactionService.saveTransaction({
     tx: p.txHash,
@@ -172,7 +182,7 @@ export async function recordClaim(p: {
     walletTo: p.userProxy,
     amount: p.amount,
     fee: 0,
-    token: 'USDC',
+    token: p.token ?? PUSD_SYMBOL,
     type: 'polymarket_claim',
     status: 'completed',
     chain_id: POLYGON_CHAIN_ID,
@@ -223,6 +233,52 @@ export async function recordWithdraw(p: {
     chain_id: POLYGON_CHAIN_ID,
     user_notes: 'Polymarket withdrawal to Scroll'
   });
+}
+
+/**
+ * Refine a `polymarket_buy` record after the bridge completes. Updates token to the
+ * Scroll-side source token and amount to the actual bridge amount (what the user spent
+ * from their Scroll wallet). Non-blocking; called fire-and-forget after recordBridge.
+ */
+export async function refineBuyToken(
+  trxHash: string,
+  token: string,
+  amount: number
+): Promise<void> {
+  await mongoTransactionService.patchTransactionFields(trxHash, { token, amount });
+}
+
+/**
+ * Refine a `polymarket_sell` record after the proceeds reach Scroll. Updates token to
+ * the Scroll-side received token and amount to what actually arrived (post-bridge fees).
+ * Non-blocking; called fire-and-forget after recordWithdraw in withdrawSellProceeds.
+ */
+export async function refineSellToken(
+  trxHash: string,
+  token: string,
+  amount: number
+): Promise<void> {
+  await mongoTransactionService.patchTransactionFields(trxHash, { token, amount });
+}
+
+/**
+ * Resolve the market slug and attach it to a PolymarketOrderModel document in the
+ * background. Symmetric with enrichOrderMarket but targets the orders collection
+ * instead of the transactions collection. The Gamma lookup is cached so concurrent
+ * calls for the same token are effectively free. Non-throwing.
+ */
+export async function enrichOrderModelSlug(
+  orderId: string,
+  tokenId: string,
+  logKey: string
+): Promise<void> {
+  try {
+    const market = await getMarketByClobTokenId(tokenId, logKey);
+    if (!market?.slug) return;
+    await updateOrderSlug(orderId, market.slug);
+  } catch {
+    // best-effort
+  }
 }
 
 /** Map a PolymarketOrderModel status to the transaction-history status. */

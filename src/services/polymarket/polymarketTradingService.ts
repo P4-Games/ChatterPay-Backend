@@ -983,7 +983,10 @@ export async function syncOpenOrders(
         // Propagate the fill state onto the linked transaction-history record.
         // For partial fills, patch the amount to the matched portion.
         const txStatus = mapClobStatusToTxStatus(newStatus);
-        const txPatch = newStatus === 'partial' ? { amount: sizeMatched * pendingOrder.price } : {};
+        const txPatch =
+          newStatus === 'partial'
+            ? { amount: sizeMatched * pendingOrder.price, polymarket_size: sizeMatched }
+            : {};
         await mongoTransactionService.updateStatusByPolymarketOrderId(
           pendingOrder.order_id,
           txStatus,

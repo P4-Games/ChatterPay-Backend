@@ -115,6 +115,8 @@ export interface TransactionData {
   polymarket_order_id?: string;
   polymarket_purchase_id?: string;
   polymarket_market_slug?: string;
+  /** Number of shares bought/sold (Polymarket orders only). */
+  polymarket_size?: number;
 }
 
 export interface ConversionRates {
