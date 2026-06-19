@@ -39,16 +39,24 @@ import {
   BRIDGE_BALANCE_POLL_TIMEOUT_MS,
   BRIDGE_FEE_BUFFER,
   CLOB_FEE_RESERVE,
+  CTF_ADDRESS,
   MIN_BRIDGE_AMOUNT_USD,
-  PUSD_ADDRESS
+  PUSD_ADDRESS,
+  WITHDRAWABLE_STABLECOINS
 } from './polymarketConstants';
-import { getMarketByClobTokenId, getOutcomeForToken } from './polymarketMarketService';
+import {
+  getClobMarketInfo,
+  getMarketByClobTokenId,
+  getOutcomeForToken
+} from './polymarketMarketService';
 import {
   deriveSafeAddress,
   executeGaslessWithdrawal,
+  executeRedeemPositions,
+  type RedeemPosition,
   transferPusdFromDepositWallet
 } from './polymarketRelayerService';
-import { getPolymarketBalanceSummary, placeOrder } from './polymarketTradingService';
+import { getPolymarketBalanceSummary, getPositions, placeOrder } from './polymarketTradingService';
 
 const LOG_PREFIX = 'polymarketPurchaseService';
 
@@ -113,6 +121,47 @@ async function getPolygonUsdceBalance(address: string, logKey: string): Promise<
 }
 
 /**
+ * Detect which stablecoin actually sits in a Polygon wallet.
+ *
+ * Redemptions pay out in the market's collateral: pUSD for CLOB-V2 markets,
+ * USDC.e for legacy neg-risk markets. The withdrawal flow bridges whichever
+ * one is present, so it must look at both. Returns the token holding the
+ * largest balance (raw 6-decimal units), or pUSD with zero if the wallet is empty.
+ */
+async function getWithdrawableStablecoin(
+  address: string,
+  logKey: string
+): Promise<{ address: string; symbol: string; raw: ethers.BigNumber }> {
+  const fnLog = `[${LOG_PREFIX}:getWithdrawableStablecoin]`;
+  const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+  const balanceAbi = ['function balanceOf(address) view returns (uint256)'];
+
+  const balances = await Promise.all(
+    WITHDRAWABLE_STABLECOINS.map(async (token) => {
+      const raw: ethers.BigNumber = await new ethers.Contract(
+        token.address,
+        balanceAbi,
+        provider
+      ).balanceOf(address);
+      return { ...token, raw };
+    })
+  );
+
+  // Pick the token with the largest balance (the actual proceeds; the rest is dust).
+  const best = balances.reduce((a, b) => (b.raw.gt(a.raw) ? b : a));
+
+  Logger.log(
+    'info',
+    fnLog,
+    `${logKey} ${address} → ${balances
+      .map((b) => `${b.symbol}: $${Number(ethers.utils.formatUnits(b.raw, 6)).toFixed(2)}`)
+      .join(', ')} (selected ${best.symbol})`
+  );
+
+  return { address: best.address, symbol: best.symbol, raw: best.raw };
+}
+
+/**
  * Withdraw ALL USDC.e from the Polygon Safe back to Scroll proxy.
  *
  * Uses on-chain RPC balance check (not the CLOB cache) so it picks up
@@ -147,49 +196,36 @@ export async function withdrawSellProceeds(
     const walletType = user.polymarket_account.wallet_type ?? 'safe';
     const polygonWalletAddress = user.polymarket_account.polygon_address;
 
-    // On-chain USDC.e balance check (catches sell proceeds + any idle balance)
-    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
-    const usdc = new ethers.Contract(
-      PUSD_ADDRESS,
-      ['function balanceOf(address) view returns (uint256)'],
-      provider
-    );
+    // Detect the withdrawable stablecoin (pUSD for V2 markets, USDC.e for legacy
+    // neg-risk redemptions) and its on-chain balance. Redemption proceeds are
+    // already settled by the time this runs, so we bridge whatever is present —
+    // we don't wait for an INCREASE (that only applies to async GTC sell fills).
+    let withdrawable = await getWithdrawableStablecoin(polygonWalletAddress, logKey);
 
-    // Snapshot idle balance before sell proceeds arrive
-    const initialRawBalance: ethers.BigNumber = await usdc.balanceOf(polygonWalletAddress);
-    const initialHuman = Number(ethers.utils.formatUnits(initialRawBalance, 6));
-    Logger.log('info', fnLog, `${logKey} Initial idle USDC.e balance: $${initialHuman.toFixed(2)}`);
-
-    // Wait for sell proceeds to arrive (balance must INCREASE above the idle amount).
-    // Intervals: 3s → 10s → 20s → 30s (total ~63s max wait)
+    // If nothing is here yet, give an async sell fill a short window to land.
+    // Intervals: 3s → 10s → 20s → 30s (total ~63s max wait). Stop as soon as a
+    // bridgeable balance appears, so already-settled claims don't wait at all.
+    const minRaw = ethers.utils.parseUnits(MIN_BRIDGE_AMOUNT_USD.toString(), 6);
     const retryDelays = [3000, 10000, 20000, 30000];
-    let rawBalance = initialRawBalance;
 
-    for (let i = 0; i < retryDelays.length; i++) {
+    for (let i = 0; i < retryDelays.length && withdrawable.raw.lt(minRaw); i++) {
       await new Promise((resolve) => setTimeout(resolve, retryDelays[i]));
-
-      rawBalance = await usdc.balanceOf(polygonWalletAddress);
-      const balanceHuman = Number(ethers.utils.formatUnits(rawBalance, 6));
-
+      withdrawable = await getWithdrawableStablecoin(polygonWalletAddress, logKey);
       Logger.log(
         'info',
         fnLog,
-        `${logKey} Polygon wallet USDC.e balance (attempt ${i + 1}/${retryDelays.length}): ${rawBalance.toString()} ($${balanceHuman.toFixed(2)})`
+        `${logKey} Waiting for proceeds (attempt ${i + 1}/${retryDelays.length}): ` +
+          `${withdrawable.symbol} $${Number(ethers.utils.formatUnits(withdrawable.raw, 6)).toFixed(2)}`
       );
-
-      // Break when balance increases above initial (sell proceeds arrived)
-      if (rawBalance.gt(initialRawBalance)) break;
     }
 
-    const totalWaitSec = retryDelays.reduce((s, d) => s + d, 0) / 1000;
-
-    if (rawBalance.lte(initialRawBalance)) {
+    if (withdrawable.raw.lt(minRaw)) {
       Logger.log(
         'warn',
         fnLog,
-        `${logKey} No sell proceeds detected after ${retryDelays.length} polls (~${totalWaitSec}s). ` +
-          `Balance unchanged at $${initialHuman.toFixed(2)}. This is expected for GTC orders that take longer to fill. ` +
-          `Proceeds will remain in the Polygon wallet and will be bridged back automatically on the next purchase or via manual sync.`
+        `${logKey} No bridgeable proceeds (${withdrawable.symbol} ` +
+          `$${Number(ethers.utils.formatUnits(withdrawable.raw, 6)).toFixed(2)} < min $${MIN_BRIDGE_AMOUNT_USD}). ` +
+          `Funds (if any) stay in the Polygon wallet and bridge on the next purchase or manual sync.`
       );
       if (purchaseId) {
         await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'skipped' }, logKey);
@@ -197,19 +233,9 @@ export async function withdrawSellProceeds(
       return;
     }
 
-    // Log whether we're including idle balance alongside sell proceeds
-    if (initialRawBalance.gt(0)) {
-      const proceedsOnly = rawBalance.sub(initialRawBalance);
-      Logger.log(
-        'info',
-        fnLog,
-        `${logKey} Bridging sell proceeds ($${Number(ethers.utils.formatUnits(proceedsOnly, 6)).toFixed(2)}) ` +
-          `+ idle balance ($${initialHuman.toFixed(2)}) = $${Number(ethers.utils.formatUnits(rawBalance, 6)).toFixed(2)} total`
-      );
-    }
-
-    const amount = rawBalance.toString();
-    const balanceHuman = Number(ethers.utils.formatUnits(rawBalance, 6));
+    const fromTokenAddress = withdrawable.address;
+    const amount = withdrawable.raw.toString();
+    const balanceHuman = Number(ethers.utils.formatUnits(withdrawable.raw, 6));
 
     // Determine which stablecoin the user holds on Scroll (USDC or USDT)
     const toToken = await getPreferredScrollStablecoin(proxyAddress, logKey);
@@ -217,12 +243,12 @@ export async function withdrawSellProceeds(
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Withdrawing $${balanceHuman.toFixed(2)} USDC.e from Polygon ${walletType} wallet to Scroll proxy (→${toToken})`
+      `${logKey} Withdrawing $${balanceHuman.toFixed(2)} ${withdrawable.symbol} from Polygon ${walletType} wallet to Scroll proxy (→${toToken})`
     );
 
     // Bridge with one retry after 10s on failure.
-    // Deposit wallet users: transfer pUSD to Safe first (relayer blocks LiFi approval
-    // from deposit wallets), then bridge from Safe via the standard gasless path.
+    // Deposit wallet users: transfer the token to the Safe first (relayer blocks LiFi
+    // approval from deposit wallets), then bridge from the Safe via the gasless path.
     const attemptBridge = async () => {
       let bridgeSourceAddress = polygonWalletAddress;
 
@@ -233,7 +259,8 @@ export async function withdrawSellProceeds(
           polygonWalletAddress,
           safeAddress,
           amount,
-          logKey
+          logKey,
+          fromTokenAddress
         );
         bridgeSourceAddress = safeAddress;
       }
@@ -243,7 +270,8 @@ export async function withdrawSellProceeds(
         proxyAddress,
         amount,
         logKey,
-        toToken
+        toToken,
+        fromTokenAddress
       );
       await executeGaslessWithdrawal(
         privateKey,
@@ -254,7 +282,8 @@ export async function withdrawSellProceeds(
           value: quote.value
         },
         amount,
-        logKey
+        logKey,
+        fromTokenAddress
       );
     };
 
@@ -269,7 +298,7 @@ export async function withdrawSellProceeds(
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Withdrawal initiated: $${balanceHuman.toFixed(2)} USDC.e → Scroll`
+      `${logKey} Withdrawal initiated: $${balanceHuman.toFixed(2)} ${withdrawable.symbol} → Scroll`
     );
 
     // Save withdrawal to transaction history
@@ -784,4 +813,150 @@ export async function executePurchase(
     Logger.log('error', fnLog, `${logKey} ${errorMsg}`);
     await updatePurchaseStatus(purchaseId, 'failed', 'done', { error: errorMsg }, logKey);
   }
+}
+
+// ============================================================================
+// Claim Winning Positions
+// ============================================================================
+
+const CTF_ERC1155_BALANCE_ABI = [
+  'function balanceOf(address account, uint256 id) view returns (uint256)'
+];
+
+/**
+ * Read the raw on-chain ERC-1155 balance of a CTF outcome token.
+ * `tokenId` is the position id (DataPosition.asset). Returns 0 on RPC failure
+ * so a single unreadable position can't abort the whole claim batch.
+ */
+async function getCtfTokenBalance(
+  owner: string,
+  tokenId: string,
+  logKey: string
+): Promise<ethers.BigNumber> {
+  const fnLog = `[${LOG_PREFIX}:getCtfTokenBalance]`;
+  try {
+    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+    const ctf = new ethers.Contract(CTF_ADDRESS, CTF_ERC1155_BALANCE_ABI, provider);
+    return await ctf.balanceOf(owner, tokenId);
+  } catch (error) {
+    Logger.log('error', fnLog, `${logKey} Failed to read CTF balance: ${String(error)}`);
+    return ethers.constants.Zero;
+  }
+}
+
+/**
+ * Redeem all winning CTF positions for a user and auto-withdraw proceeds to Scroll.
+ *
+ * Positions with curPrice >= 0.999 are resolved-and-won. For each we call
+ * CTF.redeemPositions() via the gasless Relayer (batched into one tx).
+ * neg-risk markets redeem through the NegRiskAdapter instead, using the exact
+ * on-chain token balance of the winning outcome.
+ *
+ * After redemption the collateral (pUSD for V2 markets, USDC.e for legacy
+ * neg-risk markets) lands in the deposit wallet, and withdrawSellProceeds fires
+ * to bridge whichever token arrived back to Scroll automatically. The sweep also
+ * runs when nothing new is redeemable, to pick up proceeds settled on a prior run.
+ */
+export async function claimWinningPositions(
+  user: IUser,
+  privateKey: string,
+  logKey: string
+): Promise<{ claimed: number; txHash?: string }> {
+  const fnLog = `[${LOG_PREFIX}:claimWinningPositions]`;
+
+  if (!user.polymarket_account) throw new Error('No Polymarket account');
+
+  const polygonAddress = user.polymarket_account.polygon_address;
+
+  // Always attempt to sweep any already-settled proceeds back to Scroll, even
+  // when there's nothing new to redeem. Redemptions confirmed on a prior run
+  // leave the collateral (pUSD or legacy USDC.e) idle in the deposit wallet;
+  // without this, those funds would be stranded until the next purchase.
+  const sweepProceeds = () =>
+    withdrawSellProceeds(user, privateKey, logKey).catch((err) => {
+      Logger.log(
+        'error',
+        fnLog,
+        `${logKey} Background withdrawal after claim failed: ${String(err)}`
+      );
+    });
+
+  const positions = await getPositions(polygonAddress, logKey);
+  const winning = positions.filter((p) => (p.curPrice ?? 0) >= 0.999);
+
+  if (winning.length === 0) {
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} No winning positions found — sweeping any settled proceeds`
+    );
+    sweepProceeds();
+    return { claimed: 0 };
+  }
+
+  Logger.log('info', fnLog, `${logKey} Found ${winning.length} winning position(s)`);
+
+  const toRedeem: RedeemPosition[] = [];
+
+  for (const p of winning) {
+    // Determine CTF indexSet from outcome label (binary YES/NO markets only)
+    const outcome = (p.outcome ?? '').toLowerCase();
+    let indexSet: number;
+    if (outcome === 'yes') {
+      indexSet = 1;
+    } else if (outcome === 'no') {
+      indexSet = 2;
+    } else {
+      Logger.log(
+        'warn',
+        fnLog,
+        `${logKey} Unknown outcome "${p.outcome}" — skipping conditionId ${p.conditionId}`
+      );
+      continue;
+    }
+
+    // neg-risk markets redeem via the NegRiskAdapter, which needs the exact raw
+    // token balance of the winning outcome (not just an index set).
+    let negRisk = false;
+    try {
+      const clobInfo = await getClobMarketInfo(p.conditionId, logKey);
+      negRisk = Boolean((clobInfo as { neg_risk?: boolean }).neg_risk);
+    } catch {
+      // CLOB info unavailable — assume binary CTF and proceed optimistically
+    }
+
+    if (negRisk) {
+      const rawAmount = await getCtfTokenBalance(polygonAddress, p.asset, logKey);
+      if (rawAmount.isZero()) {
+        Logger.log(
+          'warn',
+          fnLog,
+          `${logKey} Neg-risk position ${p.conditionId} has zero on-chain balance — skipping`
+        );
+        continue;
+      }
+      toRedeem.push({
+        conditionId: p.conditionId,
+        indexSet,
+        negRisk: true,
+        amount: rawAmount.toString()
+      });
+      continue;
+    }
+
+    toRedeem.push({ conditionId: p.conditionId, indexSet });
+  }
+
+  if (toRedeem.length === 0) {
+    // Nothing newly redeemable, but prior-run proceeds may still be idle — sweep.
+    sweepProceeds();
+    return { claimed: 0 };
+  }
+
+  const txHash = await executeRedeemPositions(privateKey, polygonAddress, toRedeem, logKey);
+
+  // Auto-withdraw redeemed proceeds back to Scroll (fire-and-forget, same as SELL flow)
+  sweepProceeds();
+
+  return { claimed: toRedeem.length, txHash };
 }

@@ -684,7 +684,7 @@ export async function sweepSafeToDepositWallet(
 // ============================================================================
 
 /**
- * Transfer pUSD from a deposit wallet to another Polygon address via the relayer.
+ * Transfer a stablecoin from a deposit wallet to another Polygon address via the relayer.
  *
  * Uses a plain ERC-20 transfer() call (no approval needed, allowed by relayer).
  * Intended as step 1 of withdrawal: move funds to Safe so the Safe can approve
@@ -693,22 +693,49 @@ export async function sweepSafeToDepositWallet(
  * @param privateKey - User's EOA private key
  * @param depositWalletAddress - Source deposit wallet
  * @param recipientAddress - Destination address (typically the user's Safe)
- * @param amount - Amount in smallest units (6 decimals for pUSD)
+ * @param amount - Amount in smallest units (6 decimals)
  * @param logKey - Logging identifier
+ * @param tokenAddress - ERC-20 to move (defaults to pUSD; pass USDC.e for legacy redemption proceeds)
  */
 export async function transferPusdFromDepositWallet(
   privateKey: string,
   depositWalletAddress: string,
   recipientAddress: string,
   amount: string,
-  logKey: string
+  logKey: string,
+  tokenAddress: string = PUSD_ADDRESS
 ): Promise<void> {
   const fnLog = `[${LOG_PREFIX}:transferPusdFromDepositWallet]`;
+
+  // Clamp to actual on-chain balance to prevent "batch would revert" when the
+  // requested amount is 1 unit over the real balance due to float rounding.
+  const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+  const token = new ethers.Contract(
+    tokenAddress,
+    ['function balanceOf(address) view returns (uint256)'],
+    provider
+  );
+  const actualBalance: ethers.BigNumber = await token.balanceOf(depositWalletAddress);
+  const requestedBn = ethers.BigNumber.from(amount);
+  const transferAmount = actualBalance.lt(requestedBn) ? actualBalance : requestedBn;
+
+  if (transferAmount.isZero()) {
+    Logger.log('warn', fnLog, `${logKey} Deposit wallet balance is zero — skipping transfer`);
+    return;
+  }
+
+  if (actualBalance.lt(requestedBn)) {
+    Logger.log(
+      'warn',
+      fnLog,
+      `${logKey} Requested ${requestedBn} but balance is ${actualBalance} — clamping transfer amount`
+    );
+  }
 
   Logger.log(
     'info',
     fnLog,
-    `${logKey} Transferring ${amount} pUSD from deposit wallet ${depositWalletAddress} → ${recipientAddress}`
+    `${logKey} Transferring ${transferAmount} (token ${tokenAddress}) from deposit wallet ${depositWalletAddress} → ${recipientAddress}`
   );
 
   const client = createRelayClient(privateKey);
@@ -718,8 +745,11 @@ export async function transferPusdFromDepositWallet(
 
   const calls: DepositWalletCall[] = [
     {
-      target: PUSD_ADDRESS,
-      data: erc20Iface.encodeFunctionData('transfer', [recipientAddress, amount]),
+      target: tokenAddress,
+      data: erc20Iface.encodeFunctionData('transfer', [
+        recipientAddress,
+        transferAmount.toString()
+      ]),
       value: '0'
     }
   ];
@@ -821,7 +851,8 @@ export async function executeGaslessWithdrawal(
   privateKey: string,
   withdrawData: { approvalAddress: string; to: string; data: string; value: string },
   amount: string,
-  logKey: string
+  logKey: string,
+  tokenAddress: string = PUSD_ADDRESS
 ): Promise<void> {
   const fnLog = `[${LOG_PREFIX}:executeGaslessWithdrawal]`;
 
@@ -833,14 +864,18 @@ export async function executeGaslessWithdrawal(
 
     const transactions = [];
 
-    // 1. Approve LiFi router to spend USDC.e
+    // 1. Approve the LiFi router to spend the bridged token (pUSD or USDC.e)
     if (
       withdrawData.approvalAddress &&
       withdrawData.approvalAddress !== ethers.constants.AddressZero
     ) {
-      Logger.log('info', fnLog, `${logKey} Adding approval tx for LiFi router`);
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} Adding approval tx for LiFi router (token ${tokenAddress})`
+      );
       transactions.push({
-        to: PUSD_ADDRESS,
+        to: tokenAddress,
         data: usdcInterface.encodeFunctionData('approve', [withdrawData.approvalAddress, amount]),
         value: '0'
       });
@@ -875,4 +910,110 @@ export async function executeGaslessWithdrawal(
     Logger.log('error', fnLog, `${logKey} Gasless withdrawal failed: ${String(error)}`);
     throw new Error(`Gasless withdrawal failed: ${String(error)}`);
   }
+}
+
+// ============================================================================
+// CTF Position Redemption
+// ============================================================================
+
+const CTF_REDEEM_ABI = [
+  'function redeemPositions(address collateralToken, bytes32 parentCollectionId, bytes32 conditionId, uint256[] indexSets)'
+];
+
+/**
+ * NegRiskAdapter redemption: distinct 2-arg signature. The adapter pulls the
+ * user's conditional tokens, redeems them on the CTF using its wrapped
+ * collateral, then unwraps the payout to the caller as pUSD.
+ * `amounts` is always length 2: [yesAmount, noAmount] in raw 6-decimal units.
+ * @see https://github.com/Polymarket/neg-risk-ctf-adapter
+ */
+const NEG_RISK_REDEEM_ABI = ['function redeemPositions(bytes32 conditionId, uint256[] amounts)'];
+
+/** One position to redeem. CTF markets use `indexSet`; neg-risk markets also need the raw `amount` held. */
+export interface RedeemPosition {
+  conditionId: string;
+  /** CTF index set: 1 = YES, 2 = NO */
+  indexSet: number;
+  /** True if the market is a neg-risk (multi-outcome) market — redeems via the NegRiskAdapter */
+  negRisk?: boolean;
+  /** Raw (6-decimal) balance of the winning outcome token. Required when `negRisk` is true. */
+  amount?: string;
+}
+
+/**
+ * Redeem one or more winning CTF positions via the Polymarket Relayer.
+ *
+ * Positions are held by the user's **deposit wallet** (signatureType 3 /
+ * POLY_1271), so redemption MUST execute from there — not the Safe. The
+ * redeemer (`msg.sender`) is the deposit wallet, which holds the outcome tokens
+ * and has approved the NegRiskAdapter. Each position maps to one redemption
+ * call; all are batched into a single deposit-wallet multi-send. Binary CTF
+ * markets call `CTF.redeemPositions`; neg-risk markets call
+ * `NegRiskAdapter.redeemPositions` (different signature, requires token amounts).
+ *
+ * @param privateKey           - User's EOA private key
+ * @param depositWalletAddress - User's deposit wallet (polygon_address) that holds the positions
+ * @param positions            - Positions to redeem (see {@link RedeemPosition})
+ * @param logKey               - Logging identifier
+ * @returns On-chain transaction hash
+ */
+export async function executeRedeemPositions(
+  privateKey: string,
+  depositWalletAddress: string,
+  positions: RedeemPosition[],
+  logKey: string
+): Promise<string> {
+  const fnLog = `[${LOG_PREFIX}:executeRedeemPositions]`;
+
+  if (positions.length === 0) throw new Error('No positions to redeem');
+
+  const client = createRelayClient(privateKey);
+  const ctfIface = new ethers.utils.Interface(CTF_REDEEM_ABI);
+  const negRiskIface = new ethers.utils.Interface(NEG_RISK_REDEEM_ABI);
+
+  const calls: DepositWalletCall[] = positions.map(({ conditionId, indexSet, negRisk, amount }) => {
+    if (negRisk) {
+      // NegRiskAdapter expects [yesAmount, noAmount]; put the held balance in the
+      // winning slot (indexSet 1 = YES, 2 = NO) and 0 in the other.
+      const held = amount ?? '0';
+      const amounts = indexSet === 1 ? [held, '0'] : ['0', held];
+      return {
+        target: NEG_RISK_ADAPTER_ADDRESS,
+        data: negRiskIface.encodeFunctionData('redeemPositions', [conditionId, amounts]),
+        value: '0'
+      };
+    }
+    return {
+      target: CTF_ADDRESS,
+      data: ctfIface.encodeFunctionData('redeemPositions', [
+        PUSD_ADDRESS,
+        ethers.constants.HashZero,
+        conditionId,
+        [indexSet]
+      ]),
+      value: '0'
+    };
+  });
+
+  Logger.log(
+    'info',
+    fnLog,
+    `${logKey} Redeeming ${positions.length} position(s) via deposit wallet ${depositWalletAddress}`
+  );
+
+  const deadline = Math.floor(Date.now() / 1000 + 3600).toString();
+  const response = await client.executeDepositWalletBatch(calls, depositWalletAddress, deadline);
+  const relayerId = response.transactionID;
+  const result = await response.wait();
+
+  if (!result) {
+    throw new Error(`Redeem positions failed on-chain (relayer_id: ${relayerId})`);
+  }
+
+  Logger.log(
+    'info',
+    fnLog,
+    `${logKey} Redemptions confirmed (tx: ${result.transactionHash}, relayer_id: ${relayerId})`
+  );
+  return result.transactionHash;
 }

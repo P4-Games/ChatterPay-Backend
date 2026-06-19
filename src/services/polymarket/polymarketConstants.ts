@@ -13,6 +13,28 @@
 /** pUSD (Polymarket USD) on Polygon — collateral since CLOB V2 (April 2026). Backed 1:1 by USDC. */
 export const PUSD_ADDRESS = '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB';
 
+/**
+ * USDC.e (bridged USDC) on Polygon — the pre-CLOB-V2 collateral.
+ * Legacy neg-risk markets settle in USDC.e (their NegRiskAdapter WrappedCollateral
+ * wraps USDC.e), so redeeming an old winning position pays out USDC.e, not pUSD.
+ * The withdrawal flow must detect and bridge whichever stablecoin actually lands.
+ */
+export const USDCE_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+
+/**
+ * Single source of truth for the Polygon stablecoins a withdrawal can sweep,
+ * in preference order. Redemptions pay out the market's collateral: pUSD for
+ * CLOB-V2 markets, USDC.e for legacy neg-risk markets. Both the balance summary
+ * (what's withdrawable) and the withdrawal flow (what to bridge) iterate this
+ * list, so adding a future collateral here makes both paths support it.
+ *
+ * All entries are assumed to be 6-decimal, ~$1 stablecoins (value ≈ raw / 1e6).
+ */
+export const WITHDRAWABLE_STABLECOINS: ReadonlyArray<{ address: string; symbol: string }> = [
+  { address: PUSD_ADDRESS, symbol: 'pUSD' },
+  { address: USDCE_ADDRESS, symbol: 'USDC.e' }
+];
+
 /** CTF Exchange — main order matching/settlement contract (V2 address) */
 export const CTF_EXCHANGE_ADDRESS = '0xE111180000d2663C0091e4f400237545B87B996B';
 

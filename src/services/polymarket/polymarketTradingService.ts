@@ -20,7 +20,7 @@ import { Logger } from '../../helpers/loggerHelper';
 import { PolymarketOrderModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
 import { getAuthenticatedClientForUser } from './polymarketClientService';
-import { FOK_SLIPPAGE_TOLERANCE, PUSD_ADDRESS } from './polymarketConstants';
+import { FOK_SLIPPAGE_TOLERANCE, WITHDRAWABLE_STABLECOINS } from './polymarketConstants';
 import { ensureTokenApprovals, setupDepositWalletApprovals } from './polymarketRelayerService';
 import type {
   ClobOpenOrder,
@@ -841,9 +841,12 @@ export async function getPnlHistory(
 }
 
 /**
- * Get a summary of the user's Polymarket balances: idle USDC.e + active positions.
+ * Get a summary of the user's Polymarket balances: idle stablecoin + active positions.
  *
- * - idle_usdc: USDC.e sitting in the Polygon Safe (not in any position)
+ * - idle_usdc: withdrawable stablecoin sitting idle in the Polygon wallet, summed
+ *   across every collateral a redemption can pay out (pUSD + legacy USDC.e), PLUS
+ *   the value of resolved-and-won positions not yet redeemed. This is the total the
+ *   user can sweep to Scroll, so the front can surface it and trigger a withdrawal.
  * - positions_value: total current value of all active positions (in USD)
  *
  * This is best-effort: failures return zeroes so the balance endpoint stays resilient.
@@ -855,20 +858,25 @@ export async function getPolymarketBalanceSummary(
   const fnLog = `[${LOG_PREFIX}:getPolymarketBalanceSummary]`;
 
   try {
-    // Query idle pUSD balance on Polygon and active positions in parallel
+    // Query idle balance for every withdrawable stablecoin + active positions in parallel.
     const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
-    const usdc = new ethers.Contract(
-      PUSD_ADDRESS,
-      ['function balanceOf(address) view returns (uint256)'],
-      provider
-    );
+    const balanceAbi = ['function balanceOf(address) view returns (uint256)'];
 
-    const [rawBalance, positions] = await Promise.all([
-      usdc.balanceOf(polygonAddress) as Promise<ethers.BigNumber>,
+    const [stableBalances, positions] = await Promise.all([
+      Promise.all(
+        WITHDRAWABLE_STABLECOINS.map(async (token) => {
+          const raw: ethers.BigNumber = await new ethers.Contract(
+            token.address,
+            balanceAbi,
+            provider
+          ).balanceOf(polygonAddress);
+          return { symbol: token.symbol, value: Number(ethers.utils.formatUnits(raw, 6)) };
+        })
+      ),
       getPositions(polygonAddress, logKey).catch(() => [] as DataPosition[])
     ]);
 
-    const onchain_usdc = Number(ethers.utils.formatUnits(rawBalance, 6));
+    const onchain_idle = stableBalances.reduce((sum, b) => sum + b.value, 0);
     const positions_value = positions.reduce((sum, p) => sum + (p.currentValue || 0), 0);
 
     // Positions with curPrice >= 0.999 are in resolved markets where the user won.
@@ -878,12 +886,16 @@ export async function getPolymarketBalanceSummary(
       .filter((p) => (p.curPrice ?? 0) >= 0.999)
       .reduce((sum, p) => sum + (p.currentValue || 0), 0);
 
-    const idle_usdc = onchain_usdc + redeemable;
+    const idle_usdc = onchain_idle + redeemable;
 
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Polymarket balances — idle USDC.e: $${onchain_usdc.toFixed(2)}, redeemable: $${redeemable.toFixed(2)}, positions: $${positions_value.toFixed(2)}`
+      `${logKey} Polymarket balances — idle (${stableBalances
+        .map((b) => `${b.symbol}: $${b.value.toFixed(2)}`)
+        .join(
+          ', '
+        )}), redeemable: $${redeemable.toFixed(2)}, positions: $${positions_value.toFixed(2)}`
     );
 
     return { idle_usdc, positions_value };

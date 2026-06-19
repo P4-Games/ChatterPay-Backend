@@ -759,12 +759,14 @@ export async function executeBridge(
 // ============================================================================
 
 /**
- * Get a bridge quote and necessary transactions for withdrawing USDC.e from Polygon back to Scroll.
+ * Get a bridge quote and necessary transactions for withdrawing a stablecoin from Polygon back to Scroll.
  *
  * @param polygonSafeAddress - Sender address on Polygon (the user's Safe)
  * @param scrollProxyAddress - Destination address on Scroll (the user's Proxy)
- * @param amount - Amount to withdraw in smallest unit (wei/6 decimals for USDC.e)
+ * @param amount - Amount to withdraw in smallest unit (wei/6 decimals)
  * @param logKey - Logging identifier
+ * @param toTokenSymbol - Destination token on Scroll (default 'USDC')
+ * @param fromTokenAddress - Source token on Polygon (defaults to pUSD; pass USDC.e for legacy proceeds)
  * @returns An object containing the quote, approval address, to, data, and value for the Relayer.
  */
 export async function withdrawToScroll(
@@ -772,7 +774,8 @@ export async function withdrawToScroll(
   scrollProxyAddress: string,
   amount: string,
   logKey: string,
-  toTokenSymbol: string = 'USDC'
+  toTokenSymbol: string = 'USDC',
+  fromTokenAddress: string = PUSD_ADDRESS
 ): Promise<{
   quote: LifiQuoteResponse;
   approvalAddress: string;
@@ -786,7 +789,7 @@ export async function withdrawToScroll(
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Getting withdraw quote: ${amount} USDC.e Polygon→Scroll (→${toTokenSymbol})`
+      `${logKey} Getting withdraw quote: ${amount} (token ${fromTokenAddress}) Polygon→Scroll (→${toTokenSymbol})`
     );
 
     // Deny Squid (Axelar-based): requires native MATIC as msg.value for cross-chain gas.
@@ -795,7 +798,7 @@ export async function withdrawToScroll(
       {
         fromChain: POLYMARKET_CHAIN_ID,
         toChain: SCROLL_CHAIN_ID,
-        fromToken: PUSD_ADDRESS,
+        fromToken: fromTokenAddress,
         toToken: toTokenSymbol,
         fromAmount: amount,
         fromAddress: polygonSafeAddress,

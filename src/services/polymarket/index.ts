@@ -64,13 +64,18 @@ export {
 export { registerPolymarketApiAdapter } from './polymarketProxyHelper';
 export type { PurchaseParams } from './polymarketPurchaseService';
 // Purchase (unified flow)
-export { executePurchase, withdrawSellProceeds } from './polymarketPurchaseService';
+export {
+  claimWinningPositions,
+  executePurchase,
+  withdrawSellProceeds
+} from './polymarketPurchaseService';
 // Relayer (gasless on-chain operations)
 export {
   createRelayClient,
   deploySafeWallet,
   deriveSafeAddress,
   ensureTokenApprovals,
+  executeRedeemPositions,
   setupGaslessTrading
 } from './polymarketRelayerService';
 // Trading

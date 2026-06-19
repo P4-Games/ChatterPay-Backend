@@ -10,11 +10,13 @@
  */
 
 import { randomUUID } from 'crypto';
+import { ethers } from 'ethers';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import {
   CHATTERPAY_DOMAIN,
   POLYMARKET_ENABLED,
+  POLYMARKET_POLYGON_RPC_URL,
   POLYMARKET_TERMS_VERSION
 } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
@@ -63,6 +65,7 @@ import {
   MIN_BUY_ORDER_USD,
   POLYMARKET_MAX_PRICE,
   POLYMARKET_MIN_PRICE,
+  PUSD_ADDRESS,
   placeOrder,
   resolveMaxSize,
   searchEvents,
@@ -76,7 +79,10 @@ import {
   getScrollStablecoinTotal,
   withdrawToScroll
 } from '../services/polymarket/polymarketBridgeService';
-import { executePurchase } from '../services/polymarket/polymarketPurchaseService';
+import {
+  claimWinningPositions,
+  executePurchase
+} from '../services/polymarket/polymarketPurchaseService';
 import {
   deriveSafeAddress,
   executeGaslessWithdrawal,
@@ -578,8 +584,12 @@ export const polymarketPlaceOrder = async (
     // Polymarket requires prices strictly in (0.001, 0.999). A price of exactly
     // 0 or 1 means the market has resolved; clamp to the boundary and let the
     // CLOB reject with its own error if the market is truly closed.
+    // priceClampedToMax is used below as a fallback signal: if the SELL order
+    // fails after clamping, the market is almost certainly resolved and we
+    // should try CTF redemption instead.
+    const priceClampedToMax = price >= POLYMARKET_MAX_PRICE;
     let effectivePrice = price;
-    if (price >= POLYMARKET_MAX_PRICE) {
+    if (priceClampedToMax) {
       effectivePrice = POLYMARKET_MAX_PRICE;
       Logger.log(
         'warn',
@@ -665,18 +675,43 @@ export const polymarketPlaceOrder = async (
     // ── Place order (using the bridged amount as the actual order size) ──
     // The bridge output may differ slightly from the input due to fees.
     // We use the original requested size since the buffer should cover it.
-    const result = await placeOrder(
-      user,
-      privateKey,
-      {
-        tokenId: token_id,
-        price: effectivePrice,
-        size,
-        side,
-        orderType: order_type
-      },
-      logKey
-    );
+    //
+    // If the SELL order fails after the price was clamped to the max boundary,
+    // the market is almost certainly resolved — fall back to CTF redemption
+    // instead of surfacing a confusing CLOB error to the caller.
+    let result;
+    try {
+      result = await placeOrder(
+        user,
+        privateKey,
+        {
+          tokenId: token_id,
+          price: effectivePrice,
+          size,
+          side,
+          orderType: order_type
+        },
+        logKey
+      );
+    } catch (orderError) {
+      if (side === 'SELL' && priceClampedToMax) {
+        Logger.log(
+          'warn',
+          LOG_PREFIX,
+          `${logKey} SELL failed on boundary price (${effectivePrice}) — attempting CTF claim fallback. Error: ${String(orderError)}`
+        );
+        const claimResult = await claimWinningPositions(user, privateKey, logKey);
+        if (claimResult.claimed > 0) {
+          return successReply(reply, {
+            claimed: claimResult.claimed,
+            tx_hash: claimResult.txHash,
+            withdrawal_pending: true,
+            message: `Market appears resolved. Claimed ${claimResult.claimed} winning position(s). Proceeds are being withdrawn to Scroll.`
+          });
+        }
+      }
+      throw orderError;
+    }
 
     // The CLOB SDK response may use different field names for the order ID.
     const raw = result as unknown as Record<string, unknown>;
@@ -1174,8 +1209,7 @@ export const polymarketWithdraw = async (
     // Transfer pUSD to Safe first, then bridge from Safe (no spender restrictions).
     let bridgeSourceAddress = user.polymarket_account.polygon_address;
     if (walletType === 'deposit') {
-      const { Wallet } = await import('ethers');
-      const safeAddress = deriveSafeAddress(new Wallet(privateKey).address);
+      const safeAddress = deriveSafeAddress(new ethers.Wallet(privateKey).address);
       await transferPusdFromDepositWallet(
         privateKey,
         user.polymarket_account.polygon_address,
@@ -1186,10 +1220,54 @@ export const polymarketWithdraw = async (
       bridgeSourceAddress = safeAddress;
     }
 
+    // ── Guard: LiFi fails hard if amount > actual on-chain balance ────────
+    // Read the real pUSD balance of the bridge source after any deposit-wallet
+    // transfer. Cap the bridge amount to what's actually available.
+    // If the wallet is empty but there are redeemable CTF positions, trigger
+    // claimWinningPositions (which auto-withdraws once redeemed) and return.
+    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+    const pusdContract = new ethers.Contract(
+      PUSD_ADDRESS,
+      ['function balanceOf(address) view returns (uint256)'],
+      provider
+    );
+    const actualBal: ethers.BigNumber = await pusdContract.balanceOf(bridgeSourceAddress);
+    const requestedBn = ethers.BigNumber.from(amountSmallest);
+
+    // LiFi minimum is ~$1. If we have nothing immediately bridgeable,
+    // fall back to claim+withdraw which handles the full async flow.
+    const MIN_BRIDGE_UNITS = ethers.BigNumber.from(1_000_000); // $1.00
+    if (actualBal.lt(MIN_BRIDGE_UNITS)) {
+      Logger.log(
+        'warn',
+        LOG_PREFIX,
+        `${logKey} Safe pUSD balance too low to bridge (${actualBal}). Triggering claim+withdraw flow.`
+      );
+      claimWinningPositions(user, privateKey, logKey).catch((err) =>
+        Logger.log('error', LOG_PREFIX, `${logKey} Background claim failed: ${String(err)}`)
+      );
+      return successReply(reply, {
+        withdrawal_pending: true,
+        message:
+          'Insufficient pUSD in wallet. Claim + withdrawal initiated — funds will arrive on Scroll once positions are redeemed.'
+      });
+    }
+
+    // Cap to actual balance if less than requested (e.g. rounding, partial drain)
+    const bridgeAmountSmallest = actualBal.lt(requestedBn) ? actualBal.toString() : amountSmallest;
+
+    if (actualBal.lt(requestedBn)) {
+      Logger.log(
+        'warn',
+        LOG_PREFIX,
+        `${logKey} Capping bridge from ${requestedBn} to actual balance ${actualBal}`
+      );
+    }
+
     const quote = await withdrawToScroll(
       bridgeSourceAddress,
       proxyAddress,
-      amountSmallest,
+      bridgeAmountSmallest,
       logKey,
       toToken
     );
@@ -1201,12 +1279,12 @@ export const polymarketWithdraw = async (
         data: quote.data,
         value: quote.value
       },
-      amountSmallest,
+      bridgeAmountSmallest,
       logKey
     );
 
-    // Save withdrawal to transaction history
-    const withdrawAmountHuman = Number(request.body.amount);
+    // Save withdrawal to transaction history (use actual bridged amount)
+    const withdrawAmountHuman = Number(bridgeAmountSmallest) / 1_000_000;
     await mongoTransactionService.saveTransaction({
       tx: `withdraw-${Date.now()}`,
       walletFrom: user.polymarket_account.polygon_address,
@@ -1460,5 +1538,37 @@ export const polymarketPurchaseStatus = async (
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to get purchase status');
+  }
+};
+
+/** POST /polymarket/positions/claim */
+export const polymarketClaimPositions = async (
+  request: FastifyRequest<{ Body: PolymarketUserDataBody }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  if (!checkEnabled(reply)) return reply;
+  const logKey = `[op:polymarket-claim-positions]`;
+
+  try {
+    const user = await resolveUser(request.body.channel_user_id, logKey);
+    if (!user) return errorReply(reply, 400, 'Invalid or missing channel_user_id');
+    if (!validatePolymarketReady(user, reply)) return reply;
+
+    const privateKey = await getUserPrivateKey(user);
+    const result = await claimWinningPositions(user, privateKey, logKey);
+
+    if (result.claimed === 0) {
+      return successReply(reply, { claimed: 0, message: 'No winning positions to claim' });
+    }
+
+    return successReply(reply, {
+      claimed: result.claimed,
+      tx_hash: result.txHash,
+      withdrawal_pending: true,
+      message: `Claimed ${result.claimed} position(s). Proceeds are being withdrawn to Scroll.`
+    });
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, String(error));
+    return errorReply(reply, 500, `Failed to claim positions: ${String(error)}`);
   }
 };
