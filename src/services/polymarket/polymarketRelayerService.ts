@@ -766,76 +766,6 @@ export async function transferPusdFromDepositWallet(
 }
 
 // ============================================================================
-// Deposit Wallet Gasless Withdrawal (deprecated — use Safe routing instead)
-// ============================================================================
-
-/**
- * @deprecated Relayer blocks LiFi spender approval from deposit wallets.
- * Use transferPusdFromDepositWallet + executeGaslessWithdrawal instead.
- *
- * @param privateKey - User's EOA private key
- * @param depositWalletAddress - The user's deposit wallet address
- * @param withdrawData - LiFi bridge transaction details
- * @param amount - Amount being bridged (for the approval)
- * @param logKey - Logging identifier
- */
-export async function executeDepositWalletWithdrawal(
-  privateKey: string,
-  depositWalletAddress: string,
-  withdrawData: { approvalAddress: string; to: string; data: string; value: string },
-  amount: string,
-  logKey: string
-): Promise<void> {
-  const fnLog = `[${LOG_PREFIX}:executeDepositWalletWithdrawal]`;
-
-  try {
-    Logger.log('info', fnLog, `${logKey} Initiating gasless withdrawal via deposit wallet batch`);
-    const client = createRelayClient(privateKey);
-    const erc20Iface = new ethers.utils.Interface([
-      'function approve(address spender, uint256 amount) public returns (bool)'
-    ]);
-
-    const calls: DepositWalletCall[] = [];
-
-    if (
-      withdrawData.approvalAddress &&
-      withdrawData.approvalAddress !== ethers.constants.AddressZero
-    ) {
-      Logger.log('info', fnLog, `${logKey} Adding approval call for LiFi router`);
-      calls.push({
-        target: PUSD_ADDRESS,
-        data: erc20Iface.encodeFunctionData('approve', [withdrawData.approvalAddress, amount]),
-        value: '0'
-      });
-    }
-
-    Logger.log('info', fnLog, `${logKey} Adding LiFi bridge call`);
-    calls.push({
-      target: withdrawData.to,
-      data: withdrawData.data,
-      value: BigInt(withdrawData.value || '0').toString() // normalize hex/null → decimal string
-    });
-
-    const deadline = Math.floor(Date.now() / 1000 + 3600).toString();
-    const response = await client.executeDepositWalletBatch(calls, depositWalletAddress, deadline);
-    const result = await response.wait();
-
-    if (!result) {
-      throw new Error('Deposit wallet withdrawal batch failed on-chain');
-    }
-
-    Logger.log(
-      'info',
-      fnLog,
-      `${logKey} Deposit wallet withdrawal confirmed (tx: ${result.transactionHash})`
-    );
-  } catch (error) {
-    Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
-    throw new Error(`Deposit wallet withdrawal failed: ${String(error)}`);
-  }
-}
-
-// ============================================================================
 // Gasless Withdrawal
 // ============================================================================
 
@@ -939,6 +869,13 @@ export interface RedeemPosition {
   negRisk?: boolean;
   /** Raw (6-decimal) balance of the winning outcome token. Required when `negRisk` is true. */
   amount?: string;
+  /**
+   * Collateral token the market settles in (standard CTF only). Legacy markets use
+   * USDC.e; CLOB-V2 markets use pUSD. The collateral is baked into the ERC-1155
+   * position id, so redeeming with the wrong one burns 0 tokens and pays out nothing
+   * while the tx still confirms. Defaults to pUSD when omitted.
+   */
+  collateralToken?: string;
 }
 
 /**
@@ -972,29 +909,33 @@ export async function executeRedeemPositions(
   const ctfIface = new ethers.utils.Interface(CTF_REDEEM_ABI);
   const negRiskIface = new ethers.utils.Interface(NEG_RISK_REDEEM_ABI);
 
-  const calls: DepositWalletCall[] = positions.map(({ conditionId, indexSet, negRisk, amount }) => {
-    if (negRisk) {
-      // NegRiskAdapter expects [yesAmount, noAmount]; put the held balance in the
-      // winning slot (indexSet 1 = YES, 2 = NO) and 0 in the other.
-      const held = amount ?? '0';
-      const amounts = indexSet === 1 ? [held, '0'] : ['0', held];
+  const calls: DepositWalletCall[] = positions.map(
+    ({ conditionId, indexSet, negRisk, amount, collateralToken }) => {
+      if (negRisk) {
+        // NegRiskAdapter expects [yesAmount, noAmount]; put the held balance in the
+        // winning slot (indexSet 1 = YES, 2 = NO) and 0 in the other.
+        const held = amount ?? '0';
+        const amounts = indexSet === 1 ? [held, '0'] : ['0', held];
+        return {
+          target: NEG_RISK_ADAPTER_ADDRESS,
+          data: negRiskIface.encodeFunctionData('redeemPositions', [conditionId, amounts]),
+          value: '0'
+        };
+      }
+      // Standard CTF: the collateral token is part of the position id. Legacy markets
+      // settle in USDC.e, V2 markets in pUSD — using the wrong one burns 0 tokens.
       return {
-        target: NEG_RISK_ADAPTER_ADDRESS,
-        data: negRiskIface.encodeFunctionData('redeemPositions', [conditionId, amounts]),
+        target: CTF_ADDRESS,
+        data: ctfIface.encodeFunctionData('redeemPositions', [
+          collateralToken ?? PUSD_ADDRESS,
+          ethers.constants.HashZero,
+          conditionId,
+          [indexSet]
+        ]),
         value: '0'
       };
     }
-    return {
-      target: CTF_ADDRESS,
-      data: ctfIface.encodeFunctionData('redeemPositions', [
-        PUSD_ADDRESS,
-        ethers.constants.HashZero,
-        conditionId,
-        [indexSet]
-      ]),
-      value: '0'
-    };
-  });
+  );
 
   Logger.log(
     'info',
