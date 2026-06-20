@@ -50,6 +50,7 @@ import {
   getCurrentTerms,
   getEventBySlug,
   getEvents,
+  getMarketByClobTokenId,
   getMarketBySlug,
   getMarketPrice,
   getMarkets,
@@ -728,7 +729,9 @@ export const polymarketPlaceOrder = async (
           LOG_PREFIX,
           `${logKey} SELL failed on boundary price (${effectivePrice}) — attempting CTF claim fallback. Error: ${String(orderError)}`
         );
-        const claimResult = await claimWinningPositions(user, privateKey, logKey);
+        const marketInfo = await getMarketByClobTokenId(token_id, logKey).catch(() => null);
+        const claimConditionId = marketInfo?.conditionId;
+        const claimResult = await claimWinningPositions(user, privateKey, logKey, claimConditionId);
         if (claimResult.claimed > 0) {
           // The SELL was superseded by a CTF claim (recorded inside
           // claimWinningPositions) — mark the sell intent cancelled, not failed.
@@ -1368,9 +1371,12 @@ export const polymarketPurchase = async (
       return errorReply(reply, 400, 'size=max is only supported for SELL orders');
     }
 
-    // Polymarket requires prices in (0.001, 0.999). Reject early before
-    // wasting gas on a bridge for an impossible order (e.g. resolved market).
-    if (price < 0.001 || price > 0.999) {
+    // Polymarket requires prices in (0.001, 0.999).
+    // For BUY orders with an out-of-range price, reject early — no bridge should start.
+    // For SELL orders with price >= 0.999 the market is likely resolved; fall through to
+    // the claim flow below instead of returning an error.
+    const priceClampedToMax = side === 'SELL' && price >= POLYMARKET_MAX_PRICE;
+    if (!priceClampedToMax && (price < 0.001 || price > 0.999)) {
       return errorReply(
         reply,
         400,
@@ -1431,6 +1437,67 @@ export const polymarketPurchase = async (
     }
 
     const privateKey = await getUserPrivateKey(user);
+
+    // SELL at price >= 0.999 means the market is resolved — go straight to CTF claim.
+    // We still create a purchase record so the UI can poll /purchase/status and resolve
+    // the "placing order…" state, rather than hanging on 404 forever.
+    if (priceClampedToMax) {
+      const claimPurchaseId = randomUUID();
+      await createPurchase({
+        purchase_id: claimPurchaseId,
+        user_phone: user.phone_number,
+        token_id,
+        price,
+        size: typeof rawSize === 'number' ? rawSize : 0,
+        side: 'SELL',
+        order_type,
+        bridge_amount: '0',
+        terms_version
+      });
+      await updatePurchaseStatus(claimPurchaseId, 'processing', 'order_placement', undefined, logKey);
+
+      Logger.log(
+        'warn',
+        LOG_PREFIX,
+        `${logKey} SELL at boundary price (${price}) — market likely resolved, attempting CTF claim (purchase: ${claimPurchaseId})`
+      );
+
+      try {
+        const marketInfo = await getMarketByClobTokenId(token_id, logKey).catch(() => null);
+        const claimResult = await claimWinningPositions(
+          user,
+          privateKey,
+          logKey,
+          marketInfo?.conditionId
+        );
+        if (claimResult.claimed > 0) {
+          await updatePurchaseStatus(claimPurchaseId, 'completed', 'done', undefined, logKey);
+          return successReply(reply, {
+            purchase_id: claimPurchaseId,
+            claimed: claimResult.claimed,
+            tx_hash: claimResult.txHash,
+            withdrawal_pending: true,
+            message: `Market appears resolved. Claimed ${claimResult.claimed} winning position(s). Proceeds are being withdrawn to Scroll.`
+          });
+        }
+        await updatePurchaseStatus(
+          claimPurchaseId,
+          'failed',
+          'done',
+          { error: 'No claimable winning positions found' },
+          logKey
+        );
+        return errorReply(
+          reply,
+          400,
+          `Price ${price} suggests a resolved market but no claimable winning positions were found.`
+        );
+      } catch (claimError) {
+        const errMsg = String(claimError);
+        await updatePurchaseStatus(claimPurchaseId, 'failed', 'done', { error: errMsg }, logKey);
+        throw claimError;
+      }
+    }
 
     // Resolve 'max' size for SELL orders by querying the CLOB balance
     let size: number;
