@@ -21,7 +21,7 @@ import { PolymarketOrderModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
 import { mongoTransactionService } from '../mongo/mongoTransactionService';
 import { getAuthenticatedClientForUser } from './polymarketClientService';
-import { FOK_SLIPPAGE_TOLERANCE, WITHDRAWABLE_STABLECOINS } from './polymarketConstants';
+import { CTF_ADDRESS, FOK_SLIPPAGE_TOLERANCE, WITHDRAWABLE_STABLECOINS } from './polymarketConstants';
 import { mapClobStatusToTxStatus } from './polymarketHistoryService';
 import { ensureTokenApprovals, setupDepositWalletApprovals } from './polymarketRelayerService';
 import type {
@@ -882,11 +882,35 @@ export async function getPolymarketBalanceSummary(
     const positions_value = positions.reduce((sum, p) => sum + (p.currentValue || 0), 0);
 
     // Positions with curPrice >= 0.999 are in resolved markets where the user won.
-    // Their CTF tokens are worth ~$1/share and haven't been redeemed yet — include
-    // them in idle_usdc so callers see the full withdrawable amount.
-    const redeemable = positions
-      .filter((p) => (p.curPrice ?? 0) >= 0.999)
-      .reduce((sum, p) => sum + (p.currentValue || 0), 0);
+    // Only include them in idle_usdc if:
+    //   1. The deposit wallet actually holds the on-chain CTF tokens (balance > 0)
+    //   2. The CTF oracle has finalized the outcome on-chain (payoutDenominator > 0)
+    // The CLOB API keeps showing historical positions even after they've been
+    // settled/redeemed AND even before the oracle has run, so without both checks
+    // the balance inflates and the button shows forever.
+    const ctfAbi = [
+      'function balanceOf(address, uint256) view returns (uint256)',
+      'function payoutDenominator(bytes32) view returns (uint256)'
+    ];
+    const ctf = new ethers.Contract(CTF_ADDRESS, ctfAbi, provider);
+    const winningCandidates = positions.filter((p) => (p.curPrice ?? 0) >= 0.999);
+    const winningWithBalance = (
+      await Promise.all(
+        winningCandidates.map(async (p) => {
+          try {
+            const [bal, denom]: [ethers.BigNumber, ethers.BigNumber] = await Promise.all([
+              ctf.balanceOf(polygonAddress, p.asset),
+              ctf.payoutDenominator(p.conditionId)
+            ]);
+            return bal.isZero() || denom.isZero() ? null : p;
+          } catch {
+            return p; // RPC failure — optimistically include
+          }
+        })
+      )
+    ).filter((p): p is DataPosition => p !== null);
+
+    const redeemable = winningWithBalance.reduce((sum, p) => sum + (p.currentValue || 0), 0);
 
     const idle_usdc = onchain_idle + redeemable;
 
@@ -895,9 +919,7 @@ export async function getPolymarketBalanceSummary(
       fnLog,
       `${logKey} Polymarket balances — idle (${stableBalances
         .map((b) => `${b.symbol}: $${b.value.toFixed(2)}`)
-        .join(
-          ', '
-        )}), redeemable: $${redeemable.toFixed(2)}, positions: $${positions_value.toFixed(2)}`
+        .join(', ')}), redeemable: $${redeemable.toFixed(2)} (${winningWithBalance.length}/${winningCandidates.length} winning have on-chain balance), positions: $${positions_value.toFixed(2)}`
     );
 
     return { idle_usdc, positions_value };
