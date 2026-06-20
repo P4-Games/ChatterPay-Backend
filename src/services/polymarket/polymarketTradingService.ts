@@ -21,7 +21,11 @@ import { PolymarketOrderModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
 import { mongoTransactionService } from '../mongo/mongoTransactionService';
 import { getAuthenticatedClientForUser } from './polymarketClientService';
-import { CTF_ADDRESS, FOK_SLIPPAGE_TOLERANCE, WITHDRAWABLE_STABLECOINS } from './polymarketConstants';
+import {
+  CTF_ADDRESS,
+  FOK_SLIPPAGE_TOLERANCE,
+  WITHDRAWABLE_STABLECOINS
+} from './polymarketConstants';
 import { mapClobStatusToTxStatus } from './polymarketHistoryService';
 import { ensureTokenApprovals, setupDepositWalletApprovals } from './polymarketRelayerService';
 import type {
@@ -919,7 +923,9 @@ export async function getPolymarketBalanceSummary(
       fnLog,
       `${logKey} Polymarket balances — idle (${stableBalances
         .map((b) => `${b.symbol}: $${b.value.toFixed(2)}`)
-        .join(', ')}), redeemable: $${redeemable.toFixed(2)} (${winningWithBalance.length}/${winningCandidates.length} winning have on-chain balance), positions: $${positions_value.toFixed(2)}`
+        .join(
+          ', '
+        )}), redeemable: $${redeemable.toFixed(2)} (${winningWithBalance.length}/${winningCandidates.length} winning have on-chain balance), positions: $${positions_value.toFixed(2)}`
     );
 
     return { idle_usdc, positions_value };

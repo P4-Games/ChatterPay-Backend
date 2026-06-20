@@ -942,7 +942,11 @@ async function isCtfMarketResolved(conditionId: string, logKey: string): Promise
     const denom: ethers.BigNumber = await ctf.payoutDenominator(conditionId);
     return !denom.isZero();
   } catch (error) {
-    Logger.log('warn', fnLog, `${logKey} Could not read payoutDenominator for ${conditionId}: ${String(error)} — assuming resolved`);
+    Logger.log(
+      'warn',
+      fnLog,
+      `${logKey} Could not read payoutDenominator for ${conditionId}: ${String(error)} — assuming resolved`
+    );
     return true;
   }
 }
@@ -1131,7 +1135,12 @@ export async function claimWinningPositions(
 
         // Resolve the market's collateral (pUSD vs legacy USDC.e). Redeeming with the
         // wrong token burns 0 and pays out nothing while the tx still confirms.
-        const collateralToken = await resolveCtfCollateral(p.conditionId, indexSet, p.asset, logKey);
+        const collateralToken = await resolveCtfCollateral(
+          p.conditionId,
+          indexSet,
+          p.asset,
+          logKey
+        );
 
         return { conditionId: p.conditionId, indexSet, collateralToken } as RedeemPosition;
       })
@@ -1156,9 +1165,7 @@ export async function claimWinningPositions(
     .reduce((sum, p) => sum + (p.currentValue ?? 0), 0);
   // Label the history record with the collateral that actually pays out: USDC.e for
   // neg-risk or legacy standard markets, pUSD (undefined → default) otherwise.
-  const paysUsdce = toRedeem.some(
-    (r) => r.negRisk || r.collateralToken === USDCE_ADDRESS
-  );
+  const paysUsdce = toRedeem.some((r) => r.negRisk || r.collateralToken === USDCE_ADDRESS);
   const claimToken = paysUsdce ? USDCE_SYMBOL : undefined;
   await recordClaim({
     userProxy: user.wallets[0]?.wallet_proxy || '',

@@ -1454,7 +1454,13 @@ export const polymarketPurchase = async (
         bridge_amount: '0',
         terms_version
       });
-      await updatePurchaseStatus(claimPurchaseId, 'processing', 'order_placement', undefined, logKey);
+      await updatePurchaseStatus(
+        claimPurchaseId,
+        'processing',
+        'order_placement',
+        undefined,
+        logKey
+      );
 
       Logger.log(
         'warn',
