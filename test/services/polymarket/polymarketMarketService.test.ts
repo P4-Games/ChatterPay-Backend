@@ -213,11 +213,18 @@ describe('polymarketMarketService', () => {
     });
 
     it('should return null if market not found', async () => {
-      mockedAxios.get.mockResolvedValueOnce({
-        data: [],
-        status: 200,
-        statusText: 'OK'
-      } as AxiosResponse);
+      // First lookup (closed=false) and the closed-market retry both return empty.
+      mockedAxios.get
+        .mockResolvedValueOnce({
+          data: [],
+          status: 200,
+          statusText: 'OK'
+        } as AxiosResponse)
+        .mockResolvedValueOnce({
+          data: [],
+          status: 200,
+          statusText: 'OK'
+        } as AxiosResponse);
 
       const result = await getMarketBySlug('nonexistent', '[test]');
       expect(result).toBeNull();
