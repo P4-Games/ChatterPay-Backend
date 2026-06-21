@@ -52,6 +52,21 @@ function matchesClobError(detail: string, patterns: readonly string[]): boolean 
   return patterns.some((p) => lower.includes(p));
 }
 
+/**
+ * Snap a price to the market's tick grid and clamp it to the valid range.
+ *
+ * Polymarket only accepts prices that are multiples of the market's tick size,
+ * within [tick, 1 - tick]. A 0.01-tick market (most binary/sports) caps at 0.99,
+ * so a slippage price of 0.999 is rejected with
+ * "invalid price (0.999), min: 0.01 - max: 0.99". Ticks are always powers of ten
+ * (0.1 / 0.01 / 0.001 / 0.0001), so toFixed(decimals) yields a valid multiple.
+ */
+function clampPriceToTick(price: number, tickSize: number): number {
+  const decimals = Math.max(0, Math.round(-Math.log10(tickSize)));
+  const rounded = Number(price.toFixed(decimals));
+  return Math.min(Math.max(rounded, tickSize), 1 - tickSize);
+}
+
 async function ensureApprovals(user: IUser, privateKey: string, logKey: string): Promise<void> {
   const walletType = user.polymarket_account?.wallet_type ?? 'safe';
   if (walletType === 'deposit') {
@@ -234,6 +249,24 @@ export async function placeOrder(
 
     const side = params.side === 'BUY' ? Side.BUY : Side.SELL;
 
+    // Fetch the market's tick size to compute valid price bounds. Polymarket
+    // accepts prices in [tick, 1 - tick] as multiples of the tick; hardcoding
+    // 0.999/0.001 only works for 0.001-tick markets and gets rejected on the
+    // common 0.01-tick (binary/sports) markets.
+    let tickSize = 0.01;
+    try {
+      const fetched = Number(await client.getTickSize(params.tokenId));
+      if (fetched > 0) {
+        tickSize = fetched;
+      }
+    } catch (tickError) {
+      Logger.log(
+        'warn',
+        fnLog,
+        `${logKey} Failed to fetch tick size, defaulting to ${tickSize}: ${String(tickError)}`
+      );
+    }
+
     const submitOrder = async (): Promise<Record<string, unknown>> => {
       if (params.orderType === 'FOK') {
         // FOK orders use createAndPostMarketOrder (fill-or-kill).
@@ -254,10 +287,11 @@ export async function placeOrder(
               `At price $${params.price}, use at least ${minShares} shares.`
           );
         }
-        const slippagePrice =
+        const rawSlippagePrice =
           params.side === 'BUY'
-            ? Math.min(params.price * (1 + FOK_SLIPPAGE_TOLERANCE), 0.999)
-            : Math.max(params.price * (1 - FOK_SLIPPAGE_TOLERANCE), 0.001);
+            ? params.price * (1 + FOK_SLIPPAGE_TOLERANCE)
+            : params.price * (1 - FOK_SLIPPAGE_TOLERANCE);
+        const slippagePrice = clampPriceToTick(rawSlippagePrice, tickSize);
 
         Logger.log(
           'info',
@@ -335,7 +369,7 @@ export async function placeOrder(
             );
             response = await client.createAndPostMarketOrder({
               tokenID: params.tokenId,
-              price: params.price,
+              price: clampPriceToTick(params.price, tickSize),
               amount: params.size,
               side
             });
@@ -359,7 +393,7 @@ export async function placeOrder(
         );
         response = await client.createAndPostMarketOrder({
           tokenID: params.tokenId,
-          price: params.price,
+          price: clampPriceToTick(params.price, tickSize),
           amount: params.size,
           side
         });
@@ -979,27 +1013,36 @@ export async function syncOpenOrders(
 
     for (const pendingOrder of localPendingOrders) {
       if (!liveOrderIds.has(pendingOrder.order_id)) {
-        // It's no longer open on CLOB
-        let newStatus = 'cancelled';
+        // No longer open on the CLOB. Only act on a definitive verdict: a
+        // marketable order (FOK / crossing GTC) leaves the book the instant it
+        // fills, so assuming "cancelled" when we can't confirm would downgrade
+        // an already-`completed` transaction and surface it as "failed".
+        let newStatus: string | null = null;
         let sizeMatched = 0;
         try {
-          // getOrder returns the order details including status and matched size
           const orderData = await client.getOrder(pendingOrder.order_id);
           if (orderData) {
             sizeMatched = Number((orderData as any).size_matched || 0);
+            const remoteStatus = String((orderData as any).status || '').toUpperCase();
             if (sizeMatched >= pendingOrder.size) {
               newStatus = 'filled';
             } else if (sizeMatched > 0) {
               newStatus = 'partial';
+            } else if (remoteStatus === 'CANCELED' || remoteStatus === 'CANCELLED') {
+              newStatus = 'cancelled';
             }
           }
         } catch (getOrderError) {
           Logger.log(
             'warn',
             fnLog,
-            `${logKey} Could not fetch closed order ${pendingOrder.order_id} from CLOB. Marking as cancelled.`
+            `${logKey} Could not fetch closed order ${pendingOrder.order_id} from CLOB — leaving status unchanged.`
           );
         }
+
+        // Inconclusive (unfetchable, or closed with no matched size / explicit
+        // cancel): leave it for a later sync rather than guessing.
+        if (!newStatus) continue;
 
         bulkOps.push({
           updateOne: {
