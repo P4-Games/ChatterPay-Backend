@@ -130,6 +130,20 @@ export async function getMarketBySlug(slug: string, logKey: string): Promise<Gam
       return response.data[0];
     }
 
+    // Gamma's /markets endpoint defaults to closed=false, so resolved/closed markets
+    // (e.g. short-lived BTC up/down series) are excluded from the default lookup above
+    // and would 404 even though they're still listed via /events. Retry including closed
+    // markets so they remain viewable (read-only) on the frontend.
+    const closedResponse = await axios.get<GammaMarket[]>(`${POLYMARKET_GAMMA_API_URL}/markets`, {
+      params: { slug, closed: true },
+      timeout: 10000
+    });
+
+    if (closedResponse.data.length > 0) {
+      marketsCache.set(cacheKey, closedResponse.data);
+      return closedResponse.data[0];
+    }
+
     return null;
   } catch (error) {
     Logger.log('error', `[${LOG_PREFIX}:getMarketBySlug]`, `${logKey} Failed: ${String(error)}`);
