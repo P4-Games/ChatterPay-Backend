@@ -47,6 +47,17 @@ const CLOB_ERROR_PATTERNS = {
   MIN_SIZE: ['lower than the minimum']
 } as const;
 
+// Grace window before reconciling a just-placed order against the CLOB.
+//
+// A marketable order (FOK / crossing GTC) leaves the order book the instant it
+// is accepted, and its fill settles on the CLOB asynchronously over a few
+// seconds. If syncOpenOrders runs inside this window (the frontend polls
+// /positions and /orders immediately after a purchase), getOrder transiently
+// reports `size_matched=0 / status=CANCELED` for an order that actually filled —
+// which would wrongly downgrade it to `cancelled` (rendered as "failed" in the
+// app). Deferring the verdict until the fill has settled avoids that race.
+const ORDER_SYNC_GRACE_MS = 60_000;
+
 function matchesClobError(detail: string, patterns: readonly string[]): boolean {
   const lower = detail.toLowerCase();
   return patterns.some((p) => lower.includes(p));
@@ -620,7 +631,43 @@ async function enrichItems<T extends { asset?: string; token_id?: string }>(
 }
 
 /**
- * Get current positions for a user address.
+ * A position in a market that has resolved AGAINST the user: the Data API marks
+ * it `redeemable` (the market settled on-chain) yet it priced out near zero.
+ * These can no longer be sold — there is no order book on a resolved market — so
+ * they belong in the closed list, not among active/sellable positions.
+ *
+ * Winning resolved positions also carry `redeemable: true` but settle near 1
+ * (curPrice ≈ 1); they stay active because they're still claimable. The 0.5
+ * cutoff cleanly separates the two since a resolved binary market pays 0 or 1.
+ */
+function isResolvedLostPosition(p: DataPosition): boolean {
+  return p.redeemable === true && (p.curPrice ?? 0) < 0.5;
+}
+
+/** Fetch raw (unfiltered) positions from the Data API, enriched with market metadata. */
+async function fetchRawPositions(
+  userAddress: string,
+  logKey: string,
+  market?: string
+): Promise<DataPosition[]> {
+  const params: Record<string, unknown> = { user: userAddress };
+  if (market) params.market = market;
+
+  const response = await axios.get<DataPosition[]>(`${POLYMARKET_DATA_API_URL}/positions`, {
+    params,
+    timeout: 10000
+  });
+
+  const enriched = await enrichItems(response.data, logKey);
+  return enriched as DataPosition[];
+}
+
+/**
+ * Get current ACTIVE positions for a user address.
+ *
+ * Excludes positions in markets that resolved against the user (priced to ~0):
+ * they can no longer be sold and are surfaced via getClosedPositions instead.
+ * Winning resolved positions are kept so the claim flow can still redeem them.
  */
 export async function getPositions(
   userAddress: string,
@@ -630,16 +677,8 @@ export async function getPositions(
   const fnLog = `[${LOG_PREFIX}:getPositions]`;
 
   try {
-    const params: Record<string, unknown> = { user: userAddress };
-    if (market) params.market = market;
-
-    const response = await axios.get<DataPosition[]>(`${POLYMARKET_DATA_API_URL}/positions`, {
-      params,
-      timeout: 10000
-    });
-
-    const enriched = await enrichItems(response.data, logKey);
-    return enriched as DataPosition[];
+    const positions = await fetchRawPositions(userAddress, logKey, market);
+    return positions.filter((p) => !isResolvedLostPosition(p));
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to fetch positions: ${String(error)}`);
@@ -648,6 +687,12 @@ export async function getPositions(
 
 /**
  * Get closed positions for a user address.
+ *
+ * Combines two sources:
+ *  1. Polymarket's /closed-positions feed (positions the user fully exited).
+ *  2. Positions still held in markets that resolved against the user — these
+ *     never reach /closed-positions because the worthless tokens were never
+ *     sold/redeemed, yet they're effectively closed (unsellable).
  */
 export async function getClosedPositions(
   userAddress: string,
@@ -660,16 +705,18 @@ export async function getClosedPositions(
     const params: Record<string, unknown> = { user: userAddress };
     if (market) params.market = market;
 
-    const response = await axios.get<DataPosition[]>(
-      `${POLYMARKET_DATA_API_URL}/closed-positions`,
-      {
+    const [closedResponse, activePositions] = await Promise.all([
+      axios.get<DataPosition[]>(`${POLYMARKET_DATA_API_URL}/closed-positions`, {
         params,
         timeout: 10000
-      }
-    );
+      }),
+      fetchRawPositions(userAddress, logKey, market).catch(() => [] as DataPosition[])
+    ]);
 
-    const enriched = await enrichItems(response.data, logKey);
-    return enriched as DataPosition[];
+    const enrichedClosed = (await enrichItems(closedResponse.data, logKey)) as DataPosition[];
+    const resolvedLost = activePositions.filter(isResolvedLostPosition);
+
+    return [...enrichedClosed, ...resolvedLost];
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to fetch closed positions: ${String(error)}`);
@@ -1012,64 +1059,80 @@ export async function syncOpenOrders(
     const bulkOps: any[] = [];
 
     for (const pendingOrder of localPendingOrders) {
-      if (!liveOrderIds.has(pendingOrder.order_id)) {
-        // No longer open on the CLOB. Only act on a definitive verdict: a
-        // marketable order (FOK / crossing GTC) leaves the book the instant it
-        // fills, so assuming "cancelled" when we can't confirm would downgrade
-        // an already-`completed` transaction and surface it as "failed".
-        let newStatus: string | null = null;
-        let sizeMatched = 0;
-        try {
-          const orderData = await client.getOrder(pendingOrder.order_id);
-          if (orderData) {
-            sizeMatched = Number((orderData as any).size_matched || 0);
-            const remoteStatus = String((orderData as any).status || '').toUpperCase();
-            if (sizeMatched >= pendingOrder.size) {
-              newStatus = 'filled';
-            } else if (sizeMatched > 0) {
-              newStatus = 'partial';
-            } else if (remoteStatus === 'CANCELED' || remoteStatus === 'CANCELLED') {
-              newStatus = 'cancelled';
-            }
-          }
-        } catch (getOrderError) {
-          Logger.log(
-            'warn',
-            fnLog,
-            `${logKey} Could not fetch closed order ${pendingOrder.order_id} from CLOB — leaving status unchanged.`
-          );
-        }
+      // Still resting on the CLOB book — nothing to reconcile yet.
+      if (liveOrderIds.has(pendingOrder.order_id)) continue;
 
-        // Inconclusive (unfetchable, or closed with no matched size / explicit
-        // cancel): leave it for a later sync rather than guessing.
-        if (!newStatus) continue;
-
-        bulkOps.push({
-          updateOne: {
-            filter: { _id: pendingOrder._id },
-            update: { $set: { status: newStatus, updated_at: new Date() } }
-          }
-        });
-
-        // Propagate the fill state onto the linked transaction-history record.
-        // For partial fills, patch the amount to the matched portion.
-        const txStatus = mapClobStatusToTxStatus(newStatus);
-        const txPatch =
-          newStatus === 'partial'
-            ? { amount: sizeMatched * pendingOrder.price, polymarket_size: sizeMatched }
-            : {};
-        await mongoTransactionService.updateStatusByPolymarketOrderId(
-          pendingOrder.order_id,
-          txStatus,
-          txPatch
-        );
-
+      // No longer open on the CLOB. Defer the verdict while the fill is still
+      // settling: a marketable order leaves the book instantly but its match is
+      // recorded async, so an early read can falsely look cancelled/unfilled.
+      const ageMs = Date.now() - new Date(pendingOrder.created_at).getTime();
+      if (ageMs < ORDER_SYNC_GRACE_MS) {
         Logger.log(
           'info',
           fnLog,
-          `${logKey} Synced order ${pendingOrder.order_id}: pending -> ${newStatus}`
+          `${logKey} Order ${pendingOrder.order_id} placed ${Math.round(ageMs / 1000)}s ago — ` +
+            `within grace window, deferring reconciliation.`
+        );
+        continue;
+      }
+
+      let newStatus: string | null = null;
+      try {
+        const orderData = await client.getOrder(pendingOrder.order_id);
+        if (orderData) {
+          const sizeMatched = Number((orderData as any).size_matched || 0);
+          const associateTrades = (orderData as any).associate_trades;
+          const hasFills =
+            sizeMatched > 0 || (Array.isArray(associateTrades) && associateTrades.length > 0);
+          const remoteStatus = String((orderData as any).status || '').toUpperCase();
+
+          if (hasFills) {
+            // The order executed and has left the book, so the fill is final —
+            // no further matching is coming. Share counts are NOT comparable to
+            // the requested size for marketable BUYs (USD-denominated, filled at
+            // market price within FOK_SLIPPAGE_TOLERANCE), so a share-for-share
+            // "fully filled" test spuriously reports partial. Any fill on an
+            // off-book order means the trade went through → completed.
+            newStatus = 'filled';
+          } else if (
+            remoteStatus === 'CANCELED' ||
+            remoteStatus === 'CANCELLED' ||
+            remoteStatus === 'UNMATCHED'
+          ) {
+            // No fills and a terminal cancel verdict → genuinely cancelled.
+            newStatus = 'cancelled';
+          }
+        }
+      } catch (getOrderError) {
+        Logger.log(
+          'warn',
+          fnLog,
+          `${logKey} Could not fetch closed order ${pendingOrder.order_id} from CLOB — leaving status unchanged.`
         );
       }
+
+      // Inconclusive (unfetchable, or off-book with no fills and no explicit
+      // cancel): leave it for a later sync rather than guessing.
+      if (!newStatus) continue;
+
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: pendingOrder._id },
+          update: { $set: { status: newStatus, updated_at: new Date() } }
+        }
+      });
+
+      // Propagate the verdict onto the linked transaction-history record.
+      await mongoTransactionService.updateStatusByPolymarketOrderId(
+        pendingOrder.order_id,
+        mapClobStatusToTxStatus(newStatus)
+      );
+
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} Synced order ${pendingOrder.order_id}: pending -> ${newStatus}`
+      );
     }
 
     if (bulkOps.length > 0) {

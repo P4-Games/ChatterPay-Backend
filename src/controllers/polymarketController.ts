@@ -80,10 +80,10 @@ import {
   withdrawToScroll
 } from '../services/polymarket/polymarketBridgeService';
 import {
+  discardSupersededOrder,
   enrichOrderModelSlug,
   markOrderInProgress,
   recordBridge,
-  recordOrderCancelled,
   recordOrderFailed,
   recordOrderIntent,
   recordOrderPlaced,
@@ -734,8 +734,9 @@ export const polymarketPlaceOrder = async (
         const claimResult = await claimWinningPositions(user, privateKey, logKey, claimConditionId);
         if (claimResult.claimed > 0) {
           // The SELL was superseded by a CTF claim (recorded inside
-          // claimWinningPositions) — mark the sell intent cancelled, not failed.
-          await recordOrderCancelled(orderTrx, 'SELL superseded by claim (market resolved)');
+          // claimWinningPositions) — discard the redundant sell row so the user
+          // sees a single "settlement" entry, not a phantom failed sell.
+          await discardSupersededOrder(orderTrx);
           return successReply(reply, {
             claimed: claimResult.claimed,
             tx_hash: claimResult.txHash,

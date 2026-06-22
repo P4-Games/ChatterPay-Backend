@@ -271,5 +271,23 @@ export const mongoTransactionService = {
     return Transaction.findOne({
       trx_hash: { $regex: new RegExp(`^${txHash}$`, 'i') }
     }).lean();
+  },
+
+  /**
+   * Deletes a transaction record by hash. Used to discard a synthetic order row
+   * that has been superseded by another record (e.g. a boundary-price SELL that
+   * was fulfilled as a CTF claim — the claim row is the source of truth, so the
+   * stale SELL row would only show as a phantom failure). Non-throwing.
+   */
+  deleteByHash: async (trxHash: string): Promise<void> => {
+    try {
+      await Transaction.deleteOne({ trx_hash: trxHash });
+    } catch (error: unknown) {
+      Logger.error(
+        'deleteByHash',
+        `Error deleting transaction ${trxHash}:`,
+        (error as Error).message
+      );
+    }
   }
 };

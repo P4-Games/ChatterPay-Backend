@@ -156,16 +156,15 @@ export async function recordOrderFailed(trxHash: string, error: string): Promise
 }
 
 /**
- * Mark an order attempt as cancelled (e.g. a SELL on a resolved market that is
- * superseded by a CTF claim). Distinct from `failed` so the user isn't shown a
- * scary error for an action that actually succeeded as a claim.
+ * Discard a synthetic order row that was superseded by a CTF claim.
+ *
+ * When a boundary-price SELL on a resolved market is fulfilled as a claim, the
+ * claim record (recordClaim) becomes the single source of truth. Leaving the
+ * SELL row behind — even as `cancelled` — surfaces it in the UI as a failed
+ * sell, so we remove it entirely to keep one unified "settlement" row.
  */
-export async function recordOrderCancelled(trxHash: string, note?: string): Promise<void> {
-  await mongoTransactionService.updateTransactionStatus(
-    trxHash,
-    'cancelled',
-    note ? { user_notes: note } : {}
-  );
+export async function discardSupersededOrder(trxHash: string): Promise<void> {
+  await mongoTransactionService.deleteByHash(trxHash);
 }
 
 /** Record a claim (CTF redemption of winning positions) — proceeds attributed to the user. */

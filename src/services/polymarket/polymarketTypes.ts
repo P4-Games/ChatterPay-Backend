@@ -185,6 +185,13 @@ export interface DataPosition {
   avgPrice: number;
   outcome: string;
   market: DataMarketInfo;
+  /**
+   * Set by the Data API once the market has resolved on-chain — true for both
+   * winning positions (curPrice ≈ 1, claimable) and losing ones (curPrice ≈ 0).
+   * Open markets always report false. Used to split resolved-lost positions out
+   * of the active list and into closed.
+   */
+  redeemable?: boolean;
 }
 
 /** Minimal market info embedded in Data API responses */

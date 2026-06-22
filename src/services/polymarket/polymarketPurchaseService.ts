@@ -46,11 +46,11 @@ import {
   WITHDRAWABLE_STABLECOINS
 } from './polymarketConstants';
 import {
+  discardSupersededOrder,
   enrichOrderModelSlug,
   markOrderInProgress,
   recordBridge,
   recordClaim,
-  recordOrderCancelled,
   recordOrderFailed,
   recordOrderIntent,
   recordOrderPlaced,
@@ -823,7 +823,10 @@ export async function executePurchase(
             marketInfo?.conditionId
           );
           if (claimResult.claimed > 0) {
-            await recordOrderCancelled(orderTrx, 'SELL superseded by claim (market resolved)');
+            // The claim record (created inside claimWinningPositions) is now the
+            // source of truth — drop the redundant SELL row so the user sees a
+            // single "settlement" entry instead of a phantom failed sell.
+            await discardSupersededOrder(orderTrx);
             await updatePurchaseStatus(purchaseId, 'completed', 'done', undefined, logKey);
             Logger.log(
               'info',
@@ -1174,8 +1177,13 @@ export async function claimWinningPositions(
     token: claimToken
   });
 
-  // Auto-withdraw redeemed proceeds back to Scroll (fire-and-forget, same as SELL flow)
-  sweepProceeds();
+  // Auto-withdraw redeemed proceeds back to Scroll (fire-and-forget, same as SELL
+  // flow). Link the withdrawal to the claim record above so its bridge leg is
+  // embedded inline (one unified "settlement" row) instead of emitting a second
+  // standalone polymarket_withdraw row for the same logical claim.
+  void withdrawSellProceeds(user, privateKey, logKey, undefined, txHash).catch((err) =>
+    Logger.log('error', fnLog, `${logKey} Background withdrawal after claim failed: ${String(err)}`)
+  );
 
   return { claimed: toRedeem.length, txHash };
 }

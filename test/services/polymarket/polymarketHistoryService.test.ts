@@ -15,13 +15,13 @@ vi.mock('../../../src/services/polymarket/polymarketMarketService', () => ({
 }));
 
 import {
+  discardSupersededOrder,
   enrichOrderMarket,
   mapClobStatusToTxStatus,
   markOrderInProgress,
   orderTrxHash,
   POLYMARKET_COUNTERPARTY,
   recordClaim,
-  recordOrderCancelled,
   recordOrderFailed,
   recordOrderIntent,
   recordOrderPlaced
@@ -117,7 +117,7 @@ describe('polymarketHistoryService — order lifecycle on one record', () => {
     expect(doc?.user_notes).toContain('insufficient balance');
   });
 
-  it('marks a cancelled attempt (SELL superseded by claim)', async () => {
+  it('discards a SELL row superseded by a claim (no phantom failed sell)', async () => {
     const trx = await recordOrderIntent({
       side: 'SELL',
       refId: 'cancel1',
@@ -127,10 +127,10 @@ describe('polymarketHistoryService — order lifecycle on one record', () => {
       tokenId: 'tok-yes',
       logKey: 'test'
     });
-    await recordOrderCancelled(trx, 'superseded by claim');
+    await discardSupersededOrder(trx);
 
     const doc = await Transaction.findOne({ trx_hash: trx }).lean();
-    expect(doc?.status).toBe('cancelled');
+    expect(doc).toBeNull();
   });
 });
 
