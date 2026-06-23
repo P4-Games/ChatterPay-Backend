@@ -714,9 +714,26 @@ export async function getClosedPositions(
     ]);
 
     const enrichedClosed = (await enrichItems(closedResponse.data, logKey)) as DataPosition[];
+
+    // The /closed-positions feed reports `cashPnl` as UNREALIZED P&L on tokens still
+    // held, which is 0 once a winning position has been redeemed (size → 0). The
+    // realized profit lives in `realizedPnl`. Fold both into `cashPnl` so a redeemed
+    // winner surfaces its actual gain instead of $0.00. (`resolvedLost` positions are
+    // left untouched: they still hold their worthless tokens, so their cashPnl already
+    // carries the full loss.)
+    const normalizedClosed = enrichedClosed.map((p) => {
+      const totalPnl = (p.cashPnl ?? 0) + (p.realizedPnl ?? 0);
+      const cost = p.totalBought || p.initialValue || (p.size ?? 0) * (p.avgPrice ?? 0);
+      return {
+        ...p,
+        cashPnl: totalPnl,
+        percentPnl: cost > 0 ? totalPnl / cost : (p.percentPnl ?? 0)
+      };
+    });
+
     const resolvedLost = activePositions.filter(isResolvedLostPosition);
 
-    return [...enrichedClosed, ...resolvedLost];
+    return [...normalizedClosed, ...resolvedLost];
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to fetch closed positions: ${String(error)}`);

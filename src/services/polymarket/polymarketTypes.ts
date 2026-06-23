@@ -178,8 +178,15 @@ export interface DataPosition {
   curPrice: number;
   currentValue: number;
   initialValue: number;
+  /** Total USDC spent acquiring this position (cost basis). */
+  totalBought?: number;
+  /** UNREALIZED P&L on tokens still held. Drops to 0 once a position is fully exited. */
   cashPnl: number;
   percentPnl: number;
+  /** REALIZED P&L from the portion already sold or redeemed. Holds the profit of a
+   *  redeemed winner, where cashPnl is 0 because no tokens remain. */
+  realizedPnl?: number;
+  percentRealizedPnl?: number;
   proxyWalletAddress: string;
   size: number;
   avgPrice: number;
