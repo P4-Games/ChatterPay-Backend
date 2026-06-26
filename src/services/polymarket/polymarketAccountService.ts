@@ -129,18 +129,16 @@ export function getAccountStatus(user: IUser): {
 // ============================================================================
 
 /**
- * Accept the current terms version.
+ * Accept the current terms of service.
  */
-export async function acceptTerms(user: IUser, version: number, logKey: string): Promise<IUser> {
+export async function acceptTerms(user: IUser, logKey: string): Promise<IUser> {
   const fnLog = `[${LOG_PREFIX}:acceptTerms]`;
 
   if (!user.polymarket_account) {
     throw new Error('User does not have a Polymarket account');
   }
 
-  if (version !== POLYMARKET_TERMS_VERSION) {
-    throw new Error(`Terms version mismatch: expected ${POLYMARKET_TERMS_VERSION}, got ${version}`);
-  }
+  const version = POLYMARKET_TERMS_VERSION;
 
   try {
     const updatedUser = await UserModel.findByIdAndUpdate(

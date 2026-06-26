@@ -350,9 +350,11 @@ export async function executePurchase(
       try {
         currentUser = await createPolymarketAccount(currentUser, privateKey, logKey);
 
-        // Accept terms as part of account creation in the purchase flow
+        // Accept terms as part of account creation in the purchase flow.
+        // Presence of termsVersion signals the user is accepting now; the
+        // actual version recorded is always the latest (see acceptTerms).
         if (params.termsVersion) {
-          currentUser = await acceptTerms(currentUser, params.termsVersion, logKey);
+          currentUser = await acceptTerms(currentUser, logKey);
         }
 
         await updatePurchaseStep(purchaseId, 'account_creation', { status: 'completed' }, logKey);
