@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   polymarketGetPublicTerms,
+  polymarketPurchase,
   polymarketSendTerms
 } from '../../src/controllers/polymarketController';
 import * as notificationService from '../../src/services/notificationService';
@@ -27,7 +28,11 @@ vi.mock('../../src/helpers/validationHelper', () => ({
 // Mock services
 vi.mock('../../src/services/polymarket', () => ({
   getCurrentTerms: vi.fn(),
-  hasAcceptedCurrentTerms: vi.fn()
+  hasAcceptedCurrentTerms: vi.fn(),
+  MIN_BUY_ORDER_USD: 1.5,
+  POLYMARKET_MIN_PRICE: 0.001,
+  POLYMARKET_MAX_PRICE: 0.999,
+  BRIDGE_FEE_BUFFER: 1.02
 }));
 
 vi.mock('../../src/services/userService', () => ({
@@ -213,6 +218,63 @@ describe('polymarketController - Terms and Conditions Endpoints', () => {
         status: 'error',
         data: { message: 'Failed to send terms request' }
       });
+    });
+  });
+
+  describe('polymarketPurchase - minimum BUY order value', () => {
+    const mockUser = {
+      phone_number: '5491122334455',
+      settings: { notifications: { language: 'en' } }
+    };
+
+    const makeReply = (): FastifyReply =>
+      ({
+        status: vi.fn().mockReturnThis(),
+        send: vi.fn().mockImplementation((val) => val)
+      }) as unknown as FastifyReply;
+
+    const makeRequest = (price: number, size: number) =>
+      ({
+        body: {
+          channel_user_id: '5491122334455',
+          token_id: 'token-123',
+          price,
+          size,
+          side: 'BUY'
+        }
+      }) as unknown as FastifyRequest<{ Body: any }>;
+
+    it('should reject BUY orders below the $1.50 minimum', async () => {
+      vi.mocked(userService.getUser).mockResolvedValueOnce(mockUser as any);
+
+      const mockReply = makeReply();
+      // 0.5 × 2 = $1.00 < $1.50
+      const result = await polymarketPurchase(makeRequest(0.5, 2), mockReply);
+
+      expect(mockReply.status).toHaveBeenCalledWith(400);
+      expect(result).toMatchObject({ status: 'error' });
+      expect((result as any).data.message).toContain('below the $1.50 minimum');
+    });
+
+    it('should reject BUY orders just under the minimum', async () => {
+      vi.mocked(userService.getUser).mockResolvedValueOnce(mockUser as any);
+
+      const mockReply = makeReply();
+      // 0.0855 × 17 = $1.4535 < $1.50
+      const result = await polymarketPurchase(makeRequest(0.0855, 17), mockReply);
+
+      expect(mockReply.status).toHaveBeenCalledWith(400);
+      expect((result as any).data.message).toContain('below the $1.50 minimum');
+    });
+
+    it('should not reject BUY orders at or above the minimum for the min-value rule', async () => {
+      vi.mocked(userService.getUser).mockResolvedValueOnce(mockUser as any);
+
+      const mockReply = makeReply();
+      // 0.5 × 3 = $1.50 — passes the min check, fails later on terms (no account)
+      const result = await polymarketPurchase(makeRequest(0.5, 3), mockReply);
+
+      expect((result as any).data.message).not.toContain('below the $1.50 minimum');
     });
   });
 });

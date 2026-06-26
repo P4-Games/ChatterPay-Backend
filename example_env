@@ -156,15 +156,17 @@ USE_LIFI='true'
 # Set POLYMARKET_ENABLED='true' to enable Polymarket prediction markets integration.
 # Polymarket operates on Polygon (chain 137). Funds are bridged from Scroll via LiFi.
 # Currently on basic plan (no revenue share). Future: submit for Builder Program verification.
-POLYMARKET_CLOB_API_URL='https://clob.polymarket.com'
-POLYMARKET_GAMMA_API_URL='https://gamma-api.polymarket.com'
-POLYMARKET_DATA_API_URL='https://data-api.polymarket.com'
-POLYMARKET_CHAIN_ID=137
+
 POLYMARKET_ENABLED='false'
+POLYMARKET_CLOB_API_URL='https://pm.chatterpay.net/polymarket-clob'
+POLYMARKET_GAMMA_API_URL='https://pm.chatterpay.net/polymarket-gamma'
+POLYMARKET_DATA_API_URL='https://pm.chatterpay.net/polymarket-data'
+POLYMARKET_RELAYER_URL='https://relayer-v2.polymarket.com'
+POLYMARKET_CHAIN_ID=137
 POLYMARKET_TERMS_VERSION=1
 POLYMARKET_DEFAULT_SLIPPAGE='0.01'
-
-# Polymarket Adapter Token
-# Optional bearer token attached to outbound Polymarket API requests.
-# Leave empty to disable authenticated requests.
-POLYMARKET_ADAPTER_TOKEN=''
+POLYMARKET_BUILDER_API_KEY=''
+POLYMARKET_BUILDER_SECRET=''
+POLYMARKET_BUILDER_PASSPHRASE=''
+POLYMARKET_POLYGON_RPC_URL=''
+POLYMARKET_ADAPTER_AUTH_TOKEN=''

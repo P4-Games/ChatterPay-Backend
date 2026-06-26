@@ -12,6 +12,7 @@ import {
   polymarketBridgeQuote,
   polymarketCancelAllOrders,
   polymarketCancelOrder,
+  polymarketClaimPositions,
   polymarketCreateAccount,
   polymarketGetAccountStatus,
   polymarketGetCategories,
@@ -60,6 +61,7 @@ export default async function polymarketRoutes(fastify: FastifyInstance): Promis
   fastify.post('/polymarket/orders', polymarketGetOpenOrders);
   fastify.post('/polymarket/positions', polymarketGetPositions);
   fastify.post('/polymarket/positions/closed', polymarketGetClosedPositions);
+  fastify.post('/polymarket/positions/claim', polymarketClaimPositions);
   fastify.post('/polymarket/history', polymarketGetTradeHistory);
   fastify.post('/polymarket/trades', polymarketGetTradesHistory);
   fastify.post('/polymarket/portfolio', polymarketGetPortfolioValue);

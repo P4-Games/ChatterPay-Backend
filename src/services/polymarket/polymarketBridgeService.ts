@@ -710,22 +710,37 @@ export async function executeBridge(
     const txHash = bridgeReceipt.transactionHash;
     Logger.log('info', fnLog, `${logKey} Bridge tx sent: ${txHash}`);
 
-    // 8. Poll for bridge completion
+    // 8. Poll for bridge completion.
+    // A polling timeout is NOT a failure: LiFi's status API can lag the actual
+    // transfer. Callers confirm arrival via the on-chain destination balance,
+    // which is authoritative. Only an explicit FAILED status aborts.
     Logger.log('info', fnLog, `${logKey} Polling bridge status`);
-    const status = await pollLifiStatus(
-      {
-        txHash,
-        fromChain: SCROLL_CHAIN_ID,
-        toChain: POLYMARKET_CHAIN_ID
-      },
-      logKey
-    );
+    let status: LifiStatusResponse | undefined;
+    try {
+      status = await pollLifiStatus(
+        {
+          txHash,
+          fromChain: SCROLL_CHAIN_ID,
+          toChain: POLYMARKET_CHAIN_ID
+        },
+        logKey
+      );
+    } catch (pollError) {
+      Logger.log(
+        'warn',
+        fnLog,
+        `${logKey} LiFi status polling did not complete (tx ${txHash}): ${String(pollError)}. ` +
+          `Transfer may still be in flight — deferring to on-chain balance confirmation.`
+      );
+    }
 
-    if (status.status === 'FAILED') {
+    if (status?.status === 'FAILED') {
       throw new Error(`Bridge failed: ${status.substatusMessage || 'Unknown reason'}`);
     }
 
-    Logger.log('info', fnLog, `${logKey} Bridge completed successfully`);
+    if (status?.status === 'DONE') {
+      Logger.log('info', fnLog, `${logKey} Bridge completed successfully`);
+    }
 
     return {
       success: true,
@@ -744,12 +759,14 @@ export async function executeBridge(
 // ============================================================================
 
 /**
- * Get a bridge quote and necessary transactions for withdrawing USDC.e from Polygon back to Scroll.
+ * Get a bridge quote and necessary transactions for withdrawing a stablecoin from Polygon back to Scroll.
  *
  * @param polygonSafeAddress - Sender address on Polygon (the user's Safe)
  * @param scrollProxyAddress - Destination address on Scroll (the user's Proxy)
- * @param amount - Amount to withdraw in smallest unit (wei/6 decimals for USDC.e)
+ * @param amount - Amount to withdraw in smallest unit (wei/6 decimals)
  * @param logKey - Logging identifier
+ * @param toTokenSymbol - Destination token on Scroll (default 'USDC')
+ * @param fromTokenAddress - Source token on Polygon (defaults to pUSD; pass USDC.e for legacy proceeds)
  * @returns An object containing the quote, approval address, to, data, and value for the Relayer.
  */
 export async function withdrawToScroll(
@@ -772,7 +789,7 @@ export async function withdrawToScroll(
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Getting withdraw quote: ${amount} (${fromTokenAddress}) Polygon→Scroll (→${toTokenSymbol})`
+      `${logKey} Getting withdraw quote: ${amount} (token ${fromTokenAddress}) Polygon→Scroll (→${toTokenSymbol})`
     );
 
     // Deny Squid (Axelar-based): requires native MATIC as msg.value for cross-chain gas.

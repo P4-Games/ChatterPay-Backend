@@ -19,8 +19,14 @@ import {
 import { Logger } from '../../helpers/loggerHelper';
 import { PolymarketOrderModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
+import { mongoTransactionService } from '../mongo/mongoTransactionService';
 import { getAuthenticatedClientForUser } from './polymarketClientService';
-import { FOK_SLIPPAGE_TOLERANCE, PUSD_ADDRESS, USDCE_ADDRESS } from './polymarketConstants';
+import {
+  CTF_ADDRESS,
+  FOK_SLIPPAGE_TOLERANCE,
+  WITHDRAWABLE_STABLECOINS
+} from './polymarketConstants';
+import { mapClobStatusToTxStatus } from './polymarketHistoryService';
 import { ensureTokenApprovals, setupDepositWalletApprovals } from './polymarketRelayerService';
 import type {
   ClobOpenOrder,
@@ -41,9 +47,35 @@ const CLOB_ERROR_PATTERNS = {
   MIN_SIZE: ['lower than the minimum']
 } as const;
 
+// Grace window before reconciling a just-placed order against the CLOB.
+//
+// A marketable order (FOK / crossing GTC) leaves the order book the instant it
+// is accepted, and its fill settles on the CLOB asynchronously over a few
+// seconds. If syncOpenOrders runs inside this window (the frontend polls
+// /positions and /orders immediately after a purchase), getOrder transiently
+// reports `size_matched=0 / status=CANCELED` for an order that actually filled —
+// which would wrongly downgrade it to `cancelled` (rendered as "failed" in the
+// app). Deferring the verdict until the fill has settled avoids that race.
+const ORDER_SYNC_GRACE_MS = 60_000;
+
 function matchesClobError(detail: string, patterns: readonly string[]): boolean {
   const lower = detail.toLowerCase();
   return patterns.some((p) => lower.includes(p));
+}
+
+/**
+ * Snap a price to the market's tick grid and clamp it to the valid range.
+ *
+ * Polymarket only accepts prices that are multiples of the market's tick size,
+ * within [tick, 1 - tick]. A 0.01-tick market (most binary/sports) caps at 0.99,
+ * so a slippage price of 0.999 is rejected with
+ * "invalid price (0.999), min: 0.01 - max: 0.99". Ticks are always powers of ten
+ * (0.1 / 0.01 / 0.001 / 0.0001), so toFixed(decimals) yields a valid multiple.
+ */
+function clampPriceToTick(price: number, tickSize: number): number {
+  const decimals = Math.max(0, Math.round(-Math.log10(tickSize)));
+  const rounded = Number(price.toFixed(decimals));
+  return Math.min(Math.max(rounded, tickSize), 1 - tickSize);
 }
 
 async function ensureApprovals(user: IUser, privateKey: string, logKey: string): Promise<void> {
@@ -228,6 +260,24 @@ export async function placeOrder(
 
     const side = params.side === 'BUY' ? Side.BUY : Side.SELL;
 
+    // Fetch the market's tick size to compute valid price bounds. Polymarket
+    // accepts prices in [tick, 1 - tick] as multiples of the tick; hardcoding
+    // 0.999/0.001 only works for 0.001-tick markets and gets rejected on the
+    // common 0.01-tick (binary/sports) markets.
+    let tickSize = 0.01;
+    try {
+      const fetched = Number(await client.getTickSize(params.tokenId));
+      if (fetched > 0) {
+        tickSize = fetched;
+      }
+    } catch (tickError) {
+      Logger.log(
+        'warn',
+        fnLog,
+        `${logKey} Failed to fetch tick size, defaulting to ${tickSize}: ${String(tickError)}`
+      );
+    }
+
     const submitOrder = async (): Promise<Record<string, unknown>> => {
       if (params.orderType === 'FOK') {
         // FOK orders use createAndPostMarketOrder (fill-or-kill).
@@ -248,10 +298,11 @@ export async function placeOrder(
               `At price $${params.price}, use at least ${minShares} shares.`
           );
         }
-        const slippagePrice =
+        const rawSlippagePrice =
           params.side === 'BUY'
-            ? Math.min(params.price * (1 + FOK_SLIPPAGE_TOLERANCE), 0.999)
-            : Math.max(params.price * (1 - FOK_SLIPPAGE_TOLERANCE), 0.001);
+            ? params.price * (1 + FOK_SLIPPAGE_TOLERANCE)
+            : params.price * (1 - FOK_SLIPPAGE_TOLERANCE);
+        const slippagePrice = clampPriceToTick(rawSlippagePrice, tickSize);
 
         Logger.log(
           'info',
@@ -329,7 +380,7 @@ export async function placeOrder(
             );
             response = await client.createAndPostMarketOrder({
               tokenID: params.tokenId,
-              price: params.price,
+              price: clampPriceToTick(params.price, tickSize),
               amount: params.size,
               side
             });
@@ -353,7 +404,7 @@ export async function placeOrder(
         );
         response = await client.createAndPostMarketOrder({
           tokenID: params.tokenId,
-          price: params.price,
+          price: clampPriceToTick(params.price, tickSize),
           amount: params.size,
           side
         });
@@ -580,7 +631,66 @@ async function enrichItems<T extends { asset?: string; token_id?: string }>(
 }
 
 /**
- * Get current positions for a user address.
+ * A position in a market that has resolved AGAINST the user: the Data API marks
+ * it `redeemable` (the market settled on-chain) yet it priced out near zero.
+ * These can no longer be sold — there is no order book on a resolved market — so
+ * they belong in the closed list, not among active/sellable positions.
+ *
+ * Winning resolved positions also carry `redeemable: true` but settle near 1
+ * (curPrice ≈ 1); they stay active because they're still claimable. The 0.5
+ * cutoff cleanly separates the two since a resolved binary market pays 0 or 1.
+ */
+function isResolvedLostPosition(p: DataPosition): boolean {
+  return p.redeemable === true && (p.curPrice ?? 0) < 0.5;
+}
+
+/**
+ * Fold a closed position's realized P&L into its `cashPnl`.
+ *
+ * The Data API reports `cashPnl` as only the UNREALIZED P&L on tokens still held,
+ * and `realizedPnl` as the P&L from the portion already sold or redeemed. For a
+ * closed position either or both may apply:
+ *  - redeemed winner: tokens gone (cashPnl 0), profit sits in realizedPnl;
+ *  - bought-and-held loser: still holds worthless tokens, full loss in cashPnl;
+ *  - partially sold before resolution: loss/gain split across both fields.
+ *
+ * Summing them (they cover disjoint token lots, so no double-counting) yields the
+ * true total P&L. `percentPnl` is recomputed against the full cost basis.
+ */
+function withTotalPnl(p: DataPosition): DataPosition {
+  const totalPnl = (p.cashPnl ?? 0) + (p.realizedPnl ?? 0);
+  const cost = p.totalBought || p.initialValue || (p.size ?? 0) * (p.avgPrice ?? 0);
+  return {
+    ...p,
+    cashPnl: totalPnl,
+    percentPnl: cost > 0 ? totalPnl / cost : (p.percentPnl ?? 0)
+  };
+}
+
+/** Fetch raw (unfiltered) positions from the Data API, enriched with market metadata. */
+async function fetchRawPositions(
+  userAddress: string,
+  logKey: string,
+  market?: string
+): Promise<DataPosition[]> {
+  const params: Record<string, unknown> = { user: userAddress };
+  if (market) params.market = market;
+
+  const response = await axios.get<DataPosition[]>(`${POLYMARKET_DATA_API_URL}/positions`, {
+    params,
+    timeout: 10000
+  });
+
+  const enriched = await enrichItems(response.data, logKey);
+  return enriched as DataPosition[];
+}
+
+/**
+ * Get current ACTIVE positions for a user address.
+ *
+ * Excludes positions in markets that resolved against the user (priced to ~0):
+ * they can no longer be sold and are surfaced via getClosedPositions instead.
+ * Winning resolved positions are kept so the claim flow can still redeem them.
  */
 export async function getPositions(
   userAddress: string,
@@ -590,16 +700,8 @@ export async function getPositions(
   const fnLog = `[${LOG_PREFIX}:getPositions]`;
 
   try {
-    const params: Record<string, unknown> = { user: userAddress };
-    if (market) params.market = market;
-
-    const response = await axios.get<DataPosition[]>(`${POLYMARKET_DATA_API_URL}/positions`, {
-      params,
-      timeout: 10000
-    });
-
-    const enriched = await enrichItems(response.data, logKey);
-    return enriched as DataPosition[];
+    const positions = await fetchRawPositions(userAddress, logKey, market);
+    return positions.filter((p) => !isResolvedLostPosition(p));
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to fetch positions: ${String(error)}`);
@@ -608,6 +710,12 @@ export async function getPositions(
 
 /**
  * Get closed positions for a user address.
+ *
+ * Combines two sources:
+ *  1. Polymarket's /closed-positions feed (positions the user fully exited).
+ *  2. Positions still held in markets that resolved against the user — these
+ *     never reach /closed-positions because the worthless tokens were never
+ *     sold/redeemed, yet they're effectively closed (unsellable).
  */
 export async function getClosedPositions(
   userAddress: string,
@@ -620,16 +728,21 @@ export async function getClosedPositions(
     const params: Record<string, unknown> = { user: userAddress };
     if (market) params.market = market;
 
-    const response = await axios.get<DataPosition[]>(
-      `${POLYMARKET_DATA_API_URL}/closed-positions`,
-      {
+    const [closedResponse, activePositions] = await Promise.all([
+      axios.get<DataPosition[]>(`${POLYMARKET_DATA_API_URL}/closed-positions`, {
         params,
         timeout: 10000
-      }
-    );
+      }),
+      fetchRawPositions(userAddress, logKey, market).catch(() => [] as DataPosition[])
+    ]);
 
-    const enriched = await enrichItems(response.data, logKey);
-    return enriched as DataPosition[];
+    const enrichedClosed = (await enrichItems(closedResponse.data, logKey)) as DataPosition[];
+    const resolvedLost = activePositions.filter(isResolvedLostPosition);
+
+    // Fold realized P&L into cashPnl for every closed position, so redeemed winners
+    // show their gain and positions partially sold before resolution report the full
+    // loss/gain rather than only the unrealized slice on the tokens still held.
+    return [...enrichedClosed, ...resolvedLost].map(withTotalPnl);
   } catch (error) {
     Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to fetch closed positions: ${String(error)}`);
@@ -840,36 +953,14 @@ export async function getPnlHistory(
   }
 }
 
-const BALANCE_ABI = ['function balanceOf(address) view returns (uint256)'];
-
 /**
- * Sum pUSD + USDC.e balances across one or more Polygon addresses.
- * Returns a human-readable total (e.g. 6.00 for $6.00).
- */
-async function sumPolygonStablecoins(
-  provider: ethers.providers.Provider,
-  addresses: string[]
-): Promise<number> {
-  const pusd = new ethers.Contract(PUSD_ADDRESS, BALANCE_ABI, provider);
-  const usdce = new ethers.Contract(USDCE_ADDRESS, BALANCE_ABI, provider);
-
-  const queries = addresses.flatMap((addr) => [pusd.balanceOf(addr), usdce.balanceOf(addr)]);
-
-  const results = await Promise.allSettled(queries);
-  let total = ethers.BigNumber.from(0);
-  for (const r of results) {
-    if (r.status === 'fulfilled') {
-      total = total.add(r.value as ethers.BigNumber);
-    }
-  }
-  return Number(ethers.utils.formatUnits(total, 6));
-}
-
-/**
- * Get a summary of the user's Polymarket balances: idle stablecoins + active positions.
+ * Get a summary of the user's Polymarket balances: idle stablecoin + active positions.
  *
- * - idle_usdc: pUSD + USDC.e across the deposit wallet AND the Safe (funds can be stranded
- *   in the Safe after a partial bridge failure).
+ * - idle_usdc: withdrawable stablecoin sitting idle in the Polygon wallet, summed
+ *   across every collateral a redemption can pay out (pUSD + legacy USDC.e), PLUS
+ *   the value of resolved-and-won positions not yet redeemed. This is the total the
+ *   user can sweep to Scroll, so the front can surface it and trigger a withdrawal.
+ *   Also checks safeAddress (deposit wallet users may have stranded funds there).
  * - positions_value: total current value of all active positions (in USD)
  *
  * This is best-effort: failures return zeroes so the balance endpoint stays resilient.
@@ -886,22 +977,71 @@ export async function getPolymarketBalanceSummary(
   const fnLog = `[${LOG_PREFIX}:getPolymarketBalanceSummary]`;
 
   try {
+    // Query idle balance for every withdrawable stablecoin + active positions in parallel.
+    // Check both polygonAddress and safeAddress (deposit wallet users may strand funds in Safe).
     const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+    const balanceAbi = ['function balanceOf(address) view returns (uint256)'];
+    const queryAddresses = [polygonAddress];
+    if (safeAddress && safeAddress !== polygonAddress) queryAddresses.push(safeAddress);
 
-    const addresses = [polygonAddress];
-    if (safeAddress && safeAddress !== polygonAddress) addresses.push(safeAddress);
-
-    const [idle_usdc, positions] = await Promise.all([
-      sumPolygonStablecoins(provider, addresses),
+    const [stableBalances, positions] = await Promise.all([
+      Promise.all(
+        WITHDRAWABLE_STABLECOINS.map(async (token) => {
+          const contract = new ethers.Contract(token.address, balanceAbi, provider);
+          const bals: ethers.BigNumber[] = await Promise.all(
+            queryAddresses.map((addr) => contract.balanceOf(addr))
+          );
+          const total = bals.reduce((acc, b) => acc.add(b), ethers.BigNumber.from(0));
+          return { symbol: token.symbol, value: Number(ethers.utils.formatUnits(total, 6)) };
+        })
+      ),
       getPositions(polygonAddress, logKey).catch(() => [] as DataPosition[])
     ]);
 
+    const onchain_idle = stableBalances.reduce((sum, b) => sum + b.value, 0);
     const positions_value = positions.reduce((sum, p) => sum + (p.currentValue || 0), 0);
+
+    // Positions with curPrice >= 0.999 are in resolved markets where the user won.
+    // Only include them in idle_usdc if:
+    //   1. The deposit wallet actually holds the on-chain CTF tokens (balance > 0)
+    //   2. The CTF oracle has finalized the outcome on-chain (payoutDenominator > 0)
+    // The CLOB API keeps showing historical positions even after they've been
+    // settled/redeemed AND even before the oracle has run, so without both checks
+    // the balance inflates and the button shows forever.
+    const ctfAbi = [
+      'function balanceOf(address, uint256) view returns (uint256)',
+      'function payoutDenominator(bytes32) view returns (uint256)'
+    ];
+    const ctf = new ethers.Contract(CTF_ADDRESS, ctfAbi, provider);
+    const winningCandidates = positions.filter((p) => (p.curPrice ?? 0) >= 0.999);
+    const winningWithBalance = (
+      await Promise.all(
+        winningCandidates.map(async (p) => {
+          try {
+            const [bal, denom]: [ethers.BigNumber, ethers.BigNumber] = await Promise.all([
+              ctf.balanceOf(polygonAddress, p.asset),
+              ctf.payoutDenominator(p.conditionId)
+            ]);
+            return bal.isZero() || denom.isZero() ? null : p;
+          } catch {
+            return p; // RPC failure — optimistically include
+          }
+        })
+      )
+    ).filter((p): p is DataPosition => p !== null);
+
+    const redeemable = winningWithBalance.reduce((sum, p) => sum + (p.currentValue || 0), 0);
+
+    const idle_usdc = onchain_idle + redeemable;
 
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Polymarket balances — idle: $${idle_usdc.toFixed(2)}, positions: $${positions_value.toFixed(2)}`
+      `${logKey} Polymarket balances — idle (${stableBalances
+        .map((b) => `${b.symbol}: $${b.value.toFixed(2)}`)
+        .join(
+          ', '
+        )}), redeemable: $${redeemable.toFixed(2)} (${winningWithBalance.length}/${winningCandidates.length} winning have on-chain balance), positions: $${positions_value.toFixed(2)}`
     );
 
     return { idle_usdc, positions_value };
@@ -954,41 +1094,80 @@ export async function syncOpenOrders(
     const bulkOps: any[] = [];
 
     for (const pendingOrder of localPendingOrders) {
-      if (!liveOrderIds.has(pendingOrder.order_id)) {
-        // It's no longer open on CLOB
-        let newStatus = 'cancelled';
-        try {
-          // getOrder returns the order details including status and matched size
-          const orderData = await client.getOrder(pendingOrder.order_id);
-          if (orderData) {
-            const sizeMatched = Number((orderData as any).size_matched || 0);
-            if (sizeMatched >= pendingOrder.size) {
-              newStatus = 'filled';
-            } else if (sizeMatched > 0) {
-              newStatus = 'partial';
-            }
-          }
-        } catch (getOrderError) {
-          Logger.log(
-            'warn',
-            fnLog,
-            `${logKey} Could not fetch closed order ${pendingOrder.order_id} from CLOB. Marking as cancelled.`
-          );
-        }
+      // Still resting on the CLOB book — nothing to reconcile yet.
+      if (liveOrderIds.has(pendingOrder.order_id)) continue;
 
-        bulkOps.push({
-          updateOne: {
-            filter: { _id: pendingOrder._id },
-            update: { $set: { status: newStatus, updated_at: new Date() } }
-          }
-        });
-
+      // No longer open on the CLOB. Defer the verdict while the fill is still
+      // settling: a marketable order leaves the book instantly but its match is
+      // recorded async, so an early read can falsely look cancelled/unfilled.
+      const ageMs = Date.now() - new Date(pendingOrder.created_at).getTime();
+      if (ageMs < ORDER_SYNC_GRACE_MS) {
         Logger.log(
           'info',
           fnLog,
-          `${logKey} Synced order ${pendingOrder.order_id}: pending -> ${newStatus}`
+          `${logKey} Order ${pendingOrder.order_id} placed ${Math.round(ageMs / 1000)}s ago — ` +
+            `within grace window, deferring reconciliation.`
+        );
+        continue;
+      }
+
+      let newStatus: string | null = null;
+      try {
+        const orderData = await client.getOrder(pendingOrder.order_id);
+        if (orderData) {
+          const sizeMatched = Number((orderData as any).size_matched || 0);
+          const associateTrades = (orderData as any).associate_trades;
+          const hasFills =
+            sizeMatched > 0 || (Array.isArray(associateTrades) && associateTrades.length > 0);
+          const remoteStatus = String((orderData as any).status || '').toUpperCase();
+
+          if (hasFills) {
+            // The order executed and has left the book, so the fill is final —
+            // no further matching is coming. Share counts are NOT comparable to
+            // the requested size for marketable BUYs (USD-denominated, filled at
+            // market price within FOK_SLIPPAGE_TOLERANCE), so a share-for-share
+            // "fully filled" test spuriously reports partial. Any fill on an
+            // off-book order means the trade went through → completed.
+            newStatus = 'filled';
+          } else if (
+            remoteStatus === 'CANCELED' ||
+            remoteStatus === 'CANCELLED' ||
+            remoteStatus === 'UNMATCHED'
+          ) {
+            // No fills and a terminal cancel verdict → genuinely cancelled.
+            newStatus = 'cancelled';
+          }
+        }
+      } catch (getOrderError) {
+        Logger.log(
+          'warn',
+          fnLog,
+          `${logKey} Could not fetch closed order ${pendingOrder.order_id} from CLOB — leaving status unchanged.`
         );
       }
+
+      // Inconclusive (unfetchable, or off-book with no fills and no explicit
+      // cancel): leave it for a later sync rather than guessing.
+      if (!newStatus) continue;
+
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: pendingOrder._id },
+          update: { $set: { status: newStatus, updated_at: new Date() } }
+        }
+      });
+
+      // Propagate the verdict onto the linked transaction-history record.
+      await mongoTransactionService.updateStatusByPolymarketOrderId(
+        pendingOrder.order_id,
+        mapClobStatusToTxStatus(newStatus)
+      );
+
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} Synced order ${pendingOrder.order_id}: pending -> ${newStatus}`
+      );
     }
 
     if (bulkOps.length > 0) {
