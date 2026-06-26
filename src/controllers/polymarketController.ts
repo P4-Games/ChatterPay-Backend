@@ -95,6 +95,7 @@ import {
 } from '../services/polymarket/polymarketPurchaseService';
 import {
   createRelayClient,
+  deploySafeWallet,
   deriveSafeAddress,
   executeGaslessWithdrawal,
   transferPusdFromDepositWallet
@@ -1347,6 +1348,8 @@ export const polymarketWithdraw = async (
       );
     }
 
+    await deploySafeWallet(privateKey, logKey);
+
     const quote = await withdrawToScroll(
       bridgeSourceAddress,
       proxyAddress,
@@ -1364,7 +1367,8 @@ export const polymarketWithdraw = async (
         value: quote.value
       },
       bridgeAmountSmallest,
-      logKey
+      logKey,
+      fromTokenAddress
     );
 
     const withdrawAmountHuman = Number(bridgeAmountSmallest) / 1_000_000;
