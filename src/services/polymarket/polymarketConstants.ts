@@ -35,7 +35,6 @@ export const WITHDRAWABLE_STABLECOINS: ReadonlyArray<{ address: string; symbol: 
   { address: USDCE_ADDRESS, symbol: 'USDC.e' }
 ];
 
-
 /** CTF Exchange — main order matching/settlement contract (V2 address) */
 export const CTF_EXCHANGE_ADDRESS = '0xE111180000d2663C0091e4f400237545B87B996B';
 

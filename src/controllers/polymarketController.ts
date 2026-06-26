@@ -1347,7 +1347,6 @@ export const polymarketWithdraw = async (
       );
     }
 
-
     const quote = await withdrawToScroll(
       bridgeSourceAddress,
       proxyAddress,
