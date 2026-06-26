@@ -757,7 +757,8 @@ export async function withdrawToScroll(
   scrollProxyAddress: string,
   amount: string,
   logKey: string,
-  toTokenSymbol: string = 'USDC'
+  toTokenSymbol: string = 'USDC',
+  fromTokenAddress: string = PUSD_ADDRESS
 ): Promise<{
   quote: LifiQuoteResponse;
   approvalAddress: string;
@@ -771,7 +772,7 @@ export async function withdrawToScroll(
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Getting withdraw quote: ${amount} USDC.e Polygon→Scroll (→${toTokenSymbol})`
+      `${logKey} Getting withdraw quote: ${amount} (${fromTokenAddress}) Polygon→Scroll (→${toTokenSymbol})`
     );
 
     // Deny Squid (Axelar-based): requires native MATIC as msg.value for cross-chain gas.
@@ -780,7 +781,7 @@ export async function withdrawToScroll(
       {
         fromChain: POLYMARKET_CHAIN_ID,
         toChain: SCROLL_CHAIN_ID,
-        fromToken: PUSD_ADDRESS,
+        fromToken: fromTokenAddress,
         toToken: toTokenSymbol,
         fromAmount: amount,
         fromAddress: polygonSafeAddress,

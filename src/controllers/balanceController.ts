@@ -10,6 +10,7 @@ import { getAddressBalanceWithNfts } from '../services/balanceService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { getNotificationTemplate } from '../services/notificationService';
 import { getPolymarketBalanceSummary } from '../services/polymarket';
+import { deriveSafeAddress } from '../services/polymarket/polymarketRelayerService';
 import {
   getUser,
   getUserByWalletAndChainid,
@@ -35,9 +36,16 @@ async function enrichWithPolymarketBalances(
   const logKey = `balance-${user.phone_number}`;
 
   try {
+    const eoaAddress = user.wallets[0]?.wallet_eoa;
+    const safeAddress =
+      user.polymarket_account.wallet_type === 'deposit' && eoaAddress
+        ? deriveSafeAddress(eoaAddress)
+        : undefined;
+
     const { idle_usdc, positions_value } = await getPolymarketBalanceSummary(
       polygonAddress,
-      logKey
+      logKey,
+      safeAddress
     );
     const total_usd = idle_usdc + positions_value;
     if (total_usd <= 0) return data;

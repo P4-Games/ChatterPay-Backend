@@ -13,6 +13,9 @@
 /** pUSD (Polymarket USD) on Polygon — collateral since CLOB V2 (April 2026). Backed 1:1 by USDC. */
 export const PUSD_ADDRESS = '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB';
 
+/** USDC.e (bridged USDC) on Polygon — collateral in pre-V2 markets. Still paid out on old settlements. */
+export const USDCE_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+
 /** CTF Exchange — main order matching/settlement contract (V2 address) */
 export const CTF_EXCHANGE_ADDRESS = '0xE111180000d2663C0091e4f400237545B87B996B';
 

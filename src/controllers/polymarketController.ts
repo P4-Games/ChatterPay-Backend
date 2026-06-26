@@ -946,9 +946,15 @@ export const polymarketGetPortfolioValue = async (
     }
 
     const polygonAddress = user.polymarket_account.polygon_address;
+    const eoaAddress = user.wallets[0]?.wallet_eoa;
+    const safeAddress =
+      user.polymarket_account.wallet_type === 'deposit' && eoaAddress
+        ? deriveSafeAddress(eoaAddress)
+        : undefined;
+
     const [portfolio, { idle_usdc }] = await Promise.all([
       getPortfolioValue(polygonAddress, logKey),
-      getPolymarketBalanceSummary(polygonAddress, logKey)
+      getPolymarketBalanceSummary(polygonAddress, logKey, safeAddress)
     ]);
     return successReply(reply, { portfolio, idle_usdc });
   } catch (error) {
@@ -1148,14 +1154,14 @@ export const polymarketWithdraw = async (
 
     const { ethers } = await import('ethers');
     const { POLYMARKET_POLYGON_RPC_URL } = await import('../config/constants');
-    const { PUSD_ADDRESS } = await import('../services/polymarket/polymarketConstants');
-
-    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
-    const usdc = new ethers.Contract(
-      PUSD_ADDRESS,
-      ['function balanceOf(address) view returns (uint256)'],
-      provider
+    const { PUSD_ADDRESS, USDCE_ADDRESS } = await import(
+      '../services/polymarket/polymarketConstants'
     );
+
+    const balanceAbi = ['function balanceOf(address) view returns (uint256)'];
+    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+    const pusd = new ethers.Contract(PUSD_ADDRESS, balanceAbi, provider);
+    const usdce = new ethers.Contract(USDCE_ADDRESS, balanceAbi, provider);
 
     // Deposit wallet: relayer blocks LiFi spender approval.
     // Transfer pUSD to Safe first, then bridge from Safe.
@@ -1163,26 +1169,72 @@ export const polymarketWithdraw = async (
       const { Wallet } = await import('ethers');
       const safeAddress = deriveSafeAddress(new Wallet(privateKey).address);
 
-      // Only transfer what is actually in the deposit wallet (rescue flow)
-      const depositBal = await usdc.balanceOf(bridgeSourceAddress);
-      if (depositBal.gt(0)) {
+      // Transfer any pUSD and USDC.e sitting in the deposit wallet
+      const [depositPusd, depositUsdce] = await Promise.all([
+        pusd.balanceOf(bridgeSourceAddress),
+        usdce.balanceOf(bridgeSourceAddress)
+      ]);
+
+      if (depositPusd.gt(0)) {
         await transferPusdFromDepositWallet(
           privateKey,
           user.polymarket_account.polygon_address,
           safeAddress,
-          depositBal.toString(), // Transfer everything it has
+          depositPusd.toString(),
           logKey
         );
       }
+
+      // USDC.e in deposit wallet — same relayer transfer mechanism (ERC-20 transfer)
+      if (depositUsdce.gt(0)) {
+        const { createRelayClient } = await import(
+          '../services/polymarket/polymarketRelayerService'
+        );
+        const erc20Iface = new ethers.utils.Interface([
+          'function transfer(address to, uint256 amount) returns (bool)'
+        ]);
+        const client = createRelayClient(privateKey);
+        const deadline = Math.floor(Date.now() / 1000 + 3600).toString();
+        const calls = [
+          {
+            target: USDCE_ADDRESS,
+            data: erc20Iface.encodeFunctionData('transfer', [safeAddress, depositUsdce.toString()]),
+            value: '0'
+          }
+        ];
+        const resp = await client.executeDepositWalletBatch(
+          calls,
+          user.polymarket_account.polygon_address,
+          deadline
+        );
+        await resp.wait();
+        Logger.log(LOG_PREFIX, `${logKey} Transferred USDC.e from deposit wallet to Safe`);
+      }
+
       bridgeSourceAddress = safeAddress;
     }
 
-    // Now check the actual balance available to bridge (which is in the Safe if deposit wallet was used)
-    const actualBal = await usdc.balanceOf(bridgeSourceAddress);
-    const requestedBn = ethers.BigNumber.from(amountSmallest);
+    // Check both pUSD and USDC.e balances in the bridge source (Safe)
+    const [safePusdBal, safeUsdceBal] = await Promise.all([
+      pusd.balanceOf(bridgeSourceAddress),
+      usdce.balanceOf(bridgeSourceAddress)
+    ]);
 
-    if (actualBal.lt(ethers.BigNumber.from(1_000_000))) {
-      // If we have literally 0 (or < $1), trigger claim and return
+    const requestedBn = ethers.BigNumber.from(amountSmallest);
+    const MIN_BRIDGE = ethers.BigNumber.from(1_000_000); // $1
+
+    // Prefer pUSD; fall back to USDC.e if pUSD is insufficient
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let actualBal: any;
+    let fromTokenAddress: string;
+
+    if (safePusdBal.gte(MIN_BRIDGE)) {
+      actualBal = safePusdBal;
+      fromTokenAddress = PUSD_ADDRESS;
+    } else if (safeUsdceBal.gte(MIN_BRIDGE)) {
+      actualBal = safeUsdceBal;
+      fromTokenAddress = USDCE_ADDRESS;
+    } else {
       return successReply(reply, {
         withdrawal_pending: true,
         message:
@@ -1198,7 +1250,8 @@ export const polymarketWithdraw = async (
       proxyAddress,
       bridgeAmountSmallest,
       logKey,
-      toToken
+      toToken,
+      fromTokenAddress
     );
     await executeGaslessWithdrawal(
       privateKey,

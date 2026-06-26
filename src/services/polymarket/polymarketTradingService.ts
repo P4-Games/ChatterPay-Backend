@@ -20,7 +20,7 @@ import { Logger } from '../../helpers/loggerHelper';
 import { PolymarketOrderModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
 import { getAuthenticatedClientForUser } from './polymarketClientService';
-import { FOK_SLIPPAGE_TOLERANCE, PUSD_ADDRESS } from './polymarketConstants';
+import { FOK_SLIPPAGE_TOLERANCE, PUSD_ADDRESS, USDCE_ADDRESS } from './polymarketConstants';
 import { ensureTokenApprovals, setupDepositWalletApprovals } from './polymarketRelayerService';
 import type {
   ClobOpenOrder,
@@ -840,41 +840,68 @@ export async function getPnlHistory(
   }
 }
 
+const BALANCE_ABI = ['function balanceOf(address) view returns (uint256)'];
+
 /**
- * Get a summary of the user's Polymarket balances: idle USDC.e + active positions.
+ * Sum pUSD + USDC.e balances across one or more Polygon addresses.
+ * Returns a human-readable total (e.g. 6.00 for $6.00).
+ */
+async function sumPolygonStablecoins(
+  provider: ethers.providers.Provider,
+  addresses: string[]
+): Promise<number> {
+  const pusd = new ethers.Contract(PUSD_ADDRESS, BALANCE_ABI, provider);
+  const usdce = new ethers.Contract(USDCE_ADDRESS, BALANCE_ABI, provider);
+
+  const queries = addresses.flatMap((addr) => [pusd.balanceOf(addr), usdce.balanceOf(addr)]);
+
+  const results = await Promise.allSettled(queries);
+  let total = ethers.BigNumber.from(0);
+  for (const r of results) {
+    if (r.status === 'fulfilled') {
+      total = total.add(r.value as ethers.BigNumber);
+    }
+  }
+  return Number(ethers.utils.formatUnits(total, 6));
+}
+
+/**
+ * Get a summary of the user's Polymarket balances: idle stablecoins + active positions.
  *
- * - idle_usdc: USDC.e sitting in the Polygon Safe (not in any position)
+ * - idle_usdc: pUSD + USDC.e across the deposit wallet AND the Safe (funds can be stranded
+ *   in the Safe after a partial bridge failure).
  * - positions_value: total current value of all active positions (in USD)
  *
  * This is best-effort: failures return zeroes so the balance endpoint stays resilient.
+ *
+ * @param polygonAddress - User's Polygon address (deposit wallet or Safe)
+ * @param logKey - Logging identifier
+ * @param safeAddress - Optional Safe address to also check (for deposit wallet users)
  */
 export async function getPolymarketBalanceSummary(
   polygonAddress: string,
-  logKey: string
+  logKey: string,
+  safeAddress?: string
 ): Promise<{ idle_usdc: number; positions_value: number }> {
   const fnLog = `[${LOG_PREFIX}:getPolymarketBalanceSummary]`;
 
   try {
-    // Query idle pUSD balance on Polygon and active positions in parallel
     const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
-    const usdc = new ethers.Contract(
-      PUSD_ADDRESS,
-      ['function balanceOf(address) view returns (uint256)'],
-      provider
-    );
 
-    const [rawBalance, positions] = await Promise.all([
-      usdc.balanceOf(polygonAddress) as Promise<ethers.BigNumber>,
+    const addresses = [polygonAddress];
+    if (safeAddress && safeAddress !== polygonAddress) addresses.push(safeAddress);
+
+    const [idle_usdc, positions] = await Promise.all([
+      sumPolygonStablecoins(provider, addresses),
       getPositions(polygonAddress, logKey).catch(() => [] as DataPosition[])
     ]);
 
-    const idle_usdc = Number(ethers.utils.formatUnits(rawBalance, 6));
     const positions_value = positions.reduce((sum, p) => sum + (p.currentValue || 0), 0);
 
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Polymarket balances — idle USDC.e: $${idle_usdc.toFixed(2)}, positions: $${positions_value.toFixed(2)}`
+      `${logKey} Polymarket balances — idle: $${idle_usdc.toFixed(2)}, positions: $${positions_value.toFixed(2)}`
     );
 
     return { idle_usdc, positions_value };
