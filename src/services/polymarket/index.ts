@@ -54,8 +54,7 @@ export {
   getMarketPrice,
   getMarkets,
   getOrderBook,
-  searchEvents,
-  searchMarkets
+  searchEvents
 } from './polymarketMarketService';
 // API authentication adapter
 export { registerPolymarketApiAdapter } from './polymarketProxyHelper';

@@ -25,7 +25,6 @@ import type {
   GammaCategory,
   GammaEvent,
   GammaMarket,
-  GammaSearchResult,
   MarketQueryParams
 } from './polymarketTypes';
 
@@ -272,34 +271,6 @@ export async function searchEvents(
       `${logKey} Failed to search events for "${query}": ${String(error)}`
     );
     return [];
-  }
-}
-
-// ============================================================================
-// Gamma API — Search
-// ============================================================================
-
-/**
- * Search markets using Gamma's public search endpoint.
- */
-export async function searchMarkets(
-  query: string,
-  limit: number = 10,
-  logKey: string
-): Promise<GammaSearchResult[]> {
-  try {
-    const response = await axios.get<GammaSearchResult[]>(
-      `${POLYMARKET_GAMMA_API_URL}/public-search`,
-      {
-        params: { query, limit },
-        timeout: 10000
-      }
-    );
-
-    return response.data;
-  } catch (error) {
-    Logger.log('error', `[${LOG_PREFIX}:searchMarkets]`, `${logKey} Failed: ${String(error)}`);
-    throw new Error(`Failed to search Polymarket: ${String(error)}`);
   }
 }
 

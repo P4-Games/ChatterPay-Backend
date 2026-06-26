@@ -65,7 +65,6 @@ import {
   placeOrder,
   resolveMaxSize,
   searchEvents,
-  searchMarkets,
   syncOpenOrders,
   withdrawSellProceeds
 } from '../services/polymarket';
@@ -365,9 +364,9 @@ export const polymarketSearchMarkets = async (
       return errorReply(reply, 400, 'Missing query parameter');
     }
 
-    const results = await searchMarkets(request.query.query, request.query.limit ?? 10, logKey);
+    const events = await searchEvents(request.query.query, request.query.limit ?? 10, logKey);
 
-    return successReply(reply, { results });
+    return successReply(reply, { events });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to search markets');
@@ -463,9 +462,9 @@ export const polymarketAcceptTerms = async (
       user = await createPolymarketAccount(user, privateKey, logKey);
     }
 
-    const updatedUser = await acceptTerms(user, request.body.terms_version, logKey);
+    const updatedUser = await acceptTerms(user, logKey);
     return successReply(reply, {
-      message: `Terms v${request.body.terms_version} accepted`,
+      message: `Terms v${POLYMARKET_TERMS_VERSION} accepted`,
       account: getAccountStatus(updatedUser)
     });
   } catch (error) {
@@ -1145,27 +1144,59 @@ export const polymarketWithdraw = async (
     const toToken = await getPreferredScrollStablecoin(proxyAddress, logKey);
 
     const walletType = user.polymarket_account.wallet_type ?? 'safe';
+    let bridgeSourceAddress = user.polymarket_account.polygon_address;
+
+    const { ethers } = await import('ethers');
+    const { POLYMARKET_POLYGON_RPC_URL } = await import('../config/constants');
+    const { PUSD_ADDRESS } = await import('../services/polymarket/polymarketConstants');
+
+    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+    const usdc = new ethers.Contract(
+      PUSD_ADDRESS,
+      ['function balanceOf(address) view returns (uint256)'],
+      provider
+    );
 
     // Deposit wallet: relayer blocks LiFi spender approval.
-    // Transfer pUSD to Safe first, then bridge from Safe (no spender restrictions).
-    let bridgeSourceAddress = user.polymarket_account.polygon_address;
+    // Transfer pUSD to Safe first, then bridge from Safe.
     if (walletType === 'deposit') {
       const { Wallet } = await import('ethers');
       const safeAddress = deriveSafeAddress(new Wallet(privateKey).address);
-      await transferPusdFromDepositWallet(
-        privateKey,
-        user.polymarket_account.polygon_address,
-        safeAddress,
-        amountSmallest,
-        logKey
-      );
+
+      // Only transfer what is actually in the deposit wallet (rescue flow)
+      const depositBal = await usdc.balanceOf(bridgeSourceAddress);
+      if (depositBal.gt(0)) {
+        await transferPusdFromDepositWallet(
+          privateKey,
+          user.polymarket_account.polygon_address,
+          safeAddress,
+          depositBal.toString(), // Transfer everything it has
+          logKey
+        );
+      }
       bridgeSourceAddress = safeAddress;
     }
+
+    // Now check the actual balance available to bridge (which is in the Safe if deposit wallet was used)
+    const actualBal = await usdc.balanceOf(bridgeSourceAddress);
+    const requestedBn = ethers.BigNumber.from(amountSmallest);
+
+    if (actualBal.lt(ethers.BigNumber.from(1_000_000))) {
+      // If we have literally 0 (or < $1), trigger claim and return
+      return successReply(reply, {
+        withdrawal_pending: true,
+        message:
+          'Insufficient pUSD in wallet. Claim + withdrawal initiated — funds will arrive on Scroll once positions are redeemed.'
+      });
+    }
+
+    // If the user has funds, but requested more than available, cap it to available
+    const bridgeAmountSmallest = actualBal.lt(requestedBn) ? actualBal.toString() : amountSmallest;
 
     const quote = await withdrawToScroll(
       bridgeSourceAddress,
       proxyAddress,
-      amountSmallest,
+      bridgeAmountSmallest,
       logKey,
       toToken
     );
@@ -1177,12 +1208,12 @@ export const polymarketWithdraw = async (
         data: quote.data,
         value: quote.value
       },
-      amountSmallest,
+      bridgeAmountSmallest,
       logKey
     );
 
     // Save withdrawal to transaction history
-    const withdrawAmountHuman = Number(request.body.amount);
+    const withdrawAmountHuman = Number(bridgeAmountSmallest) / 1_000_000;
     await mongoTransactionService.saveTransaction({
       tx: `withdraw-${Date.now()}`,
       walletFrom: user.polymarket_account.polygon_address,

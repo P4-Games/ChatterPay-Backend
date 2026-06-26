@@ -6,7 +6,7 @@ import {
   getMarketBySlug,
   getMarketPrice,
   getMarkets,
-  searchMarkets
+  searchEvents
 } from '../../../src/services/polymarket/polymarketMarketService';
 
 // Mock axios module
@@ -260,34 +260,34 @@ describe('polymarketMarketService', () => {
     });
   });
 
-  describe('searchMarkets', () => {
-    it('should search markets via Gamma public-search endpoint', async () => {
-      const searchResults = [
+  describe('searchEvents', () => {
+    it('should search events via Gamma public-search endpoint with the q parameter', async () => {
+      const events = [
         {
           id: '1',
-          question: 'Will Bitcoin reach $100k?',
+          title: 'Will Bitcoin reach $100k?',
           slug: 'bitcoin-100k',
-          image: 'https://example.com/btc.png',
-          outcomePrices: '["0.65","0.35"]',
           volume: '1000000',
-          active: true
+          volume24hr: '50000',
+          active: true,
+          markets: [{ clobTokenIds: '["111","222"]', outcomePrices: '["0.65","0.35"]' }]
         }
       ];
 
       mockedAxios.get.mockResolvedValueOnce({
-        data: searchResults,
+        data: { events },
         status: 200,
         statusText: 'OK'
       } as AxiosResponse);
 
-      const result = await searchMarkets('bitcoin', 5, '[test]');
+      const result = await searchEvents('bitcoin', 5, '[test]');
 
       expect(result).toHaveLength(1);
-      expect(result[0].question).toContain('Bitcoin');
+      expect(result[0].title).toContain('Bitcoin');
       expect(mockedAxios.get).toHaveBeenCalledWith(
         'https://gamma-api.polymarket.com/public-search',
         expect.objectContaining({
-          params: { query: 'bitcoin', limit: 5 }
+          params: expect.objectContaining({ q: 'bitcoin', limit_per_type: 5 })
         })
       );
     });
