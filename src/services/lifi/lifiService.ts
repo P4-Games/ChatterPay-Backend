@@ -11,6 +11,7 @@ import axios, { type AxiosError, type AxiosResponse } from 'axios';
 
 import {
   LIFI_API_BASE_URL,
+  LIFI_API_KEY,
   LIFI_DEFAULT_SLIPPAGE,
   LIFI_INTEGRATOR_FEE,
   LIFI_INTEGRATOR_KEY
@@ -54,6 +55,18 @@ function sleep(ms: number): Promise<void> {
  */
 function getBackoffDelay(attempt: number, baseDelay: number = INITIAL_RETRY_DELAY_MS): number {
   return baseDelay * 2 ** attempt;
+}
+
+/**
+ * Build request headers, including the Li.Fi API key when configured.
+ * Authenticated requests get a much higher rate limit than anonymous ones.
+ */
+function getLifiHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (LIFI_API_KEY) {
+    headers['x-lifi-api-key'] = LIFI_API_KEY;
+  }
+  return headers;
 }
 
 /**
@@ -220,9 +233,7 @@ export async function getLifiQuote(
     try {
       const response: AxiosResponse<LifiQuoteResponse> = await axios.get(url, {
         timeout: 30000,
-        headers: {
-          Accept: 'application/json'
-        }
+        headers: getLifiHeaders()
       });
 
       const quote = response.data;
@@ -275,7 +286,7 @@ export async function getLifiTokenPrice(
     const response = await axios.get<LifiToken>(url, {
       params: { chain: chainId, token: tokenAddress },
       timeout: 10000,
-      headers: { Accept: 'application/json' }
+      headers: getLifiHeaders()
     });
     const price = response.data.priceUSD ? Number(response.data.priceUSD) : null;
     Logger.info(
@@ -318,9 +329,7 @@ export async function getLifiStatus(
   try {
     const response: AxiosResponse<LifiStatusResponse> = await axios.get(url, {
       timeout: 15000,
-      headers: {
-        Accept: 'application/json'
-      }
+      headers: getLifiHeaders()
     });
 
     return response.data;
@@ -452,7 +461,7 @@ export async function getLifiChains(logKey: string): Promise<LifiChain[]> {
   try {
     const response: AxiosResponse<{ chains: LifiChain[] }> = await axios.get(url, {
       timeout: 15000,
-      headers: { Accept: 'application/json' },
+      headers: getLifiHeaders(),
       params: { chainTypes: 'EVM,SVM,UTXO' }
     });
 
@@ -495,7 +504,7 @@ export async function getLifiToken(
     try {
       const response: AxiosResponse<LifiToken> = await axios.get(url, {
         timeout: 10000,
-        headers: { Accept: 'application/json' },
+        headers: getLifiHeaders(),
         params: { chain: chainKey, token: symbol }
       });
 

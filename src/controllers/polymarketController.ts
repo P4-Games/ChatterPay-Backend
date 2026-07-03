@@ -10,13 +10,12 @@
  */
 
 import { randomUUID } from 'crypto';
-import { ethers } from 'ethers';
+import type { BigNumber } from 'ethers';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import {
   CHATTERPAY_DOMAIN,
   POLYMARKET_ENABLED,
-  POLYMARKET_POLYGON_RPC_URL,
   POLYMARKET_TERMS_VERSION
 } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
@@ -65,7 +64,6 @@ import {
   MIN_BUY_ORDER_USD,
   POLYMARKET_MAX_PRICE,
   POLYMARKET_MIN_PRICE,
-  PUSD_ADDRESS,
   placeOrder,
   resolveMaxSize,
   searchEvents,
@@ -1313,7 +1311,7 @@ export const polymarketWithdraw = async (
     const requestedBn = ethers.BigNumber.from(amountSmallest);
     const MIN_BRIDGE_UNITS = ethers.BigNumber.from(1_000_000); // $1
 
-    let actualBal: ethers.BigNumber;
+    let actualBal: BigNumber;
     let fromTokenAddress: string;
 
     if (safePusdBal.gte(MIN_BRIDGE_UNITS)) {

@@ -78,6 +78,7 @@ const {
   SECURITY_PIN_BLOCK_MINUTES: securityPinBlockMinutes = 60,
   SECURITY_PIN_ENABLED: securityPinEnabled = 'true',
   LIFI_API_BASE_URL: lifiApiBaseUrl = 'https://li.quest/v1',
+  LIFI_API_KEY: lifiApiKey = '',
   LIFI_INTEGRATOR_KEY: lifiIntegratorKey = 'ChatterPay',
   LIFI_INTEGRATOR_FEE: lifiIntegratorFee = '0.0025',
   LIFI_DEFAULT_SLIPPAGE: lifiDefaultSlippage = '0.005', // fraction: 0.005 = 0.5%
@@ -294,6 +295,7 @@ export const SECURITY_PIN_ENABLED: boolean = securityPinEnabled.toLowerCase() ==
 // LIFI_INTEGRATOR_FEE and LIFI_DEFAULT_SLIPPAGE are fractional values (0-1), not percentages.
 //   - Example: 0.0025 = 0.25% fee, 0.005 = 0.5% slippage.
 export const LIFI_API_BASE_URL: string = lifiApiBaseUrl;
+export const LIFI_API_KEY: string = lifiApiKey;
 export const LIFI_INTEGRATOR_KEY: string = lifiIntegratorKey;
 export const LIFI_INTEGRATOR_FEE: number = Number(lifiIntegratorFee);
 export const LIFI_DEFAULT_SLIPPAGE: number = Number(lifiDefaultSlippage);

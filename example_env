@@ -146,7 +146,10 @@ ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY='false' | 'true'
 # Set USE_LIFI='false' to disable cross-chain transfers and only use uniswap fork swap implementation.
 # LIFI_INTEGRATOR_FEE and LIFI_DEFAULT_SLIPPAGE are fractional values (0-1), not percentages.
 #   - Example: 0.0025 = 0.25% fee, 0.005 = 0.5% slippage.
+# LIFI_API_KEY: optional. Get from https://li.fi/plans/ (Partner Portal). Unauthenticated
+#   requests are limited to 75 quote calls per 2 hours; authenticated keys default to 100 RPM.
 LIFI_API_BASE_URL='https://li.quest/v1'
+LIFI_API_KEY=''
 LIFI_INTEGRATOR_KEY='IntegratorKey'
 LIFI_INTEGRATOR_FEE='0.0025'
 LIFI_DEFAULT_SLIPPAGE='0.005'
