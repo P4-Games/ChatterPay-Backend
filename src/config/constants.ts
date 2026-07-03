@@ -87,6 +87,7 @@ const {
   POLYMARKET_CLOB_API_URL: polymarketClobApiUrl = 'https://clob.polymarket.com',
   POLYMARKET_GAMMA_API_URL: polymarketGammaApiUrl = 'https://gamma-api.polymarket.com',
   POLYMARKET_DATA_API_URL: polymarketDataApiUrl = 'https://data-api.polymarket.com',
+  POLYMARKET_USER_PNL_API_URL: polymarketUserPnlApiUrl = 'https://user-pnl-api.polymarket.com',
   POLYMARKET_RELAYER_URL: polymarketRelayerUrl = 'https://relayer-v2.polymarket.com',
   POLYMARKET_CHAIN_ID: polymarketChainId = 137,
   POLYMARKET_TERMS_VERSION: polymarketTermsVersion = 1,
@@ -321,6 +322,7 @@ export const POLYMARKET_ENABLED: boolean = polymarketEnabled.toLowerCase() === '
 export const POLYMARKET_CLOB_API_URL: string = polymarketClobApiUrl;
 export const POLYMARKET_GAMMA_API_URL: string = polymarketGammaApiUrl;
 export const POLYMARKET_DATA_API_URL: string = polymarketDataApiUrl;
+export const POLYMARKET_USER_PNL_API_URL: string = polymarketUserPnlApiUrl;
 export const POLYMARKET_RELAYER_URL: string = polymarketRelayerUrl;
 export const POLYMARKET_CHAIN_ID: number = Number(polymarketChainId);
 export const POLYMARKET_TERMS_VERSION: number = Number(polymarketTermsVersion);

@@ -14,7 +14,8 @@ import { ethers } from 'ethers';
 import {
   POLYMARKET_DATA_API_URL,
   POLYMARKET_GAMMA_API_URL,
-  POLYMARKET_POLYGON_RPC_URL
+  POLYMARKET_POLYGON_RPC_URL,
+  POLYMARKET_USER_PNL_API_URL
 } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
 import { PolymarketOrderModel } from '../../models/polymarketModel';
@@ -36,7 +37,9 @@ import type {
   DataTradeActivity,
   PlaceOrderParams,
   PnlHistoryPoint,
-  TradeHistoryQuery
+  PnlInterval,
+  TradeHistoryQuery,
+  UserPnlApiPoint
 } from './polymarketTypes';
 
 const LOG_PREFIX = 'polymarketTradingService';
@@ -893,64 +896,113 @@ function lttbDownsample(points: PnlHistoryPoint[], target: number): PnlHistoryPo
 }
 
 /**
- * Compute cumulative PNL history from all user trades, suitable for charting.
+ * Point density (fidelity) requested from the user-pnl API per interval.
+ * Known fidelity values: '1d', '18h', '12h', '3h', '1h'.
+ */
+const PNL_INTERVAL_FIDELITY: Record<PnlInterval, string> = {
+  '1d': '1h',
+  '1w': '3h',
+  '1m': '12h',
+  all: '1d'
+};
+
+/**
+ * Fallback: compute cumulative REALIZED PNL from all user trades.
  *
  * Fetches all trades via /trades, sorts by timestamp ascending, and computes
- * a running total of cost (BUYs) vs proceeds (SELLs).
+ * a running total of cost (BUYs) vs proceeds (SELLs). Note this excludes
+ * unrealized P&L on open positions (historical position prices are not
+ * available from the /trades endpoint).
+ */
+async function getPnlHistoryFromTrades(userAddress: string): Promise<PnlHistoryPoint[]> {
+  // Fetch all trades (max 10000)
+  const response = await axios.get<DataTrade[]>(`${POLYMARKET_DATA_API_URL}/trades`, {
+    params: { user: userAddress, limit: 10000 },
+    timeout: 30000
+  });
+
+  const trades = response.data;
+  if (!trades.length) return [];
+
+  // Sort by timestamp ascending (oldest first). Timestamps are epoch SECONDS.
+  trades.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Compute cumulative PNL
+  let cumulativeCost = 0;
+  let cumulativeProceeds = 0;
+
+  return trades.map((trade) => {
+    const amount = parseFloat(trade.price) * parseFloat(trade.size);
+    if (trade.side === 'BUY') {
+      cumulativeCost += amount;
+    } else {
+      cumulativeProceeds += amount;
+    }
+
+    return {
+      timestamp: new Date(trade.timestamp * 1000).toISOString(),
+      cumulativePnl: cumulativeProceeds - cumulativeCost,
+      totalInvested: cumulativeCost,
+      totalProceeds: cumulativeProceeds
+    };
+  });
+}
+
+/**
+ * Get the user's PNL history time series, suitable for charting.
+ *
+ * Primary source is Polymarket's official user-pnl API (the same one powering
+ * the profit chart on polymarket.com), whose points are mark-to-market —
+ * realized + unrealized P&L — and already aggregated server-side, so no
+ * per-trade computation is needed. Falls back to a trade-based cumulative
+ * realized-PNL computation if that API is unavailable.
  *
  * If `limit` is provided, the resulting points are downsampled to that count.
  */
 export async function getPnlHistory(
   userAddress: string,
   logKey: string,
-  limit?: number
+  limit?: number,
+  interval: PnlInterval = 'all'
 ): Promise<PnlHistoryPoint[]> {
   const fnLog = `[${LOG_PREFIX}:getPnlHistory]`;
 
+  let points: PnlHistoryPoint[];
   try {
-    // Fetch all trades (max 10000)
-    const response = await axios.get<DataTrade[]>(`${POLYMARKET_DATA_API_URL}/trades`, {
-      params: { user: userAddress, limit: 10000 },
-      timeout: 30000
+    const response = await axios.get<UserPnlApiPoint[]>(`${POLYMARKET_USER_PNL_API_URL}/user-pnl`, {
+      params: {
+        user_address: userAddress,
+        interval,
+        fidelity: PNL_INTERVAL_FIDELITY[interval]
+      },
+      timeout: 15000
     });
 
-    const trades = response.data;
-    if (!trades.length) return [];
-
-    // Sort by timestamp ascending (oldest first)
-    trades.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-    // Compute cumulative PNL
-    let cumulativeCost = 0;
-    let cumulativeProceeds = 0;
-
-    const points: PnlHistoryPoint[] = trades.map((trade) => {
-      const amount = parseFloat(trade.price) * parseFloat(trade.size);
-      if (trade.side === 'BUY') {
-        cumulativeCost += amount;
-      } else {
-        cumulativeProceeds += amount;
-      }
-
-      return {
-        timestamp: trade.timestamp,
-        cumulativePnl: cumulativeProceeds - cumulativeCost,
-        totalInvested: cumulativeCost,
-        totalProceeds: cumulativeProceeds
-      };
-    });
-
-    // Downsample using LTTB (Largest Triangle Three Buckets) algorithm.
-    // Unlike uniform sampling, LTTB preserves visually significant peaks and valleys.
-    if (limit && limit > 0 && points.length > limit) {
-      return lttbDownsample(points, limit);
-    }
-
-    return points;
+    points = response.data.map((point) => ({
+      timestamp: new Date(point.t * 1000).toISOString(),
+      cumulativePnl: point.p
+    }));
   } catch (error) {
-    Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
-    throw new Error(`Failed to compute PNL history: ${String(error)}`);
+    Logger.log(
+      'warn',
+      fnLog,
+      `${logKey} user-pnl API failed, falling back to trades: ${String(error)}`
+    );
+    try {
+      points = await getPnlHistoryFromTrades(userAddress);
+    } catch (fallbackError) {
+      Logger.log('error', fnLog, `${logKey} Failed: ${String(fallbackError)}`);
+      throw new Error(`Failed to compute PNL history: ${String(fallbackError)}`);
+    }
   }
+
+  // Downsample using LTTB (Largest Triangle Three Buckets) algorithm.
+  // Unlike uniform sampling, LTTB preserves visually significant peaks and valleys.
+  if (limit && limit > 0 && points.length > limit) {
+    return lttbDownsample(points, limit);
+  }
+
+  return points;
 }
 
 /**

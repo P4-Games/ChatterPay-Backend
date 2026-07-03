@@ -1099,10 +1099,15 @@ export const polymarketGetPnlHistory = async (
       return errorReply(reply, 400, 'Polymarket account not created');
     }
 
+    const { limit, interval } = request.body;
+    const validInterval =
+      interval && ['1d', '1w', '1m', 'all'].includes(interval) ? interval : 'all';
+
     const history = await getPnlHistory(
       user.polymarket_account.polygon_address,
       logKey,
-      request.body.limit
+      limit,
+      validInterval
     );
     return successReply(reply, { history });
   } catch (error) {

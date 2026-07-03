@@ -68,6 +68,8 @@ export interface PolymarketTradeHistoryBody {
 export interface PolymarketPnlHistoryBody {
   channel_user_id: string;
   limit?: number;
+  /** Time range for the series (defaults to 'all') */
+  interval?: '1d' | '1w' | '1m' | 'all';
 }
 
 /** Body for bridge operations */

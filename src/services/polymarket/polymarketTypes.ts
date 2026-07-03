@@ -240,7 +240,8 @@ export interface DataTrade {
   conditionId: string;
   size: string;
   price: string;
-  timestamp: string;
+  /** UNIX epoch in SECONDS (not milliseconds) */
+  timestamp: number;
   title: string;
   slug: string;
   icon: string;
@@ -250,12 +251,23 @@ export interface DataTrade {
   transactionHash: string;
 }
 
+/** Time range accepted by the user-pnl API */
+export type PnlInterval = '1d' | '1w' | '1m' | 'all';
+
+/** Raw point returned by the user-pnl API: t = epoch seconds, p = P&L in USD */
+export interface UserPnlApiPoint {
+  t: number;
+  p: number;
+}
+
 /** A single point in the PNL history time series */
 export interface PnlHistoryPoint {
+  /** ISO 8601 timestamp */
   timestamp: string;
+  /** Mark-to-market P&L in USD (realized + unrealized) */
   cumulativePnl: number;
-  totalInvested: number;
-  totalProceeds: number;
+  totalInvested?: number;
+  totalProceeds?: number;
 }
 
 /** Query parameters for the /trades endpoint */
