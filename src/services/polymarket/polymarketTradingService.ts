@@ -7,7 +7,7 @@
  * @see https://docs.polymarket.com/trading/quickstart
  */
 
-import { AssetType, OrderType, Side } from '@polymarket/clob-client-v2';
+import { AssetType, OrderType, Side, type TickSize } from '@polymarket/clob-client-v2';
 import axios from 'axios';
 import { ethers } from 'ethers';
 
@@ -64,6 +64,16 @@ const ORDER_SYNC_GRACE_MS = 60_000;
 function matchesClobError(detail: string, patterns: readonly string[]): boolean {
   const lower = detail.toLowerCase();
   return patterns.some((p) => lower.includes(p));
+}
+
+// The CLOB SDK indexes ROUNDING_CONFIG by tick size string; any value outside
+// this set (e.g. "0" from a bad/rate-limited tick-size response cached by the
+// SDK) makes order building crash with
+// "undefined is not an object (evaluating 'roundConfig.price')".
+const VALID_TICK_SIZES: readonly TickSize[] = ['0.1', '0.01', '0.001', '0.0001'];
+
+function toValidTickSize(value: number): TickSize | undefined {
+  return VALID_TICK_SIZES.find((t) => Number(t) === value);
 }
 
 /**
@@ -267,19 +277,31 @@ export async function placeOrder(
     // accepts prices in [tick, 1 - tick] as multiples of the tick; hardcoding
     // 0.999/0.001 only works for 0.001-tick markets and gets rejected on the
     // common 0.01-tick (binary/sports) markets.
-    let tickSize = 0.01;
+    let tickSizeStr: TickSize = '0.01';
     try {
       const fetched = Number(await client.getTickSize(params.tokenId));
-      if (fetched > 0) {
-        tickSize = fetched;
+      const valid = toValidTickSize(fetched);
+      if (valid) {
+        tickSizeStr = valid;
+      } else {
+        Logger.log(
+          'warn',
+          fnLog,
+          `${logKey} Fetched tick size ${fetched} is not a valid tick, defaulting to ${tickSizeStr}`
+        );
       }
     } catch (tickError) {
       Logger.log(
         'warn',
         fnLog,
-        `${logKey} Failed to fetch tick size, defaulting to ${tickSize}: ${String(tickError)}`
+        `${logKey} Failed to fetch tick size, defaulting to ${tickSizeStr}: ${String(tickError)}`
       );
     }
+    const tickSize = Number(tickSizeStr);
+    // Always pass the validated tick size to the SDK. Without it, the SDK
+    // resolves the tick from its own cache, which can hold an invalid value
+    // when the tick-size request failed (rate limit) — crashing order building.
+    const orderOptions = { tickSize: tickSizeStr };
 
     const submitOrder = async (): Promise<Record<string, unknown>> => {
       if (params.orderType === 'FOK') {
@@ -314,12 +336,15 @@ export async function placeOrder(
             `price=${params.price} → slippagePrice=${slippagePrice.toFixed(4)}`
         );
 
-        return client.createAndPostMarketOrder({
-          tokenID: params.tokenId,
-          price: slippagePrice,
-          amount,
-          side
-        });
+        return client.createAndPostMarketOrder(
+          {
+            tokenID: params.tokenId,
+            price: slippagePrice,
+            amount,
+            side
+          },
+          orderOptions
+        );
       }
       // GTC (default) and GTD orders use createAndPostOrder
       const orderType = params.orderType === 'GTD' ? OrderType.GTD : OrderType.GTC;
@@ -330,7 +355,7 @@ export async function placeOrder(
           size: params.size,
           side
         },
-        undefined,
+        orderOptions,
         orderType
       );
     };
@@ -381,12 +406,15 @@ export async function placeOrder(
               fnLog,
               `${logKey} GTC SELL failed after retry (${retryDetail}). Falling back to FOK market order.`
             );
-            response = await client.createAndPostMarketOrder({
-              tokenID: params.tokenId,
-              price: clampPriceToTick(params.price, tickSize),
-              amount: params.size,
-              side
-            });
+            response = await client.createAndPostMarketOrder(
+              {
+                tokenID: params.tokenId,
+                price: clampPriceToTick(params.price, tickSize),
+                amount: params.size,
+                side
+              },
+              orderOptions
+            );
             if (!response.orderID) {
               const fokError = response.error || response.message || 'no orderID in response';
               throw new Error(`CLOB rejected FOK fallback: ${fokError}`);
@@ -405,12 +433,15 @@ export async function placeOrder(
           fnLog,
           `${logKey} GTC SELL below minimum (${errorDetail}). Falling back to FOK market order.`
         );
-        response = await client.createAndPostMarketOrder({
-          tokenID: params.tokenId,
-          price: clampPriceToTick(params.price, tickSize),
-          amount: params.size,
-          side
-        });
+        response = await client.createAndPostMarketOrder(
+          {
+            tokenID: params.tokenId,
+            price: clampPriceToTick(params.price, tickSize),
+            amount: params.size,
+            side
+          },
+          orderOptions
+        );
         if (!response.orderID) {
           const fokError = response.error || response.message || 'no orderID in response';
           throw new Error(`CLOB rejected FOK fallback: ${fokError}`);
