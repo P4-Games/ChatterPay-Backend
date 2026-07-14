@@ -163,6 +163,11 @@ export async function placeOrder(
 
     const client = await getAuthenticatedClientForUser(user, privateKey);
 
+    // Collateral balance (human USD) as reported by the CLOB — captured during the
+    // pre-flight check below and passed to the SDK so BUY amounts are auto-reduced
+    // to fit balance + fee estimate.
+    let collateralBalanceUsd: number | undefined;
+
     // Ensure the CLOB's cached balance/allowance is fresh before placing the order.
     //
     // For CONDITIONAL (SELL), the CLOB API requires the specific token_id
@@ -234,6 +239,7 @@ export async function placeOrder(
 
         const allowanceStatus = await client.getBalanceAllowance(collateralParams);
         const currentBalance = Number(allowanceStatus?.balance ?? 0);
+        collateralBalanceUsd = currentBalance / 1_000_000;
         const allowances = allowanceStatus?.allowances ?? {};
         const hasAnyAllowance = Object.values(allowances).some((v) => Number(v) > 0);
 
@@ -272,6 +278,20 @@ export async function placeOrder(
     }
 
     const side = params.side === 'BUY' ? Side.BUY : Side.SELL;
+
+    // For BUYs, tell the SDK how much collateral is actually available so it can
+    // deduct the CLOB fee estimate from the order notional (fee = shares × rate ×
+    // (p(1-p))^exp, up to ~5% of the amount). Without this the CLOB rejects with
+    // "not enough balance / allowance ... fee estimate" whenever balance ≈ amount.
+    // Use the smaller of the CLOB-reported balance and the caller's available
+    // figure (on-chain minus funds committed to concurrent in-flight orders).
+    const balanceCandidates = [collateralBalanceUsd, params.availableUsdc].filter(
+      (v): v is number => typeof v === 'number'
+    );
+    const userUSDCBalance =
+      params.side === 'BUY' && balanceCandidates.length > 0
+        ? Math.min(...balanceCandidates)
+        : undefined;
 
     // Fetch the market's tick size to compute valid price bounds. Polymarket
     // accepts prices in [tick, 1 - tick] as multiples of the tick; hardcoding
@@ -341,7 +361,8 @@ export async function placeOrder(
             tokenID: params.tokenId,
             price: slippagePrice,
             amount,
-            side
+            side,
+            userUSDCBalance
           },
           orderOptions
         );
@@ -353,7 +374,8 @@ export async function placeOrder(
           tokenID: params.tokenId,
           price: params.price,
           size: params.size,
-          side
+          side,
+          userUSDCBalance
         },
         orderOptions,
         orderType
@@ -424,6 +446,25 @@ export async function placeOrder(
               `CLOB rejected order after retry: ${retryDetail || 'no orderID in response'}`
             );
           }
+        }
+      } else if (params.side === 'BUY' && isAllowanceError) {
+        // BUY rejected on balance/allowance — the CLOB's cached balance can lag
+        // a just-completed bridge. Refresh the collateral cache and retry once
+        // (the SDK re-caps the amount to balance + fee via userUSDCBalance).
+        Logger.log(
+          'warn',
+          fnLog,
+          `${logKey} BUY rejected (${errorDetail}). Refreshing CLOB balance cache and retrying...`
+        );
+        await client.updateBalanceAllowance({ asset_type: AssetType.COLLATERAL });
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+
+        response = await submitOrder();
+        if (!response.orderID) {
+          const retryDetail = String(
+            response.error || response.message || 'no orderID in response'
+          );
+          throw new Error(`CLOB rejected order after retry: ${retryDetail}`);
         }
       } else if (params.side === 'SELL' && isMinSizeError && params.orderType !== 'FOK') {
         // GTC SELL rejected for being below minimum order size.

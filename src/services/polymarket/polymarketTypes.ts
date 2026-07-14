@@ -314,4 +314,10 @@ export interface PlaceOrderParams {
   size: number;
   side: 'BUY' | 'SELL';
   orderType?: 'GTC' | 'FOK' | 'GTD';
+  /**
+   * Available collateral in human USD (on-chain balance minus funds committed to
+   * in-flight orders). When set, it caps the balance passed to the CLOB SDK so the
+   * order amount is auto-reduced to cover the CLOB fee estimate.
+   */
+  availableUsdc?: number;
 }

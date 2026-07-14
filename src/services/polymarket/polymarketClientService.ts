@@ -117,7 +117,12 @@ export function createAuthenticatedClobClient(
     signer,
     creds: credentials,
     signatureType,
-    funderAddress
+    funderAddress,
+    // Buffer (in %) added on top of the SDK's fee estimate when capping a BUY
+    // to the user's balance (userUSDCBalance). Guards against the CLOB's own
+    // fee estimate rounding up past ours, which rejects the order with
+    // "not enough balance / allowance ... fee estimate".
+    feeSlippage: 10
   });
 }
 

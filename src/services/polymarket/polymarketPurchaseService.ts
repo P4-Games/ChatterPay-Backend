@@ -636,6 +636,7 @@ export async function executePurchase(
 
       const { orderResult, effectiveSize } = (await lock.queue.add(async () => {
         let effectiveSize = params.size;
+        let availableUsdc: number | undefined;
 
         // For BUY orders, check actual on-chain USDC.e balance and adjust
         // order size to account for bridge slippage and concurrent orders.
@@ -643,14 +644,13 @@ export async function executePurchase(
           const safeAddress = freshUser.polymarket_account!.polygon_address;
           const onChainBalance = await getPolygonUsdceBalance(safeAddress, logKey);
           const available = Math.max(onChainBalance - lock.committedUsdce, 0);
+          availableUsdc = available;
           const requiredUsdc = params.price * params.size;
-          // Reserve CLOB_FEE_RESERVE (3%) headroom for the 2% CLOB taker fee + rounding.
-          // Without this, placing an order for the exact balance causes "not enough balance/
-          // allowance" because CLOB requires amount + fee_estimate <= balance.
-          // Always cap at maxAffordableSize so CLOB fee (≈2-3%) never causes rejection.
-          // Condition "available < requiredUsdc" alone is insufficient: even when balance
-          // nominally covers the order amount, the CLOB adds a fee on top and rejects
-          // if amount + fee_estimate > balance.
+          // Reserve CLOB_FEE_RESERVE headroom as a first-pass estimate of the CLOB
+          // taker fee (fee = shares × rate × (p(1-p))^exp, price-dependent). The exact
+          // cap is enforced at placement: placeOrder passes availableUsdc through to
+          // the SDK (userUSDCBalance), which deducts the real fee estimate from the
+          // order notional so "amount + fee_estimate <= balance" always holds.
           const maxAffordableSize =
             Math.floor(((available * CLOB_FEE_RESERVE) / params.price) * 10000) / 10000;
 
@@ -711,7 +711,8 @@ export async function executePurchase(
               price: params.price,
               size: effectiveSize,
               side: params.side,
-              orderType: params.orderType
+              orderType: params.orderType,
+              availableUsdc
             },
             logKey
           );

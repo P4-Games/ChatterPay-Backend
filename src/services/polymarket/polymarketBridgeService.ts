@@ -592,12 +592,14 @@ export async function executeBridge(
     // hardcodes maxPriorityFeePerGas=1.5 gwei in getFeeData(), which massively overpays on L2s.
     const gasPrice = await provider.getGasPrice();
 
-    // 5. Approve LiFi router to spend the source token if needed
+    // 5. Approve LiFi router to spend the source token if needed.
+    // Returns true when an approval tx was actually sent on-chain.
     let approveTransactionHash = '';
-    const approvalAddress = quote.estimate.approvalAddress;
+    const ensureAllowance = async (q: LifiQuoteResponse): Promise<boolean> => {
+      const approvalAddress = q.estimate.approvalAddress;
+      if (!approvalAddress || approvalAddress === ethers.constants.AddressZero) return false;
 
-    if (approvalAddress && approvalAddress !== ethers.constants.AddressZero) {
-      const fromTokenAddress = quote.action.fromToken.address;
+      const fromTokenAddress = q.action.fromToken.address;
       const tokenContract = new ethers.Contract(fromTokenAddress, erc20ABI, provider);
       const amountBN = ethers.BigNumber.from(sourceToken.fromAmount);
       const currentAllowance = await tokenContract.allowance(proxyAddress, approvalAddress);
@@ -607,38 +609,42 @@ export async function executeBridge(
         `${logKey} Current ${sourceToken.symbol} allowance for Li.Fi: ${ethers.utils.formatUnits(currentAllowance, sourceToken.decimals)}`
       );
 
-      if (currentAllowance.lt(amountBN)) {
-        Logger.log('info', fnLog, `${logKey} Approving LiFi router for ${sourceToken.symbol}`);
-
-        const approveCallData = tokenContract.interface.encodeFunctionData('approve', [
-          approvalAddress,
-          ethers.constants.MaxUint256
-        ]);
-
-        const approveTx = await chatterPayContract.execute(fromTokenAddress, 0, approveCallData, {
-          gasLimit: 200000,
-          gasPrice
-        });
-
-        const approveReceipt = await approveTx.wait();
-        if (approveReceipt.status !== 1) {
-          throw new Error('Bridge approval transaction failed');
-        }
-
-        approveTransactionHash = approveReceipt.transactionHash;
-        Logger.log('info', fnLog, `${logKey} Approval tx: ${approveTransactionHash}`);
-      } else {
+      if (currentAllowance.gte(amountBN)) {
         Logger.log('info', fnLog, `${logKey} Sufficient allowance for bridge, skipping approval`);
+        return false;
       }
-    }
 
-    // 6. Fund the proxy account with ETH if it needs to pay a native bridge fee
+      Logger.log('info', fnLog, `${logKey} Approving LiFi router for ${sourceToken.symbol}`);
+
+      const approveCallData = tokenContract.interface.encodeFunctionData('approve', [
+        approvalAddress,
+        ethers.constants.MaxUint256
+      ]);
+
+      const approveTx = await chatterPayContract.execute(fromTokenAddress, 0, approveCallData, {
+        gasLimit: 200000,
+        gasPrice
+      });
+
+      const approveReceipt = await approveTx.wait();
+      if (approveReceipt.status !== 1) {
+        throw new Error('Bridge approval transaction failed');
+      }
+
+      approveTransactionHash = approveReceipt.transactionHash;
+      Logger.log('info', fnLog, `${logKey} Approval tx: ${approveTransactionHash}`);
+      return true;
+    };
+
+    // 6. Fund the proxy account with ETH if it needs to pay a native bridge fee.
     // Li.Fi quotes may require native ETH (value) for protocol fees (e.g. Across).
     // The execute() function is non-payable (receives no ETH from caller),
     // but it forwards its internal balance to the destination.
-    const requiredValue = ethers.BigNumber.from(quote.transactionRequest.value || 0);
+    // Returns true when a funding tx was actually sent on-chain.
+    const ensureNativeFee = async (q: LifiQuoteResponse): Promise<boolean> => {
+      const requiredValue = ethers.BigNumber.from(q.transactionRequest.value || 0);
+      if (requiredValue.isZero()) return false;
 
-    if (requiredValue.gt(0)) {
       const proxyBalance = await provider.getBalance(proxyAddress);
       Logger.log(
         'info',
@@ -646,65 +652,107 @@ export async function executeBridge(
         `${logKey} Required bridge fee (ETH): ${ethers.utils.formatEther(requiredValue)}. Proxy balance: ${ethers.utils.formatEther(proxyBalance)}`
       );
 
-      if (proxyBalance.lt(requiredValue)) {
-        const missing = requiredValue.sub(proxyBalance);
-        // Add a small buffer for safety
-        const fundAmount = missing.add(ethers.utils.parseUnits('0.001', 'ether'));
+      if (proxyBalance.gte(requiredValue)) return false;
 
-        Logger.log(
-          'info',
-          fnLog,
-          `${logKey} Funding proxy with ${ethers.utils.formatEther(fundAmount)} ETH from backend`
-        );
-        const fundTx = await backendSigner.sendTransaction({
-          to: proxyAddress,
-          value: fundAmount,
-          gasLimit: 50000, // Increased from 21000 to handle contract receive logic
+      const missing = requiredValue.sub(proxyBalance);
+      // Add a small buffer for safety
+      const fundAmount = missing.add(ethers.utils.parseUnits('0.001', 'ether'));
+
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} Funding proxy with ${ethers.utils.formatEther(fundAmount)} ETH from backend`
+      );
+      const fundTx = await backendSigner.sendTransaction({
+        to: proxyAddress,
+        value: fundAmount,
+        gasLimit: 50000, // Increased from 21000 to handle contract receive logic
+        gasPrice
+      });
+      await fundTx.wait();
+      Logger.log('info', fnLog, `${logKey} Proxy funded successfully`);
+      return true;
+    };
+
+    const prepareQuote = async (q: LifiQuoteResponse): Promise<boolean> => {
+      const approved = await ensureAllowance(q);
+      const funded = await ensureNativeFee(q);
+      return approved || funded;
+    };
+
+    // 7. Execute the bridge transaction through the proxy wallet; throws on revert.
+    const sendBridgeTx = async (
+      q: LifiQuoteResponse
+    ): Promise<ethers.providers.TransactionReceipt> => {
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} Sending bridge transaction to ${q.transactionRequest.to}`
+      );
+      Logger.log(
+        'debug',
+        fnLog,
+        `${logKey} Bridge Request: ${JSON.stringify(q.transactionRequest)}`
+      );
+
+      // Use LiFi's recommended gasLimit + 15% buffer for proxy execute() overhead.
+      // LiFi complex routes (e.g. relaydepository) need 2M+ gas; 1M is insufficient.
+      const lifiGasLimit = q.transactionRequest.gasLimit
+        ? Math.ceil(Number(q.transactionRequest.gasLimit) * 1.15)
+        : 2_500_000;
+      const bridgeGasLimit = Math.max(lifiGasLimit, 1_000_000);
+
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} Bridge gasLimit: ${bridgeGasLimit} (LiFi recommends: ${q.transactionRequest.gasLimit ?? 'N/A'})`
+      );
+
+      const bridgeTx = await chatterPayContract.execute(
+        q.transactionRequest.to,
+        ethers.BigNumber.from(q.transactionRequest.value || 0),
+        q.transactionRequest.data,
+        {
+          gasLimit: bridgeGasLimit,
           gasPrice
-        });
-        await fundTx.wait();
-        Logger.log('info', fnLog, `${logKey} Proxy funded successfully`);
+        }
+      );
+
+      const receipt = await bridgeTx.wait();
+      if (receipt.status !== 1) {
+        throw new Error('Bridge transaction reverted');
       }
+      return receipt;
+    };
+
+    // LiFi quotes embed signed route data with a short validity window (Relay-style
+    // routes especially). If preparing the quote required on-chain txs (approval /
+    // ETH funding), the quote may already be expired by the time it executes —
+    // fetch a fresh one and prepare it again (now a no-op).
+    if (await prepareQuote(quote)) {
+      Logger.log(
+        'info',
+        fnLog,
+        `${logKey} On-chain prep txs sent — refreshing quote before execution`
+      );
+      ({ resolvedToken: sourceToken, lifiQuote: quote } = await buildQuote(sourceToken.symbol));
+      await prepareQuote(quote);
     }
 
-    // 7. Execute the bridge transaction through the proxy wallet
-    Logger.log(
-      'info',
-      fnLog,
-      `${logKey} Sending bridge transaction to ${quote.transactionRequest.to}`
-    );
-    Logger.log(
-      'debug',
-      fnLog,
-      `${logKey} Bridge Request: ${JSON.stringify(quote.transactionRequest)}`
-    );
-
-    // Use LiFi's recommended gasLimit + 15% buffer for proxy execute() overhead.
-    // LiFi complex routes (e.g. relaydepository) need 2M+ gas; 1M is insufficient.
-    const lifiGasLimit = quote.transactionRequest.gasLimit
-      ? Math.ceil(Number(quote.transactionRequest.gasLimit) * 1.15)
-      : 2_500_000;
-    const bridgeGasLimit = Math.max(lifiGasLimit, 1_000_000);
-
-    Logger.log(
-      'info',
-      fnLog,
-      `${logKey} Bridge gasLimit: ${bridgeGasLimit} (LiFi recommends: ${quote.transactionRequest.gasLimit ?? 'N/A'})`
-    );
-
-    const bridgeTx = await chatterPayContract.execute(
-      quote.transactionRequest.to,
-      requiredValue,
-      quote.transactionRequest.data,
-      {
-        gasLimit: bridgeGasLimit,
-        gasPrice
-      }
-    );
-
-    const bridgeReceipt = await bridgeTx.wait();
-    if (bridgeReceipt.status !== 1) {
-      throw new Error('Bridge transaction reverted');
+    let bridgeReceipt: ethers.providers.TransactionReceipt;
+    try {
+      bridgeReceipt = await sendBridgeTx(quote);
+    } catch (sendError) {
+      // On-chain revert — typically stale/expired route data or source-swap
+      // slippage. Retry once with a completely fresh quote.
+      Logger.log(
+        'warn',
+        fnLog,
+        `${logKey} Bridge tx failed (${String(sendError)}) — retrying once with a fresh quote`
+      );
+      ({ resolvedToken: sourceToken, lifiQuote: quote } = await buildQuote(sourceToken.symbol));
+      await prepareQuote(quote);
+      bridgeReceipt = await sendBridgeTx(quote);
     }
 
     const txHash = bridgeReceipt.transactionHash;
