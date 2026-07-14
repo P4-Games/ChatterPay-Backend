@@ -319,10 +319,24 @@ export const polymarketGetEvents = async (
       )
     ]);
 
-    // Deduplicate: remove country events from the regular list, then prepend them
+    // Deduplicate: remove country events from the regular list, then prepend them.
+    // Gamma's /public-search returns SLIMMED event objects (no `teams`, among
+    // others), so for duplicates prefer the full object from the regular list,
+    // and hydrate the rest via the by-slug endpoint (cached) — otherwise sports
+    // events lose their team flags whenever they match the country query.
     const countryEventIds = new Set(countryEvents.map((e) => e.id));
+    const regularById = new Map(regularEvents.map((e) => [e.id, e]));
+    const hydratedCountryEvents = await Promise.all(
+      countryEvents.map(async (e) => {
+        const full = regularById.get(e.id);
+        if (full) return full;
+        if (!e.slug) return e;
+        const bySlug = await getEventBySlug(e.slug, logKey).catch(() => null);
+        return bySlug ?? e;
+      })
+    );
     const dedupedRegular = regularEvents.filter((e) => !countryEventIds.has(e.id));
-    const events = [...countryEvents, ...dedupedRegular];
+    const events = [...hydratedCountryEvents, ...dedupedRegular];
 
     return successReply(reply, { events });
   } catch (error) {
