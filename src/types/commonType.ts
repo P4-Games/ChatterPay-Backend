@@ -163,6 +163,7 @@ export enum CacheNames {
   NOTIFICATION = 'notificationTemplateCache',
   TOR = 'torCache',
   COINGECKO = 'coingeckoCache',
+  FIAT = 'fiatCache',
   ERC20 = 'erc20',
   CHATTERPOINTS_WORDS = 'chatterpoints_words'
 }

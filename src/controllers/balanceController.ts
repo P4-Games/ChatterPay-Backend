@@ -7,6 +7,7 @@ import { NotificationEnum } from '../models/templateModel';
 import type { IToken } from '../models/tokenModel';
 import type { IUser, IUserWallet } from '../models/userModel';
 import { getAddressBalanceWithNfts } from '../services/balanceService';
+import { getFiatQuotes } from '../services/criptoya/criptoYaService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { getNotificationTemplate } from '../services/notificationService';
 import { getPolymarketBalanceSummary } from '../services/polymarket';
@@ -52,10 +53,17 @@ async function enrichWithPolymarketBalances(
 
     data.polymarket = { idle_usdc, positions_value, total_usd };
 
-    // Add Polymarket total to USD totals
+    // Add Polymarket total to every currency total, not just USD — otherwise the
+    // fiat totals (ARS/BRL/UYU) exclude Polymarket while USD includes it, and any
+    // client deriving a conversion rate from the totals gets a skewed result.
     if (data.totals) {
       const USD = 'USD' as const satisfies Currency;
       data.totals[USD] = (data.totals[USD] ?? 0) + total_usd;
+
+      const fiatQuotes = await getFiatQuotes();
+      fiatQuotes.forEach(({ currency, rate }) => {
+        data.totals[currency] = (data.totals[currency] ?? 0) + total_usd * rate;
+      });
     }
   } catch (error) {
     Logger.log(

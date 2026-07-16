@@ -271,6 +271,9 @@ export const CACHE_TOR_CHECK_PERIOD = 3700; // 62 min
 export const CACHE_COINGECKO_TTL = 60; // 1 min
 export const CACHE_COINGECKO_CHECK_PERIOD = 120; // 2 min
 
+export const CACHE_FIAT_TTL = 60; // 1 min
+export const CACHE_FIAT_CHECK_PERIOD = 120; // 2 min
+
 export const CACHE_ERC20_DATA_TTL = 432000; // 5 days
 export const CACHE_ERC20_DATA_CHECK_PERIOD = 518400; // 6 days
 

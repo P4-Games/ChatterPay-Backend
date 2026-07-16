@@ -1085,7 +1085,9 @@ export async function getPnlHistory(
  *   the value of resolved-and-won positions not yet redeemed. This is the total the
  *   user can sweep to Scroll, so the front can surface it and trigger a withdrawal.
  *   Also checks safeAddress (deposit wallet users may have stranded funds there).
- * - positions_value: total current value of all active positions (in USD)
+ * - positions_value: total current value of active positions (in USD), excluding
+ *   resolved-won positions — those are either counted in idle_usdc (claimable) or
+ *   already redeemed (their payout is in the wallet), never in both buckets.
  *
  * This is best-effort: failures return zeroes so the balance endpoint stays resilient.
  *
@@ -1123,38 +1125,49 @@ export async function getPolymarketBalanceSummary(
     ]);
 
     const onchain_idle = stableBalances.reduce((sum, b) => sum + b.value, 0);
-    const positions_value = positions.reduce((sum, p) => sum + (p.currentValue || 0), 0);
 
     // Positions with curPrice >= 0.999 are in resolved markets where the user won.
-    // Only include them in idle_usdc if:
-    //   1. The deposit wallet actually holds the on-chain CTF tokens (balance > 0)
-    //   2. The CTF oracle has finalized the outcome on-chain (payoutDenominator > 0)
-    // The CLOB API keeps showing historical positions even after they've been
-    // settled/redeemed AND even before the oracle has run, so without both checks
-    // the balance inflates and the button shows forever.
+    // Each must land in exactly ONE bucket, or totals double-count:
+    //   - oracle finalized (payoutDenominator > 0) + CTF tokens held → claimable
+    //     cash: goes to idle_usdc, excluded from positions_value.
+    //   - oracle finalized + tokens gone → claim already done or in-flight; the
+    //     payout sits in the wallet's stablecoin balance (onchain_idle), so the
+    //     position counts NOWHERE. The Data API keeps listing it for a while
+    //     after redemption, which otherwise inflates the total during a claim.
+    //   - oracle not run yet → still just an active position (positions_value).
     const ctfAbi = [
       'function balanceOf(address, uint256) view returns (uint256)',
       'function payoutDenominator(bytes32) view returns (uint256)'
     ];
     const ctf = new ethers.Contract(CTF_ADDRESS, ctfAbi, provider);
     const winningCandidates = positions.filter((p) => (p.curPrice ?? 0) >= 0.999);
-    const winningWithBalance = (
-      await Promise.all(
-        winningCandidates.map(async (p) => {
-          try {
-            const [bal, denom]: [ethers.BigNumber, ethers.BigNumber] = await Promise.all([
-              ctf.balanceOf(polygonAddress, p.asset),
-              ctf.payoutDenominator(p.conditionId)
-            ]);
-            return bal.isZero() || denom.isZero() ? null : p;
-          } catch {
-            return p; // RPC failure — optimistically include
-          }
-        })
-      )
-    ).filter((p): p is DataPosition => p !== null);
+    const classified = await Promise.all(
+      winningCandidates.map(async (p) => {
+        try {
+          const [bal, denom]: [ethers.BigNumber, ethers.BigNumber] = await Promise.all([
+            ctf.balanceOf(polygonAddress, p.asset),
+            ctf.payoutDenominator(p.conditionId)
+          ]);
+          if (denom.isZero()) return { position: p, bucket: 'active' as const };
+          return {
+            position: p,
+            bucket: bal.isZero() ? ('settled' as const) : ('redeemable' as const)
+          };
+        } catch {
+          return { position: p, bucket: 'redeemable' as const }; // RPC failure — optimistically claimable
+        }
+      })
+    );
 
-    const redeemable = winningWithBalance.reduce((sum, p) => sum + (p.currentValue || 0), 0);
+    const sumValues = (items: { position: DataPosition }[]): number =>
+      items.reduce((sum, item) => sum + (item.position.currentValue || 0), 0);
+
+    const redeemableItems = classified.filter((c) => c.bucket === 'redeemable');
+    const redeemable = sumValues(redeemableItems);
+    const notActive = sumValues(classified.filter((c) => c.bucket !== 'active'));
+
+    const positions_value =
+      positions.reduce((sum, p) => sum + (p.currentValue || 0), 0) - notActive;
 
     const idle_usdc = onchain_idle + redeemable;
 
@@ -1165,7 +1178,7 @@ export async function getPolymarketBalanceSummary(
         .map((b) => `${b.symbol}: $${b.value.toFixed(2)}`)
         .join(
           ', '
-        )}), redeemable: $${redeemable.toFixed(2)} (${winningWithBalance.length}/${winningCandidates.length} winning have on-chain balance), positions: $${positions_value.toFixed(2)}`
+        )}), redeemable: $${redeemable.toFixed(2)} (${redeemableItems.length}/${winningCandidates.length} winning claimable), positions: $${positions_value.toFixed(2)}`
     );
 
     return { idle_usdc, positions_value };
