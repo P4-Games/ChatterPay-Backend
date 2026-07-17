@@ -1028,7 +1028,7 @@ export async function claimWinningPositions(
   privateKey: string,
   logKey: string,
   onlyConditionId?: string
-): Promise<{ claimed: number; txHash?: string }> {
+): Promise<{ claimed: number; txHash?: string; pendingResolution?: boolean }> {
   const fnLog = `[${LOG_PREFIX}:claimWinningPositions]`;
 
   if (!user.polymarket_account) throw new Error('No Polymarket account');
@@ -1065,6 +1065,12 @@ export async function claimWinningPositions(
 
   Logger.log('info', fnLog, `${logKey} Found ${winning.length} winning position(s)`);
 
+  // Tracks whether any winning-priced position was skipped specifically because the
+  // CTF oracle hasn't finalized yet, as opposed to unknown outcome / already redeemed.
+  // Lets the caller tell "market pending resolution" apart from "nothing to claim",
+  // which otherwise surface as the same confusing `claimed: 0`.
+  let pendingResolution = false;
+
   const toRedeem = (
     await Promise.all(
       winning.map(async (p) => {
@@ -1088,6 +1094,7 @@ export async function claimWinningPositions(
         // redeemPositions() reverts silently, burning gas and recording a phantom claim.
         const resolved = await isCtfMarketResolved(p.conditionId, logKey);
         if (!resolved) {
+          pendingResolution = true;
           Logger.log(
             'warn',
             fnLog,
@@ -1156,7 +1163,7 @@ export async function claimWinningPositions(
   if (toRedeem.length === 0) {
     // Nothing newly redeemable, but prior-run proceeds may still be idle — sweep.
     sweepProceeds();
-    return { claimed: 0 };
+    return { claimed: 0, pendingResolution };
   }
 
   const txHash = await executeRedeemPositions(privateKey, polygonAddress, toRedeem, logKey);

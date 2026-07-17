@@ -126,10 +126,15 @@ const LOG_PREFIX = 'polymarketController';
 // ============================================================================
 
 /** Standard error response */
-function errorReply(reply: FastifyReply, statusCode: number, message: string): FastifyReply {
+function errorReply(
+  reply: FastifyReply,
+  statusCode: number,
+  message: string,
+  code?: string
+): FastifyReply {
   return reply.status(statusCode).send({
     status: 'error',
-    data: { message },
+    data: code ? { message, code } : { message },
     timestamp: new Date().toISOString()
   });
 }
@@ -756,6 +761,18 @@ export const polymarketPlaceOrder = async (
             withdrawal_pending: true,
             message: `Market appears resolved. Claimed ${claimResult.claimed} winning position(s). Proceeds are being withdrawn to Scroll.`
           });
+        }
+        if (claimResult.pendingResolution) {
+          // The market is closed but the CTF oracle hasn't finalized yet: nothing
+          // to sell (no order book) and nothing to claim (not resolved on-chain).
+          // Surface that explicitly instead of the raw CLOB rejection.
+          await recordOrderFailed(orderTrx, 'Market pending resolution');
+          return errorReply(
+            reply,
+            409,
+            'This market has closed and is awaiting final resolution on-chain. It cannot be sold or claimed until Polymarket finalizes the outcome — this typically takes a few hours to a few days. Try again later.',
+            'MARKET_PENDING_RESOLUTION'
+          );
         }
       }
       throw orderError;
@@ -1561,17 +1578,21 @@ export const polymarketPurchase = async (
             message: `Market appears resolved. Claimed ${claimResult.claimed} winning position(s). Proceeds are being withdrawn to Scroll.`
           });
         }
+        const pendingMsg = claimResult.pendingResolution
+          ? 'This market has closed and is awaiting final resolution on-chain. It cannot be sold or claimed until Polymarket finalizes the outcome — this typically takes a few hours to a few days. Try again later.'
+          : `Price ${price} suggests a resolved market but no claimable winning positions were found.`;
         await updatePurchaseStatus(
           claimPurchaseId,
           'failed',
           'done',
-          { error: 'No claimable winning positions found' },
+          { error: pendingMsg },
           logKey
         );
         return errorReply(
           reply,
-          400,
-          `Price ${price} suggests a resolved market but no claimable winning positions were found.`
+          claimResult.pendingResolution ? 409 : 400,
+          pendingMsg,
+          claimResult.pendingResolution ? 'MARKET_PENDING_RESOLUTION' : undefined
         );
       } catch (claimError) {
         const errMsg = String(claimError);

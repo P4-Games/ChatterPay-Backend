@@ -6,8 +6,10 @@ import {
   polymarketPurchase,
   polymarketSendTerms
 } from '../../src/controllers/polymarketController';
+import * as mongoPolymarketService from '../../src/services/mongo/mongoPolymarketService';
 import * as notificationService from '../../src/services/notificationService';
 import * as polymarketService from '../../src/services/polymarket';
+import * as polymarketPurchaseService from '../../src/services/polymarket/polymarketPurchaseService';
 import * as userService from '../../src/services/userService';
 
 // Mock config
@@ -29,10 +31,37 @@ vi.mock('../../src/helpers/validationHelper', () => ({
 vi.mock('../../src/services/polymarket', () => ({
   getCurrentTerms: vi.fn(),
   hasAcceptedCurrentTerms: vi.fn(),
+  getMarketByClobTokenId: vi.fn(),
   MIN_BUY_ORDER_USD: 1.5,
   POLYMARKET_MIN_PRICE: 0.001,
   POLYMARKET_MAX_PRICE: 0.999,
   BRIDGE_FEE_BUFFER: 1.02
+}));
+
+vi.mock('../../src/services/polymarket/polymarketPurchaseService', () => ({
+  claimWinningPositions: vi.fn(),
+  executePurchase: vi.fn()
+}));
+
+vi.mock('../../src/services/mongo/mongoPolymarketService', () => ({
+  createOrder: vi.fn(),
+  createPurchase: vi.fn(),
+  getActivePurchases: vi.fn(),
+  getPendingOrders: vi.fn(),
+  getPurchaseById: vi.fn(),
+  updatePurchaseStatus: vi.fn()
+}));
+
+vi.mock('../../src/services/mongo/mongoBlockchainService', () => ({
+  mongoBlockchainService: {
+    getNetworkConfig: vi.fn().mockResolvedValue({ chainId: 534351 })
+  }
+}));
+
+vi.mock('../../src/services/secService', () => ({
+  secService: {
+    get_up: vi.fn().mockReturnValue('mock-private-key')
+  }
 }));
 
 vi.mock('../../src/services/userService', () => ({
@@ -275,6 +304,85 @@ describe('polymarketController - Terms and Conditions Endpoints', () => {
       const result = await polymarketPurchase(makeRequest(0.5, 3), mockReply);
 
       expect((result as any).data.message).not.toContain('below the $1.50 minimum');
+    });
+  });
+
+  describe('polymarketPurchase - SELL at boundary price (market resolution states)', () => {
+    const mockUser = {
+      phone_number: '5491122334455',
+      settings: { notifications: { language: 'en' } },
+      wallets: [{ wallet_proxy: '0xProxy' }],
+      polymarket_account: { polygon_address: '0xPolygon' }
+    };
+
+    const makeReply = (): FastifyReply =>
+      ({
+        status: vi.fn().mockReturnThis(),
+        send: vi.fn().mockImplementation((val) => val)
+      }) as unknown as FastifyReply;
+
+    const makeSellRequest = (price: number) =>
+      ({
+        body: {
+          channel_user_id: '5491122334455',
+          token_id: 'token-123',
+          price,
+          size: 10,
+          side: 'SELL'
+        }
+      }) as unknown as FastifyRequest<{ Body: any }>;
+
+    beforeEach(() => {
+      vi.mocked(userService.getUser).mockResolvedValue(mockUser as any);
+      vi.mocked(polymarketService.hasAcceptedCurrentTerms).mockReturnValue(true);
+      vi.mocked(polymarketService.getMarketByClobTokenId).mockResolvedValue({
+        conditionId: '0xCondition'
+      } as any);
+      vi.mocked(mongoPolymarketService.createPurchase).mockResolvedValue({} as any);
+      vi.mocked(mongoPolymarketService.updatePurchaseStatus).mockResolvedValue({} as any);
+    });
+
+    it('claims and succeeds when the market has resolved on-chain', async () => {
+      vi.mocked(polymarketPurchaseService.claimWinningPositions).mockResolvedValueOnce({
+        claimed: 1,
+        txHash: '0xhash'
+      });
+
+      const result = await polymarketPurchase(makeSellRequest(0.9995), makeReply());
+
+      expect(result).toMatchObject({ status: 'success', data: { claimed: 1 } });
+    });
+
+    it('returns a clear MARKET_PENDING_RESOLUTION error when the market is closed but not yet resolved on-chain', async () => {
+      vi.mocked(polymarketPurchaseService.claimWinningPositions).mockResolvedValueOnce({
+        claimed: 0,
+        pendingResolution: true
+      });
+
+      const mockReply = makeReply();
+      const result = await polymarketPurchase(makeSellRequest(0.9995), mockReply);
+
+      expect(mockReply.status).toHaveBeenCalledWith(409);
+      expect(result).toMatchObject({
+        status: 'error',
+        data: { code: 'MARKET_PENDING_RESOLUTION' }
+      });
+      expect((result as any).data.message).toContain('awaiting final resolution');
+      expect((result as any).data.message).not.toContain('no claimable winning positions');
+    });
+
+    it('falls back to the generic message when nothing is claimable and the market is not pending resolution', async () => {
+      vi.mocked(polymarketPurchaseService.claimWinningPositions).mockResolvedValueOnce({
+        claimed: 0,
+        pendingResolution: false
+      });
+
+      const mockReply = makeReply();
+      const result = await polymarketPurchase(makeSellRequest(0.9995), mockReply);
+
+      expect(mockReply.status).toHaveBeenCalledWith(400);
+      expect((result as any).data.code).toBeUndefined();
+      expect((result as any).data.message).toContain('no claimable winning positions were found');
     });
   });
 });
