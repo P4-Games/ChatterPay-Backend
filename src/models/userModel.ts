@@ -2,6 +2,15 @@ import { type Document, model, Schema } from 'mongoose';
 
 import { DEFAULT_CHAIN_ID, SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT } from '../config/constants';
 
+export interface IPolymarketAccount {
+  polygon_address: string;
+  api_credentials_encrypted: string;
+  terms_accepted_version: number;
+  terms_accepted_at: Date | null;
+  created_at: Date;
+  wallet_type: 'safe' | 'deposit';
+}
+
 export interface IUserWallet {
   wallet_proxy: string;
   wallet_eoa: string;
@@ -66,6 +75,7 @@ export interface IUser extends Document {
   telegram_id?: string;
   referral_code?: string;
   referral_by_code?: string;
+  polymarket_account?: IPolymarketAccount;
 }
 
 const walletSchema = new Schema<IUserWallet>(
@@ -151,7 +161,20 @@ const userSchema = new Schema<IUser>({
   chatterpoints_admin: { type: Boolean, required: false, default: false },
   telegram_id: { type: String, required: false, default: 0 },
   referral_code: { type: String, required: false, default: '' },
-  referral_by_code: { type: String, required: false, default: '' }
+  referral_by_code: { type: String, required: false, default: '' },
+  polymarket_account: {
+    type: {
+      polygon_address: { type: String, required: true },
+      api_credentials_encrypted: { type: String, required: true },
+      terms_accepted_version: { type: Number, required: false, default: 0 },
+      terms_accepted_at: { type: Date, required: false, default: null },
+      created_at: { type: Date, required: true, default: Date.now },
+      wallet_type: { type: String, enum: ['safe', 'deposit'], default: 'safe' }
+    },
+    required: false,
+    default: undefined,
+    _id: false
+  }
 });
 
 export const UserModel = model<IUser>('User', userSchema, 'users');

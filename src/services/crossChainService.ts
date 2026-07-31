@@ -197,6 +197,10 @@ export async function executeCrossChainTransfer(
             `Approving ${quote.estimate.approvalAddress} to spend tokens`
           );
 
+          // NOTE: Use getGasPrice() instead of getFeeData().gasPrice because ethers.js v5
+          // hardcodes maxPriorityFeePerGas=1.5 gwei in getFeeData(), which massively overpays on L2s.
+          const gasPrice = await provider.getGasPrice();
+
           const approveABI = ['function approve(address,uint256) returns (bool)'];
           const approveInterface = new ethers.utils.Interface(approveABI);
           const approveData = approveInterface.encodeFunctionData('approve', [

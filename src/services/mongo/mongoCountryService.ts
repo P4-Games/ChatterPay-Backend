@@ -78,7 +78,7 @@ export const mongoCountryService = {
   getCountryByPhoneNumber: async (phoneNumber: string): Promise<ICountry | null> => {
     const digits = phoneNumber.replace(/\D/g, '');
     try {
-      const countries = await CountryModel.find({}, { code: 1, phone_code: 1 }).lean();
+      const countries = await CountryModel.find({}, { code: 1, phone_code: 1, name: 1 }).lean();
       const sorted = countries.sort((a, b) => b.phone_code.length - a.phone_code.length);
       // @ts-expect-error
       return sorted.find((c) => digits.startsWith(c.phone_code)) ?? null;
