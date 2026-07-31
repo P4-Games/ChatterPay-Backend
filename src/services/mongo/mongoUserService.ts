@@ -437,5 +437,11 @@ export const mongoUserService = {
     return UserModel.findOne({
       'wallets.wallet_proxy': { $regex: new RegExp(`^${address}$`, 'i') }
     }).lean();
+  },
+
+  async getUserByPolymarketSafeInsensitive(address: string) {
+    return UserModel.findOne({
+      'polymarket_account.polygon_address': { $regex: new RegExp(`^${address}$`, 'i') }
+    }).lean();
   }
 };

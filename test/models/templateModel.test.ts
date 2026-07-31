@@ -289,6 +289,110 @@ it('should create and save a Template document successfully', async () => {
           pt: 'Erro ao verificar o PIN: erro interno.'
         }
       },
+      polymarket_account_created: {
+        title: {
+          en: 'Polymarket Account Created',
+          es: 'Cuenta de Polymarket Creada',
+          pt: 'Conta Polymarket Criada'
+        },
+        message: {
+          en: 'Your Polymarket account has been created.',
+          es: 'Tu cuenta de Polymarket fue creada.',
+          pt: 'Sua conta Polymarket foi criada.'
+        }
+      },
+      polymarket_order_placed: {
+        title: { en: 'Order Placed', es: 'Orden Ejecutada', pt: 'Ordem Colocada' },
+        message: {
+          en: 'Your order has been placed.',
+          es: 'Tu orden fue ejecutada.',
+          pt: 'Sua ordem foi colocada.'
+        }
+      },
+      polymarket_order_cancelled: {
+        title: { en: 'Order Cancelled', es: 'Orden Cancelada', pt: 'Ordem Cancelada' },
+        message: {
+          en: 'Your order has been cancelled.',
+          es: 'Tu orden fue cancelada.',
+          pt: 'Sua ordem foi cancelada.'
+        }
+      },
+      polymarket_order_failed: {
+        title: { en: 'Order Failed', es: 'Orden Fallida', pt: 'Ordem Falhou' },
+        message: {
+          en: 'Your order could not be placed.',
+          es: 'Tu orden no pudo ser ejecutada.',
+          pt: 'Sua ordem não pôde ser colocada.'
+        }
+      },
+      polymarket_terms_not_accepted: {
+        title: {
+          en: 'Terms Not Accepted',
+          es: 'Términos No Aceptados',
+          pt: 'Termos Não Aceitos'
+        },
+        message: {
+          en: 'Accept terms before trading.',
+          es: 'Aceptá los términos antes de operar.',
+          pt: 'Aceite os termos antes de negociar.'
+        }
+      },
+      polymarket_account_not_found: {
+        title: {
+          en: 'No Polymarket Account',
+          es: 'Sin Cuenta de Polymarket',
+          pt: 'Sem Conta Polymarket'
+        },
+        message: {
+          en: 'Create an account first.',
+          es: 'Creá una cuenta primero.',
+          pt: 'Crie uma conta primeiro.'
+        }
+      },
+      polymarket_bridge_initiated: {
+        title: { en: 'Bridge Initiated', es: 'Puente Iniciado', pt: 'Ponte Iniciada' },
+        message: {
+          en: 'Bridging USDC to Polygon.',
+          es: 'Transfiriendo USDC a Polygon.',
+          pt: 'Transferindo USDC para Polygon.'
+        }
+      },
+      polymarket_disabled: {
+        title: {
+          en: 'Polymarket Unavailable',
+          es: 'Polymarket No Disponible',
+          pt: 'Polymarket Indisponível'
+        },
+        message: {
+          en: 'Polymarket is currently disabled.',
+          es: 'Polymarket está deshabilitado.',
+          pt: 'Polymarket está desativado.'
+        }
+      },
+      polymarket_settlement_claimed: {
+        title: {
+          en: 'Settlement Claimed',
+          es: 'Liquidación Reclamada',
+          pt: 'Liquidação Reivindicada'
+        },
+        message: {
+          en: 'Your sell has settled!',
+          es: 'Tu venta se liquidó!',
+          pt: 'Sua venda foi liquidada!'
+        }
+      },
+      polymarket_terms_request: {
+        title: {
+          en: 'Polymarket Terms',
+          es: 'Términos de Polymarket',
+          pt: 'Termos da Polymarket'
+        },
+        message: {
+          en: 'To place predictions on Polymarket you must accept their Terms of Service (v{0}). Read them at: {1}',
+          es: 'Para realizar predicciones en Polymarket debes aceptar sus Términos de Servicio (v{0}). Léelos en: {1}',
+          pt: 'Para fazer previsões no Polymarket você deve aceitar os Termos de Serviço (v{0}). Leia-os em: {1}'
+        }
+      },
       operation_in_progress: {
         title: {
           en: 'ChatterPay: Operation in progress',
@@ -311,6 +415,81 @@ it('should create and save a Template document successfully', async () => {
           en: "A wallet linked to your phone number hasn't been created yet. Please create one to continue with the operation.",
           es: 'Aún no se creó una wallet vinculada a tu número de teléfono. Por favor, creá una para continuar con la operación.',
           pt: 'Uma carteira vinculada ao seu número de telefone ainda não foi criada. Por favor, crie uma para continuar com a operação.'
+        }
+      },
+      wallet_creation_intro: {
+        title: {
+          en: 'Wallet Created!',
+          es: '¡Billetera Creada!',
+          pt: 'Carteira Criada!'
+        },
+        message: {
+          en: 'Your wallet was successfully created and linked to your WhatsApp number!',
+          es: '¡Tu wallet fue creada y vinculada a tu número de WhatsApp con éxito!',
+          pt: 'Sua carteira foi criada e vinculada ao seu número do WhatsApp com sucesso!'
+        }
+      },
+      wallet_already_exists_intro: {
+        title: {
+          en: 'Your Wallet',
+          es: 'Tu Billetera',
+          pt: 'Sua Carteira'
+        },
+        message: {
+          en: 'You already have a wallet linked to your WhatsApp number.',
+          es: 'Ya tienes una wallet vinculada a tu número de WhatsApp.',
+          pt: 'Você já tem uma carteira vinculada ao seu número do WhatsApp.'
+        }
+      },
+      deposit_from_other_networks: {
+        title: {
+          en: 'Deposit from other networks',
+          es: 'Depositar desde otras redes',
+          pt: 'Depositar de outras redes'
+        },
+        message: {
+          en: 'Deposit from Ethereum, Bitcoin, Solana, Polygon, Arbitrum and more.',
+          es: 'Depositá desde Ethereum, Bitcoin, Solana, Polygon, Arbitrum y más.',
+          pt: 'Deposite de Ethereum, Bitcoin, Solana, Polygon, Arbitrum e mais.'
+        },
+        footer: {
+          en: 'ChatterPay Beta',
+          es: 'ChatterPay Beta',
+          pt: 'ChatterPay Beta'
+        },
+        button: {
+          en: 'Deposit Now',
+          es: 'Depositar Ahora',
+          pt: 'Depositar Agora'
+        }
+      },
+      deposit_info_intro: {
+        title: {
+          en: 'Deposit Info',
+          es: 'Información de Depósito',
+          pt: 'Informações de Depósito'
+        },
+        message: {
+          en: 'Deposit information message.',
+          es: 'Mensaje de información de depósito.',
+          pt: 'Mensagem de informações de depósito.'
+        }
+      },
+      wallet_next_steps: {
+        title: {
+          en: 'What would you like to do?',
+          es: '¿Qué te gustaría hacer?',
+          pt: 'O que você gostaria de fazer?'
+        },
+        message: {
+          en: 'Next steps message.',
+          es: 'Mensaje de próximos pasos.',
+          pt: 'Mensagem de próximos passos.'
+        },
+        footer: {
+          en: 'ChatterPay',
+          es: 'ChatterPay',
+          pt: 'ChatterPay'
         }
       }
     }

@@ -9,6 +9,8 @@ import {
   CACHE_COINGECKO_TTL,
   CACHE_ERC20_DATA_CHECK_PERIOD,
   CACHE_ERC20_DATA_TTL,
+  CACHE_FIAT_CHECK_PERIOD,
+  CACHE_FIAT_TTL,
   CACHE_NOTIFICATION_CHECK_PERIOD,
   CACHE_NOTIFICATION_TTL,
   CACHE_OPENSEA_CHECK_PERIOD,
@@ -36,6 +38,7 @@ const TTL_CONFIG = {
     stdTTL: CACHE_COINGECKO_TTL,
     checkperiod: CACHE_COINGECKO_CHECK_PERIOD
   },
+  [CacheNames.FIAT]: { stdTTL: CACHE_FIAT_TTL, checkperiod: CACHE_FIAT_CHECK_PERIOD },
   [CacheNames.ERC20]: { stdTTL: CACHE_ERC20_DATA_TTL, checkperiod: CACHE_ERC20_DATA_CHECK_PERIOD },
   [CacheNames.CHATTERPOINTS_WORDS]: {
     stdTTL: CACHE_CHATTERPOINTS_WORDS_TTL,
@@ -50,6 +53,7 @@ const caches: Record<CacheNames, NodeCache> = {
   [CacheNames.NOTIFICATION]: new NodeCache(TTL_CONFIG[CacheNames.NOTIFICATION]),
   [CacheNames.TOR]: new NodeCache(TTL_CONFIG[CacheNames.TOR]),
   [CacheNames.COINGECKO]: new NodeCache(TTL_CONFIG[CacheNames.COINGECKO]),
+  [CacheNames.FIAT]: new NodeCache(TTL_CONFIG[CacheNames.FIAT]),
   [CacheNames.ERC20]: new NodeCache(TTL_CONFIG[CacheNames.ERC20]),
   [CacheNames.CHATTERPOINTS_WORDS]: new NodeCache(TTL_CONFIG[CacheNames.CHATTERPOINTS_WORDS])
 };

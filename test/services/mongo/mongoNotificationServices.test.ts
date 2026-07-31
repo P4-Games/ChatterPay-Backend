@@ -3,7 +3,7 @@ import NotificationModel from '../../../src/models/notificationModel';
 import { mongoNotificationService } from '../../../src/services/mongo/mongoNotificationServices';
 
 describe('mongoNotificationServices', () => {
-  const phoneNumber = '5492233049354';
+  const phoneNumber = '5492231111111';
   const otherPhoneNumber = '5491100000000';
 
   beforeEach(async () => {
