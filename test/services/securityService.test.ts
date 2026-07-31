@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { SECURITY_PIN_MAX_FAILED_ATTEMPTS } from '../../src/config/constants';
-import { TemplateType } from '../../src/models/templateModel';
+import { NotificationEnum, TemplateType } from '../../src/models/templateModel';
 import { UserModel } from '../../src/models/userModel';
 import { securityService } from '../../src/services/securityService';
 
@@ -22,41 +22,12 @@ describe('securityService', () => {
       message: { en: 'Test message', es: 'Mensaje de prueba', pt: 'Mensagem de teste' }
     };
 
+    const notifications = Object.fromEntries(
+      Object.values(NotificationEnum).map((key) => [key, mockNotification])
+    );
+
     await TemplateType.create({
-      notifications: {
-        incoming_transfer: mockNotification,
-        incoming_transfer_w_note: mockNotification,
-        incoming_transfer_external: mockNotification,
-        swap: mockNotification,
-        mint: mockNotification,
-        outgoing_transfer: mockNotification,
-        wallet_creation: mockNotification,
-        wallet_already_exists: mockNotification,
-        user_balance_not_enough: mockNotification,
-        no_valid_blockchain_conditions: mockNotification,
-        concurrent_operation: mockNotification,
-        internal_error: mockNotification,
-        daily_limit_reached: mockNotification,
-        amount_outside_limits: mockNotification,
-        aave_supply_created: mockNotification,
-        aave_supply_modified: mockNotification,
-        aave_supply_info: mockNotification,
-        aave_supply_info_no_data: mockNotification,
-        chatterpoints_operation: mockNotification,
-        wallet_creation_intro: mockNotification,
-        wallet_already_exists_intro: mockNotification,
-        deposit_from_other_networks: mockNotification,
-        deposit_info_intro: mockNotification,
-        wallet_next_steps: mockNotification,
-        cross_chain_disabled: mockNotification,
-        pin_blocked: mockNotification,
-        pin_not_set: mockNotification,
-        pin_invalid_remaining_attempts: mockNotification,
-        pin_verified_success: mockNotification,
-        pin_internal_error: mockNotification,
-        operation_in_progress: mockNotification,
-        wallet_not_created: mockNotification
-      },
+      notifications,
       security_questions: {
         pet_name: {
           en: "What is your pet's name?",

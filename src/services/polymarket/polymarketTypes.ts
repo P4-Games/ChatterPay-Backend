@@ -21,7 +21,19 @@ export interface GammaMarket {
   endDate: string;
   image: string;
   icon: string;
+  /**
+   * Full resolution rules for the market (e.g. sports markets: "This market
+   * refers only to the outcome within the first 90 minutes of regular play
+   * plus stoppage time."). This is the text to surface as the market's
+   * conditions in the UI.
+   */
   description: string;
+  /**
+   * Short outcome label within the parent event's group (e.g. "England",
+   * "Argentina", "Draw (England vs. Argentina)"). Cleaner than `question`
+   * for rendering event sub-markets.
+   */
+  groupItemTitle?: string;
   outcomes: string;
   outcomePrices: string;
   volume: string;
@@ -39,6 +51,33 @@ export interface GammaMarket {
   lastTradePrice: number;
   oneDayPriceChange: number;
   negRiskOther: boolean;
+}
+
+/**
+ * Team metadata attached to Gamma sports events. `logo` is the team flag/crest
+ * Polymarket's own UI composes for the event thumbnail — the event-level
+ * `image`/`icon` on sports events is just the generic sport image (e.g. a
+ * soccer ball), so UIs should prefer these logos when present.
+ */
+export interface GammaEventTeam {
+  id: number;
+  name: string;
+  league: string;
+  record: string;
+  logo: string;
+  abbreviation: string;
+  /** Team accent color (hex) */
+  color: string;
+  /** Side within the fixture: 'home' | 'away' */
+  ordering: string;
+}
+
+/** Sport metadata on Gamma sports events (source of the generic event image) */
+export interface GammaEventSport {
+  id: number;
+  sport: string;
+  image: string;
+  resolution: string;
 }
 
 /** Gamma API event response */
@@ -59,6 +98,21 @@ export interface GammaEvent {
   enableNegRisk: boolean;
   commentCount: number;
   volume24hr?: string | number;
+  /** Present on sports events — team names, flags/crests, colors */
+  teams?: GammaEventTeam[];
+  /** Present on sports events */
+  sport?: GammaEventSport;
+  /**
+   * Gamma hint: when false (sports events), per-market images are generic
+   * placeholders and should not be rendered — use `teams[].logo` instead.
+   */
+  showMarketImages?: boolean;
+  /** Fixture date (YYYY-MM-DD), sports events only */
+  eventDate?: string;
+  /** Fixture kickoff time (ISO), sports events only */
+  startTime?: string;
+  /** Slug of the series the event belongs to (e.g. 'soccer-fifwc') */
+  seriesSlug?: string;
 }
 
 /** Gamma API category response */
@@ -178,13 +232,27 @@ export interface DataPosition {
   curPrice: number;
   currentValue: number;
   initialValue: number;
+  /** Total USDC spent acquiring this position (cost basis). */
+  totalBought?: number;
+  /** UNREALIZED P&L on tokens still held. Drops to 0 once a position is fully exited. */
   cashPnl: number;
   percentPnl: number;
+  /** REALIZED P&L from the portion already sold or redeemed. Holds the profit of a
+   *  redeemed winner, where cashPnl is 0 because no tokens remain. */
+  realizedPnl?: number;
+  percentRealizedPnl?: number;
   proxyWalletAddress: string;
   size: number;
   avgPrice: number;
   outcome: string;
   market: DataMarketInfo;
+  /**
+   * Set by the Data API once the market has resolved on-chain — true for both
+   * winning positions (curPrice ≈ 1, claimable) and losing ones (curPrice ≈ 0).
+   * Open markets always report false. Used to split resolved-lost positions out
+   * of the active list and into closed.
+   */
+  redeemable?: boolean;
 }
 
 /** Minimal market info embedded in Data API responses */
@@ -226,7 +294,8 @@ export interface DataTrade {
   conditionId: string;
   size: string;
   price: string;
-  timestamp: string;
+  /** UNIX epoch in SECONDS (not milliseconds) */
+  timestamp: number;
   title: string;
   slug: string;
   icon: string;
@@ -236,12 +305,23 @@ export interface DataTrade {
   transactionHash: string;
 }
 
+/** Time range accepted by the user-pnl API */
+export type PnlInterval = '1d' | '1w' | '1m' | 'all';
+
+/** Raw point returned by the user-pnl API: t = epoch seconds, p = P&L in USD */
+export interface UserPnlApiPoint {
+  t: number;
+  p: number;
+}
+
 /** A single point in the PNL history time series */
 export interface PnlHistoryPoint {
+  /** ISO 8601 timestamp */
   timestamp: string;
+  /** Mark-to-market P&L in USD (realized + unrealized) */
   cumulativePnl: number;
-  totalInvested: number;
-  totalProceeds: number;
+  totalInvested?: number;
+  totalProceeds?: number;
 }
 
 /** Query parameters for the /trades endpoint */
@@ -288,4 +368,10 @@ export interface PlaceOrderParams {
   size: number;
   side: 'BUY' | 'SELL';
   orderType?: 'GTC' | 'FOK' | 'GTD';
+  /**
+   * Available collateral in human USD (on-chain balance minus funds committed to
+   * in-flight orders). When set, it caps the balance passed to the CLOB SDK so the
+   * order amount is auto-reduced to cover the CLOB fee estimate.
+   */
+  availableUsdc?: number;
 }

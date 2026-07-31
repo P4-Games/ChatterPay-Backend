@@ -74,6 +74,18 @@ export async function createOrder(data: {
   });
 }
 
+/** Attach the resolved market slug to an order (background enrichment). Non-throwing. */
+export async function updateOrderSlug(orderId: string, slug: string): Promise<void> {
+  try {
+    await PolymarketOrderModel.findOneAndUpdate(
+      { order_id: orderId },
+      { $set: { market_slug: slug, updated_at: new Date() } }
+    );
+  } catch {
+    // best-effort
+  }
+}
+
 /** Update order status */
 export async function updateOrderStatus(
   orderId: string,

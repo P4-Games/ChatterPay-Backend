@@ -25,7 +25,6 @@ import type {
   GammaCategory,
   GammaEvent,
   GammaMarket,
-  GammaSearchResult,
   MarketQueryParams
 } from './polymarketTypes';
 
@@ -130,10 +129,73 @@ export async function getMarketBySlug(slug: string, logKey: string): Promise<Gam
       return response.data[0];
     }
 
+    // Gamma's /markets endpoint defaults to closed=false, so resolved/closed markets
+    // (e.g. short-lived BTC up/down series) are excluded from the default lookup above
+    // and would 404 even though they're still listed via /events. Retry including closed
+    // markets so they remain viewable (read-only) on the frontend.
+    const closedResponse = await axios.get<GammaMarket[]>(`${POLYMARKET_GAMMA_API_URL}/markets`, {
+      params: { slug, closed: true },
+      timeout: 10000
+    });
+
+    if (closedResponse.data.length > 0) {
+      marketsCache.set(cacheKey, closedResponse.data);
+      return closedResponse.data[0];
+    }
+
     return null;
   } catch (error) {
     Logger.log('error', `[${LOG_PREFIX}:getMarketBySlug]`, `${logKey} Failed: ${String(error)}`);
     throw new Error(`Failed to fetch market by slug: ${String(error)}`);
+  }
+}
+
+/**
+ * Fetch the market that contains a given CLOB token ID.
+ * Used to enrich notifications with the market question and outcome label.
+ */
+export async function getMarketByClobTokenId(
+  tokenId: string,
+  logKey: string
+): Promise<GammaMarket | null> {
+  const cacheKey = `marketByToken:${tokenId}`;
+  const cached = marketsCache.get<GammaMarket>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const response = await axios.get<GammaMarket[]>(`${POLYMARKET_GAMMA_API_URL}/markets`, {
+      params: { clob_token_ids: tokenId },
+      timeout: 10000
+    });
+
+    if (response.data.length > 0) {
+      marketsCache.set(cacheKey, response.data[0]);
+      return response.data[0];
+    }
+
+    return null;
+  } catch (error) {
+    Logger.log(
+      'error',
+      `[${LOG_PREFIX}:getMarketByClobTokenId]`,
+      `${logKey} Failed: ${String(error)}`
+    );
+    return null;
+  }
+}
+
+/**
+ * Resolve the outcome label (e.g. "Yes" / "No") for a token within a market.
+ * Gamma returns `clobTokenIds` and `outcomes` as parallel JSON-encoded arrays.
+ */
+export function getOutcomeForToken(market: GammaMarket, tokenId: string): string {
+  try {
+    const tokenIds: string[] = JSON.parse(market.clobTokenIds || '[]');
+    const outcomes: string[] = JSON.parse(market.outcomes || '[]');
+    const idx = tokenIds.indexOf(tokenId);
+    return idx >= 0 ? (outcomes[idx] ?? '') : '';
+  } catch {
+    return '';
   }
 }
 
@@ -272,34 +334,6 @@ export async function searchEvents(
       `${logKey} Failed to search events for "${query}": ${String(error)}`
     );
     return [];
-  }
-}
-
-// ============================================================================
-// Gamma API — Search
-// ============================================================================
-
-/**
- * Search markets using Gamma's public search endpoint.
- */
-export async function searchMarkets(
-  query: string,
-  limit: number = 10,
-  logKey: string
-): Promise<GammaSearchResult[]> {
-  try {
-    const response = await axios.get<GammaSearchResult[]>(
-      `${POLYMARKET_GAMMA_API_URL}/public-search`,
-      {
-        params: { query, limit },
-        timeout: 10000
-      }
-    );
-
-    return response.data;
-  } catch (error) {
-    Logger.log('error', `[${LOG_PREFIX}:searchMarkets]`, `${logKey} Failed: ${String(error)}`);
-    throw new Error(`Failed to search Polymarket: ${String(error)}`);
   }
 }
 

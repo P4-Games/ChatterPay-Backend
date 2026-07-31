@@ -38,6 +38,7 @@ export {
   CTF_EXCHANGE_ADDRESS,
   FOK_SLIPPAGE_TOLERANCE,
   MIN_BRIDGE_AMOUNT_USD,
+  MIN_BUY_ORDER_USD,
   NEG_RISK_ADAPTER_ADDRESS,
   NEG_RISK_CTF_EXCHANGE_ADDRESS,
   POLYMARKET_MAX_PRICE,
@@ -50,24 +51,30 @@ export {
   getClobMarketInfo,
   getEventBySlug,
   getEvents,
+  getMarketByClobTokenId,
   getMarketBySlug,
   getMarketPrice,
   getMarkets,
   getOrderBook,
-  searchEvents,
-  searchMarkets
+  getOutcomeForToken,
+  searchEvents
 } from './polymarketMarketService';
 // API authentication adapter
 export { registerPolymarketApiAdapter } from './polymarketProxyHelper';
 export type { PurchaseParams } from './polymarketPurchaseService';
 // Purchase (unified flow)
-export { executePurchase, withdrawSellProceeds } from './polymarketPurchaseService';
+export {
+  claimWinningPositions,
+  executePurchase,
+  withdrawSellProceeds
+} from './polymarketPurchaseService';
 // Relayer (gasless on-chain operations)
 export {
   createRelayClient,
   deploySafeWallet,
   deriveSafeAddress,
   ensureTokenApprovals,
+  executeRedeemPositions,
   setupGaslessTrading
 } from './polymarketRelayerService';
 // Trading

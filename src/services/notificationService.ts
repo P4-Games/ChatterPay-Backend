@@ -1196,15 +1196,39 @@ export async function sendOperationOutsideLimitsNotification(
 /* Polymarket Notifications                                                                  */
 /* ----------------------------------------------------------------------------------------- */
 
+/** Localized labels for Polymarket order sides, used in WhatsApp messages */
+const POLYMARKET_SIDE_LABELS: Record<string, Record<NotificationLanguage, string>> = {
+  BUY: { en: 'buy', es: 'compra', pt: 'compra' },
+  SELL: { en: 'sell', es: 'venta', pt: 'venda' }
+};
+
+/** Localized labels for the common Yes/No market outcomes */
+const POLYMARKET_OUTCOME_LABELS: Record<string, Record<NotificationLanguage, string>> = {
+  YES: { en: 'Yes', es: 'Sí', pt: 'Sim' },
+  NO: { en: 'No', es: 'No', pt: 'Não' }
+};
+
+function localizePolymarketSide(side: string, language: NotificationLanguage): string {
+  return POLYMARKET_SIDE_LABELS[side.toUpperCase()]?.[language] ?? side;
+}
+
+function localizePolymarketOutcome(outcome: string, language: NotificationLanguage): string {
+  return POLYMARKET_OUTCOME_LABELS[outcome.toUpperCase()]?.[language] ?? outcome;
+}
+
 /**
  * Sends a WhatsApp notification when a Polymarket order is placed successfully.
+ * Includes the market question and outcome so the user can identify the bet.
  */
 export async function sendPolymarketOrderPlacedNotification(
   channelUserId: string,
   side: string,
   size: string,
   price: string,
-  orderId: string
+  orderId: string,
+  marketQuestion?: string,
+  outcome?: string,
+  totalUsd?: string
 ): Promise<void> {
   try {
     const { title, message } = await getNotificationTemplate(
@@ -1212,11 +1236,17 @@ export async function sendPolymarketOrderPlacedNotification(
       NotificationEnum.polymarket_order_placed
     );
 
+    const userLanguage: NotificationLanguage =
+      await mongoUserService.getUserSettingsLanguage(channelUserId);
+
     const formattedMessage = message
-      .replace('{0}', side)
+      .replace('{0}', localizePolymarketSide(side, userLanguage))
       .replace('{1}', size)
       .replace('{2}', price)
-      .replace('{3}', orderId);
+      .replace('{3}', orderId)
+      .replace('{4}', marketQuestion || '-')
+      .replace('{5}', outcome ? localizePolymarketOutcome(outcome, userLanguage) : '-')
+      .replace('{6}', totalUsd || '-');
 
     await persistAndSendNotification({
       to: channelUserId,
@@ -1248,8 +1278,11 @@ export async function sendPolymarketOrderFailedNotification(
       NotificationEnum.polymarket_order_failed
     );
 
+    const userLanguage: NotificationLanguage =
+      await mongoUserService.getUserSettingsLanguage(channelUserId);
+
     const formattedMessage = message
-      .replace('{0}', side)
+      .replace('{0}', localizePolymarketSide(side, userLanguage))
       .replace('{1}', errorReason)
       .replace('{2}', balance);
 
@@ -1319,6 +1352,58 @@ export async function sendPolymarketDisabledNotification(channelUserId: string):
     });
   } catch (error) {
     Logger.error('sendPolymarketDisabledNotification', error);
+  }
+}
+
+/**
+ * Sends an interactive WhatsApp button message asking the user to accept or decline
+ * Polymarket's Terms of Service before placing their first prediction.
+ * Buttons: "Accept Terms" / "Decline"
+ */
+export async function sendPolymarketTermsRequest(
+  channelUserId: string,
+  termsVersion: string,
+  termsUrl: string
+): Promise<void> {
+  try {
+    const DEFAULT_TITLE = 'Polymarket Terms';
+    const DEFAULT_MESSAGE =
+      `To place predictions on Polymarket you must accept their Terms of Service (v${termsVersion}). ` +
+      `Read them at: ${termsUrl}`;
+
+    let title = DEFAULT_TITLE;
+    let bodyText = DEFAULT_MESSAGE;
+
+    try {
+      const template = await getNotificationTemplate(
+        channelUserId,
+        NotificationEnum.polymarket_terms_request
+      );
+      if (template.message) {
+        title = template.title || DEFAULT_TITLE;
+        bodyText = template.message.replace('{0}', termsVersion).replace('{1}', termsUrl);
+      }
+    } catch {
+      // Template not in DB yet — use hardcoded fallback above
+    }
+
+    await chatizaloService.sendInteractiveMessage({
+      data_token: BOT_DATA_TOKEN!,
+      channel_user_id: channelUserId,
+      message: {
+        type: 'button',
+        header_text: title,
+        body_text: bodyText,
+        buttons: [
+          { id: 'polymarket_terms_accept', title: 'Accept Terms' },
+          { id: 'polymarket_terms_decline', title: 'Decline' }
+        ]
+      }
+    });
+
+    await persistNotification(channelUserId, bodyText, NotificationEnum.polymarket_terms_request);
+  } catch (error) {
+    Logger.error('sendPolymarketTermsRequest', error);
   }
 }
 

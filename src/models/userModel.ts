@@ -8,6 +8,7 @@ export interface IPolymarketAccount {
   terms_accepted_version: number;
   terms_accepted_at: Date | null;
   created_at: Date;
+  wallet_type: 'safe' | 'deposit';
 }
 
 export interface IUserWallet {
@@ -167,7 +168,8 @@ const userSchema = new Schema<IUser>({
       api_credentials_encrypted: { type: String, required: true },
       terms_accepted_version: { type: Number, required: false, default: 0 },
       terms_accepted_at: { type: Date, required: false, default: null },
-      created_at: { type: Date, required: true, default: Date.now }
+      created_at: { type: Date, required: true, default: Date.now },
+      wallet_type: { type: String, enum: ['safe', 'deposit'], default: 'safe' }
     },
     required: false,
     default: undefined,

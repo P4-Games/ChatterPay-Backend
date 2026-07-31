@@ -1,9 +1,5 @@
-import {
-  type gamesLanguage,
-  type NotificationLanguage,
-  notificationLanguages
-} from '../types/commonType';
-import { type LogLevel, validLogLevels } from '../types/loggerType';
+import { gamesLanguage, NotificationLanguage, notificationLanguages } from '../types/commonType';
+import { LogLevel, validLogLevels } from '../types/loggerType';
 
 interface ABIs {
   [key: string]: string;
@@ -82,23 +78,25 @@ const {
   SECURITY_PIN_BLOCK_MINUTES: securityPinBlockMinutes = 60,
   SECURITY_PIN_ENABLED: securityPinEnabled = 'true',
   LIFI_API_BASE_URL: lifiApiBaseUrl = 'https://li.quest/v1',
+  LIFI_API_KEY: lifiApiKey = '',
   LIFI_INTEGRATOR_KEY: lifiIntegratorKey = 'ChatterPay',
   LIFI_INTEGRATOR_FEE: lifiIntegratorFee = '0.0025',
   LIFI_DEFAULT_SLIPPAGE: lifiDefaultSlippage = '0.005', // fraction: 0.005 = 0.5%
   USE_LIFI: useLifiEnv = 'true',
+  POLYMARKET_ENABLED: polymarketEnabled = 'false',
   POLYMARKET_CLOB_API_URL: polymarketClobApiUrl = 'https://clob.polymarket.com',
   POLYMARKET_GAMMA_API_URL: polymarketGammaApiUrl = 'https://gamma-api.polymarket.com',
   POLYMARKET_DATA_API_URL: polymarketDataApiUrl = 'https://data-api.polymarket.com',
+  POLYMARKET_USER_PNL_API_URL: polymarketUserPnlApiUrl = 'https://user-pnl-api.polymarket.com',
+  POLYMARKET_RELAYER_URL: polymarketRelayerUrl = 'https://relayer-v2.polymarket.com',
   POLYMARKET_CHAIN_ID: polymarketChainId = 137,
-  POLYMARKET_ENABLED: polymarketEnabled = 'false',
   POLYMARKET_TERMS_VERSION: polymarketTermsVersion = 1,
   POLYMARKET_DEFAULT_SLIPPAGE: polymarketDefaultSlippage = '0.01',
-  POLYMARKET_RELAYER_URL: polymarketRelayerUrl = 'https://relayer-v2.polymarket.com',
   POLYMARKET_BUILDER_API_KEY: polymarketBuilderApiKey = '',
   POLYMARKET_BUILDER_SECRET: polymarketBuilderSecret = '',
   POLYMARKET_BUILDER_PASSPHRASE: polymarketBuilderPassphrase = '',
   POLYMARKET_POLYGON_RPC_URL: polymarketPolygonRpcUrl = 'https://polygon-rpc.com',
-  POLYMARKET_ADAPTER_TOKEN: polymarketApiToken = ''
+  POLYMARKET_ADAPTER_AUTH_TOKEN: polymarketAdapterAuthToken = ''
 } = process.env;
 
 export {
@@ -236,7 +234,7 @@ export const ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY: boolean =
 export const TELEGRAM_WEBHOOK_PATH = '/telegram/webhook';
 
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
-export const CORS_ORIGINS_EXCEPTIONS: string = `/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH}`;
+export const CORS_ORIGINS_EXCEPTIONS: string = `/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH},/polymarket/terms`;
 
 export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/price';
 export const TOKEN_IDS = ['usd-coin', 'tether', 'ethereum', 'bitcoin', 'wrapped-bitcoin', 'dai'];
@@ -273,6 +271,9 @@ export const CACHE_TOR_CHECK_PERIOD = 3700; // 62 min
 export const CACHE_COINGECKO_TTL = 60; // 1 min
 export const CACHE_COINGECKO_CHECK_PERIOD = 120; // 2 min
 
+export const CACHE_FIAT_TTL = 60; // 1 min
+export const CACHE_FIAT_CHECK_PERIOD = 120; // 2 min
+
 export const CACHE_ERC20_DATA_TTL = 432000; // 5 days
 export const CACHE_ERC20_DATA_CHECK_PERIOD = 518400; // 6 days
 
@@ -298,6 +299,7 @@ export const SECURITY_PIN_ENABLED: boolean = securityPinEnabled.toLowerCase() ==
 // LIFI_INTEGRATOR_FEE and LIFI_DEFAULT_SLIPPAGE are fractional values (0-1), not percentages.
 //   - Example: 0.0025 = 0.25% fee, 0.005 = 0.5% slippage.
 export const LIFI_API_BASE_URL: string = lifiApiBaseUrl;
+export const LIFI_API_KEY: string = lifiApiKey;
 export const LIFI_INTEGRATOR_KEY: string = lifiIntegratorKey;
 export const LIFI_INTEGRATOR_FEE: number = Number(lifiIntegratorFee);
 export const LIFI_DEFAULT_SLIPPAGE: number = Number(lifiDefaultSlippage);
@@ -319,21 +321,20 @@ export const TESTNET_CHAIN_IDS: readonly number[] = [
 ] as const;
 
 // Polymarket Configuration
+export const POLYMARKET_ENABLED: boolean = polymarketEnabled.toLowerCase() === 'true';
 export const POLYMARKET_CLOB_API_URL: string = polymarketClobApiUrl;
 export const POLYMARKET_GAMMA_API_URL: string = polymarketGammaApiUrl;
 export const POLYMARKET_DATA_API_URL: string = polymarketDataApiUrl;
+export const POLYMARKET_USER_PNL_API_URL: string = polymarketUserPnlApiUrl;
+export const POLYMARKET_RELAYER_URL: string = polymarketRelayerUrl;
 export const POLYMARKET_CHAIN_ID: number = Number(polymarketChainId);
-export const POLYMARKET_ENABLED: boolean = polymarketEnabled.toLowerCase() === 'true';
 export const POLYMARKET_TERMS_VERSION: number = Number(polymarketTermsVersion);
 export const POLYMARKET_DEFAULT_SLIPPAGE: number = Number(polymarketDefaultSlippage);
-export const POLYMARKET_RELAYER_URL: string = polymarketRelayerUrl;
 export const POLYMARKET_BUILDER_API_KEY: string = polymarketBuilderApiKey;
 export const POLYMARKET_BUILDER_SECRET: string = polymarketBuilderSecret;
 export const POLYMARKET_BUILDER_PASSPHRASE: string = polymarketBuilderPassphrase;
 export const POLYMARKET_POLYGON_RPC_URL: string = polymarketPolygonRpcUrl;
-
-/** Bearer token attached to outbound Polymarket API requests. Empty string disables auth. */
-export const POLYMARKET_ADAPTER_TOKEN: string = polymarketApiToken;
+export const POLYMARKET_ADAPTER_AUTH_TOKEN: string = polymarketAdapterAuthToken;
 
 export const CACHE_POLYMARKET_MARKETS_TTL = 300; // 5 min
 export const CACHE_POLYMARKET_MARKETS_CHECK_PERIOD = 360; // 6 min

@@ -21,7 +21,6 @@ import {
   updatePurchaseStatus,
   updatePurchaseStep
 } from '../mongo/mongoPolymarketService';
-import { mongoTransactionService } from '../mongo/mongoTransactionService';
 import {
   sendPolymarketOrderFailedNotification,
   sendPolymarketOrderPlacedNotification,
@@ -35,13 +34,44 @@ import {
   withdrawToScroll
 } from './polymarketBridgeService';
 import {
+  BRIDGE_BALANCE_POLL_INTERVAL_MS,
+  BRIDGE_BALANCE_POLL_TIMEOUT_MS,
   BRIDGE_FEE_BUFFER,
   CLOB_FEE_RESERVE,
+  CTF_ADDRESS,
   MIN_BRIDGE_AMOUNT_USD,
-  PUSD_ADDRESS
+  POLYMARKET_MAX_PRICE,
+  PUSD_ADDRESS,
+  USDCE_ADDRESS,
+  WITHDRAWABLE_STABLECOINS
 } from './polymarketConstants';
-import { executeGaslessWithdrawal } from './polymarketRelayerService';
-import { getPolymarketBalanceSummary, placeOrder } from './polymarketTradingService';
+import {
+  discardSupersededOrder,
+  enrichOrderModelSlug,
+  markOrderInProgress,
+  recordBridge,
+  recordClaim,
+  recordOrderFailed,
+  recordOrderIntent,
+  recordOrderPlaced,
+  recordWithdraw,
+  refineBuyToken,
+  refineSellToken,
+  USDCE_SYMBOL
+} from './polymarketHistoryService';
+import {
+  getClobMarketInfo,
+  getMarketByClobTokenId,
+  getOutcomeForToken
+} from './polymarketMarketService';
+import {
+  deriveSafeAddress,
+  executeGaslessWithdrawal,
+  executeRedeemPositions,
+  type RedeemPosition,
+  transferPusdFromDepositWallet
+} from './polymarketRelayerService';
+import { getPolymarketBalanceSummary, getPositions, placeOrder } from './polymarketTradingService';
 
 const LOG_PREFIX = 'polymarketPurchaseService';
 
@@ -106,6 +136,47 @@ async function getPolygonUsdceBalance(address: string, logKey: string): Promise<
 }
 
 /**
+ * Detect which stablecoin actually sits in a Polygon wallet.
+ *
+ * Redemptions pay out in the market's collateral: pUSD for CLOB-V2 markets,
+ * USDC.e for legacy neg-risk markets. The withdrawal flow bridges whichever
+ * one is present, so it must look at both. Returns the token holding the
+ * largest balance (raw 6-decimal units), or pUSD with zero if the wallet is empty.
+ */
+async function getWithdrawableStablecoin(
+  address: string,
+  logKey: string
+): Promise<{ address: string; symbol: string; raw: ethers.BigNumber }> {
+  const fnLog = `[${LOG_PREFIX}:getWithdrawableStablecoin]`;
+  const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+  const balanceAbi = ['function balanceOf(address) view returns (uint256)'];
+
+  const balances = await Promise.all(
+    WITHDRAWABLE_STABLECOINS.map(async (token) => {
+      const raw: ethers.BigNumber = await new ethers.Contract(
+        token.address,
+        balanceAbi,
+        provider
+      ).balanceOf(address);
+      return { ...token, raw };
+    })
+  );
+
+  // Pick the token with the largest balance (the actual proceeds; the rest is dust).
+  const best = balances.reduce((a, b) => (b.raw.gt(a.raw) ? b : a));
+
+  Logger.log(
+    'info',
+    fnLog,
+    `${logKey} ${address} → ${balances
+      .map((b) => `${b.symbol}: $${Number(ethers.utils.formatUnits(b.raw, 6)).toFixed(2)}`)
+      .join(', ')} (selected ${best.symbol})`
+  );
+
+  return { address: best.address, symbol: best.symbol, raw: best.raw };
+}
+
+/**
  * Withdraw ALL USDC.e from the Polygon Safe back to Scroll proxy.
  *
  * Uses on-chain RPC balance check (not the CLOB cache) so it picks up
@@ -121,7 +192,8 @@ export async function withdrawSellProceeds(
   user: IUser,
   privateKey: string,
   logKey: string,
-  purchaseId?: string
+  purchaseId?: string,
+  sellTrxHash?: string
 ): Promise<void> {
   const fnLog = `[${LOG_PREFIX}:withdrawSellProceeds]`;
 
@@ -137,51 +209,39 @@ export async function withdrawSellProceeds(
       return;
     }
 
-    const safeAddress = user.polymarket_account.polygon_address;
+    const walletType = user.polymarket_account.wallet_type ?? 'safe';
+    const polygonWalletAddress = user.polymarket_account.polygon_address;
 
-    // On-chain USDC.e balance check (catches sell proceeds + any idle balance)
-    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
-    const usdc = new ethers.Contract(
-      PUSD_ADDRESS,
-      ['function balanceOf(address) view returns (uint256)'],
-      provider
-    );
+    // Detect the withdrawable stablecoin (pUSD for V2 markets, USDC.e for legacy
+    // neg-risk redemptions) and its on-chain balance. Redemption proceeds are
+    // already settled by the time this runs, so we bridge whatever is present —
+    // we don't wait for an INCREASE (that only applies to async GTC sell fills).
+    let withdrawable = await getWithdrawableStablecoin(polygonWalletAddress, logKey);
 
-    // Snapshot idle balance before sell proceeds arrive
-    const initialRawBalance: ethers.BigNumber = await usdc.balanceOf(safeAddress);
-    const initialHuman = Number(ethers.utils.formatUnits(initialRawBalance, 6));
-    Logger.log('info', fnLog, `${logKey} Initial idle USDC.e balance: $${initialHuman.toFixed(2)}`);
-
-    // Wait for sell proceeds to arrive (balance must INCREASE above the idle amount).
-    // Intervals: 3s → 10s → 20s → 30s (total ~63s max wait)
+    // If nothing is here yet, give an async sell fill a short window to land.
+    // Intervals: 3s → 10s → 20s → 30s (total ~63s max wait). Stop as soon as a
+    // bridgeable balance appears, so already-settled claims don't wait at all.
+    const minRaw = ethers.utils.parseUnits(MIN_BRIDGE_AMOUNT_USD.toString(), 6);
     const retryDelays = [3000, 10000, 20000, 30000];
-    let rawBalance = initialRawBalance;
 
-    for (let i = 0; i < retryDelays.length; i++) {
+    for (let i = 0; i < retryDelays.length && withdrawable.raw.lt(minRaw); i++) {
       await new Promise((resolve) => setTimeout(resolve, retryDelays[i]));
-
-      rawBalance = await usdc.balanceOf(safeAddress);
-      const balanceHuman = Number(ethers.utils.formatUnits(rawBalance, 6));
-
+      withdrawable = await getWithdrawableStablecoin(polygonWalletAddress, logKey);
       Logger.log(
         'info',
         fnLog,
-        `${logKey} Safe USDC.e on-chain balance (attempt ${i + 1}/${retryDelays.length}): ${rawBalance.toString()} ($${balanceHuman.toFixed(2)})`
+        `${logKey} Waiting for proceeds (attempt ${i + 1}/${retryDelays.length}): ` +
+          `${withdrawable.symbol} $${Number(ethers.utils.formatUnits(withdrawable.raw, 6)).toFixed(2)}`
       );
-
-      // Break when balance increases above initial (sell proceeds arrived)
-      if (rawBalance.gt(initialRawBalance)) break;
     }
 
-    const totalWaitSec = retryDelays.reduce((s, d) => s + d, 0) / 1000;
-
-    if (rawBalance.lte(initialRawBalance)) {
+    if (withdrawable.raw.lt(minRaw)) {
       Logger.log(
         'warn',
         fnLog,
-        `${logKey} No sell proceeds detected after ${retryDelays.length} polls (~${totalWaitSec}s). ` +
-          `Balance unchanged at $${initialHuman.toFixed(2)}. This is expected for GTC orders that take longer to fill. ` +
-          `Proceeds will remain safe in the Polygon Safe and will be bridged back automatically on the next purchase or via manual sync.`
+        `${logKey} No bridgeable proceeds (${withdrawable.symbol} ` +
+          `$${Number(ethers.utils.formatUnits(withdrawable.raw, 6)).toFixed(2)} < min $${MIN_BRIDGE_AMOUNT_USD}). ` +
+          `Funds (if any) stay in the Polygon wallet and bridge on the next purchase or manual sync.`
       );
       if (purchaseId) {
         await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'skipped' }, logKey);
@@ -189,19 +249,9 @@ export async function withdrawSellProceeds(
       return;
     }
 
-    // Log whether we're including idle balance alongside sell proceeds
-    if (initialRawBalance.gt(0)) {
-      const proceedsOnly = rawBalance.sub(initialRawBalance);
-      Logger.log(
-        'info',
-        fnLog,
-        `${logKey} Bridging sell proceeds ($${Number(ethers.utils.formatUnits(proceedsOnly, 6)).toFixed(2)}) ` +
-          `+ idle balance ($${initialHuman.toFixed(2)}) = $${Number(ethers.utils.formatUnits(rawBalance, 6)).toFixed(2)} total`
-      );
-    }
-
-    const amount = rawBalance.toString();
-    const balanceHuman = Number(ethers.utils.formatUnits(rawBalance, 6));
+    const fromTokenAddress = withdrawable.address;
+    const amount = withdrawable.raw.toString();
+    const balanceHuman = Number(ethers.utils.formatUnits(withdrawable.raw, 6));
 
     // Determine which stablecoin the user holds on Scroll (USDC or USDT)
     const toToken = await getPreferredScrollStablecoin(proxyAddress, logKey);
@@ -209,13 +259,37 @@ export async function withdrawSellProceeds(
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Withdrawing $${balanceHuman.toFixed(2)} USDC.e from Polygon Safe to Scroll proxy (→${toToken})`
+      `${logKey} Withdrawing $${balanceHuman.toFixed(2)} ${withdrawable.symbol} from Polygon ${walletType} wallet to Scroll proxy (→${toToken})`
     );
 
-    // Bridge with one retry after 10s on failure
+    // Bridge with one retry after 10s on failure.
+    // Deposit wallet users: transfer the token to the Safe first (relayer blocks LiFi
+    // approval from deposit wallets), then bridge from the Safe via the gasless path.
     const attemptBridge = async () => {
-      const quote = await withdrawToScroll(safeAddress, proxyAddress, amount, logKey, toToken);
-      await executeGaslessWithdrawal(
+      let bridgeSourceAddress = polygonWalletAddress;
+
+      if (walletType === 'deposit') {
+        const safeAddress = deriveSafeAddress(new ethers.Wallet(privateKey).address);
+        await transferPusdFromDepositWallet(
+          privateKey,
+          polygonWalletAddress,
+          safeAddress,
+          amount,
+          logKey,
+          fromTokenAddress
+        );
+        bridgeSourceAddress = safeAddress;
+      }
+
+      const quote = await withdrawToScroll(
+        bridgeSourceAddress,
+        proxyAddress,
+        amount,
+        logKey,
+        toToken,
+        fromTokenAddress
+      );
+      return await executeGaslessWithdrawal(
         privateKey,
         {
           approvalAddress: quote.approvalAddress,
@@ -224,37 +298,39 @@ export async function withdrawSellProceeds(
           value: quote.value
         },
         amount,
-        logKey
+        logKey,
+        fromTokenAddress
       );
     };
 
+    let txHash: string | undefined;
     try {
-      await attemptBridge();
+      txHash = await attemptBridge();
     } catch (bridgeError) {
       Logger.log('warn', fnLog, `${logKey} Bridge failed, retrying in 10s: ${String(bridgeError)}`);
       await new Promise((resolve) => setTimeout(resolve, 10000));
-      await attemptBridge();
+      txHash = await attemptBridge();
     }
 
     Logger.log(
       'info',
       fnLog,
-      `${logKey} Withdrawal initiated: $${balanceHuman.toFixed(2)} USDC.e → Scroll`
+      `${logKey} Withdrawal initiated: $${balanceHuman.toFixed(2)} ${withdrawable.symbol} → Scroll (tx: ${txHash})`
     );
 
     // Save withdrawal to transaction history
-    await mongoTransactionService.saveTransaction({
-      tx: `withdraw-${Date.now()}`,
-      walletFrom: safeAddress,
+    await recordWithdraw({
+      txHash,
+      walletFrom: polygonWalletAddress,
       walletTo: proxyAddress,
       amount: balanceHuman,
-      fee: 0,
       token: toToken,
-      type: 'polymarket_withdraw',
-      status: 'completed',
-      chain_id: 137,
-      user_notes: 'Polymarket withdrawal to Scroll'
+      linkedOrderTrxHash: sellTrxHash
     });
+
+    // Refine the linked sell order record to show the Scroll-side token/amount
+    // (what the user actually received), replacing the initial pUSD estimate.
+    if (sellTrxHash) void refineSellToken(sellTrxHash, toToken, balanceHuman);
 
     if (purchaseId) {
       await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'completed' }, logKey);
@@ -283,7 +359,10 @@ export interface PurchaseParams {
   size: number;
   side: 'BUY' | 'SELL';
   orderType?: 'GTC' | 'FOK' | 'GTD';
-  bridgeAmount: string;
+  /** Max bridge amount in human-readable USD (e.g. "5.00"). No cap applied if omitted. */
+  bridgeAmountUsd?: string;
+  /** Scroll token symbol to bridge from (e.g. "WETH"). Auto-detects stablecoin if omitted. */
+  bridgeToken?: string;
   termsVersion?: number;
 }
 
@@ -320,9 +399,11 @@ export async function executePurchase(
       try {
         currentUser = await createPolymarketAccount(currentUser, privateKey, logKey);
 
-        // Accept terms as part of account creation in the purchase flow
+        // Accept terms as part of account creation in the purchase flow.
+        // Presence of termsVersion signals the user is accepting now; the
+        // actual version recorded is always the latest (see acceptTerms).
         if (params.termsVersion) {
-          currentUser = await acceptTerms(currentUser, params.termsVersion, logKey);
+          currentUser = await acceptTerms(currentUser, logKey);
         }
 
         await updatePurchaseStep(purchaseId, 'account_creation', { status: 'completed' }, logKey);
@@ -347,6 +428,21 @@ export async function executePurchase(
       }
     }
 
+    // Record the order intent now that the Polymarket account (and its Polygon
+    // address) is known. Status starts at `submitted` so a failure at the bridge
+    // step still leaves a `failed` order row in the transaction history.
+    // trx_hash is keyed on the purchaseId and stays stable across status updates.
+    const orderTrx = await recordOrderIntent({
+      side: params.side,
+      refId: purchaseId,
+      purchaseId,
+      userProxy: currentUser.wallets[0]?.wallet_proxy || '',
+      price: params.price,
+      size: params.size,
+      tokenId: params.tokenId,
+      logKey
+    });
+
     // ── Step 2: Bridge (BUY only) ───────────────────────────────────────
     // Check existing USDC.e in the Polygon Safe and bridge only the deficit.
     // If the Safe already holds enough, the bridge is skipped entirely.
@@ -358,22 +454,26 @@ export async function executePurchase(
       try {
         const safeAddress = currentUser.polymarket_account!.polygon_address;
         const existingBalance = await getPolygonUsdceBalance(safeAddress, logKey);
+        // Subtract committed funds (GTC orders in flight) so bridge decision
+        // matches the actual available balance at order placement time.
+        const committedAtBridge = getOrderLock(currentUser.phone_number).committedUsdce;
+        const availableBalance = Math.max(existingBalance - committedAtBridge, 0);
         const requiredUsdc = params.price * params.size;
-        const deficit = requiredUsdc - existingBalance;
+        const deficit = requiredUsdc - availableBalance;
 
         Logger.log(
           'info',
           fnLog,
           `${logKey} Bridge check — required: $${requiredUsdc.toFixed(2)}, ` +
-            `existing: $${existingBalance.toFixed(2)}, deficit: $${deficit.toFixed(2)}`
+            `on-chain: $${existingBalance.toFixed(2)}, committed: $${committedAtBridge.toFixed(2)}, ` +
+            `available: $${availableBalance.toFixed(2)}, deficit: $${deficit.toFixed(2)}`
         );
 
         if (deficit <= 0) {
-          // Existing balance covers the full purchase — skip bridge
           Logger.log(
             'info',
             fnLog,
-            `${logKey} Skipping bridge: existing balance ($${existingBalance.toFixed(2)}) ` +
+            `${logKey} Skipping bridge: available balance ($${availableBalance.toFixed(2)}) ` +
               `covers required ($${requiredUsdc.toFixed(2)})`
           );
           await updatePurchaseStep(purchaseId, 'bridge', { status: 'skipped' }, logKey);
@@ -402,38 +502,79 @@ export async function executePurchase(
             logKey
           );
         } else {
-          // Bridge only the deficit (+ 2% buffer for fees/slippage),
-          // but never exceed the client-authorized bridge amount.
-          const deficitRaw = Math.ceil(deficit * BRIDGE_FEE_BUFFER * 1_000_000);
-          const maxAllowed = Number(params.bridgeAmount);
-          const actualBridgeAmount = Math.min(deficitRaw, maxAllowed).toString();
+          // Bridge the deficit + fee buffer, capped at client-authorized amount if provided.
+          const deficitWithBuffer = deficit * BRIDGE_FEE_BUFFER;
+          const actualBridgeAmountUsd = params.bridgeAmountUsd
+            ? Math.min(deficitWithBuffer, Number(params.bridgeAmountUsd)).toFixed(6)
+            : deficitWithBuffer.toFixed(6);
 
           Logger.log(
             'info',
             fnLog,
-            `${logKey} Bridging deficit: $${(deficit * BRIDGE_FEE_BUFFER).toFixed(2)} ` +
-              `(${actualBridgeAmount} smallest units, max allowed: ${params.bridgeAmount})`
+            `${logKey} Bridging deficit: $${deficitWithBuffer.toFixed(2)} USD ` +
+              `(cap: ${params.bridgeAmountUsd ? `$${Number(params.bridgeAmountUsd).toFixed(2)}` : 'none'}, actual: $${actualBridgeAmountUsd})`
           );
 
           const bridgeResult = await executeBridge(
             currentUser,
             privateKey,
-            actualBridgeAmount,
-            logKey
+            actualBridgeAmountUsd,
+            logKey,
+            params.bridgeToken
           );
 
-          // LiFi may report DONE before the Polygon RPC reflects the new balance.
-          // Poll until balance increases from pre-bridge level (max 30s).
-          const expectedMinBalance =
-            existingBalance + (Number(actualBridgeAmount) / 1_000_000) * 0.85;
-          for (let attempt = 0; attempt < 6; attempt++) {
-            await new Promise((resolve) => setTimeout(resolve, 5000));
+          // Save bridge to transaction history immediately — the tx is on-chain
+          // even if the balance confirmation below times out.
+          // Passing `linkedOrderTrxHash` makes this patch the existing buy record
+          // (as bridge sub-step fields) instead of inserting a separate bridge row.
+          await recordBridge({
+            txHash: bridgeResult.txHash,
+            walletFrom: currentUser.wallets[0]?.wallet_proxy || '',
+            walletTo: safeAddress,
+            amount: Number(actualBridgeAmountUsd),
+            token: bridgeResult.fromToken || 'USDC',
+            side: params.side,
+            linkedOrderTrxHash: orderTrx
+          });
+
+          // Refine the buy order record to show the Scroll-side token/amount
+          // (what the user actually spent), replacing the initial pUSD estimate.
+          void refineBuyToken(
+            orderTrx,
+            bridgeResult.fromToken || 'pUSD',
+            Number(actualBridgeAmountUsd)
+          );
+
+          // LiFi may report DONE before the Polygon RPC reflects the new balance,
+          // or its status API may lag the actual transfer. The on-chain balance
+          // is the authoritative confirmation — poll it until the funds arrive.
+          // If they never do within the window, fail here instead of proceeding
+          // to order placement with $0 available.
+          const expectedMinBalance = existingBalance + Number(actualBridgeAmountUsd) * 0.85;
+          const pollDeadline = Date.now() + BRIDGE_BALANCE_POLL_TIMEOUT_MS;
+          let balanceConfirmed = false;
+          while (Date.now() < pollDeadline) {
+            await new Promise((resolve) => {
+              setTimeout(resolve, BRIDGE_BALANCE_POLL_INTERVAL_MS);
+            });
             const confirmedBalance = await getPolygonUsdceBalance(safeAddress, logKey);
-            if (confirmedBalance >= expectedMinBalance) break;
+            if (confirmedBalance >= expectedMinBalance) {
+              balanceConfirmed = true;
+              break;
+            }
             Logger.log(
               'warn',
               fnLog,
-              `${logKey} Bridge DONE but balance not yet reflected ($${confirmedBalance.toFixed(2)} < $${expectedMinBalance.toFixed(2)}), waiting...`
+              `${logKey} Bridge sent but balance not yet reflected ($${confirmedBalance.toFixed(2)} < $${expectedMinBalance.toFixed(2)}), waiting...`
+            );
+          }
+
+          if (!balanceConfirmed) {
+            throw new Error(
+              `Bridged funds (tx ${bridgeResult.txHash}) have not arrived on Polygon after ` +
+                `${Math.round(BRIDGE_BALANCE_POLL_TIMEOUT_MS / 1000)}s. The transfer is still in transit — ` +
+                `the funds will be credited to your Polymarket balance shortly. ` +
+                `Retry the order once they arrive (no new bridge will be needed).`
             );
           }
 
@@ -451,21 +592,6 @@ export async function executePurchase(
             logKey
           );
           Logger.log('info', fnLog, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
-
-          // Save bridge to transaction history
-          const bridgeAmountHuman = Number(actualBridgeAmount) / 1_000_000;
-          await mongoTransactionService.saveTransaction({
-            tx: bridgeResult.txHash,
-            walletFrom: currentUser.wallets[0]?.wallet_proxy || '',
-            walletTo: safeAddress,
-            amount: bridgeAmountHuman,
-            fee: 0,
-            token: bridgeResult.fromToken || 'USDC',
-            type: 'polymarket_bridge',
-            status: 'completed',
-            chain_id: 534352,
-            user_notes: `Polymarket ${params.side} bridge`
-          });
         }
       } catch (error) {
         const errorMsg = `Bridge failed: ${String(error)}`;
@@ -477,6 +603,8 @@ export async function executePurchase(
           logKey
         );
         await updatePurchaseStatus(purchaseId, 'failed', 'bridge', { error: errorMsg }, logKey);
+        // The order never reached the CLOB — mark its history record failed.
+        await recordOrderFailed(orderTrx, errorMsg);
         return;
       }
     } else {
@@ -508,6 +636,7 @@ export async function executePurchase(
 
       const { orderResult, effectiveSize } = (await lock.queue.add(async () => {
         let effectiveSize = params.size;
+        let availableUsdc: number | undefined;
 
         // For BUY orders, check actual on-chain USDC.e balance and adjust
         // order size to account for bridge slippage and concurrent orders.
@@ -515,10 +644,13 @@ export async function executePurchase(
           const safeAddress = freshUser.polymarket_account!.polygon_address;
           const onChainBalance = await getPolygonUsdceBalance(safeAddress, logKey);
           const available = Math.max(onChainBalance - lock.committedUsdce, 0);
+          availableUsdc = available;
           const requiredUsdc = params.price * params.size;
-          // Reserve CLOB_FEE_RESERVE (3%) headroom for the 2% CLOB taker fee + rounding.
-          // Without this, placing an order for the exact balance causes "not enough balance/
-          // allowance" because CLOB requires amount + fee_estimate <= balance.
+          // Reserve CLOB_FEE_RESERVE headroom as a first-pass estimate of the CLOB
+          // taker fee (fee = shares × rate × (p(1-p))^exp, price-dependent). The exact
+          // cap is enforced at placement: placeOrder passes availableUsdc through to
+          // the SDK (userUSDCBalance), which deducts the real fee estimate from the
+          // order notional so "amount + fee_estimate <= balance" always holds.
           const maxAffordableSize =
             Math.floor(((available * CLOB_FEE_RESERVE) / params.price) * 10000) / 10000;
 
@@ -527,10 +659,10 @@ export async function executePurchase(
             fnLog,
             `${logKey} Balance check — on-chain: $${onChainBalance.toFixed(2)}, ` +
               `committed: $${lock.committedUsdce.toFixed(2)}, available: $${available.toFixed(2)}, ` +
-              `required: $${requiredUsdc.toFixed(2)}`
+              `required: $${requiredUsdc.toFixed(2)}, max affordable: ${maxAffordableSize}`
           );
 
-          if (available < requiredUsdc) {
+          if (params.size > maxAffordableSize) {
             effectiveSize = maxAffordableSize;
 
             if (effectiveSize <= 0) {
@@ -541,13 +673,13 @@ export async function executePurchase(
             }
 
             // For FOK orders, CLOB V2 requires minimum $1 per marketable BUY.
-            // If bridge slippage reduced effectiveSize below that, fail now.
             const isFok = params.orderType === 'FOK';
             const effectiveAmount = effectiveSize * params.price;
             if (isFok && effectiveAmount < 1.0) {
               throw new Error(
-                `After bridge, available pUSD ($${available.toFixed(2)}) is below Polymarket's $1.00 minimum ` +
-                  `for FOK orders. Bridge delivered less than expected — try again or increase the amount.`
+                `Insufficient pUSD for FOK order: $${available.toFixed(2)} available ` +
+                  `(of $${onChainBalance.toFixed(2)} on-chain, $${lock.committedUsdce.toFixed(2)} committed). ` +
+                  `Polymarket requires minimum $1.00 per FOK order.`
               );
             }
 
@@ -555,7 +687,7 @@ export async function executePurchase(
               'warn',
               fnLog,
               `${logKey} Adjusted order size: ${params.size} → ${effectiveSize} ` +
-                `(available $${available.toFixed(2)} < required $${requiredUsdc.toFixed(2)})`
+                `(max affordable with fee reserve: $${(maxAffordableSize * params.price).toFixed(2)})`
             );
           }
         }
@@ -565,6 +697,9 @@ export async function executePurchase(
         // service crashes after placeOrder succeeds but before returning.
         const commitAmount = params.side === 'BUY' ? effectiveSize * params.price : 0;
         lock.committedUsdce += commitAmount;
+
+        // Placement is now underway — move the order history record to in_progress.
+        await markOrderInProgress(orderTrx);
 
         let orderResult: { orderID: string };
         try {
@@ -576,7 +711,8 @@ export async function executePurchase(
               price: params.price,
               size: effectiveSize,
               side: params.side,
-              orderType: params.orderType
+              orderType: params.orderType,
+              availableUsdc
             },
             logKey
           );
@@ -596,13 +732,13 @@ export async function executePurchase(
         user_phone: freshUser.phone_number,
         order_id: orderID,
         market_condition_id: params.tokenId,
-        market_slug: '',
         token_id: params.tokenId,
         side: params.side,
         price: params.price,
         size: effectiveSize,
         status: 'pending'
       });
+      void enrichOrderModelSlug(orderID, params.tokenId, logKey);
 
       await updatePurchaseStep(
         purchaseId,
@@ -612,28 +748,46 @@ export async function executePurchase(
       );
       Logger.log('info', fnLog, `${logKey} Order placed: ${orderID} (size: ${effectiveSize})`);
 
-      // Save order to transaction history
-      await mongoTransactionService.saveTransaction({
-        tx: orderID,
-        walletFrom: freshUser.polymarket_account!.polygon_address,
-        walletTo: 'polymarket',
-        amount: params.price * effectiveSize,
-        fee: 0,
-        token: 'USDC',
-        type: 'polymarket_order',
-        status: 'completed',
-        chain_id: 137,
-        user_notes: `Polymarket ${params.side} order`
+      // Order accepted by the CLOB — evolve the history record to completed,
+      // attach the real CLOB order id, and rewrite the amount to the effective
+      // (possibly auto-reduced) size. Async fills refine this later via syncOpenOrders.
+      await recordOrderPlaced(orderTrx, {
+        orderId: orderID,
+        price: params.price,
+        effectiveSize
       });
 
-      // WhatsApp notification — fire-and-forget (don't block the flow)
-      sendPolymarketOrderPlacedNotification(
-        freshUser.phone_number,
-        params.side,
-        effectiveSize.toString(),
-        params.price.toString(),
-        orderID
-      ).catch((err) =>
+      // WhatsApp notification — fire-and-forget (don't block the flow).
+      // Market question/outcome are fetched best-effort to make the message
+      // identifiable ("Will X happen? — Yes") instead of just a token ID.
+      (async () => {
+        let marketQuestion = '';
+        let outcome = '';
+        try {
+          const market = await getMarketByClobTokenId(params.tokenId, logKey);
+          if (market) {
+            marketQuestion = market.question;
+            outcome = getOutcomeForToken(market, params.tokenId);
+          }
+        } catch (marketError) {
+          Logger.log(
+            'warn',
+            fnLog,
+            `${logKey} Market lookup for notification failed: ${String(marketError)}`
+          );
+        }
+
+        await sendPolymarketOrderPlacedNotification(
+          freshUser.phone_number,
+          params.side,
+          effectiveSize.toString(),
+          params.price.toString(),
+          orderID,
+          marketQuestion,
+          outcome,
+          (effectiveSize * params.price).toFixed(2)
+        );
+      })().catch((err) =>
         Logger.log('warn', fnLog, `${logKey} Order placed notification failed: ${String(err)}`)
       );
 
@@ -645,7 +799,7 @@ export async function executePurchase(
         await updatePurchaseStatus(purchaseId, 'processing', 'withdrawal', undefined, logKey);
         await updatePurchaseStep(purchaseId, 'withdrawal', { status: 'in_progress' }, logKey);
 
-        await withdrawSellProceeds(freshUser, privateKey, logKey, purchaseId);
+        await withdrawSellProceeds(freshUser, privateKey, logKey, purchaseId, orderTrx);
       }
 
       // Mark entire purchase as completed
@@ -654,6 +808,45 @@ export async function executePurchase(
     } catch (error) {
       const errorMsg = `Order placement failed: ${String(error)}`;
       Logger.log('error', fnLog, `${logKey} ${errorMsg}`);
+
+      // SELL at boundary price → market likely resolved. Attempt CTF claim before
+      // marking the purchase as failed, mirroring the synchronous sell endpoint's fallback.
+      if (params.side === 'SELL' && params.price >= POLYMARKET_MAX_PRICE) {
+        try {
+          Logger.log(
+            'warn',
+            fnLog,
+            `${logKey} SELL at boundary price (${params.price}) failed — attempting CTF claim fallback`
+          );
+          const marketInfo = await getMarketByClobTokenId(params.tokenId, logKey).catch(() => null);
+          const claimResult = await claimWinningPositions(
+            currentUser,
+            privateKey,
+            logKey,
+            marketInfo?.conditionId
+          );
+          if (claimResult.claimed > 0) {
+            // The claim record (created inside claimWinningPositions) is now the
+            // source of truth — drop the redundant SELL row so the user sees a
+            // single "settlement" entry instead of a phantom failed sell.
+            await discardSupersededOrder(orderTrx);
+            await updatePurchaseStatus(purchaseId, 'completed', 'done', undefined, logKey);
+            Logger.log(
+              'info',
+              fnLog,
+              `${logKey} SELL superseded by claim: ${claimResult.claimed} position(s) claimed (tx: ${claimResult.txHash})`
+            );
+            return;
+          }
+        } catch (claimError) {
+          Logger.log(
+            'warn',
+            fnLog,
+            `${logKey} Claim fallback after failed SELL failed: ${String(claimError)}`
+          );
+        }
+      }
+
       await updatePurchaseStep(
         purchaseId,
         'order_placement',
@@ -667,6 +860,7 @@ export async function executePurchase(
         { error: errorMsg },
         logKey
       );
+      await recordOrderFailed(orderTrx, errorMsg);
 
       // WhatsApp notification with balance — fire-and-forget
       (async () => {
@@ -701,4 +895,305 @@ export async function executePurchase(
     Logger.log('error', fnLog, `${logKey} ${errorMsg}`);
     await updatePurchaseStatus(purchaseId, 'failed', 'done', { error: errorMsg }, logKey);
   }
+}
+
+// ============================================================================
+// Claim Winning Positions
+// ============================================================================
+
+const CTF_ERC1155_BALANCE_ABI = [
+  'function balanceOf(address account, uint256 id) view returns (uint256)'
+];
+
+const CTF_RESOLUTION_ABI = [
+  'function payoutDenominator(bytes32 conditionId) view returns (uint256)'
+];
+
+const CTF_POSITION_ABI = [
+  'function getCollectionId(bytes32 parentCollectionId, bytes32 conditionId, uint256 indexSet) view returns (bytes32)',
+  'function getPositionId(address collateralToken, bytes32 collectionId) view returns (uint256)'
+];
+
+/**
+ * Read the raw on-chain ERC-1155 balance of a CTF outcome token.
+ * `tokenId` is the position id (DataPosition.asset). Returns 0 on RPC failure
+ * so a single unreadable position can't abort the whole claim batch.
+ */
+async function getCtfTokenBalance(
+  owner: string,
+  tokenId: string,
+  logKey: string
+): Promise<ethers.BigNumber> {
+  const fnLog = `[${LOG_PREFIX}:getCtfTokenBalance]`;
+  try {
+    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+    const ctf = new ethers.Contract(CTF_ADDRESS, CTF_ERC1155_BALANCE_ABI, provider);
+    return await ctf.balanceOf(owner, tokenId);
+  } catch (error) {
+    Logger.log('error', fnLog, `${logKey} Failed to read CTF balance: ${String(error)}`);
+    return ethers.constants.Zero;
+  }
+}
+
+/**
+ * Check whether a CTF condition has been finalized on-chain.
+ * payoutDenominator > 0 means the oracle has reported and funds can be redeemed.
+ * Returns true on RPC failure so a network blip never blocks a legitimate claim.
+ */
+async function isCtfMarketResolved(conditionId: string, logKey: string): Promise<boolean> {
+  const fnLog = `[${LOG_PREFIX}:isCtfMarketResolved]`;
+  try {
+    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+    const ctf = new ethers.Contract(CTF_ADDRESS, CTF_RESOLUTION_ABI, provider);
+    const denom: ethers.BigNumber = await ctf.payoutDenominator(conditionId);
+    return !denom.isZero();
+  } catch (error) {
+    Logger.log(
+      'warn',
+      fnLog,
+      `${logKey} Could not read payoutDenominator for ${conditionId}: ${String(error)} — assuming resolved`
+    );
+    return true;
+  }
+}
+
+/**
+ * Determine which collateral token a standard CTF position settles in.
+ *
+ * The collateral is baked into the ERC-1155 position id, so we recompute the
+ * position id for each candidate stablecoin (pUSD for CLOB-V2 markets, USDC.e for
+ * legacy markets) and return the one matching the token the user actually holds.
+ * Redeeming with the wrong collateral burns 0 tokens and pays out nothing while the
+ * tx still confirms — the exact failure that left winning positions un-redeemable.
+ * Defaults to pUSD if nothing matches (e.g. RPC failure).
+ */
+async function resolveCtfCollateral(
+  conditionId: string,
+  indexSet: number,
+  heldAsset: string,
+  logKey: string
+): Promise<string> {
+  const fnLog = `[${LOG_PREFIX}:resolveCtfCollateral]`;
+  try {
+    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+    const ctf = new ethers.Contract(CTF_ADDRESS, CTF_POSITION_ABI, provider);
+    const collectionId: string = await ctf.getCollectionId(
+      ethers.constants.HashZero,
+      conditionId,
+      indexSet
+    );
+    const held = ethers.BigNumber.from(heldAsset);
+    const candidates = [
+      { address: PUSD_ADDRESS, symbol: 'pUSD' },
+      { address: USDCE_ADDRESS, symbol: 'USDC.e' }
+    ];
+    for (const { address, symbol } of candidates) {
+      const posId: ethers.BigNumber = await ctf.getPositionId(address, collectionId);
+      if (posId.eq(held)) {
+        Logger.log('info', fnLog, `${logKey} Condition ${conditionId} settles in ${symbol}`);
+        return address;
+      }
+    }
+    Logger.log(
+      'warn',
+      fnLog,
+      `${logKey} No collateral matched position ${heldAsset} for ${conditionId} — defaulting to pUSD`
+    );
+    return PUSD_ADDRESS;
+  } catch (error) {
+    Logger.log(
+      'warn',
+      fnLog,
+      `${logKey} Collateral resolution failed for ${conditionId}: ${String(error)} — defaulting to pUSD`
+    );
+    return PUSD_ADDRESS;
+  }
+}
+
+/**
+ * Redeem all winning CTF positions for a user and auto-withdraw proceeds to Scroll.
+ *
+ * Positions with curPrice >= 0.999 are resolved-and-won. For each we call
+ * CTF.redeemPositions() via the gasless Relayer (batched into one tx).
+ * neg-risk markets redeem through the NegRiskAdapter instead, using the exact
+ * on-chain token balance of the winning outcome.
+ *
+ * After redemption the collateral (pUSD for V2 markets, USDC.e for legacy
+ * neg-risk markets) lands in the deposit wallet, and withdrawSellProceeds fires
+ * to bridge whichever token arrived back to Scroll automatically. The sweep also
+ * runs when nothing new is redeemable, to pick up proceeds settled on a prior run.
+ */
+export async function claimWinningPositions(
+  user: IUser,
+  privateKey: string,
+  logKey: string,
+  onlyConditionId?: string
+): Promise<{ claimed: number; txHash?: string; pendingResolution?: boolean }> {
+  const fnLog = `[${LOG_PREFIX}:claimWinningPositions]`;
+
+  if (!user.polymarket_account) throw new Error('No Polymarket account');
+
+  const polygonAddress = user.polymarket_account.polygon_address;
+
+  // Always attempt to sweep any already-settled proceeds back to Scroll, even
+  // when there's nothing new to redeem. Redemptions confirmed on a prior run
+  // leave the collateral (pUSD or legacy USDC.e) idle in the deposit wallet;
+  // without this, those funds would be stranded until the next purchase.
+  const sweepProceeds = () =>
+    withdrawSellProceeds(user, privateKey, logKey).catch((err) => {
+      Logger.log(
+        'error',
+        fnLog,
+        `${logKey} Background withdrawal after claim failed: ${String(err)}`
+      );
+    });
+
+  const positions = await getPositions(polygonAddress, logKey);
+  const winning = positions
+    .filter((p) => (p.curPrice ?? 0) >= 0.999)
+    .filter((p) => !onlyConditionId || p.conditionId === onlyConditionId);
+
+  if (winning.length === 0) {
+    Logger.log(
+      'info',
+      fnLog,
+      `${logKey} No winning positions found — sweeping any settled proceeds`
+    );
+    sweepProceeds();
+    return { claimed: 0 };
+  }
+
+  Logger.log('info', fnLog, `${logKey} Found ${winning.length} winning position(s)`);
+
+  // Tracks whether any winning-priced position was skipped specifically because the
+  // CTF oracle hasn't finalized yet, as opposed to unknown outcome / already redeemed.
+  // Lets the caller tell "market pending resolution" apart from "nothing to claim",
+  // which otherwise surface as the same confusing `claimed: 0`.
+  let pendingResolution = false;
+
+  const toRedeem = (
+    await Promise.all(
+      winning.map(async (p) => {
+        const outcome = (p.outcome ?? '').toLowerCase();
+        let indexSet: number;
+        if (outcome === 'yes') {
+          indexSet = 1;
+        } else if (outcome === 'no') {
+          indexSet = 2;
+        } else {
+          Logger.log(
+            'warn',
+            fnLog,
+            `${logKey} Unknown outcome "${p.outcome}" — skipping conditionId ${p.conditionId}`
+          );
+          return null;
+        }
+
+        // Gate on on-chain resolution: payoutDenominator > 0 means the oracle
+        // has finalized the outcome. Without this the CLOB can show 100¢ while
+        // redeemPositions() reverts silently, burning gas and recording a phantom claim.
+        const resolved = await isCtfMarketResolved(p.conditionId, logKey);
+        if (!resolved) {
+          pendingResolution = true;
+          Logger.log(
+            'warn',
+            fnLog,
+            `${logKey} Market ${p.conditionId} shows price≥0.999 on CLOB but is NOT yet resolved on-chain — skipping`
+          );
+          return null;
+        }
+
+        // neg-risk markets redeem via the NegRiskAdapter, which needs the exact raw
+        // token balance of the winning outcome (not just an index set).
+        let negRisk = false;
+        try {
+          const clobInfo = await getClobMarketInfo(p.conditionId, logKey);
+          negRisk = Boolean((clobInfo as { neg_risk?: boolean }).neg_risk);
+        } catch {
+          // CLOB info unavailable — assume binary CTF and proceed optimistically
+        }
+
+        if (negRisk) {
+          const rawAmount = await getCtfTokenBalance(polygonAddress, p.asset, logKey);
+          if (rawAmount.isZero()) {
+            Logger.log(
+              'warn',
+              fnLog,
+              `${logKey} Neg-risk position ${p.conditionId} has zero on-chain balance — skipping`
+            );
+            return null;
+          }
+          return {
+            conditionId: p.conditionId,
+            indexSet,
+            negRisk: true,
+            amount: rawAmount.toString()
+          } as RedeemPosition;
+        }
+
+        // Standard binary CTF: also verify on-chain balance before redeeming.
+        // The Data API price (>= 0.999) only means the market resolved; it does NOT
+        // confirm the deposit wallet still holds the outcome tokens. Without this
+        // check, we'd fire a redeemPositions(0) that burns gas, records a phantom
+        // claim, and leaves pUSD = $0 — the same position keeps appearing forever.
+        const stdBalance = await getCtfTokenBalance(polygonAddress, p.asset, logKey);
+        if (stdBalance.isZero()) {
+          Logger.log(
+            'warn',
+            fnLog,
+            `${logKey} Standard CTF position ${p.conditionId} has zero on-chain balance — skipping`
+          );
+          return null;
+        }
+
+        // Resolve the market's collateral (pUSD vs legacy USDC.e). Redeeming with the
+        // wrong token burns 0 and pays out nothing while the tx still confirms.
+        const collateralToken = await resolveCtfCollateral(
+          p.conditionId,
+          indexSet,
+          p.asset,
+          logKey
+        );
+
+        return { conditionId: p.conditionId, indexSet, collateralToken } as RedeemPosition;
+      })
+    )
+  ).filter((r): r is RedeemPosition => r !== null);
+
+  if (toRedeem.length === 0) {
+    // Nothing newly redeemable, but prior-run proceeds may still be idle — sweep.
+    sweepProceeds();
+    return { claimed: 0, pendingResolution };
+  }
+
+  const txHash = await executeRedeemPositions(privateKey, polygonAddress, toRedeem, logKey);
+
+  // Record the claim in transaction history (IN: proceeds land on Polygon).
+  // Amount is the USD value of the winning positions being redeemed.
+  // Token: legacy neg-risk markets redeem to USDC.e; standard CLOB V2 markets redeem to pUSD.
+  // Only sum positions that passed the on-chain balance check (i.e., are in toRedeem).
+  const redeemConditionIds = new Set(toRedeem.map((r) => r.conditionId));
+  const claimedValue = winning
+    .filter((p) => redeemConditionIds.has(p.conditionId))
+    .reduce((sum, p) => sum + (p.currentValue ?? 0), 0);
+  // Label the history record with the collateral that actually pays out: USDC.e for
+  // neg-risk or legacy standard markets, pUSD (undefined → default) otherwise.
+  const paysUsdce = toRedeem.some((r) => r.negRisk || r.collateralToken === USDCE_ADDRESS);
+  const claimToken = paysUsdce ? USDCE_SYMBOL : undefined;
+  await recordClaim({
+    userProxy: user.wallets[0]?.wallet_proxy || '',
+    amount: claimedValue,
+    txHash,
+    token: claimToken
+  });
+
+  // Auto-withdraw redeemed proceeds back to Scroll (fire-and-forget, same as SELL
+  // flow). Link the withdrawal to the claim record above so its bridge leg is
+  // embedded inline (one unified "settlement" row) instead of emitting a second
+  // standalone polymarket_withdraw row for the same logical claim.
+  void withdrawSellProceeds(user, privateKey, logKey, undefined, txHash).catch((err) =>
+    Logger.log('error', fnLog, `${logKey} Background withdrawal after claim failed: ${String(err)}`)
+  );
+
+  return { claimed: toRedeem.length, txHash };
 }

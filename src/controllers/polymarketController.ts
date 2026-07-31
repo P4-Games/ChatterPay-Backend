@@ -10,9 +10,14 @@
  */
 
 import { randomUUID } from 'crypto';
+import type { BigNumber } from 'ethers';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import { POLYMARKET_ENABLED, POLYMARKET_TERMS_VERSION } from '../config/constants';
+import {
+  CHATTERPAY_DOMAIN,
+  POLYMARKET_ENABLED,
+  POLYMARKET_TERMS_VERSION
+} from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import type { IUser } from '../models/userModel';
@@ -26,10 +31,10 @@ import {
   getPurchaseById,
   updatePurchaseStatus
 } from '../services/mongo/mongoPolymarketService';
-import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import {
   sendPolymarketDisabledNotification,
-  sendPolymarketTermsNotAcceptedNotification
+  sendPolymarketTermsNotAcceptedNotification,
+  sendPolymarketTermsRequest
 } from '../services/notificationService';
 import {
   acceptTerms,
@@ -44,32 +49,55 @@ import {
   getCurrentTerms,
   getEventBySlug,
   getEvents,
+  getMarketByClobTokenId,
   getMarketBySlug,
   getMarketPrice,
   getMarkets,
   getOpenOrders,
   getPnlHistory,
+  getPolymarketBalanceSummary,
   getPortfolioValue,
   getPositions,
   getTradeHistory,
   getTradesHistory,
   hasAcceptedCurrentTerms,
+  MIN_BUY_ORDER_USD,
   POLYMARKET_MAX_PRICE,
   POLYMARKET_MIN_PRICE,
   placeOrder,
   resolveMaxSize,
   searchEvents,
-  searchMarkets,
   syncOpenOrders,
   withdrawSellProceeds
 } from '../services/polymarket';
 import {
   executeBridge,
   getPreferredScrollStablecoin,
+  getScrollStablecoinTotal,
   withdrawToScroll
 } from '../services/polymarket/polymarketBridgeService';
-import { executePurchase } from '../services/polymarket/polymarketPurchaseService';
-import { executeGaslessWithdrawal } from '../services/polymarket/polymarketRelayerService';
+import {
+  discardSupersededOrder,
+  enrichOrderModelSlug,
+  markOrderInProgress,
+  recordBridge,
+  recordOrderFailed,
+  recordOrderIntent,
+  recordOrderPlaced,
+  recordWithdraw,
+  refineBuyToken
+} from '../services/polymarket/polymarketHistoryService';
+import {
+  claimWinningPositions,
+  executePurchase
+} from '../services/polymarket/polymarketPurchaseService';
+import {
+  createRelayClient,
+  deploySafeWallet,
+  deriveSafeAddress,
+  executeGaslessWithdrawal,
+  transferPusdFromDepositWallet
+} from '../services/polymarket/polymarketRelayerService';
 import { secService } from '../services/secService';
 import { getUser } from '../services/userService';
 import type {
@@ -98,10 +126,15 @@ const LOG_PREFIX = 'polymarketController';
 // ============================================================================
 
 /** Standard error response */
-function errorReply(reply: FastifyReply, statusCode: number, message: string): FastifyReply {
+function errorReply(
+  reply: FastifyReply,
+  statusCode: number,
+  message: string,
+  code?: string
+): FastifyReply {
   return reply.status(statusCode).send({
     status: 'error',
-    data: { message },
+    data: code ? { message, code } : { message },
     timestamp: new Date().toISOString()
   });
 }
@@ -291,10 +324,24 @@ export const polymarketGetEvents = async (
       )
     ]);
 
-    // Deduplicate: remove country events from the regular list, then prepend them
+    // Deduplicate: remove country events from the regular list, then prepend them.
+    // Gamma's /public-search returns SLIMMED event objects (no `teams`, among
+    // others), so for duplicates prefer the full object from the regular list,
+    // and hydrate the rest via the by-slug endpoint (cached) — otherwise sports
+    // events lose their team flags whenever they match the country query.
     const countryEventIds = new Set(countryEvents.map((e) => e.id));
+    const regularById = new Map(regularEvents.map((e) => [e.id, e]));
+    const hydratedCountryEvents = await Promise.all(
+      countryEvents.map(async (e) => {
+        const full = regularById.get(e.id);
+        if (full) return full;
+        if (!e.slug) return e;
+        const bySlug = await getEventBySlug(e.slug, logKey).catch(() => null);
+        return bySlug ?? e;
+      })
+    );
     const dedupedRegular = regularEvents.filter((e) => !countryEventIds.has(e.id));
-    const events = [...countryEvents, ...dedupedRegular];
+    const events = [...hydratedCountryEvents, ...dedupedRegular];
 
     return successReply(reply, { events });
   } catch (error) {
@@ -354,9 +401,9 @@ export const polymarketSearchMarkets = async (
       return errorReply(reply, 400, 'Missing query parameter');
     }
 
-    const results = await searchMarkets(request.query.query, request.query.limit ?? 10, logKey);
+    const events = await searchEvents(request.query.query, request.query.limit ?? 10, logKey);
 
-    return successReply(reply, { results });
+    return successReply(reply, { events });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to search markets');
@@ -452,14 +499,74 @@ export const polymarketAcceptTerms = async (
       user = await createPolymarketAccount(user, privateKey, logKey);
     }
 
-    const updatedUser = await acceptTerms(user, request.body.terms_version, logKey);
+    const updatedUser = await acceptTerms(user, logKey);
     return successReply(reply, {
-      message: `Terms v${request.body.terms_version} accepted`,
+      message: `Terms v${POLYMARKET_TERMS_VERSION} accepted`,
       account: getAccountStatus(updatedUser)
     });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, `Failed to accept terms: ${String(error)}`);
+  }
+};
+
+// ============================================================================
+// Terms Endpoints
+// ============================================================================
+
+/** GET /polymarket/terms — public, no auth required */
+export const polymarketGetPublicTerms = async (
+  _request: FastifyRequest,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  if (!checkEnabled(reply)) return reply;
+  const logKey = `[op:polymarket-public-terms]`;
+
+  try {
+    const terms = await getCurrentTerms(logKey);
+    if (!terms) {
+      return errorReply(reply, 404, 'Terms not found');
+    }
+
+    return successReply(reply, {
+      version: terms.version,
+      content: terms.content,
+      effective_date: terms.effective_date,
+      terms_url: `${CHATTERPAY_DOMAIN}/polymarket/terms`
+    });
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, String(error));
+    return errorReply(reply, 500, 'Failed to fetch terms');
+  }
+};
+
+/** POST /polymarket/terms/send — sends WhatsApp interactive Accept/Decline button to user */
+export const polymarketSendTerms = async (
+  request: FastifyRequest<{ Body: PolymarketAccountBody }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  if (!checkEnabled(reply)) return reply;
+  const logKey = `[op:polymarket-send-terms]`;
+
+  try {
+    const user = await resolveUser(request.body.channel_user_id, logKey);
+    if (!user) {
+      return errorReply(reply, 400, 'Invalid or missing channel_user_id');
+    }
+
+    const terms = await getCurrentTerms(logKey);
+    if (!terms) {
+      return errorReply(reply, 404, 'Terms not found');
+    }
+
+    const termsUrl = `${CHATTERPAY_DOMAIN}/polymarket/terms`;
+
+    await sendPolymarketTermsRequest(user.phone_number, String(terms.version), termsUrl);
+
+    return successReply(reply, { message: 'NO_REPLY_REQUIRED' });
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, String(error));
+    return errorReply(reply, 500, 'Failed to send terms request');
   }
 };
 
@@ -474,6 +581,9 @@ export const polymarketPlaceOrder = async (
 ): Promise<FastifyReply> => {
   if (!checkEnabled(reply)) return reply;
   const logKey = `[op:polymarket-place-order]`;
+  // Stable id for the order lifecycle history record (declared here so the
+  // outer catch can mark it failed). Assigned once the account/price are known.
+  let orderTrx: string | undefined;
 
   try {
     const user = await resolveUser(request.body.channel_user_id, logKey);
@@ -503,15 +613,54 @@ export const polymarketPlaceOrder = async (
     }
 
     // ── Price validation ──────────────────────────────────────────────────
-    // Polymarket requires prices in (0.001, 0.999). Reject early before
-    // wasting gas on a bridge for an impossible order (e.g. resolved market).
-    if (price < POLYMARKET_MIN_PRICE || price > POLYMARKET_MAX_PRICE) {
+    // Polymarket requires prices strictly in (0.001, 0.999). A price of exactly
+    // 0 or 1 means the market has resolved; clamp to the boundary and let the
+    // CLOB reject with its own error if the market is truly closed.
+    // priceClampedToMax is used below as a fallback signal: if the SELL order
+    // fails after clamping, the market is almost certainly resolved and we
+    // should try CTF redemption instead.
+    const priceClampedToMax = price >= POLYMARKET_MAX_PRICE;
+    let effectivePrice = price;
+    if (priceClampedToMax) {
+      effectivePrice = POLYMARKET_MAX_PRICE;
+      Logger.log(
+        'warn',
+        LOG_PREFIX,
+        `${logKey} Price ${price} clamped to ${POLYMARKET_MAX_PRICE} — market may be near resolution`
+      );
+    } else if (price <= POLYMARKET_MIN_PRICE) {
+      effectivePrice = POLYMARKET_MIN_PRICE;
+      Logger.log(
+        'warn',
+        LOG_PREFIX,
+        `${logKey} Price ${price} clamped to ${POLYMARKET_MIN_PRICE} — market may be near resolution`
+      );
+    }
+
+    // ── Minimum order value (BUY) ─────────────────────────────────────────
+    // Enforced above Polymarket's $1.00 FOK minimum so bridge fees/slippage
+    // can't push the deliverable amount below the CLOB's floor.
+    if (side === 'BUY' && effectivePrice * size < MIN_BUY_ORDER_USD) {
+      const minShares = Math.ceil((MIN_BUY_ORDER_USD / effectivePrice) * 100) / 100;
       return errorReply(
         reply,
         400,
-        `Invalid price ${price}: must be between ${POLYMARKET_MIN_PRICE} and ${POLYMARKET_MAX_PRICE}. The market may have already been resolved.`
+        `Order value $${(effectivePrice * size).toFixed(2)} is below the $${MIN_BUY_ORDER_USD.toFixed(2)} minimum for BUY orders. ` +
+          `At price $${effectivePrice}, buy at least ${minShares} shares.`
       );
     }
+
+    // Record the order intent (status `submitted`) before any bridge so a
+    // failure at the bridge step still leaves a `failed` order row in history.
+    orderTrx = await recordOrderIntent({
+      side,
+      refId: randomUUID(),
+      userProxy: user.wallets[0]?.wallet_proxy || '',
+      price: effectivePrice,
+      size,
+      tokenId: token_id,
+      logKey
+    });
 
     // ── Auto-bridge: Scroll → Polygon ────────────────────────────────────
     // The user's USDC lives on Scroll. We need to bridge it to Polygon
@@ -520,10 +669,8 @@ export const polymarketPlaceOrder = async (
     // Required USDC = price × size (e.g. 0.55 × 10 = 5.5 USDC)
     // We add a small buffer (2%) to cover bridge fees / slippage.
     if (side === 'BUY') {
-      const requiredUsdc = price * size;
+      const requiredUsdc = effectivePrice * size;
       const bridgeAmountHuman = requiredUsdc * BRIDGE_FEE_BUFFER;
-      // Convert to smallest units (USDC has 6 decimals)
-      const bridgeAmountSmallest = Math.ceil(bridgeAmountHuman * 1_000_000).toString();
 
       Logger.log(
         'info',
@@ -532,24 +679,29 @@ export const polymarketPlaceOrder = async (
       );
 
       try {
-        const bridgeResult = await executeBridge(user, privateKey, bridgeAmountSmallest, logKey);
+        const bridgeResult = await executeBridge(
+          user,
+          privateKey,
+          bridgeAmountHuman.toFixed(6),
+          logKey
+        );
         Logger.log('info', LOG_PREFIX, `${logKey} Bridge completed: ${bridgeResult.txHash}`);
 
         // Save bridge to transaction history
-        await mongoTransactionService.saveTransaction({
-          tx: bridgeResult.txHash,
+        await recordBridge({
+          txHash: bridgeResult.txHash,
           walletFrom: user.wallets[0]?.wallet_proxy || '',
           walletTo: user.polymarket_account!.polygon_address,
           amount: bridgeAmountHuman,
-          fee: 0,
           token: bridgeResult.fromToken || 'USDC',
-          type: 'polymarket_bridge',
-          status: 'completed',
-          chain_id: 534352,
-          user_notes: `Polymarket ${side} bridge`
+          side
         });
+
+        // Refine the buy order record to show the Scroll-side token/amount.
+        void refineBuyToken(orderTrx!, bridgeResult.fromToken || 'pUSD', bridgeAmountHuman);
       } catch (bridgeError) {
         Logger.log('error', LOG_PREFIX, `${logKey} Bridge failed: ${String(bridgeError)}`);
+        await recordOrderFailed(orderTrx, `Bridge failed: ${String(bridgeError)}`);
         return errorReply(
           reply,
           500,
@@ -567,18 +719,64 @@ export const polymarketPlaceOrder = async (
     // ── Place order (using the bridged amount as the actual order size) ──
     // The bridge output may differ slightly from the input due to fees.
     // We use the original requested size since the buffer should cover it.
-    const result = await placeOrder(
-      user,
-      privateKey,
-      {
-        tokenId: token_id,
-        price,
-        size,
-        side,
-        orderType: order_type
-      },
-      logKey
-    );
+    //
+    // If the SELL order fails after the price was clamped to the max boundary,
+    // the market is almost certainly resolved — fall back to CTF redemption
+    // instead of surfacing a confusing CLOB error to the caller.
+    // Placement underway — move the order history record to in_progress.
+    await markOrderInProgress(orderTrx);
+
+    let result;
+    try {
+      result = await placeOrder(
+        user,
+        privateKey,
+        {
+          tokenId: token_id,
+          price: effectivePrice,
+          size,
+          side,
+          orderType: order_type
+        },
+        logKey
+      );
+    } catch (orderError) {
+      if (side === 'SELL' && priceClampedToMax) {
+        Logger.log(
+          'warn',
+          LOG_PREFIX,
+          `${logKey} SELL failed on boundary price (${effectivePrice}) — attempting CTF claim fallback. Error: ${String(orderError)}`
+        );
+        const marketInfo = await getMarketByClobTokenId(token_id, logKey).catch(() => null);
+        const claimConditionId = marketInfo?.conditionId;
+        const claimResult = await claimWinningPositions(user, privateKey, logKey, claimConditionId);
+        if (claimResult.claimed > 0) {
+          // The SELL was superseded by a CTF claim (recorded inside
+          // claimWinningPositions) — discard the redundant sell row so the user
+          // sees a single "settlement" entry, not a phantom failed sell.
+          await discardSupersededOrder(orderTrx);
+          return successReply(reply, {
+            claimed: claimResult.claimed,
+            tx_hash: claimResult.txHash,
+            withdrawal_pending: true,
+            message: `Market appears resolved. Claimed ${claimResult.claimed} winning position(s). Proceeds are being withdrawn to Scroll.`
+          });
+        }
+        if (claimResult.pendingResolution) {
+          // The market is closed but the CTF oracle hasn't finalized yet: nothing
+          // to sell (no order book) and nothing to claim (not resolved on-chain).
+          // Surface that explicitly instead of the raw CLOB rejection.
+          await recordOrderFailed(orderTrx, 'Market pending resolution');
+          return errorReply(
+            reply,
+            409,
+            'This market has closed and is awaiting final resolution on-chain. It cannot be sold or claimed until Polymarket finalizes the outcome — this typically takes a few hours to a few days. Try again later.',
+            'MARKET_PENDING_RESOLUTION'
+          );
+        }
+      }
+      throw orderError;
+    }
 
     // The CLOB SDK response may use different field names for the order ID.
     const raw = result as unknown as Record<string, unknown>;
@@ -589,32 +787,26 @@ export const polymarketPlaceOrder = async (
       user_phone: user.phone_number,
       order_id: String(orderId),
       market_condition_id: token_id,
-      market_slug: '',
       token_id,
       side,
-      price,
+      price: effectivePrice,
       size,
       status: 'pending'
     });
+    void enrichOrderModelSlug(String(orderId), token_id, logKey);
 
-    // Save order to transaction history
-    await mongoTransactionService.saveTransaction({
-      tx: String(orderId),
-      walletFrom: user.polymarket_account!.polygon_address,
-      walletTo: 'polymarket',
-      amount: price * size,
-      fee: 0,
-      token: 'USDC',
-      type: 'polymarket_order',
-      status: 'completed',
-      chain_id: 137,
-      user_notes: `Polymarket ${side} order`
+    // Order accepted by the CLOB — evolve the history record to completed and
+    // attach the real CLOB order id (async fills refine it via syncOpenOrders).
+    await recordOrderPlaced(orderTrx, {
+      orderId: String(orderId),
+      price: effectivePrice,
+      effectiveSize: size
     });
 
     // Auto-withdraw SELL proceeds from Polygon Safe → Scroll proxy.
     // Fire-and-forget so the API response isn't delayed.
     if (side === 'SELL') {
-      withdrawSellProceeds(user, privateKey, logKey).catch((err) => {
+      withdrawSellProceeds(user, privateKey, logKey, undefined, orderTrx).catch((err) => {
         Logger.log('error', LOG_PREFIX, `${logKey} Background withdrawal failed: ${String(err)}`);
       });
     }
@@ -624,7 +816,7 @@ export const polymarketPlaceOrder = async (
       order_id: String(orderId),
       status: 'pending',
       side,
-      price,
+      price: effectivePrice,
       size,
       token_id,
       withdrawal_pending: side === 'SELL',
@@ -632,6 +824,7 @@ export const polymarketPlaceOrder = async (
     });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
+    if (orderTrx) await recordOrderFailed(orderTrx, String(error));
     return errorReply(reply, 500, `Failed to place order: ${String(error)}`);
   }
 };
@@ -872,8 +1065,18 @@ export const polymarketGetPortfolioValue = async (
       return errorReply(reply, 400, 'Polymarket account not created');
     }
 
-    const portfolio = await getPortfolioValue(user.polymarket_account.polygon_address, logKey);
-    return successReply(reply, { portfolio });
+    const polygonAddress = user.polymarket_account.polygon_address;
+    const eoaAddress = user.wallets[0]?.wallet_eoa;
+    const safeAddress =
+      user.polymarket_account.wallet_type === 'deposit' && eoaAddress
+        ? deriveSafeAddress(eoaAddress)
+        : undefined;
+
+    const [portfolio, { idle_usdc }] = await Promise.all([
+      getPortfolioValue(polygonAddress, logKey),
+      getPolymarketBalanceSummary(polygonAddress, logKey, safeAddress)
+    ]);
+    return successReply(reply, { portfolio, idle_usdc });
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to fetch portfolio value');
@@ -927,10 +1130,15 @@ export const polymarketGetPnlHistory = async (
       return errorReply(reply, 400, 'Polymarket account not created');
     }
 
+    const { limit, interval } = request.body;
+    const validInterval =
+      interval && ['1d', '1w', '1m', 'all'].includes(interval) ? interval : 'all';
+
     const history = await getPnlHistory(
       user.polymarket_account.polygon_address,
       logKey,
-      request.body.limit
+      limit,
+      validInterval
     );
     return successReply(reply, { history });
   } catch (error) {
@@ -1066,16 +1274,124 @@ export const polymarketWithdraw = async (
     // Determine which stablecoin the user holds on Scroll (USDC or USDT)
     const toToken = await getPreferredScrollStablecoin(proxyAddress, logKey);
 
-    const quote = await withdrawToScroll(
-      user.polymarket_account.polygon_address,
-      proxyAddress,
-      amountSmallest,
-      logKey,
-      toToken
+    const walletType = user.polymarket_account.wallet_type ?? 'safe';
+    let bridgeSourceAddress = user.polymarket_account.polygon_address;
+
+    const { ethers } = await import('ethers');
+    const { POLYMARKET_POLYGON_RPC_URL } = await import('../config/constants');
+    const { PUSD_ADDRESS, USDCE_ADDRESS } = await import(
+      '../services/polymarket/polymarketConstants'
     );
 
-    // Step 2: Push quote payloads into Relayer for gasless execution
-    // executeGaslessWithdrawal takes (privateKey, withdrawData, amount, logKey)
+    const balanceAbi = ['function balanceOf(address) view returns (uint256)'];
+    const provider = new ethers.providers.JsonRpcProvider(POLYMARKET_POLYGON_RPC_URL);
+    const pusd = new ethers.Contract(PUSD_ADDRESS, balanceAbi, provider);
+    const usdce = new ethers.Contract(USDCE_ADDRESS, balanceAbi, provider);
+
+    // Deposit wallet: relayer blocks LiFi spender approval.
+    // Transfer pUSD to Safe first, then bridge from Safe.
+    if (walletType === 'deposit') {
+      const safeAddress = deriveSafeAddress(new ethers.Wallet(privateKey).address);
+
+      // Transfer any pUSD and USDC.e sitting in the deposit wallet to the Safe.
+      // Settlements from legacy markets pay in USDC.e; new markets pay in pUSD.
+      const [depositPusd, depositUsdce] = await Promise.all([
+        pusd.balanceOf(bridgeSourceAddress),
+        usdce.balanceOf(bridgeSourceAddress)
+      ]);
+
+      if (depositPusd.gt(0)) {
+        await transferPusdFromDepositWallet(
+          privateKey,
+          user.polymarket_account.polygon_address,
+          safeAddress,
+          depositPusd.toString(),
+          logKey
+        );
+      }
+
+      if (depositUsdce.gt(0)) {
+        const erc20Iface = new ethers.utils.Interface([
+          'function transfer(address to, uint256 amount) returns (bool)'
+        ]);
+        const client = createRelayClient(privateKey);
+        const deadline = Math.floor(Date.now() / 1000 + 3600).toString();
+        const resp = await client.executeDepositWalletBatch(
+          [
+            {
+              target: USDCE_ADDRESS,
+              data: erc20Iface.encodeFunctionData('transfer', [
+                safeAddress,
+                depositUsdce.toString()
+              ]),
+              value: '0'
+            }
+          ],
+          user.polymarket_account.polygon_address,
+          deadline
+        );
+        await resp.wait();
+        Logger.log(LOG_PREFIX, `${logKey} Transferred USDC.e from deposit wallet to Safe`);
+      }
+
+      bridgeSourceAddress = safeAddress;
+    }
+
+    // Check both pUSD and USDC.e balances in the bridge source (Safe).
+    // Prefer pUSD; fall back to USDC.e for legacy market settlements.
+    const [safePusdBal, safeUsdceBal] = await Promise.all([
+      pusd.balanceOf(bridgeSourceAddress),
+      usdce.balanceOf(bridgeSourceAddress)
+    ]);
+
+    const requestedBn = ethers.BigNumber.from(amountSmallest);
+    const MIN_BRIDGE_UNITS = ethers.BigNumber.from(1_000_000); // $1
+
+    let actualBal: BigNumber;
+    let fromTokenAddress: string;
+
+    if (safePusdBal.gte(MIN_BRIDGE_UNITS)) {
+      actualBal = safePusdBal;
+      fromTokenAddress = PUSD_ADDRESS;
+    } else if (safeUsdceBal.gte(MIN_BRIDGE_UNITS)) {
+      actualBal = safeUsdceBal;
+      fromTokenAddress = USDCE_ADDRESS;
+    } else {
+      Logger.log(
+        'warn',
+        LOG_PREFIX,
+        `${logKey} No bridgeable stablecoin in Safe (pUSD=${safePusdBal}, USDC.e=${safeUsdceBal}). Triggering claim+withdraw flow.`
+      );
+      claimWinningPositions(user, privateKey, logKey).catch((err) =>
+        Logger.log('error', LOG_PREFIX, `${logKey} Background claim failed: ${String(err)}`)
+      );
+      return successReply(reply, {
+        withdrawal_pending: true,
+        message:
+          'Insufficient pUSD in wallet. Claim + withdrawal initiated — funds will arrive on Scroll once positions are redeemed.'
+      });
+    }
+
+    const bridgeAmountSmallest = actualBal.lt(requestedBn) ? actualBal.toString() : amountSmallest;
+
+    if (actualBal.lt(requestedBn)) {
+      Logger.log(
+        'warn',
+        LOG_PREFIX,
+        `${logKey} Capping bridge from ${requestedBn} to actual balance ${actualBal}`
+      );
+    }
+
+    await deploySafeWallet(privateKey, logKey);
+
+    const quote = await withdrawToScroll(
+      bridgeSourceAddress,
+      proxyAddress,
+      bridgeAmountSmallest,
+      logKey,
+      toToken,
+      fromTokenAddress
+    );
     await executeGaslessWithdrawal(
       privateKey,
       {
@@ -1084,23 +1400,17 @@ export const polymarketWithdraw = async (
         data: quote.data,
         value: quote.value
       },
-      amountSmallest,
-      logKey
+      bridgeAmountSmallest,
+      logKey,
+      fromTokenAddress
     );
 
-    // Save withdrawal to transaction history
-    const withdrawAmountHuman = Number(request.body.amount);
-    await mongoTransactionService.saveTransaction({
-      tx: `withdraw-${Date.now()}`,
+    const withdrawAmountHuman = Number(bridgeAmountSmallest) / 1_000_000;
+    await recordWithdraw({
       walletFrom: user.polymarket_account.polygon_address,
       walletTo: proxyAddress,
       amount: withdrawAmountHuman,
-      fee: 0,
-      token: toToken,
-      type: 'polymarket_withdraw',
-      status: 'completed',
-      chain_id: 137,
-      user_notes: 'Polymarket withdrawal to Scroll'
+      token: toToken
     });
 
     return successReply(reply, {
@@ -1141,8 +1451,10 @@ export const polymarketPurchase = async (
       side,
       order_type,
       bridge_amount,
+      bridge_token,
       terms_version
     } = request.body;
+
     if (!token_id || price == null || rawSize == null || !side) {
       return errorReply(reply, 400, 'Missing required parameters (token_id, price, size, side)');
     }
@@ -1151,9 +1463,12 @@ export const polymarketPurchase = async (
       return errorReply(reply, 400, 'size=max is only supported for SELL orders');
     }
 
-    // Polymarket requires prices in (0.001, 0.999). Reject early before
-    // wasting gas on a bridge for an impossible order (e.g. resolved market).
-    if (price < 0.001 || price > 0.999) {
+    // Polymarket requires prices in (0.001, 0.999).
+    // For BUY orders with an out-of-range price, reject early — no bridge should start.
+    // For SELL orders with price >= 0.999 the market is likely resolved; fall through to
+    // the claim flow below instead of returning an error.
+    const priceClampedToMax = side === 'SELL' && price >= POLYMARKET_MAX_PRICE;
+    if (!priceClampedToMax && (price < 0.001 || price > 0.999)) {
       return errorReply(
         reply,
         400,
@@ -1161,9 +1476,34 @@ export const polymarketPurchase = async (
       );
     }
 
-    const safeBridgeAmount = bridge_amount ?? '0';
-    if (side === 'BUY' && (!bridge_amount || bridge_amount === '0')) {
-      return errorReply(reply, 400, 'Missing required parameter (bridge_amount) for BUY order');
+    // Minimum order value for BUY: enforced above Polymarket's $1.00 FOK
+    // minimum so bridge fees/slippage can't push the deliverable below it.
+    // (BUY size is always numeric — size=max is rejected above for BUY.)
+    if (side === 'BUY' && price * (rawSize as number) < MIN_BUY_ORDER_USD) {
+      const minShares = Math.ceil((MIN_BUY_ORDER_USD / price) * 100) / 100;
+      return errorReply(
+        reply,
+        400,
+        `Order value $${(price * (rawSize as number)).toFixed(2)} is below the $${MIN_BUY_ORDER_USD.toFixed(2)} minimum for BUY orders. ` +
+          `At price $${price}, buy at least ${minShares} shares.`
+      );
+    }
+
+    // Auto-compute bridge_amount when not provided for BUY orders.
+    // Computed as: ceil(price * size * BRIDGE_FEE_BUFFER * 1_000_000) to cover fees/slippage.
+    // This avoids requiring the caller (e.g. an LLM) to do floating-point arithmetic.
+    let safeBridgeAmount: string;
+    if (side === 'BUY') {
+      if (bridge_amount && bridge_amount !== '0') {
+        safeBridgeAmount = bridge_amount;
+      } else {
+        // Auto-compute: bridge enough to cover the full order + fee buffer.
+        // size=max is resolved later, so use 0 here — executePurchase will use the actual deficit.
+        const sizeNum = rawSize === 'max' ? 0 : (rawSize as number);
+        safeBridgeAmount = (price * sizeNum * BRIDGE_FEE_BUFFER).toFixed(6);
+      }
+    } else {
+      safeBridgeAmount = '0';
     }
 
     // Terms validation:
@@ -1190,6 +1530,77 @@ export const polymarketPurchase = async (
 
     const privateKey = await getUserPrivateKey(user);
 
+    // SELL at price >= 0.999 means the market is resolved — go straight to CTF claim.
+    // We still create a purchase record so the UI can poll /purchase/status and resolve
+    // the "placing order…" state, rather than hanging on 404 forever.
+    if (priceClampedToMax) {
+      const claimPurchaseId = randomUUID();
+      await createPurchase({
+        purchase_id: claimPurchaseId,
+        user_phone: user.phone_number,
+        token_id,
+        price,
+        size: typeof rawSize === 'number' ? rawSize : 0,
+        side: 'SELL',
+        order_type,
+        bridge_amount: '0',
+        terms_version
+      });
+      await updatePurchaseStatus(
+        claimPurchaseId,
+        'processing',
+        'order_placement',
+        undefined,
+        logKey
+      );
+
+      Logger.log(
+        'warn',
+        LOG_PREFIX,
+        `${logKey} SELL at boundary price (${price}) — market likely resolved, attempting CTF claim (purchase: ${claimPurchaseId})`
+      );
+
+      try {
+        const marketInfo = await getMarketByClobTokenId(token_id, logKey).catch(() => null);
+        const claimResult = await claimWinningPositions(
+          user,
+          privateKey,
+          logKey,
+          marketInfo?.conditionId
+        );
+        if (claimResult.claimed > 0) {
+          await updatePurchaseStatus(claimPurchaseId, 'completed', 'done', undefined, logKey);
+          return successReply(reply, {
+            purchase_id: claimPurchaseId,
+            claimed: claimResult.claimed,
+            tx_hash: claimResult.txHash,
+            withdrawal_pending: true,
+            message: `Market appears resolved. Claimed ${claimResult.claimed} winning position(s). Proceeds are being withdrawn to Scroll.`
+          });
+        }
+        const pendingMsg = claimResult.pendingResolution
+          ? 'This market has closed and is awaiting final resolution on-chain. It cannot be sold or claimed until Polymarket finalizes the outcome — this typically takes a few hours to a few days. Try again later.'
+          : `Price ${price} suggests a resolved market but no claimable winning positions were found.`;
+        await updatePurchaseStatus(
+          claimPurchaseId,
+          'failed',
+          'done',
+          { error: pendingMsg },
+          logKey
+        );
+        return errorReply(
+          reply,
+          claimResult.pendingResolution ? 409 : 400,
+          pendingMsg,
+          claimResult.pendingResolution ? 'MARKET_PENDING_RESOLUTION' : undefined
+        );
+      } catch (claimError) {
+        const errMsg = String(claimError);
+        await updatePurchaseStatus(claimPurchaseId, 'failed', 'done', { error: errMsg }, logKey);
+        throw claimError;
+      }
+    }
+
     // Resolve 'max' size for SELL orders by querying the CLOB balance
     let size: number;
     if (rawSize === 'max') {
@@ -1197,6 +1608,27 @@ export const polymarketPurchase = async (
       Logger.log('info', LOG_PREFIX, `${logKey} Resolved max size: ${size} shares`);
     } else {
       size = rawSize;
+    }
+
+    // Early balance check for BUY: fail fast before starting async flow.
+    // Skipped when bridge_token is a non-stablecoin (e.g. WETH) — resolveSourceToken
+    // validates that balance later with the correct USD conversion.
+    const SCROLL_STABLECOINS = new Set(['USDC', 'USDT']);
+    const bridgeTokenIsStablecoin =
+      !bridge_token || SCROLL_STABLECOINS.has(bridge_token.toUpperCase());
+    if (side === 'BUY' && bridgeTokenIsStablecoin) {
+      const proxyAddress = user.wallets[0]?.wallet_proxy || '';
+      if (proxyAddress) {
+        const requiredUsd = price * size;
+        const scrollBalance = await getScrollStablecoinTotal(proxyAddress, logKey);
+        if (scrollBalance < requiredUsd) {
+          return errorReply(
+            reply,
+            400,
+            `Insufficient balance: $${scrollBalance.toFixed(2)} available, need $${requiredUsd.toFixed(2)}`
+          );
+        }
+      }
     }
 
     const purchaseId = randomUUID();
@@ -1225,7 +1657,8 @@ export const polymarketPurchase = async (
         size,
         side,
         orderType: order_type ?? 'FOK',
-        bridgeAmount: safeBridgeAmount,
+        bridgeAmountUsd: safeBridgeAmount,
+        bridgeToken: bridge_token,
         termsVersion: terms_version
       },
       logKey
@@ -1294,5 +1727,37 @@ export const polymarketPurchaseStatus = async (
   } catch (error) {
     Logger.error(LOG_PREFIX, logKey, String(error));
     return errorReply(reply, 500, 'Failed to get purchase status');
+  }
+};
+
+/** POST /polymarket/positions/claim */
+export const polymarketClaimPositions = async (
+  request: FastifyRequest<{ Body: PolymarketUserDataBody }>,
+  reply: FastifyReply
+): Promise<FastifyReply> => {
+  if (!checkEnabled(reply)) return reply;
+  const logKey = `[op:polymarket-claim-positions]`;
+
+  try {
+    const user = await resolveUser(request.body.channel_user_id, logKey);
+    if (!user) return errorReply(reply, 400, 'Invalid or missing channel_user_id');
+    if (!validatePolymarketReady(user, reply)) return reply;
+
+    const privateKey = await getUserPrivateKey(user);
+    const result = await claimWinningPositions(user, privateKey, logKey);
+
+    if (result.claimed === 0) {
+      return successReply(reply, { claimed: 0, message: 'No winning positions to claim' });
+    }
+
+    return successReply(reply, {
+      claimed: result.claimed,
+      tx_hash: result.txHash,
+      withdrawal_pending: true,
+      message: `Claimed ${result.claimed} position(s). Proceeds are being withdrawn to Scroll.`
+    });
+  } catch (error) {
+    Logger.error(LOG_PREFIX, logKey, String(error));
+    return errorReply(reply, 500, `Failed to claim positions: ${String(error)}`);
   }
 };
