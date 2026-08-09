@@ -123,7 +123,9 @@ const mintNftOriginal = async (
       bddIdToUseAsUri
     ]);
 
-    const gasPrice = await provider.getGasPrice();
+    // 20% buffer over the current gas price: on EIP-1559 networks the base fee can tick up
+    // between estimation and broadcast, causing "max fee per gas less than block base fee".
+    const gasPrice = (await provider.getGasPrice()).mul(120).div(100);
     const tx = await nftContract.mintOriginal(recipientAddress, bddIdToUseAsUri, {
       gasLimit,
       gasPrice
@@ -180,7 +182,9 @@ const mintNftCopy = async (
       bddIdToUseAsUri
     ]);
 
-    const gasPrice = await provider.getGasPrice();
+    // 20% buffer over the current gas price: on EIP-1559 networks the base fee can tick up
+    // between estimation and broadcast, causing "max fee per gas less than block base fee".
+    const gasPrice = (await provider.getGasPrice()).mul(120).div(100);
     const tx = await nftContract.mintCopy(
       recipientAddress,
       parseInt(originalTOkenId, 10),
