@@ -1,7 +1,7 @@
 FROM node:20.19.0-bullseye AS base
 
 COPY package.json bun.lockb tsconfig.json ./
-RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.1.21" && \
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.14" && \
     echo 'export BUN_INSTALL="$HOME/.bun"' >> ~/.bashrc && \
     echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.bashrc && \
     echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.profile && \

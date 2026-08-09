@@ -1,6 +1,15 @@
 import type { AxiosResponse } from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Pin the Polymarket API URLs used by this test to their defaults, isolated from
+// .env overrides (e.g. POLYMARKET_DATA_API_URL pointing at a proxy in local dev).
+vi.mock('../../../src/config/constants', () => ({
+  POLYMARKET_DATA_API_URL: 'https://data-api.polymarket.com',
+  POLYMARKET_GAMMA_API_URL: 'https://gamma-api.polymarket.com',
+  POLYMARKET_USER_PNL_API_URL: 'https://user-pnl-api.polymarket.com',
+  POLYMARKET_POLYGON_RPC_URL: 'https://polygon-rpc.com'
+}));
+
 import { getPnlHistory } from '../../../src/services/polymarket/polymarketTradingService';
 
 // Mock axios module
