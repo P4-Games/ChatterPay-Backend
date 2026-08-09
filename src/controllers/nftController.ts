@@ -528,7 +528,10 @@ export const generateNftCopy = async (
     logKey = `[op:mintNftCopy:${channel_user_id}]`;
 
     // Verify that the NFT to copy exists
-    const nfts: INFT[] = await NFTModel.find({ id });
+    const nfts: INFT[] = await NFTModel.find({
+      id,
+      chain_id: request.server.networkConfig.chainId
+    });
     if (!nfts || nfts.length === 0) {
       const msgError = `NFT with id ${id} not found`;
       Logger.info('generateNftCopy', logKey, `${msgError}`);
@@ -587,7 +590,8 @@ export const generateNftCopy = async (
       // If it is being copied from a copy, then the original is sought.
       Logger.log('generateNftCopy', logKey, 'Searching by nft original.');
       const nftOriginal: INFT | null = await NFTModel.findOne({
-        id: nftCopyOf.copy_of_original
+        id: nftCopyOf.copy_of_original,
+        chain_id: request.server.networkConfig.chainId
       });
       if (nftOriginal) {
         copy_of_original = nftOriginal.id;
@@ -709,7 +713,7 @@ export const getNftById = async (
   try {
     const { id } = request.params;
 
-    const nft = (await NFTModel.find({ id }))?.[0];
+    const nft = (await NFTModel.find({ id, chain_id: request.server.networkConfig.chainId }))?.[0];
 
     if (nft) {
       return await returnSuccessResponse(reply, 'NFT found', {
@@ -763,7 +767,10 @@ export const getLastNFT = async (
       );
     }
 
-    const nft = (await NFTModel.find({ channel_user_id })).sort((a, b) => b.id - a.id)?.[0];
+    const nft = await NFTModel.findOne({
+      channel_user_id,
+      chain_id: request.server.networkConfig.chainId
+    }).sort({ timestamp: -1 });
 
     if (!nft) {
       return await returnErrorResponse('getLastNFT', '', reply, 404, 'NFT not found');
@@ -854,7 +861,8 @@ export const getNftList = async (
 ): Promise<void> => {
   const { tokenId } = request.params;
   try {
-    const nfts = await NFTModel.find({ id: tokenId });
+    const chain_id = request.server.networkConfig.chainId;
+    const nfts = await NFTModel.find({ id: tokenId, chain_id });
 
     if (nfts.length === 0) {
       return await returnErrorResponse('getNftList', '', reply, 400, 'NFT not found');
@@ -864,11 +872,11 @@ export const getNftList = async (
     if (nft.original) {
       return await returnSuccessResponse(reply, 'Original NFT found', {
         original: nft,
-        copies: await NFTModel.find({ copy_of: tokenId.toString() })
+        copies: await NFTModel.find({ copy_of: tokenId.toString(), chain_id })
       });
     }
 
-    const originalNft = (await NFTModel.find({ id: nft.copy_of }))?.[0];
+    const originalNft = (await NFTModel.find({ id: nft.copy_of, chain_id }))?.[0];
     return await returnSuccessResponse(reply, 'Original NFT found', {
       original: originalNft,
       copy: nft
