@@ -554,7 +554,9 @@ export async function executeUserOperationWithRetry(
       userOpType,
       logKey,
       perGasInitialMultiplier * perGasIncrement,
+      perGasIncrement,
       callDataGasInitialMultiplier,
+      timeoutMsBetweenRetries,
       maxRetries,
       attempt + 1
     );

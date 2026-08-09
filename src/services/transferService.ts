@@ -85,8 +85,8 @@ export async function sendTransferUserOperation(
       userOpGasConfig.perGasInitialMultiplier,
       userOpGasConfig.perGasIncrement,
       userOpGasConfig.callDataInitialMultiplier,
-      userOpGasConfig.maxRetries,
-      userOpGasConfig.timeoutMsBetweenRetries
+      userOpGasConfig.timeoutMsBetweenRetries,
+      userOpGasConfig.maxRetries
     );
 
     await logPaymasterEntryPointDeposit(
