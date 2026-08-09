@@ -47,7 +47,7 @@ function getDefiLlamaChainPrefix(chainId: number): string {
     534352: 'scroll',
     8453: 'base'
   };
-  return chainMap[chainId] || 'scroll';
+  return chainMap[chainId] || '';
 }
 
 /**
