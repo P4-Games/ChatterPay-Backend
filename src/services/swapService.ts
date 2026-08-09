@@ -1311,21 +1311,37 @@ async function calculateAndValidateAmountOutMin(
       prev.usdValue > current.usdValue ? prev : current
     );
 
-    // Calculate difference from direct reference
-    const differenceFromDirect = ((bestAmount.usdValue - directPriceUSD) / directPriceUSD) * 100;
+    // Measure how far the candidate's *price* sits from the oracle reference, not how
+    // much slippage we chose to tolerate.
+    //
+    // Quoter and Price Feed both return amountOutMin — the expected output with
+    // totalSlippage already subtracted — while directPriceUSD is the raw spot value with
+    // no slippage at all. Comparing them directly measures our own slippage: the
+    // difference is always about -totalSlippage, so the check below could never pass
+    // whenever slippage exceeded the threshold, on any chain and for any amount. Undo
+    // the slippage first so the threshold measures what it is meant to catch — a pool
+    // whose price has drifted away from the oracle. Direct Price is the reference itself
+    // and carries no slippage, so nothing is undone for it.
+    const slippageFactor = 1 - totalSlippage / 10000;
+    const bestPriceUSD =
+      bestAmount.method === 'Direct Price' || slippageFactor <= 0
+        ? bestAmount.usdValue
+        : bestAmount.usdValue / slippageFactor;
+
+    const differenceFromDirect = ((bestPriceUSD - directPriceUSD) / directPriceUSD) * 100;
 
     Logger.info(
       'calculateAndValidateAmountOutMin',
       logKey,
       `Best method: ${bestAmount.method}, amount: ${bestAmount.amount}, Value: ${bestAmount.usdValue.toFixed(6)} USD, ` +
-        `Difference from direct: ${differenceFromDirect.toFixed(2)}%`
+        `Price before slippage: ${bestPriceUSD.toFixed(6)} USD, Difference from direct: ${differenceFromDirect.toFixed(2)}%`
     );
 
     // ONLY throw error if the BEST result is significantly worse than direct price
     if (differenceFromDirect < -SWAP_PRICE_THRESHOLD_PERCENT) {
       const errorMessage =
         `Best available price is ${Math.abs(differenceFromDirect).toFixed(2)}% worse than expected. ` +
-        `Expected: ${directPriceUSD.toFixed(6)} USD, Best available: ${bestAmount.usdValue.toFixed(6)} USD. ` +
+        `Expected: ${directPriceUSD.toFixed(6)} USD, Best available: ${bestPriceUSD.toFixed(6)} USD. ` +
         `Maximum allowed difference: ${SWAP_PRICE_THRESHOLD_PERCENT}%`;
 
       Logger.error('calculateAndValidateAmountOutMin', logKey, errorMessage);
