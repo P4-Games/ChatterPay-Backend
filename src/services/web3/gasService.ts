@@ -133,11 +133,20 @@ const getcallDataGasValues = async (
   const alchemyResult = await response.json();
 
   if (alchemyResult && alchemyResult.result) {
+    // Apply the same buffer to all three values: the bundler (Pimlico) re-validates
+    // against its own estimate moments later, and on L2s preVerificationGas/verificationGasLimit
+    // can drift up between estimation and submission (e.g. L1 calldata price changes on Arbitrum),
+    // causing "preVerificationGas is not enough" if left unbuffered.
+    const multiplierBps = Math.round(gasMultiplier * 100);
     gasResult.callGasLimit = BigNumber.from(alchemyResult.result.callGasLimit)
-      .mul(Math.round(gasMultiplier * 100))
+      .mul(multiplierBps)
       .div(100);
-    gasResult.verificationGasLimit = BigNumber.from(alchemyResult.result.verificationGasLimit);
-    gasResult.preVerificationGas = BigNumber.from(alchemyResult.result.preVerificationGas);
+    gasResult.verificationGasLimit = BigNumber.from(alchemyResult.result.verificationGasLimit)
+      .mul(multiplierBps)
+      .div(100);
+    gasResult.preVerificationGas = BigNumber.from(alchemyResult.result.preVerificationGas)
+      .mul(multiplierBps)
+      .div(100);
     gettingGasValuesfrom = 'alchemy';
   }
 
