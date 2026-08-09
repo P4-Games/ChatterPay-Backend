@@ -665,7 +665,9 @@ async function handleTokenApproval(
       approveGasLimit = ethers.BigNumber.from('100000');
     }
 
-    const gasPrice = await provider.getGasPrice();
+    // 20% buffer over the current gas price: on EIP-1559 networks the base fee can tick up
+    // between estimation and broadcast, causing "max fee per gas less than block base fee".
+    const gasPrice = (await provider.getGasPrice()).mul(120).div(100);
     const signerAddress = await signer.getAddress();
 
     // Ensure funds for the APPROVAL transaction
@@ -1833,7 +1835,9 @@ export async function executeSwapSimple(
       ethers.BigNumber.from('500000')
     );
 
-    const gasPrice = await provider.getGasPrice();
+    // 20% buffer over the current gas price: on EIP-1559 networks the base fee can tick up
+    // between estimation and broadcast, causing "max fee per gas less than block base fee".
+    const gasPrice = (await provider.getGasPrice()).mul(120).div(100);
     const signerAddress = await signer.getAddress();
 
     // 4) Ensure signer has gas for SWAP transaction
@@ -2054,7 +2058,9 @@ export async function executeSwapLiFi(
     // - The entryPointContract parameter passed into this function is unused here.
     const backendSigner = setupContractsResult.backPrincipal;
 
-    const gasPrice = await provider.getGasPrice();
+    // 20% buffer over the current gas price: on EIP-1559 networks the base fee can tick up
+    // between estimation and broadcast, causing "max fee per gas less than block base fee".
+    const gasPrice = (await provider.getGasPrice()).mul(120).div(100);
 
     const chatterPayContract = new ethers.Contract(proxyAddress, chatterpayABI, backendSigner);
 
