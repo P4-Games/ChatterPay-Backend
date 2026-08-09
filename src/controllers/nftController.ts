@@ -21,6 +21,7 @@ import {
   isValidPhoneNumber,
   isValidUrl
 } from '../helpers/validationHelper';
+import type { IBlockchain } from '../models/blockchainModel';
 import NFTModel, { type INFT, type INFTMetadata } from '../models/nftModel';
 import { NotificationEnum } from '../models/templateModel';
 import type { IUser, IUserWallet } from '../models/userModel';
@@ -802,15 +803,41 @@ export const getPhoneNFTs = async (
   phone_number: string
 ): Promise<{ count: number; nfts: NFTInfo[] }> => {
   try {
-    const networkConfig = await mongoBlockchainService.getNetworkConfig(DEFAULT_CHAIN_ID);
     const nfts = await NFTModel.find({ channel_user_id: phone_number });
+
+    // A user may hold NFTs minted on more than one network, and a token id only
+    // identifies an NFT within its own. Resolve the marketplace of each NFT from
+    // the chain it was minted on, not from the network the app runs on now.
+    const chainIds = [...new Set(nfts.map((nft: INFT) => nft.chain_id ?? DEFAULT_CHAIN_ID))];
+    const networkConfigs = new Map<number, IBlockchain>();
+    await Promise.all(
+      chainIds.map(async (chainId) => {
+        try {
+          networkConfigs.set(chainId, await mongoBlockchainService.getNetworkConfig(chainId));
+        } catch (error) {
+          Logger.warn(
+            'getPhoneNFTs',
+            `No network configuration for chain ${chainId}, its NFTs will have no marketplace url`,
+            (error as Error).message
+          );
+        }
+      })
+    );
 
     return {
       count: nfts.length,
-      nfts: nfts.map((nft: INFT) => ({
-        description: nft.metadata.description,
-        url: `${networkConfig.marketplaceOpenseaUrl}/${networkConfig.contracts.chatterNFTAddress}/${nft.id}`
-      }))
+      nfts: nfts.map((nft: INFT) => {
+        const networkConfig = networkConfigs.get(nft.chain_id ?? DEFAULT_CHAIN_ID);
+        const contractAddress =
+          nft.minted_contract_address || networkConfig?.contracts.chatterNFTAddress || '';
+
+        return {
+          description: nft.metadata.description,
+          url: networkConfig
+            ? `${networkConfig.marketplaceOpenseaUrl}/${contractAddress}/${nft.id}`
+            : ''
+        };
+      })
     };
   } catch (error) {
     Logger.error('getPhoneNFTs', error);
