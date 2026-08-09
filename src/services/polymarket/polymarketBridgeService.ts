@@ -26,9 +26,6 @@ import { PUSD_ADDRESS } from './polymarketConstants';
 
 const LOG_PREFIX = 'polymarketBridgeService';
 
-// Default scroll chain ID (will be user's current chain in practice)
-const SCROLL_CHAIN_ID = 534352; // Scroll Mainnet
-
 // ============================================================================
 // Bridge Operations
 // ============================================================================
@@ -56,9 +53,11 @@ export async function getBridgeQuote(
       `${logKey} Getting bridge quote: ${amount} ${fromTokenSymbol} Scroll→Polygon`
     );
 
+    const { chainId } = await mongoBlockchainService.getNetworkConfig();
+
     const quote = await getLifiQuote(
       {
-        fromChain: SCROLL_CHAIN_ID,
+        fromChain: chainId,
         toChain: POLYMARKET_CHAIN_ID,
         fromToken: fromTokenSymbol,
         toToken: PUSD_ADDRESS,
@@ -102,10 +101,12 @@ export async function checkBridgeStatus(
   try {
     Logger.log('info', fnLog, `${logKey} Checking bridge status for tx: ${txHash}`);
 
+    const { chainId } = await mongoBlockchainService.getNetworkConfig();
+
     const status = await pollLifiStatus(
       {
         txHash,
-        fromChain: SCROLL_CHAIN_ID,
+        fromChain: chainId,
         toChain: POLYMARKET_CHAIN_ID
       },
       logKey
@@ -481,6 +482,8 @@ export async function executeBridge(
   try {
     Logger.log('info', fnLog, `${logKey} Executing bridge: $${amountUsd} USD Scroll→Polygon`);
 
+    const { chainId } = await mongoBlockchainService.getNetworkConfig();
+
     const walletType = user.polymarket_account?.wallet_type ?? 'safe';
 
     // For deposit wallet users: don't deploy/use Safe — send funds directly to deposit wallet.
@@ -536,7 +539,7 @@ export async function executeBridge(
         proxyAddress,
         amountUsd,
         provider,
-        SCROLL_CHAIN_ID,
+        chainId,
         symbol,
         logKey
       );
@@ -547,7 +550,7 @@ export async function executeBridge(
       );
       const lifiQuote = await getLifiQuote(
         {
-          fromChain: SCROLL_CHAIN_ID,
+          fromChain: chainId,
           toChain: POLYMARKET_CHAIN_ID,
           fromToken: resolvedToken.address,
           toToken: PUSD_ADDRESS,
@@ -768,7 +771,7 @@ export async function executeBridge(
       status = await pollLifiStatus(
         {
           txHash,
-          fromChain: SCROLL_CHAIN_ID,
+          fromChain: chainId,
           toChain: POLYMARKET_CHAIN_ID
         },
         logKey
@@ -842,10 +845,12 @@ export async function withdrawToScroll(
 
     // Deny Squid (Axelar-based): requires native MATIC as msg.value for cross-chain gas.
     // The Polygon Safe has no MATIC, so any bridge that sets value > 0 would revert on-chain.
+    const { chainId } = await mongoBlockchainService.getNetworkConfig();
+
     const quote = await getLifiQuote(
       {
         fromChain: POLYMARKET_CHAIN_ID,
-        toChain: SCROLL_CHAIN_ID,
+        toChain: chainId,
         fromToken: fromTokenAddress,
         toToken: toTokenSymbol,
         fromAmount: amount,

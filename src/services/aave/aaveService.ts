@@ -11,9 +11,16 @@ import type { SetupContractReturn } from '../../types/commonType';
 import { getERC20ABI } from '../web3/abiService';
 
 // ====== HARD-CODED (Scroll Sepolia) ======
+// Aave V3 has no official deployment on Arbitrum Sepolia (or most other testnets),
+// so these addresses — and therefore this whole service — only make sense on Scroll Sepolia.
+const AAVE_SUPPORTED_CHAIN_ID = 534351; // Scroll Sepolia
 const USDC_ADDRESS = '0x2c9678042d52b97d27f2bd2947f7111d93f3dd0d';
 const AUSDC_ADDRESS = '0x6E4A1BcBd3C3038e6957207cadC1A17092DC7ba3';
 const POOL_ADDRESS = '0x48914C788295b5db23aF2b5F0B3BE775C4eA9440';
+
+export function isAaveSupportedOnChain(chainId: number): boolean {
+  return chainId === AAVE_SUPPORTED_CHAIN_ID;
+}
 
 // Expected aTokens mapping for validation
 const EXPECTED_ATOKENS: Record<string, string> = {
