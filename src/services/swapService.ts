@@ -1013,16 +1013,14 @@ async function calculateSwapAmounts(
   const amountInBN = ethers.utils.parseUnits(amount, tokenInDecimals);
   const swapAmount = amountInBN.sub(feeInTokenIn);
 
-  const expectedOutput = SWAP_ZERO_FEE_MODE
-    ? ethers.constants.Zero
-    : calculateExpectedOutput(
-        swapAmount,
-        effectivePriceIn,
-        effectivePriceOut,
-        tokenInDecimals,
-        tokenOutDecimals,
-        logKey
-      );
+  const expectedOutput = calculateExpectedOutput(
+    swapAmount,
+    effectivePriceIn,
+    effectivePriceOut,
+    tokenInDecimals,
+    tokenOutDecimals,
+    logKey
+  );
 
   const baseSlippage = await determineSlippage(
     chatterPayContract,
@@ -1255,7 +1253,9 @@ async function calculateAndValidateAmountOutMin(
     );
   }
 
-  // Collect all available amounts
+  // Collect amounts that apply real slippage tolerance (Quoter, Price Feed). Direct Price
+  // is intentionally excluded here: it's the raw spot-price reference with zero slippage,
+  // so it would always outrank a slippage-adjusted candidate and defeat slippage protection.
   const availableAmounts: { method: string; amount: ethers.BigNumber }[] = [];
 
   if (quoterAmountOutMin && quoterAmountOutMin.gt(0)) {
@@ -1265,14 +1265,19 @@ async function calculateAndValidateAmountOutMin(
     availableAmounts.push({ method: 'Price Feed', amount: priceFeedAmountOutMin });
   }
 
-  // If we have a direct price reference, use it for validation
-  if (directPriceAmountOutMin && directPriceAmountOutMin.gt(0)) {
-    availableAmounts.push({ method: 'Direct Price', amount: directPriceAmountOutMin });
-  }
-
-  // If no methods succeeded, throw error
+  // Direct Price is only used as a last-resort fallback (no slippage protection) when
+  // Quoter and Price Feed both failed to produce a usable amount.
   if (availableAmounts.length === 0) {
-    throw new Error('All calculation methods produced invalid results');
+    if (directPriceAmountOutMin && directPriceAmountOutMin.gt(0)) {
+      Logger.warn(
+        'calculateAndValidateAmountOutMin',
+        logKey,
+        'Quoter and Price Feed both unavailable; falling back to Direct Price reference with no slippage protection.'
+      );
+      availableAmounts.push({ method: 'Direct Price', amount: directPriceAmountOutMin });
+    } else {
+      throw new Error('All calculation methods produced invalid results');
+    }
   }
 
   // Convert all amounts to USD for comparison (if we have prices)
