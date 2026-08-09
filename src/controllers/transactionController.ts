@@ -544,7 +544,8 @@ export const makeTransaction = async (
 
     // Validate cross-chain parameters when USE_LIFI is disabled
     if (!USE_LIFI && (network || destination_token)) {
-      const isCrossChainNetwork = network && network.toLowerCase() !== 'scroll';
+      const isCrossChainNetwork =
+        network && network.toLowerCase() !== networkConfig.name.toLowerCase();
       const isCrossChainToken =
         destination_token && destination_token.toUpperCase() !== tokenSymbol.toUpperCase();
 
@@ -789,8 +790,9 @@ export const makeTransaction = async (
       : undefined;
 
     // Determine if this is a cross-chain transfer
-    // Cross-chain = USE_LIFI enabled AND network specified AND not 'scroll'
-    const isCrossChain = USE_LIFI && network && network.toLowerCase() !== 'scroll';
+    // Cross-chain = USE_LIFI enabled AND network specified AND not the active home network
+    const isCrossChain =
+      USE_LIFI && network && network.toLowerCase() !== networkConfig.name.toLowerCase();
 
     let executeTransactionResult: ExecueTransactionResult;
 
