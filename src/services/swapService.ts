@@ -1879,6 +1879,13 @@ export async function executeSwapSimple(
 
     Logger.info('executeSwapSimple', logKey, `Tx sent: ${tx.hash}`);
 
+    const receipt = await tx.wait();
+    if (receipt.status !== 1) {
+      throw new Error(`Swap transaction reverted on-chain: ${tx.hash}`);
+    }
+
+    Logger.info('executeSwapSimple', logKey, `Tx confirmed: ${tx.hash}`);
+
     return {
       success: true,
       approveTransactionHash,
