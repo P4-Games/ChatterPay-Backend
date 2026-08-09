@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { ONRAMP_APP_ID, ONRAMP_BASE_URL, ONRAMP_DEFAULT_COIN_CODE } from '../../src/config/constants';
+import {
+  ONRAMP_APP_ID,
+  ONRAMP_BASE_URL,
+  ONRAMP_DEFAULT_COIN_CODE
+} from '../../src/config/constants';
 
 // network comes from the active blockchain's manteca_name at runtime (see rampController.ts)
 const mockNetwork = 'arbitrum';
