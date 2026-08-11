@@ -234,7 +234,12 @@ export const ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY: boolean =
 export const TELEGRAM_WEBHOOK_PATH = '/telegram/webhook';
 
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
-export const CORS_ORIGINS_EXCEPTIONS: string = `/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH},/polymarket/terms`;
+// Paths exempt from the origin check. They must match the routes as registered in
+// `src/api/*.ts`, since the check compares against the full request path: the NFT
+// metadata entry read `/metadata/opensea` while the route is `/nft/metadata/opensea/:id`,
+// so it never matched and every request without an Origin header was rejected — which is
+// exactly how explorers, marketplaces and link previews fetch the tokenURI.
+export const CORS_ORIGINS_EXCEPTIONS: string = `/nft/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH},/polymarket/terms`;
 
 export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/price';
 export const TOKEN_IDS = ['usd-coin', 'tether', 'ethereum', 'bitcoin', 'wrapped-bitcoin', 'dai'];
