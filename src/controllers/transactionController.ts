@@ -44,6 +44,7 @@ import {
 import { securityService } from '../services/securityService';
 import { sendTransferUserOperation } from '../services/transferService';
 import {
+  addWalletToUser,
   closeOperation,
   getOrCreateUser,
   getUser,
@@ -544,7 +545,8 @@ export const makeTransaction = async (
 
     // Validate cross-chain parameters when USE_LIFI is disabled
     if (!USE_LIFI && (network || destination_token)) {
-      const isCrossChainNetwork = network && network.toLowerCase() !== 'scroll';
+      const isCrossChainNetwork =
+        network && network.toLowerCase() !== networkConfig.name.toLowerCase();
       const isCrossChainToken =
         destination_token && destination_token.toUpperCase() !== tokenSymbol.toUpperCase();
 
@@ -776,7 +778,45 @@ export const makeTransaction = async (
       const chatterpayProxyAddress: string = networkConfig.contracts.chatterPayAddress;
       const { factoryAddress } = networkConfig.contracts;
       toUser = await getOrCreateUser(to, chatterpayProxyAddress, factoryAddress);
-      toAddress = toUser.wallets[0].wallet_proxy;
+
+      // A user has a different proxy on every chain, so their wallet on another
+      // chain is not an address they control on this one: sending there strands
+      // the funds. Resolve the recipient by the chain the transfer runs on, and
+      // create their wallet here when they joined on a different network —
+      // getOrCreateUser only creates one for brand-new users.
+      let toWallet: IUserWallet | null = getUserWalletByChainId(
+        toUser.wallets,
+        networkConfig.chainId
+      );
+
+      if (!toWallet) {
+        Logger.info(
+          'makeTransaction',
+          logKey,
+          `Recipient ${to} has no wallet on chain ${networkConfig.chainId}, creating one.`
+        );
+        const added = await addWalletToUser(
+          to,
+          networkConfig.chainId,
+          chatterpayProxyAddress,
+          factoryAddress
+        );
+        if (added) {
+          toUser = added.user;
+          toWallet = added.newWallet;
+        }
+      }
+
+      if (!toWallet) {
+        validationError = `Wallet not found for recipient ${to} and chain ${networkConfig.chainId}`;
+        userCreationSpan?.endSpan();
+        rootSpan?.endSpan();
+        Logger.error('makeTransaction', logKey, validationError);
+        // must return 200, so the bot displays the message instead of an error!
+        return await returnSuccessResponse(reply, validationError);
+      }
+
+      toAddress = toWallet.wallet_proxy;
     }
     userCreationSpan?.endSpan();
 
@@ -789,8 +829,9 @@ export const makeTransaction = async (
       : undefined;
 
     // Determine if this is a cross-chain transfer
-    // Cross-chain = USE_LIFI enabled AND network specified AND not 'scroll'
-    const isCrossChain = USE_LIFI && network && network.toLowerCase() !== 'scroll';
+    // Cross-chain = USE_LIFI enabled AND network specified AND not the active home network
+    const isCrossChain =
+      USE_LIFI && network && network.toLowerCase() !== networkConfig.name.toLowerCase();
 
     let executeTransactionResult: ExecueTransactionResult;
 

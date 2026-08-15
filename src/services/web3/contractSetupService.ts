@@ -4,6 +4,7 @@ import type { IUser, IUserWallet } from '../../models/userModel';
 import type { ComputedAddress, SetupContractReturn } from '../../types/commonType';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
 import { secService } from '../secService';
+import { getUserWalletByChainId } from '../userService';
 import { getChatterpayABI, getERC20ABI } from './abiService';
 
 /**
@@ -23,7 +24,12 @@ export async function setupContracts(
   const data = secService.get_up(user.phone_number, blockchain.chainId.toString());
   const signer = new ethers.Wallet(data, provider);
   const bs = secService.get_bs(provider);
-  const userWallet: IUserWallet = user.wallets[0];
+  const userWallet: IUserWallet | null = getUserWalletByChainId(user.wallets, blockchain.chainId);
+  if (!userWallet) {
+    throw new Error(
+      `Wallet not found for user ${user.phone_number} and chain ${blockchain.chainId}`
+    );
+  }
   const computedAddress: ComputedAddress = {
     proxyAddress: userWallet.wallet_proxy,
     EOAAddress: userWallet.wallet_eoa,

@@ -21,6 +21,7 @@ import {
   isValidPhoneNumber,
   isValidUrl
 } from '../helpers/validationHelper';
+import type { IBlockchain } from '../models/blockchainModel';
 import NFTModel, { type INFT, type INFTMetadata } from '../models/nftModel';
 import { NotificationEnum } from '../models/templateModel';
 import type { IUser, IUserWallet } from '../models/userModel';
@@ -123,7 +124,9 @@ const mintNftOriginal = async (
       bddIdToUseAsUri
     ]);
 
-    const gasPrice = await provider.getGasPrice();
+    // 20% buffer over the current gas price: on EIP-1559 networks the base fee can tick up
+    // between estimation and broadcast, causing "max fee per gas less than block base fee".
+    const gasPrice = (await provider.getGasPrice()).mul(120).div(100);
     const tx = await nftContract.mintOriginal(recipientAddress, bddIdToUseAsUri, {
       gasLimit,
       gasPrice
@@ -180,7 +183,9 @@ const mintNftCopy = async (
       bddIdToUseAsUri
     ]);
 
-    const gasPrice = await provider.getGasPrice();
+    // 20% buffer over the current gas price: on EIP-1559 networks the base fee can tick up
+    // between estimation and broadcast, causing "max fee per gas less than block base fee".
+    const gasPrice = (await provider.getGasPrice()).mul(120).div(100);
     const tx = await nftContract.mintCopy(
       recipientAddress,
       parseInt(originalTOkenId, 10),
@@ -524,7 +529,10 @@ export const generateNftCopy = async (
     logKey = `[op:mintNftCopy:${channel_user_id}]`;
 
     // Verify that the NFT to copy exists
-    const nfts: INFT[] = await NFTModel.find({ id });
+    const nfts: INFT[] = await NFTModel.find({
+      id,
+      chain_id: request.server.networkConfig.chainId
+    });
     if (!nfts || nfts.length === 0) {
       const msgError = `NFT with id ${id} not found`;
       Logger.info('generateNftCopy', logKey, `${msgError}`);
@@ -583,7 +591,8 @@ export const generateNftCopy = async (
       // If it is being copied from a copy, then the original is sought.
       Logger.log('generateNftCopy', logKey, 'Searching by nft original.');
       const nftOriginal: INFT | null = await NFTModel.findOne({
-        id: nftCopyOf.copy_of_original
+        id: nftCopyOf.copy_of_original,
+        chain_id: request.server.networkConfig.chainId
       });
       if (nftOriginal) {
         copy_of_original = nftOriginal.id;
@@ -705,7 +714,7 @@ export const getNftById = async (
   try {
     const { id } = request.params;
 
-    const nft = (await NFTModel.find({ id }))?.[0];
+    const nft = (await NFTModel.find({ id, chain_id: request.server.networkConfig.chainId }))?.[0];
 
     if (nft) {
       return await returnSuccessResponse(reply, 'NFT found', {
@@ -759,7 +768,10 @@ export const getLastNFT = async (
       );
     }
 
-    const nft = (await NFTModel.find({ channel_user_id })).sort((a, b) => b.id - a.id)?.[0];
+    const nft = await NFTModel.findOne({
+      channel_user_id,
+      chain_id: request.server.networkConfig.chainId
+    }).sort({ timestamp: -1 });
 
     if (!nft) {
       return await returnErrorResponse('getLastNFT', '', reply, 404, 'NFT not found');
@@ -791,15 +803,41 @@ export const getPhoneNFTs = async (
   phone_number: string
 ): Promise<{ count: number; nfts: NFTInfo[] }> => {
   try {
-    const networkConfig = await mongoBlockchainService.getNetworkConfig(DEFAULT_CHAIN_ID);
     const nfts = await NFTModel.find({ channel_user_id: phone_number });
+
+    // A user may hold NFTs minted on more than one network, and a token id only
+    // identifies an NFT within its own. Resolve the marketplace of each NFT from
+    // the chain it was minted on, not from the network the app runs on now.
+    const chainIds = [...new Set(nfts.map((nft: INFT) => nft.chain_id ?? DEFAULT_CHAIN_ID))];
+    const networkConfigs = new Map<number, IBlockchain>();
+    await Promise.all(
+      chainIds.map(async (chainId) => {
+        try {
+          networkConfigs.set(chainId, await mongoBlockchainService.getNetworkConfig(chainId));
+        } catch (error) {
+          Logger.warn(
+            'getPhoneNFTs',
+            `No network configuration for chain ${chainId}, its NFTs will have no marketplace url`,
+            (error as Error).message
+          );
+        }
+      })
+    );
 
     return {
       count: nfts.length,
-      nfts: nfts.map((nft: INFT) => ({
-        description: nft.metadata.description,
-        url: `${networkConfig.marketplaceOpenseaUrl}/${networkConfig.contracts.chatterNFTAddress}/${nft.id}`
-      }))
+      nfts: nfts.map((nft: INFT) => {
+        const networkConfig = networkConfigs.get(nft.chain_id ?? DEFAULT_CHAIN_ID);
+        const contractAddress =
+          nft.minted_contract_address || networkConfig?.contracts.chatterNFTAddress || '';
+
+        return {
+          description: nft.metadata.description,
+          url: networkConfig
+            ? `${networkConfig.marketplaceOpenseaUrl}/${contractAddress}/${nft.id}`
+            : ''
+        };
+      })
     };
   } catch (error) {
     Logger.error('getPhoneNFTs', error);
@@ -850,7 +888,8 @@ export const getNftList = async (
 ): Promise<void> => {
   const { tokenId } = request.params;
   try {
-    const nfts = await NFTModel.find({ id: tokenId });
+    const chain_id = request.server.networkConfig.chainId;
+    const nfts = await NFTModel.find({ id: tokenId, chain_id });
 
     if (nfts.length === 0) {
       return await returnErrorResponse('getNftList', '', reply, 400, 'NFT not found');
@@ -860,11 +899,11 @@ export const getNftList = async (
     if (nft.original) {
       return await returnSuccessResponse(reply, 'Original NFT found', {
         original: nft,
-        copies: await NFTModel.find({ copy_of: tokenId.toString() })
+        copies: await NFTModel.find({ copy_of: tokenId.toString(), chain_id })
       });
     }
 
-    const originalNft = (await NFTModel.find({ id: nft.copy_of }))?.[0];
+    const originalNft = (await NFTModel.find({ id: nft.copy_of, chain_id }))?.[0];
     return await returnSuccessResponse(reply, 'Original NFT found', {
       original: originalNft,
       copy: nft

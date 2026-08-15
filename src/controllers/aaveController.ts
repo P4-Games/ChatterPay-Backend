@@ -6,7 +6,7 @@ import { delaySeconds } from '../helpers/timeHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { NotificationEnum } from '../models/templateModel';
 import type { IUser, IUserWallet } from '../models/userModel';
-import { aaveService } from '../services/aave/aaveService';
+import { aaveService, isAaveSupportedOnChain } from '../services/aave/aaveService';
 import { checkBlockchainConditions } from '../services/blockchainService';
 import {
   getNotificationTemplate,
@@ -78,6 +78,10 @@ export const aaveCreateSupply = async (
       const { channel_user_id, amount, token } = request.body;
       const { networkConfig } = request.server as FastifyInstance;
       logKey = `[op:${keyName}:${channel_user_id || ''}:${token}:${amount}]`;
+
+      if (!isAaveSupportedOnChain(networkConfig.chainId)) {
+        throw new Error(`Aave is not supported on chain ${networkConfig.chainId}`);
+      }
 
       if (!channel_user_id) throw new Error('Missing channel_user_id in body');
       if (!isValidPhoneNumber(channel_user_id)) {
@@ -205,6 +209,10 @@ export const aaveUpdateSupply = async (
       const startTime = Date.now();
       logKey = `[op:${keyName}:${channel_user_id || ''}:${token}:${amount}]`;
 
+      if (!isAaveSupportedOnChain(networkConfig.chainId)) {
+        throw new Error(`Aave is not supported on chain ${networkConfig.chainId}`);
+      }
+
       if (!channel_user_id) throw new Error('Missing channel_user_id in body');
       if (!isValidPhoneNumber(channel_user_id)) {
         throw new Error(`Invalid phone number: '${channel_user_id}'`);
@@ -329,6 +337,10 @@ export const aaveRemoveSupply = async (
       const { lastBotMsgDelaySeconds = 0 } = request.query as AaveCommonQuery;
       const startTime = Date.now();
       logKey = `[op:${keyName}:${channel_user_id || ''}:${token}:amount: all]`;
+
+      if (!isAaveSupportedOnChain(networkConfig.chainId)) {
+        throw new Error(`Aave is not supported on chain ${networkConfig.chainId}`);
+      }
 
       if (!channel_user_id) throw new Error('Missing channel_user_id in body');
       if (!isValidPhoneNumber(channel_user_id)) {
@@ -457,6 +469,10 @@ export const aaveGetSupplyInfo = async (
       }
       const startTime = Date.now();
       const { networkConfig } = request.server as FastifyInstance;
+
+      if (!isAaveSupportedOnChain(networkConfig.chainId)) {
+        throw new Error(`Aave is not supported on chain ${networkConfig.chainId}`);
+      }
 
       logKey = `[op:${keyName}:${channel_user_id || ''}`;
 
