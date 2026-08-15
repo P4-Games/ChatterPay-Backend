@@ -130,7 +130,9 @@ export async function computeWallet(pn: string): Promise<ComputedAddress> {
 
             let gasPrice: ethers.BigNumber;
             try {
-              gasPrice = await provider.getGasPrice();
+              // 20% buffer over the current gas price: on EIP-1559 networks the base fee can tick up
+              // between estimation and broadcast, causing "max fee per gas less than block base fee".
+              gasPrice = (await provider.getGasPrice()).mul(120).div(100);
             } catch (error) {
               Logger.warn(
                 'computeWallet',

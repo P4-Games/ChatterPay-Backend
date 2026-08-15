@@ -102,7 +102,13 @@
     "vite": "5.4.11"
   },
   "trustedDependencies": [
-    "es5-ext"
+    "bufferutil",
+    "es5-ext",
+    "esbuild",
+    "keccak",
+    "mongodb-memory-server",
+    "sharp",
+    "utf-8-validate"
   ],
   "husky": {
     "hooks": {

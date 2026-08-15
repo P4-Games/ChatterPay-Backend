@@ -1,11 +1,15 @@
 import { ethers } from 'ethers';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Logger } from '../helpers/loggerHelper';
-import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import {
+  returnErrorResponse,
+  returnErrorResponseAsSuccess,
+  returnSuccessResponse
+} from '../helpers/requestHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { NotificationEnum } from '../models/templateModel';
-import type { IUser } from '../models/userModel';
+import type { IUser, IUserWallet } from '../models/userModel';
 import { getTokenPrices } from '../services/balanceService';
 import {
   checkBlockchainConditions,
@@ -34,6 +38,7 @@ import { executeSwap } from '../services/swapService';
 import {
   closeOperation,
   getUser,
+  getUserWalletByChainId,
   hasPhoneAnyOperationInProgress,
   openOperation
 } from '../services/userService';
@@ -112,7 +117,7 @@ export const swap = async (
     if (!request.body) {
       return await returnErrorResponse(
         'swap',
-        '',
+        logKey,
         reply,
         400,
         'You have to send a body with this request'
@@ -122,6 +127,8 @@ export const swap = async (
     const { channel_user_id, inputCurrency, outputCurrency, amount } = request.body;
     const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds ?? 0;
     const { tokens: blockchainTokens, networkConfig } = request.server as FastifyInstance;
+
+    logKey = `[op:swap:${channel_user_id}:${inputCurrency}:${outputCurrency}:${amount}]`;
 
     const tokensData: swapTokensData = getSwapTokensData(
       networkConfig,
@@ -133,13 +140,22 @@ export const swap = async (
     let validationError: string = await validateInputs(request.body, tokensData);
 
     if (validationError) {
-      return await returnErrorResponse('swap', '', reply, 400, validationError);
+      Logger.error('swap', logKey, `Invalid swap request: ${validationError}`);
+      // must return 200, so the bot displays the message instead of staying silent!
+      return await returnErrorResponseAsSuccess(
+        'swap',
+        logKey,
+        reply,
+        'Error making swap',
+        false,
+        channel_user_id,
+        validationError
+      );
     }
 
     /* ***************************************************** */
     /* 2. swap: check user has wallet                        */
     /* ***************************************************** */
-    logKey = `[op:swap:${channel_user_id}:${inputCurrency}:${outputCurrency}:${amount}]`;
     const fromUser: IUser | null = await getUser(channel_user_id);
     if (!fromUser) {
       const { message: walletNotCreatedMessage } = await getNotificationTemplate(
@@ -249,7 +265,21 @@ export const swap = async (
     /* ***************************************************** */
     const provider = new ethers.providers.JsonRpcProvider(networkConfig.rpc);
     const bs = secService.get_bs(provider);
-    const proxyAddress = fromUser.wallets[0].wallet_proxy;
+    const userWallet: IUserWallet | null = getUserWalletByChainId(
+      fromUser.wallets,
+      networkConfig.chainId
+    );
+    if (!userWallet) {
+      await closeOperation(channel_user_id, ConcurrentOperationsEnum.Swap);
+      return await returnErrorResponse(
+        'swap',
+        logKey,
+        reply,
+        400,
+        `Wallet not found for user ${channel_user_id} and chain ${networkConfig.chainId}`
+      );
+    }
+    const proxyAddress = userWallet.wallet_proxy;
 
     // Get the contracts and decimals for the tokens
     const fromTokenContract = await setupERC20(tokensData.tokenInputAddress, bs);

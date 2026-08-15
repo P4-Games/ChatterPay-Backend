@@ -25,12 +25,12 @@
 
 import { randomUUID } from 'crypto';
 
+import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
 import { updateOrderSlug } from '../mongo/mongoPolymarketService';
 import { mongoTransactionService } from '../mongo/mongoTransactionService';
 import { getMarketByClobTokenId, getOutcomeForToken } from './polymarketMarketService';
 
 const POLYGON_CHAIN_ID = 137;
-const SCROLL_CHAIN_ID = 534352;
 
 /** Collateral token for standard Polymarket CLOB V2 orders (pUSD on Polygon). */
 export const PUSD_SYMBOL = 'pUSD';
@@ -221,6 +221,8 @@ export async function recordBridge(p: {
   }
 
   // Manual bridge endpoint: create a standalone bridge record (legacy behaviour).
+  const { chainId } = await mongoBlockchainService.getNetworkConfig();
+
   await mongoTransactionService.saveTransaction({
     tx: p.txHash,
     walletFrom: p.walletFrom,
@@ -230,7 +232,7 @@ export async function recordBridge(p: {
     token: p.token,
     type: 'polymarket_bridge',
     status: 'completed',
-    chain_id: SCROLL_CHAIN_ID,
+    chain_id: chainId,
     user_notes: `Polymarket ${p.side} bridge`
   });
 }

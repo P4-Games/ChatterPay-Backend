@@ -5,8 +5,7 @@ import {
   MANTECA_MOCK_UPLOAD_DOCUMENTS_URL,
   ONRAMP_APP_ID,
   ONRAMP_BASE_URL,
-  ONRAMP_DEFAULT_COIN_CODE,
-  ONRAMP_DEFAULT_NETWORK
+  ONRAMP_DEFAULT_COIN_CODE
 } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import {
@@ -708,7 +707,7 @@ export const generateOnRampLink = async (
 
   const walletAddress = fromUser.wallets[0].wallet_proxy;
 
-  const onRampLink = `${ONRAMP_BASE_URL}?appId=${ONRAMP_APP_ID}&coinCode=${ONRAMP_DEFAULT_COIN_CODE}&network=${ONRAMP_DEFAULT_NETWORK}&walletAddress=${walletAddress}`;
+  const onRampLink = `${ONRAMP_BASE_URL}?appId=${ONRAMP_APP_ID}&coinCode=${ONRAMP_DEFAULT_COIN_CODE}&network=${request.server.networkConfig.manteca_name}&walletAddress=${walletAddress}`;
 
   Logger.log('generateOnRampLink', `On-ramp link generated for ${phone_number}: ${onRampLink}`);
 
