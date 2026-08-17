@@ -11,6 +11,21 @@ export interface IPolymarketAccount {
   wallet_type: 'safe' | 'deposit';
 }
 
+/**
+ * What kind of address a wallet entry holds.
+ *
+ * Absent on every wallet written before Cardano existed, and read as `evm_aa` when missing: those
+ * are all ERC-4337 accounts. A Cardano entry has no proxy, no factory and no EOA — it carries the
+ * same bech32 address in `wallet_proxy` and `wallet_eoa` so that every existing reader (bot,
+ * dashboard, balance) keeps working unchanged.
+ *
+ * `cardano_base` is a CIP-19 type-0 address: payment credential plus staking credential, the
+ * staking one written into the address but registered nowhere. `cardano_enterprise` was the shape
+ * of the first implementation and **was never written to any database** — it is absent from this
+ * union on purpose, so that a row carrying it fails loudly rather than being read as current.
+ */
+export type UserWalletAddressType = 'evm_aa' | 'cardano_base';
+
 export interface IUserWallet {
   wallet_proxy: string;
   wallet_eoa: string;
@@ -19,6 +34,25 @@ export interface IUserWallet {
   chain_id: number;
   status: string;
   alchemy_registered?: boolean; // flag to indicate if the wallet is registered with Alchemy webHook
+  /** Address family of this entry. Missing means `evm_aa`. */
+  address_type?: UserWalletAddressType;
+  /**
+   * Raw Ed25519 **payment** public key behind a Cardano address, hex with `0x`.
+   *
+   * Stored rather than re-derived on every read because it is what goes into the witness of a
+   * transaction, and because it lets an address be audited against its key without touching the
+   * signing path.
+   */
+  cardano_public_key?: string;
+  /**
+   * Raw Ed25519 **staking** public key behind a Cardano address, hex with `0x`.
+   *
+   * Signs nothing: a transfer is authorised by the payment key alone. It is stored because it is
+   * half of what the address hashes, so an address can be audited against both its credentials —
+   * and because whatever registers or delegates this stake credential later will need the key, not
+   * just the hash the address carries.
+   */
+  cardano_stake_public_key?: string;
 }
 
 export interface IRecoveryQuestion {
@@ -94,7 +128,14 @@ const walletSchema = new Schema<IUserWallet>(
     },
     chain_id: { type: Number, required: true, default: DEFAULT_CHAIN_ID },
     status: { type: String, required: true, default: 'active' },
-    alchemy_registered: { type: Boolean, required: false, default: false }
+    alchemy_registered: { type: Boolean, required: false, default: false },
+    address_type: {
+      type: String,
+      enum: ['evm_aa', 'cardano_base'],
+      required: false
+    },
+    cardano_public_key: { type: String, required: false },
+    cardano_stake_public_key: { type: String, required: false }
   },
   { _id: false }
 );

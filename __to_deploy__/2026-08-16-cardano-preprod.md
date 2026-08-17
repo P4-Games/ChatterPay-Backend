@@ -46,8 +46,16 @@ existentes siguen validando sin tocarlos.
 
 ### `src/models/userModel.ts` — `IUserWallet`
 
-- **`address_type?: 'evm_aa' | 'cardano_enterprise'`**, opcional. Ausente = `evm_aa`.
-- **`cardano_public_key?: string`**, opcional. Clave Ed25519 cruda, hex con `0x`.
+- **`address_type?: 'evm_aa' | 'cardano_base'`**, opcional. Ausente = `evm_aa`.
+- **`cardano_public_key?: string`**, opcional. Clave Ed25519 de pago, cruda, hex con `0x`.
+- **`cardano_stake_public_key?: string`**, opcional. Clave Ed25519 de staking, cruda, hex con `0x`.
+
+> ⚠️ **Corregido el 2026-08-17.** La primera versión declaraba `'cardano_enterprise'` y emitía
+> addresses tipo 6 (sin stake credential). Se cambió a addresses **base (tipo 0)** con la stake
+> credential sin registrar, para que habilitar staking después sea una transacción y no una
+> migración de todas las wallets. Se verificó que no había **ninguna** wallet ni transacción de
+> Cardano escrita en ninguna base antes de hacerlo. Detalle completo y costos en
+> [config-entornos §3.1](./2026-08-16-cardano-config-entornos.md).
 
 Las entradas de Cardano llevan la misma address bech32 en `wallet_proxy` **y** en `wallet_eoa`, para
 que todos los lectores existentes (bot, dashboard, balance) sigan funcionando sin cambios.

@@ -23,17 +23,25 @@ registro.
 | Fecha | Cambio | Tipo | Entornos aplicados |
 |---|---|---|---|
 | 2026-08-16 | [Cardano: red, token ADA e índices](./2026-08-16-cardano-preprod.md) | base de datos | `local dev` |
-| 2026-08-16 | [Cardano: variables de entorno para GCP](./2026-08-16-cardano-env-vars.md) | entorno / Cloud Build | ⛔ ninguno |
+| 2026-08-16 | [**Cardano: variables de entorno y valores por ambiente**](./2026-08-16-cardano-env-vars.md) | entorno / Cloud Build | ⛔ ninguno |
 | 2026-08-16 | [Cardano: configuración por ambiente (dev/test y prod)](./2026-08-16-cardano-config-entornos.md) | base de datos + entorno | ⛔ ninguno |
 | 2026-08-16 | [Cardano en chatizalo: tools, templates y prompt](./2026-08-16-cardano-chatizalo.md) | base de datos (chatizalo + templates) | ⛔ ninguno |
+| 2026-08-17 | [Wallets de Cardano: qué quedó y qué falta para staking](./2026-08-17-cardano-wallets-staking.md) | código / referencia | n/a |
 
-> El orden entre los cuatro no es opcional:
+### Dónde está cada cosa
+
+| Busco… | Archivo |
+|---|---|
+| **variables de entorno y sus valores**, para local / dev / prod | [env-vars](./2026-08-16-cardano-env-vars.md) — **única fuente**, no repetir valores en otro lado |
+| documentos de `blockchains` y `tokens` para cada ambiente | [config-entornos](./2026-08-16-cardano-config-entornos.md) |
+| qué se cargó en local, y los cambios de schema | [preprod](./2026-08-16-cardano-preprod.md) |
+| tools del bot, templates y prompt | [chatizalo](./2026-08-16-cardano-chatizalo.md) |
+| cómo es la wallet de Cardano y qué falta para staking | [wallets-staking](./2026-08-17-cardano-wallets-staking.md) |
+
+> El orden de aplicación no es opcional:
 >
 > 1. **base del backend** (`blockchains`, `tokens`, índices) — sin esto la familia no tiene dónde
 >    leer su red ni sus tokens;
 > 2. **variables de entorno** — habilitan el código que consulta esa base;
 > 3. **chatizalo** (`chat_functions`, prompt) — recién tiene sentido ofrecer la funcionalidad cuando
 >    el backend la responde. Al revés, el bot ofrece una operación que devuelve error.
->
-> Los dos primeros archivos son el registro de lo que se aplicó en local; los dos últimos son lo que
-> falta aplicar, con los valores listos para copiar.

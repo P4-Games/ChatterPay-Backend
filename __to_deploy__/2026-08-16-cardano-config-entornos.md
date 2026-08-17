@@ -98,22 +98,13 @@ fake provider (`test/helpers/fakeCardanoProvider.ts`), no por la red.
 
 ## 1.4 Variables de entorno — dev / test
 
-Substitutions del trigger de Cloud Build (este `cloudbuild.yaml` no declara bloque `substitutions:`;
-las toma del trigger, igual que `_POLYMARKET_ENABLED`):
+Las 8 substitutions, sus valores y qué pasa si falta cada una viven en un solo lugar:
+**[variables de entorno §1 y §2.2](./2026-08-16-cardano-env-vars.md)**. No se repiten acá para que no
+haya dos fuentes que puedan divergir.
 
-```
-_CARDANO_ENABLED=true
-_CARDANO_NETWORK=preprod
-_CARDANO_CHAIN_ID=900000000001
-_CARDANO_PROVIDER_URL=https://preprod.koios.rest/api/v1
-_CARDANO_PROVIDER_TIMEOUT_MS=20000
-_CARDANO_TTL_SLOTS=900
-_CARDANO_DEPOSIT_CONFIRMATIONS=3
-_CARDANO_EXPLORER_URL=https://preprod.cardanoscan.io/transaction/
-```
-
-Ninguna es secreta: no hay que tocar Secret Manager. La familia **además** exige
-`SEED_INTERNAL_SALT`, que ya existe; sin él queda apagada con el motivo en `disabledReason`.
+En resumen: `_CARDANO_ENABLED=true`, `_CARDANO_NETWORK=preprod`, `_CARDANO_CHAIN_ID=900000000001`, y
+el provider y el explorer apuntando a Preprod. Ninguna es secreta. La familia **además** exige
+`SEED_INTERNAL_SALT`, que ya existe.
 
 ## 1.5 Comandos — dev / test
 
@@ -304,28 +295,22 @@ Dos cosas que hay que resolver **antes** de que estos tokens aparezcan en produc
 
 ## 2.5 Variables de entorno — producción
 
-```
-_CARDANO_ENABLED=false
-_CARDANO_NETWORK=mainnet
-_CARDANO_CHAIN_ID=900764824073
-_CARDANO_PROVIDER_URL=https://api.koios.rest/api/v1
-_CARDANO_PROVIDER_TIMEOUT_MS=20000
-_CARDANO_TTL_SLOTS=900
-_CARDANO_DEPOSIT_CONFIRMATIONS=3
-_CARDANO_EXPLORER_URL=https://cardanoscan.io/transaction/
-```
+Valores completos en **[variables de entorno §1 y §2.3](./2026-08-16-cardano-env-vars.md)**.
 
-**`_CARDANO_ENABLED=false` a propósito.** Se dan de alta las 8, se deploya con la familia apagada, se
-verifica que el servicio levanta y que EVM sigue normal, y recién ahí se pone `true` en un deploy
-aparte. Separar los dos pasos es lo que permite distinguir "el deploy rompió algo" de "Cardano rompió
-algo"; juntos, una regresión tiene dos causas candidatas.
+Los tres que cambian respecto de dev: `_CARDANO_NETWORK=mainnet`,
+`_CARDANO_CHAIN_ID=900764824073`, y el provider/explorer de mainnet. Y uno que **no** es el de dev:
 
-**`CARDANO_NETWORK` decide el header byte de cada address que se emite** (CIP-19). Apuntarla mal
-produce addresses perfectamente bien formadas de las que nadie puede gastar, y ningún chequeo
-posterior lo detecta.
+**`_CARDANO_ENABLED=false` en el primer deploy, a propósito.** Se dan de alta las 8, se deploya con
+la familia apagada, se verifica que el servicio levanta y que EVM sigue normal, y recién ahí se pone
+`true` en un deploy aparte. Separar los dos pasos es lo que permite distinguir "el deploy rompió
+algo" de "Cardano rompió algo"; juntos, una regresión tiene dos causas candidatas.
 
-**Koios gratuito tiene rate limit.** Un 429 sostenido en producción es la señal para revisar la
-elección de provider, no para subir el timeout.
+> ⚠️ **`CARDANO_NETWORK` decide el header byte de cada address emitida.** Las mayúsculas no importan
+> (`Mainnet` vale), y un valor no reconocido apaga la familia con el motivo explícito en vez de
+> defaultear en silencio. Pero una substitution que **no se dio de alta** llega vacía, y eso sí
+> resuelve a `testnet`: un deployment de producción emitiría addresses de testnet, bien formadas y de
+> las que nadie puede gastar. Detalle en
+> [env-vars §4.1](./2026-08-16-cardano-env-vars.md).
 
 ## 2.6 Comandos — producción
 

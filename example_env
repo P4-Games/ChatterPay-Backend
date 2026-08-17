@@ -173,3 +173,26 @@ POLYMARKET_BUILDER_SECRET=''
 POLYMARKET_BUILDER_PASSPHRASE=''
 POLYMARKET_POLYGON_RPC_URL=''
 POLYMARKET_ADAPTER_AUTH_TOKEN=''
+
+# Cardano
+# Set CARDANO_ENABLED='true' to enable ADA and native-asset (USDCx / USDM / USDA) transfers.
+# The family stays off unless SEED_INTERNAL_SALT and a provider URL are also present: a half-configured
+# Cardano is worse than none, because a transfer would get as far as building and then fail to submit.
+# CARDANO_NETWORK decides the header byte of every address issued (CIP-19) — 'preprod' or 'mainnet'.
+# CARDANO_CHAIN_ID is the internal, non-EIP-155 id (9e11 + network magic). It is frozen once any
+# wallet, transaction or token row has been written with it.
+# CARDANO_PROVIDER_URL: Koios needs no API key, which is why it is the default. The free tier is
+# rate-limited, so a sustained 429 in production is the signal to revisit the provider choice.
+# CARDANO_TTL_SLOTS: a Preprod slot is one second, so 900 is fifteen minutes. Cardano has no
+# replace-by-fee and no nonce, so the TTL is what makes a stuck transaction resolvable.
+# CARDANO_DEPOSIT_CONFIRMATIONS: blocks required before an output is spendable. Not finality — the
+# guarantee is probabilistic — but the declared answer to the rollback question.
+
+CARDANO_ENABLED='false'
+CARDANO_NETWORK='preprod'
+CARDANO_CHAIN_ID=900000000001
+CARDANO_PROVIDER_URL='https://preprod.koios.rest/api/v1'
+CARDANO_PROVIDER_TIMEOUT_MS=20000
+CARDANO_TTL_SLOTS=900
+CARDANO_DEPOSIT_CONFIRMATIONS=3
+CARDANO_EXPLORER_URL='https://preprod.cardanoscan.io/transaction/'

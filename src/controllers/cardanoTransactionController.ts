@@ -1,0 +1,383 @@
+/**
+ * `make_transaction` for Cardano.
+ *
+ * A sibling of `makeTransaction` rather than a branch inside it. The plan (§3.3) calls for
+ * extracting a `transferRouter` and moving the EVM steps behind it, and that is still the right
+ * end state — but it is a refactor of the live money path, and doing it in the same change that
+ * introduces a new chain means that any regression on EVM has two candidate causes. So the EVM
+ * function is left byte-for-byte untouched here, and the extraction stays queued as its own change.
+ *
+ * What is *not* duplicated is policy. The concurrency lock, the security gate, the daily and
+ * per-amount limits, chatterpoints and the notifications are the same functions the EVM path calls.
+ * A change to any of them applies to both chains, which is the property that matters: those are
+ * product rules, not EVM details.
+ *
+ * @see CARDANO_INTEGRATION_PLAN.md §6.2
+ */
+
+import type { FastifyReply, FastifyRequest } from 'fastify';
+
+import { getCardanoConfig } from '../config/cardanoConfig';
+import { areSamePhoneNumber } from '../helpers/formatHelper';
+import { Logger } from '../helpers/loggerHelper';
+import { returnErrorResponseAsSuccess, returnSuccessResponse } from '../helpers/requestHelper';
+import { delaySeconds } from '../helpers/timeHelper';
+import { NotificationEnum } from '../models/templateModel';
+import type { IToken } from '../models/tokenModel';
+import type { IUser } from '../models/userModel';
+import {
+  userReachedOperationLimit,
+  userWithinTokenOperationLimits
+} from '../services/blockchainService';
+import { executeCardanoOperation } from '../services/cardano/cardanoOperationService';
+import { chatterpointsService, type RegisterOperationResult } from '../services/chatterpointsService';
+import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
+import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
+import { mongoUserService } from '../services/mongo/mongoUserService';
+import {
+  getNotificationTemplate,
+  persistNotification,
+  sendOutgoingTransferNotification,
+  sendReceivedTransferNotification
+} from '../services/notificationService';
+import { securityService } from '../services/securityService';
+import {
+  closeOperation,
+  getUser,
+  hasUserAnyOperationInProgress,
+  openOperation
+} from '../services/userService';
+import { ConcurrentOperationsEnum, type TransactionData } from '../types/commonType';
+
+/** The chain's own coin: the default asset, and the one every fee is charged in. */
+const ADA_SYMBOL = 'ADA';
+
+/**
+ * Whether a `make_transaction` request is asking for Cardano.
+ *
+ * Three ways to say it, because three callers already exist: the bot sends `network`, the dashboard
+ * sends `chain_id`, and a bare ticker has to be resolved against what is actually configured.
+ *
+ * The ticker is matched against the token catalogue rather than a hardcoded list, so adding a
+ * stablecoin is a database row and not a code change. **A ticker that also exists on the active EVM
+ * network stays on EVM**: diverting a working USDC transfer because someone later listed a token of
+ * the same name on Cardano would break a live feature, and the caller can always be explicit with
+ * `network` or `chain_id`.
+ *
+ * @param body - The request body.
+ * @param tokens - The token catalogue, as the Fastify instance caches it.
+ * @param evmChainId - Chain id of the EVM network this instance operates on.
+ * @returns `true` when the request should be handled by the Cardano path.
+ */
+export function isCardanoTransferRequest(
+  body: { token?: string; network?: string; chain_id?: string },
+  tokens: IToken[] = [],
+  evmChainId?: number
+): boolean {
+  const { chainId } = getCardanoConfig();
+  if (body.network && body.network.trim().toLowerCase().startsWith('cardano')) return true;
+  if (body.chain_id && Number.parseInt(body.chain_id, 10) === chainId) return true;
+
+  const symbol = (body.token ?? '').trim().toUpperCase();
+  if (!symbol) return false;
+
+  const matches = (token: IToken, id: number): boolean =>
+    token.chain_id === id && token.symbol.trim().toUpperCase() === symbol;
+
+  if (evmChainId !== undefined && tokens.some((token) => matches(token, evmChainId))) return false;
+  return tokens.some((token) => matches(token, chainId));
+}
+
+export interface MakeCardanoTransactionInputs {
+  channel_user_id: string;
+  to: string;
+  token: string;
+  amount: string;
+  chain_id?: string;
+  network?: string;
+  user_notes?: string;
+}
+
+/**
+ * Validates what can be validated without touching the chain or the database.
+ *
+ * @param inputs - The request body.
+ * @returns An error message, or an empty string when the inputs are usable.
+ */
+async function validateCardanoInputs(inputs: MakeCardanoTransactionInputs): Promise<string> {
+  const { channel_user_id, to, amount } = inputs;
+
+  if (!channel_user_id || !to || !amount) return 'One or more fields are empty';
+
+  if (amount.includes(',')) {
+    return 'Invalid amount format: use "." (point) as the decimal separator (no commas allowed)';
+  }
+
+  // Only the shape is checked here. How many decimals the amount may carry depends on the asset,
+  // and the asset is resolved from the database further down — validating against ADA's six here
+  // would reject a legitimate amount of a token with a different scale.
+  if (!/^\d+(\.\d+)?$/.test(amount.trim())) {
+    return 'Amount must contain only digits and optionally a single decimal point';
+  }
+
+  if (await areSamePhoneNumber(channel_user_id.trim(), to.trim())) {
+    return 'You cannot send money to yourself';
+  }
+
+  return '';
+}
+
+/**
+ * Handles a Cardano transfer request.
+ *
+ * Mirrors `makeTransaction`'s contract exactly, including the parts that look odd out of context:
+ * validation failures answer 200 with a message, because the caller is a chat bot that displays the
+ * body to the user, and an HTTP error would surface as "something went wrong" instead.
+ *
+ * @param request - Fastify request.
+ * @param reply - Fastify reply.
+ */
+export const makeCardanoTransaction = async (
+  request: FastifyRequest<{
+    Body: MakeCardanoTransactionInputs;
+    Querystring?: { lastBotMsgDelaySeconds?: number };
+  }>,
+  reply: FastifyReply
+): Promise<undefined> => {
+  const { channel_user_id, to, amount, user_notes } = request.body;
+  const tokenSymbol = (request.body.token ?? ADA_SYMBOL).trim() || ADA_SYMBOL;
+  const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
+  const logKey = `[op:transfer:cardano:${channel_user_id || ''}:${to}:${amount}:${tokenSymbol}]`;
+  const config = getCardanoConfig();
+
+  try {
+    /* 1. inputs */
+    if (!config.enabled) {
+      await returnErrorResponseAsSuccess(
+        'makeCardanoTransaction',
+        logKey,
+        reply,
+        'Error making transaction',
+        false,
+        channel_user_id,
+        `Cardano is not available right now (${config.disabledReason})`
+      );
+      return undefined;
+    }
+
+    const validationError = await validateCardanoInputs(request.body);
+    if (validationError) {
+      await returnErrorResponseAsSuccess(
+        'makeCardanoTransaction',
+        logKey,
+        reply,
+        'Error making transaction',
+        false,
+        channel_user_id,
+        validationError
+      );
+      return undefined;
+    }
+
+    /* 2. the sender must already be a ChatterPay user */
+    const fromUser: IUser | null = await getUser(channel_user_id);
+    if (!fromUser) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.wallet_not_created
+      );
+      Logger.info('makeCardanoTransaction', logKey, message);
+      await returnSuccessResponse(reply, message);
+      return undefined;
+    }
+
+    /* 3. one operation at a time — on Cardano this is what keeps two transfers from selecting the
+          same UTxOs. There is no nonce to fall back on. */
+    if (hasUserAnyOperationInProgress(fromUser)) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.concurrent_operation
+      );
+      await persistNotification(channel_user_id, message, NotificationEnum.concurrent_operation);
+      Logger.log('makeCardanoTransaction', logKey, 'Concurrent operation in progress');
+      await returnSuccessResponse(reply, message);
+      return undefined;
+    }
+
+    /* 3.1 security gate */
+    const operationGate = await securityService.getOperationGate(channel_user_id);
+    if (!operationGate.allowed) {
+      await returnSuccessResponse(reply, 'Security verification required', {
+        allowed: false,
+        required_flow: operationGate.required_flow,
+        reason: operationGate.reason,
+        blocked_until: operationGate.blocked_until
+      });
+      return undefined;
+    }
+
+    /* 4. daily operation limit — read from the Cardano network document */
+    const cardanoNetwork = await mongoBlockchainService.getBlockchain(config.chainId);
+    if (!cardanoNetwork) {
+      Logger.error('makeCardanoTransaction', logKey, `No blockchain document for ${config.chainId}`);
+      await returnSuccessResponse(reply, 'Cardano is not configured on this environment');
+      return undefined;
+    }
+
+    if (await userReachedOperationLimit(cardanoNetwork, channel_user_id, 'transfer')) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.daily_limit_reached
+      );
+      await persistNotification(channel_user_id, message, NotificationEnum.daily_limit_reached);
+      Logger.info('makeCardanoTransaction', logKey, message);
+      await returnSuccessResponse(reply, message);
+      return undefined;
+    }
+
+    /* 5. per-amount limits for ADA */
+    const limitsResult = await userWithinTokenOperationLimits(
+      channel_user_id,
+      'transfer',
+      tokenSymbol,
+      config.chainId,
+      Number(amount)
+    );
+    if (!limitsResult.isWithinLimits) {
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.amount_outside_limits
+      );
+      const formatted = message
+        .replace('[LIMIT_MIN]', String(limitsResult.min ?? ''))
+        .replace('[LIMIT_MAX]', String(limitsResult.max ?? ''));
+      await persistNotification(channel_user_id, formatted, NotificationEnum.amount_outside_limits);
+      Logger.info('makeCardanoTransaction', logKey, formatted);
+      await returnSuccessResponse(reply, formatted);
+      return undefined;
+    }
+
+    /* 6. take the lock and answer optimistically, as the EVM path does */
+    await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+    const { message: inProgressMessage } = await getNotificationTemplate(
+      fromUser.phone_number,
+      NotificationEnum.operation_in_progress
+    );
+    await returnSuccessResponse(reply, inProgressMessage);
+
+    /* 7. the transfer itself. Balance, destination and fee are all checked inside, before any
+          signature — Cardano offers no way to cancel a submitted transaction. */
+    const result = await executeCardanoOperation({
+      fromUser,
+      to,
+      amount,
+      token: tokenSymbol,
+      logKey
+    });
+
+    if (!result.success) {
+      await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+      // The text persisted is the service's own, not a template. For insufficient funds it names
+      // the address to fund — the only remedy, and useless buried in a log. The generic
+      // `user_balance_not_enough` template cannot say that, because on Cardano the wallet the user
+      // has to fund is one the product has never had to mention before.
+      const category =
+        result.errorCode === 'CARDANO_INSUFFICIENT_FUNDS'
+          ? NotificationEnum.user_balance_not_enough
+          : NotificationEnum.internal_error;
+      await persistNotification(channel_user_id, result.error, category);
+      Logger.error('makeCardanoTransaction', logKey, `${result.errorCode}: ${result.error}`);
+      return undefined;
+    }
+
+    /* 8. persist. `fee` is the ChatterPay fee, zero on Cardano in V1; `network_fee` is what the
+          chain really charged, which the sender paid out of their own inputs. */
+    const networkFeeAda = Number(result.networkFeeAda);
+    const transactionOut: TransactionData = {
+      tx: result.transactionHash,
+      walletFrom: result.fromAddress,
+      walletTo: result.toAddress,
+      amount: Number(amount),
+      fee: 0,
+      token: result.tokenSymbol,
+      type: 'transfer',
+      status: 'completed',
+      chain_id: config.chainId,
+      user_notes: user_notes ?? '',
+      network_fee: networkFeeAda,
+      // Always ADA, whatever moved: Cardano charges its fee in the chain's own coin, so a USDM
+      // transfer still pays in ADA.
+      network_fee_token: ADA_SYMBOL
+    };
+    await mongoTransactionService.saveTransaction(transactionOut);
+
+    /* 9. chatterpoints */
+    let chatterpointsOpResult: RegisterOperationResult | null = null;
+    try {
+      chatterpointsOpResult = await chatterpointsService.registerOperation({
+        userId: fromUser.phone_number,
+        userLevel: fromUser.level,
+        type: ConcurrentOperationsEnum.Transfer,
+        amount: Number(amount),
+        operationId: result.transactionHash
+      });
+    } catch (error) {
+      // Points are a reward, not part of the transfer. The money already moved.
+      Logger.error('makeCardanoTransaction', logKey, `Chatterpoints failed: ${String(error)}`);
+    }
+    await mongoUserService.updateUserOperationCounter(channel_user_id, 'transfer');
+
+    /* 10. release the lock, then notify */
+    await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+
+    if (lastBotMsgDelaySeconds > 0) {
+      await delaySeconds(lastBotMsgDelaySeconds);
+    }
+
+    const displayAmount = Number(amount).toFixed(2);
+    await sendOutgoingTransferNotification(
+      fromUser.phone_number,
+      result.toUser?.phone_number ?? result.toAddress,
+      result.toUser?.name ?? '',
+      displayAmount,
+      result.tokenSymbol,
+      user_notes ?? '',
+      result.transactionHash,
+      chatterpointsOpResult,
+      undefined,
+      // Without this the notification would link a real Cardano hash to the EVM explorer.
+      config.explorerUrl
+    );
+
+    if (result.toUser) {
+      await sendReceivedTransferNotification(
+        fromUser.phone_number,
+        fromUser.name,
+        result.toUser.phone_number,
+        displayAmount,
+        result.tokenSymbol,
+        user_notes ?? ''
+      );
+    }
+
+    Logger.info(
+      'makeCardanoTransaction',
+      logKey,
+      `Completed: ${result.transactionHash}, network fee ${result.networkFeeAda} ADA, ${result.explorerUrl}`
+    );
+    return undefined;
+  } catch (error) {
+    Logger.error('makeCardanoTransaction', logKey, error);
+    try {
+      const fromUser = await getUser(channel_user_id);
+      if (fromUser) {
+        await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
+      }
+    } catch (closeError) {
+      // A lock that cannot be released is worse than the original failure: the user is stuck until
+      // it expires. Logged loudly rather than swallowed.
+      Logger.error('makeCardanoTransaction', logKey, `Failed to release lock: ${String(closeError)}`);
+    }
+    return undefined;
+  }
+};

@@ -721,13 +721,18 @@ export async function sendOutgoingTransferNotification(
   notes: string,
   txHash: string,
   chatterpointsOpResult: RegisterOperationResult | null,
-  traceHeader?: string
+  traceHeader?: string,
+  explorerUrlOverride?: string
 ): Promise<unknown> {
   try {
     Logger.log('sendOutgoingTransferNotification', 'Sending outgoing transfer notification');
     if (!isValidPhoneNumber(phoneNumberFrom)) return '';
 
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+    // The default network config is the EVM chain this instance operates on. A transfer that
+    // settled somewhere else — Cardano — has to carry its own explorer, or the notification links
+    // a real transaction hash to a chain that never saw it.
+    const explorer = explorerUrlOverride || networkConfig.explorer;
 
     const { title, message } = await getNotificationTemplate(
       phoneNumberFrom,
@@ -751,7 +756,7 @@ export async function sendOutgoingTransferNotification(
         .replaceAll('[AMOUNT]', amount)
         .replaceAll('[TOKEN]', token)
         .replaceAll('[TO]', toNumberAndName)
-        .replaceAll('[EXPLORER]', networkConfig.explorer)
+        .replaceAll('[EXPLORER]', explorer)
         .replaceAll('[TX_HASH]', txHash)
         .replaceAll('[NOTES]', notes ? `\n('${notes}')` : '');
       if (messageChp) {

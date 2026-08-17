@@ -27,15 +27,25 @@ export interface IToken extends Document {
   };
 }
 
-const limitDetailSchema = new Schema<TokenLimitDetail>({
-  min: { type: Number, required: true },
-  max: { type: Number, required: true }
-});
+// `_id: false` on both: these are value objects, not entities. Without it Mongoose stamps an
+// ObjectId into every nested limit, which no existing token document in the collection carries —
+// the rows were written before these schemas existed. Leaving it on would make newly seeded tokens
+// structurally different from every token already stored.
+const limitDetailSchema = new Schema<TokenLimitDetail>(
+  {
+    min: { type: Number, required: true },
+    max: { type: Number, required: true }
+  },
+  { _id: false }
+);
 
-const operationLimitsSchema = new Schema<TokenOperationLimits>({
-  L1: { type: limitDetailSchema, required: true },
-  L2: { type: limitDetailSchema, required: true }
-});
+const operationLimitsSchema = new Schema<TokenOperationLimits>(
+  {
+    L1: { type: limitDetailSchema, required: true },
+    L2: { type: limitDetailSchema, required: true }
+  },
+  { _id: false }
+);
 
 const tokenSchema = new Schema<IToken>({
   name: { type: String, required: true },

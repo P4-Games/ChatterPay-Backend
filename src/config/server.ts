@@ -15,13 +15,26 @@ import { setupRateLimit } from './plugins/rateLimitPlugin';
 import { setupSwagger } from './plugins/swaggerPlugin';
 
 /**
- * Starts the Fastify server with all necessary configurations.
- * @returns {Promise<FastifyInstance>} A promise that resolves to the configured Fastify server instance
+ * Builds the Fastify server with every plugin, hook and route registered — and does not listen.
+ *
+ * Split out from {@link startServer} so the application can be exercised through
+ * `server.inject()` without binding a port. Until this existed there was no way to test a request
+ * end to end, which is why the repository has route handlers with no tests at all.
+ *
+ * @returns The configured server, ready to inject into or to listen with.
  */
-export async function startServer(): Promise<FastifyInstance> {
+export async function buildServer(): Promise<FastifyInstance> {
   const server: FastifyInstance = Fastify({
     ignoreDuplicateSlashes: true,
     ignoreTrailingSlash: true,
+    // Fastify's default is 100 characters, and a Cardano base address is 103 on mainnet and 108 on
+    // Preprod. Over the limit the router does not error, it answers **404** — so `GET /balance/:wallet`
+    // silently stopped existing for every Cardano wallet. An EVM address is 42 and the enterprise
+    // addresses this deployment used to issue were 59, which is why nothing noticed until now.
+    //
+    // 256 is the same ceiling `cardanoAddressService` passes to bech32, for the same reason: it is
+    // above any address either family can produce.
+    maxParamLength: 256,
     logger: {
       redact: ['req.headers.authorization'],
       level: CURRENT_LOG_LEVEL
@@ -46,6 +59,17 @@ export async function startServer(): Promise<FastifyInstance> {
     root: path.join(__dirname, '../../public'),
     prefix: '/'
   });
+
+  return server;
+}
+
+/**
+ * Builds the server and binds it to the configured port.
+ *
+ * @returns {Promise<FastifyInstance>} A promise that resolves to the listening Fastify instance.
+ */
+export async function startServer(): Promise<FastifyInstance> {
+  const server = await buildServer();
 
   await server.listen({ port: PORT, host: '0.0.0.0' });
 
