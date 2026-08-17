@@ -25,7 +25,7 @@
 | Dashboard (§8) | ⛔ pendiente, repo aparte |
 
 Los policy id de USDCx / USDM / USDA **no están en el repo**: se dan de alta con
-`scripts/cardano-add-token.ts` tras verificarlos. Ver §4.8.
+documentos de `tokens` cargados a mano tras verificarlos. Ver §4.8.
 
 ---
 
@@ -478,15 +478,15 @@ documentación oficial de cada emisor, y Cardanoscan.
 
 #### Cómo se dan de alta
 
-Con `scripts/cardano-add-token.ts`, que exige el policy id explícito y **rechaza** cualquier cosa
-que no sea estructuralmente un activo de Cardano (56 hex de policy, asset name ≤32 bytes, sin
-tickers duplicados en la misma red). Deliberadamente **no** hay una tabla de stablecoins
-hardcodeada en el repo: los valores los aporta quien los verificó.
+Insertando el documento en `tokens` a mano, con `address` = policy id + asset name en hex y
+minúsculas. Los documentos exactos están en [cambios.md](./cambios.md).
 
-```bash
-MONGO_URI=... bun run scripts/cardano-add-token.ts \
-  --symbol USDM --policy-id <56 hex> --asset-name-ascii USDM --decimals 6
-```
+Deliberadamente **no** hay una tabla de stablecoins hardcodeada en el repo: los valores los aporta
+quien los verificó, cruzando el Cardano Token Registry, la documentación del emisor y Cardanoscan.
+
+> Un policy id equivocado **no falla**: produce una transferencia válida de un activo que no es el
+> que el usuario cree estar mandando. Verificar en `https://cardanoscan.io/token/<policyId+assetName>`
+> antes de insertar.
 
 **Impacto en decisiones ya tomadas:** §4.4 (fees) se vuelve más urgente; §5.2 (documentos de
 `tokens`) usa `address` = `policyId+assetNameHex`; §8.2 (dashboard) necesita vista por activo.

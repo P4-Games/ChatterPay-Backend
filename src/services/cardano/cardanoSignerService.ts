@@ -33,34 +33,27 @@
  * @see CARDANO_INTEGRATION_PLAN.md §4.2
  */
 
-// `node:` prefix required, not stylistic: Bun resolves the bare `crypto` specifier to a shim that
-// does not re-export `hkdfSync`, so the process dies at import time with
-// "Export named 'hkdfSync' not found in module 'crypto'". Node resolves both, which is why the
-// tests never caught it — they run under Node while the server runs under Bun.
-import {
-  createPrivateKey,
-  createPublicKey,
-  hkdfSync,
-  type KeyObject,
-  sign as nodeSign
-} from 'node:crypto';
+// Every cryptographic primitive here comes from `@noble`, none from `node:crypto`.
+//
+// Not a preference: Bun's `node:crypto` is a reimplementation and it does not behave the same on
+// every platform. `hkdfSync` is simply absent (the process dies at import time with "Export named
+// 'hkdfSync' not found in module 'crypto'"), and importing an Ed25519 key from PKCS#8 was observed
+// on Bun for Windows to return a **different key on every call for the same seed** — which made the
+// derived address change between two requests of the same process, while Node and Bun for Linux
+// stayed deterministic. A derivation that is not a pure function of its inputs is not a derivation:
+// the address is the identity, and it cannot depend on which runtime happens to be serving.
+//
+// `@noble` is pure JavaScript, so the same seed gives the same key everywhere. Byte-for-byte
+// equality with the `node:crypto` output — public key and signature both — was verified before the
+// swap, because a different result would mean every existing address and signature changed.
+import { ed25519 } from '@noble/curves/ed25519';
+import { hkdf } from '@noble/hashes/hkdf';
+import { sha256 } from '@noble/hashes/sha2';
+import { createHash } from 'node:crypto';
 import { $B, $S } from '../../config/constants';
 import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
 import type { CardanoAccount, CardanoNetwork } from '../../types/cardanoType';
 import { baseAddress, decodeCardanoAddress } from './cardanoAddressService';
-
-/**
- * DER prefix of a PKCS#8 Ed25519 private key, ahead of its 32-byte seed. Node has no API to build
- * an Ed25519 key from a raw seed, so the seed is wrapped into the DER structure that
- * `createPrivateKey` does accept.
- */
-const ED25519_PKCS8_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex');
-
-/**
- * Length of the SPKI DER header ahead of the 32 raw public key bytes — which is the form Cardano's
- * blake2b-224 payment credential hashes.
- */
-const ED25519_SPKI_PREFIX_LENGTH = 12;
 
 /** Size of the Ed25519 seed HKDF produces. */
 const SEED_BYTES = 32;
@@ -102,22 +95,28 @@ function ed25519Seed(
   const salt = Buffer.from(`chatterpay:cardano:${network}`, 'utf8');
   const label = role === 'stake' ? `stake:${SCHEME_VERSION}` : SCHEME_VERSION;
   const info = Buffer.from(`ed25519:${label}:${chainId}`, 'utf8');
-  return Buffer.from(hkdfSync('sha256', ikm, salt, info, SEED_BYTES));
-}
-
-/** Wraps a 32-byte seed as an Ed25519 private key object. */
-function keyFromSeed(seed: Buffer): KeyObject {
-  return createPrivateKey({
-    key: Buffer.concat([ED25519_PKCS8_PREFIX, seed]),
-    format: 'der',
-    type: 'pkcs8'
-  });
+  return Buffer.from(hkdf(sha256, ikm, salt, info, SEED_BYTES));
 }
 
 /** The raw 32-byte Ed25519 public key of a seed, hex with `0x`. */
 function publicKeyOf(seed: Buffer): string {
-  const spki = createPublicKey(keyFromSeed(seed)).export({ format: 'der', type: 'spki' }) as Buffer;
-  return `0x${spki.subarray(ED25519_SPKI_PREFIX_LENGTH).toString('hex')}`;
+  return `0x${Buffer.from(ed25519.getPublicKey(seed)).toString('hex')}`;
+}
+
+/**
+ * A non-secret description of the inputs the derivation depends on.
+ *
+ * Every one of them is part of the address, so when a stored address stops matching the derived one
+ * the answer is always "one of these changed" — and without naming them the only way to find out
+ * which is to guess. The salt is reported as a length and a hash prefix, never as itself.
+ *
+ * @returns A one-line fingerprint safe to put in a log or an error message.
+ */
+export function derivationFingerprint(): string {
+  const salt = $S
+    ? `len=${$S.length},sha=${createHash('sha256').update($S).digest('hex').slice(0, 8)}`
+    : 'MISSING';
+  return `salt(${salt}) env(${$B ?? 'undefined'})`;
 }
 
 export const cardanoSignerService = {
@@ -179,7 +178,7 @@ export const cardanoSignerService = {
     const hex = transactionId.startsWith('0x') ? transactionId.slice(2) : transactionId;
     if (!/^[0-9a-fA-F]{64}$/.test(hex)) throw new Error('CARDANO_INVALID_TRANSACTION_ID');
     const seed = ed25519Seed(phoneNumber, network, chainId);
-    const signature = nodeSign(null, Buffer.from(hex, 'hex'), keyFromSeed(seed));
-    return `0x${signature.toString('hex')}`;
+    const signature = ed25519.sign(Buffer.from(hex, 'hex'), seed);
+    return `0x${Buffer.from(signature).toString('hex')}`;
   }
 };

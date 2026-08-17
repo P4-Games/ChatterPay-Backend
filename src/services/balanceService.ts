@@ -139,12 +139,19 @@ export async function getTokenPrices(
   const norm = (s: string) => String(s).trim().toUpperCase();
   const priceMap = new Map<string, number>();
 
+  // The Cardano stablecoins (USDCX, USDM, USDA) belong here for the same reason the rest do: there
+  // is no Binance pair for any of them, and the DefiLlama fallback needs a `tokenAddresses` entry
+  // the Cardano balance path does not pass. Without the entry they price at 0 and a funded wallet
+  // reads as empty.
   const STABLES: Set<string> = new Set([
     'AUSDC',
     'AUSDT',
     'DAI',
     'SUSX',
+    'USDA',
     'USDC',
+    'USDCX',
+    'USDM',
     'USDQ',
     'USDT',
     'USX'

@@ -1,0 +1,167 @@
+{
+  "_id": {
+    "$oid": "68b34b3a6bff6daa87df8e49"
+  },
+  "name": "transferir_fondos",
+  "active": "true",
+  "api_config": {
+    "url": "https://back.chatterpay.net/make_transaction?lastBotMsgDelaySeconds=10",
+    "auth": {
+      "strategy": "env",
+      "type": "authorization"
+    },
+    "headers": {
+      "Authorization": "Bearer {{env:CHATTERPAY_AUTH_API_TOKEN}}",
+      "Content-Type": "application/json",
+      "Origin": "chatizalo"
+    },
+    "parameters": {
+      "to": "str",
+      "token": "str",
+      "amount": "str",
+      "user_notes": "str",
+      "destination_token": "str",
+      "network": "str"
+    },
+    "required_parameters": [
+      "to",
+      "token",
+      "amount"
+    ],
+    "method": "POST",
+    "user_parameters": {
+      "channel_user_id": "channel_user_id"
+    }
+  },
+  "model_config": {
+    "type": "function",
+    "function": {
+      "name": "transferir_fondos",
+      "description": "This tool allows users to transfer funds from their wallet to a contact or wallet they provide. They can transfer to a phone number (same-chain) or to a wallet address on another network (cross-chain). They need to specify the amount, recipient, token type, and optionally the destination network and token.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "Recipient: a wa_id (phone number) for same-chain transfers, or a wallet address for cross-chain transfers (EVM 0x address, Solana base58 address, or Bitcoin address)."
+          },
+          "token": {
+            "type": "string",
+            "description": "Name of the token the user wants to transfer.",
+            "enum": [
+              "USDT",
+              "WETH"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "description": "Amount to be transferred."
+          },
+          "user_notes": {
+            "type": "string",
+            "description": "Notes or reference."
+          },
+          "destination_token": {
+            "type": "string",
+            "description": "Token symbol on the destination chain if different from source token. Omit to keep the same token."
+          },
+          "network": {
+            "type": "string",
+            "description": "Destination network for cross-chain transfers. Use the chain key (e.g., 'eth', 'arb', 'pol', 'sol', 'btc'). Omit for same-chain transfers."
+          }
+        },
+        "required": [
+          "to",
+          "token",
+          "amount"
+        ]
+      }
+    }
+  },
+  "preconditions": [
+    {
+      "id": "security_status_check",
+      "type": "tool_call",
+      "enabled": true,
+      "tool_name": "get_security_status",
+      "stop_on_failure": true,
+      "stop_if": {
+        "path": "data.pin_status",
+        "equals": "blocked"
+      }
+    },
+    {
+      "id": "pin_verification_flow",
+      "type": "whatsapp_flow",
+      "enabled": true,
+      "depends_on": [
+        "security_status_check"
+      ],
+      "channels": [
+        "whatsapp"
+      ],
+      "policy": {
+        "resend_on_verification_failure": false
+      },
+      "run_if": {
+        "source": "security_status_check",
+        "path": "data.pin_status",
+        "equals": "active"
+      },
+      "flow": {
+        "es": {
+          "flow_key": "flow_verify_security_pin_es_v1"
+        },
+        "pt": {
+          "flow_key": "flow_verify_security_pin_pt_v1"
+        },
+        "en": {
+          "flow_key": "flow_verify_security_pin_en_v1"
+        }
+      },
+      "verify_tool_name": "verify_security_pin",
+      "verify_arg_mapping": {
+        "pin": "{{flow.data.pin}}",
+        "channel": "bot",
+        "channel_user_id": "{{user.channel_user_id}}"
+      },
+      "errors_i18n": {
+        "no_pending": {
+          "es": "No hay una operación pendiente para validar.",
+          "pt": "Não há nenhuma operação pendente para validar.",
+          "en": "No pending operation to validate."
+        },
+        "expired": {
+          "es": "La verificación expiró. Reintentá la operación.",
+          "pt": "A verificação expirou. Tente novamente a operação.",
+          "en": "Verification expired. Please retry the operation."
+        },
+        "max_attempts": {
+          "es": "Alcanzaste el máximo de intentos. Reintentá más tarde.",
+          "pt": "Você atingiu o número máximo de tentativas. Tente novamente mais tarde.",
+          "en": "Maximum attempts reached. Try again later."
+        },
+        "misconfigured": {
+          "es": "No se pudo iniciar la verificación por una configuración incompleta.",
+          "pt": "Não foi possível iniciar a verificação devido a uma configuração incompleta.",
+          "en": "Verification could not be started due to a configuration issue."
+        },
+        "verification_failed": {
+          "es": "No se pudo validar. Reintentá.",
+          "pt": "Não foi possível validar. Tente novamente.",
+          "en": "Verification failed. Please retry."
+        },
+        "operation_success": {
+          "es": "Operación confirmada.",
+          "pt": "Operação confirmada.",
+          "en": "Operation confirmed."
+        },
+        "operation_failed": {
+          "es": "No pudimos completar la operación. Intentá de nuevo.",
+          "pt": "Não foi possível concluir a operação. Tente novamente.",
+          "en": "We could not complete the operation. Please try again."
+        }
+      }
+    }
+  ]
+}

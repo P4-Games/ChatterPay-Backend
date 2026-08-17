@@ -20,7 +20,7 @@ import { Logger } from '../../helpers/loggerHelper';
 import { type IUser, type IUserWallet, UserModel } from '../../models/userModel';
 import type { CardanoAccount } from '../../types/cardanoType';
 import { getUserWalletByChainId } from '../userService';
-import { cardanoSignerService } from './cardanoSignerService';
+import { cardanoSignerService, derivationFingerprint } from './cardanoSignerService';
 
 /** A user's Cardano wallet, as the rest of the code needs it. */
 export interface CardanoWallet {
@@ -83,21 +83,42 @@ function walletEntryFor(account: CardanoAccount, chainId: number): IUserWallet {
  *   transaction nobody can authorise.
  */
 export async function ensureCardanoWalletForUser(user: IUser): Promise<CardanoWallet> {
-  const { chainId } = getCardanoConfig();
+  const { chainId, network } = getCardanoConfig();
   const account = deriveCardanoAccount(user.phone_number);
   const existing = getUserWalletByChainId(user.wallets, chainId);
 
   if (existing) {
     if (existing.wallet_proxy !== account.address) {
+      // The fingerprint is what makes this actionable: the address is a pure function of the
+      // derivation inputs, so a mismatch means one of them changed, and naming them turns "why is
+      // this address different" into one line instead of a bisection.
       throw new Error(
-        `CARDANO_ADDRESS_MISMATCH: stored ${existing.wallet_proxy}, derived ${account.address}`
+        `CARDANO_ADDRESS_MISMATCH: stored ${existing.wallet_proxy}, derived ${account.address}, ` +
+          `inputs ${derivationFingerprint()} network(${network}) chainId(${chainId})`
       );
     }
     return { address: account.address, publicKey: account.publicKey, wasCreated: false };
   }
 
-  user.wallets.push(walletEntryFor(account, chainId));
-  await user.save();
+  // An atomic append rather than `user.save()`.
+  //
+  // The document handed to this function is often minutes old by the time it gets here: a transfer
+  // loads the user, then takes the operation lock and runs the security gate, and both of those
+  // write. Saving the stale copy fails Mongoose's optimistic concurrency check with a `VersionError`
+  // — which is what a transfer used to die on, after having already opened the lock.
+  //
+  // The filter is the idempotency: if a concurrent request added the wallet first, it matches
+  // nothing and nothing happens, which is the same outcome as the branch above. There is no
+  // conflict to resolve because the value being written is derived, so both writers would have
+  // written the same entry.
+  const entry = walletEntryFor(account, chainId);
+  await UserModel.updateOne(
+    { phone_number: user.phone_number, 'wallets.chain_id': { $ne: chainId } },
+    { $push: { wallets: entry } }
+  );
+  // The caller keeps using this document, so the in-memory copy has to agree with the database.
+  if (!getUserWalletByChainId(user.wallets, chainId)) user.wallets.push(entry);
+
   Logger.log(
     'ensureCardanoWalletForUser',
     `Cardano wallet provisioned for ${user.phone_number}: ${account.address}`
