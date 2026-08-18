@@ -323,7 +323,8 @@ export async function placeOrder(
     // when the tick-size request failed (rate limit) — crashing order building.
     const orderOptions = { tickSize: tickSizeStr };
 
-    const submitOrder = async (): Promise<Record<string, unknown>> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const submitOrder = async (): Promise<any> => {
       if (params.orderType === 'FOK') {
         // FOK orders use createAndPostMarketOrder (fill-or-kill).
         // SDK UserMarketOrder.amount semantics:
@@ -382,7 +383,11 @@ export async function placeOrder(
       );
     };
 
-    let response = await submitOrder();
+    // The SDK returns OrderResponse which may carry orderID+status on success, or error+message on
+    // failure, but its type definition lacks an index signature and is not assignable to
+    // Record<string, unknown>. Cast through `any` so response handling can read all fields.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let response: any = await submitOrder();
 
     // The CLOB SDK may swallow HTTP errors and return the error body
     // instead of throwing (e.g. {"error": "not enough balance / allowance"}).
