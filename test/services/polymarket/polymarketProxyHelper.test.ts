@@ -135,7 +135,6 @@ describe('registerPolymarketApiAdapter', () => {
   beforeEach(() => {
     process.env.NODE_ENV = 'test';
     // Clear any interceptors left by a previous test and reset the flag
-    // @ts-expect-error – accessing internal Axios property for test isolation
     axios.interceptors.request.handlers = [];
     _resetAdapterForTesting();
     mock = new MockAdapter(axios);
@@ -153,7 +152,6 @@ describe('registerPolymarketApiAdapter', () => {
     registerPolymarketApiAdapter();
     registerPolymarketApiAdapter();
 
-    // @ts-expect-error – internal property
     const active = (axios.interceptors.request.handlers as unknown[]).filter(Boolean);
     expect(active).toHaveLength(1);
   });
@@ -167,7 +165,6 @@ describe('registerPolymarketApiAdapter', () => {
 
     registerPolymarketApiAdapter();
 
-    // @ts-expect-error – internal property
     const active = (axios.interceptors.request.handlers as unknown[]).filter(Boolean);
     expect(active).toHaveLength(0);
 

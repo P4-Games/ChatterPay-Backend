@@ -318,15 +318,16 @@ export const makeCardanoTransaction = async (
       return undefined;
     }
 
-    /* 8. persist. `fee` is the ChatterPay fee, zero on Cardano in V1; `network_fee` is what the
-          chain really charged, which the sender paid out of their own inputs. */
+    /* 8. persist. `fee` is the ChatterPay fee (collected from accumulated debt when above min-ADA);
+          `network_fee` is what the chain charged, covered by the sponsor when sponsoring is on. */
     const networkFeeAda = Number(result.networkFeeAda);
+    const feeCollectedAda = Number(result.feeCollectedAda);
     const transactionOut: TransactionData = {
       tx: result.transactionHash,
       walletFrom: result.fromAddress,
       walletTo: result.toAddress,
       amount: Number(amount),
-      fee: 0,
+      fee: feeCollectedAda,
       token: result.tokenSymbol,
       type: 'transfer',
       status: 'completed',

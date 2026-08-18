@@ -106,6 +106,8 @@ export interface CardanoOperationResult {
   tokenSymbol: string;
   /** Network fee actually paid, in ADA, as a plain decimal string. */
   networkFeeAda: string;
+  /** ChatterPay fee collected in this transaction, in ADA. "0" when not collecting. */
+  feeCollectedAda: string;
   /**
    * ADA that left the sender for the destination.
    *
@@ -184,6 +186,7 @@ function failure(code: string, message: string, symbol = 'ADA'): CardanoOperatio
     transactionHash: '',
     tokenSymbol: symbol,
     networkFeeAda: '0.000000',
+    feeCollectedAda: '0.000000',
     sentAda: '0.000000',
     explorerUrl: '',
     fromAddress: '',
@@ -291,6 +294,7 @@ export async function executeCardanoOperation(
     transactionHash: result.transactionHash,
     tokenSymbol: token.symbol,
     networkFeeAda: lovelaceToAda(result.feeLovelace),
+    feeCollectedAda: lovelaceToAda(result.feeCollectedLovelace),
     sentAda: lovelaceToAda(result.sentLovelace),
     explorerUrl: result.explorerUrl,
     fromAddress: senderAddress,

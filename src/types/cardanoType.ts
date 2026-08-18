@@ -160,6 +160,14 @@ export interface CardanoTransferPlan {
     changeAddress: Uint8Array;
   };
   /**
+   * Accumulated ChatterPay fee to collect in this transaction, in lovelace.
+   *
+   * When present and above the min-ADA for an output, an extra output is added to the sponsor's
+   * address. The sender's inputs must cover this on top of the amount. Zero or absent means no
+   * collection this time.
+   */
+  feeCollectionLovelace?: bigint;
+  /**
    * The native asset being sent, when this is a token transfer.
    *
    * Absent for ADA. One asset per transfer: that is what the product asks for, and it keeps
@@ -205,6 +213,8 @@ export interface BuiltCardanoTransaction {
   inputs: readonly CardanoUtxo[];
   /** Slot after which the network stops accepting this transaction. */
   ttlSlot: number;
+  /** ChatterPay fee collected in this transaction, in lovelace. Zero when not collecting. */
+  feeCollected?: bigint;
 }
 
 /** A wallet's Cardano identity: the address, its raw bytes, and the key behind it. */

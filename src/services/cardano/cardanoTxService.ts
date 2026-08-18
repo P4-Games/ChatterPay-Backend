@@ -533,10 +533,6 @@ function buildAdaTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
   }
 
   const available = spendableUtxos(plan.utxos);
-  // The size the fee is charged for is the size of the *signed* transaction, so it is measured by
-  // serializing one — with signatures of the right length and no meaning. Estimating the witness
-  // bytes instead is how a fee ends up eight bytes short of what the network wants, which is a
-  // rejection rather than a rounding error.
   const placeholderWitnesses = Array.from({ length: Math.max(1, plan.witnessCount) }, () => ({
     publicKey: '00'.repeat(PUBLIC_KEY_BYTES),
     signature: '00'.repeat(SIGNATURE_BYTES)
@@ -544,31 +540,38 @@ function buildAdaTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
   const signedSizeOf = (body: Uint8Array): number =>
     encodeSignedTransaction(body, placeholderWitnesses).length / 2;
 
-  // With a sponsor the two wallets pay for different things: the sender funds exactly the amount,
-  // and the sponsor funds the fee. Each gets its own change output, because sending the sponsor's
-  // leftover to the sender's address would be handing ChatterPay's ADA to the user.
   const sponsor = plan.sponsor;
   const sponsorAvailable = sponsor ? spendableUtxos(sponsor.utxos) : [];
 
+  // Fee collection: when the accumulated ChatterPay fee clears min-ADA, it becomes an extra output
+  // to the sponsor's address. The sender pays it on top of the amount.
+  const feeCollection = plan.feeCollectionLovelace ?? 0n;
+  const feeCollectionOutput =
+    feeCollection > 0n && sponsor
+      ? encodeOutput(sponsor.changeAddress, feeCollection)
+      : new Uint8Array();
+  const collectsFee =
+    feeCollection > 0n &&
+    sponsor !== undefined &&
+    feeCollection >= minimumAdaForOutput(feeCollectionOutput, parameters.coinsPerUtxoByte);
+
+  // The sender covers: amount + fee collection (if any). Sponsor covers network fee.
+  const senderOwes = amount + (collectsFee ? feeCollection : 0n);
+
   let fee = feeForSize(0, parameters);
   for (let pass = 0; pass < MAX_FEE_PASSES; pass++) {
-    // Unsponsored, the sender covers amount + fee. Sponsored, only the amount.
-    const selected = selectFor(available, sponsor ? amount : amount + fee);
+    const selected = selectFor(available, sponsor ? senderOwes : senderOwes + fee);
     const total = selected.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
 
     const sponsorSelected = sponsor ? selectFor(sponsorAvailable, fee) : [];
     const sponsorTotal = sponsorSelected.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
 
-    let change = sponsor ? total - amount : total - amount - fee;
+    let change = sponsor ? total - senderOwes : total - senderOwes - fee;
     const changeOutput = encodeOutput(plan.changeAddress, change);
     const keepsChange =
       change > 0n && change >= minimumAdaForOutput(changeOutput, parameters.coinsPerUtxoByte);
-    // Dust change has nowhere to go: it cannot be its own UTxO and it is already spent as an input,
-    // so it lands in the fee. Reported, never silent.
     if (!keepsChange) change = 0n;
 
-    // The sponsor's leftover follows the same rule, and the same dust outcome: anything it cannot
-    // keep is money ChatterPay donates to the network, never to the user.
     let sponsorChange = sponsor ? sponsorTotal - fee : 0n;
     const sponsorChangeOutput = sponsor
       ? encodeOutput(sponsor.changeAddress, sponsorChange)
@@ -581,6 +584,7 @@ function buildAdaTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
 
     const outputs = [
       paymentOutput,
+      ...(collectsFee ? [feeCollectionOutput] : []),
       ...(keepsChange ? [changeOutput] : []),
       ...(keepsSponsorChange ? [sponsorChangeOutput] : [])
     ];
@@ -588,7 +592,7 @@ function buildAdaTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
     const body = encodeBody(
       inputs,
       outputs,
-      total + sponsorTotal - amount - change - sponsorChange,
+      total + sponsorTotal - amount - (collectsFee ? feeCollection : 0n) - change - sponsorChange,
       ttlSlot
     );
     const size = signedSizeOf(body);
@@ -601,12 +605,13 @@ function buildAdaTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
       return {
         bodyBytes: body,
         transactionId: transactionIdOf(body),
-        fee: total + sponsorTotal - amount - change - sponsorChange,
+        fee: total + sponsorTotal - amount - (collectsFee ? feeCollection : 0n) - change - sponsorChange,
         sentLovelace: amount,
         change,
         changeAssets: [],
         inputs,
-        ttlSlot
+        ttlSlot,
+        feeCollected: collectsFee ? feeCollection : 0n
       };
     }
     fee = required;

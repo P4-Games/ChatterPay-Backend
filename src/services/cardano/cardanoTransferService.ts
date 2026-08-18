@@ -17,8 +17,9 @@
  * @see CARDANO_INTEGRATION_PLAN.md §6.2
  */
 
-import { getCardanoFeeConfig } from '../../config/cardanoFeeConfig';
+import { chargesTransferFee, getCardanoFeeConfig } from '../../config/cardanoFeeConfig';
 import { Logger } from '../../helpers/loggerHelper';
+import { accumulateFee, clearFeeDebt, getFeeDebt } from './cardanoFeeDebtService';
 import type {
   CardanoAccount,
   CardanoAssetAmount,
@@ -92,6 +93,8 @@ export interface CardanoTransferResult {
   sentLovelace: bigint;
   /** Explorer link to the transaction. Empty when nothing was submitted. */
   explorerUrl: string;
+  /** ChatterPay fee collected from the sender in this transaction, in lovelace. */
+  feeCollectedLovelace: bigint;
   /** Machine-readable failure code, empty on success. */
   errorCode: string;
   /** Human-readable failure detail, empty on success. */
@@ -115,6 +118,7 @@ function failure(code: string, message: string): CardanoTransferResult {
     transactionHash: '',
     feeLovelace: 0n,
     sentLovelace: 0n,
+    feeCollectedLovelace: 0n,
     explorerUrl: '',
     errorCode: code,
     error: message
@@ -267,18 +271,23 @@ export async function executeCardanoTransfer(
       );
     }
 
+    // Fee collection: check if the accumulated ChatterPay fee is collectable.
+    const currentDebt = chargesTransferFee(feeConfig)
+      ? await getFeeDebt(fromPhoneNumber)
+      : 0n;
+
     const built = buildCardanoTransfer({
       utxos,
       destinationAddress: destination.payload,
       changeAddress: account.addressBytes,
       amount: amountLovelace,
       asset: input.asset,
+      feeCollectionLovelace: currentDebt > 0n ? currentDebt : undefined,
       sponsor: sponsorAccount
         ? { utxos: sponsorUtxos, changeAddress: sponsorAccount.addressBytes }
         : undefined,
       ttlSlot: tip.slot + ttlSlots,
       parameters,
-      // One witness per distinct signing key: the sender's, plus the sponsor's when it contributes.
       witnessCount: sponsorAccount ? 2 : 1
     });
 
@@ -296,7 +305,8 @@ export async function executeCardanoTransfer(
     // residue that must exist and must not be negative. Asserted here, where refusing is still
     // free: a transaction that does not balance is one the chain rejects, and finding that out from
     // the provider costs a signature.
-    const sponsorChange = consumed - built.sentLovelace - built.fee - built.change;
+    const collected = built.feeCollected ?? 0n;
+    const sponsorChange = consumed - built.sentLovelace - collected - built.fee - built.change;
     const balances = sponsorAccount ? sponsorChange >= 0n : sponsorChange === 0n;
     if (!balances) {
       throw new CardanoTransferRefusal(
@@ -345,14 +355,22 @@ export async function executeCardanoTransfer(
     Logger.info(
       'cardanoTransfer',
       logKey,
-      `Submitted ${transactionHash}, fee ${built.fee} lovelace`
+      `Submitted ${transactionHash}, fee ${built.fee} lovelace` +
+        (collected > 0n ? `, collected ${collected} lovelace ChatterPay fee` : '')
     );
+
+    // Fee bookkeeping: clear collected debt, then accumulate the new fee for this transfer.
+    if (chargesTransferFee(feeConfig)) {
+      if (collected > 0n) await clearFeeDebt(fromPhoneNumber);
+      await accumulateFee(fromPhoneNumber, feeConfig.transferFeeUsd);
+    }
 
     return {
       success: true,
       transactionHash,
       feeLovelace: built.fee,
       sentLovelace: built.sentLovelace,
+      feeCollectedLovelace: collected,
       explorerUrl: `${explorerUrl}${transactionHash}`,
       errorCode: '',
       error: ''
