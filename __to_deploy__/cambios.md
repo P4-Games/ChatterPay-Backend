@@ -201,9 +201,24 @@ No hay secretos. `SEED_INTERNAL_SALT` ya existe y es requerida.
 
 ### Índices (los dos ambientes)
 
+Colección `users`, pestaña **Indexes** en Compass → **Create Index**.
+
+**Índice 1**
+- Name: `wallets_proxy`
+- Field: `wallets.wallet_proxy` → `1 (asc)`
+- No marcar unique, TTL, sparse ni wildcard
+
+**Índice 2**
+- Name: `wallets_chain_proxy`
+- Dos campos (Add Another Field):
+  - `wallets.chain_id` → `1 (asc)`
+  - `wallets.wallet_proxy` → `1 (asc)`
+- No marcar unique, TTL, sparse ni wildcard
+
+O por mongosh:
 ```js
-db.users.createIndex({ 'wallets.wallet_proxy': 1 }, { name: 'wallets_proxy', background: true })
-db.users.createIndex({ 'wallets.chain_id': 1, 'wallets.wallet_proxy': 1 }, { name: 'wallets_chain_proxy', background: true })
+db.users.createIndex({ 'wallets.wallet_proxy': 1 }, { name: 'wallets_proxy' })
+db.users.createIndex({ 'wallets.chain_id': 1, 'wallets.wallet_proxy': 1 }, { name: 'wallets_chain_proxy' })
 ```
 
 ### Template (los dos ambientes)
