@@ -174,18 +174,18 @@ export async function sendWalletNotificationSequence(
       message: formattedIntro
     });
 
-    // 2. Wallet addresses as separate messages (easy to copy)
+    // 2. Wallet addresses as separate messages (plain text, easy to long-press and copy)
     await chatizaloService.sendBotNotification({
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
-      message: `${network_name}: ${user_wallet_proxy}`
+      message: user_wallet_proxy
     });
 
     if (cardanoAddress) {
       await chatizaloService.sendBotNotification({
         data_token: BOT_DATA_TOKEN!,
         channel_user_id,
-        message: `Cardano: ${cardanoAddress}`
+        message: cardanoAddress
       });
     }
 
