@@ -583,9 +583,9 @@
         "pt": "ChatterPay: Sua Carteira"
       },
       "message": {
-        "en": "Here is your ChatterPay wallet information.\n\nYou can receive funds on [NETWORK_NAME] and on Cardano.\n\n⚠️ Important: Make sure to use the correct network and verify the address carefully. Sending funds to the wrong network or address cannot be reversed.\n\nYour addresses:",
-        "es": "Aquí está la información de tu billetera ChatterPay.\n\nPodés recibir fondos en [NETWORK_NAME] y en Cardano.\n\n⚠️ Importante: Asegurate de usar la red correcta y verificar bien la dirección. Enviar fondos a la red o dirección equivocada no se puede revertir.\n\nTus direcciones:",
-        "pt": "Aqui estão as informações da sua carteira ChatterPay.\n\nVocê pode receber fundos em [NETWORK_NAME] e em Cardano.\n\n⚠️ Importante: Certifique-se de usar a rede correta e verificar bem o endereço. Enviar fundos para a rede ou endereço errado não pode ser revertido.\n\nSeus endereços:"
+        "en": "You can receive funds on [NETWORK_NAME] (address 1 below) and on Cardano (address 2 below).\n\n⚠️ Important: Make sure to use the correct network and verify the address carefully. Sending funds to the wrong network or address cannot be reversed.",
+        "es": "Podés recibir fondos en [NETWORK_NAME] (dirección 1 debajo) y en Cardano (dirección 2 debajo).\n\n⚠️ Importante: Asegurate de usar la red correcta y verificar bien la dirección. Enviar fondos a la red o dirección equivocada no se puede revertir.",
+        "pt": "Você pode receber fundos em [NETWORK_NAME] (endereço 1 abaixo) e em Cardano (endereço 2 abaixo).\n\n⚠️ Importante: Certifique-se de usar a rede correta e verificar bem o endereço. Enviar fundos para a rede ou endereço errado não pode ser revertido."
       }
     },
     "wallet_creation_intro": {
@@ -595,9 +595,9 @@
         "pt": "ChatterPay: Carteira criada!"
       },
       "message": {
-        "en": "Here is your ChatterPay wallet information.\n\nYou can receive funds on [NETWORK_NAME] and on Cardano.\n\n⚠️ Important: Make sure to use the correct network and verify the address carefully. Sending funds to the wrong network or address cannot be reversed.\n\nYour addresses:",
-        "es": "Aquí está la información de tu billetera ChatterPay.\n\nPodés recibir fondos en [NETWORK_NAME] y en Cardano.\n\n⚠️ Importante: Asegurate de usar la red correcta y verificar bien la dirección. Enviar fondos a la red o dirección equivocada no se puede revertir.\n\nTus direcciones:",
-        "pt": "Aqui estão as informações da sua carteira ChatterPay.\n\nVocê pode receber fundos em [NETWORK_NAME] e em Cardano.\n\n⚠️ Importante: Certifique-se de usar a rede correta e verificar bem o endereço. Enviar fundos para a rede ou endereço errado não pode ser revertido.\n\nSeus endereços:"
+        "en": "You can receive funds on [NETWORK_NAME] (address 1 below) and on Cardano (address 2 below).\n\n⚠️ Important: Make sure to use the correct network and verify the address carefully. Sending funds to the wrong network or address cannot be reversed.",
+        "es": "Podés recibir fondos en [NETWORK_NAME] (dirección 1 debajo) y en Cardano (dirección 2 debajo).\n\n⚠️ Importante: Asegurate de usar la red correcta y verificar bien la dirección. Enviar fondos a la red o dirección equivocada no se puede revertir.",
+        "pt": "Você pode receber fundos em [NETWORK_NAME] (endereço 1 abaixo) e em Cardano (endereço 2 abaixo).\n\n⚠️ Importante: Certifique-se de usar a rede correta e verificar bem o endereço. Enviar fundos para a rede ou endereço errado não pode ser revertido."
       }
     },
     "wallet_next_steps": {

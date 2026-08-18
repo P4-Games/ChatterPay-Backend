@@ -1,87 +1,65 @@
 # GitHub issues — Cardano, trabajo pendiente
 
-Uno por repo. Copiar título y descripción.
-
----
-
 # 1. Backend — `ChatterPay-Backend`
 
 **Title**
 
 ```
-Support the three Cardano fee models behind environment variables, defaulting to sponsored transfers
+Add Cardano as a supported network 
 ```
 
 **Description**
 
 ```markdown
-Cardano has no paymaster contract and fees can only be paid in ADA, so who pays what
-has to become a deployment decision rather than something baked into the transfer path.
+Add Cardano as a new blockchain family in ChatterPay, alongside the existing EVM chains.
+Users will be able to send and receive ADA and Cardano native tokens (USDCx, USDM, USDA)
+through the same WhatsApp interface they already use for EVM tokens.
 
-Two independent settings will control it:
+### What is already done
 
-| `CARDANO_SPONSOR_FEES` | `CARDANO_TRANSFER_FEE_USD` | Result |
-|---|---|---|
-| `false` | `0` | Option A — the user pays the network fee, ChatterPay charges nothing |
-| `false` | `0.08` | Option B — the user pays the network fee and owes ChatterPay's fee |
-| `true` | `0.08` | **Option C** — ChatterPay covers the network fee and charges its own |
-| `true` | `0` | ChatterPay covers the network fee and charges nothing |
+- Wallet derivation (Ed25519/HKDF, deterministic from the existing master secret)
+- Base address generation (payment + staking credential, CIP-19)
+- ADA transfers with exact fee calculation
+- Native token transfers (multi-asset CBOR builder)
+- Balance queries through Koios
+- Wallet provisioning (atomic, idempotent)
+- Notification templates with `[CARDANO_ADDRESS]`
+- Blockchain and token catalogue entries for Preprod and mainnet
 
-A third variable, `CARDANO_SPONSOR_WALLET_ID`, will identify the wallet that funds the
-sponsored transfers. It will be derived from the existing master secret like any other
-wallet, so no second secret has to be distributed or rotated. Sponsoring will report
-itself off, with an explicit reason, when it is switched on without that wallet.
+### What remains
 
-### What has to be built
+- **Fee model configuration.** Cardano has no paymaster, so who covers the network fee is a
+  deployment decision. Three options controlled by `CARDANO_SPONSOR_FEES` and
+  `CARDANO_TRANSFER_FEE_USD`:
 
-- **Multi-source inputs in the transaction builder.** This is the only part of option C
-  that does not exist today: the builder takes UTxOs from a single wallet. A Cardano
-  transaction accepts inputs from several addresses and only needs a signature from each
-  owner, and ChatterPay already signs for the user, so this changes no trust boundary. It
-  costs ~0.004 ADA of extra network fee.
-- **Deferred collection of ChatterPay's fee.** At USD 0.08 the fee is ~0.46 ADA, which is
-  below the ledger's min-ADA (~0.97 ADA), so it cannot be an output of its own — a
-  transaction carrying one is rejected outright. The fee will accrue per user and be
-  collected as an extra output on a later transfer, once the accrued total clears the
-  minimum (three transfers). What happens to an unpaid balance when a user stops
-  transferring still has to be decided.
-- **Pre-flight balance validation, before the operation lock is taken.** The required
-  minimum depends on the mode and on the asset, and the message must name the exact
-  figures. Today a user finds out after the lock, the notification and the optimistic
-  answer have already gone out.
+  | Sponsor | Fee USD | Result |
+  |---|---|---|
+  | off | 0 | A — user pays network fee, ChatterPay charges nothing |
+  | off | 0.08 | B — user pays network fee + ChatterPay fee |
+  | **on** | **0.08** | **C — ChatterPay covers network fee and charges its own** |
 
-### Minimums the validation has to enforce
+  Option C (sponsored transfers) is the default. The sponsor wallet is derived from the
+  same master secret. Multi-input signing is implemented; deferred fee collection is not.
 
-| To transfer | A and B | C |
-|---|---|---|
-| ADA | 1.135119 ADA | 0.969750 ADA |
-| USDCx, sending the whole balance | 1.322341 ADA | 0 |
-| USDCx, sending part of it | 2.482173 ADA | 0 |
+- **Deferred collection of ChatterPay's fee.** At USD 0.08 (~0.46 ADA) it is below the
+  ledger's min-ADA (~0.97 ADA), so it cannot be a transaction output. It has to accrue per
+  user and be collected when it clears the minimum (~3 transfers).
 
-The last row is the non-obvious one: when the sender keeps part of a native asset, their
-own change output carries the remainder and needs min-ADA too, so **the floor is paid
-twice**. A token never travels alone.
+- **Pre-flight balance validation.** The required minimum depends on the fee model and the
+  asset. Validation runs before the operation lock. Messages name exact figures.
 
-The validation must also reject the dust window — the range just below "send everything"
-where the change would fall under min-ADA and be burned as fee — and offer "send all" as a
-valid amount, since the user cannot compute it themselves without knowing the fee.
+  | Transfer | Options A/B | Option C |
+  |---|---|---|
+  | ADA | 1.135 ADA | 0.970 ADA |
+  | Token (all) | 1.322 ADA | 0 |
+  | Token (partial) | 2.482 ADA | 0 |
 
-### Response contract
+  The dust window (change below min-ADA) is rejected with a "send all" suggestion.
 
-Every failure must answer HTTP 200 with the message in the body. The caller is a bot and a
-response without a body leaves the conversation waiting forever, which is worse than any
-error text.
+- **Live token transfer on Preprod** once USDCx test tokens are obtained.
 
-### Tests
-
-The three options have to be exercised, not just the default: minimum enforcement,
-the dust window, the deferred fee reaching the collection threshold, and a sponsored
-transfer with two signatures. Option C will be left configured as the default once all
-three pass.
-
-Numbers above were measured against Preprod protocol parameters
-(`minFeeA=44`, `minFeeB=155381`, `coinsPerUtxoByte=4310`) with base addresses.
-See `__to_deploy__/opciones-fees-cardano.md`.
+Numbers measured against Preprod parameters (`minFeeA=44`, `minFeeB=155381`,
+`coinsPerUtxoByte=4310`). See `opciones-fees-cardano.md`.
 ```
 
 ---
@@ -91,42 +69,34 @@ See `__to_deploy__/opciones-fees-cardano.md`.
 **Title**
 
 ```
-Show Cardano network cost and minimum-balance requirements in the dashboard
+Cardano: display balances, fees and transfer limits
 ```
 
 **Description**
 
 ```markdown
-Cardano charges the sender directly rather than through a paymaster, and the ledger puts a
-floor under every output. Neither is visible in the dashboard today, so a user can hold ADA
-and still be unable to send it without understanding why.
+The dashboard needs to support Cardano alongside EVM chains. A user holding ADA or Cardano
+tokens should see their balance, understand transfer costs, and know the minimum they need
+before sending.
 
 ### What will be shown
 
-- **The network fee on a Cardano transaction.** Transactions already carry `network_fee`
-  and `network_fee_token`, separate from `fee` (ChatterPay's fee, charged in the token
-  moved). On EVM the paymaster absorbs the network cost and the user never sees it; on
-  Cardano it is real money the sender paid, and a history showing only `fee` hides it.
-- **The minimum a wallet needs before it can transfer**, in the withdraw flow, with the
-  reason. Sending ADA needs the amount plus the network fee; sending a native asset such
-  as USDCx also needs ADA — the network requires ~1.16 ADA to travel attached to the token
-  output, and if the sender keeps part of the token their own change needs the same floor
-  again. A user holding USDCx and no ADA cannot transfer at all.
-- **A "send all" option**, since the exact maximum depends on a fee the user cannot know
-  in advance.
-- **The dust window.** Between "keep at least the minimum" and "send everything" there is a
-  ~1.14 ADA band where the change would fall below the ledger floor and be burned as fee.
-  The amount input should not let the user land there silently.
+- **Cardano balances** in the portfolio view (ADA and native tokens).
+- **The network fee** on Cardano transactions. Transactions carry `network_fee` and
+  `network_fee_token`. On EVM the paymaster hides the cost; on Cardano it is real money
+  the sender paid.
+- **Minimum balance to transfer**, in the send flow, with the reason. Sending a native
+  token also requires ADA (~1.16 ADA attached to the token output). Keeping part of a
+  token doubles the floor.
+- **A "send all" option**, since the exact maximum depends on the fee.
+- **The dust window** — the range where change would be below min-ADA and burned. The
+  amount input must not let the user land there silently.
 
 ### Notes
 
-The figures depend on the fee model the backend is configured with, so they should come
-from the API rather than be hardcoded in the client. The backend issue tracks exposing
-them.
-
-Balances of zero are already filtered out of the response for both families, so an empty
-Cardano wallet shows the empty state rather than an "ADA 0" row — the address stays
-reachable through the deposit modal, which is where a user goes to fund it.
+Figures depend on the backend's fee model and should come from the API. Balances of zero
+are filtered out, so an empty Cardano wallet shows the empty state — the address is
+reachable through the deposit modal.
 ```
 
 ---
@@ -136,43 +106,34 @@ reachable through the deposit modal, which is where a user goes to fund it.
 **Title**
 
 ```
-Explain Cardano balance requirements and fee model in the assistant prompt
+Cardano: update bot prompt with ADA transfer rules
 ```
 
 **Description**
 
 ```markdown
-The Cardano section of the prompt tells the assistant how to route a transfer, but not what
-the user needs in their wallet before one can succeed. That gap shows up as a failed
-transfer the assistant cannot explain, or as an amount the user is told will arrive and
-does not.
+The Cardano section of the prompt tells the assistant how to route a transfer, but not
+what the user needs in their wallet before one can succeed. That gap shows up as a failed
+transfer the assistant cannot explain.
 
-### What the prompt will have to state
+### What the prompt needs
 
-- **Fees on Cardano are paid in ADA and, depending on the deployment, may come out of the
-  user's own balance.** Unlike EVM transfers, where ChatterPay covers the network cost, on
-  Cardano the sender can be paying it directly. The assistant must never quote or promise a
-  specific fee amount: it is decided by the network when the transaction is built.
-- **Sending a Cardano token that is not ADA also requires ADA.** The network makes a
-  minimum amount of ADA travel attached to the token output, and if the sender keeps part
-  of the token, that floor applies a second time to their own change. A user holding USDCx
-  and zero ADA cannot transfer.
-- **There is a minimum transfer amount set by the network, not by ChatterPay.** Below it the
-  ledger rejects the whole transaction rather than the payment.
-- **When ChatterPay charges its own fee, the recipient may receive less than the stated
-  amount**, and the assistant has to say so in the confirmation summary rather than let the
-  difference surface afterwards.
+- **Fees are paid in ADA** and may come from the user's balance (depending on the fee
+  model). The assistant must never quote a specific fee — the network decides it.
+- **Sending a token requires ADA too.** The network attaches ~1.16 ADA to the token
+  output. Keeping part of the token doubles the floor. A user with tokens and no ADA
+  cannot transfer.
+- **There is a minimum transfer amount** set by the network (~0.97 ADA), not by
+  ChatterPay. Below it the whole transaction is rejected.
+- **When ChatterPay charges a fee**, the recipient may receive less. The assistant must
+  say so in the confirmation, not after.
 
-The backend returns these conditions as a message with HTTP 200 precisely so the assistant
-can relay them. It must relay the backend's own text and must not invent a different
-explanation — the message names the exact figures and, for insufficient funds, the address
-to fund.
+The backend returns these conditions as HTTP 200 messages. The assistant must relay the
+backend's text and not invent a different explanation — it names the exact figures.
 
 ### Related
 
-A separate concern worth resolving alongside this: the prompt is truncated to
-`MAX_BASE_PROMPT_CHARS` (default 1800) while `chat_modes` holds ~94,000 characters, so
-anything past the first ~2% never reaches the model. Raising the limit makes each call cost
-~25,000 tokens instead of ~2,800. See `__to_deploy__/propuesta-tokens-prompt.md` in the
-backend repository for the measurements and a plan.
+The prompt is truncated to `MAX_BASE_PROMPT_CHARS` (default 1800) while `chat_modes`
+holds ~94,000 chars. Anything past ~2% never reaches the model. Raising the limit costs
+~25,000 tokens/call instead of ~2,800. See `propuesta-tokens-prompt.md`.
 ```
