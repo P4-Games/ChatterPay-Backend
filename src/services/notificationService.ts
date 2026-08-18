@@ -755,7 +755,13 @@ export async function sendOutgoingTransferNotification(
       let base = message
         .replaceAll('[AMOUNT]', amount)
         .replaceAll('[TOKEN]', token)
-        .replaceAll('[TO]', toNumberAndName)
+        .replaceAll('[TO]', toNumberAndName);
+      // When the caller supplies a full explorer path (Cardano: /transaction/), replace the
+      // whole pattern so the template's /tx/ does not end up in the middle of the URL.
+      if (explorerUrlOverride) {
+        base = base.replaceAll('[EXPLORER]/tx/[TX_HASH]', `${explorer}${txHash}`);
+      }
+      base = base
         .replaceAll('[EXPLORER]', explorer)
         .replaceAll('[TX_HASH]', txHash)
         .replaceAll('[NOTES]', notes ? `\n('${notes}')` : '');

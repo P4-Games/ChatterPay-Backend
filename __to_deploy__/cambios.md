@@ -12,6 +12,9 @@
 - Add variable `_CARDANO_TTL_SLOTS=900`
 - Add variable `_CARDANO_DEPOSIT_CONFIRMATIONS=3`
 - Add variable `_CARDANO_EXPLORER_URL=https://preprod.cardanoscan.io/transaction/`
+- Add variable `_CARDANO_SPONSOR_FEES=true`
+- Add variable `_CARDANO_TRANSFER_FEE_USD=0.08`
+- Add variable `_CARDANO_SPONSOR_WALLET_ID=chatterpay-sponsor`
 
 **main**
 
@@ -23,8 +26,16 @@
 - Add variable `_CARDANO_TTL_SLOTS=900`
 - Add variable `_CARDANO_DEPOSIT_CONFIRMATIONS=3`
 - Add variable `_CARDANO_EXPLORER_URL=https://cardanoscan.io/transaction/`
+- Add variable `_CARDANO_SPONSOR_FEES=true`
+- Add variable `_CARDANO_TRANSFER_FEE_USD=0.08`
+- Add variable `_CARDANO_SPONSOR_WALLET_ID=chatterpay-sponsor`
 
 No hay secretos. `SEED_INTERNAL_SALT` ya existe y es requerida.
+
+> **Sponsor:** sin estas tres variables la opción C no se activa y la transferencia corre como
+> opción A (el usuario paga la red y ChatterPay no cobra). La wallet del sponsor tiene que estar
+> fondeada con ADA antes de habilitar `CARDANO_SPONSOR_FEES=true` — si está vacía, toda
+> transferencia se rechaza con `CARDANO_SPONSOR_WALLET_EMPTY`.
 
 
 ## GCP changes (Chatizalo-bot)

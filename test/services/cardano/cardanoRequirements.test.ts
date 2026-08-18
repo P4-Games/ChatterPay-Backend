@@ -98,15 +98,12 @@ describe('getCardanoFeeConfig - the three options', () => {
     expect(config.transferFeeUsd).toBe(0.08);
   });
 
-  it('reads C, but keeps sponsoring off until the builder supports it', () => {
-    // The setting is read, the fee is read, and sponsoring still reports itself off with the
-    // reason. Switching it on before the builder can take a second wallet's inputs would let the
-    // preflight approve a wallet with no ADA and fail the build afterwards — after the lock.
+  it('reads C: sponsor on, fee charged', () => {
     optionC();
     const config = getCardanoFeeConfig();
     expect(config.transferFeeUsd).toBe(0.08);
-    expect(config.sponsorNetworkFee).toBe(false);
-    expect(config.disabledReason).toContain('second wallet');
+    expect(config.sponsorNetworkFee).toBe(true);
+    expect(config.disabledReason).toBe('');
   });
 
   it('refuses to sponsor without a wallet to sponsor from', () => {
@@ -180,7 +177,7 @@ describe('adaTransferRequirement - minimum to move ADA', () => {
 });
 
 describe('tokenTransferRequirement - a token never travels alone', () => {
-  const held = [utxo(3_000_000n, [{ ...USDCX, quantity: 10_000_000n }])];
+  const held = [utxo(2_000_000n, [{ ...USDCX, quantity: 10_000_000n }])];
 
   it('A and B need ADA even though the user is sending a token', () => {
     for (const option of [optionA, optionB]) {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { CARDANO_PREPROD_CHAIN_ID } from '../../../src/config/cardanoConfig';
 import Token from '../../../src/models/tokenModel';
@@ -23,6 +23,7 @@ const EXTERNAL_ADDRESS =
 const MAINNET_ADDRESS = 'addr1vx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzers66hrl8';
 
 let provider: FakeCardanoProvider;
+const savedSponsor: Record<string, string | undefined> = {};
 
 /** Creates a ChatterPay user with only an EVM wallet, as every existing user has. */
 async function createEvmOnlyUser(phone: string): Promise<IUser> {
@@ -86,10 +87,22 @@ async function seedTokens(): Promise<void> {
 }
 
 beforeEach(async () => {
+  for (const name of ['CARDANO_SPONSOR_FEES', 'CARDANO_SPONSOR_WALLET_ID']) {
+    savedSponsor[name] = process.env[name];
+  }
   process.env.CARDANO_ENABLED = 'true';
   process.env.CARDANO_NETWORK = 'preprod';
+  process.env.CARDANO_SPONSOR_FEES = 'false';
+  delete process.env.CARDANO_SPONSOR_WALLET_ID;
   provider = new FakeCardanoProvider();
   await seedTokens();
+});
+
+afterEach(() => {
+  for (const [name, value] of Object.entries(savedSponsor)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
 });
 
 describe('cardanoWalletService - provisioning', () => {

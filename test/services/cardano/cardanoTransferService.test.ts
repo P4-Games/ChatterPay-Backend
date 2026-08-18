@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { CardanoProviderError } from '../../../src/services/cardano/cardanoProviderService';
 import { cardanoSignerService } from '../../../src/services/cardano/cardanoSignerService';
@@ -17,6 +17,9 @@ const MAINNET_ADDRESS = 'addr1vx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzers66h
 
 let provider: FakeCardanoProvider;
 
+const savedSponsor: Record<string, string | undefined> = {};
+const SPONSOR_VARS = ['CARDANO_SPONSOR_FEES', 'CARDANO_SPONSOR_WALLET_ID'];
+
 function transfer(overrides: Partial<Parameters<typeof executeCardanoTransfer>[0]> = {}) {
   return executeCardanoTransfer({
     fromPhoneNumber: SENDER_PHONE,
@@ -34,7 +37,17 @@ function transfer(overrides: Partial<Parameters<typeof executeCardanoTransfer>[0
 }
 
 beforeEach(() => {
+  SPONSOR_VARS.forEach((name) => { savedSponsor[name] = process.env[name]; });
+  process.env.CARDANO_SPONSOR_FEES = 'false';
+  delete process.env.CARDANO_SPONSOR_WALLET_ID;
   provider = new FakeCardanoProvider();
+});
+
+afterEach(() => {
+  SPONSOR_VARS.forEach((name) => {
+    if (savedSponsor[name] === undefined) delete process.env[name];
+    else process.env[name] = savedSponsor[name];
+  });
 });
 
 describe('executeCardanoTransfer - the happy path', () => {
