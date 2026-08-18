@@ -268,17 +268,33 @@ caracteres.
 
 ### Backend Changes
 
-- 
-
+- Added Cardano as a new blockchain family alongside EVM chains.
+- Implemented deterministic Ed25519 wallet derivation (HKDF from the existing master secret), with base addresses carrying both a payment and a staking credential (CIP-19).
+- Built a hand-rolled CBOR transaction builder with exact fee calculation (no estimation), coin selection, dust-change rejection, and multi-asset support.
+- Added ADA and native token (USDCx, USDM, USDA) transfers — phone-to-phone and to external bech32 addresses.
+- Implemented three configurable fee models via environment variables: user pays (A), user pays + ChatterPay fee (B), and sponsored transfers where ChatterPay covers the network fee (C, default).
+- Built sponsor wallet support: a second wallet contributes inputs to cover the network fee, with its own change output and signature.
+- Implemented deferred ChatterPay fee collection: the fee (~0.46 ADA) is below the ledger's min-ADA, so it accrues per user and is collected as an extra transaction output when it clears the minimum (~3 transfers).
+- Added pre-flight balance validation before the operation lock, with messages naming exact figures and the address to fund.
+- Integrated Cardano balances into all balance endpoints (balance_by_phone, balance_by_address).
+- Added wallet notification sequence showing both EVM and Cardano addresses as separate copyable messages.
+- Fixed notification explorer URL for Cardano (was generating double path `/transaction//tx/`).
+- Added blockchain and token catalogue entries for Preprod and mainnet.
+- Fixed all pre-existing TypeScript errors in polymarket code.
 
 ## [#342: Support Cardano in the dashboard](https://github.com/P4-Games/ChatterPay/issues/342)
 
 ### Frontend Changes
 
-- 
+- Added Cardano wallet address display in the wallet view (address starting with `addr_test1` / `addr1`).
+- Portfolio view shows ADA and Cardano native token balances alongside EVM tokens.
 
 ## [#259: Support Cardano transfers](https://github.com/P4-Games/ChatBot-WhatsappOpenIA/issues/259)
 
 ### Bot Changes
 
-- 
+- Added `httpx` dependency (was missing, caused boot crash on Cloud Run).
+- Updated `chat_functions` (`transferir_fondos`): added `ADA` to the token enum, added `network: "cardano"` routing, updated recipient description to include Cardano bech32 addresses.
+- Updated `chat_modes` prompt: declared Cardano as a supported network in the assistant description, added full Cardano section covering transfer rules, fee model, balance requirements, and the rule that recipients don't need an existing wallet.
+- Updated balance example in prompt to include ADA alongside EVM tokens, with instruction not to separate by network.
+- Updated wallet notification templates (`wallet_creation`, `wallet_already_exists`) with `[CARDANO_ADDRESS]` placeholder.
