@@ -247,3 +247,23 @@ grande. En prod hay que ajustarle `date` para que supere al último de esa base,
 caracteres.
 
 > El bot cachea `chat_functions` y `chat_modes` con TTL: reiniciar después de aplicar.
+
+-----------
+## [#734: Add Cardano as a supported network](https://github.com/P4-Games/ChatterPay-Backend/issues/734)
+
+### Backend Changes
+
+- 
+
+
+## [#342: Support Cardano in the dashboard](https://github.com/P4-Games/ChatterPay/issues/342)
+
+### Frontend Changes
+
+- 
+
+## [#259: Support Cardano transfers](https://github.com/P4-Games/ChatBot-WhatsappOpenIA/issues/259)
+
+### Bot Changes
+
+- 
