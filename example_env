@@ -196,3 +196,19 @@ CARDANO_PROVIDER_TIMEOUT_MS=20000
 CARDANO_TTL_SLOTS=900
 CARDANO_DEPOSIT_CONFIRMATIONS=3
 CARDANO_EXPLORER_URL='https://preprod.cardanoscan.io/transaction/'
+
+# Cardano — quién paga qué en una transferencia (ver __to_deploy__/opciones-fees-cardano.md)
+#
+#   CARDANO_SPONSOR_FEES  CARDANO_TRANSFER_FEE_USD
+#   false                 0        opción A: el usuario paga la red, no se le cobra nada
+#   false                 0.08     opción B: el usuario paga la red y debe el fee de ChatterPay
+#   true                  0.08     opción C: ChatterPay paga la red y cobra su fee
+#
+# CARDANO_SPONSOR_WALLET_ID identifica la wallet que financia las transferencias patrocinadas. Se
+# deriva del mismo master secret que el resto, así que no hay un segundo secreto que distribuir.
+#
+# La opción C es el default. La wallet del sponsor tiene que tener ADA: si está vacía, la
+# transferencia se rechaza en vez de cobrarle al usuario un fee que se le prometió cubrir.
+CARDANO_SPONSOR_FEES='true'
+CARDANO_TRANSFER_FEE_USD=0.08
+CARDANO_SPONSOR_WALLET_ID='chatterpay-sponsor'

@@ -17,6 +17,7 @@
  * @see CARDANO_INTEGRATION_PLAN.md §6.2
  */
 
+import { getCardanoFeeConfig } from '../../config/cardanoFeeConfig';
 import { Logger } from '../../helpers/loggerHelper';
 import type {
   CardanoAccount,
@@ -246,17 +247,39 @@ export async function executeCardanoTransfer(
       }
     }
 
+    // Sponsoring, when it is on: a second wallet contributes an input that covers the fee, and gets
+    // its own change output back. Cardano needs no paymaster contract for this -- a transaction may
+    // spend inputs from several addresses and only asks for a signature from each owner.
+    const feeConfig = getCardanoFeeConfig();
+    const sponsorAccount = feeConfig.sponsorNetworkFee
+      ? cardanoSignerService.getSponsorAccount(feeConfig.sponsorWalletId, network, chainId)
+      : null;
+    const sponsorUtxos = sponsorAccount
+      ? await provider.confirmedUtxosFor(sponsorAccount.address, depositConfirmations)
+      : [];
+
+    if (sponsorAccount && spendableBalance(sponsorUtxos) === 0n) {
+      // Refused rather than silently falling back to charging the user: a deployment that promised
+      // to cover the fee and then takes it from the sender is worse than one that never promised.
+      throw new CardanoTransferRefusal(
+        'CARDANO_SPONSOR_WALLET_EMPTY',
+        `the sponsor wallet ${sponsorAccount.address} holds no spendable ADA`
+      );
+    }
+
     const built = buildCardanoTransfer({
       utxos,
       destinationAddress: destination.payload,
       changeAddress: account.addressBytes,
       amount: amountLovelace,
       asset: input.asset,
+      sponsor: sponsorAccount
+        ? { utxos: sponsorUtxos, changeAddress: sponsorAccount.addressBytes }
+        : undefined,
       ttlSlot: tip.slot + ttlSlots,
       parameters,
-      // One key signs: the wallet's own. A platform fee or subsidy input would add a second
-      // witness, and it is not built here.
-      witnessCount: 1
+      // One witness per distinct signing key: the sender's, plus the sponsor's when it contributes.
+      witnessCount: sponsorAccount ? 2 : 1
     });
 
     // The invariant reconciliation depends on, asserted where refusing is still free: what came in
@@ -268,10 +291,18 @@ export async function executeCardanoTransfer(
     );
     // Stated against what actually left, not against what was requested: on a token transfer the
     // ADA leaving is the minimum attached to the token output, which the builder decides.
-    if (consumed !== built.sentLovelace + built.fee + built.change) {
+    // What came in equals what went out. With a sponsor there is a second change output, and the
+    // builder does not report it separately, so it is whatever the other three did not claim — a
+    // residue that must exist and must not be negative. Asserted here, where refusing is still
+    // free: a transaction that does not balance is one the chain rejects, and finding that out from
+    // the provider costs a signature.
+    const sponsorChange = consumed - built.sentLovelace - built.fee - built.change;
+    const balances = sponsorAccount ? sponsorChange >= 0n : sponsorChange === 0n;
+    if (!balances) {
       throw new CardanoTransferRefusal(
         'CARDANO_TRANSACTION_DOES_NOT_BALANCE',
-        `inputs ${consumed} != sent ${built.sentLovelace} + fee ${built.fee} + change ${built.change}`
+        `inputs ${consumed} != sent ${built.sentLovelace} + fee ${built.fee} + ` +
+          `change ${built.change} (+ sponsor change ${sponsorChange})`
       );
     }
 
@@ -290,9 +321,19 @@ export async function executeCardanoTransfer(
       chainId,
       built.transactionId
     );
-    const signed = encodeSignedTransaction(built.bodyBytes, [
-      { publicKey: account.publicKey, signature }
-    ]);
+    const witnesses = [{ publicKey: account.publicKey, signature }];
+    if (sponsorAccount) {
+      witnesses.push({
+        publicKey: sponsorAccount.publicKey,
+        signature: cardanoSignerService.signAsSponsor(
+          feeConfig.sponsorWalletId,
+          network,
+          chainId,
+          built.transactionId
+        )
+      });
+    }
+    const signed = encodeSignedTransaction(built.bodyBytes, witnesses);
 
     const transactionHash = await submitResolvingTimeout(
       provider,

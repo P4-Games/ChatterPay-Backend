@@ -29,7 +29,12 @@ import {
   userReachedOperationLimit,
   userWithinTokenOperationLimits
 } from '../services/blockchainService';
-import { executeCardanoOperation } from '../services/cardano/cardanoOperationService';
+import {
+  executeCardanoOperation,
+  resolveCardanoToken
+} from '../services/cardano/cardanoOperationService';
+import { canAffordCardanoTransfer } from '../services/cardano/cardanoPreflightService';
+import { deriveCardanoAccount } from '../services/cardano/cardanoWalletService';
 import { chatterpointsService, type RegisterOperationResult } from '../services/chatterpointsService';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
@@ -257,6 +262,29 @@ export const makeCardanoTransaction = async (
       return undefined;
     }
 
+    /* 5.1 can the wallet actually afford it?
+       Asked here, not inside the transfer: the chain's own floors -- min-ADA on every output, the
+       fee coming out of the inputs, the ADA a token drags with it -- used to surface after the
+       lock was open and the user had already been told the operation was in progress. */
+    const senderAddress = deriveCardanoAccount(fromUser.phone_number).address;
+    const resolved = await resolveCardanoToken(tokenSymbol, config.chainId);
+    const preflight = await canAffordCardanoTransfer(
+      senderAddress,
+      amount,
+      resolved.decimals,
+      resolved.asset
+    );
+    if (!preflight.ok) {
+      await persistNotification(
+        channel_user_id,
+        preflight.message,
+        NotificationEnum.user_balance_not_enough
+      );
+      Logger.info('makeCardanoTransaction', logKey, `Preflight rejected: ${preflight.message}`);
+      await returnSuccessResponse(reply, preflight.message);
+      return undefined;
+    }
+
     /* 6. take the lock and answer optimistically, as the EVM path does */
     await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
     const { message: inProgressMessage } = await getNotificationTemplate(
@@ -368,6 +396,23 @@ export const makeCardanoTransaction = async (
     return undefined;
   } catch (error) {
     Logger.error('makeCardanoTransaction', logKey, error);
+
+    // The caller is a bot: a request that ends without a body leaves the conversation waiting
+    // forever, which is worse than any error text. Everything below the optimistic answer has
+    // already replied, so this only fires for a failure on the way there -- but that is exactly the
+    // case that used to return nothing at all.
+    if (!reply.sent) {
+      await returnErrorResponseAsSuccess(
+        'makeCardanoTransaction',
+        logKey,
+        reply,
+        'No pudimos procesar la transferencia. Intentá de nuevo en unos minutos.',
+        false,
+        channel_user_id,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+
     try {
       const fromUser = await getUser(channel_user_id);
       if (fromUser) {

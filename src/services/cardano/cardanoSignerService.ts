@@ -70,6 +70,29 @@ const SCHEME_VERSION = 'v1';
 type KeyRole = 'payment' | 'stake';
 
 /**
+ * The Ed25519 seed of the sponsor wallet.
+ *
+ * Derived from the same master secret as every user wallet, so sponsoring adds no second secret to
+ * distribute or rotate — but through its own `info` label, which is what keeps it from colliding
+ * with a user's. It does **not** go through `getPhoneNumberFormatted`: that strips everything but
+ * digits, and an identifier like `chatterpay-sponsor` would come out empty, deriving the same
+ * wallet for every possible id.
+ *
+ * @param walletId - Identifier from `CARDANO_SPONSOR_WALLET_ID`.
+ * @param network - Cardano network.
+ * @param chainId - Internal chain id.
+ * @returns The 32-byte seed.
+ * @throws Error `CARDANO_SEED_SALT_MISSING` when the master secret is absent.
+ */
+function sponsorSeed(walletId: string, network: CardanoNetwork, chainId: number): Buffer {
+  if (!$S) throw new Error('CARDANO_SEED_SALT_MISSING');
+  const ikm = Buffer.from(`${$S}${$B}${walletId}`, 'utf8');
+  const salt = Buffer.from(`chatterpay:cardano:${network}`, 'utf8');
+  const info = Buffer.from(`ed25519:sponsor:${SCHEME_VERSION}:${chainId}`, 'utf8');
+  return Buffer.from(hkdf(sha256, ikm, salt, info, SEED_BYTES));
+}
+
+/**
  * The Ed25519 seed of a user on a network, for one role.
  *
  * @param phoneNumber - The user's phone number, in any accepted format.
@@ -153,6 +176,60 @@ export const cardanoSignerService = {
     const decoded = decodeCardanoAddress(address);
     if (!decoded) throw new Error('CARDANO_ADDRESS_DERIVATION_FAILED');
     return { address, addressBytes: decoded.payload, publicKey, stakePublicKey };
+  },
+
+  /**
+   * The sponsor wallet: the one that funds the network fee when sponsoring is on.
+   *
+   * @param walletId - Identifier from `CARDANO_SPONSOR_WALLET_ID`.
+   * @param network - Cardano network the address belongs to.
+   * @param chainId - Internal chain id of the network.
+   * @returns The account, in the same shape a user's has.
+   * @throws Error `CARDANO_ADDRESS_DERIVATION_FAILED` when the address cannot be read back.
+   */
+  getSponsorAccount: (
+    walletId: string,
+    network: CardanoNetwork,
+    chainId: number
+  ): CardanoAccount => {
+    const seed = sponsorSeed(walletId, network, chainId);
+    const publicKey = publicKeyOf(seed);
+    const stakePublicKey = publicKeyOf(
+      Buffer.from(
+        hkdf(
+          sha256,
+          seed,
+          Buffer.from(`chatterpay:cardano:${network}`, 'utf8'),
+          Buffer.from('ed25519:sponsor-stake:v1', 'utf8'),
+          SEED_BYTES
+        )
+      )
+    );
+    const address = baseAddress(publicKey, stakePublicKey, network);
+    const decoded = decodeCardanoAddress(address);
+    if (!decoded) throw new Error('CARDANO_ADDRESS_DERIVATION_FAILED');
+    return { address, addressBytes: decoded.payload, publicKey, stakePublicKey };
+  },
+
+  /**
+   * Signs a transaction body hash with the sponsor key.
+   *
+   * @param walletId - Identifier from `CARDANO_SPONSOR_WALLET_ID`.
+   * @param network - Cardano network.
+   * @param chainId - Internal chain id.
+   * @param transactionId - The transaction body hash, hex with or without `0x`.
+   * @returns The 64-byte signature, hex with `0x`.
+   */
+  signAsSponsor: (
+    walletId: string,
+    network: CardanoNetwork,
+    chainId: number,
+    transactionId: string
+  ): string => {
+    const hex = transactionId.startsWith('0x') ? transactionId.slice(2) : transactionId;
+    if (!/^[0-9a-fA-F]{64}$/.test(hex)) throw new Error('CARDANO_INVALID_TRANSACTION_ID');
+    const signature = ed25519.sign(Buffer.from(hex, 'hex'), sponsorSeed(walletId, network, chainId));
+    return `0x${Buffer.from(signature).toString('hex')}`;
   },
 
   /**

@@ -144,6 +144,22 @@ export interface CardanoTransferPlan {
    */
   amount: bigint;
   /**
+   * A second wallet that covers the network fee, and the ADA a token drags with it.
+   *
+   * Cardano has no paymaster contract and it does not need one: a transaction may spend inputs from
+   * several addresses and only requires a signature from each owner. So sponsoring is not a
+   * mechanism to build, it is an input to add — and a second change output, because the sponsor's
+   * leftover has to come back to the sponsor rather than be handed to the user.
+   *
+   * Absent means the sender pays for everything, which is what happens when sponsoring is off.
+   */
+  sponsor?: {
+    /** Unspent outputs the sponsor offers. */
+    utxos: readonly CardanoUtxo[];
+    /** Raw bytes of the sponsor's address, where its change returns. */
+    changeAddress: Uint8Array;
+  };
+  /**
    * The native asset being sent, when this is a token transfer.
    *
    * Absent for ADA. One asset per transfer: that is what the product asks for, and it keeps
