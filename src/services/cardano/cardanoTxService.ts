@@ -493,6 +493,12 @@ function selectFor(available: readonly CardanoUtxo[], target: bigint): CardanoUt
  * instead. That is a real cost to the sender and it is reported as fee rather than hidden, which is
  * what lets reconciliation add up: inputs = amount + fee + change, always.
  *
+ * **The accrued ChatterPay fee is collected only when it is free to collect.** It is a debt with no
+ * deadline, so it never gets to be the reason a transfer fails, and it never gets to cost the
+ * sender more than itself: the transfer is built both ways and the collecting build is taken only
+ * if it both succeeds and does not push the sender's change under min-ADA. Otherwise the debt
+ * stands and the next transfer tries again. `feeCollected` on the result says which happened.
+ *
  * @param plan - Inputs, addresses, amount, expiry and parameters.
  * @returns The body, its transaction id, and the numbers the ledger reconciles against.
  * @throws Error `CARDANO_AMOUNT_BELOW_MINIMUM_UTXO` when the amount itself is under the min-ADA of
@@ -506,7 +512,53 @@ function selectFor(available: readonly CardanoUtxo[], target: bigint): CardanoUt
  * @throws Error `CARDANO_FEE_DID_NOT_CONVERGE` when the fee loop fails to settle.
  */
 export function buildCardanoTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
-  return plan.asset ? buildAssetTransfer(plan, plan.asset) : buildAdaTransfer(plan);
+  const build = (candidate: CardanoTransferPlan): BuiltCardanoTransaction =>
+    candidate.asset ? buildAssetTransfer(candidate, candidate.asset) : buildAdaTransfer(candidate);
+
+  const owed = plan.feeCollectionLovelace ?? 0n;
+  if (owed <= 0n) return build(plan);
+
+  // Built first, and it is this one that decides whether the transfer happens at all. The accrued
+  // fee is a debt with no deadline — that is the whole point of accruing it — so it must never be
+  // the reason a transfer the sender could otherwise afford gets refused. If this throws, the
+  // wallet is genuinely short, and the message says so without a collection the user never asked
+  // for inflating the figure it names.
+  const deferred = build({ ...plan, feeCollectionLovelace: undefined });
+
+  let collecting: BuiltCardanoTransaction;
+  try {
+    collecting = build(plan);
+  } catch (error) {
+    if (!isShortOfAda(error)) throw error;
+    return deferred;
+  }
+
+  // The builder declined it on its own: below min-ADA the fee cannot be an output at all.
+  if ((collecting.feeCollected ?? 0n) <= 0n) return deferred;
+
+  // Both build. Take the collecting one only if collecting is all it costs — see the constant.
+  return collecting.fee - deferred.fee <= FEE_COLLECTION_MAX_EXTRA_COST ? collecting : deferred;
+}
+
+/**
+ * Tolerance on what collecting the accrued fee may cost the sender beyond the fee itself.
+ *
+ * The extra output adds bytes and bytes are lovelace: a few thousand, unavoidable, fine. What is
+ * not fine is the collection pushing the sender's change under min-ADA, because change that cannot
+ * be an output is absorbed into the network fee — the sender loses it *on top of* the fee, the
+ * transaction still succeeds, and the only way to find out is to read it on chain. Costing more
+ * than this ceiling means that happened, not that the transaction grew.
+ */
+const FEE_COLLECTION_MAX_EXTRA_COST = 50_000n;
+
+/**
+ * Whether an error is a builder refusing for lack of ADA, as opposed to a defect.
+ *
+ * Matched on the code rather than on a class because the builders raise plain `Error`s carrying a
+ * machine-readable prefix, and every caller up to the controller already reads them that way.
+ */
+function isShortOfAda(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith('CARDANO_INSUFFICIENT_FUNDS');
 }
 
 /**

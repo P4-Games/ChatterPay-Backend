@@ -212,6 +212,105 @@ describe('collecting the accumulated ChatterPay fee on a native-asset transfer',
   });
 });
 
+describe('deferring the accumulated fee rather than failing the transfer', () => {
+  // The debt has no deadline — that is the entire reason it accrues instead of being charged per
+  // transfer. So collecting it is opportunistic: it happens when it is free, and waits when it is
+  // not. These are the two ways it is not free.
+
+  /** min-ADA of the sender's change output when it carries the residual token. */
+  const CHANGE_FLOOR = minimumAdaFor(SENDER, [{ ...USDM, quantity: 70_000_000n }], 4310n);
+  /** min-ADA of a plain ADA-only change output back to the sender. */
+  const PLAIN_FLOOR = minimumAdaFor(SENDER, [], 4310n);
+
+  it('sends anyway when collecting the debt would leave the sender short', () => {
+    // The reported case: a wallet holding just enough ADA to carry the token and its residual, and
+    // a debt larger than what is left over. Collecting it made the whole transfer fail — the user
+    // was told they had no balance for a transfer they could plainly afford.
+    const barely = ATTACHED + CHANGE_FLOOR;
+    const plan = tokenPlan([tokenUtxo(barely, [{ ...USDM, quantity: 100_000_000n }])], {
+      sponsor: sponsoring(),
+      feeCollectionLovelace: 1_400_000n
+    });
+
+    const built = buildCardanoTransfer(plan);
+
+    expect(built.feeCollected).toBe(0n);
+    expect(built.sentLovelace).toBe(ATTACHED);
+    expect(costToSender(built)).toBe(ATTACHED);
+    expect(built.change).toBe(CHANGE_FLOOR);
+  });
+
+  it('waits rather than burning the change it would have to destroy to collect', () => {
+    // Change under min-ADA cannot be an output, so the ledger absorbs it into the fee. Collecting
+    // a 1.2 ADA debt by silently destroying 0.85 ADA of the sender's own money is a worse outcome
+    // than collecting nothing, and the sender would only find out by reading the transaction.
+    const leftover = PLAIN_FLOOR - 1n;
+    const held = ATTACHED + 1_200_000n + leftover;
+    const plan = tokenPlan([tokenUtxo(held, [{ ...USDM, quantity: 30_000_000n }])], {
+      sponsor: sponsoring(),
+      feeCollectionLovelace: 1_200_000n
+    });
+
+    const built = buildCardanoTransfer(plan);
+
+    expect(built.feeCollected).toBe(0n);
+    expect(built.change).toBe(held - ATTACHED);
+    expect(costToSender(built)).toBe(ATTACHED);
+  });
+
+  it('collects when the sender can afford it, which is the point', () => {
+    // The guard must not have turned collection off in general.
+    const held = ATTACHED + CHANGE_FLOOR + 1_200_000n;
+    const built = buildCardanoTransfer(
+      tokenPlan([tokenUtxo(held, [{ ...USDM, quantity: 100_000_000n }])], {
+        sponsor: sponsoring(),
+        feeCollectionLovelace: 1_200_000n
+      })
+    );
+
+    expect(built.feeCollected).toBe(1_200_000n);
+    expect(paysTo(built.bodyBytes, SPONSOR)).toBe(true);
+    expect(costToSender(built)).toBe(ATTACHED + 1_200_000n);
+  });
+
+  it('names what the transfer needs, not what the debt needs, when truly short', () => {
+    // A wallet that cannot carry the token at all is refused — but the figure in the message has to
+    // be the one the user can act on, and the debt is not part of it.
+    const plan = tokenPlan([tokenUtxo(ATTACHED - 1n, [{ ...USDM, quantity: 30_000_000n }])], {
+      sponsor: sponsoring(),
+      feeCollectionLovelace: 1_400_000n
+    });
+
+    expect(() => buildCardanoTransfer(plan)).toThrow(
+      new RegExp(`CARDANO_INSUFFICIENT_FUNDS.*need at least ${ATTACHED}`)
+    );
+  });
+
+  it('defers on the ADA path too', () => {
+    const built = buildCardanoTransfer(
+      adaPlan([adaUtxo(6_000_000n)], {
+        sponsor: sponsoring(),
+        feeCollectionLovelace: 4_000_000n
+      })
+    );
+
+    expect(built.feeCollected).toBe(0n);
+    expect(built.sentLovelace).toBe(5_000_000n);
+    expect(costToSender(built)).toBe(5_000_000n);
+  });
+
+  it('propagates a failure that is not about money', () => {
+    // A debt must not turn a defect into a silent retry: only a shortfall is worth deferring for.
+    const plan = adaPlan([adaUtxo(6_000_000n)], {
+      amount: 1n,
+      sponsor: sponsoring(),
+      feeCollectionLovelace: 1_200_000n
+    });
+
+    expect(() => buildCardanoTransfer(plan)).toThrow(/CARDANO_AMOUNT_BELOW_MINIMUM_UTXO/);
+  });
+});
+
 describe('sponsoring an ADA transfer', () => {
   it('takes the network fee from the sponsor and not from the sender', () => {
     const built = buildCardanoTransfer(adaPlan([adaUtxo(8_000_000n)], { sponsor: sponsoring() }));

@@ -220,7 +220,11 @@ describe('tokenTransferRequirement - a token never travels alone', () => {
     expect(part.message).toContain('vuelto');
   });
 
-  it('C needs no ADA at all', () => {
+  it('C still needs the ADA the token drags along', () => {
+    // This used to report `0` on the grounds that C sponsors the fee. But the ADA attached to a
+    // token output is not a fee: it leaves the sender and stays with the recipient. Reporting zero
+    // told a wallet holding tokens and no ADA that it could send, and the builder then refused it
+    // after the lock was taken, the notification sent and the optimistic answer returned.
     const result = tokenTransferRequirement(
       { ...USDCX, quantity: 5_000_000n },
       [utxo(0n, [{ ...USDCX, quantity: 10_000_000n }])],
@@ -228,7 +232,28 @@ describe('tokenTransferRequirement - a token never travels alone', () => {
       PREPROD,
       true
     );
-    expect(result.ok).toBe(true);
-    expect(result.requiredLovelace).toBe(0n);
+    expect(result.ok, 'a wallet with tokens and no ADA cannot send, sponsored or not').toBe(false);
+    expect(result.requiredLovelace).toBeGreaterThan(1_000_000n);
+    expect(result.message).toContain('el costo de red lo cubre ChatterPay');
+  });
+
+  it('C asks for less than A: the difference is exactly the network fee', () => {
+    const utxos = [utxo(50_000_000n, [{ ...USDCX, quantity: 10_000_000n }])];
+    const sponsored = tokenTransferRequirement(
+      { ...USDCX, quantity: 10_000_000n },
+      utxos,
+      ADDRESS,
+      PREPROD,
+      true
+    );
+    const unsponsored = tokenTransferRequirement(
+      { ...USDCX, quantity: 10_000_000n },
+      utxos,
+      ADDRESS,
+      PREPROD,
+      false
+    );
+    expect(sponsored.requiredLovelace).toBeGreaterThan(0n);
+    expect(unsponsored.requiredLovelace - sponsored.requiredLovelace).toBe(200_000n);
   });
 });
