@@ -12,6 +12,17 @@ export interface ITransaction extends Document {
   token: string;
   chain_id: number;
   user_notes: string;
+  /**
+   * Network fee the chain actually charged, in the network's own coin.
+   *
+   * Distinct from `fee`, which is the ChatterPay fee taken in the token being moved. On EVM the two
+   * never coexist: the paymaster absorbs the network cost and the user never sees it. On Cardano
+   * the sender pays the network directly out of the inputs of their own transaction, so a history
+   * that only showed `fee` would hide a cost the user really paid.
+   */
+  network_fee?: number;
+  /** Coin `network_fee` is denominated in, e.g. `ADA`. */
+  network_fee_token?: string;
   /** CLOB order id for Polymarket order transactions (links to PolymarketOrderModel). */
   polymarket_order_id?: string;
   /** Purchase flow id for Polymarket order transactions (links to PolymarketPurchaseModel). */
@@ -44,6 +55,8 @@ const transactionSchema = new Schema<ITransaction>({
   token: { type: String, required: true },
   chain_id: { type: Number, required: true },
   user_notes: { type: String, required: false },
+  network_fee: { type: Number, required: false },
+  network_fee_token: { type: String, required: false },
   polymarket_order_id: { type: String, required: false },
   polymarket_purchase_id: { type: String, required: false },
   polymarket_market_slug: { type: String, required: false },
