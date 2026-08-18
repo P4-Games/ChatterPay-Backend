@@ -79,24 +79,24 @@ async function main(): Promise<number> {
   const tokenSymbol = arg('token') ?? 'ADA';
 
   step('Configuration');
-  Logger.log(LOG_KEY, `network  : Cardano ${config.network} (internal chainId ${config.chainId})`);
-  Logger.log(LOG_KEY, `provider : ${config.providerUrl}`);
-  Logger.log(LOG_KEY, `mongo    : ${uri.replace(/\/\/[^@]*@/, '//***@')}`);
+  Logger.info(LOG_KEY, `network  : Cardano ${config.network} (internal chainId ${config.chainId})`);
+  Logger.info(LOG_KEY, `provider : ${config.providerUrl}`);
+  Logger.info(LOG_KEY, `mongo    : ${uri.replace(/\/\/[^@]*@/, '//***@')}`);
 
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 8000 });
 
   try {
     step('Wallet resolution from the phone number');
     const { user: sender, wallet: senderWallet } = await getOrCreateCardanoWallet(SENDER_PHONE);
-    Logger.log(LOG_KEY, `sender      ${SENDER_PHONE}`);
-    Logger.log(
+    Logger.info(LOG_KEY, `sender      ${SENDER_PHONE}`);
+    Logger.info(
       LOG_KEY,
       `            ${senderWallet.address} ${senderWallet.wasCreated ? '(provisioned now)' : '(already existed)'}`
     );
-    Logger.log(LOG_KEY, `destination ${to}`);
+    Logger.info(LOG_KEY, `destination ${to}`);
     if (!to.startsWith('addr')) {
       const preview = deriveCardanoAccount(to);
-      Logger.log(
+      Logger.info(
         LOG_KEY,
         `            ${preview.address} (derived from the phone, nothing written)`
       );
@@ -116,13 +116,13 @@ async function main(): Promise<number> {
     const token = await resolveCardanoToken(tokenSymbol, config.chainId);
     const tokenBefore = token.asset ? assetBalance(destinationUtxos, token.asset) : 0n;
 
-    Logger.log(LOG_KEY, `tip         : slot ${tip.slot}, height ${tip.height}`);
-    Logger.log(
+    Logger.info(LOG_KEY, `tip         : slot ${tip.slot}, height ${tip.height}`);
+    Logger.info(
       LOG_KEY,
       `sender      : ${senderUtxos.length} UTxO(s), ${lovelaceToAda(spendableBalance(senderUtxos))} ADA total, ` +
         `${lovelaceToAda(spendableBalance(senderReady))} ADA spendable (${config.depositConfirmations} conf.)`
     );
-    Logger.log(LOG_KEY, `destination : ${lovelaceToAda(recipientBefore)} ADA`);
+    Logger.info(LOG_KEY, `destination : ${lovelaceToAda(recipientBefore)} ADA`);
 
     step(`Transfer of ${amount} ${tokenSymbol} (phone -> phone)`);
     const started = Date.now();
@@ -150,19 +150,19 @@ async function main(): Promise<number> {
     }
 
     Logger.info(LOG_KEY, `submitted in ${((Date.now() - started) / 1000).toFixed(1)}s`);
-    Logger.log(LOG_KEY, `  from     : ${result.fromAddress}`);
-    Logger.log(LOG_KEY, `  to       : ${result.toAddress}`);
-    Logger.log(LOG_KEY, `  asset    : ${amount} ${result.tokenSymbol}`);
-    Logger.log(LOG_KEY, `  tx       : ${result.transactionHash}`);
-    Logger.log(LOG_KEY, `  network fee : ${result.networkFeeAda} ADA`);
+    Logger.info(LOG_KEY, `  from     : ${result.fromAddress}`);
+    Logger.info(LOG_KEY, `  to       : ${result.toAddress}`);
+    Logger.info(LOG_KEY, `  asset    : ${amount} ${result.tokenSymbol}`);
+    Logger.info(LOG_KEY, `  tx       : ${result.transactionHash}`);
+    Logger.info(LOG_KEY, `  network fee : ${result.networkFeeAda} ADA`);
     if (result.tokenSymbol.toUpperCase() !== 'ADA') {
       // Not a fee: the protocol will not carry a token in an output without ADA beside it, so this
       // leaves the sender and arrives at the recipient along with the token.
-      Logger.log(LOG_KEY, `  ADA attached to the token : ${result.sentAda} ADA`);
+      Logger.info(LOG_KEY, `  ADA attached to the token : ${result.sentAda} ADA`);
     }
-    Logger.log(LOG_KEY, `  explorer : ${result.explorerUrl}`);
+    Logger.info(LOG_KEY, `  explorer : ${result.explorerUrl}`);
     if (result.toUser) {
-      Logger.log(LOG_KEY, `  recipient : ChatterPay user ${result.toUser.phone_number}`);
+      Logger.info(LOG_KEY, `  recipient : ChatterPay user ${result.toUser.phone_number}`);
     }
 
     if (process.argv.includes('--no-wait')) return 0;
@@ -177,7 +177,7 @@ async function main(): Promise<number> {
         confirmed = true;
         break;
       }
-      Logger.log(LOG_KEY, 'not visible yet, polling again');
+      Logger.info(LOG_KEY, 'not visible yet, polling again');
       await sleep(POLL_INTERVAL_MS);
     }
     if (!confirmed) {
@@ -194,21 +194,21 @@ async function main(): Promise<number> {
       // mismatch that is not there.
       const delta = spendableBalance(after) - recipientBefore;
       const expected = toBaseUnits(amount, token.decimals, 'ADA');
-      Logger.log(LOG_KEY, `destination before : ${lovelaceToAda(recipientBefore)} ADA`);
-      Logger.log(LOG_KEY, `destination after  : ${lovelaceToAda(spendableBalance(after))} ADA`);
-      Logger.log(LOG_KEY, `difference         : ${lovelaceToAda(delta)} ADA (expected ${amount})`);
+      Logger.info(LOG_KEY, `destination before : ${lovelaceToAda(recipientBefore)} ADA`);
+      Logger.info(LOG_KEY, `destination after  : ${lovelaceToAda(spendableBalance(after))} ADA`);
+      Logger.info(LOG_KEY, `difference         : ${lovelaceToAda(delta)} ADA (expected ${amount})`);
       ok = delta === expected;
     } else {
       const asset = token.asset!;
       const tokenDelta = assetBalance(after, asset) - tokenBefore;
       const expectedTokens = toBaseUnits(amount, token.decimals, token.symbol);
       const adaDelta = after.reduce((sum, utxo) => sum + utxo.lovelace, 0n) - adaBefore;
-      Logger.log(
+      Logger.info(
         LOG_KEY,
         `${token.symbol} received : ${fromBaseUnits(tokenDelta, token.decimals)} ` +
           `(expected ${amount})`
       );
-      Logger.log(
+      Logger.info(
         LOG_KEY,
         `attached ADA received : ${lovelaceToAda(adaDelta)} (expected ${result.sentAda})`
       );
@@ -232,7 +232,7 @@ async function main(): Promise<number> {
       const removed = await UserModel.deleteMany({
         phone_number: { $in: [SENDER_PHONE, DEFAULT_RECIPIENT_PHONE] }
       });
-      Logger.log(
+      Logger.info(
         LOG_KEY,
         `cleanup: ${removed.deletedCount} test user(s) deleted; --keep preserves them`
       );
