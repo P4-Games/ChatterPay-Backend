@@ -151,7 +151,8 @@ export async function sendWalletNotificationSequence(
   user_wallet_proxy: string,
   channel_user_id: string,
   network_name: string,
-  was_created: boolean
+  was_created: boolean,
+  cardanoAddress?: string
 ) {
   try {
     Logger.log(
@@ -165,7 +166,9 @@ export async function sendWalletNotificationSequence(
       : NotificationEnum.wallet_already_exists_intro;
 
     const { message: introMessage } = await getNotificationTemplate(channel_user_id, introType);
-    const formattedIntro = introMessage.replaceAll('[NETWORK_NAME]', network_name);
+    const formattedIntro = introMessage
+      .replaceAll('[NETWORK_NAME]', network_name)
+      .replaceAll('[CARDANO_ADDRESS]', cardanoAddress ?? '');
 
     await chatizaloService.sendBotNotification({
       data_token: BOT_DATA_TOKEN!,
@@ -179,6 +182,15 @@ export async function sendWalletNotificationSequence(
       channel_user_id,
       message: user_wallet_proxy
     });
+
+    // 2b. Cardano Address (separate message for easy copying, when the user has one)
+    if (cardanoAddress) {
+      await chatizaloService.sendBotNotification({
+        data_token: BOT_DATA_TOKEN!,
+        channel_user_id,
+        message: `Cardano: ${cardanoAddress}`
+      });
+    }
 
     // 3. Next Steps Interactive Message (quick-reply buttons)
     const {

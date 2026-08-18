@@ -126,12 +126,8 @@ export const createWallet = async (
 
       const { networkConfig, tokens } = request.server;
 
-      const { message, walletAddress, wasWalletCreated } = await createOrReturnWallet(
-        channel_user_id,
-        networkConfig,
-        logKey,
-        referral_by_code
-      );
+      const { message, walletAddress, wasWalletCreated, cardanoAddress } =
+        await createOrReturnWallet(channel_user_id, networkConfig, logKey, referral_by_code);
 
       const processingTimeMs = Date.now() - startTime;
       const delayMs = delaySecondsValue * 1000;
@@ -154,7 +150,8 @@ export const createWallet = async (
         walletAddress,
         channel_user_id,
         networkConfig.name,
-        wasWalletCreated
+        wasWalletCreated,
+        cardanoAddress
       );
 
       if (
@@ -225,7 +222,8 @@ export const createWalletSync = async (
       walletAddress,
       channel_user_id,
       networkConfig.name,
-      wasWalletCreated
+      wasWalletCreated,
+      cardanoAddress
     );
 
     // The network's display name comes from the `blockchains` document, not from a literal here:
