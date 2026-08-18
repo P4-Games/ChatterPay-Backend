@@ -583,9 +583,9 @@
         "pt": "ChatterPay: Sua Carteira"
       },
       "message": {
-        "en": "Here is your ChatterPay wallet information.\n\nYou can receive funds on [NETWORK_NAME].\n\n⚠️ Important: If you're depositing from another app (like a wallet or exchange), make sure to use the [NETWORK_NAME] network and verify the address carefully. Transactions cannot be reversed.\n\nYour address on [NETWORK_NAME]:\n\nYour Cardano address is:\n[CARDANO_ADDRESS]",
-        "es": "Aquí está la información de tu billetera ChatterPay.\n\nPodés recibir fondos en [NETWORK_NAME].\n\n⚠️ Importante: Si vas a depositar desde otra app (como un wallet o exchange), asegurate de usar la red [NETWORK_NAME] y verificar bien la dirección. Las transacciones no se pueden revertir.\n\nTu dirección en [NETWORK_NAME]:\n\nTu dirección de Cardano es:\n[CARDANO_ADDRESS]",
-        "pt": "Aqui estão as informações da sua carteira ChatterPay.\n\nVocê pode receber fundos em [NETWORK_NAME].\n\n⚠️ Importante: Se você for depositar de outro app (como uma carteira ou exchange), certifique-se de usar a rede [NETWORK_NAME] e verificar bem o endereço. As transações não podem ser revertidas.\n\nSeu endereço em [NETWORK_NAME]:\n\nO seu endereço Cardano é:\n[CARDANO_ADDRESS]"
+        "en": "Here is your ChatterPay wallet information.\n\nYou can receive funds on [NETWORK_NAME].\n\n⚠️ Important: If you're depositing from another app (like a wallet or exchange), make sure to use the [NETWORK_NAME] network and verify the address carefully. Transactions cannot be reversed.\n\nYour addresses:",
+        "es": "Aquí está la información de tu billetera ChatterPay.\n\nPodés recibir fondos en [NETWORK_NAME].\n\n⚠️ Importante: Si vas a depositar desde otra app (como un wallet o exchange), asegurate de usar la red correcta y verificar bien la dirección. Las transacciones no se pueden revertir.\n\nTus direcciones:",
+        "pt": "Aqui estão as informações da sua carteira ChatterPay.\n\nVocê pode receber fundos em [NETWORK_NAME].\n\n⚠️ Importante: Se você for depositar de outro app (como uma carteira ou exchange), certifique-se de usar a rede correta e verificar bem o endereço. As transações não podem ser revertidas.\n\nSeus endereços:"
       }
     },
     "wallet_creation_intro": {
@@ -595,9 +595,9 @@
         "pt": "ChatterPay: Carteira criada!"
       },
       "message": {
-        "en": "Here is your ChatterPay wallet information.\n\nYou can receive funds on [NETWORK_NAME].\n\n⚠️ Important: If you're depositing from another app (like a wallet or exchange), make sure to use the [NETWORK_NAME] network and verify the address carefully. Transactions cannot be reversed.\n\nYour address on [NETWORK_NAME]:\n\nYour Cardano address is:\n[CARDANO_ADDRESS]",
-        "es": "Aquí está la información de tu billetera ChatterPay.\n\nPodés recibir fondos en [NETWORK_NAME].\n\n⚠️ Importante: Si vas a depositar desde otra app (como un wallet o exchange), asegurate de usar la red [NETWORK_NAME] y verificar bien la dirección. Las transacciones no se pueden revertir.\n\nTu dirección en [NETWORK_NAME]:\n\nTu dirección de Cardano es:\n[CARDANO_ADDRESS]",
-        "pt": "Aqui estão as informações da sua carteira ChatterPay.\n\nVocê pode receber fundos em [NETWORK_NAME].\n\n⚠️ Importante: Se você for depositar de outro app (como uma carteira ou exchange), certifique-se de usar a rede [NETWORK_NAME] e verificar bem o endereço. As transações não podem ser revertidas.\n\nSeu endereço em [NETWORK_NAME]:\n\nO seu endereço Cardano é:\n[CARDANO_ADDRESS]"
+        "en": "Here is your ChatterPay wallet information.\n\nYou can receive funds on [NETWORK_NAME].\n\n⚠️ Important: If you're depositing from another app (like a wallet or exchange), make sure to use the [NETWORK_NAME] network and verify the address carefully. Transactions cannot be reversed.\n\nYour addresses:",
+        "es": "Aquí está la información de tu billetera ChatterPay.\n\nPodés recibir fondos en [NETWORK_NAME].\n\n⚠️ Importante: Si vas a depositar desde otra app (como un wallet o exchange), asegurate de usar la red correcta y verificar bien la dirección. Las transacciones no se pueden revertir.\n\nTus direcciones:",
+        "pt": "Aqui estão as informações da sua carteira ChatterPay.\n\nVocê pode receber fundos em [NETWORK_NAME].\n\n⚠️ Importante: Se você for depositar de outro app (como uma carteira ou exchange), certifique-se de usar a rede correta e verificar bem o endereço. As transações não podem ser revertidas.\n\nSeus endereços:"
       }
     },
     "wallet_next_steps": {
