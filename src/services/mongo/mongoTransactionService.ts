@@ -26,7 +26,9 @@ export const mongoTransactionService = {
         polymarket_size,
         polymarket_bridge_tx_hash,
         polymarket_bridge_amount,
-        polymarket_bridge_token
+        polymarket_bridge_token,
+        network_fee,
+        network_fee_token
       } = transactionData;
 
       await Transaction.create({
@@ -47,7 +49,9 @@ export const mongoTransactionService = {
         polymarket_size,
         polymarket_bridge_tx_hash,
         polymarket_bridge_amount,
-        polymarket_bridge_token
+        polymarket_bridge_token,
+        network_fee,
+        network_fee_token
       });
     } catch (error: unknown) {
       // avoid throw error
