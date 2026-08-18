@@ -1,12 +1,14 @@
 import { once as onceEvent } from 'events';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { IncomingMessage, ServerResponse } from 'http';
+import { getCardanoConfig } from '../config/cardanoConfig';
 import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { NotificationEnum } from '../models/templateModel';
+import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import {
   getNotificationTemplate,
   sendDepositCta,
@@ -124,12 +126,8 @@ export const createWallet = async (
 
       const { networkConfig, tokens } = request.server;
 
-      const { message, walletAddress, wasWalletCreated } = await createOrReturnWallet(
-        channel_user_id,
-        networkConfig,
-        logKey,
-        referral_by_code
-      );
+      const { message, walletAddress, wasWalletCreated, cardanoAddress } =
+        await createOrReturnWallet(channel_user_id, networkConfig, logKey, referral_by_code);
 
       const processingTimeMs = Date.now() - startTime;
       const delayMs = delaySecondsValue * 1000;
@@ -152,7 +150,8 @@ export const createWallet = async (
         walletAddress,
         channel_user_id,
         networkConfig.name,
-        wasWalletCreated
+        wasWalletCreated,
+        cardanoAddress
       );
 
       if (
@@ -206,7 +205,8 @@ export const createWalletSync = async (
     const {
       message: walletResultMessage,
       walletAddress,
-      wasWalletCreated
+      wasWalletCreated,
+      cardanoAddress
     } = await createOrReturnWallet(channel_user_id, networkConfig, logKey, referral_by_code);
 
     const notificationType = wasWalletCreated
@@ -222,12 +222,25 @@ export const createWalletSync = async (
       walletAddress,
       channel_user_id,
       networkConfig.name,
-      wasWalletCreated
+      wasWalletCreated,
+      cardanoAddress
     );
 
+    // The network's display name comes from the `blockchains` document, not from a literal here:
+    // the database is what names a network, and this path must not disagree with the balance and
+    // history views that read it from there.
+    const cardanoNetwork = cardanoAddress
+      ? await mongoBlockchainService.getBlockchain(getCardanoConfig().chainId)
+      : null;
+    const cardanoNetworkName = cardanoNetwork?.name ?? '';
+
+    // `[CARDANO_ADDRESS]` is honoured but never required: the template in the database decides
+    // whether the Cardano address is shown. A deployment with Cardano off, or a template that does
+    // not mention it, is unaffected — the placeholder simply resolves to nothing.
     const notificationMessage = templateMessage
       .replace('[WALLET_ADDRESS]', walletAddress)
-      .replace('[NETWORK_NAME]', networkConfig.name);
+      .replace('[NETWORK_NAME]', networkConfig.name)
+      .replace('[CARDANO_ADDRESS]', cardanoAddress);
 
     if (
       wasWalletCreated &&
@@ -246,7 +259,31 @@ export const createWalletSync = async (
       data: {
         message: notificationMessage,
         walletAddress,
-        wasWalletCreated
+        wasWalletCreated,
+        /**
+         * Every address the user holds, one per network family.
+         *
+         * `walletAddress` stays as it was so no existing caller breaks, but a user now has more
+         * than one address and they are not interchangeable: funds sent to the EVM address never
+         * arrive on Cardano. A client that wants to answer "what is my wallet?" completely reads
+         * this instead.
+         */
+        wallets: [
+          {
+            chain_id: networkConfig.chainId,
+            network: networkConfig.name,
+            address: walletAddress
+          },
+          ...(cardanoAddress
+            ? [
+                {
+                  chain_id: getCardanoConfig().chainId,
+                  network: cardanoNetworkName,
+                  address: cardanoAddress
+                }
+              ]
+            : [])
+        ]
       }
     });
   } catch (error) {

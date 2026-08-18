@@ -151,7 +151,8 @@ export async function sendWalletNotificationSequence(
   user_wallet_proxy: string,
   channel_user_id: string,
   network_name: string,
-  was_created: boolean
+  was_created: boolean,
+  cardanoAddress?: string
 ) {
   try {
     Logger.log(
@@ -173,12 +174,20 @@ export async function sendWalletNotificationSequence(
       message: formattedIntro
     });
 
-    // 2. Wallet Address (separate message for easy copying)
+    // 2. Wallet addresses as separate messages (plain text, easy to long-press and copy)
     await chatizaloService.sendBotNotification({
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message: user_wallet_proxy
     });
+
+    if (cardanoAddress) {
+      await chatizaloService.sendBotNotification({
+        data_token: BOT_DATA_TOKEN!,
+        channel_user_id,
+        message: cardanoAddress
+      });
+    }
 
     // 3. Next Steps Interactive Message (quick-reply buttons)
     const {
@@ -721,13 +730,18 @@ export async function sendOutgoingTransferNotification(
   notes: string,
   txHash: string,
   chatterpointsOpResult: RegisterOperationResult | null,
-  traceHeader?: string
+  traceHeader?: string,
+  explorerUrlOverride?: string
 ): Promise<unknown> {
   try {
     Logger.log('sendOutgoingTransferNotification', 'Sending outgoing transfer notification');
     if (!isValidPhoneNumber(phoneNumberFrom)) return '';
 
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+    // The default network config is the EVM chain this instance operates on. A transfer that
+    // settled somewhere else — Cardano — has to carry its own explorer, or the notification links
+    // a real transaction hash to a chain that never saw it.
+    const explorer = explorerUrlOverride || networkConfig.explorer;
 
     const { title, message } = await getNotificationTemplate(
       phoneNumberFrom,
@@ -750,8 +764,14 @@ export async function sendOutgoingTransferNotification(
       let base = message
         .replaceAll('[AMOUNT]', amount)
         .replaceAll('[TOKEN]', token)
-        .replaceAll('[TO]', toNumberAndName)
-        .replaceAll('[EXPLORER]', networkConfig.explorer)
+        .replaceAll('[TO]', toNumberAndName);
+      // When the caller supplies a full explorer path (Cardano: /transaction/), replace the
+      // whole pattern so the template's /tx/ does not end up in the middle of the URL.
+      if (explorerUrlOverride) {
+        base = base.replaceAll('[EXPLORER]/tx/[TX_HASH]', `${explorer}${txHash}`);
+      }
+      base = base
+        .replaceAll('[EXPLORER]', explorer)
         .replaceAll('[TX_HASH]', txHash)
         .replaceAll('[NOTES]', notes ? `\n('${notes}')` : '');
       if (messageChp) {
