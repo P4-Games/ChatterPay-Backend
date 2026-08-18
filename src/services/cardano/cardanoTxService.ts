@@ -687,6 +687,13 @@ function buildAssetTransfer(
     ...untouched.filter((utxo) => utxo.holdsOtherAssets).sort(byLovelaceDescending)
   ];
 
+  // Sponsoring works here exactly as it does on the ADA path: a second wallet contributes inputs
+  // that cover the network fee and gets its own change back. Only its ADA-only outputs are taken —
+  // pulling in a sponsor UTxO that holds tokens would drag them into a change output belonging to
+  // the sender, which is how a sponsor quietly gives its assets away.
+  const sponsor = plan.sponsor;
+  const sponsorAvailable = sponsor ? spendableUtxos(sponsor.utxos) : [];
+
   const placeholderWitnesses = Array.from({ length: Math.max(1, plan.witnessCount) }, () => ({
     publicKey: '00'.repeat(PUBLIC_KEY_BYTES),
     signature: '00'.repeat(SIGNATURE_BYTES)
@@ -706,6 +713,20 @@ function buildAssetTransfer(
   }
   const paymentOutput = encodeOutput(plan.destinationAddress, attached, [sent]);
 
+  // Fee collection: the accumulated ChatterPay fee becomes an extra output to the sponsor's
+  // address, paid by the sender on top of the ADA the token drags along. Below min-ADA it cannot be
+  // an output at all, so it stays owed and is collected once it has grown enough.
+  const feeCollection = plan.feeCollectionLovelace ?? 0n;
+  const feeCollectionOutput =
+    feeCollection > 0n && sponsor
+      ? encodeOutput(sponsor.changeAddress, feeCollection)
+      : new Uint8Array();
+  const collectsFee =
+    feeCollection > 0n &&
+    sponsor !== undefined &&
+    feeCollection >= minimumAdaForOutput(feeCollectionOutput, parameters.coinsPerUtxoByte);
+  const collected = collectsFee ? feeCollection : 0n;
+
   // One pass per extra ADA-only input. Each pass runs the fee loop to convergence; a pass that
   // cannot fund the mandatory change output asks for one more input rather than giving up.
   let shortfall = '';
@@ -720,9 +741,15 @@ function buildAssetTransfer(
     let needsMoreAda = false;
 
     for (let pass = 0; pass < MAX_FEE_PASSES; pass++) {
-      let change = inputAda - attached - fee;
+      const sponsorSelected = sponsor ? selectFor(sponsorAvailable, fee) : [];
+      const sponsorTotal = sponsorSelected.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
+
+      // What the sender owes: the ADA attached to the token output, plus the fee being collected.
+      // The network fee is on this list only when nobody is sponsoring it.
+      const senderOwes = attached + collected + (sponsor ? 0n : fee);
+      let change = inputAda - senderOwes;
       if (change < 0n) {
-        shortfall = `CARDANO_INSUFFICIENT_FUNDS: ${inputAda} lovelace available, need at least ${attached + fee}`;
+        shortfall = `CARDANO_INSUFFICIENT_FUNDS: ${inputAda} lovelace available, need at least ${senderOwes}`;
         needsMoreAda = true;
         break;
       }
@@ -746,10 +773,27 @@ function buildAssetTransfer(
         if (!keepsChange) change = 0n;
       }
 
-      const outputs = keepsChange
-        ? [paymentOutput, encodeOutput(plan.changeAddress, change, residual)]
-        : [paymentOutput];
-      const body = encodeBody(selected, outputs, inputAda - attached - change, ttlSlot);
+      let sponsorChange = sponsor ? sponsorTotal - fee : 0n;
+      const sponsorChangeOutput = sponsor
+        ? encodeOutput(sponsor.changeAddress, sponsorChange)
+        : new Uint8Array();
+      const keepsSponsorChange =
+        sponsor !== undefined &&
+        sponsorChange > 0n &&
+        sponsorChange >= minimumAdaForOutput(sponsorChangeOutput, parameters.coinsPerUtxoByte);
+      // Below min-ADA the sponsor's leftover cannot be an output, so it stays in the fee. The
+      // sponsor donates it — the same call the ADA path makes, and it never reaches the sender.
+      if (!keepsSponsorChange) sponsorChange = 0n;
+
+      const outputs = [
+        paymentOutput,
+        ...(collectsFee ? [feeCollectionOutput] : []),
+        ...(keepsChange ? [encodeOutput(plan.changeAddress, change, residual)] : []),
+        ...(keepsSponsorChange ? [sponsorChangeOutput] : [])
+      ];
+      const inputs = [...selected, ...sponsorSelected];
+      const bodyFee = inputAda + sponsorTotal - attached - collected - change - sponsorChange;
+      const body = encodeBody(inputs, outputs, bodyFee, ttlSlot);
       const size = signedSizeOf(body);
       if (size > parameters.maxTxSize) {
         throw new Error(`CARDANO_TX_TOO_LARGE: ${size} bytes over ${parameters.maxTxSize}`);
@@ -760,12 +804,13 @@ function buildAssetTransfer(
         return {
           bodyBytes: body,
           transactionId: transactionIdOf(body),
-          fee: inputAda - attached - change,
+          fee: bodyFee,
           sentLovelace: attached,
           change,
           changeAssets: residual,
-          inputs: selected,
-          ttlSlot
+          inputs,
+          ttlSlot,
+          feeCollected: collected
         };
       }
       fee = required;
