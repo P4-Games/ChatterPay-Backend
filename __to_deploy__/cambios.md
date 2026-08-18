@@ -92,6 +92,27 @@ No hay secretos. `SEED_INTERNAL_SALT` ya existe y es requerida.
 }
 ```
 
+`tokens` — stablecoin de Preprod (ya insertada en la base local de dev):
+
+```json
+{
+  "address": "648823ffdad1610b4162f4dbc87bd47f6f9cf45d772ddef661eff19855534443",
+  "chain_id": 900000000001,
+  "name": "USD Coin",
+  "symbol": "USDCx",
+  "display_symbol": "USDC",
+  "decimals": 6,
+  "display_decimals": 2,
+  "type": "stable",
+  "ramp_enabled": false,
+  "logo": "https://cryptofonts.com/img/SVG/usdc.svg",
+  "operations_limits": {
+    "transfer": { "L1": { "min": 1, "max": 1000 }, "L2": { "min": 1, "max": 1000 } },
+    "swap":     { "L1": { "min": 0, "max": 0 },    "L2": { "min": 0, "max": 0 } }
+  }
+}
+```
+
 ### producción
 
 `blockchains` — insertar:
