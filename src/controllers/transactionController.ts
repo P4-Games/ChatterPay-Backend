@@ -2,6 +2,7 @@ import { get } from '@google-cloud/trace-agent';
 import type { Span, Tracer } from '@google-cloud/trace-agent/build/src/plugin-types';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Web3 } from 'web3';
+import { isCardanoChainId } from '../config/cardanoConfig';
 import { GCP_CLOUD_TRACE_ENABLED, INFURA_API_KEY, INFURA_URL, USE_LIFI } from '../config/constants';
 import { areSamePhoneNumber } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
@@ -23,6 +24,7 @@ import {
   userReachedOperationLimit,
   userWithinTokenOperationLimits
 } from '../services/blockchainService';
+import { buildCardanoProvider } from '../services/cardano/cardanoProviderService';
 import {
   chatterpointsService,
   type RegisterOperationResult
@@ -58,6 +60,7 @@ import {
   type ExecueTransactionResult,
   type TransactionData
 } from '../types/commonType';
+import { isCardanoTransferRequest, makeCardanoTransaction } from './cardanoTransactionController';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {
@@ -190,6 +193,21 @@ export const checkTransactionStatus = async (
         404,
         'Transaction not found'
       );
+    }
+
+    // Cardano transaction ids are 64 hex characters with no `0x`, so they would otherwise fall into
+    // the synthetic-hash branch below and report a stored status that nothing ever re-checked.
+    // Resolved against the chain instead, by chain id rather than by the shape of the hash.
+    if (isCardanoChainId(transaction.chain_id)) {
+      const status = await buildCardanoProvider().statusOf(trx_hash);
+      if (!status.known) {
+        return await returnSuccessResponse(reply, transaction.status || 'pending');
+      }
+      if (transaction.status !== 'completed') {
+        transaction.status = 'completed';
+        await transaction.save();
+      }
+      return await returnSuccessResponse(reply, transaction.status);
     }
 
     // Polymarket order/withdraw records use synthetic, off-chain trx_hashes
@@ -513,6 +531,19 @@ export const makeTransaction = async (
     } = request.body;
     const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
     const { networkConfig, tokens: tokensConfig } = request.server as FastifyInstance;
+
+    /* ***************************************************** */
+    /* 1.1 makeTransaction: route non-EVM families           */
+    /* ***************************************************** */
+    // Cardano is handled by its own controller rather than by a branch further down. Its account
+    // model shares nothing with the steps that follow — no paymaster, no bundler, no ERC-20
+    // contract — while the policy checks it does share are the same functions called from there.
+    // The active EVM chain id is passed so a ticker listed on both families stays on EVM.
+    if (isCardanoTransferRequest(request.body, tokensConfig, networkConfig.chainId)) {
+      rootSpan?.endSpan();
+      return await makeCardanoTransaction(request, reply);
+    }
+
     const santizedUserNotes = sanitizeUserNotesWhatsApp(user_notes || '', {
       maxLen: 500,
       preserveWaFormatting: true
