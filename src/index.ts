@@ -61,13 +61,15 @@ async function main(): Promise<void> {
     initializeCloudTrace();
     registerPolymarketApiAdapter();
 
-    // Bind the port first: Cloud Run's startup probe only checks that something
-    // listens on PORT. Connecting to MongoDB beforehand meant a slow or briefly
-    // unreachable cluster kept the port closed until the probe gave up.
+    // The database has to be up before the server is built: networkConfigPlugin
+    // reads the token list while registering, and mongoose would buffer that
+    // query until it times out. Retrying here means a transient connection error
+    // delays startup instead of killing the container, which is what used to
+    // leave port 8080 closed until Cloud Run's startup probe gave up.
+    await connectToDatabaseWithRetry();
+
     const server = await startServer();
     setupGracefulShutdown(server);
-
-    await connectToDatabaseWithRetry();
   } catch (err) {
     Logger.error('main', 'Error starting application:', err);
     process.exit(1);
