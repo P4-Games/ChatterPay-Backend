@@ -204,8 +204,10 @@ export const GAMES_LANGUAGE_DEFAULT: gamesLanguage = 'en';
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
 export const GCP_CLOUD_TRACE_ENABLED: boolean = gcpCloudTraceEnabled.toLowerCase() === 'true';
 
-export const FASTIFY_REFRESH_TOKENS_INTERVAL_MS: number = Number(fastifyRefreshNetworksIntervalMs);
-export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(fastifyRefreshTokensIntervalMs);
+export const FASTIFY_REFRESH_TOKENS_INTERVAL_MS: number = Number(fastifyRefreshTokensIntervalMs);
+export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(
+  fastifyRefreshNetworksIntervalMs
+);
 
 export const WHATSAPP_API_URL = 'https://api.whatsapp.com';
 
