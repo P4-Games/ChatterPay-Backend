@@ -196,9 +196,9 @@ export function decodeCardanoAddress(address: string): DecodedCardanoAddress | n
     addressType,
     credentialHex: Buffer.from(payload.slice(1, 1 + CREDENTIAL_HASH_BYTES)).toString('hex'),
     stakeCredentialHex: hasStakePart
-      ? Buffer.from(payload.slice(1 + CREDENTIAL_HASH_BYTES, 1 + 2 * CREDENTIAL_HASH_BYTES)).toString(
-          'hex'
-        )
+      ? Buffer.from(
+          payload.slice(1 + CREDENTIAL_HASH_BYTES, 1 + 2 * CREDENTIAL_HASH_BYTES)
+        ).toString('hex')
       : undefined,
     payload: Uint8Array.from(payload)
   };

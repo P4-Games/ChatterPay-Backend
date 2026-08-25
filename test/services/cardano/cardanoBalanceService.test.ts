@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-
+import { CARDANO_PREPROD_CHAIN_ID } from '../../../src/config/cardanoConfig';
+import Token from '../../../src/models/tokenModel';
 import {
   getCardanoBalance,
   isCardanoWalletAddress
 } from '../../../src/services/cardano/cardanoBalanceService';
-import { CARDANO_PREPROD_CHAIN_ID } from '../../../src/config/cardanoConfig';
-import Token from '../../../src/models/tokenModel';
 import { CardanoProviderError } from '../../../src/services/cardano/cardanoProviderService';
 import { FakeCardanoProvider } from '../../helpers/fakeCardanoProvider';
 

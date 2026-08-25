@@ -73,7 +73,12 @@ describe('cardanoTxService - the balance invariant', () => {
       [[5_000_000n, 5_000_000n], 8_000_000n],
       [[1_200_000n, 1_200_000n, 1_200_000n], 2_000_000n]
     ] as const) {
-      const built = buildCardanoTransfer(plan(funds.map((v, i) => utxo(v, i)), amount));
+      const built = buildCardanoTransfer(
+        plan(
+          funds.map((v, i) => utxo(v, i)),
+          amount
+        )
+      );
       const consumed = built.inputs.reduce((sum, input) => sum + input.lovelace, 0n);
       expect(consumed, `funds=${funds} amount=${amount}`).toBe(amount + built.fee + built.change);
     }

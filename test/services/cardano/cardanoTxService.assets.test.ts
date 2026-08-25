@@ -185,10 +185,7 @@ describe('native assets - two-dimensional selection', () => {
     // barely any ADA, so a separate ADA-only input has to join.
     const built = buildCardanoTransfer(
       plan(
-        [
-          tokenUtxo(2_000_000n, [{ ...USDM, quantity: 100_000_000n }]),
-          adaUtxo(10_000_000n, 0)
-        ],
+        [tokenUtxo(2_000_000n, [{ ...USDM, quantity: 100_000_000n }]), adaUtxo(10_000_000n, 0)],
         { ...USDM, quantity: 30_000_000n }
       )
     );
@@ -377,9 +374,7 @@ describe('native assets - conformance with the real chain', () => {
       ])
     ).toString('hex');
 
-    expect(shortNameFirst.indexOf('494e4359')).toBeLessThan(
-      shortNameFirst.indexOf('424541434f4e')
-    );
+    expect(shortNameFirst.indexOf('494e4359')).toBeLessThan(shortNameFirst.indexOf('424541434f4e'));
   });
 
   it('emits a bare coin, not a one-element value, when there are no assets', () => {

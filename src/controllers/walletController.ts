@@ -1,12 +1,14 @@
 import { once as onceEvent } from 'events';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { IncomingMessage, ServerResponse } from 'http';
+import { getCardanoConfig } from '../config/cardanoConfig';
 import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { NotificationEnum } from '../models/templateModel';
+import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import {
   getNotificationTemplate,
   sendDepositCta,
@@ -14,8 +16,6 @@ import {
   sendWalletNextSteps,
   sendWalletNotificationSequence
 } from '../services/notificationService';
-import { getCardanoConfig } from '../config/cardanoConfig';
-import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import { createOrReturnWallet, tryIssueTokens } from '../services/walletService';
 
 /**

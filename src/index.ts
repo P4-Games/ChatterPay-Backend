@@ -2,7 +2,7 @@ import { start } from '@google-cloud/trace-agent';
 import type { FastifyInstance } from 'fastify/types/instance';
 import mongoose from 'mongoose';
 import { $B, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
-import { connectToDatabase } from './config/database';
+import { connectToDatabaseWithRetry } from './config/database';
 import { startServer } from './config/server';
 import { Logger } from './helpers/loggerHelper';
 import { registerPolymarketApiAdapter } from './services/polymarket/polymarketProxyHelper';
@@ -60,9 +60,14 @@ async function main(): Promise<void> {
   try {
     initializeCloudTrace();
     registerPolymarketApiAdapter();
-    await connectToDatabase();
+
+    // Bind the port first: Cloud Run's startup probe only checks that something
+    // listens on PORT. Connecting to MongoDB beforehand meant a slow or briefly
+    // unreachable cluster kept the port closed until the probe gave up.
     const server = await startServer();
     setupGracefulShutdown(server);
+
+    await connectToDatabaseWithRetry();
   } catch (err) {
     Logger.error('main', 'Error starting application:', err);
     process.exit(1);

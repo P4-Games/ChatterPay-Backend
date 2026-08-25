@@ -54,7 +54,11 @@ export class FakeCardanoProvider implements CardanoProvider {
   ) {}
 
   /** Gives an address a UTxO, at a depth measured back from the current tip. */
-  fund(address: string, lovelace: bigint, options: { confirmations?: number; index?: number } = {}) {
+  fund(
+    address: string,
+    lovelace: bigint,
+    options: { confirmations?: number; index?: number } = {}
+  ) {
     const confirmations = options.confirmations ?? 10;
     const existing = this.utxos.get(address) ?? [];
     existing.push({
@@ -171,10 +175,12 @@ export class FakeCardanoProvider implements CardanoProvider {
   async statusOf(transactionId: string): Promise<CardanoTransactionStatus> {
     this.consumeReadFailure();
     const record = this.submitted.get(transactionId);
-    return record ? { known: true, confirmations: record.confirmations } : {
-      known: false,
-      confirmations: 0
-    };
+    return record
+      ? { known: true, confirmations: record.confirmations }
+      : {
+          known: false,
+          confirmations: 0
+        };
   }
 }
 

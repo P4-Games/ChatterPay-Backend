@@ -35,7 +35,10 @@ import {
 } from '../services/cardano/cardanoOperationService';
 import { canAffordCardanoTransfer } from '../services/cardano/cardanoPreflightService';
 import { deriveCardanoAccount } from '../services/cardano/cardanoWalletService';
-import { chatterpointsService, type RegisterOperationResult } from '../services/chatterpointsService';
+import {
+  chatterpointsService,
+  type RegisterOperationResult
+} from '../services/chatterpointsService';
 import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import { mongoTransactionService } from '../services/mongo/mongoTransactionService';
 import { mongoUserService } from '../services/mongo/mongoUserService';
@@ -224,7 +227,11 @@ export const makeCardanoTransaction = async (
     /* 4. daily operation limit — read from the Cardano network document */
     const cardanoNetwork = await mongoBlockchainService.getBlockchain(config.chainId);
     if (!cardanoNetwork) {
-      Logger.error('makeCardanoTransaction', logKey, `No blockchain document for ${config.chainId}`);
+      Logger.error(
+        'makeCardanoTransaction',
+        logKey,
+        `No blockchain document for ${config.chainId}`
+      );
       await returnSuccessResponse(reply, 'Cardano is not configured on this environment');
       return undefined;
     }
@@ -422,7 +429,11 @@ export const makeCardanoTransaction = async (
     } catch (closeError) {
       // A lock that cannot be released is worse than the original failure: the user is stuck until
       // it expires. Logged loudly rather than swallowed.
-      Logger.error('makeCardanoTransaction', logKey, `Failed to release lock: ${String(closeError)}`);
+      Logger.error(
+        'makeCardanoTransaction',
+        logKey,
+        `Failed to release lock: ${String(closeError)}`
+      );
     }
     return undefined;
   }

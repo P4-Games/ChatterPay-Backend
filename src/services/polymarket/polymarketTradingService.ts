@@ -433,7 +433,7 @@ export async function placeOrder(
               fnLog,
               `${logKey} GTC SELL failed after retry (${retryDetail}). Falling back to FOK market order.`
             );
-            response = (await client.createAndPostMarketOrder(
+            response = await client.createAndPostMarketOrder(
               {
                 tokenID: params.tokenId,
                 price: clampPriceToTick(params.price, tickSize),
@@ -441,7 +441,7 @@ export async function placeOrder(
                 side
               },
               orderOptions
-            ));
+            );
             if (!response.orderID) {
               const fokError = response.error || response.message || 'no orderID in response';
               throw new Error(`CLOB rejected FOK fallback: ${fokError}`);
@@ -479,7 +479,7 @@ export async function placeOrder(
           fnLog,
           `${logKey} GTC SELL below minimum (${errorDetail}). Falling back to FOK market order.`
         );
-        response = (await client.createAndPostMarketOrder(
+        response = await client.createAndPostMarketOrder(
           {
             tokenID: params.tokenId,
             price: clampPriceToTick(params.price, tickSize),
@@ -487,7 +487,7 @@ export async function placeOrder(
             side
           },
           orderOptions
-        ));
+        );
         if (!response.orderID) {
           const fokError = response.error || response.message || 'no orderID in response';
           throw new Error(`CLOB rejected FOK fallback: ${fokError}`);

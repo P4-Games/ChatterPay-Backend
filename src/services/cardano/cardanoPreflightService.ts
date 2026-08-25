@@ -16,6 +16,7 @@
 
 import { getCardanoConfig } from '../../config/cardanoConfig';
 import { Logger } from '../../helpers/loggerHelper';
+import type { CardanoAssetAmount } from '../../types/cardanoType';
 import { decodeCardanoAddress } from './cardanoAddressService';
 import { buildCardanoProvider } from './cardanoProviderService';
 import {
@@ -24,7 +25,6 @@ import {
   tokenTransferRequirement
 } from './cardanoRequirementsService';
 import { assetBalance } from './cardanoTxService';
-import type { CardanoAssetAmount } from '../../types/cardanoType';
 
 /** Amount, in the asset's own base units. */
 function toBaseUnits(amount: string, decimals: number): bigint {
@@ -76,7 +76,10 @@ export async function canAffordCardanoTransfer(
 
     if (!asset) {
       const quantity = toBaseUnits(amount, decimals);
-      return { checked: true, ...adaTransferRequirement(quantity, utxos, decoded.payload, parameters) };
+      return {
+        checked: true,
+        ...adaTransferRequirement(quantity, utxos, decoded.payload, parameters)
+      };
     }
 
     const quantity = toBaseUnits(amount, decimals);

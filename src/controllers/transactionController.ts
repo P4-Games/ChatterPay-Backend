@@ -18,13 +18,13 @@ import type { IToken } from '../models/tokenModel';
 import Transaction, { type ITransaction } from '../models/transactionModel';
 import type { IUser, IUserWallet } from '../models/userModel';
 import { getTokenPrices, verifyWalletBalanceInRpc } from '../services/balanceService';
-import { buildCardanoProvider } from '../services/cardano/cardanoProviderService';
 import {
   checkBlockchainConditions,
   getTokenData,
   userReachedOperationLimit,
   userWithinTokenOperationLimits
 } from '../services/blockchainService';
+import { buildCardanoProvider } from '../services/cardano/cardanoProviderService';
 import {
   chatterpointsService,
   type RegisterOperationResult
@@ -46,10 +46,6 @@ import {
 import { securityService } from '../services/securityService';
 import { sendTransferUserOperation } from '../services/transferService';
 import {
-  isCardanoTransferRequest,
-  makeCardanoTransaction
-} from './cardanoTransactionController';
-import {
   addWalletToUser,
   closeOperation,
   getOrCreateUser,
@@ -64,6 +60,7 @@ import {
   type ExecueTransactionResult,
   type TransactionData
 } from '../types/commonType';
+import { isCardanoTransferRequest, makeCardanoTransaction } from './cardanoTransactionController';
 
 type PaginationQuery = { page?: string; limit?: string };
 type MakeTransactionInputs = {

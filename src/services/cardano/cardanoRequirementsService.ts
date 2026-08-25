@@ -119,7 +119,8 @@ export function adaTransferRequirement(
  * @param utxos - Everything the sender holds.
  * @param addressBytes - The sender's address.
  * @param parameters - Protocol parameters.
- * @param sponsored - Whether ChatterPay covers the network fee and the ADA the token drags along.
+ * @param sponsored - Whether ChatterPay covers the network fee. It does not cover the ADA the
+ *   token drags along: that ADA is the sender's value moving to the recipient, not a fee.
  * @returns The requirement, in lovelace, ignoring whether the token balance itself suffices — that
  *   is checked separately and reported in the token's own units.
  */
@@ -144,10 +145,20 @@ export function tokenTransferRequirement(
     )?.quantity ?? 0n;
   const keepsSome = heldOfAsset > asset.quantity;
   const changeFloor = keepsSome
-    ? minimumAdaFor(addressBytes, [{ ...asset, quantity: heldOfAsset - asset.quantity }], parameters.coinsPerUtxoByte)
+    ? minimumAdaFor(
+        addressBytes,
+        [{ ...asset, quantity: heldOfAsset - asset.quantity }],
+        parameters.coinsPerUtxoByte
+      )
     : 0n;
 
-  const required = sponsorNetworkFee ? 0n : attached + changeFloor + fee;
+  // Sponsoring covers the *network fee*, and nothing else. The ADA attached to the token output is
+  // not a fee: it is value that leaves the sender and arrives at the recipient, and a sponsor that
+  // supplied it would be giving away roughly 1.2 ADA on every token transfer to buy a fee worth a
+  // few cents. So the sender owes it whether or not the fee is sponsored — and reporting `0` here,
+  // as this did, told a wallet with no ADA that it could send a token and then let the builder
+  // refuse it after the operation had already been announced.
+  const required = attached + changeFloor + fee;
 
   if (held < required) {
     return {
@@ -156,7 +167,8 @@ export function tokenTransferRequirement(
       heldLovelace: held,
       message:
         `Para enviar un token de Cardano también necesitás ADA: la red exige que el envío lleve ` +
-        `${ada(attached)} ADA adjunta${keepsSome ? `, y otro tanto para el vuelto que conserva el resto del token` : ''}. ` +
+        `${ada(attached)} ADA adjunta${keepsSome ? `, y otro tanto para el vuelto que conserva el resto del token` : ''}` +
+        `${sponsorNetworkFee ? ' (el costo de red lo cubre ChatterPay)' : ' (más el costo de red)'}. ` +
         `Necesitás ${ada(required)} ADA en tu wallet y tenés ${ada(held)} ADA.`
     };
   }

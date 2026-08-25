@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { getCardanoConfig } from '../config/cardanoConfig';
 import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidEthereumWallet, isValidPhoneNumber } from '../helpers/validationHelper';
@@ -6,7 +7,6 @@ import type { IBlockchain } from '../models/blockchainModel';
 import { NotificationEnum } from '../models/templateModel';
 import type { IToken } from '../models/tokenModel';
 import type { IUser, IUserWallet } from '../models/userModel';
-import { getCardanoConfig } from '../config/cardanoConfig';
 import {
   calculateBalances,
   calculateBalancesTotals,
@@ -190,10 +190,11 @@ export const walletBalance = async (
       // like a USDC row does.
       const catalogue = await getCardanoTokenSymbols();
       const [prices, fiatQuotes] = await Promise.all([getTokenPrices(catalogue), getFiatQuotes()]);
-      const { networkName, balances: tokenBalances, raw } = await getCardanoTokenBalances(
-        wallet,
-        (symbol) => prices.get(symbol.toUpperCase()) ?? 0
-      );
+      const {
+        networkName,
+        balances: tokenBalances,
+        raw
+      } = await getCardanoTokenBalances(wallet, (symbol) => prices.get(symbol.toUpperCase()) ?? 0);
       // Same rule as the EVM branch: a token the address does not hold is not a row.
       const balances = calculateBalances(tokenBalances, fiatQuotes, networkName).filter(
         (entry) => entry.balance > 0

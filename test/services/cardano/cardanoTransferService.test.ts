@@ -37,7 +37,9 @@ function transfer(overrides: Partial<Parameters<typeof executeCardanoTransfer>[0
 }
 
 beforeEach(() => {
-  SPONSOR_VARS.forEach((name) => { savedSponsor[name] = process.env[name]; });
+  SPONSOR_VARS.forEach((name) => {
+    savedSponsor[name] = process.env[name];
+  });
   process.env.CARDANO_SPONSOR_FEES = 'false';
   delete process.env.CARDANO_SPONSOR_WALLET_ID;
   provider = new FakeCardanoProvider();

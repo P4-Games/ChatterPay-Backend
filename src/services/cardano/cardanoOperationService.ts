@@ -57,9 +57,14 @@ export async function resolveCardanoToken(
   chainId: number
 ): Promise<ResolvedCardanoToken> {
   const ticker = symbol.trim();
-  const token = await Token.findOne({
-    symbol: new RegExp(`^${ticker}$`, 'i'),
-    chain_id: chainId
+  // Matched case-insensitively through the collation rather than a regular expression. The ticker
+  // arrives from the bot and from the command line, and interpolating it into a `RegExp` would let
+  // the caller decide what the pattern matches: `.*` resolves to whatever token the query happens
+  // to return first, which is a transfer of an asset nobody asked for. Strength 2 is exactly
+  // "ignore case", so `usdcx`, `USDCx` and `USDCX` still resolve to the same row.
+  const token = await Token.findOne({ symbol: ticker, chain_id: chainId }).collation({
+    locale: 'en',
+    strength: 2
   });
   if (!token) {
     throw new Error(`CARDANO_UNKNOWN_TOKEN: '${ticker}' is not configured on chain ${chainId}`);
@@ -212,7 +217,11 @@ export async function executeCardanoOperation(
   const config = getCardanoConfig();
 
   if (!config.enabled) {
-    return failure('CARDANO_DISABLED', `Cardano is not available: ${config.disabledReason}`, symbol);
+    return failure(
+      'CARDANO_DISABLED',
+      `Cardano is not available: ${config.disabledReason}`,
+      symbol
+    );
   }
 
   // Resolved from the database before anything else: the asset decides how many decimals the

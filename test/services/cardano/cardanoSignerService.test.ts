@@ -90,7 +90,11 @@ describe('cardanoSignerService - derivation', () => {
 });
 
 describe('cardanoSignerService - domain separation from the EVM key', () => {
-  it('never derives the Cardano key from the EVM private key', () => {
+  // The only test here that needs the EVM derivation, and so the only one that needs CDS1-3
+  // configured. Skipped rather than fed hardcoded values: those live in the deployment's
+  // environment and do not belong in a repository, and the twelve tests above still cover the
+  // Cardano derivation without them.
+  it.skipIf(!process.env.CDS1)('never derives the Cardano key from the EVM private key', () => {
     // `secService.get_up()` returns the user's EVM private key. If it were the Ed25519 seed, then
     // leaking one key would leak the other, on a different chain, silently. The two must be
     // independent derivations from the master secret, and this is the assertion that says so.
@@ -110,9 +114,7 @@ describe('cardanoSignerService - domain separation from the EVM key', () => {
       format: 'der',
       type: 'pkcs8'
     });
-    const naive = (
-      createPublicKey(naiveSeedKey).export({ format: 'der', type: 'spki' }) as Buffer
-    )
+    const naive = (createPublicKey(naiveSeedKey).export({ format: 'der', type: 'spki' }) as Buffer)
       .subarray(12)
       .toString('hex');
     expect(cardanoKeyMaterial).not.toBe(naive);

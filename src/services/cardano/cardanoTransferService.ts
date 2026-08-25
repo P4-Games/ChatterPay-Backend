@@ -19,7 +19,6 @@
 
 import { chargesTransferFee, getCardanoFeeConfig } from '../../config/cardanoFeeConfig';
 import { Logger } from '../../helpers/loggerHelper';
-import { accumulateFee, clearFeeDebt, getFeeDebt } from './cardanoFeeDebtService';
 import type {
   CardanoAccount,
   CardanoAssetAmount,
@@ -27,6 +26,7 @@ import type {
   CardanoUtxo
 } from '../../types/cardanoType';
 import { decodeCardanoAddress } from './cardanoAddressService';
+import { accumulateFee, clearFeeDebt, getFeeDebt } from './cardanoFeeDebtService';
 import {
   type CardanoProvider,
   CardanoProviderError,
@@ -272,9 +272,7 @@ export async function executeCardanoTransfer(
     }
 
     // Fee collection: check if the accumulated ChatterPay fee is collectable.
-    const currentDebt = chargesTransferFee(feeConfig)
-      ? await getFeeDebt(fromPhoneNumber)
-      : 0n;
+    const currentDebt = chargesTransferFee(feeConfig) ? await getFeeDebt(fromPhoneNumber) : 0n;
 
     const built = buildCardanoTransfer({
       utxos,

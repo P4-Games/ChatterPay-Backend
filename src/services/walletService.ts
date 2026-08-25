@@ -1,12 +1,12 @@
 import { ethers } from 'ethers';
+import { getCardanoConfig } from '../config/cardanoConfig';
 import { Logger } from '../helpers/loggerHelper';
 import type { IBlockchain } from '../models/blockchainModel';
 import type { IToken } from '../models/tokenModel';
 import { type MintResult, rpcProviders } from '../types/commonType';
+import { ensureCardanoWalletForUser } from './cardano/cardanoWalletService';
 import { mongoReferralService } from './mongo/mongoReferralService';
 import { mongoUserService } from './mongo/mongoUserService';
-import { getCardanoConfig } from '../config/cardanoConfig';
-import { ensureCardanoWalletForUser } from './cardano/cardanoWalletService';
 import { secService } from './secService';
 import { addWalletToUser, createUserWithWallet, getUserWalletByChainId } from './userService';
 import { wrapRpc } from './web3/rpc/rpcService';

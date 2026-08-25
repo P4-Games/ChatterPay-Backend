@@ -37,7 +37,10 @@ const USDCX = {
   assetName: '55534443'
 };
 
-function utxo(lovelace: bigint, assets: { policyId: string; assetName: string; quantity: bigint }[] = []): CardanoUtxo {
+function utxo(
+  lovelace: bigint,
+  assets: { policyId: string; assetName: string; quantity: bigint }[] = []
+): CardanoUtxo {
   return {
     txHash: 'aa'.repeat(32),
     outputIndex: 0,
@@ -143,14 +146,18 @@ describe('adaTransferRequirement - minimum to move ADA', () => {
       // 1.2 covers it, but sending exactly the floor would leave ~0.03 of change -- below the
       // floor, so the network would eat it. Emptying the wallet is the way out, and it works.
       expect(adaTransferRequirement(MIN_ADA, [utxo(1_200_000n)], ADDRESS, PREPROD).ok).toBe(false);
-      expect(adaTransferRequirement(1_000_000n, [utxo(1_200_000n)], ADDRESS, PREPROD).ok).toBe(true);
+      expect(adaTransferRequirement(1_000_000n, [utxo(1_200_000n)], ADDRESS, PREPROD).ok).toBe(
+        true
+      );
     }
   });
 
   it('C needs only the amount, because ChatterPay covers the fee', () => {
     // The same wallet that cannot pay unsponsored pays fine sponsored: that difference *is* C.
     expect(adaTransferRequirement(MIN_ADA, [utxo(MIN_ADA)], ADDRESS, PREPROD, true).ok).toBe(true);
-    expect(adaTransferRequirement(MIN_ADA, [utxo(MIN_ADA)], ADDRESS, PREPROD, false).ok).toBe(false);
+    expect(adaTransferRequirement(MIN_ADA, [utxo(MIN_ADA)], ADDRESS, PREPROD, false).ok).toBe(
+      false
+    );
   });
 
   it('rejects the dust window and says what can be sent instead', () => {
@@ -195,15 +202,29 @@ describe('tokenTransferRequirement - a token never travels alone', () => {
 
   it('charges the floor twice when the sender keeps part of the token', () => {
     optionA();
-    const whole = tokenTransferRequirement({ ...USDCX, quantity: 10_000_000n }, held, ADDRESS, PREPROD);
-    const part = tokenTransferRequirement({ ...USDCX, quantity: 5_000_000n }, held, ADDRESS, PREPROD);
+    const whole = tokenTransferRequirement(
+      { ...USDCX, quantity: 10_000_000n },
+      held,
+      ADDRESS,
+      PREPROD
+    );
+    const part = tokenTransferRequirement(
+      { ...USDCX, quantity: 5_000_000n },
+      held,
+      ADDRESS,
+      PREPROD
+    );
     // The change output carries the remainder, so it needs min-ADA of its own.
     expect(part.requiredLovelace).toBeGreaterThan(whole.requiredLovelace);
     expect(part.requiredLovelace - whole.requiredLovelace).toBeGreaterThan(1_000_000n);
     expect(part.message).toContain('vuelto');
   });
 
-  it('C needs no ADA at all', () => {
+  it('C still needs the ADA the token drags along', () => {
+    // This used to report `0` on the grounds that C sponsors the fee. But the ADA attached to a
+    // token output is not a fee: it leaves the sender and stays with the recipient. Reporting zero
+    // told a wallet holding tokens and no ADA that it could send, and the builder then refused it
+    // after the lock was taken, the notification sent and the optimistic answer returned.
     const result = tokenTransferRequirement(
       { ...USDCX, quantity: 5_000_000n },
       [utxo(0n, [{ ...USDCX, quantity: 10_000_000n }])],
@@ -211,7 +232,28 @@ describe('tokenTransferRequirement - a token never travels alone', () => {
       PREPROD,
       true
     );
-    expect(result.ok).toBe(true);
-    expect(result.requiredLovelace).toBe(0n);
+    expect(result.ok, 'a wallet with tokens and no ADA cannot send, sponsored or not').toBe(false);
+    expect(result.requiredLovelace).toBeGreaterThan(1_000_000n);
+    expect(result.message).toContain('el costo de red lo cubre ChatterPay');
+  });
+
+  it('C asks for less than A: the difference is exactly the network fee', () => {
+    const utxos = [utxo(50_000_000n, [{ ...USDCX, quantity: 10_000_000n }])];
+    const sponsored = tokenTransferRequirement(
+      { ...USDCX, quantity: 10_000_000n },
+      utxos,
+      ADDRESS,
+      PREPROD,
+      true
+    );
+    const unsponsored = tokenTransferRequirement(
+      { ...USDCX, quantity: 10_000_000n },
+      utxos,
+      ADDRESS,
+      PREPROD,
+      false
+    );
+    expect(sponsored.requiredLovelace).toBeGreaterThan(0n);
+    expect(unsponsored.requiredLovelace - sponsored.requiredLovelace).toBe(200_000n);
   });
 });

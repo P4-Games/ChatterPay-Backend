@@ -166,7 +166,10 @@ export async function getCardanoBalance(
     };
   } catch (error) {
     logCardanoProviderError('getCardanoBalance', error);
-    Logger.warn('getCardanoBalance', `Returning zero balance for ${address} after provider failure`);
+    Logger.warn(
+      'getCardanoBalance',
+      `Returning zero balance for ${address} after provider failure`
+    );
     return { address, ...ZERO };
   }
 }

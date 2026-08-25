@@ -33,6 +33,7 @@
  * @see CARDANO_INTEGRATION_PLAN.md §4.2
  */
 
+import { createHash } from 'node:crypto';
 // Every cryptographic primitive here comes from `@noble`, none from `node:crypto`.
 //
 // Not a preference: Bun's `node:crypto` is a reimplementation and it does not behave the same on
@@ -49,7 +50,6 @@
 import { ed25519 } from '@noble/curves/ed25519';
 import { hkdf } from '@noble/hashes/hkdf';
 import { sha256 } from '@noble/hashes/sha2';
-import { createHash } from 'node:crypto';
 import { $B, $S } from '../../config/constants';
 import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
 import type { CardanoAccount, CardanoNetwork } from '../../types/cardanoType';
@@ -228,7 +228,10 @@ export const cardanoSignerService = {
   ): string => {
     const hex = transactionId.startsWith('0x') ? transactionId.slice(2) : transactionId;
     if (!/^[0-9a-fA-F]{64}$/.test(hex)) throw new Error('CARDANO_INVALID_TRANSACTION_ID');
-    const signature = ed25519.sign(Buffer.from(hex, 'hex'), sponsorSeed(walletId, network, chainId));
+    const signature = ed25519.sign(
+      Buffer.from(hex, 'hex'),
+      sponsorSeed(walletId, network, chainId)
+    );
     return `0x${Buffer.from(signature).toString('hex')}`;
   },
 

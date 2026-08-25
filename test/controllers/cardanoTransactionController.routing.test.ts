@@ -60,10 +60,9 @@ describe('isCardanoTransferRequest - routes to Cardano', () => {
     // Resolved against the catalogue, not a hardcoded list: registering a stablecoin is a database
     // row, not a code change.
     for (const symbol of ['ADA', 'ada', ' ADA ', 'USDM', 'USDA', 'USDCx', 'usdcx']) {
-      expect(
-        isCardanoTransferRequest({ token: symbol }, CATALOGUE, EVM_CHAIN_ID),
-        symbol
-      ).toBe(true);
+      expect(isCardanoTransferRequest({ token: symbol }, CATALOGUE, EVM_CHAIN_ID), symbol).toBe(
+        true
+      );
     }
   });
 
@@ -75,10 +74,9 @@ describe('isCardanoTransferRequest - routes to Cardano', () => {
 describe('isCardanoTransferRequest - leaves EVM alone', () => {
   it('for ordinary same-chain transfers', () => {
     for (const symbol of ['USDT', 'USDC', 'WETH', 'SCR']) {
-      expect(
-        isCardanoTransferRequest({ token: symbol }, CATALOGUE, EVM_CHAIN_ID),
-        symbol
-      ).toBe(false);
+      expect(isCardanoTransferRequest({ token: symbol }, CATALOGUE, EVM_CHAIN_ID), symbol).toBe(
+        false
+      );
     }
   });
 
@@ -109,10 +107,9 @@ describe('isCardanoTransferRequest - leaves EVM alone', () => {
     // No substring matching: `ADAX` and `CADA` are not ADA, and diverting them would send a
     // transfer to a chain that has never heard of them.
     for (const symbol of ['ADAX', 'CADA', 'DOGE']) {
-      expect(
-        isCardanoTransferRequest({ token: symbol }, CATALOGUE, EVM_CHAIN_ID),
-        symbol
-      ).toBe(false);
+      expect(isCardanoTransferRequest({ token: symbol }, CATALOGUE, EVM_CHAIN_ID), symbol).toBe(
+        false
+      );
     }
   });
 

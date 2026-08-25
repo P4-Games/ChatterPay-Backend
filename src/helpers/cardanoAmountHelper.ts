@@ -52,8 +52,7 @@ export function toBaseUnits(amount: string, decimals: number, label = 'the asset
     );
   }
   const scale = 10n ** BigInt(decimals);
-  const base =
-    BigInt(whole) * scale + (decimals > 0 ? BigInt(fraction.padEnd(decimals, '0')) : 0n);
+  const base = BigInt(whole) * scale + (decimals > 0 ? BigInt(fraction.padEnd(decimals, '0')) : 0n);
   if (base <= 0n) throw new Error(`CARDANO_INVALID_AMOUNT: '${amount}'`);
   return base;
 }
