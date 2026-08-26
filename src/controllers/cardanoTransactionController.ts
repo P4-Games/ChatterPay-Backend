@@ -31,7 +31,10 @@ import {
   executeCardanoOperation,
   resolveCardanoToken
 } from '../services/cardano/cardanoOperationService';
-import { canAffordCardanoTransfer } from '../services/cardano/cardanoPreflightService';
+import {
+  canAffordCardanoTransfer,
+  sponsorCanCoverFee
+} from '../services/cardano/cardanoPreflightService';
 import { deriveCardanoAccount } from '../services/cardano/cardanoWalletService';
 import {
   chatterpointsService,
@@ -42,7 +45,9 @@ import { mongoTransactionService } from '../services/mongo/mongoTransactionServi
 import { mongoUserService } from '../services/mongo/mongoUserService';
 import {
   getNotificationTemplate,
+  persistAndSendNotification,
   persistNotification,
+  sendInternalErrorNotification,
   sendOutgoingTransferNotification,
   sendReceivedTransferNotification
 } from '../services/notificationService';
@@ -312,6 +317,17 @@ export const makeCardanoTransaction = async (
       return undefined;
     }
 
+    /* 5.2 can ChatterPay still cover the network fee?
+       Asked before the lock for the same reason as the balance: an empty sponsor wallet is nothing
+       the user can act on, and finding out inside the transfer means telling them the operation is
+       in progress and then never mentioning it again. */
+    const sponsor = await sponsorCanCoverFee(logKey);
+    if (!sponsor.ok) {
+      await persistNotification(channel_user_id, sponsor.message, NotificationEnum.internal_error);
+      await returnSuccessResponse(reply, sponsor.message);
+      return undefined;
+    }
+
     /* 6. take the lock and answer optimistically, as the EVM path does */
     await openOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
     const { message: inProgressMessage } = await getNotificationTemplate(
@@ -332,16 +348,33 @@ export const makeCardanoTransaction = async (
 
     if (!result.success) {
       await closeOperation(fromUser.phone_number, ConcurrentOperationsEnum.Transfer);
-      // The text persisted is the service's own, not a template. For insufficient funds it names
-      // the address to fund — the only remedy, and useless buried in a log. The generic
-      // `user_balance_not_enough` template cannot say that, because on Cardano the wallet the user
-      // has to fund is one the product has never had to mention before.
-      const category =
-        result.errorCode === 'CARDANO_INSUFFICIENT_FUNDS'
-          ? NotificationEnum.user_balance_not_enough
-          : NotificationEnum.internal_error;
-      await persistNotification(channel_user_id, result.error, category);
       Logger.error('makeCardanoTransaction', logKey, `${result.errorCode}: ${result.error}`);
+
+      // Sent, not merely persisted. The optimistic answer at step 6 already used up the reply, so
+      // a row in `notifications` is the whole of what the user would ever see — which is silence.
+      if (result.errorCode === 'CARDANO_INSUFFICIENT_FUNDS') {
+        // The text sent is the service's own, not a template: it names the address to fund, the
+        // only remedy. The generic `user_balance_not_enough` template cannot say that, because on
+        // Cardano the wallet the user has to fund is one the product never had to mention before.
+        if (lastBotMsgDelaySeconds > 0) await delaySeconds(lastBotMsgDelaySeconds);
+        const { title } = await getNotificationTemplate(
+          channel_user_id,
+          NotificationEnum.user_balance_not_enough
+        );
+        await persistAndSendNotification({
+          to: channel_user_id,
+          messageBot: result.error,
+          messagePush: result.error,
+          template: NotificationEnum.user_balance_not_enough,
+          sendPush: true,
+          sendBot: true,
+          title
+        });
+      } else {
+        // Everything else is an incident: the template is the same one the EVM path sends, and the
+        // detail stays in the log above rather than travelling to somebody waiting on a transfer.
+        await sendInternalErrorNotification(channel_user_id, lastBotMsgDelaySeconds);
+      }
       return undefined;
     }
 
@@ -434,7 +467,7 @@ export const makeCardanoTransaction = async (
         'makeCardanoTransaction',
         logKey,
         reply,
-        'No pudimos procesar la transferencia. Intentá de nuevo en unos minutos.',
+        'We could not process the transfer. Please try again in a few minutes.',
         false,
         channel_user_id,
         // The code and nothing else: the full text is already in the log above, and an unexpected
