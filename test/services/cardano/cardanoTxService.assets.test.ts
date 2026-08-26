@@ -6,6 +6,9 @@ import {
   buildCardanoTransfer,
   encodeValue,
   minimumAdaFor,
+  selectableBalance,
+  selectableUtxos,
+  spendableBalance,
   totalAssets,
   utxosHolding
 } from '../../../src/services/cardano/cardanoTxService';
@@ -425,5 +428,123 @@ describe('native assets - reading balances', () => {
     const small = tokenUtxo(3_000_000n, [{ ...USDM, quantity: 1_000_000n }], 0, 'aa'.repeat(32));
     const large = tokenUtxo(3_000_000n, [{ ...USDM, quantity: 90_000_000n }], 0, 'bb'.repeat(32));
     expect(utxosHolding([small, large], USDM)[0]).toBe(large);
+  });
+});
+
+/** An ADA transfer — no `asset` — over the same fixtures. */
+function adaPlan(utxos: CardanoUtxo[], amount: bigint) {
+  return {
+    utxos,
+    destinationAddress: RECIPIENT,
+    changeAddress: SENDER,
+    amount,
+    ttlSlot: TTL,
+    parameters: PREPROD,
+    witnessCount: 1
+  };
+}
+
+describe('an ADA transfer reaching outputs that carry tokens', () => {
+  it('spends the only output there is and brings its tokens home in the change', () => {
+    // The shape that stranded funds: a wallet sends part of a token, its change lands in one output
+    // holding the remainder, and from then on that ADA was neither spendable nor visible. Refusing
+    // it left a wallet unable to move ADA it plainly held.
+    const built = buildCardanoTransfer(
+      adaPlan([tokenUtxo(100_000_000n, [{ ...USDM, quantity: 2_000_000n }])], 10_000_000n)
+    );
+
+    expect(built.sentLovelace).toBe(10_000_000n);
+    expect(built.changeAssets).toHaveLength(1);
+    expect(built.changeAssets[0].quantity).toBe(2_000_000n);
+    // Nothing of the token may go missing: a transaction that does not return its inputs' assets
+    // does not balance, and the ledger rejects it outright.
+    expect(built.inputs).toHaveLength(1);
+  });
+
+  it('still balances: inputs = amount + fee + change', () => {
+    const built = buildCardanoTransfer(
+      adaPlan([tokenUtxo(100_000_000n, [{ ...USDM, quantity: 2_000_000n }])], 10_000_000n)
+    );
+    const consumed = built.inputs.reduce((sum, u) => sum + u.lovelace, 0n);
+
+    expect(consumed).toBe(built.sentLovelace + built.fee + built.change);
+  });
+
+  it('leaves token-bearing outputs alone while plain ADA covers the transfer', () => {
+    // Pulling one in drags its assets into the change and grows the transaction, so it is a last
+    // resort and not a first choice — even when it is the largest output in the wallet.
+    const tokens = tokenUtxo(100_000_000n, [{ ...USDM, quantity: 2_000_000n }], 0, 'aa'.repeat(32));
+    const plain = adaUtxo(20_000_000n, 0, 'cc'.repeat(32));
+
+    const built = buildCardanoTransfer(adaPlan([tokens, plain], 10_000_000n));
+
+    expect(built.inputs).toHaveLength(1);
+    expect(built.inputs[0].txHash).toBe('cc'.repeat(32));
+    expect(built.changeAssets).toHaveLength(0);
+  });
+
+  it('reaches for one once the plain outputs run short, and carries every token home', () => {
+    const plain = adaUtxo(5_000_000n, 0, 'cc'.repeat(32));
+    const tokens = tokenUtxo(
+      50_000_000n,
+      [
+        { ...USDM, quantity: 2_000_000n },
+        { ...USDA, quantity: 7_000_000n }
+      ],
+      0,
+      'aa'.repeat(32)
+    );
+
+    const built = buildCardanoTransfer(adaPlan([plain, tokens], 40_000_000n));
+
+    expect(built.inputs).toHaveLength(2);
+    expect(built.changeAssets).toHaveLength(2);
+    expect(built.changeAssets.reduce((sum, a) => sum + a.quantity, 0n)).toBe(9_000_000n);
+  });
+
+  it('keeps the change above the floor the tokens raise it to', () => {
+    // A change output carrying tokens is bigger than one carrying only ADA, so its min-ADA is
+    // higher. Change that clears the plain floor can still fall under this one.
+    const built = buildCardanoTransfer(
+      adaPlan([tokenUtxo(100_000_000n, [{ ...USDM, quantity: 2_000_000n }])], 10_000_000n)
+    );
+
+    expect(built.change).toBeGreaterThanOrEqual(
+      minimumAdaFor(SENDER, built.changeAssets, PREPROD.coinsPerUtxoByte)
+    );
+  });
+
+  it('refuses rather than stranding the tokens when nothing can fund that floor', () => {
+    // Sending everything is legal when the wallet holds only ADA — there is simply no change. With
+    // tokens in the inputs there is no such escape: they have to come back, the output carrying
+    // them has a floor, and nothing is left to fund it.
+    expect(() =>
+      buildCardanoTransfer(
+        adaPlan([tokenUtxo(11_000_000n, [{ ...USDM, quantity: 2_000_000n }])], 10_000_000n)
+      )
+    ).toThrow(/CARDANO_CHANGE_WOULD_BE_BURNED|CARDANO_INSUFFICIENT_FUNDS/);
+  });
+});
+
+describe('selectableUtxos - what the sender can reach', () => {
+  it('offers plain ADA first and token-bearing outputs last, each largest first', () => {
+    const bigToken = tokenUtxo(90_000_000n, [{ ...USDM, quantity: 1n }], 0, 'aa'.repeat(32));
+    const smallPlain = adaUtxo(1_000_000n, 0, 'cc'.repeat(32));
+    const bigPlain = adaUtxo(5_000_000n, 0, 'dd'.repeat(32));
+
+    const order = selectableUtxos([bigToken, smallPlain, bigPlain]);
+
+    expect(order.map((u) => u.lovelace)).toEqual([5_000_000n, 1_000_000n, 90_000_000n]);
+  });
+
+  it('counts every lovelace, tokens company included', () => {
+    const utxos = [
+      adaUtxo(5_000_000n, 0, 'cc'.repeat(32)),
+      tokenUtxo(3_000_000n, [{ ...USDM, quantity: 1n }], 0, 'aa'.repeat(32))
+    ];
+
+    expect(selectableBalance(utxos)).toBe(8_000_000n);
+    // The ADA-only view is what the sponsor uses, and it still excludes them.
+    expect(spendableBalance(utxos)).toBe(5_000_000n);
   });
 });
