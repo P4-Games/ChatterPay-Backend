@@ -8,8 +8,6 @@
  * The reason the split exists: everything below it is pure enough to test against fabricated UTxOs,
  * and everything here needs Mongo. Keeping the chain logic free of the database is what makes the
  * borders — dust change, an undetermined submit — testable at all.
- *
- * @see CARDANO_INTEGRATION_PLAN.md §6.2
  */
 
 import { getCardanoConfig } from '../../config/cardanoConfig';
@@ -185,6 +183,30 @@ export interface CardanoOperationInput {
   provider?: CardanoProvider;
 }
 
+/** What the user is told when the failure is one nobody anticipated. */
+const OPERATION_FAILED = 'No pudimos completar la transferencia. Probá de nuevo en unos minutos.';
+
+/**
+ * Classifies a caught error into what the log needs and what the user is told.
+ *
+ * The refusals raised below carry a `CARDANO_*` code and a sentence written to be read, and that
+ * sentence is the answer. Anything else that lands here is a database or a network fault: its text
+ * describes this deployment to somebody who only wanted to send money, so it stays in the log.
+ *
+ * @param error - Whatever was caught.
+ * @param fallbackCode - The code to report when the error carries none.
+ * @returns The code and the message to answer with.
+ */
+function classify(error: unknown, fallbackCode: string): { code: string; message: string } {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = /^CARDANO_[A-Z_]+/.exec(message)?.[0] ?? '';
+  // A message that is nothing but its own code is a classification, not a sentence: it comes from
+  // a failure whose detail was deliberately left in the log, and it has nothing to say to a person.
+  if (code && message.trim() !== code) return { code, message };
+  Logger.error('executeCardanoOperation', `${code || fallbackCode}: ${message}`);
+  return { code: code || fallbackCode, message: OPERATION_FAILED };
+}
+
 function failure(code: string, message: string, symbol = 'ADA'): CardanoOperationResult {
   return {
     success: false,
@@ -217,11 +239,10 @@ export async function executeCardanoOperation(
   const config = getCardanoConfig();
 
   if (!config.enabled) {
-    return failure(
-      'CARDANO_DISABLED',
-      `Cardano is not available: ${config.disabledReason}`,
-      symbol
-    );
+    // The code says which piece is missing, and it stays in the log: the message travels back to
+    // the user, and it must not describe this deployment's configuration.
+    Logger.warn('executeCardanoOperation', logKey, `cardano unavailable: ${config.disabledReason}`);
+    return failure('CARDANO_DISABLED', 'Cardano is not available right now', symbol);
   }
 
   // Resolved from the database before anything else: the asset decides how many decimals the
@@ -261,20 +282,16 @@ export async function executeCardanoOperation(
     // refusal that should cost nothing, not a half-provisioned recipient.
     destination = await resolveCardanoDestination(to);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return failure('CARDANO_INVALID_DESTINATION', message, symbol);
+    const { code, message } = classify(error, 'CARDANO_INVALID_DESTINATION');
+    return failure(code, message, symbol);
   }
 
   let senderAddress: string;
   try {
     senderAddress = (await ensureCardanoWalletForUser(fromUser)).address;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return failure(
-      /^CARDANO_[A-Z_]+/.exec(message)?.[0] ?? 'CARDANO_WALLET_ERROR',
-      message,
-      symbol
-    );
+    const { code, message } = classify(error, 'CARDANO_WALLET_ERROR');
+    return failure(code, message, symbol);
   }
 
   Logger.log(
