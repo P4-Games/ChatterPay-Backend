@@ -59,6 +59,55 @@ describe('gasService.getDynamicGas', () => {
     ).rejects.toThrow(/executeSwap would revert on-chain: ChatterPay__SwapFailed/);
   });
 
+  it('does not abort on a transient RPC failure, which proves nothing about the tx', async () => {
+    // Both estimateGas and callStatic land in the same catch, but a node that never evaluated
+    // the call must not be reported as a guaranteed revert.
+    const rpcDown = () => {
+      throw Object.assign(new Error('missing response'), { code: 'SERVER_ERROR' });
+    };
+    const contract = contractDouble({ estimateGas: rpcDown, callStatic: rpcDown });
+
+    const gas = await gasService.getDynamicGas(
+      contract,
+      'executeSwap',
+      [],
+      20,
+      BigNumber.from(500_000),
+      true
+    );
+    expect(gas.toString()).toBe('500000');
+  });
+
+  it('treats a CALL_EXCEPTION without a decoded name as a real revert', async () => {
+    const reverted = () => {
+      throw Object.assign(new Error('call revert exception'), {
+        code: 'CALL_EXCEPTION',
+        reason: 'STF'
+      });
+    };
+    const contract = contractDouble({ estimateGas: reverted, callStatic: reverted });
+
+    await expect(
+      gasService.getDynamicGas(contract, 'executeSwap', [], 20, BigNumber.from(500_000), true)
+    ).rejects.toThrow(/would revert on-chain: STF/);
+  });
+
+  it('keeps the message of a require-string revert instead of printing "Error"', async () => {
+    // ethers sets errorName to the literal 'Error' for revert("msg") and puts the text in reason.
+    const reverted = () => {
+      throw Object.assign(new Error('call revert exception'), {
+        code: 'CALL_EXCEPTION',
+        errorName: 'Error',
+        reason: 'ERC20: transfer amount exceeds balance'
+      });
+    };
+    const contract = contractDouble({ estimateGas: reverted, callStatic: reverted });
+
+    await expect(
+      gasService.getDynamicGas(contract, 'executeSwap', [], 20, BigNumber.from(500_000), true)
+    ).rejects.toThrow(/ERC20: transfer amount exceeds balance/);
+  });
+
   it('still returns a gas limit when only estimation fails but the static call passes', async () => {
     const contract = contractDouble({ estimateGas: revert, callStatic: async () => undefined });
 

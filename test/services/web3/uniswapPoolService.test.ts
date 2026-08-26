@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getPoolAddress,
   quoteAmountOutViaPool,
+  quoteSpotAmountOut,
   resolvePoolFee,
   simulateExactInputSingle
 } from '../../../src/services/web3/uniswapPoolService';
@@ -38,22 +39,29 @@ function chatterPayDouble({
  */
 function stubContracts({
   getPool,
-  exactInputSingle
+  exactInputSingle,
+  allowance = ethers.constants.MaxUint256,
+  sqrtPriceX96 = ethers.BigNumber.from('1834821501228792017703123664'),
+  token0 = TOKEN_A
 }: {
   getPool?: (a: string, b: string, fee: number) => Promise<string>;
   exactInputSingle?: (params: unknown, overrides: unknown) => Promise<ethers.BigNumber>;
+  allowance?: ethers.BigNumber;
+  sqrtPriceX96?: ethers.BigNumber;
+  token0?: string;
 }) {
-  return vi
-    .spyOn(ethers, 'Contract')
-    .mockImplementation(
-      (address: string) =>
-        ({
-          address,
-          factory: async () => FACTORY,
-          getPool,
-          callStatic: { exactInputSingle }
-        }) as unknown as ethers.Contract
-    );
+  return vi.spyOn(ethers, 'Contract').mockImplementation(
+    (address: string) =>
+      ({
+        address,
+        factory: async () => FACTORY,
+        getPool,
+        allowance: async () => allowance,
+        slot0: async () => ({ sqrtPriceX96 }),
+        token0: async () => token0,
+        callStatic: { exactInputSingle }
+      }) as unknown as ethers.Contract
+  );
 }
 
 describe('uniswapPoolService', () => {
@@ -117,7 +125,9 @@ describe('uniswapPoolService', () => {
 
   describe('simulateExactInputSingle', () => {
     it('simulates with no minimum output and the wallet as caller and recipient', async () => {
-      const exactInputSingle = vi.fn(async () => ethers.BigNumber.from('9235050006558805000'));
+      const exactInputSingle = vi.fn(async (_params: unknown, _overrides: unknown) =>
+        ethers.BigNumber.from('9235050006558805000')
+      );
       stubContracts({ exactInputSingle });
 
       const provider = {} as ethers.providers.Provider;
@@ -134,7 +144,7 @@ describe('uniswapPoolService', () => {
 
       expect(amountOut.toString()).toBe('9235050006558805000');
 
-      const [params, overrides] = exactInputSingle.mock.calls[0] as [
+      const [params, overrides] = exactInputSingle.mock.calls[0] as unknown as [
         Record<string, unknown>,
         Record<string, unknown>
       ];
@@ -168,6 +178,7 @@ describe('uniswapPoolService', () => {
       expect(quote.fee).toBe(3000);
       expect(quote.pool).toBe(POOL);
       expect(quote.amountOut.toString()).toBe('9235050006558805000');
+      expect(quote.source).toBe('simulation');
       expect(getPool).toHaveBeenCalledWith(TOKEN_A, TOKEN_B, 3000);
     });
 
@@ -238,6 +249,94 @@ describe('uniswapPoolService', () => {
           'k'
         )
       ).rejects.toThrow(/zero output/);
+    });
+
+    it('prices off the pool spot when the router has no allowance yet', async () => {
+      // Both execution paths validate before approving, so the first swap of a token must not
+      // depend on a router allowance that does not exist yet.
+      const exactInputSingle = vi.fn(async () => ethers.BigNumber.from('1'));
+      stubContracts({
+        getPool: async () => POOL,
+        exactInputSingle,
+        allowance: ethers.constants.Zero,
+        token0: TOKEN_B
+      });
+
+      const contract = chatterPayDouble();
+      const quote = await quoteAmountOutViaPool(
+        provider,
+        contract,
+        ROUTER,
+        TOKEN_A,
+        TOKEN_B,
+        ethers.BigNumber.from('4967641396620640'),
+        WALLET,
+        'k'
+      );
+
+      expect(quote.source).toBe('spot');
+      expect(exactInputSingle).not.toHaveBeenCalled();
+      // Same pool state the live WETH->USDT simulation returned 9.2346e18 for.
+      expect(Number(ethers.utils.formatUnits(quote.amountOut, 18))).toBeCloseTo(9.2346, 3);
+    });
+
+    it('simulates rather than using spot once the allowance covers the amount', async () => {
+      const exactInputSingle = vi.fn(async () => ethers.BigNumber.from('9235050006558805000'));
+      stubContracts({
+        getPool: async () => POOL,
+        exactInputSingle,
+        allowance: ethers.BigNumber.from('4967641396620640')
+      });
+
+      const contract = chatterPayDouble();
+      const quote = await quoteAmountOutViaPool(
+        provider,
+        contract,
+        ROUTER,
+        TOKEN_A,
+        TOKEN_B,
+        ethers.BigNumber.from('4967641396620640'),
+        WALLET,
+        'k'
+      );
+
+      expect(quote.source).toBe('simulation');
+      expect(exactInputSingle).toHaveBeenCalled();
+    });
+  });
+
+  describe('quoteSpotAmountOut', () => {
+    const provider = {} as ethers.providers.Provider;
+
+    it('rejects a pool that was never initialised', async () => {
+      stubContracts({ sqrtPriceX96: ethers.constants.Zero });
+
+      await expect(
+        quoteSpotAmountOut(provider, POOL, TOKEN_A, 3000, ethers.BigNumber.from('1000'), 'k')
+      ).rejects.toThrow(/never initialised/);
+    });
+
+    it('inverts the price depending on which side of the pool tokenIn sits', async () => {
+      const amountIn = ethers.BigNumber.from('4967641396620640');
+
+      stubContracts({ token0: TOKEN_A });
+      const asToken0 = await quoteSpotAmountOut(provider, POOL, TOKEN_A, 3000, amountIn, 'k');
+
+      stubContracts({ token0: TOKEN_B });
+      const asToken1 = await quoteSpotAmountOut(provider, POOL, TOKEN_A, 3000, amountIn, 'k');
+
+      expect(asToken0.lt(amountIn)).toBe(true);
+      expect(asToken1.gt(amountIn)).toBe(true);
+    });
+
+    it('deducts the pool fee tier from the input', async () => {
+      const amountIn = ethers.BigNumber.from('1000000000000000000');
+      stubContracts({ token0: TOKEN_B });
+
+      const low = await quoteSpotAmountOut(provider, POOL, TOKEN_A, 500, amountIn, 'k');
+      const high = await quoteSpotAmountOut(provider, POOL, TOKEN_A, 10000, amountIn, 'k');
+
+      expect(low.gt(high)).toBe(true);
     });
   });
 });

@@ -1209,9 +1209,15 @@ async function calculateAmountOutMinViaPool(
     throw new Error('Unable to resolve the Uniswap router address for this network');
   }
 
+  // Same bound the Quoter path enforces: a slippage at or above 100% would make amountOutMin
+  // zero or negative, which surfaces downstream as a misleading "quote is zero" error.
+  if (totalSlippage < 0 || totalSlippage >= 10000) {
+    throw new Error(`Total slippage must be in [0, 10000) bps, got ${totalSlippage}`);
+  }
+
   const swapAmount = await getRouterInputAmount(chatterPayContract, tokenIn, amountInBN, logKey);
 
-  const { fee, pool, amountOut } = await quoteAmountOutViaPool(
+  const { fee, pool, amountOut, source } = await quoteAmountOutViaPool(
     setupContractsResult.provider,
     chatterPayContract,
     routerAddress,
@@ -1227,7 +1233,7 @@ async function calculateAmountOutMinViaPool(
   Logger.info(
     'calculateAmountOutMinViaPool',
     logKey,
-    `Pool ${pool} (fee tier ${fee}) quotes ${ethers.utils.formatUnits(amountOut, tokenDetails.tokenOutDecimals)} ${tokenDetails.tokenOutSymbol} ` +
+    `Pool ${pool} (fee tier ${fee}, via ${source}) quotes ${ethers.utils.formatUnits(amountOut, tokenDetails.tokenOutDecimals)} ${tokenDetails.tokenOutSymbol} ` +
       `for ${ethers.utils.formatUnits(swapAmount, tokenDetails.tokenInDecimals)} ${tokenDetails.tokenInSymbol}. ` +
       `amountOutMin with ${totalSlippage} bps slippage: ${ethers.utils.formatUnits(amountOutMin, tokenDetails.tokenOutDecimals)} ${tokenDetails.tokenOutSymbol}`
   );
@@ -1317,6 +1323,23 @@ async function calculateAndValidateAmountOutMin(
     );
   }
 
+  // Amount that will actually reach the router. `executeSwap` charges its fee first, so every
+  // candidate below — and the reference they are measured against — has to price the net
+  // amount. Mixing a net candidate with a gross reference turns the fee into apparent price
+  // drift and trips the SWAP_PRICE_THRESHOLD_PERCENT check on small swaps, where a flat
+  // USD fee is a large share of the trade. Falls back to the gross amount when the fee cannot
+  // be read, which keeps the comparison self-consistent either way.
+  let netAmountInBN = amountInBN;
+  try {
+    netAmountInBN = await getRouterInputAmount(walletContract, tokenIn, amountInBN, logKey);
+  } catch (feeError) {
+    Logger.warn(
+      'calculateAndValidateAmountOutMin',
+      logKey,
+      `Could not read the ChatterPay fee, pricing the gross amount: ${feeError instanceof Error ? feeError.message : 'Unknown error'}`
+    );
+  }
+
   // First get prices for reference
   let effectivePriceIn = 0;
   let effectivePriceOut = 0;
@@ -1352,7 +1375,6 @@ async function calculateAndValidateAmountOutMin(
       // that may not even exist. Quote the post-fee amount too, since `executeSwap` charges
       // its fee before forwarding the remainder to the router.
       const poolFee = await resolvePoolFee(walletContract, tokenIn, tokenOut, logKey);
-      const swapAmount = await getRouterInputAmount(walletContract, tokenIn, amountInBN, logKey);
 
       const result = await getAmountOutMinViaQuoter({
         provider: setupContractsResult.provider,
@@ -1362,7 +1384,7 @@ async function calculateAndValidateAmountOutMin(
           tokenOut,
           fee: poolFee,
           recipient,
-          amountIn: swapAmount,
+          amountIn: netAmountInBN,
           sqrtPriceLimitX96: ethers.constants.Zero
         },
         slippageBps: totalSlippage,
@@ -1406,9 +1428,10 @@ async function calculateAndValidateAmountOutMin(
   // 3) Calculate direct reference amount (what we expect based on fixed price)
   try {
     if (effectivePriceOut > 0) {
-      // Calculate input value in USD
+      // Priced on the net amount, matching the Quoter and Price Feed candidates so the
+      // difference measured below is pool-vs-oracle price drift and not the ChatterPay fee.
       const amountInUSD =
-        Number(ethers.utils.formatUnits(amountInBN, tokenDetails.tokenInDecimals)) *
+        Number(ethers.utils.formatUnits(netAmountInBN, tokenDetails.tokenInDecimals)) *
         effectivePriceIn;
 
       // Calculate expected tokens based on fixed output price

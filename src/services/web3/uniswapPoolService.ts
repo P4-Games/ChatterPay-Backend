@@ -11,6 +11,23 @@ const UNISWAP_V3_FACTORY_ABI = [
   'function getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)'
 ];
 
+/** Minimal ABI for a Uniswap V3 pool: spot price and token ordering. */
+const UNISWAP_V3_POOL_ABI = [
+  'function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)',
+  'function token0() view returns (address)'
+];
+
+/** Minimal ABI for reading an ERC20 allowance. */
+const ERC20_ALLOWANCE_ABI = [
+  'function allowance(address owner, address spender) view returns (uint256)'
+];
+
+/** Q96 fixed-point scale used by Uniswap V3 for `sqrtPriceX96`. */
+const Q96 = ethers.BigNumber.from(2).pow(96);
+
+/** Denominator for Uniswap V3 fee tiers, which are expressed in hundredths of a bip. */
+const FEE_DENOMINATOR = ethers.BigNumber.from(1_000_000);
+
 /**
  * Result of quoting a swap against the real Uniswap V3 pool.
  */
@@ -21,6 +38,11 @@ export type PoolQuote = {
   pool: string;
   /** Output amount the pool would actually deliver for the given input. */
   amountOut: ethers.BigNumber;
+  /**
+   * How the amount was obtained. `simulation` replays the router call and is exact;
+   * `spot` derives it from the pool price and ignores price impact.
+   */
+  source: 'simulation' | 'spot';
 };
 
 /**
@@ -175,6 +197,87 @@ export async function simulateExactInputSingle(
 }
 
 /**
+ * Derives the output amount from the pool's spot price, without touching the router.
+ *
+ * `sqrtPriceX96` encodes token1-per-token0 in raw units, so the decimals of both tokens are
+ * already baked in and need no adjustment. The pool's own fee tier is deducted the same way
+ * Uniswap does, but price impact is not modelled: this overstates the output for trades large
+ * enough to move the pool, so it is a fallback rather than the primary quote.
+ *
+ * Its reason to exist is ordering. Both execution paths validate before approving, so on the
+ * first swap of a token the wallet has no router allowance yet and a router simulation reverts
+ * with `STF`. Reading the price needs neither allowance nor balance, which keeps validation
+ * from deadlocking against the approval that would unblock it.
+ *
+ * @param provider - Ethers provider for blockchain interaction
+ * @param pool - Uniswap V3 pool address
+ * @param tokenIn - Input token address
+ * @param fee - Fee tier in hundredths of a bip
+ * @param amountIn - Amount that will reach the router (ChatterPay fee already deducted)
+ * @param logKey - Unique identifier for operation tracing and logging
+ *
+ * @returns Output amount implied by the current pool price, net of the pool fee
+ * @throws Error if the pool has no price (never initialised)
+ */
+export async function quoteSpotAmountOut(
+  provider: ethers.providers.Provider,
+  pool: string,
+  tokenIn: string,
+  fee: number,
+  amountIn: ethers.BigNumber,
+  logKey: string
+): Promise<ethers.BigNumber> {
+  const poolContract = new ethers.Contract(pool, UNISWAP_V3_POOL_ABI, provider);
+  const [slot0, token0] = await Promise.all([poolContract.slot0(), poolContract.token0()]);
+
+  const sqrtPriceX96: ethers.BigNumber = slot0.sqrtPriceX96;
+  if (sqrtPriceX96.isZero()) {
+    throw new Error(`Uniswap pool ${pool} has no price: it was never initialised`);
+  }
+
+  // Deduct the pool fee first, exactly as Uniswap does before touching the curve.
+  const amountInAfterFee = amountIn.mul(FEE_DENOMINATOR.sub(fee)).div(FEE_DENOMINATOR);
+
+  // price(token1 per token0) = (sqrtPriceX96 / 2^96)^2. Multiplying before dividing keeps the
+  // full precision of the Q96 representation.
+  const isTokenInToken0 = tokenIn.toLowerCase() === token0.toLowerCase();
+  const amountOut = isTokenInToken0
+    ? amountInAfterFee.mul(sqrtPriceX96).div(Q96).mul(sqrtPriceX96).div(Q96)
+    : amountInAfterFee.mul(Q96).div(sqrtPriceX96).mul(Q96).div(sqrtPriceX96);
+
+  Logger.debug(
+    'quoteSpotAmountOut',
+    logKey,
+    `Spot quote from pool ${pool}: ${amountOut.toString()} (tokenIn is token${isTokenInToken0 ? '0' : '1'})`
+  );
+
+  return amountOut;
+}
+
+/**
+ * Reports whether the wallet has already approved the router to move `amount` of a token.
+ *
+ * @param provider - Ethers provider for blockchain interaction
+ * @param token - Token to check
+ * @param owner - Wallet that holds the tokens
+ * @param spender - Router that would pull them
+ * @param amount - Amount the router needs to move
+ *
+ * @returns True when the current allowance covers the amount
+ */
+async function hasRouterAllowance(
+  provider: ethers.providers.Provider,
+  token: string,
+  owner: string,
+  spender: string,
+  amount: ethers.BigNumber
+): Promise<boolean> {
+  const erc20 = new ethers.Contract(token, ERC20_ALLOWANCE_ABI, provider);
+  const allowance: ethers.BigNumber = await erc20.allowance(owner, spender);
+  return allowance.gte(amount);
+}
+
+/**
  * Quotes a swap against the real Uniswap V3 pool ChatterPay will trade on.
  *
  * Resolves the fee tier exactly as the contract does, verifies the pool exists, and
@@ -214,25 +317,49 @@ export async function quoteAmountOutViaPool(
     );
   }
 
+  // Both execution paths validate before approving, so on a token's first swap the router has
+  // no allowance yet and a simulation would revert with `STF` — failing validation and thereby
+  // preventing the very approval that would fix it. Check first and price off the pool instead.
+  const canSimulate = await hasRouterAllowance(
+    provider,
+    tokenIn,
+    wallet,
+    routerAddress,
+    swapAmount
+  );
+
   let amountOut: ethers.BigNumber;
-  try {
-    amountOut = await simulateExactInputSingle(
-      provider,
-      routerAddress,
-      tokenIn,
-      tokenOut,
-      fee,
-      swapAmount,
-      wallet,
-      logKey
+  let source: PoolQuote['source'];
+
+  if (canSimulate) {
+    try {
+      amountOut = await simulateExactInputSingle(
+        provider,
+        routerAddress,
+        tokenIn,
+        tokenOut,
+        fee,
+        swapAmount,
+        wallet,
+        logKey
+      );
+      source = 'simulation';
+    } catch (error) {
+      const reason =
+        (error as { reason?: string })?.reason ??
+        (error instanceof Error ? error.message : 'Unknown error');
+      throw new Error(
+        `Uniswap pool simulation reverted for ${tokenIn}/${tokenOut} at fee tier ${fee} (pool ${pool}): ${reason}`
+      );
+    }
+  } else {
+    Logger.info(
+      'quoteAmountOutViaPool',
+      logKey,
+      `Router allowance not yet granted for ${tokenIn}; pricing off the pool spot instead of simulating`
     );
-  } catch (error) {
-    const reason =
-      (error as { reason?: string })?.reason ??
-      (error instanceof Error ? error.message : 'Unknown error');
-    throw new Error(
-      `Uniswap pool simulation reverted for ${tokenIn}/${tokenOut} at fee tier ${fee} (pool ${pool}): ${reason}`
-    );
+    amountOut = await quoteSpotAmountOut(provider, pool, tokenIn, fee, swapAmount, logKey);
+    source = 'spot';
   }
 
   if (amountOut.lte(0)) {
@@ -241,12 +368,13 @@ export async function quoteAmountOutViaPool(
     );
   }
 
-  return { fee, pool, amountOut };
+  return { fee, pool, amountOut, source };
 }
 
 export const uniswapPoolService = {
   resolvePoolFee,
   getPoolAddress,
   simulateExactInputSingle,
+  quoteSpotAmountOut,
   quoteAmountOutViaPool
 };
