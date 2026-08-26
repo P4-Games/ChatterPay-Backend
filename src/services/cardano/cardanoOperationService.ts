@@ -11,7 +11,7 @@
  */
 
 import { getCardanoConfig } from '../../config/cardanoConfig';
-import { lovelaceToAda, toBaseUnits } from '../../helpers/cardanoAmountHelper';
+import { fromBaseUnits, lovelaceToAda, toBaseUnits } from '../../helpers/cardanoAmountHelper';
 import { Logger } from '../../helpers/loggerHelper';
 import Token from '../../models/tokenModel';
 import type { IUser } from '../../models/userModel';
@@ -109,8 +109,13 @@ export interface CardanoOperationResult {
   tokenSymbol: string;
   /** Network fee actually paid, in ADA, as a plain decimal string. */
   networkFeeAda: string;
-  /** ChatterPay fee collected in this transaction, in ADA. "0" when not collecting. */
-  feeCollectedAda: string;
+  /**
+   * ChatterPay's fee for this transfer, in the display units of {@link tokenSymbol}.
+   *
+   * Deducted from the amount, as EVM does: the destination received the amount less this. `"0"`
+   * when nothing was charged.
+   */
+  chatterPayFee: string;
   /**
    * ADA that left the sender for the destination.
    *
@@ -213,7 +218,7 @@ function failure(code: string, message: string, symbol = 'ADA'): CardanoOperatio
     transactionHash: '',
     tokenSymbol: symbol,
     networkFeeAda: '0.000000',
-    feeCollectedAda: '0.000000',
+    chatterPayFee: '0',
     sentAda: '0.000000',
     explorerUrl: '',
     fromAddress: '',
@@ -306,6 +311,8 @@ export async function executeCardanoOperation(
     toAddress: destination.address,
     amountLovelace,
     asset,
+    tokenSymbol: token.symbol,
+    tokenDecimals: token.decimals,
     provider: input.provider ?? buildCardanoProvider(),
     network: config.network,
     chainId: config.chainId,
@@ -320,7 +327,8 @@ export async function executeCardanoOperation(
     transactionHash: result.transactionHash,
     tokenSymbol: token.symbol,
     networkFeeAda: lovelaceToAda(result.feeLovelace),
-    feeCollectedAda: lovelaceToAda(result.feeCollectedLovelace),
+    // In the units of what moved, not in ADA: on a token transfer the fee is charged in the token.
+    chatterPayFee: fromBaseUnits(result.chatterPayFee, token.decimals),
     sentAda: lovelaceToAda(result.sentLovelace),
     explorerUrl: result.explorerUrl,
     fromAddress: senderAddress,
