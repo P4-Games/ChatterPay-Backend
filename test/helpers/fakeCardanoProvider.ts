@@ -43,6 +43,28 @@ export class FakeCardanoProvider implements CardanoProvider {
   /** A failure to raise on the next read call, if any. */
   private nextReadFailure: CardanoProviderError | null = null;
 
+  /**
+   * Outpoints consumed by transactions the chain accepted.
+   *
+   * Deliberately *not* removed from `utxos`: a provider reads an indexed chain, and until the block
+   * carrying the spend is indexed it goes on offering the output as if nothing had happened. That
+   * gap is where consecutive transfers collide, so the fake has to have it too.
+   */
+  private readonly spent = new Set<string>();
+
+  /** The inputs each accepted submit consumed, in order. What the consecutive-transfer tests read. */
+  readonly spentInputs: string[][] = [];
+
+  /**
+   * How many outputs this fake has minted.
+   *
+   * Counted across every address rather than per address, because an outpoint is unique on the whole
+   * chain. Numbering per address gave the sender and the sponsor the same `txHash#index`, which no
+   * real chain can produce and which quietly made them look like one output to anything keyed by
+   * outpoint.
+   */
+  private minted = 0;
+
   constructor(
     private tipState: CardanoTip = { slot: 131_235_000, height: 5_064_000 },
     private parameters: CardanoProtocolParameters = {
@@ -61,8 +83,9 @@ export class FakeCardanoProvider implements CardanoProvider {
   ) {
     const confirmations = options.confirmations ?? 10;
     const existing = this.utxos.get(address) ?? [];
+    const serial = this.minted++;
     existing.push({
-      txHash: `fa${String(existing.length).padStart(2, '0')}`.repeat(16).slice(0, 64),
+      txHash: `fa${String(serial).padStart(2, '0')}`.repeat(16).slice(0, 64),
       outputIndex: options.index ?? existing.length,
       lovelace,
       holdsOtherAssets: false,
@@ -80,8 +103,9 @@ export class FakeCardanoProvider implements CardanoProvider {
    */
   fundWithAssets(address: string, lovelace: bigint, assets: CardanoAssetAmount[]) {
     const existing = this.utxos.get(address) ?? [];
+    const serial = this.minted++;
     existing.push({
-      txHash: `ba${String(existing.length).padStart(2, '0')}`.repeat(16).slice(0, 64),
+      txHash: `ba${String(serial).padStart(2, '0')}`.repeat(16).slice(0, 64),
       outputIndex: existing.length,
       lovelace,
       holdsOtherAssets: assets.length > 0,
@@ -97,6 +121,23 @@ export class FakeCardanoProvider implements CardanoProvider {
     return this.fundWithAssets(address, lovelace, [
       { policyId: 'ff'.repeat(28), assetName: '', quantity: 1n }
     ]);
+  }
+
+  /** Moves a submitted transaction into a block, so the provider would list what it created. */
+  confirm(transactionId: string, confirmations = 1) {
+    this.submitted.set(transactionId, { confirmations });
+    return this;
+  }
+
+  /**
+   * Empties an address, without touching what has been claimed or promised.
+   *
+   * Models an output that left by a route this flow knows nothing about — a transaction submitted
+   * elsewhere, a wallet spending from the same keys.
+   */
+  forgetUtxosOf(address: string) {
+    this.utxos.set(address, []);
+    return this;
   }
 
   /** Arms the behaviour of the next submit. */
@@ -152,6 +193,18 @@ export class FakeCardanoProvider implements CardanoProvider {
     // The id the chain would compute is the hash of the body inside the signed transaction. The
     // caller already knows it, so the fake records whatever the caller will look up.
     const transactionId = extractBodyHash(cborHex);
+    const inputs = extractInputs(cborHex);
+
+    // What a node answers when the inputs are gone. Without this the fake would accept a
+    // double-spend and a test asserting `success` would prove nothing at all — this is the exact
+    // rejection the incident produced, quoted from the log.
+    if (behaviour.mode === 'accept' && inputs.some((outpoint) => this.spent.has(outpoint))) {
+      throw new CardanoProviderError(
+        'rejected_by_chain',
+        'CARDANO_PROVIDER_400: /submittx: ConwayMempoolFailure "All inputs are spent. ' +
+          'Transaction has probably already been included"'
+      );
+    }
 
     switch (behaviour.mode) {
       case 'reject':
@@ -168,8 +221,34 @@ export class FakeCardanoProvider implements CardanoProvider {
         throw new CardanoProviderError('timeout', 'CARDANO_PROVIDER_TIMEOUT: /submittx', true);
       default:
         this.submitted.set(transactionId, { confirmations: 0 });
+        for (const outpoint of inputs) this.spent.add(outpoint);
+        this.spentInputs.push(inputs);
         return transactionId;
     }
+  }
+
+  /**
+   * Lets the indexer catch up with one transaction: its inputs disappear and its change shows up.
+   *
+   * The change arrives with no `blockHeight`, which is how a provider reports an output in a block
+   * too recent to count as confirmed. Spending it is what a wallet has to do to pay twice in a row.
+   *
+   * @param address - The address whose view moves forward.
+   * @param transactionId - The transaction that settled.
+   * @param change - Lovelace the change output carries.
+   */
+  settleAsUnconfirmedChange(address: string, transactionId: string, change: bigint) {
+    const remaining = (this.utxos.get(address) ?? []).filter(
+      (utxo) => !this.spent.has(`${utxo.txHash}#${utxo.outputIndex}`)
+    );
+    remaining.push({
+      txHash: transactionId,
+      outputIndex: 1,
+      lovelace: change,
+      holdsOtherAssets: false
+    });
+    this.utxos.set(address, remaining);
+    return this;
   }
 
   async statusOf(transactionId: string): Promise<CardanoTransactionStatus> {
@@ -200,6 +279,47 @@ function extractBodyHash(signedCborHex: string): string {
   if (bytes[bodyStart] !== 0xa4) throw new Error('FAKE_PROVIDER_UNEXPECTED_BODY');
   const bodyEnd = findBodyEnd(bytes, bodyStart);
   return transactionIdOf(Uint8Array.from(bytes.subarray(bodyStart, bodyEnd)));
+}
+
+/**
+ * The outpoints a signed transaction spends, as `txHash#index`.
+ *
+ * Reads the first entry of the body map, which is the input set. The set may be tagged (258) or a
+ * bare array depending on the encoder, so both are accepted. Every head is read through
+ * `readHead` rather than by masking the initial byte: a 32-byte hash encodes its length in a
+ * following byte, and treating that byte as part of the head silently shifts everything after it.
+ */
+function extractInputs(signedCborHex: string): string[] {
+  const bytes = Buffer.from(signedCborHex, 'hex');
+  let offset = 2; // past the outer array head and the body map head
+  offset = skipItem(bytes, offset); // the key `0`
+  if (bytes[offset] >> 5 === 6) offset = readHead(bytes, offset).next; // an optional set tag
+
+  const set = readHead(bytes, offset);
+  offset = set.next;
+
+  const outpoints: string[] = [];
+  for (let i = 0; i < set.value; i++) {
+    offset = readHead(bytes, offset).next; // the two-element array head
+    const hash = readHead(bytes, offset);
+    outpoints.push(
+      `${bytes.subarray(hash.next, hash.next + hash.value).toString('hex')}#${
+        readHead(bytes, hash.next + hash.value).value
+      }`
+    );
+    offset = readHead(bytes, hash.next + hash.value).next;
+  }
+  return outpoints;
+}
+
+/** The argument of a CBOR head — a length, a count or a small integer — and where the item begins. */
+function readHead(bytes: Buffer, offset: number): { value: number; next: number } {
+  const additional = bytes[offset] & 0x1f;
+  if (additional < 24) return { value: additional, next: offset + 1 };
+  if (additional === 24) return { value: bytes[offset + 1], next: offset + 2 };
+  if (additional === 25) return { value: bytes.readUInt16BE(offset + 1), next: offset + 3 };
+  if (additional === 26) return { value: bytes.readUInt32BE(offset + 1), next: offset + 5 };
+  return { value: Number(bytes.readBigUInt64BE(offset + 1)), next: offset + 9 };
 }
 
 /**
