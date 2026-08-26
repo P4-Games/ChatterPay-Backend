@@ -294,8 +294,22 @@ export async function executeCardanoTransfer(
     const sponsorAccount = feeConfig.sponsorNetworkFee
       ? cardanoSignerService.getSponsorAccount(feeConfig.sponsorWalletId, network, chainId)
       : null;
+    // Read without waiting for confirmations, unlike the sender's outputs above. `depositConfirmations`
+    // exists so a deposit somebody else made is not credited before a rollback can still take it
+    // away -- it is a rule about money arriving from outside. The sponsor's own change is not that:
+    // it is an output of a transaction this deployment built, signed and submitted moments ago.
+    //
+    // Requiring three blocks here made the sponsor unusable for a minute or two after every single
+    // transfer, because it spends its whole balance and gets the remainder back as a fresh output.
+    // With one UTxO in the wallet that is a hard outage between consecutive transfers; the operator
+    // sees a funded address and the caller is told ChatterPay cannot cover the fee.
+    //
+    // Spending an unconfirmed output is how Cardano chains transactions, and the failure mode is
+    // benign: if the parent never reaches the chain, the child spends an input that does not exist
+    // and is rejected outright. Nothing is lost and nothing is double-spent -- the transfer fails
+    // before it is reported as done, which is the same outcome as refusing it here.
     let sponsorUtxos: readonly CardanoUtxo[] = sponsorAccount
-      ? await provider.confirmedUtxosFor(sponsorAccount.address, depositConfirmations)
+      ? await provider.utxosFor(sponsorAccount.address)
       : [];
 
     if (sponsorAccount && spendableBalance(sponsorUtxos) === 0n) {
@@ -312,9 +326,10 @@ export async function executeCardanoTransfer(
     }
 
     // Claimed before building, so two transfers in flight do not both plan to spend the same
-    // output. Without this the second one is rejected by the chain, and its sponsor change is not
-    // spendable again for `depositConfirmations` blocks — which is how sponsoring stops working
-    // under exactly the traffic it was built for.
+    // output. Without this the second one is rejected by the chain — and a rejected transfer is one
+    // the caller was already told was on its way, which is how sponsoring stops working under
+    // exactly the traffic it was built for. A wallet holding several outputs is what lets the claim
+    // hand a different one to each transfer; with a single output they still queue.
     if (sponsorAccount) {
       const lease = await leaseSponsorUtxos(sponsorUtxos, SPONSOR_LEASE_COVER, logKey);
       if (lease.utxos.length === 0) {
