@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CARDANO_PREPROD_CHAIN_ID } from '../../../src/config/cardanoConfig';
 import Token from '../../../src/models/tokenModel';
@@ -13,6 +13,19 @@ import {
   getOrCreateCardanoWallet
 } from '../../../src/services/cardano/cardanoWalletService';
 import { FakeCardanoProvider } from '../../helpers/fakeCardanoProvider';
+import { enableCardanoPreprod, setCardanoEnv } from '../../support/cardanoEnv';
+
+vi.mock('../../../src/helpers/envHelper', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/helpers/envHelper')>();
+  const { cardanoEnvHelperMock } = await import('../../support/cardanoEnv');
+  return cardanoEnvHelperMock(actual);
+});
+
+vi.mock('../../../src/config/constants', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/config/constants')>();
+  const { cardanoConstantsMock } = await import('../../support/cardanoEnv');
+  return cardanoConstantsMock(actual);
+});
 
 const SENDER_PHONE = '5491100000001';
 const RECIPIENT_PHONE = '5491100000002';
@@ -23,7 +36,6 @@ const EXTERNAL_ADDRESS =
 const MAINNET_ADDRESS = 'addr1vx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzers66hrl8';
 
 let provider: FakeCardanoProvider;
-const savedSponsor: Record<string, string | undefined> = {};
 
 /** Creates a ChatterPay user with only an EVM wallet, as every existing user has. */
 async function createEvmOnlyUser(phone: string): Promise<IUser> {
@@ -87,22 +99,9 @@ async function seedTokens(): Promise<void> {
 }
 
 beforeEach(async () => {
-  for (const name of ['CARDANO_SPONSOR_FEES', 'CARDANO_SPONSOR_WALLET_ID']) {
-    savedSponsor[name] = process.env[name];
-  }
-  process.env.CARDANO_ENABLED = 'true';
-  process.env.CARDANO_NETWORK = 'preprod';
-  process.env.CARDANO_SPONSOR_FEES = 'false';
-  delete process.env.CARDANO_SPONSOR_WALLET_ID;
+  enableCardanoPreprod();
   provider = new FakeCardanoProvider();
   await seedTokens();
-});
-
-afterEach(() => {
-  for (const [name, value] of Object.entries(savedSponsor)) {
-    if (value === undefined) delete process.env[name];
-    else process.env[name] = value;
-  }
 });
 
 describe('cardanoWalletService - provisioning', () => {
@@ -452,7 +451,7 @@ describe('executeCardanoOperation - refusals', () => {
   });
 
   it('reports the family as unavailable rather than half-working when it is off', async () => {
-    process.env.CARDANO_ENABLED = 'false';
+    setCardanoEnv({ enabled: false });
     const sender = await createEvmOnlyUser(SENDER_PHONE);
 
     const result = await executeCardanoOperation({
