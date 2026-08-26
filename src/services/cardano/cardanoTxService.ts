@@ -16,8 +16,6 @@
  * **What V1 does not do**, declared rather than discovered: a UTxO holding native assets is never
  * selected, because spending it would require carrying those assets into the change output and V1
  * carries ADA only. Those UTxOs stay unspent and their ADA is not counted as available.
- *
- * @see CARDANO_INTEGRATION_PLAN.md §4.6
  */
 
 import { blake2b } from '@noble/hashes/blake2';
