@@ -35,6 +35,7 @@ import {
   getPaymasterEntryPointDepositValue,
   logPaymasterEntryPointDeposit
 } from './web3/paymasterService';
+import { quoteAmountOutViaPool, resolvePoolFee } from './web3/uniswapPoolService';
 import { executeUserOperationWithRetry } from './web3/userOpService';
 
 const SLIPPAGE_CONFIG = {
@@ -1089,6 +1090,158 @@ async function calculateAmountOutMinViaPriceFeeds(
 }
 
 /**
+ * Resolves the Uniswap router address the ChatterPay wallet will actually trade through
+ *
+ * The contract swaps via `_getChatterPayState().swapRouter`, so that value is the source of
+ * truth: quoting against a different router than the one the swap executes on can produce a
+ * quote for a pool that is never touched. Falls back to the network config only when the
+ * on-chain getter is unavailable.
+ *
+ * @param chatterPayContract - ChatterPay wallet contract instance
+ * @param networkConfig - Blockchain network configuration
+ * @param logKey - Unique identifier for operation tracing and logging
+ *
+ * @returns Router address, or undefined when neither source provides one
+ */
+async function resolveSwapRouterAddress(
+  chatterPayContract: ethers.Contract,
+  networkConfig: IBlockchain,
+  logKey: string
+): Promise<string | undefined> {
+  try {
+    const router: string = await chatterPayContract.getSwapRouter();
+    if (router && router !== ethers.constants.AddressZero) return router;
+  } catch (error) {
+    Logger.warn(
+      'resolveSwapRouterAddress',
+      logKey,
+      `getSwapRouter() failed, falling back to network config: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+
+  return networkConfig.contracts.routerAddress;
+}
+
+/**
+ * Calculates the amount that will actually reach the Uniswap router
+ *
+ * `ChatterPay.executeSwap` charges its fee before swapping and forwards `amountIn - fee` to
+ * the router, so any quote taken on the full `amountIn` overstates the output. `getTokenFee`
+ * returns the very same value the contract computes via `_calculateFee`.
+ *
+ * @param chatterPayContract - ChatterPay wallet contract instance
+ * @param tokenIn - Input token address
+ * @param amountInBN - Full input amount as sent to `executeSwap`
+ * @param logKey - Unique identifier for operation tracing and logging
+ *
+ * @returns Input amount net of the ChatterPay fee
+ * @throws Error if the token is not whitelisted or the fee consumes the whole amount
+ */
+async function getRouterInputAmount(
+  chatterPayContract: ethers.Contract,
+  tokenIn: string,
+  amountInBN: ethers.BigNumber,
+  logKey: string
+): Promise<ethers.BigNumber> {
+  const fee: ethers.BigNumber = await chatterPayContract.getTokenFee(tokenIn);
+
+  // Same guard the contract applies before charging the fee.
+  if (amountInBN.lt(fee.mul(2))) {
+    throw new Error(
+      `Amount ${amountInBN.toString()} is too low to cover the ChatterPay fee ${fee.toString()} for ${tokenIn}`
+    );
+  }
+
+  const swapAmount = amountInBN.sub(fee);
+  Logger.debug(
+    'getRouterInputAmount',
+    logKey,
+    `Router input amount: ${swapAmount.toString()} (amountIn ${amountInBN.toString()} - fee ${fee.toString()})`
+  );
+
+  return swapAmount;
+}
+
+/**
+ * Calculates the minimum output amount from the Uniswap pool that will execute the swap
+ *
+ * Simulates the exact router call the contract makes and applies the slippage policy to the
+ * result. Unlike the price-feed path, this reflects the pool's real price, its fee tier and
+ * the price impact of this specific trade.
+ *
+ * This is the path used on testnets, where the pools are mock deployments seeded by hand and
+ * their price bears no relation to the Chainlink/Binance feeds. Deriving `amountOutMin` from
+ * real-world prices there yields a floor the pool cannot reach, and the swap reverts with
+ * `ChatterPay__SwapFailed` after the gas is already spent.
+ *
+ * @param networkConfig - Blockchain network configuration
+ * @param setupContractsResult - Setup results with provider and contract instances
+ * @param chatterPayContract - ChatterPay wallet contract instance that will execute the swap
+ * @param tokenIn - Input token address
+ * @param tokenOut - Output token address
+ * @param amountInBN - Full input amount as sent to `executeSwap`
+ * @param totalSlippage - Total slippage tolerance in basis points
+ * @param tokenDetails - Token metadata including decimals and symbols
+ * @param logKey - Unique identifier for operation tracing and logging
+ *
+ * @returns Minimum output amount in BigNumber
+ * @throws Error if the router cannot be resolved, no pool exists, or the simulation reverts
+ */
+async function calculateAmountOutMinViaPool(
+  networkConfig: IBlockchain,
+  setupContractsResult: SetupContractReturn,
+  chatterPayContract: ethers.Contract,
+  tokenIn: string,
+  tokenOut: string,
+  amountInBN: ethers.BigNumber,
+  totalSlippage: number,
+  tokenDetails: {
+    tokenInDecimals: number;
+    tokenOutDecimals: number;
+    tokenInSymbol: string;
+    tokenOutSymbol: string;
+    feeInCents: ethers.BigNumber;
+  },
+  logKey: string
+): Promise<ethers.BigNumber> {
+  const routerAddress = await resolveSwapRouterAddress(chatterPayContract, networkConfig, logKey);
+  if (!routerAddress) {
+    throw new Error('Unable to resolve the Uniswap router address for this network');
+  }
+
+  // Same bound the Quoter path enforces: a slippage at or above 100% would make amountOutMin
+  // zero or negative, which surfaces downstream as a misleading "quote is zero" error.
+  if (totalSlippage < 0 || totalSlippage >= 10000) {
+    throw new Error(`Total slippage must be in [0, 10000) bps, got ${totalSlippage}`);
+  }
+
+  const swapAmount = await getRouterInputAmount(chatterPayContract, tokenIn, amountInBN, logKey);
+
+  const { fee, pool, amountOut, source } = await quoteAmountOutViaPool(
+    setupContractsResult.provider,
+    chatterPayContract,
+    routerAddress,
+    tokenIn,
+    tokenOut,
+    swapAmount,
+    chatterPayContract.address,
+    logKey
+  );
+
+  const amountOutMin = amountOut.mul(10000 - totalSlippage).div(10000);
+
+  Logger.info(
+    'calculateAmountOutMinViaPool',
+    logKey,
+    `Pool ${pool} (fee tier ${fee}, via ${source}) quotes ${ethers.utils.formatUnits(amountOut, tokenDetails.tokenOutDecimals)} ${tokenDetails.tokenOutSymbol} ` +
+      `for ${ethers.utils.formatUnits(swapAmount, tokenDetails.tokenInDecimals)} ${tokenDetails.tokenInSymbol}. ` +
+      `amountOutMin with ${totalSlippage} bps slippage: ${ethers.utils.formatUnits(amountOutMin, tokenDetails.tokenOutDecimals)} ${tokenDetails.tokenOutSymbol}`
+  );
+
+  return amountOutMin;
+}
+
+/**
  * Calculates and validates the minimum output amount by comparing Quoter and Price Feed methods
  *
  * Computes the minimum output amount using both Uniswap Quoter and Price Feed methods,
@@ -1144,6 +1297,49 @@ async function calculateAndValidateAmountOutMin(
   let priceFeedAmountOutMin: ethers.BigNumber | null = null;
   let directPriceAmountOutMin: ethers.BigNumber | null = null;
 
+  // The wallet that executes the swap is the user's proxy, not the singleton in the network
+  // config: pool fees, stable flags and the router all live in the proxy's own storage.
+  const walletContract = chatterPayContract.attach(recipient);
+
+  // Testnet pools are mock deployments seeded by hand, so their price is unrelated to the
+  // Chainlink/Binance feeds. Quoting the real pool is the only way to produce a reachable
+  // amountOutMin there; the oracle-based methods below would set a floor no pool can fill.
+  if (TESTNET_CHAIN_IDS.includes(networkConfig.chainId)) {
+    Logger.info(
+      'calculateAndValidateAmountOutMin',
+      logKey,
+      'Testnet detected: calculating via Uniswap pool simulation'
+    );
+    return calculateAmountOutMinViaPool(
+      networkConfig,
+      setupContractsResult,
+      walletContract,
+      tokenIn,
+      tokenOut,
+      amountInBN,
+      totalSlippage,
+      tokenDetails,
+      logKey
+    );
+  }
+
+  // Amount that will actually reach the router. `executeSwap` charges its fee first, so every
+  // candidate below — and the reference they are measured against — has to price the net
+  // amount. Mixing a net candidate with a gross reference turns the fee into apparent price
+  // drift and trips the SWAP_PRICE_THRESHOLD_PERCENT check on small swaps, where a flat
+  // USD fee is a large share of the trade. Falls back to the gross amount when the fee cannot
+  // be read, which keeps the comparison self-consistent either way.
+  let netAmountInBN = amountInBN;
+  try {
+    netAmountInBN = await getRouterInputAmount(walletContract, tokenIn, amountInBN, logKey);
+  } catch (feeError) {
+    Logger.warn(
+      'calculateAndValidateAmountOutMin',
+      logKey,
+      `Could not read the ChatterPay fee, pricing the gross amount: ${feeError instanceof Error ? feeError.message : 'Unknown error'}`
+    );
+  }
+
   // First get prices for reference
   let effectivePriceIn = 0;
   let effectivePriceOut = 0;
@@ -1173,15 +1369,22 @@ async function calculateAndValidateAmountOutMin(
   try {
     if (networkConfig.contracts.quoterAddress && SWAP_USE_QUOTER) {
       Logger.info('calculateAndValidateAmountOutMin', logKey, 'Calculating via Uniswap Quoter');
+
+      // Quote the same pool the contract will trade on: `_getPoolFee` picks the low tier for
+      // stable/stable pairs and honours per-pair overrides, so a hardcoded tier quotes a pool
+      // that may not even exist. Quote the post-fee amount too, since `executeSwap` charges
+      // its fee before forwarding the remainder to the router.
+      const poolFee = await resolvePoolFee(walletContract, tokenIn, tokenOut, logKey);
+
       const result = await getAmountOutMinViaQuoter({
         provider: setupContractsResult.provider,
         quoterAddress: networkConfig.contracts.quoterAddress!,
         params: {
           tokenIn,
           tokenOut,
-          fee: 3000, // Default Uniswap fee
+          fee: poolFee,
           recipient,
-          amountIn: amountInBN,
+          amountIn: netAmountInBN,
           sqrtPriceLimitX96: ethers.constants.Zero
         },
         slippageBps: totalSlippage,
@@ -1225,9 +1428,10 @@ async function calculateAndValidateAmountOutMin(
   // 3) Calculate direct reference amount (what we expect based on fixed price)
   try {
     if (effectivePriceOut > 0) {
-      // Calculate input value in USD
+      // Priced on the net amount, matching the Quoter and Price Feed candidates so the
+      // difference measured below is pool-vs-oracle price drift and not the ChatterPay fee.
       const amountInUSD =
-        Number(ethers.utils.formatUnits(amountInBN, tokenDetails.tokenInDecimals)) *
+        Number(ethers.utils.formatUnits(netAmountInBN, tokenDetails.tokenInDecimals)) *
         effectivePriceIn;
 
       // Calculate expected tokens based on fixed output price
@@ -1473,7 +1677,7 @@ export async function validateSwap(
       `Parsed amountIn: ${amountInBN.toString()} (${tokenDetails.tokenInSymbol} decimals=${tokenDetails.tokenInDecimals})`
     );
 
-    // 3) Pre-chequeos de wallet: balance & allowance contra la wallet/proxy (chatterPayAddress)
+    // 3) Wallet pre-checks: balance & allowance against the wallet/proxy (chatterPayAddress)
     const erc20In = new ethers.Contract(tokenIn, erc20ABI, provider);
     const walletAddress = setupContractsResult.proxy?.proxyAddress;
     if (!walletAddress) {
@@ -1533,8 +1737,12 @@ export async function validateSwap(
     Logger.debug('validateSwap', logKey, `Base slippage: ${baseSlippage} bps`);
     Logger.debug('validateSwap', logKey, `Total slippage (policy): ${totalSlippage} bps`);
 
-    // 5) Quoter (ruta/liquidez)
-    if (!networkConfig.contracts.quoterAddress) {
+    // 5) Quoter (ruta/liquidez). On testnets amountOutMin comes from simulating the pool
+    // directly, so the Quoter deployment is not needed and must not block the swap.
+    if (
+      !networkConfig.contracts.quoterAddress &&
+      !TESTNET_CHAIN_IDS.includes(networkConfig.chainId)
+    ) {
       const msg = 'Missing quoterAddress in network config';
       Logger.debug('validateSwap', logKey, msg);
       errors.push(msg);
@@ -1847,13 +2055,15 @@ export async function executeSwapSimple(
       logKey
     );
 
-    // 3) Estimate gas for swap
+    // 3) Estimate gas for swap. A reverting static call here means the swap cannot succeed,
+    // so abort instead of broadcasting a transaction that is guaranteed to fail on-chain.
     const gasLimit = await gasService.getDynamicGas(
       chatterPayContract,
       'executeSwap',
       [tokenIn, tokenOut, validationResult.amountInBN!, validationResult.amountOutMin!, recipient],
       20,
-      ethers.BigNumber.from('500000')
+      ethers.BigNumber.from('500000'),
+      true
     );
 
     // 20% buffer over the current gas price: on EIP-1559 networks the base fee can tick up
