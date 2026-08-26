@@ -227,7 +227,7 @@ export const createRampUser = async (request: FastifyRequest, reply: FastifyRepl
   };
   */
 
-  // TO-REVIEW: Falla el create User en el sandbox, porque no tiene el campo address y no está en la documentación como se completa.
+  // TO-REVIEW: createUser fails in the sandbox: it has no `address` field and the docs do not say how to fill it.
   // https://docs.manteca.dev/api-runner/mantecadev/cripto/gestion-de-usuarios/usuarios-1/crear-usuario
   const userCreated =
     // await mantecaUserService.createUser(mockCreateUser);

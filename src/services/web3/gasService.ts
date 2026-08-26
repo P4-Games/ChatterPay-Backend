@@ -173,6 +173,10 @@ const getcallDataGasValues = async (
  * @param {unknown[]} args - The arguments to pass to the contract method.
  * @param {number} [gasBufferPercentage=10] - The buffer percentage to add to the estimated gas.
  * @param {BigNumber} [defaultGasLimit=BigNumber.from('7000000')] - The fallback gas limit if estimation fails.
+ * @param {boolean} [throwOnStaticRevert=false] - Rethrow instead of falling back when the static
+ *   call reverts. A reverting static call means the transaction is guaranteed to fail on-chain,
+ *   so returning a default gas limit only broadcasts a doomed transaction and burns the gas.
+ *   Callers that can surface the failure to the user should opt in.
  * @returns {Promise<BigNumber>} - The calculated gas limit.
  */
 const getDynamicGas = async (
@@ -180,7 +184,8 @@ const getDynamicGas = async (
   methodName: string,
   args: unknown[],
   gasBufferPercentage: number = 20,
-  defaultGasLimit: BigNumber = BigNumber.from('250000')
+  defaultGasLimit: BigNumber = BigNumber.from('250000'),
+  throwOnStaticRevert: boolean = false
 ): Promise<BigNumber> => {
   const defaultGasMessage = `Default Estimated gas limit for ${methodName}: ${defaultGasLimit.toString()}`;
 
@@ -217,11 +222,21 @@ const getDynamicGas = async (
         return gasWithBuffer;
       } catch (staticError) {
         Logger.warn('getDynamicGas', `Static call also failed for ${methodName}:`, staticError);
+
+        if (throwOnStaticRevert) {
+          const reason =
+            (staticError as { errorName?: string; reason?: string })?.errorName ??
+            (staticError as { reason?: string })?.reason ??
+            (staticError instanceof Error ? staticError.message : 'Unknown error');
+          throw new Error(`${methodName} would revert on-chain: ${reason}`);
+        }
+
         Logger.debug('getDynamicGas', defaultGasMessage);
         return defaultGasLimit;
       }
     }
   } catch (error) {
+    if (throwOnStaticRevert) throw error;
     Logger.warn('getDynamicGas', `Gas estimation completely failed for ${methodName}:`, error);
     Logger.debug('getDynamicGas', defaultGasMessage);
     return defaultGasLimit;

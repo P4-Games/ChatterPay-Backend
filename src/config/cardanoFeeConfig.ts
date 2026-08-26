@@ -11,12 +11,12 @@
  * They are modelled as two settings rather than as one enum of named plans, because they are
  * genuinely independent and every combination is meaningful:
  *
- * | `CARDANO_SPONSOR_FEES` | `CARDANO_TRANSFER_FEE_USD` | resultado                          |
+ * | `CARDANO_SPONSOR_FEES` | `CARDANO_TRANSFER_FEE_USD` | result                             |
  * |---|---|---|
- * | false | 0    | el usuario paga la red, no se le cobra nada                     |
- * | false | 0.08 | el usuario paga la red; sin sponsor no se le cobra fee           |
- * | true  | 0.08 | ChatterPay paga la red y le descuenta el fee del monto enviado   |
- * | true  | 0    | ChatterPay paga la red y no cobra nada                          |
+ * | false | 0    | the user pays the network, nothing is charged on top            |
+ * | false | 0.08 | the user pays the network; with no sponsor, no fee is charged   |
+ * | true  | 0.08 | ChatterPay pays the network and deducts its fee from the amount |
+ * | true  | 0    | ChatterPay pays the network and charges nothing                 |
  *
  * The settings themselves are read by `constants.ts`, the only module that touches the environment.
  * What is left here is the decision the two of them add up to.
