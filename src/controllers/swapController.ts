@@ -10,7 +10,7 @@ import { delaySeconds } from '../helpers/timeHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { NotificationEnum } from '../models/templateModel';
 import type { IUser, IUserWallet } from '../models/userModel';
-import { getTokenPrices, buildTokenAddressMap } from '../services/balanceService';
+import { buildTokenAddressMap, getTokenPrices } from '../services/balanceService';
 import {
   checkBlockchainConditions,
   getSwapTokensData,

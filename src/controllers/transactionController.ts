@@ -18,8 +18,8 @@ import type { IToken } from '../models/tokenModel';
 import Transaction, { type ITransaction } from '../models/transactionModel';
 import type { IUser, IUserWallet } from '../models/userModel';
 import {
-  getTokenPrices,
   buildTokenAddressMap,
+  getTokenPrices,
   verifyWalletBalanceInRpc
 } from '../services/balanceService';
 import {
