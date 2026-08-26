@@ -13,6 +13,7 @@ import {
   getOrCreateCardanoWallet
 } from '../../../src/services/cardano/cardanoWalletService';
 import { FakeCardanoProvider } from '../../helpers/fakeCardanoProvider';
+import { resetCardanoUtxoClaims } from '../../support/cardanoClaims';
 import { enableCardanoPreprod, setCardanoEnv } from '../../support/cardanoEnv';
 
 vi.mock('../../../src/helpers/envHelper', async (importOriginal) => {
@@ -102,6 +103,7 @@ beforeEach(async () => {
   enableCardanoPreprod();
   provider = new FakeCardanoProvider();
   await seedTokens();
+  await resetCardanoUtxoClaims();
 });
 
 describe('cardanoWalletService - provisioning', () => {
