@@ -31,6 +31,7 @@ import {
   logCardanoProviderError
 } from './cardanoProviderService';
 import { cardanoSignerService } from './cardanoSignerService';
+import { leaseSponsorUtxos, releaseSponsorUtxos } from './cardanoSponsorUtxoService';
 import {
   assetBalance,
   buildCardanoTransfer,
@@ -107,6 +108,20 @@ export interface CardanoTransferResult {
  */
 const PROVIDER_UNREACHABLE =
   'No pudimos contactar la red de Cardano. Probá de nuevo en unos minutos.';
+
+/** What the user is told when ChatterPay cannot cover the fee right now. */
+const SPONSOR_UNAVAILABLE =
+  'No pudimos procesar la transferencia en este momento. Probá de nuevo en unos minutos.';
+
+/**
+ * Lovelace a sponsor claim has to add up to.
+ *
+ * A ceiling on the network fee rather than the fee itself, which is not known until the
+ * transaction has been built: claiming has to happen first, or the claim is not what decides who
+ * spends the output. Generous enough that no ordinary transfer outgrows it, small enough that one
+ * output usually satisfies it and the rest stay free for other transfers.
+ */
+const SPONSOR_LEASE_COVER = 2_000_000n;
 
 /** What the user is told when the failure is one nobody anticipated. */
 const TRANSFER_FAILED = 'No pudimos completar la transferencia. Probá de nuevo en unos minutos.';
@@ -206,6 +221,9 @@ export async function executeCardanoTransfer(
   } = input;
 
   let account: CardanoAccount | undefined;
+  // Held outside the try so the claims are given back on every path out, including the ones that
+  // throw before a transaction exists.
+  let sponsorLease: string[] = [];
 
   try {
     // A real bech32 decode rather than a prefix test: `addr1…` and `addr_test1…` are alike enough
@@ -271,17 +289,40 @@ export async function executeCardanoTransfer(
     const sponsorAccount = feeConfig.sponsorNetworkFee
       ? cardanoSignerService.getSponsorAccount(feeConfig.sponsorWalletId, network, chainId)
       : null;
-    const sponsorUtxos = sponsorAccount
+    let sponsorUtxos: readonly CardanoUtxo[] = sponsorAccount
       ? await provider.confirmedUtxosFor(sponsorAccount.address, depositConfirmations)
       : [];
 
     if (sponsorAccount && spendableBalance(sponsorUtxos) === 0n) {
       // Refused rather than silently falling back to charging the user: a deployment that promised
       // to cover the fee and then takes it from the sender is worse than one that never promised.
-      throw new CardanoTransferRefusal(
-        'CARDANO_SPONSOR_WALLET_EMPTY',
-        `the sponsor wallet ${sponsorAccount.address} holds no spendable ADA`
+      // The address stays in the log: naming it here would hand every user the operational wallet
+      // and announce that it is empty.
+      Logger.error(
+        'cardanoTransfer',
+        logKey,
+        `CARDANO_SPONSOR_WALLET_EMPTY: ${sponsorAccount.address} holds no spendable ADA`
       );
+      throw new CardanoTransferRefusal('CARDANO_SPONSOR_WALLET_EMPTY', SPONSOR_UNAVAILABLE);
+    }
+
+    // Claimed before building, so two transfers in flight do not both plan to spend the same
+    // output. Without this the second one is rejected by the chain, and its sponsor change is not
+    // spendable again for `depositConfirmations` blocks — which is how sponsoring stops working
+    // under exactly the traffic it was built for.
+    if (sponsorAccount) {
+      const lease = await leaseSponsorUtxos(sponsorUtxos, SPONSOR_LEASE_COVER, logKey);
+      if (lease.utxos.length === 0) {
+        Logger.error(
+          'cardanoTransfer',
+          logKey,
+          `CARDANO_SPONSOR_WALLET_BUSY: no unclaimed output of ${sponsorAccount.address} covers ` +
+            `${SPONSOR_LEASE_COVER} lovelace`
+        );
+        throw new CardanoTransferRefusal('CARDANO_SPONSOR_WALLET_BUSY', SPONSOR_UNAVAILABLE);
+      }
+      sponsorLease = lease.outpoints;
+      sponsorUtxos = lease.utxos;
     }
 
     // Fee collection: check if the accumulated ChatterPay fee is collectable.
@@ -410,5 +451,10 @@ export async function executeCardanoTransfer(
     return code && message.trim() !== code
       ? failure(code, message)
       : failure(code || 'CARDANO_UNEXPECTED_ERROR', TRANSFER_FAILED);
+  } finally {
+    // Whatever happened, the sponsor's outputs stop being reserved. On the path that submitted, the
+    // chain has already consumed them and the claim only ever governed who got to try; on every
+    // other path they were never spent and the next transfer should have them at once.
+    await releaseSponsorUtxos(sponsorLease);
   }
 }

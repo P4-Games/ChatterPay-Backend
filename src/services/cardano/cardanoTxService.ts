@@ -469,6 +469,27 @@ function residualAssets(
  * @returns The selected outputs.
  * @throws Error `CARDANO_INSUFFICIENT_FUNDS` when everything spendable is not enough.
  */
+/**
+ * What the selection below would actually gather for a target.
+ *
+ * Exported because the pre-flight has to answer the same question this builder answers, and
+ * answering it against the *balance* instead of against the *selection* is how a transfer gets
+ * approved and then burns the remainder: coin selection stops as soon as it covers the target, so
+ * the change is whatever the chosen outputs leave over, not whatever the wallet holds.
+ *
+ * @param utxos - Everything the address holds, spendable or not.
+ * @param target - Lovelace the selection has to cover.
+ * @returns The lovelace the selection gathers, or `null` when it cannot reach the target.
+ */
+export function selectionTotalFor(utxos: readonly CardanoUtxo[], target: bigint): bigint | null {
+  let total = 0n;
+  for (const utxo of spendableUtxos(utxos)) {
+    total += utxo.lovelace;
+    if (total >= target) return total;
+  }
+  return null;
+}
+
 function selectFor(available: readonly CardanoUtxo[], target: bigint): CardanoUtxo[] {
   const selected: CardanoUtxo[] = [];
   let total = 0n;
@@ -602,16 +623,46 @@ function buildAdaTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
 
   let fee = feeForSize(0, parameters);
   for (let pass = 0; pass < MAX_FEE_PASSES; pass++) {
-    const selected = selectFor(available, sponsor ? senderOwes : senderOwes + fee);
-    const total = selected.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
+    const target = sponsor ? senderOwes : senderOwes + fee;
+    let selected = selectFor(available, target);
+    let total = selected.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
+    let change = total - target;
+
+    // Change below the floor is change the network takes as fee: the transfer succeeds and the
+    // sender is quietly short by up to a whole min-ADA. Coin selection stops as soon as it covers
+    // the target, so this is not a matter of the wallet being poor — it is one output's remainder
+    // landing in the gap. Pulling one more output is what a wallet does about it, and it is only
+    // when there is nothing left to pull that the transfer has to be refused.
+    const floor = minimumAdaForOutput(
+      encodeOutput(plan.changeAddress, change),
+      parameters.coinsPerUtxoByte
+    );
+    if (change > 0n && change < floor) {
+      let widened: CardanoUtxo[];
+      try {
+        widened = selectFor(available, target + floor);
+      } catch {
+        throw new Error(
+          `CARDANO_CHANGE_WOULD_BE_BURNED: ${change} lovelace of change is below the ${floor} ` +
+            `an output must hold, and there is nothing further to select`
+        );
+      }
+      selected = widened;
+      total = selected.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
+      change = total - target;
+    }
 
     const sponsorSelected = sponsor ? selectFor(sponsorAvailable, fee) : [];
     const sponsorTotal = sponsorSelected.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
 
-    let change = sponsor ? total - senderOwes : total - senderOwes - fee;
     const changeOutput = encodeOutput(plan.changeAddress, change);
     const keepsChange =
       change > 0n && change >= minimumAdaForOutput(changeOutput, parameters.coinsPerUtxoByte);
+    if (!keepsChange && change > 0n) {
+      throw new Error(
+        `CARDANO_CHANGE_WOULD_BE_BURNED: ${change} lovelace is below the minimum an output may hold`
+      );
+    }
     if (!keepsChange) change = 0n;
 
     let sponsorChange = sponsor ? sponsorTotal - fee : 0n;
@@ -797,7 +848,7 @@ function buildAssetTransfer(
       // What the sender owes: the ADA attached to the token output, plus the fee being collected.
       // The network fee is on this list only when nobody is sponsoring it.
       const senderOwes = attached + collected + (sponsor ? 0n : fee);
-      let change = inputAda - senderOwes;
+      const change = inputAda - senderOwes;
       if (change < 0n) {
         shortfall = `CARDANO_INSUFFICIENT_FUNDS: ${inputAda} lovelace available, need at least ${senderOwes}`;
         needsMoreAda = true;
@@ -818,9 +869,17 @@ function buildAssetTransfer(
           break;
         }
         keepsChange = true;
+      } else if (change > 0n && change < minimumChange) {
+        // The same gap the ADA path guards: a remainder too small to stand as its own output is a
+        // remainder the network keeps. Asking for more ADA pulls another input in, which is what
+        // closes it; running out of inputs ends the loop with the shortfall below.
+        shortfall =
+          `CARDANO_INSUFFICIENT_FUNDS: change of ${change} lovelace is below the ${minimumChange} ` +
+          `an output must hold, and would be lost to the network as fee`;
+        needsMoreAda = true;
+        break;
       } else {
-        keepsChange = change > 0n && change >= minimumChange;
-        if (!keepsChange) change = 0n;
+        keepsChange = change > 0n;
       }
 
       let sponsorChange = sponsor ? sponsorTotal - fee : 0n;

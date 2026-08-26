@@ -13,12 +13,12 @@
  */
 
 import { getCardanoConfig } from '../../config/cardanoConfig';
-import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
+import { getPhoneNumberFormatted, getPhoneNumberVariants } from '../../helpers/formatHelper';
 import { Logger } from '../../helpers/loggerHelper';
 import { type IUser, type IUserWallet, UserModel } from '../../models/userModel';
 import type { CardanoAccount } from '../../types/cardanoType';
 import { getUserWalletByChainId } from '../userService';
-import { cardanoSignerService, derivationFingerprint } from './cardanoSignerService';
+import { cardanoSignerService } from './cardanoSignerService';
 
 /** A user's Cardano wallet, as the rest of the code needs it. */
 export interface CardanoWallet {
@@ -94,7 +94,7 @@ export async function ensureCardanoWalletForUser(user: IUser): Promise<CardanoWa
       Logger.error(
         'ensureCardanoWalletForUser',
         `CARDANO_ADDRESS_MISMATCH: stored ${existing.wallet_proxy}, derived ${account.address}, ` +
-          `inputs ${derivationFingerprint()} network(${network}) chainId(${chainId})`
+          `network(${network}) chainId(${chainId})`
       );
       throw new Error('CARDANO_ADDRESS_MISMATCH');
     }
@@ -143,7 +143,14 @@ export async function getOrCreateCardanoWallet(
   phoneNumber: string
 ): Promise<{ user: IUser; wallet: CardanoWallet }> {
   const formatted = getPhoneNumberFormatted(phoneNumber);
-  let user = await UserModel.findOne({ phone_number: formatted });
+  // Matched across the country's spellings of the same number, not against the digits as typed.
+  // Argentina writes a mobile with and without the `9` after the country code, and both reach the
+  // same person — `areSamePhoneNumber` already knows that, which is why sending to yourself is
+  // caught either way. Looking up an exact string here meant the other spelling found no user,
+  // created a second one, and paid a wallet derived from a number nobody is registered under. The
+  // recipient never sees it and only an operator can get it back.
+  const variants = await getPhoneNumberVariants(formatted);
+  let user = await UserModel.findOne({ phone_number: { $in: variants } });
 
   if (!user) {
     const { chainId } = getCardanoConfig();

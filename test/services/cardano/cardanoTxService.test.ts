@@ -69,9 +69,11 @@ describe('cardanoTxService - the balance invariant', () => {
     for (const [funds, amount] of [
       [[15_000_000n], 2_000_000n],
       [[15_000_000n], 5_000_000n],
-      [[3_000_000n], 2_000_000n],
       [[5_000_000n, 5_000_000n], 8_000_000n],
-      [[1_200_000n, 1_200_000n, 1_200_000n], 2_000_000n]
+      [[1_200_000n, 1_200_000n, 1_200_000n], 2_000_000n],
+      // The shape that used to burn: selection covers the amount with one output and leaves a
+      // remainder inside the dust window. The second output has to come in for it to survive.
+      [[10_000_000n, 10_000_000n], 9_500_000n]
     ] as const) {
       const built = buildCardanoTransfer(
         plan(
@@ -110,15 +112,26 @@ describe('cardanoTxService - fee', () => {
 });
 
 describe('cardanoTxService - change', () => {
-  it('sends dust change to the fee instead of creating an output the ledger would reject', () => {
-    // 3 ADA in, 2 ADA out: the ~0.83 ADA left over is below the min-ADA of an output, so it cannot
-    // be its own UTxO, and it is already spent as an input. It lands in the fee — reported, never
-    // silent.
-    const built = buildCardanoTransfer(plan([utxo(3_000_000n)], 2_000_000n));
-    expect(built.change).toBe(0n);
-    expect(built.fee).toBe(1_000_000n);
-    expect(built.inputs.reduce((s, i) => s + i.lovelace, 0n)).toBe(
-      2_000_000n + built.fee + built.change
+  it('pulls another input rather than letting the remainder go to the fee', () => {
+    // Two outputs of 10 ADA, sending 9.5: selection covers the amount with the first one and leaves
+    // ~0.33 ADA, which is inside the dust window. Absorbing it means the sender pays half an ADA of
+    // "fee" nobody quoted them — and on a sponsored transfer, one they were told was covered. The
+    // second output comes in instead, and the remainder survives as change.
+    const built = buildCardanoTransfer(
+      plan([utxo(10_000_000n, 0), utxo(10_000_000n, 1)], 9_500_000n)
+    );
+    expect(built.inputs).toHaveLength(2);
+    expect(built.change).toBeGreaterThan(849_070n);
+    // The fee is the network's price for the bytes, not a hiding place for the remainder.
+    expect(built.fee).toBeLessThan(200_000n);
+  });
+
+  it('refuses when the remainder would be lost and there is nothing left to select', () => {
+    // 3 ADA in, 2 ADA out, one output: the ~0.84 ADA left cannot be its own UTxO and there is no
+    // second output to pull. Refused rather than absorbed — the pre-flight turns this into a
+    // message naming the two amounts that do work, before the operation starts.
+    expect(() => buildCardanoTransfer(plan([utxo(3_000_000n)], 2_000_000n))).toThrow(
+      /CARDANO_CHANGE_WOULD_BE_BURNED/
     );
   });
 

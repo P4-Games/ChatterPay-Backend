@@ -17,7 +17,12 @@ import type {
   CardanoProtocolParameters,
   CardanoUtxo
 } from '../../types/cardanoType';
-import { minimumAdaFor, spendableBalance, totalAssets } from './cardanoTxService';
+import {
+  minimumAdaFor,
+  selectionTotalFor,
+  spendableBalance,
+  totalAssets
+} from './cardanoTxService';
 
 /** A fee estimate good enough to validate against, in lovelace. */
 const FEE_ESTIMATE = 200_000n;
@@ -89,9 +94,15 @@ export function adaTransferRequirement(
   // The dust window: what is left would be too small to be its own UTxO, so the network absorbs it
   // as fee. The user does not lose the transfer, they lose the remainder — which is worse, because
   // it succeeds and they only notice afterwards.
-  const change = held - required;
+  //
+  // Measured against what coin selection will actually gather, not against the balance. Selection
+  // stops as soon as it covers the target, so a wallet holding ten spendable outputs may well hand
+  // the builder one of them — and the change that gets burned is that one output's remainder, not
+  // the wallet's. Checking the balance here is why this window went undetected.
+  const selected = selectionTotalFor(utxos, required);
+  const change = (selected ?? held) - required;
   if (change > 0n && change < minOutput) {
-    const maxKeepingChange = held - fee - minOutput;
+    const maxKeepingChange = (selected ?? held) - fee - minOutput;
     return {
       ok: false,
       requiredLovelace: required,
