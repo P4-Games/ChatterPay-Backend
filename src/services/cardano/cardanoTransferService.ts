@@ -24,25 +24,46 @@ import type {
   CardanoUtxo
 } from '../../types/cardanoType';
 import { decodeCardanoAddress } from './cardanoAddressService';
-import { accumulateFee, clearFeeDebt, getFeeDebt } from './cardanoFeeDebtService';
+import { chatterPayFeeUnits } from './cardanoFeeService';
 import {
   type CardanoProvider,
   CardanoProviderError,
   logCardanoProviderError
 } from './cardanoProviderService';
 import { cardanoSignerService } from './cardanoSignerService';
-import { leaseSponsorUtxos, releaseSponsorUtxos } from './cardanoSponsorUtxoService';
 import {
   assetBalance,
   buildCardanoTransfer,
   encodeSignedTransaction,
+  selectableBalance,
   spendableBalance
 } from './cardanoTxService';
+import {
+  claimUtxos,
+  forgetPendingChange,
+  outpointOf,
+  ownTransactionsAmong,
+  pendingChangeFor,
+  recordOwnTransaction,
+  recordPendingChange,
+  releaseUtxos,
+  unclaimedUtxos
+} from './cardanoUtxoClaimService';
 
 /** Everything a transfer needs to be attempted. */
 export interface CardanoTransferInput {
   /** Phone number of the sender: the identity the signing key derives from. */
   fromPhoneNumber: string;
+  /**
+   * Ticker of what is moving — `ADA`, or the token's symbol.
+   *
+   * Here to price ChatterPay's fee, which is charged in whatever is being sent rather than always
+   * in ADA. Required rather than defaulted: a caller that forgets it would silently move the charge
+   * onto the wrong asset.
+   */
+  tokenSymbol: string;
+  /** Decimals that ticker carries. */
+  tokenDecimals: number;
   /** Bech32 destination address. */
   toAddress: string;
   /**
@@ -92,8 +113,13 @@ export interface CardanoTransferResult {
   sentLovelace: bigint;
   /** Explorer link to the transaction. Empty when nothing was submitted. */
   explorerUrl: string;
-  /** ChatterPay fee collected from the sender in this transaction, in lovelace. */
-  feeCollectedLovelace: bigint;
+  /**
+   * ChatterPay's fee for this transfer, **in the units of whatever moved**.
+   *
+   * Deducted from the amount, so the destination received the amount less this. Zero when nothing
+   * was charged.
+   */
+  chatterPayFee: bigint;
   /** Machine-readable failure code, empty on success. */
   errorCode: string;
   /** Human-readable failure detail, empty on success. */
@@ -119,14 +145,12 @@ export const SPONSOR_UNAVAILABLE =
   'We could not process the transfer right now. Please try again in a few minutes.';
 
 /**
- * Lovelace a sponsor claim has to add up to.
+ * What the user is told when another transfer got to the outputs first.
  *
- * A ceiling on the network fee rather than the fee itself, which is not known until the
- * transaction has been built: claiming has to happen first, or the claim is not what decides who
- * spends the output. Generous enough that no ordinary transfer outgrows it, small enough that one
- * output usually satisfies it and the rest stay free for other transfers.
+ * Worth its own sentence rather than the generic failure: this one clears by itself in seconds, and
+ * telling somebody to try again in a moment is true here in a way it is not for the rest.
  */
-const SPONSOR_LEASE_COVER = 2_000_000n;
+const TRANSFER_BUSY = 'Another transfer of yours is still settling. Try again in a few seconds.';
 
 /** What the user is told when the failure is one nobody anticipated. */
 const TRANSFER_FAILED = 'We could not complete the transfer. Please try again in a few minutes.';
@@ -148,7 +172,7 @@ function failure(code: string, message: string): CardanoTransferResult {
     transactionHash: '',
     feeLovelace: 0n,
     sentLovelace: 0n,
-    feeCollectedLovelace: 0n,
+    chatterPayFee: 0n,
     explorerUrl: '',
     errorCode: code,
     error: message
@@ -203,6 +227,80 @@ async function submitResolvingTimeout(
 }
 
 /**
+ * Everything the sponsor can spend right now.
+ *
+ * The provider's answer plus the change of transactions already submitted, which it cannot report
+ * yet. Deduplicated by outpoint so an output that has since been indexed appears once, with the
+ * provider's version winning.
+ *
+ * @param provider - Provider to read from.
+ * @param address - The sponsor's address.
+ * @returns Outputs available to fund a fee.
+ */
+async function sponsorHoldings(provider: CardanoProvider, address: string): Promise<CardanoUtxo[]> {
+  const held = await provider.utxosFor(address);
+  return [...held, ...(await spendablePendingChange(provider, address, held))];
+}
+
+/**
+ * Pending change that is still worth offering.
+ *
+ * A pending output is only a promise until the chain has it, and the promise expires in two ways.
+ * The obvious one is that the transaction never landed. The other is that the output landed and was
+ * then spent by something outside this flow, which leaves the record describing an outpoint that no
+ * longer exists — and spending an input that does not exist is rejected outright.
+ *
+ * Both are the same question: has the transaction reached a block yet? If it has, then whatever the
+ * provider reports about that address is the truth, and an output missing from it is one that has
+ * been spent. If it has not -- unknown, or known with no confirmations, which is a mempool and not a
+ * block -- the transaction is still in flight and its change is the best information available.
+ *
+ * The distinction between "known" and "in a block" is the whole of it: an indexer cannot list an
+ * output whose transaction it has not indexed, so treating a mempool sighting as proof would discard
+ * every promise the moment it was made.
+ *
+ * @param provider - Provider to ask.
+ * @param address - The address whose pending change is being weighed.
+ * @param held - What the provider reports the address holds right now.
+ * @returns The pending outputs that are still plausible, with the rest forgotten.
+ */
+async function spendablePendingChange(
+  provider: CardanoProvider,
+  address: string,
+  held: readonly CardanoUtxo[]
+): Promise<CardanoUtxo[]> {
+  const pending = await pendingChangeFor(address);
+  if (pending.length === 0) return [];
+
+  const seen = new Set(held.map(outpointOf));
+  const usable: CardanoUtxo[] = [];
+  const stale: string[] = [];
+
+  for (const utxo of pending) {
+    // Already reported by the provider: the record has served its purpose and the real one wins.
+    if (seen.has(outpointOf(utxo))) {
+      stale.push(outpointOf(utxo));
+      continue;
+    }
+    let inABlock = false;
+    try {
+      const status = await provider.statusOf(utxo.txHash);
+      inABlock = status.known && status.confirmations >= 1;
+    } catch {
+      // Unreachable provider is not evidence either way. Keeping the output is the safer guess: it
+      // was promised by a transaction this deployment submitted.
+      usable.push(utxo);
+      continue;
+    }
+    if (inABlock) stale.push(outpointOf(utxo));
+    else usable.push(utxo);
+  }
+
+  await forgetPendingChange(stale);
+  return usable;
+}
+
+/**
  * Sends ADA from a user's derived address to a Cardano destination.
  *
  * @param input - Sender, destination, amount and the chain settings to use.
@@ -226,9 +324,14 @@ export async function executeCardanoTransfer(
   } = input;
 
   let account: CardanoAccount | undefined;
-  // Held outside the try so the claims are given back on every path out, including the ones that
-  // throw before a transaction exists.
-  let sponsorLease: string[] = [];
+  // Held outside the try so the claims can be given back on the paths that end without a
+  // transaction on chain. On the paths that do reach the chain they must stay: see the `finally`.
+  let claimed: string[] = [];
+  let reachedChain = false;
+  let outcomeUnknown = false;
+  // Inputs that were promises rather than outputs the provider had confirmed. If the chain refuses
+  // this transaction, they are the first thing to doubt.
+  let promisedInputs: string[] = [];
 
   try {
     // A real bech32 decode rather than a prefix test: `addr1…` and `addr_test1…` are alike enough
@@ -256,10 +359,39 @@ export async function executeCardanoTransfer(
       );
     }
 
-    const [parameters, tip, utxos] = await Promise.all([
+    // Two reads of the same address, because "what the sender can spend" is not a question the
+    // provider answers on its own. The confirmed set is the rule for money that arrived from
+    // outside: a deposit is not credited until a rollback can no longer take it back. But that rule
+    // also hides the change of the transfer this user made a moment ago, which is not a deposit and
+    // cannot roll back independently of the transaction that produced it -- so a wallet would go
+    // unusable for a few blocks after every transfer.
+    //
+    // What is added back is exactly that: outputs of transactions this deployment submitted. What
+    // is taken away is anything already claimed, which is what a spend that the provider has not
+    // indexed yet looks like from here.
+    const [parameters, tip, confirmed, everything] = await Promise.all([
       provider.protocolParameters(),
       provider.tip(),
-      provider.confirmedUtxosFor(account.address, depositConfirmations)
+      provider.confirmedUtxosFor(account.address, depositConfirmations),
+      provider.utxosFor(account.address)
+    ]);
+    const confirmedOutpoints = new Set(confirmed.map(outpointOf));
+    const unconfirmed = everything.filter((utxo) => !confirmedOutpoints.has(outpointOf(utxo)));
+    const ownTransactions = await ownTransactionsAmong(unconfirmed);
+
+    // Change of transactions submitted so recently that the provider reports nothing at all about
+    // them. Merged in rather than waited for: a wallet that just spent everything it had holds its
+    // whole balance in an output no query can see yet, and telling its owner they have no funds is
+    // false. Anything the provider does report wins, so an output appears once.
+    const pending = await spendablePendingChange(provider, account.address, everything);
+
+    // A union rather than a filter over one of the sets: each is spendable on its own terms, and
+    // making one conditional on another would tie this to one provider's idea of consistency
+    // between two calls.
+    const utxos = await unclaimedUtxos([
+      ...confirmed,
+      ...unconfirmed.filter((utxo) => ownTransactions.has(utxo.txHash)),
+      ...pending
     ]);
 
     if (input.asset) {
@@ -275,7 +407,7 @@ export async function executeCardanoTransfer(
         );
       }
     } else {
-      const available: bigint = spendableBalance(utxos);
+      const available: bigint = selectableBalance(utxos);
       if (available < amountLovelace) {
         // The address is part of the message on purpose: funding it is the only remedy, and burying
         // it in a log turns a self-serve fix into a support ticket.
@@ -294,22 +426,17 @@ export async function executeCardanoTransfer(
     const sponsorAccount = feeConfig.sponsorNetworkFee
       ? cardanoSignerService.getSponsorAccount(feeConfig.sponsorWalletId, network, chainId)
       : null;
-    // Read without waiting for confirmations, unlike the sender's outputs above. `depositConfirmations`
-    // exists so a deposit somebody else made is not credited before a rollback can still take it
-    // away -- it is a rule about money arriving from outside. The sponsor's own change is not that:
-    // it is an output of a transaction this deployment built, signed and submitted moments ago.
-    //
-    // Requiring three blocks here made the sponsor unusable for a minute or two after every single
-    // transfer, because it spends its whole balance and gets the remainder back as a fresh output.
-    // With one UTxO in the wallet that is a hard outage between consecutive transfers; the operator
-    // sees a funded address and the caller is told ChatterPay cannot cover the fee.
+    // Read without waiting for confirmations, unlike the sender's deposits. Everything the sponsor
+    // holds it produced itself -- it is funded once and then spends and re-receives its own change
+    // -- so the confirmation rule, which exists to keep somebody else's deposit from being credited
+    // before a rollback could take it away, has nothing to protect here. Requiring it made the
+    // sponsor unusable for a minute or two after every transfer.
     //
     // Spending an unconfirmed output is how Cardano chains transactions, and the failure mode is
     // benign: if the parent never reaches the chain, the child spends an input that does not exist
-    // and is rejected outright. Nothing is lost and nothing is double-spent -- the transfer fails
-    // before it is reported as done, which is the same outcome as refusing it here.
-    let sponsorUtxos: readonly CardanoUtxo[] = sponsorAccount
-      ? await provider.utxosFor(sponsorAccount.address)
+    // and is rejected outright. Nothing is lost and nothing is double-spent.
+    const sponsorUtxos: readonly CardanoUtxo[] = sponsorAccount
+      ? await unclaimedUtxos(await sponsorHoldings(provider, sponsorAccount.address))
       : [];
 
     if (sponsorAccount && spendableBalance(sponsorUtxos) === 0n) {
@@ -325,28 +452,13 @@ export async function executeCardanoTransfer(
       throw new CardanoTransferRefusal('CARDANO_SPONSOR_WALLET_EMPTY', SPONSOR_UNAVAILABLE);
     }
 
-    // Claimed before building, so two transfers in flight do not both plan to spend the same
-    // output. Without this the second one is rejected by the chain — and a rejected transfer is one
-    // the caller was already told was on its way, which is how sponsoring stops working under
-    // exactly the traffic it was built for. A wallet holding several outputs is what lets the claim
-    // hand a different one to each transfer; with a single output they still queue.
-    if (sponsorAccount) {
-      const lease = await leaseSponsorUtxos(sponsorUtxos, SPONSOR_LEASE_COVER, logKey);
-      if (lease.utxos.length === 0) {
-        Logger.error(
-          'cardanoTransfer',
-          logKey,
-          `CARDANO_SPONSOR_WALLET_BUSY: no unclaimed output of ${sponsorAccount.address} covers ` +
-            `${SPONSOR_LEASE_COVER} lovelace`
-        );
-        throw new CardanoTransferRefusal('CARDANO_SPONSOR_WALLET_BUSY', SPONSOR_UNAVAILABLE);
-      }
-      sponsorLease = lease.outpoints;
-      sponsorUtxos = lease.utxos;
-    }
-
-    // Fee collection: check if the accumulated ChatterPay fee is collectable.
-    const currentDebt = chargesTransferFee(feeConfig) ? await getFeeDebt(fromPhoneNumber) : 0n;
+    // ChatterPay's fee, priced in whatever is moving and taken out of the amount. It needs a
+    // sponsor: the fee rides in the sponsor's change output, and without one there is no output to
+    // ride in — a deployment that is not sponsoring is not charging either.
+    const chatterPayFee =
+      sponsorAccount && chargesTransferFee(feeConfig)
+        ? await chatterPayFeeUnits(feeConfig.transferFeeUsd, input.tokenSymbol, input.tokenDecimals)
+        : 0n;
 
     const built = buildCardanoTransfer({
       utxos,
@@ -354,7 +466,7 @@ export async function executeCardanoTransfer(
       changeAddress: account.addressBytes,
       amount: amountLovelace,
       asset: input.asset,
-      feeCollectionLovelace: currentDebt > 0n ? currentDebt : undefined,
+      chatterPayFee,
       sponsor: sponsorAccount
         ? { utxos: sponsorUtxos, changeAddress: sponsorAccount.addressBytes }
         : undefined,
@@ -377,8 +489,9 @@ export async function executeCardanoTransfer(
     // residue that must exist and must not be negative. Asserted here, where refusing is still
     // free: a transaction that does not balance is one the chain rejects, and finding that out from
     // the provider costs a signature.
-    const collected = built.feeCollected ?? 0n;
-    const sponsorChange = consumed - built.sentLovelace - collected - built.fee - built.change;
+    // ChatterPay's fee is not subtracted here: on an ADA transfer it is already inside the sponsor's
+    // change, and on a token transfer it is not lovelace at all.
+    const sponsorChange = consumed - built.sentLovelace - built.fee - built.change;
     const balances = sponsorAccount ? sponsorChange >= 0n : sponsorChange === 0n;
     if (!balances) {
       throw new CardanoTransferRefusal(
@@ -394,6 +507,27 @@ export async function executeCardanoTransfer(
       `Built ${built.transactionId}: ${built.inputs.length} input(s), fee ${built.fee}, ` +
         `change ${built.change}, ttl ${built.ttlSlot}`
     );
+
+    // Claimed now, because now is when the inputs are known: coin selection needs the amount and the
+    // fee to decide, and both come out of the build. From here on those outputs belong to this
+    // transaction -- the provider will keep offering them until it indexes the spend, and the claim
+    // is what stops the next transfer from building around the very same ones.
+    //
+    // A claim that loses means another transfer got there first. Nothing has been signed, so this
+    // costs nothing to refuse, and the retry will select around the outputs now taken.
+    const promised = new Set([...pending, ...sponsorUtxos].map(outpointOf));
+    promisedInputs = built.inputs.map(outpointOf).filter((outpoint) => promised.has(outpoint));
+
+    const claim = await claimUtxos(built.inputs, logKey);
+    if (!claim) {
+      Logger.warn(
+        'cardanoTransfer',
+        logKey,
+        `CARDANO_UTXO_BUSY: another transfer claimed one of ${built.inputs.length} input(s)`
+      );
+      throw new CardanoTransferRefusal('CARDANO_UTXO_BUSY', TRANSFER_BUSY);
+    }
+    claimed = claim;
 
     // Past this line the transaction exists as an authorised object. Everything above could refuse
     // for free; nothing below can.
@@ -424,30 +558,74 @@ export async function executeCardanoTransfer(
       logKey
     );
 
+    reachedChain = true;
+    // Recorded so the change this transaction is about to create can be spent by the next transfer
+    // without waiting for confirmations. Without it a wallet that just paid cannot pay again for
+    // several blocks, which is the same outage the claim above exists to prevent, arriving from the
+    // other side. Two records, because the change goes through two stages of invisibility: first
+    // the provider knows nothing of it (the pending output covers that), then it reports it with no
+    // confirmations (the transaction id covers that).
+    await recordOwnTransaction(transactionHash, logKey);
+    if (built.changeIndex !== undefined && built.change > 0n) {
+      await recordPendingChange(
+        {
+          txHash: transactionHash,
+          outputIndex: built.changeIndex,
+          lovelace: built.change,
+          holdsOtherAssets: built.changeAssets.length > 0,
+          assets: [...built.changeAssets]
+        },
+        account.address,
+        logKey
+      );
+    }
+    // The sponsor needs this more than anyone: it is one wallet behind every transfer, so its change
+    // is unindexed exactly when the next transfer comes looking for it. Without this it funds one
+    // transfer and then reports itself empty while holding the entire balance.
+    if (sponsorAccount && built.sponsorChangeIndex !== undefined && sponsorChange > 0n) {
+      await recordPendingChange(
+        {
+          txHash: transactionHash,
+          outputIndex: built.sponsorChangeIndex,
+          lovelace: sponsorChange,
+          holdsOtherAssets: false
+        },
+        sponsorAccount.address,
+        logKey
+      );
+    }
+
     Logger.info(
       'cardanoTransfer',
       logKey,
-      `Submitted ${transactionHash}, fee ${built.fee} lovelace` +
-        (collected > 0n ? `, collected ${collected} lovelace ChatterPay fee` : '')
+      `Submitted ${transactionHash}, network fee ${built.fee} lovelace` +
+        (built.chatterPayFee > 0n
+          ? `, ChatterPay fee ${built.chatterPayFee} ${input.tokenSymbol} base units`
+          : '')
     );
-
-    // Fee bookkeeping: clear collected debt, then accumulate the new fee for this transfer.
-    if (chargesTransferFee(feeConfig)) {
-      if (collected > 0n) await clearFeeDebt(fromPhoneNumber);
-      await accumulateFee(fromPhoneNumber, feeConfig.transferFeeUsd);
-    }
 
     return {
       success: true,
       transactionHash,
       feeLovelace: built.fee,
       sentLovelace: built.sentLovelace,
-      feeCollectedLovelace: collected,
+      chatterPayFee: built.chatterPayFee,
       explorerUrl: `${explorerUrl}${transactionHash}`,
       errorCode: '',
       error: ''
     };
   } catch (error) {
+    // An undetermined submit is the one outcome where the claims must stand: the transaction may be
+    // in a mempool this process can no longer ask about, and handing its inputs to the next transfer
+    // would build a second transaction around outputs the first one is still about to spend.
+    if (error instanceof CardanoProviderError && error.undetermined) outcomeUnknown = true;
+    // The chain refused it outright. When the transaction was built on an output that had only been
+    // promised, the promise is the likeliest thing that was wrong -- the output may have been spent
+    // by something that never passed through the claim store, or its transaction never landed.
+    // Forgetting it keeps the next transfer from building on the same bad input over and over.
+    if (error instanceof CardanoProviderError && error.failure === 'rejected_by_chain') {
+      await forgetPendingChange(promisedInputs);
+    }
     if (error instanceof CardanoTransferRefusal) {
       // Refused before signing: an expected outcome of a user-supplied input, not an incident.
       Logger.info('cardanoTransfer', logKey, `${error.code}: ${error.message}`);
@@ -472,9 +650,12 @@ export async function executeCardanoTransfer(
       ? failure(code, message)
       : failure(code || 'CARDANO_UNEXPECTED_ERROR', TRANSFER_FAILED);
   } finally {
-    // Whatever happened, the sponsor's outputs stop being reserved. On the path that submitted, the
-    // chain has already consumed them and the claim only ever governed who got to try; on every
-    // other path they were never spent and the next transfer should have them at once.
-    await releaseSponsorUtxos(sponsorLease);
+    // Released only when the transaction provably did not happen. The instinct is to release on
+    // success too -- the chain consumed those outputs, so what is left to reserve? -- but that is
+    // exactly the window this exists for: the provider goes on offering them until it indexes the
+    // spend, and the next transfer would select the same ones and be rejected for spending inputs
+    // that are already gone. On success the claim expires on its own, by which time the provider
+    // has caught up and stopped offering them anyway.
+    if (!reachedChain && !outcomeUnknown) await releaseUtxos(claimed);
   }
 }

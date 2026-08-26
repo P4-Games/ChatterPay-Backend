@@ -170,144 +170,163 @@ describe('sponsoring a native-asset transfer', () => {
   });
 });
 
-describe('collecting the accumulated ChatterPay fee on a native-asset transfer', () => {
-  const DEBT = 1_200_000n;
+/** What came back to the sponsor: whatever the other outputs and the network fee did not claim. */
+function sponsorChangeOf(built: {
+  inputs: readonly CardanoUtxo[];
+  sentLovelace: bigint;
+  fee: bigint;
+  change: bigint;
+}): bigint {
+  const consumed = built.inputs.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
+  return consumed - built.sentLovelace - built.fee - built.change;
+}
 
-  it('pays the debt to the sponsor, on top of the ADA the token drags along', () => {
+/** Net ADA the sponsor is up on this transfer: what came back less what it put in. */
+function gainToSponsor(built: {
+  inputs: readonly CardanoUtxo[];
+  sentLovelace: bigint;
+  fee: bigint;
+  change: bigint;
+}): bigint {
+  const contributed = built.inputs
+    .filter((utxo) => utxo.txHash === SPONSOR_HASH)
+    .reduce((sum, utxo) => sum + utxo.lovelace, 0n);
+  return sponsorChangeOf(built) - contributed;
+}
+
+/** How many times a byte string appears in the body — one per output that carries it. */
+function occurrences(bodyBytes: Uint8Array, needle: Uint8Array): number {
+  const hay = Buffer.from(bodyBytes).toString('hex');
+  const pin = Buffer.from(needle).toString('hex');
+  return hay.split(pin).length - 1;
+}
+
+describe("charging ChatterPay's fee on an ADA transfer", () => {
+  /** Roughly USD 0.08 of ADA — and, deliberately, well under the ~0.97 min-ADA of an output. */
+  const FEE = 400_000n;
+
+  it('takes the fee out of the amount, so the sender is charged exactly what they asked to send', () => {
+    // The EVM contract does `transferAmount = amount - fee`. Matching it is what makes
+    // `amount - fee` mean the same thing on both chains — and what stops the sender's balance from
+    // dropping by more than the figure they typed.
     const built = buildCardanoTransfer(
-      tokenPlan([tokenUtxo(4_500_000n, [{ ...USDM, quantity: 100_000_000n }])], {
-        sponsor: sponsoring(),
-        feeCollectionLovelace: DEBT
-      })
+      adaPlan([adaUtxo(8_000_000n)], { sponsor: sponsoring(), chatterPayFee: FEE })
     );
 
-    expect(built.feeCollected).toBe(DEBT);
-    // The sender pays the attached ADA and the debt. The network fee is still the sponsor's.
-    expect(costToSender(built)).toBe(ATTACHED + DEBT);
-    expect(built.change).toBe(4_500_000n - ATTACHED - DEBT);
-  });
-
-  it('leaves the debt owed when it is below the min-ADA of its own output', () => {
-    // An output cannot hold less than min-ADA, so a small debt has nowhere to go yet. It stays owed
-    // rather than being written off, and is collected once it has grown enough.
-    const built = buildCardanoTransfer(
-      tokenPlan([tokenUtxo(4_500_000n, [{ ...USDM, quantity: 100_000_000n }])], {
-        sponsor: sponsoring(),
-        feeCollectionLovelace: 100_000n
-      })
-    );
-
-    expect(built.feeCollected).toBe(0n);
-    expect(costToSender(built)).toBe(ATTACHED);
-  });
-
-  it('collects nothing when there is no sponsor to collect into', () => {
-    const built = buildCardanoTransfer(
-      tokenPlan([tokenUtxo(4_500_000n, [{ ...USDM, quantity: 100_000_000n }])], {
-        feeCollectionLovelace: DEBT
-      })
-    );
-
-    expect(built.feeCollected).toBe(0n);
-  });
-});
-
-describe('deferring the accumulated fee rather than failing the transfer', () => {
-  // The debt has no deadline — that is the entire reason it accrues instead of being charged per
-  // transfer. So collecting it is opportunistic: it happens when it is free, and waits when it is
-  // not. These are the two ways it is not free.
-
-  /** min-ADA of the sender's change output when it carries the residual token. */
-  const CHANGE_FLOOR = minimumAdaFor(SENDER, [{ ...USDM, quantity: 70_000_000n }], 4310n);
-  /** min-ADA of a plain ADA-only change output back to the sender. */
-  const PLAIN_FLOOR = minimumAdaFor(SENDER, [], 4310n);
-
-  it('sends anyway when collecting the debt would leave the sender short', () => {
-    // The reported case: a wallet holding just enough ADA to carry the token and its residual, and
-    // a debt larger than what is left over. Collecting it made the whole transfer fail — the user
-    // was told they had no balance for a transfer they could plainly afford.
-    const barely = ATTACHED + CHANGE_FLOOR;
-    const plan = tokenPlan([tokenUtxo(barely, [{ ...USDM, quantity: 100_000_000n }])], {
-      sponsor: sponsoring(),
-      feeCollectionLovelace: 1_400_000n
-    });
-
-    const built = buildCardanoTransfer(plan);
-
-    expect(built.feeCollected).toBe(0n);
-    expect(built.sentLovelace).toBe(ATTACHED);
-    expect(costToSender(built)).toBe(ATTACHED);
-    expect(built.change).toBe(CHANGE_FLOOR);
-  });
-
-  it('waits rather than burning the change it would have to destroy to collect', () => {
-    // Change under min-ADA cannot be an output, so the ledger absorbs it into the fee. Collecting
-    // a 1.2 ADA debt by silently destroying 0.85 ADA of the sender's own money is a worse outcome
-    // than collecting nothing, and the sender would only find out by reading the transaction.
-    const leftover = PLAIN_FLOOR - 1n;
-    const held = ATTACHED + 1_200_000n + leftover;
-    const plan = tokenPlan([tokenUtxo(held, [{ ...USDM, quantity: 30_000_000n }])], {
-      sponsor: sponsoring(),
-      feeCollectionLovelace: 1_200_000n
-    });
-
-    const built = buildCardanoTransfer(plan);
-
-    expect(built.feeCollected).toBe(0n);
-    expect(built.change).toBe(held - ATTACHED);
-    expect(costToSender(built)).toBe(ATTACHED);
-  });
-
-  it('collects when the sender can afford it, which is the point', () => {
-    // The guard must not have turned collection off in general.
-    const held = ATTACHED + CHANGE_FLOOR + 1_200_000n;
-    const built = buildCardanoTransfer(
-      tokenPlan([tokenUtxo(held, [{ ...USDM, quantity: 100_000_000n }])], {
-        sponsor: sponsoring(),
-        feeCollectionLovelace: 1_200_000n
-      })
-    );
-
-    expect(built.feeCollected).toBe(1_200_000n);
-    expect(paysTo(built.bodyBytes, SPONSOR)).toBe(true);
-    expect(costToSender(built)).toBe(ATTACHED + 1_200_000n);
-  });
-
-  it('names what the transfer needs, not what the debt needs, when truly short', () => {
-    // A wallet that cannot carry the token at all is refused — but the figure in the message has to
-    // be the one the user can act on, and the debt is not part of it.
-    const plan = tokenPlan([tokenUtxo(ATTACHED - 1n, [{ ...USDM, quantity: 30_000_000n }])], {
-      sponsor: sponsoring(),
-      feeCollectionLovelace: 1_400_000n
-    });
-
-    expect(() => buildCardanoTransfer(plan)).toThrow(
-      new RegExp(`CARDANO_INSUFFICIENT_FUNDS.*need at least ${ATTACHED}`)
-    );
-  });
-
-  it('defers on the ADA path too', () => {
-    const built = buildCardanoTransfer(
-      adaPlan([adaUtxo(6_000_000n)], {
-        sponsor: sponsoring(),
-        feeCollectionLovelace: 4_000_000n
-      })
-    );
-
-    expect(built.feeCollected).toBe(0n);
-    expect(built.sentLovelace).toBe(5_000_000n);
+    expect(built.chatterPayFee).toBe(FEE);
+    expect(built.sentLovelace).toBe(5_000_000n - FEE);
     expect(costToSender(built)).toBe(5_000_000n);
   });
 
-  it('propagates a failure that is not about money', () => {
-    // A debt must not turn a defect into a silent retry: only a shortfall is worth deferring for.
-    const plan = adaPlan([adaUtxo(6_000_000n)], {
-      amount: 1n,
+  it('hands the fee to the sponsor inside the change output it already had', () => {
+    // The whole trick. A fee of 0.4 ADA cannot be an output of its own — it is under the floor —
+    // which is why this used to accrue until it had tripled. Folded into an output that already
+    // exists and already clears the floor, it can be charged in full every time.
+    const built = buildCardanoTransfer(
+      adaPlan([adaUtxo(8_000_000n)], { sponsor: sponsoring(), chatterPayFee: FEE })
+    );
+
+    expect(gainToSponsor(built)).toBe(FEE - built.fee);
+    // Payment, sender's change, sponsor's change. A fourth output would be the old fee output back.
+    expect(built.changeIndex).toBe(1);
+    expect(built.sponsorChangeIndex).toBe(2);
+  });
+
+  it('charges the same fee every time, with nothing carried between transfers', () => {
+    const built = [1, 2, 3].map(() =>
+      buildCardanoTransfer(
+        adaPlan([adaUtxo(8_000_000n)], { sponsor: sponsoring(), chatterPayFee: FEE })
+      )
+    );
+
+    expect(built.map((b) => b.chatterPayFee)).toEqual([FEE, FEE, FEE]);
+    expect(built.map((b) => b.sentLovelace)).toEqual(Array(3).fill(5_000_000n - FEE));
+  });
+
+  it('charges nothing when nobody sponsors, because there is no change to fold it into', () => {
+    const built = buildCardanoTransfer(adaPlan([adaUtxo(8_000_000n)], { chatterPayFee: FEE }));
+
+    expect(built.chatterPayFee).toBe(0n);
+    expect(built.sentLovelace).toBe(5_000_000n);
+  });
+
+  it('refuses when the fee would push what arrives under the floor, naming what to send instead', () => {
+    // The floor applies to what *arrives*, so charging a fee raises the smallest transfer that can
+    // work. The figure in the message has to be the amount to type, not the floor.
+    const floor = minimumAdaFor(RECIPIENT, [], 4310n);
+    const plan = adaPlan([adaUtxo(8_000_000n)], {
+      amount: floor + FEE - 1n,
       sponsor: sponsoring(),
-      feeCollectionLovelace: 1_200_000n
+      chatterPayFee: FEE
     });
 
-    expect(() => buildCardanoTransfer(plan)).toThrow(/CARDANO_AMOUNT_BELOW_MINIMUM_UTXO/);
+    expect(() => buildCardanoTransfer(plan)).toThrow(
+      new RegExp(`CARDANO_AMOUNT_BELOW_MINIMUM_UTXO: ${floor + FEE} lovelace minimum`)
+    );
+  });
+
+  it('refuses a fee that would swallow the whole amount rather than building nonsense', () => {
+    expect(() =>
+      buildCardanoTransfer(
+        adaPlan([adaUtxo(8_000_000n)], { sponsor: sponsoring(), chatterPayFee: 5_000_000n })
+      )
+    ).toThrow(/CARDANO_INVALID_FEE/);
+  });
+});
+
+describe("charging ChatterPay's fee on a native-asset transfer", () => {
+  /** The fee in the token's own base units — USDCx, not ADA, exactly as EVM charges it. */
+  const FEE = 80_000n;
+
+  it("takes the fee out of the token, leaving the sender's ADA cost untouched", () => {
+    const built = buildCardanoTransfer(
+      tokenPlan([tokenUtxo(4_500_000n, [{ ...USDM, quantity: 100_000_000n }])], {
+        sponsor: sponsoring(),
+        chatterPayFee: FEE
+      })
+    );
+
+    expect(built.chatterPayFee).toBe(FEE);
+    // The only ADA the sender parts with is the min-ADA the token drags along, as before: charging
+    // in the token is what keeps a stablecoin transfer from also costing ADA.
+    expect(costToSender(built)).toBe(ATTACHED);
+    expect(built.change).toBe(4_500_000n - ATTACHED);
+  });
+
+  it('sends the fee home in the sponsor change, which now carries the token too', () => {
+    const built = buildCardanoTransfer(
+      tokenPlan([tokenUtxo(4_500_000n, [{ ...USDM, quantity: 100_000_000n }])], {
+        sponsor: sponsoring(),
+        chatterPayFee: FEE
+      })
+    );
+
+    // The policy appears in the destination's output, in the sender's change, and now in the
+    // sponsor's change — three outputs carrying USDM, and still no output created for the fee.
+    expect(occurrences(built.bodyBytes, Buffer.from(USDM.policyId, 'hex'))).toBe(3);
+    expect(paysTo(built.bodyBytes, SPONSOR)).toBe(true);
+    expect(built.sponsorChangeIndex).toBe(2);
+  });
+
+  it('costs the sponsor no extra ADA beyond the network fee', () => {
+    const built = buildCardanoTransfer(
+      tokenPlan([tokenUtxo(4_500_000n, [{ ...USDM, quantity: 100_000_000n }])], {
+        sponsor: sponsoring(),
+        chatterPayFee: FEE
+      })
+    );
+
+    expect(gainToSponsor(built)).toBe(-built.fee);
+  });
+
+  it('charges nothing when nobody sponsors', () => {
+    const built = buildCardanoTransfer(
+      tokenPlan([tokenUtxo(4_500_000n, [{ ...USDM, quantity: 100_000_000n }])], {
+        chatterPayFee: FEE
+      })
+    );
+
+    expect(built.chatterPayFee).toBe(0n);
   });
 });
 
@@ -321,16 +340,12 @@ describe('sponsoring an ADA transfer', () => {
     expect(built.fee).toBeGreaterThan(0n);
   });
 
-  it('collects the accumulated fee into the sponsor', () => {
+  it('pays the sponsor back through its own change output', () => {
     const built = buildCardanoTransfer(
-      adaPlan([adaUtxo(8_000_000n)], {
-        sponsor: sponsoring(),
-        feeCollectionLovelace: 1_200_000n
-      })
+      adaPlan([adaUtxo(8_000_000n)], { sponsor: sponsoring(), chatterPayFee: 400_000n })
     );
 
-    expect(built.feeCollected).toBe(1_200_000n);
-    expect(costToSender(built)).toBe(5_000_000n + 1_200_000n);
+    expect(costToSender(built)).toBe(5_000_000n);
     expect(paysTo(built.bodyBytes, SPONSOR)).toBe(true);
   });
 

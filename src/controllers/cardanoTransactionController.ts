@@ -16,6 +16,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { getCardanoConfig } from '../config/cardanoConfig';
+import { chargesTransferFee, getCardanoFeeConfig } from '../config/cardanoFeeConfig';
 import { areSamePhoneNumber } from '../helpers/formatHelper';
 import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponseAsSuccess, returnSuccessResponse } from '../helpers/requestHelper';
@@ -27,6 +28,7 @@ import {
   userReachedOperationLimit,
   userWithinTokenOperationLimits
 } from '../services/blockchainService';
+import { chatterPayFeeUnits } from '../services/cardano/cardanoFeeService';
 import {
   executeCardanoOperation,
   resolveCardanoToken
@@ -300,11 +302,20 @@ export const makeCardanoTransaction = async (
        lock was open and the user had already been told the operation was in progress. */
     const senderAddress = deriveCardanoAccount(fromUser.phone_number).address;
     const resolved = await resolveCardanoToken(tokenSymbol, config.chainId);
+    // Priced here as well as inside the transfer, because it moves the floor: what reaches the
+    // destination is the amount less this, and a preflight that ignored it would wave through a
+    // transfer the builder then refuses.
+    const feeConfig = getCardanoFeeConfig();
+    const estimatedChatterPayFee =
+      feeConfig.sponsorNetworkFee && chargesTransferFee(feeConfig)
+        ? await chatterPayFeeUnits(feeConfig.transferFeeUsd, resolved.symbol, resolved.decimals)
+        : 0n;
     const preflight = await canAffordCardanoTransfer(
       senderAddress,
       amount,
       resolved.decimals,
-      resolved.asset
+      resolved.asset,
+      estimatedChatterPayFee
     );
     if (!preflight.ok) {
       await persistNotification(
@@ -378,16 +389,17 @@ export const makeCardanoTransaction = async (
       return undefined;
     }
 
-    /* 8. persist. `fee` is the ChatterPay fee (collected from accumulated debt when above min-ADA);
+    /* 8. persist. `fee` is ChatterPay's fee, in the same token as `amount` and already deducted
+          from it — so `amount - fee` is what reached the destination, exactly as on EVM.
           `network_fee` is what the chain charged, covered by the sponsor when sponsoring is on. */
     const networkFeeAda = Number(result.networkFeeAda);
-    const feeCollectedAda = Number(result.feeCollectedAda);
+    const chatterPayFee = Number(result.chatterPayFee);
     const transactionOut: TransactionData = {
       tx: result.transactionHash,
       walletFrom: result.fromAddress,
       walletTo: result.toAddress,
       amount: Number(amount),
-      fee: feeCollectedAda,
+      fee: chatterPayFee,
       token: result.tokenSymbol,
       type: 'transfer',
       status: 'completed',
@@ -396,7 +408,10 @@ export const makeCardanoTransaction = async (
       network_fee: networkFeeAda,
       // Always ADA, whatever moved: Cardano charges its fee in the chain's own coin, so a USDM
       // transfer still pays in ADA.
-      network_fee_token: ADA_SYMBOL
+      network_fee_token: ADA_SYMBOL,
+      // Only on a token transfer, where the ADA that left is the minimum the ledger makes travel
+      // with the token. On an ADA transfer it is the amount itself and would say nothing.
+      attached_ada: resolved.isAda ? undefined : Number(result.sentAda)
     };
     await mongoTransactionService.saveTransaction(transactionOut);
 

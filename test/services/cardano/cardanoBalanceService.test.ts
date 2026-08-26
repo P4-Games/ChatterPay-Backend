@@ -122,15 +122,16 @@ describe('getCardanoBalance', () => {
     expect(balance.assets[0].quantity).toBe('25000000');
   });
 
-  it('separates ADA locked beside native assets from what can be spent', async () => {
-    // Reporting only the spendable part would make the balance disagree with every explorer;
-    // reporting the total would promise funds a transfer then refuses to move. Both are returned.
+  it('counts ADA sitting beside native assets as spendable, and still reports it apart', async () => {
+    // It used to be excluded, on the grounds that an ADA transfer could not spend such an output.
+    // It can now — the change output carries the tokens home — so leaving it out understated the
+    // balance by a whole output, which is what made a wallet look robbed after sending a token.
     provider.fund(ADDRESS, 5_000_000n).fundWithNativeAssets(ADDRESS, 3_000_000n);
 
     const balance = await getCardanoBalance(ADDRESS, provider);
 
     expect(balance.totalAda).toBe('8.000000');
-    expect(balance.spendableAda).toBe('5.000000');
+    expect(balance.spendableAda).toBe('8.000000');
     expect(balance.lockedWithAssetsAda).toBe('3.000000');
     expect(balance.utxoCount).toBe(2);
   });

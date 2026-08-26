@@ -17,12 +17,7 @@ import type {
   CardanoProtocolParameters,
   CardanoUtxo
 } from '../../types/cardanoType';
-import {
-  minimumAdaFor,
-  selectionTotalFor,
-  spendableBalance,
-  totalAssets
-} from './cardanoTxService';
+import { minimumAdaFor, selectableBalance, selectionFor, totalAssets } from './cardanoTxService';
 
 /** A fee estimate good enough to validate against, in lovelace. */
 const FEE_ESTIMATE = 200_000n;
@@ -53,6 +48,9 @@ function ada(lovelace: bigint): string {
  * @param parameters - Protocol parameters, read from the chain.
  * @param sponsored - Whether ChatterPay covers the network fee. Taken as a parameter rather than
  *   read here so the three fee models can be exercised without reaching for the environment.
+ * @param chatterPayFee - ChatterPay's fee in lovelace, which comes out of the amount. It raises the
+ *   smallest transfer that can work — what reaches the destination is the amount less this, and
+ *   that is the figure the ledger's floor applies to.
  * @returns The requirement, with a message naming the exact figures when it cannot be met.
  */
 export function adaTransferRequirement(
@@ -60,21 +58,26 @@ export function adaTransferRequirement(
   utxos: readonly CardanoUtxo[],
   addressBytes: Uint8Array,
   parameters: CardanoProtocolParameters,
-  sponsored: boolean = getCardanoFeeConfig().sponsorNetworkFee
+  sponsored: boolean = getCardanoFeeConfig().sponsorNetworkFee,
+  chatterPayFee: bigint = 0n
 ): CardanoRequirement {
-  const held = spendableBalance(utxos);
+  const held = selectableBalance(utxos);
   const minOutput = minimumAdaFor(addressBytes, [], parameters.coinsPerUtxoByte);
   const sponsorNetworkFee = sponsored;
   const fee = sponsorNetworkFee ? 0n : FEE_ESTIMATE;
 
-  if (amountLovelace < minOutput) {
+  // The floor applies to what arrives, and what arrives is the amount less ChatterPay's fee — so
+  // the smallest transfer that works is the floor plus that fee, not the floor.
+  const smallestSendable = minOutput + chatterPayFee;
+  if (amountLovelace < smallestSendable) {
     return {
       ok: false,
-      requiredLovelace: minOutput,
+      requiredLovelace: smallestSendable,
       heldLovelace: held,
       message:
-        `The minimum you can send on Cardano is ${ada(minOutput)} ADA. ` +
-        `It is a network limit, not a ChatterPay one: a smaller transfer fails the whole transaction.`
+        `The minimum you can send on Cardano is ${ada(smallestSendable)} ADA. ` +
+        `${ada(minOutput)} of it is a network limit, not a ChatterPay one: below that, the ` +
+        `transfer fails the whole transaction.`
     };
   }
 
@@ -99,10 +102,32 @@ export function adaTransferRequirement(
   // stops as soon as it covers the target, so a wallet holding ten spendable outputs may well hand
   // the builder one of them — and the change that gets burned is that one output's remainder, not
   // the wallet's. Checking the balance here is why this window went undetected.
-  const selected = selectionTotalFor(utxos, required);
-  const change = (selected ?? held) - required;
-  if (change > 0n && change < minOutput) {
-    const maxKeepingChange = (selected ?? held) - fee - minOutput;
+  //
+  // And priced against what that selection *carries*: an output pulled in for its ADA may hold
+  // tokens as well, and those tokens have to come home in the change output, which puts its floor
+  // above the plain one.
+  const selection = selectionFor(utxos, required);
+  const gathered = selection ? selection.reduce((sum, utxo) => sum + utxo.lovelace, 0n) : held;
+  const carried = selection ? totalAssets(selection) : [];
+  const changeFloor = minimumAdaFor(addressBytes, carried, parameters.coinsPerUtxoByte);
+  const change = gathered - required;
+
+  // Tokens in the selection make the change output mandatory — they have nowhere else to go — so
+  // the "or send it all" escape below does not exist here: that floor stays behind, always.
+  if (carried.length > 0 && change < changeFloor) {
+    return {
+      ok: false,
+      requiredLovelace: required,
+      heldLovelace: held,
+      message:
+        `With ${ada(held)} ADA you can send up to ${ada(gathered - fee - changeFloor)} ADA. ` +
+        `The rest has to stay in your wallet: it holds tokens, and the ${ada(changeFloor)} ADA ` +
+        `that carries them cannot leave with the transfer.`
+    };
+  }
+
+  if (change > 0n && change < changeFloor) {
+    const maxKeepingChange = gathered - fee - changeFloor;
     return {
       ok: false,
       requiredLovelace: required,
@@ -110,7 +135,7 @@ export function adaTransferRequirement(
       message:
         `With ${ada(held)} ADA you can send up to ${ada(maxKeepingChange)} ADA, or send it all ` +
         `(${ada(held - fee)} ADA). Between those two figures the change falls below the minimum ` +
-        `the network requires (${ada(minOutput)} ADA) and is lost.`
+        `the network requires (${ada(changeFloor)} ADA) and is lost.`
     };
   }
 

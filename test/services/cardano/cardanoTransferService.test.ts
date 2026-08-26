@@ -4,6 +4,7 @@ import { CardanoProviderError } from '../../../src/services/cardano/cardanoProvi
 import { cardanoSignerService } from '../../../src/services/cardano/cardanoSignerService';
 import { executeCardanoTransfer } from '../../../src/services/cardano/cardanoTransferService';
 import { FakeCardanoProvider } from '../../helpers/fakeCardanoProvider';
+import { resetCardanoUtxoClaims } from '../../support/cardanoClaims';
 import { resetCardanoEnv, setCardanoFeeEnv } from '../../support/cardanoEnv';
 
 vi.mock('../../../src/helpers/envHelper', async (importOriginal) => {
@@ -35,6 +36,8 @@ function transfer(overrides: Partial<Parameters<typeof executeCardanoTransfer>[0
     fromPhoneNumber: SENDER_PHONE,
     toAddress: recipient.address,
     amountLovelace: 2_000_000n,
+    tokenSymbol: 'ADA',
+    tokenDecimals: 6,
     provider,
     network: 'testnet',
     chainId: CHAIN_ID,
@@ -46,10 +49,11 @@ function transfer(overrides: Partial<Parameters<typeof executeCardanoTransfer>[0
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   resetCardanoEnv();
   setCardanoFeeEnv({ sponsorFees: false, sponsorWalletId: '' });
   provider = new FakeCardanoProvider();
+  await resetCardanoUtxoClaims();
 });
 
 describe('executeCardanoTransfer - the happy path', () => {
@@ -91,13 +95,16 @@ describe('executeCardanoTransfer - the happy path', () => {
     expect(result.errorCode).toBe('CARDANO_INSUFFICIENT_FUNDS');
   });
 
-  it('ignores ADA locked in outputs that also hold native assets', async () => {
+  it('reaches ADA sitting in outputs that also hold native assets', async () => {
+    // The only output the wallet has carries tokens. Refusing it, which is what this used to do,
+    // left a wallet unable to send ADA it plainly held — and there is no second output to fall back
+    // on, so the tokens have to travel home in the change.
     provider.fundWithNativeAssets(sender.address, 100_000_000n);
 
     const result = await transfer();
 
-    expect(result.success).toBe(false);
-    expect(result.errorCode).toBe('CARDANO_INSUFFICIENT_FUNDS');
+    expect(result.success).toBe(true);
+    expect(result.errorCode).toBe('');
   });
 });
 

@@ -120,6 +120,13 @@ export interface TransactionData {
   network_fee?: number;
   /** Coin `network_fee` is denominated in, e.g. `ADA`. */
   network_fee_token?: string;
+  /**
+   * ADA the ledger forced to travel with a token, on a Cardano token transfer.
+   *
+   * Not a fee: the recipient keeps it. Recorded because it is the only figure that explains why
+   * sending a token also moved ADA.
+   */
+  attached_ada?: number;
   polymarket_order_id?: string;
   polymarket_purchase_id?: string;
   polymarket_market_slug?: string;

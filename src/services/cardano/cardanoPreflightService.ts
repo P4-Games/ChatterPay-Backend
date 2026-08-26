@@ -47,6 +47,8 @@ export interface CardanoPreflight extends CardanoRequirement {
  * @param amount - Amount as the user typed it, in the asset's display units.
  * @param decimals - Decimals of the asset.
  * @param asset - The native asset, or undefined for ADA.
+ * @param chatterPayFee - ChatterPay's fee in the asset's base units, which comes out of the amount.
+ *   Priced by the caller, which is the layer that knows the ticker.
  * @returns The verdict. **A provider failure passes the check** rather than blocking the transfer:
  *   the authoritative validation still runs inside the transfer, before any signature, so a
  *   provider hiccup here must not turn into a refusal to move money that the wallet can afford.
@@ -55,7 +57,8 @@ export async function canAffordCardanoTransfer(
   address: string,
   amount: string,
   decimals: number,
-  asset?: Omit<CardanoAssetAmount, 'quantity'>
+  asset?: Omit<CardanoAssetAmount, 'quantity'>,
+  chatterPayFee: bigint = 0n
 ): Promise<CardanoPreflight> {
   const pass: CardanoPreflight = {
     checked: false,
@@ -79,7 +82,14 @@ export async function canAffordCardanoTransfer(
       const quantity = toBaseUnits(amount, decimals);
       return {
         checked: true,
-        ...adaTransferRequirement(quantity, utxos, decoded.payload, parameters)
+        ...adaTransferRequirement(
+          quantity,
+          utxos,
+          decoded.payload,
+          parameters,
+          undefined,
+          chatterPayFee
+        )
       };
     }
 
