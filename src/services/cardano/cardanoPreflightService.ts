@@ -13,6 +13,7 @@
  */
 
 import { getCardanoConfig } from '../../config/cardanoConfig';
+import { getCardanoFeeConfig } from '../../config/cardanoFeeConfig';
 import { Logger } from '../../helpers/loggerHelper';
 import type { CardanoAssetAmount } from '../../types/cardanoType';
 import { decodeCardanoAddress } from './cardanoAddressService';
@@ -22,7 +23,9 @@ import {
   type CardanoRequirement,
   tokenTransferRequirement
 } from './cardanoRequirementsService';
-import { assetBalance } from './cardanoTxService';
+import { cardanoSignerService } from './cardanoSignerService';
+import { SPONSOR_UNAVAILABLE } from './cardanoTransferService';
+import { assetBalance, spendableBalance } from './cardanoTxService';
 
 /** Amount, in the asset's own base units. */
 function toBaseUnits(amount: string, decimals: number): bigint {
@@ -92,8 +95,8 @@ export async function canAffordCardanoTransfer(
         requiredLovelace: 0n,
         heldLovelace: 0n,
         message:
-          `No te alcanza el saldo: tenés ${(Number(held) / scale).toFixed(2)} y ` +
-          `querés enviar ${(Number(quantity) / scale).toFixed(2)}.`
+          `Not enough balance: you have ${(Number(held) / scale).toFixed(2)} and you are ` +
+          `trying to send ${(Number(quantity) / scale).toFixed(2)}.`
       };
     }
 
@@ -105,6 +108,66 @@ export async function canAffordCardanoTransfer(
     Logger.warn(
       'canAffordCardanoTransfer',
       `Preflight skipped for ${address}: ${String(error)}. The transfer will validate it itself.`
+    );
+    return pass;
+  }
+}
+
+/** What a sponsor check concluded. */
+export interface CardanoSponsorPreflight {
+  /** Whether the transfer may go ahead. */
+  ok: boolean;
+  /** What to tell the user when it may not. Empty when it may. */
+  message: string;
+}
+
+/**
+ * Whether the fee sponsor can still cover a transfer.
+ *
+ * Asked here for the same reason the sender's balance is: an empty sponsor wallet used to surface
+ * inside the transfer, after the lock was open and the user had been told the operation was in
+ * progress — and since nothing about it is theirs to fix, the failure read as silence.
+ *
+ * The message names nothing: the wallet is the product's, and handing every user its address along
+ * with the news that it is empty is an operational detail that belongs in the log.
+ *
+ * @param logKey - Correlation key for the logs.
+ * @returns `ok: false` only when sponsoring is on and the sponsor wallet holds nothing spendable.
+ *   Sponsoring turned off passes, and so does a provider that could not be reached: the transfer
+ *   checks it again before signing, so a hiccup here must not refuse a transfer that would work.
+ */
+export async function sponsorCanCoverFee(logKey: string): Promise<CardanoSponsorPreflight> {
+  const pass: CardanoSponsorPreflight = { ok: true, message: '' };
+
+  const feeConfig = getCardanoFeeConfig();
+  if (!feeConfig.sponsorNetworkFee) return pass;
+
+  const config = getCardanoConfig();
+  try {
+    const sponsor = cardanoSignerService.getSponsorAccount(
+      feeConfig.sponsorWalletId,
+      config.network,
+      config.chainId
+    );
+    // Confirmed outputs, and the same confirmation depth the transfer spends at: a preflight that
+    // counts outputs the transfer will not touch answers a different question than the one asked.
+    const utxos = await buildCardanoProvider().confirmedUtxosFor(
+      sponsor.address,
+      config.depositConfirmations
+    );
+    if (spendableBalance(utxos) > 0n) return pass;
+
+    Logger.error(
+      'sponsorCanCoverFee',
+      logKey,
+      `CARDANO_SPONSOR_WALLET_EMPTY: ${sponsor.address} holds no spendable ADA`
+    );
+    return { ok: false, message: SPONSOR_UNAVAILABLE };
+  } catch (error) {
+    Logger.warn(
+      'sponsorCanCoverFee',
+      logKey,
+      `Sponsor preflight skipped: ${String(error)}. The transfer will validate it itself.`
     );
     return pass;
   }

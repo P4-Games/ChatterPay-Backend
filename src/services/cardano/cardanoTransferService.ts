@@ -107,11 +107,16 @@ export interface CardanoTransferResult {
  * reading `CARDANO_PROVIDER_TIMEOUT` learns nothing they can act on. The code is in the log.
  */
 const PROVIDER_UNREACHABLE =
-  'No pudimos contactar la red de Cardano. Probá de nuevo en unos minutos.';
+  'We could not reach the Cardano network. Please try again in a few minutes.';
 
-/** What the user is told when ChatterPay cannot cover the fee right now. */
-const SPONSOR_UNAVAILABLE =
-  'No pudimos procesar la transferencia en este momento. Probá de nuevo en unos minutos.';
+/**
+ * What the user is told when ChatterPay cannot cover the fee right now.
+ *
+ * Exported because the preflight answers the same question before the lock is taken, and two
+ * copies of a sentence the user reads are two sentences that drift apart.
+ */
+export const SPONSOR_UNAVAILABLE =
+  'We could not process the transfer right now. Please try again in a few minutes.';
 
 /**
  * Lovelace a sponsor claim has to add up to.
@@ -124,7 +129,7 @@ const SPONSOR_UNAVAILABLE =
 const SPONSOR_LEASE_COVER = 2_000_000n;
 
 /** What the user is told when the failure is one nobody anticipated. */
-const TRANSFER_FAILED = 'No pudimos completar la transferencia. Probá de nuevo en unos minutos.';
+const TRANSFER_FAILED = 'We could not complete the transfer. Please try again in a few minutes.';
 
 /** A failure that happened before anything was signed, and therefore costs nothing to report. */
 class CardanoTransferRefusal extends Error {

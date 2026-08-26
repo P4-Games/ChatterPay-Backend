@@ -73,8 +73,8 @@ export function adaTransferRequirement(
       requiredLovelace: minOutput,
       heldLovelace: held,
       message:
-        `El mínimo que se puede enviar en Cardano es ${ada(minOutput)} ADA. ` +
-        `Es un límite de la red, no de ChatterPay: un envío menor hace fallar la transacción entera.`
+        `The minimum you can send on Cardano is ${ada(minOutput)} ADA. ` +
+        `It is a network limit, not a ChatterPay one: a smaller transfer fails the whole transaction.`
     };
   }
 
@@ -85,9 +85,9 @@ export function adaTransferRequirement(
       requiredLovelace: required,
       heldLovelace: held,
       message:
-        `No te alcanza el saldo. Para enviar ${ada(amountLovelace)} ADA necesitás ` +
-        `${ada(required)} ADA en tu wallet${sponsorNetworkFee ? '' : ' (incluye el costo de red)'} ` +
-        `y tenés ${ada(held)} ADA.`
+        `Not enough balance. To send ${ada(amountLovelace)} ADA you need ` +
+        `${ada(required)} ADA in your wallet${sponsorNetworkFee ? '' : ' (network cost included)'} ` +
+        `and you have ${ada(held)} ADA.`
     };
   }
 
@@ -108,9 +108,9 @@ export function adaTransferRequirement(
       requiredLovelace: required,
       heldLovelace: held,
       message:
-        `Con ${ada(held)} ADA podés enviar hasta ${ada(maxKeepingChange)} ADA, o enviar todo ` +
-        `(${ada(held - fee)} ADA). Entre esos dos valores el vuelto queda por debajo del mínimo ` +
-        `que exige la red (${ada(minOutput)} ADA) y se pierde.`
+        `With ${ada(held)} ADA you can send up to ${ada(maxKeepingChange)} ADA, or send it all ` +
+        `(${ada(held - fee)} ADA). Between those two figures the change falls below the minimum ` +
+        `the network requires (${ada(minOutput)} ADA) and is lost.`
     };
   }
 
@@ -175,10 +175,10 @@ export function tokenTransferRequirement(
       requiredLovelace: required,
       heldLovelace: held,
       message:
-        `Para enviar un token de Cardano también necesitás ADA: la red exige que el envío lleve ` +
-        `${ada(attached)} ADA adjunta${keepsSome ? `, y otro tanto para el vuelto que conserva el resto del token` : ''}` +
-        `${sponsorNetworkFee ? ' (el costo de red lo cubre ChatterPay)' : ' (más el costo de red)'}. ` +
-        `Necesitás ${ada(required)} ADA en tu wallet y tenés ${ada(held)} ADA.`
+        `Sending a Cardano token also takes ADA: the network requires the transfer to carry ` +
+        `${ada(attached)} ADA attached${keepsSome ? `, and as much again for the change that keeps the rest of the token` : ''}` +
+        `${sponsorNetworkFee ? ' (ChatterPay covers the network cost)' : ' (plus the network cost)'}. ` +
+        `You need ${ada(required)} ADA in your wallet and you have ${ada(held)} ADA.`
     };
   }
 
