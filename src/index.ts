@@ -5,6 +5,7 @@ import { $B, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
 import { connectToDatabaseWithRetry } from './config/database';
 import { startServer } from './config/server';
 import { Logger } from './helpers/loggerHelper';
+import { assertCardanoDerivationUnchanged } from './services/cardano/cardanoDerivationCheck';
 import { registerPolymarketApiAdapter } from './services/polymarket/polymarketProxyHelper';
 
 /**
@@ -67,6 +68,10 @@ async function main(): Promise<void> {
     // delays startup instead of killing the container, which is what used to
     // leave port 8080 closed until Cloud Run's startup probe gave up.
     await connectToDatabaseWithRetry();
+
+    // Before the port opens: an address issued by a deployment whose derivation moved is an address
+    // nobody can sign for, and no request should be served until that is ruled out.
+    assertCardanoDerivationUnchanged();
 
     const server = await startServer();
     setupGracefulShutdown(server);
