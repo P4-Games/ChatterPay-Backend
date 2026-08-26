@@ -149,12 +149,12 @@ export async function sponsorCanCoverFee(logKey: string): Promise<CardanoSponsor
       config.network,
       config.chainId
     );
-    // Confirmed outputs, and the same confirmation depth the transfer spends at: a preflight that
-    // counts outputs the transfer will not touch answers a different question than the one asked.
-    const utxos = await buildCardanoProvider().confirmedUtxosFor(
-      sponsor.address,
-      config.depositConfirmations
-    );
+    // Every output, confirmed or not, which is the same set the transfer itself will spend from --
+    // see the note in `cardanoTransferService`. A preflight that counted a different set than the
+    // transfer would answer a different question than the one being asked, and the direction of the
+    // mismatch matters: demanding confirmations here would refuse transfers the transfer path would
+    // have gone on to complete.
+    const utxos = await buildCardanoProvider().utxosFor(sponsor.address);
     if (spendableBalance(utxos) > 0n) return pass;
 
     Logger.error(
