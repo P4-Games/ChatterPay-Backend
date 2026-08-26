@@ -184,7 +184,7 @@ export interface CardanoOperationInput {
 }
 
 /** What the user is told when the failure is one nobody anticipated. */
-const OPERATION_FAILED = 'No pudimos completar la transferencia. Probá de nuevo en unos minutos.';
+const OPERATION_FAILED = 'We could not complete the transfer. Please try again in a few minutes.';
 
 /**
  * Classifies a caught error into what the log needs and what the user is told.
