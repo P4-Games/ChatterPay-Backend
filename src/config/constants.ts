@@ -72,6 +72,25 @@ const {
   CDO4,
   CDP1,
   CDP2,
+  CDC1,
+  CDC2,
+  CDC3,
+  CDC4,
+  CDC5,
+  CDC6,
+  NODE_ENV: nodeEnv = '',
+  CARDANO_ENABLED: cardanoEnabled = 'false',
+  CARDANO_NETWORK: cardanoNetwork = '',
+  CARDANO_CHAIN_ID: cardanoChainId = '',
+  CARDANO_PROVIDER_URL: cardanoProviderUrl = '',
+  CARDANO_PROVIDER_TIMEOUT_MS: cardanoProviderTimeoutMs = '',
+  CARDANO_TTL_SLOTS: cardanoTtlSlots = '',
+  CARDANO_DEPOSIT_CONFIRMATIONS: cardanoDepositConfirmations = '',
+  CARDANO_EXPLORER_URL: cardanoExplorerUrl = '',
+  CARDANO_SPONSOR_FEES: cardanoSponsorFees = 'false',
+  CARDANO_TRANSFER_FEE_USD: cardanoTransferFeeUsd = '',
+  CARDANO_SPONSOR_WALLET_ID: cardanoSponsorWalletId = '',
+  CARDANO_DERIVATION_CHECK: cardanoDerivationCheck = '',
   TELEGRAM_BOT_API_KEY,
   SECURITY_PIN_LENGTH: securityPinLength = 6,
   SECURITY_PIN_MAX_FAILED_ATTEMPTS: securityPinMaxFailedAttempts = 3,
@@ -109,6 +128,12 @@ export {
   CDO4,
   CDP1,
   CDP2,
+  CDC1,
+  CDC2,
+  CDC3,
+  CDC4,
+  CDC5,
+  CDC6,
   PINATA_JWT,
   BOT_API_URL,
   CORS_ORIGINS,
@@ -346,3 +371,19 @@ export const CACHE_POLYMARKET_MARKETS_TTL = 300; // 5 min
 export const CACHE_POLYMARKET_MARKETS_CHECK_PERIOD = 360; // 6 min
 export const CACHE_POLYMARKET_PRICES_TTL = 60; // 1 min
 export const CACHE_POLYMARKET_PRICES_CHECK_PERIOD = 120; // 2 min
+
+// Cardano Configuration
+// Read as the environment holds them. `envHelper` turns them into the shapes the subsystem uses.
+export const NODE_ENV: string = nodeEnv;
+export const CARDANO_ENABLED: string = cardanoEnabled;
+export const CARDANO_NETWORK: string = cardanoNetwork;
+export const CARDANO_CHAIN_ID: string = cardanoChainId;
+export const CARDANO_PROVIDER_URL: string = cardanoProviderUrl;
+export const CARDANO_PROVIDER_TIMEOUT_MS: string = cardanoProviderTimeoutMs;
+export const CARDANO_TTL_SLOTS: string = cardanoTtlSlots;
+export const CARDANO_DEPOSIT_CONFIRMATIONS: string = cardanoDepositConfirmations;
+export const CARDANO_EXPLORER_URL: string = cardanoExplorerUrl;
+export const CARDANO_SPONSOR_FEES: string = cardanoSponsorFees;
+export const CARDANO_TRANSFER_FEE_USD: string = cardanoTransferFeeUsd;
+export const CARDANO_SPONSOR_WALLET_ID: string = cardanoSponsorWalletId;
+export const CARDANO_DERIVATION_CHECK: string = cardanoDerivationCheck.trim();
