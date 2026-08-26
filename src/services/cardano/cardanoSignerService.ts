@@ -1,6 +1,5 @@
 import { ed25519 } from '@noble/curves/ed25519';
 import { hkdf } from '@noble/hashes/hkdf';
-import { pbkdf2 } from '@noble/hashes/pbkdf2';
 import { sha256 } from '@noble/hashes/sha2';
 import { $B, $S, CDC1, CDC2, CDC3, CDC4, CDC5, CDC6 } from '../../config/constants';
 import { $hx } from '../../helpers/envHelper';
@@ -9,10 +8,6 @@ import type { CardanoAccount, CardanoNetwork } from '../../types/cardanoType';
 import { baseAddress, decodeCardanoAddress } from './cardanoAddressService';
 
 const SEED_BYTES = 32;
-const FINGERPRINT_DOMAIN = 'chatterpay-derivation-fingerprint';
-const FINGERPRINT_ITERATIONS = 100_000;
-
-let fingerprintCache: string | null = null;
 
 type KeyRole = 'payment' | 'stake';
 
@@ -40,21 +35,6 @@ function ed25519Seed(
 
 function publicKeyOf(seed: Buffer): string {
   return `0x${Buffer.from(ed25519.getPublicKey(seed)).toString('hex')}`;
-}
-
-export function derivationFingerprint(): string {
-  if (fingerprintCache === null) {
-    const tag = $S
-      ? Buffer.from(
-          pbkdf2(sha256, $S, `${FINGERPRINT_DOMAIN}:${$B}`, {
-            c: FINGERPRINT_ITERATIONS,
-            dkLen: 4
-          })
-        ).toString('hex')
-      : 'MISSING';
-    fingerprintCache = `secret(${tag}) env(${$B ?? 'undefined'})`;
-  }
-  return fingerprintCache;
 }
 
 export const cardanoSignerService = {
