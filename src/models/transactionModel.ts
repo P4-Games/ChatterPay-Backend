@@ -23,6 +23,14 @@ export interface ITransaction extends Document {
   network_fee?: number;
   /** Coin `network_fee` is denominated in, e.g. `ADA`. */
   network_fee_token?: string;
+  /**
+   * ADA the ledger forced to travel with a token, on a Cardano token transfer.
+   *
+   * Not a fee and not ours: the recipient keeps it. It is recorded because it is the only figure
+   * that explains why sending USDCx also moved ADA — without it the sender's ADA balance drops by
+   * something no line of the history accounts for, which is a support ticket every time.
+   */
+  attached_ada?: number;
   /** CLOB order id for Polymarket order transactions (links to PolymarketOrderModel). */
   polymarket_order_id?: string;
   /** Purchase flow id for Polymarket order transactions (links to PolymarketPurchaseModel). */
@@ -57,6 +65,7 @@ const transactionSchema = new Schema<ITransaction>({
   user_notes: { type: String, required: false },
   network_fee: { type: Number, required: false },
   network_fee_token: { type: String, required: false },
+  attached_ada: { type: Number, required: false },
   polymarket_order_id: { type: String, required: false },
   polymarket_purchase_id: { type: String, required: false },
   polymarket_market_slug: { type: String, required: false },
