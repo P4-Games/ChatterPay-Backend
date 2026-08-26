@@ -1,8 +1,21 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CARDANO_PREPROD_CHAIN_ID } from '../../src/config/cardanoConfig';
 import { isCardanoTransferRequest } from '../../src/controllers/cardanoTransactionController';
 import type { IToken } from '../../src/models/tokenModel';
+import { enableCardanoPreprod } from '../support/cardanoEnv';
+
+vi.mock('../../src/helpers/envHelper', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/helpers/envHelper')>();
+  const { cardanoEnvHelperMock } = await import('../support/cardanoEnv');
+  return cardanoEnvHelperMock(actual);
+});
+
+vi.mock('../../src/config/constants', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/config/constants')>();
+  const { cardanoConstantsMock } = await import('../support/cardanoEnv');
+  return cardanoConstantsMock(actual);
+});
 
 /** Chain id of the EVM network this instance operates on, as `.env` configures it. */
 const EVM_CHAIN_ID = 534351;
@@ -32,8 +45,7 @@ const CATALOGUE: IToken[] = [
  * as a working EVM feature that suddenly stopped, not as a Cardano bug.
  */
 beforeEach(() => {
-  process.env.CARDANO_ENABLED = 'true';
-  process.env.CARDANO_NETWORK = 'preprod';
+  enableCardanoPreprod();
 });
 
 describe('isCardanoTransferRequest - routes to Cardano', () => {
