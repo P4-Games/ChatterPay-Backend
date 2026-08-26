@@ -55,9 +55,9 @@ export interface CardanoUtxo {
   /**
    * Whether the output also holds native assets.
    *
-   * Kept alongside {@link assets} because it answers the question an ADA-only transfer asks — "can
-   * I ignore this?" — without walking a list. An ADA transfer never spends one of these, since
-   * doing so would require carrying the tokens into the change output.
+   * Kept alongside {@link assets} because it answers, without walking a list, the question coin
+   * selection asks: reach for this one last. An ADA transfer can spend it — the change output
+   * carries the tokens home — but doing so grows the transaction, so it is a last resort.
    */
   holdsOtherAssets: boolean;
   /**
@@ -160,13 +160,18 @@ export interface CardanoTransferPlan {
     changeAddress: Uint8Array;
   };
   /**
-   * Accumulated ChatterPay fee to collect in this transaction, in lovelace.
+   * ChatterPay's fee for this transfer, **in the units of whatever is moving** — lovelace on an ADA
+   * transfer, the asset's own base units on a token transfer.
    *
-   * When present and above the min-ADA for an output, an extra output is added to the sponsor's
-   * address. The sender's inputs must cover this on top of the amount. Zero or absent means no
-   * collection this time.
+   * Taken out of {@link amount} rather than charged on top of it, which is what EVM does and what
+   * makes `amount − fee` the figure that actually arrives. It needs no output of its own: it rides
+   * in the sponsor's change, which already exists in every sponsored transfer and is far above the
+   * floor an output has to clear. That is the whole reason the fee can be charged every time
+   * instead of being accrued until it grows past min-ADA.
+   *
+   * Requires a sponsor. Without one there is no change output to fold it into, and it is dropped.
    */
-  feeCollectionLovelace?: bigint;
+  chatterPayFee?: bigint;
   /**
    * The native asset being sent, when this is a token transfer.
    *
@@ -211,10 +216,31 @@ export interface BuiltCardanoTransaction {
   changeAssets: readonly CardanoAssetAmount[];
   /** The outputs selected as inputs, in the order they appear in the body. */
   inputs: readonly CardanoUtxo[];
+  /**
+   * Where the sender's change sits among the outputs, or `undefined` when there is none.
+   *
+   * Reported rather than left to be recomputed by the caller: together with {@link transactionId} it
+   * names the output this transaction is about to create, which is what lets the next transfer spend
+   * it before any provider has indexed it.
+   */
+  changeIndex?: number;
+  /**
+   * Where the sponsor's change sits among the outputs, or `undefined` when there is none.
+   *
+   * The sponsor spends and re-receives its own outputs on every sponsored transfer, so it runs into
+   * the unindexed-change problem sooner than any user does: reported for the same reason as
+   * {@link changeIndex}.
+   */
+  sponsorChangeIndex?: number;
   /** Slot after which the network stops accepting this transaction. */
   ttlSlot: number;
-  /** ChatterPay fee collected in this transaction, in lovelace. Zero when not collecting. */
-  feeCollected?: bigint;
+  /**
+   * ChatterPay fee actually charged, in the units of whatever moved.
+   *
+   * Zero when nothing was charged — no sponsor to fold it into, or none asked for. Deducted from
+   * the amount, so what reached the destination is the amount minus this.
+   */
+  chatterPayFee: bigint;
 }
 
 /** A wallet's Cardano identity: the address, its raw bytes, and the key behind it. */
