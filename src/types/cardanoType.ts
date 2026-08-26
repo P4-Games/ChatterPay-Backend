@@ -234,3 +234,121 @@ export interface CardanoAccount {
    */
   stakePublicKey: string;
 }
+
+/**
+ * Cardano settings as the environment holds them.
+ *
+ * For the numbers, `null` means "not configured", never "zero": the defaults are declared in
+ * `cardanoConfig.ts` alongside the reasoning for each one, so the reader validates without
+ * deciding. The strings say the same thing with `''`.
+ */
+export interface CardanoEnv {
+  /** Whether the family was switched on. Not whether it is usable — that is a conclusion. */
+  enabled: boolean;
+  /** Network as written, trimmed. Resolving the spelling is the caller's job. */
+  network: string;
+  /** Explicit chain id, when one was set. */
+  chainId: number | null;
+  /** Provider root as configured. Stripping its trailing slashes is the caller's job, so that a
+   *  value of nothing but slashes still reads as a value and not as an absent one. */
+  providerUrl: string;
+  /** Per-call ceiling for provider requests, in milliseconds. */
+  providerTimeoutMs: number | null;
+  /** Slots of validity given to a transaction, from the tip. */
+  ttlSlots: number | null;
+  /** Confirmations required before an output is spendable. */
+  depositConfirmations: number | null;
+  /** Explorer base URL. */
+  explorerUrl: string;
+  /** Whether the master secret every wallet derives from is present. */
+  hasSecret: boolean;
+  /** Whether every derivation label is present and readable. */
+  labelsReadable: boolean;
+}
+
+/** Who pays what on a Cardano transfer, as the environment holds it. */
+export interface CardanoFeeEnv {
+  /** Whether ChatterPay was asked to cover the network fee. */
+  sponsorFees: boolean;
+  /** ChatterPay's fee per transfer, in USD. */
+  transferFeeUsd: number | null;
+  /** Identifier the sponsor wallet derives from. */
+  sponsorWalletId: string;
+}
+
+/**
+ * Why the family is off, as a code.
+ *
+ * A code rather than a sentence, and deliberately without the name of the setting behind it: this
+ * value travels into the message a caller shows the user, and a sentence naming the variable that
+ * is missing describes this deployment's configuration to anybody who pokes the endpoint. The
+ * operator reads the same code in the log and knows what to look at.
+ *
+ * - `flag_off` — the family was not switched on.
+ * - `network_unknown` — the configured network is not one this deployment can read.
+ * - `provider_missing` — a provider root was configured, and it resolved to nothing.
+ * - `secret_missing` — the master secret every wallet derives from is absent.
+ * - `labels_unreadable` — one of the configured derivation labels is absent or not readable.
+ */
+export type CardanoDisabledReason =
+  | ''
+  | 'flag_off'
+  | 'network_unknown'
+  | 'provider_missing'
+  | 'secret_missing'
+  | 'labels_unreadable';
+
+/** Everything the Cardano subsystem needs to run, resolved once. */
+export interface CardanoConfig {
+  /** Whether the family is fully configured and may be used. */
+  enabled: boolean;
+  /** The network this deployment operates on. Decides the header byte of every address it issues. */
+  network: CardanoNetwork;
+  /** Internal chain id of that network. */
+  chainId: number;
+  /** Provider root URL. */
+  providerUrl: string;
+  /** Per-call ceiling for provider requests, in milliseconds. */
+  providerTimeoutMs: number;
+  /** Slots of validity given to a transaction, from the tip. */
+  ttlSlots: number;
+  /** Confirmations required before an output is spendable. */
+  depositConfirmations: number;
+  /** Explorer base URL; the transaction id is appended directly. */
+  explorerUrl: string;
+  /** Why the family is off, when it is. Empty when enabled. */
+  disabledReason: CardanoDisabledReason;
+}
+
+/**
+ * Why sponsoring is off, as a code.
+ *
+ * A code rather than a sentence naming the setting behind it, for the same reason as
+ * `CardanoDisabledReason`: this value travels towards the caller, and the name of a missing
+ * variable describes this deployment's configuration to whoever reads the answer.
+ */
+export type CardanoSponsorDisabledReason = '' | 'sponsor_wallet_missing';
+
+/** ChatterPay's fee cannot be a Cardano output of its own: it is below the ledger's min-ADA. */
+export interface CardanoFeeConfig {
+  /** Whether ChatterPay supplies an input to cover the network fee. */
+  sponsorNetworkFee: boolean;
+  /** ChatterPay's fee per transfer, in USD. Zero disables charging entirely. */
+  transferFeeUsd: number;
+  /**
+   * Identifier the sponsor wallet derives from, when sponsoring is on.
+   *
+   * Derived like any other wallet rather than configured as a private key: the same master secret
+   * produces it, so there is no second secret to distribute, rotate or leak.
+   */
+  sponsorWalletId: string;
+  /** Why sponsoring is off, when it is configured on but unusable. Empty when nothing is wrong. */
+  disabledReason: CardanoSponsorDisabledReason;
+}
+
+/** What the startup derivation check concluded. */
+export type CardanoDerivationCheck =
+  | { status: 'ok'; address: string }
+  | { status: 'skipped'; detail: string }
+  | { status: 'unrecorded'; address: string }
+  | { status: 'changed'; expected: string; derived: string };
