@@ -328,9 +328,6 @@ export async function sendDepositInfo(
       message: user_wallet_proxy
     });
 
-    // A user who holds a Cardano address must see it here too: this is the "where do I deposit"
-    // answer, and an answer that names only the EVM address invites an ADA deposit to a chain
-    // that cannot receive it. The template decides the wording; this decides that it is shown.
     if (cardanoAddress) {
       await chatizaloService.sendBotNotification({
         data_token: BOT_DATA_TOKEN!,
@@ -339,8 +336,7 @@ export async function sendDepositInfo(
       });
     }
 
-    // 4. CTA Interactive Message (deposit from OTHER networks) — EVM/Bitcoin/Solana bridge only.
-    // There is no bridge to Cardano, so the CTA stays EVM-only on purpose.
+    // 4. CTA Interactive Message (deposit from OTHER networks)
     const { title, message, footer, button } = await getNotificationTemplate(
       channel_user_id,
       NotificationEnum.deposit_from_other_networks
