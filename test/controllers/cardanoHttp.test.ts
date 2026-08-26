@@ -1,12 +1,26 @@
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CARDANO_PREPROD_CHAIN_ID } from '../../src/config/cardanoConfig';
+import { CHATIZALO_TOKEN, DEFAULT_CHAIN_ID } from '../../src/config/constants';
 import { buildServer } from '../../src/config/server';
 import Blockchain from '../../src/models/blockchainModel';
 import Token from '../../src/models/tokenModel';
 import { UserModel } from '../../src/models/userModel';
 import { deriveCardanoAccount } from '../../src/services/cardano/cardanoWalletService';
+import { enableCardanoPreprod, setCardanoEnv } from '../support/cardanoEnv';
+
+vi.mock('../../src/helpers/envHelper', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/helpers/envHelper')>();
+  const { cardanoEnvHelperMock } = await import('../support/cardanoEnv');
+  return cardanoEnvHelperMock(actual);
+});
+
+vi.mock('../../src/config/constants', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/config/constants')>();
+  const { cardanoConstantsMock } = await import('../support/cardanoEnv');
+  return cardanoConstantsMock(actual);
+});
 
 /**
  * The application driven over HTTP, not through its services.
@@ -26,7 +40,7 @@ import { deriveCardanoAccount } from '../../src/services/cardano/cardanoWalletSe
  */
 
 /** Chain id of the EVM network this instance operates on, per `.env`. */
-const EVM_CHAIN_ID = Number(process.env.DEFAULT_CHAIN_ID ?? 534351);
+const EVM_CHAIN_ID = DEFAULT_CHAIN_ID;
 
 /** `CORS_ORIGINS` is `*` in development, but the middleware still demands the header be present. */
 const ORIGIN = 'http://localhost';
@@ -128,9 +142,7 @@ async function call(
     headers: {
       origin: ORIGIN,
       'content-type': 'application/json',
-      ...(init.auth === false
-        ? {}
-        : { authorization: `Bearer ${process.env.CHATIZALO_TOKEN ?? ''}` })
+      ...(init.auth === false ? {} : { authorization: `Bearer ${CHATIZALO_TOKEN ?? ''}` })
     },
     body: init.body === undefined ? undefined : JSON.stringify(init.body)
   });
@@ -146,10 +158,9 @@ async function call(
  * look like it was hanging.
  */
 beforeAll(async () => {
-  process.env.CARDANO_NETWORK = 'preprod';
   // A closed port: an accidental chain call fails instantly instead of reaching out.
-  process.env.CARDANO_PROVIDER_URL = 'http://127.0.0.1:1';
-  process.env.CARDANO_PROVIDER_TIMEOUT_MS = '1000';
+  enableCardanoPreprod({ providerUrl: 'http://127.0.0.1:1', providerTimeoutMs: 1000 });
+  setCardanoEnv({ enabled: false });
 
   // Seeded before booting: the network config plugin snapshots the catalogue at startup.
   await seedEvmNetwork();
@@ -182,7 +193,7 @@ describe('GET /balance/:wallet - a Cardano address', () => {
     // error — it answers **404**, so this endpoint silently stopped existing for every Cardano
     // wallet the moment base addresses replaced enterprise ones. The previous fixture was 59
     // characters, which is why the suite stayed green through a broken endpoint.
-    process.env.CARDANO_ENABLED = 'true';
+    setCardanoEnv({ enabled: true });
     const address = deriveCardanoAccount('5491100000009').address;
     expect(address.length).toBeGreaterThan(100);
 
@@ -194,7 +205,7 @@ describe('GET /balance/:wallet - a Cardano address', () => {
   });
 
   it('answers a bech32 address with the same shape an EVM address gets', async () => {
-    process.env.CARDANO_ENABLED = 'true';
+    setCardanoEnv({ enabled: true });
     const address = 'addr_test1vrhdandhv2ngazdseql7v5fkg5utnu629anv9zt25x8vrsqn2mhal';
 
     const { status, text } = await call(`/balance/${address}`);
@@ -221,7 +232,7 @@ describe('GET /balance_by_phone - the Cardano wallet is discoverable', () => {
     // The entry point of the whole flow: in V1 the user funds their own Cardano wallet, so they
     // have to be able to see the address before they have used it. The address is derived, not
     // looked up, which is what makes that possible — and nothing is written to get it.
-    process.env.CARDANO_ENABLED = 'true';
+    setCardanoEnv({ enabled: true });
     const phone = '5491100000001';
     await UserModel.create({
       phone_number: phone,
@@ -251,7 +262,7 @@ describe('GET /balance_by_phone - the Cardano wallet is discoverable', () => {
   });
 
   it('leaves the portfolio untouched when Cardano is off', async () => {
-    process.env.CARDANO_ENABLED = 'false';
+    setCardanoEnv({ enabled: false });
     const phone = '5491100000002';
     await UserModel.create({
       phone_number: phone,
@@ -283,7 +294,7 @@ describe('POST /make_transaction - dispatch', () => {
   it('sends an ADA request to the Cardano controller', async () => {
     // With the family switched off, the Cardano controller answers with a message only it produces.
     // That makes this a test of the dispatch rather than of the chain: no provider is touched.
-    process.env.CARDANO_ENABLED = 'false';
+    setCardanoEnv({ enabled: false });
 
     const { status, text } = await call('/make_transaction/', { method: 'POST', body });
 
@@ -292,7 +303,7 @@ describe('POST /make_transaction - dispatch', () => {
   });
 
   it('sends a request naming the Cardano network there too', async () => {
-    process.env.CARDANO_ENABLED = 'false';
+    setCardanoEnv({ enabled: false });
 
     const { text } = await call('/make_transaction/', {
       method: 'POST',
@@ -308,7 +319,7 @@ describe('POST /make_transaction - dispatch', () => {
 
   it('leaves an EVM request on the EVM path', async () => {
     // The regression that matters: adding a chain must not divert the transfers that already work.
-    process.env.CARDANO_ENABLED = 'true';
+    setCardanoEnv({ enabled: true });
 
     const { text } = await call('/make_transaction/', {
       method: 'POST',
