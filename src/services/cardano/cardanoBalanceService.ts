@@ -4,11 +4,16 @@
  * There is no contract to call and no `balanceOf`: a Cardano balance is the sum of the unspent
  * outputs an address holds, so this reads UTxOs and adds them up.
  *
- * The one judgement call is what "balance" means when some of those outputs also carry native
- * assets. V1 never spends such an output — carrying its tokens into the change output is not
- * implemented — so its ADA is real but not usable. Reporting only the spendable part would make the
- * balance disagree with every explorer; reporting the total would promise funds a transfer then
- * refuses to move. Both numbers are returned, and the caller decides which one it is showing.
+ * An output that also carries native assets used to be invisible here, because an ADA transfer
+ * could not spend one: its tokens had nowhere to go. That is no longer true — the change output
+ * carries them home — so its ADA counts like any other, and a wallet that sent a token stops
+ * appearing to have lost the whole output it came out of.
+ *
+ * What is still reported apart is how much ADA is keeping tokens company. Almost all of it is
+ * spendable; roughly one min-ADA of it is not, because the change output that carries the tokens
+ * has to hold its own floor. Pricing that floor needs the protocol parameters, so the exact figure
+ * is left to whoever has them: the builder refuses precisely, and `adaTransferRequirement`
+ * explains it in a sentence.
  */
 
 import { ADA_ADDRESS_PREFIX, getCardanoConfig } from '../../config/cardanoConfig';
@@ -28,7 +33,7 @@ import {
   type CardanoProvider,
   logCardanoProviderError
 } from './cardanoProviderService';
-import { spendableBalance, totalAssets } from './cardanoTxService';
+import { selectableBalance, spendableBalance, totalAssets } from './cardanoTxService';
 
 /**
  * The whole Cardano token catalogue for this network, as configured.
@@ -79,17 +84,18 @@ export interface CardanoAssetBalance {
 export interface CardanoBalance {
   /** The address queried. */
   address: string;
-  /** Everything the address holds, ADA locked beside native assets included. */
+  /** Everything the address holds. */
   totalAda: string;
-  /** What an ADA transfer could spend right now. */
+  /** What an ADA transfer can reach. Equal to {@link totalAda} but for a rounding of min-ADA. */
   spendableAda: string;
   /** Spendable amount as a number, for the fields that store balances numerically. */
   spendable: number;
   /**
-   * ADA sitting in outputs an ADA transfer will not touch.
+   * ADA sitting in outputs that also carry native assets.
    *
-   * Not stranded: a *token* transfer spends exactly those outputs. It is the amount that an ADA
-   * transfer alone cannot reach.
+   * Informational, not a deduction: this ADA is spendable. It is reported because it is the part of
+   * the balance whose availability has a caveat — the change output carrying those tokens keeps one
+   * min-ADA of it behind.
    */
   lockedWithAssetsAda: string;
   /** Native assets held, one entry per asset. */
@@ -134,7 +140,7 @@ export async function getCardanoBalance(
   try {
     const utxos = await (provider ?? buildCardanoProvider()).utxosFor(address);
     const total = utxos.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
-    const spendable = spendableBalance(utxos);
+    const spendable = selectableBalance(utxos);
     const held = totalAssets(utxos);
 
     // Tickers and decimals come from the token catalogue: the chain knows the policy and the
@@ -147,7 +153,7 @@ export async function getCardanoBalance(
       totalAda: lovelaceToAda(total),
       spendableAda: lovelaceToAda(spendable),
       spendable: lovelaceToAdaNumber(spendable),
-      lockedWithAssetsAda: lovelaceToAda(total - spendable),
+      lockedWithAssetsAda: lovelaceToAda(total - spendableBalance(utxos)),
       assets: held.map((asset) => {
         const unit = assetUnit(asset);
         const known = configured.get(unit);
