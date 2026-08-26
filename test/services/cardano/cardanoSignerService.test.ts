@@ -1,9 +1,27 @@
 import { createPrivateKey, createPublicKey, verify as nodeVerify } from 'crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { CDS1 } from '../../../src/config/constants';
 import { decodeCardanoAddress } from '../../../src/services/cardano/cardanoAddressService';
 import { cardanoSignerService } from '../../../src/services/cardano/cardanoSignerService';
 import { secService } from '../../../src/services/secService';
+
+// Fixed inputs, so the suite is a property of the code and not of whatever the machine running it
+// happens to have configured.
+vi.mock('../../../src/config/constants', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/config/constants')>();
+  return {
+    ...actual,
+    $S: 'x',
+    $B: 'y',
+    CDC1: '743a643a',
+    CDC2: '743a633a',
+    CDC3: '7430',
+    CDC4: '743a6b3a',
+    CDC5: '743a733a',
+    CDC6: '743a73733a'
+  };
+});
 
 const CHAIN_ID = 900000000001;
 const PHONE = '5491100000001';
@@ -94,7 +112,7 @@ describe('cardanoSignerService - domain separation from the EVM key', () => {
   // configured. Skipped rather than fed hardcoded values: those live in the deployment's
   // environment and do not belong in a repository, and the twelve tests above still cover the
   // Cardano derivation without them.
-  it.skipIf(!process.env.CDS1)('never derives the Cardano key from the EVM private key', () => {
+  it.skipIf(!CDS1)('never derives the Cardano key from the EVM private key', () => {
     // `secService.get_up()` returns the user's EVM private key. If it were the Ed25519 seed, then
     // leaking one key would leak the other, on a different chain, silently. The two must be
     // independent derivations from the master secret, and this is the assertion that says so.

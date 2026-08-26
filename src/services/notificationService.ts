@@ -285,19 +285,22 @@ export async function sendWalletNextSteps(
 }
 
 /**
- * Sends a 3-message sequence with deposit information.
+ * Sends the deposit information sequence.
  * 1. Deposit info intro message (translated)
- * 2. Wallet address (for Scroll network)
- * 3. CTA to deposit from other networks (EVM, Bitcoin, Solana, etc)
+ * 2. EVM wallet address
+ * 3. Cardano address, when the user has one
+ * 4. CTA to deposit from other networks (EVM, Bitcoin, Solana, etc)
  *
  * @param user_wallet_proxy - The blockchain address of the wallet.
  * @param channel_user_id - The user's identifier within the communication channel.
  * @param network_name - The network name (e.g., "Scroll Sepolia").
+ * @param cardanoAddress - The user's Cardano address, or empty when the family is off.
  */
 export async function sendDepositInfo(
   user_wallet_proxy: string,
   channel_user_id: string,
-  network_name: string
+  network_name: string,
+  cardanoAddress?: string
 ) {
   try {
     Logger.log(
@@ -318,14 +321,22 @@ export async function sendDepositInfo(
       message: formattedIntro
     });
 
-    // 2. Wallet Address (separate message for easy copying)
+    // 2. Wallet addresses as separate messages (plain text, easy to long-press and copy)
     await chatizaloService.sendBotNotification({
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message: user_wallet_proxy
     });
 
-    // 3. CTA Interactive Message (deposit from OTHER networks)
+    if (cardanoAddress) {
+      await chatizaloService.sendBotNotification({
+        data_token: BOT_DATA_TOKEN!,
+        channel_user_id,
+        message: cardanoAddress
+      });
+    }
+
+    // 4. CTA Interactive Message (deposit from OTHER networks)
     const { title, message, footer, button } = await getNotificationTemplate(
       channel_user_id,
       NotificationEnum.deposit_from_other_networks

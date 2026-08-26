@@ -125,6 +125,23 @@ async function getContractBalance(
 }
 
 /**
+ * Builds the symbol -> contract address map the DefiLlama fallback needs.
+ * A caller that omits it gets Binance-only pricing, so any token Binance does not list
+ * comes back without a rate instead of falling back.
+ * @param {IToken[]} tokens - Token catalogue, any chain
+ * @param {number} chainId - Chain ID to filter tokens by
+ * @returns {Map<string, string>} Map of normalized token symbols to contract addresses
+ */
+export function buildTokenAddressMap(tokens: IToken[], chainId: number): Map<string, string> {
+  const map = new Map<string, string>();
+  tokens
+    .filter((token) => token.chain_id === chainId)
+    .filter((token) => !isSkippableTokenContractAddress(token.address))
+    .forEach((token) => map.set(String(token.symbol).trim().toUpperCase(), token.address));
+  return map;
+}
+
+/**
  * Fetches token prices from Binance API using USDT pairs, with DefiLlama fallback
  * @param {string[]} symbols - Array of token symbols to fetch prices for
  * @param {Map<string, string>} tokenAddresses - Map of token symbols to contract addresses
@@ -182,9 +199,16 @@ export async function getTokenPrices(
     const wrapToken = (symbol: string): string =>
       symbol.replace(/^ETH$/, 'WETH').replace(/^BTC$/, 'WBTC');
 
+    // `BINANCE_API_URL` points at the US exchange, whose catalogue is a subset of the global one:
+    // SCR trades on binance.com but not here, and wstETH on neither. Asking for them spends a
+    // round trip that can only ever answer `-1121 Invalid symbol`, so they skip straight to the
+    // DefiLlama fallback, which does price both.
+    const NO_BINANCE_PAIR: Set<string> = new Set(['SCR', 'WSTETH']);
+    const binanceSymbols = symbolsToFetchFromApi.filter((symbol) => !NO_BINANCE_PAIR.has(symbol));
+
     // Fetch to Binance
     await Promise.all(
-      symbolsToFetchFromApi.map(async (symbol) => {
+      binanceSymbols.map(async (symbol) => {
         try {
           const unwrapped = unwrapToken(symbol);
           const res = await fetch(`${BINANCE_API_URL}/ticker/price?symbol=${unwrapped}USDT`);
@@ -194,15 +218,23 @@ export async function getTokenPrices(
           if (data?.price) {
             const price = parseFloat(data.price);
             Logger.log('getTokenPrices', `Price for ${symbol}: ${price} USDT`);
+            // Stored under both keys on purpose: callers read back by the symbol they asked for,
+            // and `ETH` would otherwise only be written as `WETH` and come back a miss.
+            priceMap.set(symbol, price);
             priceMap.set(wrapped, price);
+            cacheService.set(CacheNames.PRICE, symbol, price);
             cacheService.set(CacheNames.PRICE, wrapped, price);
           } else {
-            Logger.warn('getTokenPrices', `No price found for ${unwrapped}USDT`);
-            priceMap.set(wrapped, 0);
+            // The HTTP status and Binance's own code are what separate "this pair is not listed"
+            // (-1121) from an outage worth acting on: 451 is the geographic block, 429 the rate
+            // limit. Without them every cause reads the same in the logs.
+            Logger.warn(
+              'getTokenPrices',
+              `No price found for ${unwrapped}USDT (http=${res.status} code=${data?.code ?? 'none'} msg=${data?.msg ?? 'none'})`
+            );
           }
         } catch (err) {
           Logger.error('getTokenPrices', `Error fetching price for ${symbol}:`, err);
-          priceMap.set(symbol, 0);
         }
       })
     );
@@ -252,13 +284,7 @@ async function getTokenInfo(tokens: IToken[], chanId: number): Promise<TokenInfo
   );
   const symbols = [...new Set(priceEligibleTokens.map((token) => norm(token.symbol)))];
 
-  // Build address map for DefiLlama fallback
-  const tokenAddresses = new Map<string, string>();
-  priceEligibleTokens.forEach((token) => {
-    tokenAddresses.set(norm(token.symbol), token.address);
-  });
-
-  const prices = await getTokenPrices(symbols, tokenAddresses, chanId);
+  const prices = await getTokenPrices(symbols, buildTokenAddressMap(tokens, chanId), chanId);
 
   return chainTokens.map((token) => ({
     symbol: token.symbol,

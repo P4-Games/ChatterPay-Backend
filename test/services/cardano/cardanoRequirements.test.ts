@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getCardanoFeeConfig } from '../../../src/config/cardanoFeeConfig';
 import { decodeCardanoAddress } from '../../../src/services/cardano/cardanoAddressService';
@@ -7,6 +7,13 @@ import {
   tokenTransferRequirement
 } from '../../../src/services/cardano/cardanoRequirementsService';
 import type { CardanoProtocolParameters, CardanoUtxo } from '../../../src/types/cardanoType';
+import { resetCardanoEnv, setCardanoFeeEnv } from '../../support/cardanoEnv';
+
+vi.mock('../../../src/helpers/envHelper', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/helpers/envHelper')>();
+  const { cardanoEnvHelperMock } = await import('../../support/cardanoEnv');
+  return cardanoEnvHelperMock(actual);
+});
 
 /**
  * The three fee models, exercised through what they actually change: how much a wallet has to hold
@@ -50,40 +57,27 @@ function utxo(
   };
 }
 
-const saved: Record<string, string | undefined> = {};
-const VARS = ['CARDANO_SPONSOR_FEES', 'CARDANO_TRANSFER_FEE_USD', 'CARDANO_SPONSOR_WALLET_ID'];
-
 beforeEach(() => {
-  VARS.forEach((name) => {
-    saved[name] = process.env[name];
-    delete process.env[name];
-  });
-});
-
-afterEach(() => {
-  VARS.forEach((name) => {
-    if (saved[name] === undefined) delete process.env[name];
-    else process.env[name] = saved[name];
-  });
+  resetCardanoEnv();
 });
 
 /** Option A: nobody sponsors, nothing is charged. */
 function optionA(): void {
-  process.env.CARDANO_SPONSOR_FEES = 'false';
-  process.env.CARDANO_TRANSFER_FEE_USD = '0';
+  setCardanoFeeEnv({ sponsorFees: false, transferFeeUsd: 0 });
 }
 
 /** Option B: the user pays the network, ChatterPay charges its fee. */
 function optionB(): void {
-  process.env.CARDANO_SPONSOR_FEES = 'false';
-  process.env.CARDANO_TRANSFER_FEE_USD = '0.08';
+  setCardanoFeeEnv({ sponsorFees: false, transferFeeUsd: 0.08 });
 }
 
 /** Option C: ChatterPay covers the network fee and charges its own. */
 function optionC(): void {
-  process.env.CARDANO_SPONSOR_FEES = 'true';
-  process.env.CARDANO_SPONSOR_WALLET_ID = 'chatterpay-sponsor';
-  process.env.CARDANO_TRANSFER_FEE_USD = '0.08';
+  setCardanoFeeEnv({
+    sponsorFees: true,
+    sponsorWalletId: 'chatterpay-sponsor',
+    transferFeeUsd: 0.08
+  });
 }
 
 describe('getCardanoFeeConfig - the three options', () => {
@@ -112,17 +106,17 @@ describe('getCardanoFeeConfig - the three options', () => {
   it('refuses to sponsor without a wallet to sponsor from', () => {
     // Half-configured is off, the same posture the family flag takes: a transfer that gets as far
     // as building and then has no input to cover the fee has already cost the user a lock.
-    process.env.CARDANO_SPONSOR_FEES = 'true';
+    setCardanoFeeEnv({ sponsorFees: true });
     const config = getCardanoFeeConfig();
     expect(config.sponsorNetworkFee).toBe(false);
-    expect(config.disabledReason).toContain('CARDANO_SPONSOR_WALLET_ID');
+    expect(config.disabledReason).toBe('sponsor_wallet_missing');
   });
 
   it('ignores a fee that is not a usable amount', () => {
-    for (const value of ['-1', 'abc', '']) {
-      process.env.CARDANO_TRANSFER_FEE_USD = value;
-      expect(getCardanoFeeConfig().transferFeeUsd, value).toBe(0);
-    }
+    // Nothing usable read from the environment means the fee is not configured, and an
+    // unconfigured fee is no fee.
+    setCardanoFeeEnv({ transferFeeUsd: null });
+    expect(getCardanoFeeConfig().transferFeeUsd).toBe(0);
   });
 });
 

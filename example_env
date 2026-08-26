@@ -93,6 +93,12 @@ CDO3=
 CDO4=
 CDP1=
 CDP2=
+CDC1=
+CDC2=
+CDC3=
+CDC4=
+CDC5=
+CDC6=
 
 # telegram bot
 TELEGRAM_BOT_API_KEY=''
@@ -176,8 +182,8 @@ POLYMARKET_ADAPTER_AUTH_TOKEN=''
 
 # Cardano
 # Set CARDANO_ENABLED='true' to enable ADA and native-asset (USDCx / USDM / USDA) transfers.
-# The family stays off unless SEED_INTERNAL_SALT and a provider URL are also present: a half-configured
-# Cardano is worse than none, because a transfer would get as far as building and then fail to submit.
+# The family stays off unless a provider URL is present too: a half-configured Cardano is worse than
+# none, because a transfer would get as far as building and then fail to submit.
 # CARDANO_NETWORK decides the header byte of every address issued (CIP-19) — 'preprod' or 'mainnet'.
 # CARDANO_CHAIN_ID is the internal, non-EIP-155 id (9e11 + network magic). It is frozen once any
 # wallet, transaction or token row has been written with it.
@@ -197,18 +203,20 @@ CARDANO_TTL_SLOTS=900
 CARDANO_DEPOSIT_CONFIRMATIONS=3
 CARDANO_EXPLORER_URL='https://preprod.cardanoscan.io/transaction/'
 
-# Cardano — quién paga qué en una transferencia (ver __to_deploy__/opciones-fees-cardano.md)
+# Cardano - who pays what on a transfer. The two settings are independent:
 #
 #   CARDANO_SPONSOR_FEES  CARDANO_TRANSFER_FEE_USD
-#   false                 0        opción A: el usuario paga la red, no se le cobra nada
-#   false                 0.08     opción B: el usuario paga la red y debe el fee de ChatterPay
-#   true                  0.08     opción C: ChatterPay paga la red y cobra su fee
+#   false                 0        the user pays the network fee and is charged nothing
+#   false                 0.08     the user pays the network fee and owes the ChatterPay fee
+#   true                  0.08     ChatterPay pays the network fee and charges its own
 #
-# CARDANO_SPONSOR_WALLET_ID identifica la wallet que financia las transferencias patrocinadas. Se
-# deriva del mismo master secret que el resto, así que no hay un segundo secreto que distribuir.
+# CARDANO_SPONSOR_WALLET_ID names the wallet that funds sponsored transfers.
 #
-# La opción C es el default. La wallet del sponsor tiene que tener ADA: si está vacía, la
-# transferencia se rechaza en vez de cobrarle al usuario un fee que se le prometió cubrir.
+# The sponsor wallet has to hold ADA: if it is empty the transfer is refused, rather than charging the user a fee that was promised to be covered.
 CARDANO_SPONSOR_FEES='true'
 CARDANO_TRANSFER_FEE_USD=0.08
-CARDANO_SPONSOR_WALLET_ID='chatterpay-sponsor'
+CARDANO_SPONSOR_WALLET_ID='some-text'
+
+# Address this deployment derives for its own startup check. If the backend stops producing it,
+# something the derivation depends on changed and the process refuses to start. Empty switches it off.
+CARDANO_DERIVATION_CHECK=''

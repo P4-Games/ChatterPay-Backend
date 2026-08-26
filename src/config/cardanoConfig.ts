@@ -7,10 +7,13 @@
  * URL is off, not partly on — a transfer that gets as far as building and then cannot submit has
  * already cost the user an operation lock and a notification.
  *
- * @see CARDANO_INTEGRATION_PLAN.md §7
+ * The settings themselves are read by `constants.ts`, the only module that touches the environment,
+ * and shaped by `envHelper`. What is left here is the reasoning: the defaults, why each one is the
+ * number it is, and the order in which a missing piece is reported.
  */
 
-import type { CardanoNetwork } from '../types/cardanoType';
+import { readCardanoEnv } from '../helpers/envHelper';
+import type { CardanoConfig, CardanoDisabledReason, CardanoNetwork } from '../types/cardanoType';
 
 /**
  * Internal chain ids for networks that have no EIP-155 chain id.
@@ -68,34 +71,8 @@ const DEFAULT_TTL_SLOTS = 900;
  */
 const DEFAULT_DEPOSIT_CONFIRMATIONS = 3;
 
-/** Everything the Cardano subsystem needs to run, resolved once. */
-export interface CardanoConfig {
-  /** Whether the family is fully configured and may be used. */
-  enabled: boolean;
-  /** The network this deployment operates on. Decides the header byte of every address it issues. */
-  network: CardanoNetwork;
-  /** Internal chain id of that network. */
-  chainId: number;
-  /** Provider root URL. */
-  providerUrl: string;
-  /** Per-call ceiling for provider requests, in milliseconds. */
-  providerTimeoutMs: number;
-  /** Slots of validity given to a transaction, from the tip. */
-  ttlSlots: number;
-  /** Confirmations required before an output is spendable. */
-  depositConfirmations: number;
-  /** Explorer base URL; the transaction id is appended directly. */
-  explorerUrl: string;
-  /** Why the family is off, when it is. Empty when enabled. */
-  disabledReason: string;
-}
-
-function intFromEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (raw === undefined || raw.trim() === '') return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
+/** Per-call ceiling for provider requests, in milliseconds. */
+const DEFAULT_PROVIDER_TIMEOUT_MS = 20_000;
 
 /** Spellings of each network this deployment accepts, all compared case-insensitively. */
 const NETWORK_ALIASES: Readonly<Record<string, CardanoNetwork>> = {
@@ -105,7 +82,7 @@ const NETWORK_ALIASES: Readonly<Record<string, CardanoNetwork>> = {
 };
 
 /**
- * Reads `CARDANO_NETWORK`.
+ * Resolves the configured network spelling.
  *
  * Case and surrounding whitespace are irrelevant: `Mainnet`, `MAINNET` and ` mainnet ` all mean
  * mainnet. Requiring an exact lowercase match would turn a capital letter in a Cloud Build
@@ -116,12 +93,11 @@ const NETWORK_ALIASES: Readonly<Record<string, CardanoNetwork>> = {
  * `mainet` is not a request for testnet, it is a typo, and answering it with a silent testnet is the
  * same failure the case-insensitivity above exists to prevent.
  *
- * @returns The network, or `null` when the variable holds something this deployment cannot read.
- *   Absent or empty falls back to testnet: that is "not configured", and testnet is the safe default
- *   for it.
+ * @param raw - Network as configured, already trimmed.
+ * @returns The network, or `null` when the value is something this deployment cannot read. Empty
+ *   falls back to testnet: that is "not configured", and testnet is the safe default for it.
  */
-function networkFromEnv(): CardanoNetwork | null {
-  const raw = (process.env.CARDANO_NETWORK ?? '').trim();
+function resolveNetwork(raw: string): CardanoNetwork | null {
   if (raw === '') return 'testnet';
   return NETWORK_ALIASES[raw.toLowerCase()] ?? null;
 }
@@ -135,48 +111,43 @@ function networkFromEnv(): CardanoNetwork | null {
  *   family needs is missing.
  */
 export function getCardanoConfig(): CardanoConfig {
-  const readNetwork = networkFromEnv();
+  const env = readCardanoEnv();
+  const readNetwork = resolveNetwork(env.network);
   // Unreadable network: everything below still resolves, against testnet, so the shape of the
   // returned config is the usual one -- but `disabledReason` further down keeps the family off, so
   // none of it is ever used.
   const network: CardanoNetwork = readNetwork ?? 'testnet';
-  const chainId = intFromEnv(
-    'CARDANO_CHAIN_ID',
-    network === 'mainnet' ? CARDANO_MAINNET_CHAIN_ID : CARDANO_PREPROD_CHAIN_ID
-  );
-  const providerUrl = (process.env.CARDANO_PROVIDER_URL || DEFAULT_PROVIDER_URL[network]).replace(
-    /\/+$/,
-    ''
-  );
+  const chainId =
+    env.chainId ?? (network === 'mainnet' ? CARDANO_MAINNET_CHAIN_ID : CARDANO_PREPROD_CHAIN_ID);
+  // Stripped after the fallback rather than before it, so a configured value of nothing but
+  // slashes reads as a value that resolved to nothing -- which is a misconfiguration to report,
+  // not an absent setting to paper over with the default.
+  const providerUrl = (env.providerUrl || DEFAULT_PROVIDER_URL[network]).replace(/\/+$/, '');
 
-  const flagOn = (process.env.CARDANO_ENABLED || 'false').toLowerCase() === 'true';
-  // The salt is what every address derives from. Without it the family would still produce
-  // well-formed addresses -- ones that anybody who knows the phone number could spend from.
-  const hasSalt = Boolean(process.env.SEED_INTERNAL_SALT);
-
-  const disabledReason = !flagOn
-    ? 'CARDANO_ENABLED is not true'
+  // The last two are what the derivation is made of. Without either, this deployment would issue
+  // well-formed addresses that are not the ones it issued yesterday — and nothing downstream can
+  // tell the difference — so the family stays off instead.
+  const disabledReason: CardanoDisabledReason = !env.enabled
+    ? 'flag_off'
     : readNetwork === null
-      ? `CARDANO_NETWORK is not a network this deployment knows: '${process.env.CARDANO_NETWORK}' ` +
-        `(expected one of ${Object.keys(NETWORK_ALIASES).join(', ')}, in any case)`
+      ? 'network_unknown'
       : !providerUrl
-        ? 'CARDANO_PROVIDER_URL is empty'
-        : !hasSalt
-          ? 'SEED_INTERNAL_SALT is not configured'
-          : '';
+        ? 'provider_missing'
+        : !env.hasSecret
+          ? 'secret_missing'
+          : !env.labelsReadable
+            ? 'labels_unreadable'
+            : '';
 
   return {
     enabled: disabledReason === '',
     network,
     chainId,
     providerUrl,
-    providerTimeoutMs: intFromEnv('CARDANO_PROVIDER_TIMEOUT_MS', 20_000),
-    ttlSlots: intFromEnv('CARDANO_TTL_SLOTS', DEFAULT_TTL_SLOTS),
-    depositConfirmations: intFromEnv(
-      'CARDANO_DEPOSIT_CONFIRMATIONS',
-      DEFAULT_DEPOSIT_CONFIRMATIONS
-    ),
-    explorerUrl: process.env.CARDANO_EXPLORER_URL || EXPLORER_URL[network],
+    providerTimeoutMs: env.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS,
+    ttlSlots: env.ttlSlots ?? DEFAULT_TTL_SLOTS,
+    depositConfirmations: env.depositConfirmations ?? DEFAULT_DEPOSIT_CONFIRMATIONS,
+    explorerUrl: env.explorerUrl || EXPLORER_URL[network],
     disabledReason
   };
 }

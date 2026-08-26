@@ -5,6 +5,7 @@ import { $B, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
 import { connectToDatabaseWithRetry } from './config/database';
 import { startServer } from './config/server';
 import { Logger } from './helpers/loggerHelper';
+import { assertCardanoDerivationUnchanged } from './services/cardano/cardanoDerivationCheck';
 import { registerPolymarketApiAdapter } from './services/polymarket/polymarketProxyHelper';
 
 /**
@@ -61,13 +62,19 @@ async function main(): Promise<void> {
     initializeCloudTrace();
     registerPolymarketApiAdapter();
 
-    // Bind the port first: Cloud Run's startup probe only checks that something
-    // listens on PORT. Connecting to MongoDB beforehand meant a slow or briefly
-    // unreachable cluster kept the port closed until the probe gave up.
+    // The database has to be up before the server is built: networkConfigPlugin
+    // reads the token list while registering, and mongoose would buffer that
+    // query until it times out. Retrying here means a transient connection error
+    // delays startup instead of killing the container, which is what used to
+    // leave port 8080 closed until Cloud Run's startup probe gave up.
+    await connectToDatabaseWithRetry();
+
+    // Before the port opens: an address issued by a deployment whose derivation moved is an address
+    // nobody can sign for, and no request should be served until that is ruled out.
+    assertCardanoDerivationUnchanged();
+
     const server = await startServer();
     setupGracefulShutdown(server);
-
-    await connectToDatabaseWithRetry();
   } catch (err) {
     Logger.error('main', 'Error starting application:', err);
     process.exit(1);

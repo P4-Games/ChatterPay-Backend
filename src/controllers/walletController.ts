@@ -19,6 +19,14 @@ import {
 import { createOrReturnWallet, tryIssueTokens } from '../services/walletService';
 
 /**
+ * Returned by the endpoints whose message the backend already delivered over WhatsApp.
+ * The wallet address is deliberately left out of the payload: handing it back invites the
+ * model to echo it, which is the duplicate message this contract exists to prevent.
+ */
+const NO_REPLY_REQUIRED_MESSAGE =
+  'NO_REPLY_REQUIRED. The information has already been delivered to the user via separate WhatsApp messages sent by the backend. Do not produce any user-facing text in this turn. Your assistant message content MUST be an empty string. Do not repeat the address, do not narrate or summarise what was sent, and do not ask follow-up questions. Any visible output you generate will appear as a duplicate noise message to the user, which is a bug.';
+
+/**
  * Retrieves the ChatterPay wallet address associated with the given user.
  * If the wallet does not exist, it will be created automatically.
  *
@@ -337,16 +345,18 @@ export const getDepositInfo = async (
     const { networkConfig } = request.server;
 
     // Get or create wallet
-    const { walletAddress } = await createOrReturnWallet(channel_user_id, networkConfig, logKey);
+    const { walletAddress, cardanoAddress } = await createOrReturnWallet(
+      channel_user_id,
+      networkConfig,
+      logKey
+    );
 
     // Send deposit info sequence
-    await sendDepositInfo(walletAddress, channel_user_id, networkConfig.name);
+    await sendDepositInfo(walletAddress, channel_user_id, networkConfig.name, cardanoAddress);
 
     Logger.log('getDepositInfo', logKey, `Deposit info sent for ${walletAddress}`);
 
-    return await returnSuccessResponse(reply, 'Deposit information sent successfully', {
-      walletAddress
-    });
+    return await returnSuccessResponse(reply, NO_REPLY_REQUIRED_MESSAGE);
   } catch (error) {
     const err = error as Error;
     return returnErrorResponse(
@@ -409,9 +419,7 @@ export const getMultichainDepositCta = async (
       `Multichain deposit CTA sent for ${walletAddress}`
     );
 
-    return await returnSuccessResponse(reply, 'Multichain deposit CTA sent successfully', {
-      walletAddress
-    });
+    return await returnSuccessResponse(reply, NO_REPLY_REQUIRED_MESSAGE);
   } catch (error) {
     const err = error as Error;
     return returnErrorResponse(

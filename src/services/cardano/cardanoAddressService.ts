@@ -19,8 +19,6 @@
  * migration of every funded wallet, and that migration only gets more expensive with each user.
  *
  * Nothing in this module talks to a provider, a node or the database.
- *
- * @see CARDANO_INTEGRATION_PLAN.md §4.3
  */
 
 import { blake2b } from '@noble/hashes/blake2';

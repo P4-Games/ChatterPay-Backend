@@ -10,8 +10,6 @@
  *
  * This asks the provider once and answers the same question first, while the user can still act on
  * it.
- *
- * @see __to_deploy__/opciones-fees-cardano.md
  */
 
 import { getCardanoConfig } from '../../config/cardanoConfig';

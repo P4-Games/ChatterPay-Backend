@@ -13,8 +13,6 @@
  * **The fee is exact, not estimated.** It is computed from the serialized size of the very
  * transaction being submitted, so what gets reported is what the chain charged rather than a guess
  * with a margin.
- *
- * @see CARDANO_INTEGRATION_PLAN.md §6.2
  */
 
 import { chargesTransferFee, getCardanoFeeConfig } from '../../config/cardanoFeeConfig';
@@ -101,6 +99,18 @@ export interface CardanoTransferResult {
   error: string;
 }
 
+/**
+ * What the user is told when the chain could not be reached.
+ *
+ * A sentence rather than the code behind it: this text is delivered as a chat message, and a person
+ * reading `CARDANO_PROVIDER_TIMEOUT` learns nothing they can act on. The code is in the log.
+ */
+const PROVIDER_UNREACHABLE =
+  'No pudimos contactar la red de Cardano. Probá de nuevo en unos minutos.';
+
+/** What the user is told when the failure is one nobody anticipated. */
+const TRANSFER_FAILED = 'No pudimos completar la transferencia. Probá de nuevo en unos minutos.';
+
 /** A failure that happened before anything was signed, and therefore costs nothing to report. */
 class CardanoTransferRefusal extends Error {
   constructor(
@@ -161,10 +171,13 @@ async function submitResolvingTimeout(
       Logger.info('cardanoTransfer', logKey, `Transaction ${expectedId} did reach the chain`);
       return expectedId;
     }
-    throw new CardanoProviderError(
-      error.failure,
-      `${error.message} (transaction ${expectedId} is not on chain; it is safe to retry)`,
-      false
+    // A refusal rather than a provider error, because the outcome is now known and the sentence
+    // below is the one the user needs. The provider's own text stays in the log: it names the host
+    // that failed and quotes its response, neither of which is the user's to read.
+    Logger.warn('cardanoTransfer', logKey, `Submit failed outright: ${error.message}`);
+    throw new CardanoTransferRefusal(
+      `CARDANO_PROVIDER_${error.failure.toUpperCase()}`,
+      `transaction ${expectedId} is not on chain; it is safe to retry`
     );
   }
 }
@@ -380,14 +393,22 @@ export async function executeCardanoTransfer(
       return failure(error.code, error.message);
     }
     if (error instanceof CardanoProviderError) {
+      // The provider's own text names the host it could not reach and quotes its response body,
+      // and this message is what the user is shown. The code classifies it for the log; the
+      // sentence is the one a person can act on.
       logCardanoProviderError('cardanoTransfer', error);
-      return failure(`CARDANO_PROVIDER_${error.failure.toUpperCase()}`, error.message);
+      return failure(`CARDANO_PROVIDER_${error.failure.toUpperCase()}`, PROVIDER_UNREACHABLE);
     }
     const message = error instanceof Error ? error.message : String(error);
     // Errors raised by the builder are refusals too, they simply arrive as plain Errors: the codes
     // are already machine-readable, so the prefix is what separates them from anything unexpected.
-    const code = /^CARDANO_[A-Z_]+/.exec(message)?.[0] ?? 'CARDANO_UNEXPECTED_ERROR';
-    Logger.error('cardanoTransfer', logKey, `${code}: ${message}`);
-    return failure(code, message);
+    // A recognised code keeps its message, which was written to be read; anything else is a bug
+    // report, and a bug report is not an answer to give somebody waiting on a transfer.
+    const code = /^CARDANO_[A-Z_]+/.exec(message)?.[0] ?? '';
+    Logger.error('cardanoTransfer', logKey, `${code || 'CARDANO_UNEXPECTED_ERROR'}: ${message}`);
+    // A message that is nothing but its own code is a classification, not a sentence.
+    return code && message.trim() !== code
+      ? failure(code, message)
+      : failure(code || 'CARDANO_UNEXPECTED_ERROR', TRANSFER_FAILED);
   }
 }

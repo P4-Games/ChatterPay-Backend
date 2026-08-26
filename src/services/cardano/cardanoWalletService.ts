@@ -10,8 +10,6 @@
  * The practical consequence is the one that matters for transfers: **a recipient who has never used
  * Cardano still has a Cardano address**, so sending to a phone number works the first time, without
  * asking them to do anything first.
- *
- * @see CARDANO_INTEGRATION_PLAN.md §6.1
  */
 
 import { getCardanoConfig } from '../../config/cardanoConfig';
@@ -89,13 +87,16 @@ export async function ensureCardanoWalletForUser(user: IUser): Promise<CardanoWa
 
   if (existing) {
     if (existing.wallet_proxy !== account.address) {
-      // The fingerprint is what makes this actionable: the address is a pure function of the
-      // derivation inputs, so a mismatch means one of them changed, and naming them turns "why is
-      // this address different" into one line instead of a bisection.
-      throw new Error(
+      // The detail is what makes this actionable — the address is a pure function of its inputs, so
+      // a mismatch means one of them changed — and it belongs in the log and nowhere else. The
+      // message on the error travels to the user through the failure path, so it carries the code
+      // alone: the two addresses and the fingerprint are not theirs to read.
+      Logger.error(
+        'ensureCardanoWalletForUser',
         `CARDANO_ADDRESS_MISMATCH: stored ${existing.wallet_proxy}, derived ${account.address}, ` +
           `inputs ${derivationFingerprint()} network(${network}) chainId(${chainId})`
       );
+      throw new Error('CARDANO_ADDRESS_MISMATCH');
     }
     return { address: account.address, publicKey: account.publicKey, wasCreated: false };
   }

@@ -18,40 +18,15 @@
  * | true  | 0.08 | ChatterPay paga la red y le cobra el fee                        |
  * | true  | 0    | ChatterPay paga la red y no cobra nada                          |
  *
- * @see __to_deploy__/opciones-fees-cardano.md
+ * The settings themselves are read by `constants.ts`, the only module that touches the environment.
+ * What is left here is the decision the two of them add up to.
  */
 
-/** ChatterPay's fee cannot be a Cardano output of its own: it is below the ledger's min-ADA. */
-export interface CardanoFeeConfig {
-  /** Whether ChatterPay supplies an input to cover the network fee. */
-  sponsorNetworkFee: boolean;
-  /** ChatterPay's fee per transfer, in USD. Zero disables charging entirely. */
-  transferFeeUsd: number;
-  /**
-   * Identifier the sponsor wallet derives from, when sponsoring is on.
-   *
-   * Derived like any other wallet rather than configured as a private key: the same master secret
-   * produces it, so there is no second secret to distribute, rotate or leak.
-   */
-  sponsorWalletId: string;
-  /** Why sponsoring is off, when it is configured on but unusable. Empty when nothing is wrong. */
-  disabledReason: string;
-}
+import { readCardanoFeeEnv } from '../helpers/envHelper';
+import type { CardanoFeeConfig, CardanoSponsorDisabledReason } from '../types/cardanoType';
 
-function boolFromEnv(name: string, fallback: boolean): boolean {
-  const raw = (process.env[name] ?? '').trim().toLowerCase();
-  if (raw === '') return fallback;
-  return raw === 'true';
-}
-
-function moneyFromEnv(name: string, fallback: number): number {
-  const raw = (process.env[name] ?? '').trim();
-  if (raw === '') return fallback;
-  const parsed = Number.parseFloat(raw);
-  // A negative or unreadable fee is a configuration mistake, and charging a negative fee would pay
-  // the user. Falls back rather than trusting it.
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
+/** ChatterPay's fee per transfer when the setting holds nothing usable: it charges nothing. */
+const DEFAULT_TRANSFER_FEE_USD = 0;
 
 /**
  * Resolves who pays what, from the environment.
@@ -60,19 +35,15 @@ function moneyFromEnv(name: string, fallback: number): number {
  *   without the wallet it needs — the same posture as the family flag: half-configured is off.
  */
 export function getCardanoFeeConfig(): CardanoFeeConfig {
-  const sponsorRequested = boolFromEnv('CARDANO_SPONSOR_FEES', false);
-  const sponsorWalletId = (process.env.CARDANO_SPONSOR_WALLET_ID ?? '').trim();
+  const env = readCardanoFeeEnv();
 
-  const disabledReason = !sponsorRequested
-    ? ''
-    : sponsorWalletId === ''
-      ? 'CARDANO_SPONSOR_WALLET_ID is empty'
-      : '';
+  const disabledReason: CardanoSponsorDisabledReason =
+    env.sponsorFees && env.sponsorWalletId === '' ? 'sponsor_wallet_missing' : '';
 
   return {
-    sponsorNetworkFee: sponsorRequested && disabledReason === '',
-    transferFeeUsd: moneyFromEnv('CARDANO_TRANSFER_FEE_USD', 0),
-    sponsorWalletId,
+    sponsorNetworkFee: env.sponsorFees && disabledReason === '',
+    transferFeeUsd: env.transferFeeUsd ?? DEFAULT_TRANSFER_FEE_USD,
+    sponsorWalletId: env.sponsorWalletId,
     disabledReason
   };
 }

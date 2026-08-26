@@ -17,8 +17,6 @@
  * `CardanoProvider` is an interface rather than a class on purpose: the tests drive the whole
  * transfer flow through an in-memory implementation, which is the only way to provoke a submit that
  * times out *after* the transaction reached the chain.
- *
- * @see CARDANO_INTEGRATION_PLAN.md §4.5
  */
 
 import { getCardanoConfig } from '../../config/cardanoConfig';

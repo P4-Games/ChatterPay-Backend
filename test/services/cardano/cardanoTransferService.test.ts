@@ -1,9 +1,22 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CardanoProviderError } from '../../../src/services/cardano/cardanoProviderService';
 import { cardanoSignerService } from '../../../src/services/cardano/cardanoSignerService';
 import { executeCardanoTransfer } from '../../../src/services/cardano/cardanoTransferService';
 import { FakeCardanoProvider } from '../../helpers/fakeCardanoProvider';
+import { resetCardanoEnv, setCardanoFeeEnv } from '../../support/cardanoEnv';
+
+vi.mock('../../../src/helpers/envHelper', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/helpers/envHelper')>();
+  const { cardanoEnvHelperMock } = await import('../../support/cardanoEnv');
+  return cardanoEnvHelperMock(actual);
+});
+
+vi.mock('../../../src/config/constants', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/config/constants')>();
+  const { cardanoConstantsMock } = await import('../../support/cardanoEnv');
+  return cardanoConstantsMock(actual);
+});
 
 const CHAIN_ID = 900000000001;
 const SENDER_PHONE = '5491100000001';
@@ -16,9 +29,6 @@ const recipient = cardanoSignerService.getAccount(RECIPIENT_PHONE, 'testnet', CH
 const MAINNET_ADDRESS = 'addr1vx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzers66hrl8';
 
 let provider: FakeCardanoProvider;
-
-const savedSponsor: Record<string, string | undefined> = {};
-const SPONSOR_VARS = ['CARDANO_SPONSOR_FEES', 'CARDANO_SPONSOR_WALLET_ID'];
 
 function transfer(overrides: Partial<Parameters<typeof executeCardanoTransfer>[0]> = {}) {
   return executeCardanoTransfer({
@@ -37,19 +47,9 @@ function transfer(overrides: Partial<Parameters<typeof executeCardanoTransfer>[0
 }
 
 beforeEach(() => {
-  SPONSOR_VARS.forEach((name) => {
-    savedSponsor[name] = process.env[name];
-  });
-  process.env.CARDANO_SPONSOR_FEES = 'false';
-  delete process.env.CARDANO_SPONSOR_WALLET_ID;
+  resetCardanoEnv();
+  setCardanoFeeEnv({ sponsorFees: false, sponsorWalletId: '' });
   provider = new FakeCardanoProvider();
-});
-
-afterEach(() => {
-  SPONSOR_VARS.forEach((name) => {
-    if (savedSponsor[name] === undefined) delete process.env[name];
-    else process.env[name] = savedSponsor[name];
-  });
 });
 
 describe('executeCardanoTransfer - the happy path', () => {
