@@ -9,8 +9,6 @@
  * implemented — so its ADA is real but not usable. Reporting only the spendable part would make the
  * balance disagree with every explorer; reporting the total would promise funds a transfer then
  * refuses to move. Both numbers are returned, and the caller decides which one it is showing.
- *
- * @see CARDANO_INTEGRATION_PLAN.md §6.4
  */
 
 import { ADA_ADDRESS_PREFIX, getCardanoConfig } from '../../config/cardanoConfig';
