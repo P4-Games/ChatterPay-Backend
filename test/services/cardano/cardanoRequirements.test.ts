@@ -128,7 +128,7 @@ describe('adaTransferRequirement - minimum to move ADA', () => {
       expect(result.ok).toBe(false);
       expect(result.requiredLovelace).toBe(MIN_ADA);
       // The user has to be able to tell this apart from "you are broke".
-      expect(result.message).toContain('límite de la red');
+      expect(result.message).toContain('network limit');
     }
   });
 
@@ -160,9 +160,9 @@ describe('adaTransferRequirement - minimum to move ADA', () => {
     // absorb it as fee and the user would lose it without the transfer failing.
     const result = adaTransferRequirement(2_400_000n, [utxo(3_494_785n)], ADDRESS, PREPROD);
     expect(result.ok).toBe(false);
-    expect(result.message).toContain('se pierde');
+    expect(result.message).toContain('is lost');
     // Both escapes are offered: keep change, or empty the wallet.
-    expect(result.message).toMatch(/hasta 2\.3/);
+    expect(result.message).toMatch(/up to 2\.3/);
     expect(result.message).toMatch(/3\.29/);
   });
 
@@ -190,7 +190,7 @@ describe('tokenTransferRequirement - a token never travels alone', () => {
         PREPROD
       );
       expect(result.ok, 'a wallet with tokens and no ADA cannot send').toBe(false);
-      expect(result.message).toContain('también necesitás ADA');
+      expect(result.message).toContain('also takes ADA');
     }
   });
 
@@ -211,7 +211,7 @@ describe('tokenTransferRequirement - a token never travels alone', () => {
     // The change output carries the remainder, so it needs min-ADA of its own.
     expect(part.requiredLovelace).toBeGreaterThan(whole.requiredLovelace);
     expect(part.requiredLovelace - whole.requiredLovelace).toBeGreaterThan(1_000_000n);
-    expect(part.message).toContain('vuelto');
+    expect(part.message).toContain('change that keeps the rest of the token');
   });
 
   it('C still needs the ADA the token drags along', () => {
@@ -228,7 +228,7 @@ describe('tokenTransferRequirement - a token never travels alone', () => {
     );
     expect(result.ok, 'a wallet with tokens and no ADA cannot send, sponsored or not').toBe(false);
     expect(result.requiredLovelace).toBeGreaterThan(1_000_000n);
-    expect(result.message).toContain('el costo de red lo cubre ChatterPay');
+    expect(result.message).toContain('ChatterPay covers the network cost');
   });
 
   it('C asks for less than A: the difference is exactly the network fee', () => {
