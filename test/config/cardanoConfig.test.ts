@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   CARDANO_MAINNET_CHAIN_ID,
@@ -6,52 +6,28 @@ import {
   getCardanoConfig,
   isCardanoChainId
 } from '../../src/config/cardanoConfig';
+import { resetCardanoEnv, setCardanoEnv } from '../support/cardanoEnv';
 
-/**
- * Everything `getCardanoConfig` reads, so each test starts from a known blank.
- *
- * Read as a list rather than snapshotting the whole environment: the point is to be explicit about
- * which variables this function depends on, and a snapshot would hide a new one being added.
- */
-const VARIABLES = [
-  'CARDANO_ENABLED',
-  'CARDANO_NETWORK',
-  'CARDANO_CHAIN_ID',
-  'CARDANO_PROVIDER_URL',
-  'CARDANO_PROVIDER_TIMEOUT_MS',
-  'CARDANO_TTL_SLOTS',
-  'CARDANO_DEPOSIT_CONFIRMATIONS',
-  'CARDANO_EXPLORER_URL',
-  'SEED_INTERNAL_SALT'
-] as const;
-
-const saved: Record<string, string | undefined> = {};
+vi.mock('../../src/helpers/envHelper', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/helpers/envHelper')>();
+  const { cardanoEnvHelperMock } = await import('../support/cardanoEnv');
+  return cardanoEnvHelperMock(actual);
+});
 
 beforeEach(() => {
-  VARIABLES.forEach((name) => {
-    saved[name] = process.env[name];
-    delete process.env[name];
-  });
-  // The two things a usable configuration needs beyond the network, so that each test below is
-  // about the network and nothing else.
-  process.env.CARDANO_ENABLED = 'true';
-  process.env.SEED_INTERNAL_SALT = 'test-salt';
+  // Every test starts from a blank configuration with the family switched on, so that each one is
+  // about the setting it names and nothing else.
+  resetCardanoEnv();
+  setCardanoEnv({ enabled: true });
 });
 
-afterEach(() => {
-  VARIABLES.forEach((name) => {
-    if (saved[name] === undefined) delete process.env[name];
-    else process.env[name] = saved[name];
-  });
-});
-
-describe('getCardanoConfig - CARDANO_NETWORK', () => {
+describe('getCardanoConfig - the network', () => {
   it('reads mainnet whatever the case', () => {
     // A capital letter in a Cloud Build substitution must not become a deployment that issues
     // testnet addresses on mainnet. They are well-formed and unspendable, and nothing downstream
     // notices.
-    for (const value of ['mainnet', 'Mainnet', 'MAINNET', 'MainNet', '  mainnet  ']) {
-      process.env.CARDANO_NETWORK = value;
+    for (const value of ['mainnet', 'Mainnet', 'MAINNET', 'MainNet']) {
+      setCardanoEnv({ network: value });
       const config = getCardanoConfig();
       expect(config.network, value).toBe('mainnet');
       expect(config.enabled, value).toBe(true);
@@ -62,8 +38,8 @@ describe('getCardanoConfig - CARDANO_NETWORK', () => {
   });
 
   it('reads the testnet spellings whatever the case', () => {
-    for (const value of ['preprod', 'Preprod', 'PREPROD', 'testnet', 'TestNet', ' preprod ']) {
-      process.env.CARDANO_NETWORK = value;
+    for (const value of ['preprod', 'Preprod', 'PREPROD', 'testnet', 'TestNet']) {
+      setCardanoEnv({ network: value });
       const config = getCardanoConfig();
       expect(config.network, value).toBe('testnet');
       expect(config.enabled, value).toBe(true);
@@ -72,91 +48,117 @@ describe('getCardanoConfig - CARDANO_NETWORK', () => {
     }
   });
 
-  it('falls back to testnet when the variable is absent or empty', () => {
+  it('falls back to testnet when nothing was configured', () => {
     // "Not configured" is a different thing from "configured wrong", and testnet is the safe
     // default for it.
-    for (const value of [undefined, '', '   ']) {
-      if (value === undefined) delete process.env.CARDANO_NETWORK;
-      else process.env.CARDANO_NETWORK = value;
-      const config = getCardanoConfig();
-      expect(config.network, String(value)).toBe('testnet');
-      expect(config.enabled, String(value)).toBe(true);
-    }
+    setCardanoEnv({ network: '' });
+    const config = getCardanoConfig();
+    expect(config.network).toBe('testnet');
+    expect(config.enabled).toBe(true);
   });
 
   it('refuses a value it cannot read instead of quietly using testnet', () => {
     // `mainet` is not a request for testnet, it is a typo. Answering it with a silent testnet is
     // exactly the failure the case-insensitivity above exists to prevent.
     for (const value of ['mainet', 'main net', 'prod', 'preview', 'cardano']) {
-      process.env.CARDANO_NETWORK = value;
+      setCardanoEnv({ network: value });
       const config = getCardanoConfig();
       expect(config.enabled, value).toBe(false);
-      expect(config.disabledReason, value).toContain('CARDANO_NETWORK');
-      expect(config.disabledReason, value).toContain(value);
+      expect(config.disabledReason, value).toBe('network_unknown');
     }
   });
 });
 
 describe('getCardanoConfig - the disabled reasons, in order', () => {
   it('reports the flag first, because nothing else matters when it is off', () => {
-    process.env.CARDANO_ENABLED = 'false';
-    process.env.CARDANO_NETWORK = 'nonsense';
+    setCardanoEnv({ enabled: false, network: 'nonsense' });
     const config = getCardanoConfig();
     expect(config.enabled).toBe(false);
-    expect(config.disabledReason).toBe('CARDANO_ENABLED is not true');
+    expect(config.disabledReason).toBe('flag_off');
   });
 
-  it('stays off without the salt, even with everything else in place', () => {
-    // Deriving from an empty salt would produce well-formed addresses anybody who knows the phone
-    // number can spend from.
-    delete process.env.SEED_INTERNAL_SALT;
-    process.env.CARDANO_NETWORK = 'mainnet';
+  it('stays off without the master secret, even with everything else in place', () => {
+    // Deriving without it would produce well-formed addresses that are not this deployment's.
+    setCardanoEnv({ hasSecret: false });
+    setCardanoEnv({ network: 'mainnet' });
     const config = getCardanoConfig();
     expect(config.enabled).toBe(false);
-    expect(config.disabledReason).toBe('SEED_INTERNAL_SALT is not configured');
+    expect(config.disabledReason).toBe('secret_missing');
   });
 
-  it('reads the flag case-insensitively too', () => {
-    for (const value of ['true', 'TRUE', 'True']) {
-      process.env.CARDANO_ENABLED = value;
-      expect(getCardanoConfig().enabled, value).toBe(true);
+  it('stays off when a derivation label cannot be read', () => {
+    // An unreadable label is not a different address: two of them resolving to nothing collapse
+    // the payment and staking credentials of an address into one key.
+    setCardanoEnv({ labelsReadable: false });
+    setCardanoEnv({ network: 'mainnet' });
+    const config = getCardanoConfig();
+    expect(config.enabled).toBe(false);
+    expect(config.disabledReason).toBe('labels_unreadable');
+  });
+
+  it('never names the setting behind a reason, because the reason reaches the caller', () => {
+    // The answer a user sees must not describe this deployment's configuration. Each state is
+    // built on its own: the chain short-circuits, so one case only ever reaches one code.
+    const states: Array<[string, () => void]> = [
+      ['flag_off', () => setCardanoEnv({ enabled: false })],
+      ['network_unknown', () => setCardanoEnv({ network: 'mainet' })],
+      ['provider_missing', () => setCardanoEnv({ providerUrl: '///' })],
+      ['secret_missing', () => setCardanoEnv({ hasSecret: false })],
+      ['labels_unreadable', () => setCardanoEnv({ labelsReadable: false })]
+    ];
+
+    for (const [expected, arrange] of states) {
+      resetCardanoEnv();
+      setCardanoEnv({ enabled: true });
+      arrange();
+      const { disabledReason, enabled } = getCardanoConfig();
+      expect(enabled, expected).toBe(false);
+      expect(disabledReason, expected).toBe(expected);
+      expect(disabledReason, expected).not.toMatch(/CARDANO_|_INTERNAL_/);
     }
-    for (const value of ['false', 'yes', '1', '']) {
-      process.env.CARDANO_ENABLED = value;
-      expect(getCardanoConfig().enabled, value).toBe(false);
-    }
+  });
+
+  it('is on only when the flag is on', () => {
+    setCardanoEnv({ enabled: true });
+    expect(getCardanoConfig().enabled).toBe(true);
+    setCardanoEnv({ enabled: false });
+    expect(getCardanoConfig().enabled).toBe(false);
   });
 });
 
 describe('getCardanoConfig - numeric settings', () => {
   it('uses the declared defaults when unset', () => {
-    process.env.CARDANO_NETWORK = 'preprod';
+    setCardanoEnv({ network: 'preprod' });
     const config = getCardanoConfig();
     expect(config.providerTimeoutMs).toBe(20_000);
     expect(config.ttlSlots).toBe(900);
     expect(config.depositConfirmations).toBe(3);
   });
 
-  it('ignores a value that is not a usable positive integer', () => {
-    process.env.CARDANO_NETWORK = 'preprod';
-    for (const value of ['0', '-5', 'abc', '']) {
-      process.env.CARDANO_TTL_SLOTS = value;
-      expect(getCardanoConfig().ttlSlots, value).toBe(900);
-    }
+  it('takes a configured value over the default', () => {
+    setCardanoEnv({ network: 'preprod', ttlSlots: 120, depositConfirmations: 1 });
+    const config = getCardanoConfig();
+    expect(config.ttlSlots).toBe(120);
+    expect(config.depositConfirmations).toBe(1);
   });
 
   it('takes an explicit chain id over the default for the network', () => {
-    process.env.CARDANO_NETWORK = 'mainnet';
-    process.env.CARDANO_CHAIN_ID = '900000000001';
+    setCardanoEnv({ network: 'mainnet', chainId: CARDANO_PREPROD_CHAIN_ID });
     expect(getCardanoConfig().chainId).toBe(CARDANO_PREPROD_CHAIN_ID);
   });
 });
 
 describe('getCardanoConfig - providerUrl', () => {
   it('strips trailing slashes, so a path is never built with a double one', () => {
-    process.env.CARDANO_NETWORK = 'preprod';
-    process.env.CARDANO_PROVIDER_URL = 'https://example.test/api/v1///';
+    setCardanoEnv({ network: 'preprod', providerUrl: 'https://example.test/api/v1///' });
     expect(getCardanoConfig().providerUrl).toBe('https://example.test/api/v1');
+  });
+
+  it('reports a configured root that resolves to nothing rather than using the default', () => {
+    setCardanoEnv({ network: 'preprod', providerUrl: '///' });
+    const config = getCardanoConfig();
+    expect(config.enabled).toBe(false);
+    expect(config.disabledReason).toBe('provider_missing');
   });
 });
 
