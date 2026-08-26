@@ -337,10 +337,14 @@ export const getDepositInfo = async (
     const { networkConfig } = request.server;
 
     // Get or create wallet
-    const { walletAddress } = await createOrReturnWallet(channel_user_id, networkConfig, logKey);
+    const { walletAddress, cardanoAddress } = await createOrReturnWallet(
+      channel_user_id,
+      networkConfig,
+      logKey
+    );
 
     // Send deposit info sequence
-    await sendDepositInfo(walletAddress, channel_user_id, networkConfig.name);
+    await sendDepositInfo(walletAddress, channel_user_id, networkConfig.name, cardanoAddress);
 
     Logger.log('getDepositInfo', logKey, `Deposit info sent for ${walletAddress}`);
 
