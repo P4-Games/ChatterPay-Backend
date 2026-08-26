@@ -1,8 +1,8 @@
 /**
  * `make_transaction` for Cardano.
  *
- * A sibling of `makeTransaction` rather than a branch inside it. The plan (§3.3) calls for
- * extracting a `transferRouter` and moving the EVM steps behind it, and that is still the right
+ * A sibling of `makeTransaction` rather than a branch inside it. Extracting a `transferRouter` and
+ * moving the EVM steps behind it is still the right
  * end state — but it is a refactor of the live money path, and doing it in the same change that
  * introduces a new chain means that any regression on EVM has two candidate causes. So the EVM
  * function is left byte-for-byte untouched here, and the extraction stays queued as its own change.
@@ -11,8 +11,6 @@
  * per-amount limits, chatterpoints and the notifications are the same functions the EVM path calls.
  * A change to any of them applies to both chains, which is the property that matters: those are
  * product rules, not EVM details.
- *
- * @see CARDANO_INTEGRATION_PLAN.md §6.2
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -59,6 +57,21 @@ import { ConcurrentOperationsEnum, type TransactionData } from '../types/commonT
 
 /** The chain's own coin: the default asset, and the one every fee is charged in. */
 const ADA_SYMBOL = 'ADA';
+
+/**
+ * The machine-readable part of an error, and only that part.
+ *
+ * Anything raised below here may carry a provider hostname, a response body or a pair of derived
+ * addresses in its message, and this value is answered to the caller. The codes already say what
+ * happened; the text is for the log.
+ *
+ * @param error - Whatever was caught.
+ * @returns The `CARDANO_*` code when there is one, `CARDANO_UNEXPECTED_ERROR` otherwise.
+ */
+function cardanoErrorCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return /^CARDANO_[A-Z_]+/.exec(message)?.[0] ?? 'CARDANO_UNEXPECTED_ERROR';
+}
 
 /**
  * Whether a `make_transaction` request is asking for Cardano.
@@ -161,6 +174,13 @@ export const makeCardanoTransaction = async (
   try {
     /* 1. inputs */
     if (!config.enabled) {
+      // The code says which piece is missing, and it stays in the log: the answer the caller
+      // displays must not describe this deployment's configuration.
+      Logger.warn(
+        'makeCardanoTransaction',
+        logKey,
+        `cardano unavailable: ${config.disabledReason}`
+      );
       await returnErrorResponseAsSuccess(
         'makeCardanoTransaction',
         logKey,
@@ -168,7 +188,7 @@ export const makeCardanoTransaction = async (
         'Error making transaction',
         false,
         channel_user_id,
-        `Cardano is not available right now (${config.disabledReason})`
+        'Cardano is not available right now'
       );
       return undefined;
     }
@@ -417,7 +437,9 @@ export const makeCardanoTransaction = async (
         'No pudimos procesar la transferencia. Intentá de nuevo en unos minutos.',
         false,
         channel_user_id,
-        error instanceof Error ? error.message : String(error)
+        // The code and nothing else: the full text is already in the log above, and an unexpected
+        // error's message is written for an operator, not for the person waiting on a transfer.
+        cardanoErrorCode(error)
       );
     }
 
