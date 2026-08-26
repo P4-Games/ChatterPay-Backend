@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CARDANO_PREPROD_CHAIN_ID } from '../../../src/config/cardanoConfig';
 import Token from '../../../src/models/tokenModel';
 import {
@@ -7,6 +7,19 @@ import {
 } from '../../../src/services/cardano/cardanoBalanceService';
 import { CardanoProviderError } from '../../../src/services/cardano/cardanoProviderService';
 import { FakeCardanoProvider } from '../../helpers/fakeCardanoProvider';
+import { enableCardanoPreprod } from '../../support/cardanoEnv';
+
+vi.mock('../../../src/helpers/envHelper', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/helpers/envHelper')>();
+  const { cardanoEnvHelperMock } = await import('../../support/cardanoEnv');
+  return cardanoEnvHelperMock(actual);
+});
+
+vi.mock('../../../src/config/constants', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/config/constants')>();
+  const { cardanoConstantsMock } = await import('../../support/cardanoEnv');
+  return cardanoConstantsMock(actual);
+});
 
 const ADDRESS = 'addr_test1vrhdandhv2ngazdseql7v5fkg5utnu629anv9zt25x8vrsqn2mhal';
 const MAINNET_ADDRESS = 'addr1vx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzers66hrl8';
@@ -20,8 +33,7 @@ const USDM = {
 let provider: FakeCardanoProvider;
 
 beforeEach(() => {
-  process.env.CARDANO_ENABLED = 'true';
-  process.env.CARDANO_NETWORK = 'preprod';
+  enableCardanoPreprod();
   provider = new FakeCardanoProvider();
 });
 
