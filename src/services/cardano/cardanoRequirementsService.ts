@@ -9,8 +9,6 @@
  * This is computed **before the operation lock is taken**, so a wallet that cannot pay is told why
  * while it can still do something about it, instead of being told after the lock, the notification
  * and the optimistic answer have already gone out.
- *
- * @see __to_deploy__/opciones-fees-cardano.md
  */
 
 import { getCardanoFeeConfig } from '../../config/cardanoFeeConfig';
