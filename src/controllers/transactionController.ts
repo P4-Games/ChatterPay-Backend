@@ -17,7 +17,11 @@ import { NotificationEnum } from '../models/templateModel';
 import type { IToken } from '../models/tokenModel';
 import Transaction, { type ITransaction } from '../models/transactionModel';
 import type { IUser, IUserWallet } from '../models/userModel';
-import { getTokenPrices, verifyWalletBalanceInRpc } from '../services/balanceService';
+import {
+  getTokenPrices,
+  buildTokenAddressMap,
+  verifyWalletBalanceInRpc
+} from '../services/balanceService';
 import {
   checkBlockchainConditions,
   getTokenData,
@@ -961,7 +965,13 @@ export const makeTransaction = async (
     /* ***************************************************** */
     /* 12. makeTransaction: save chatterpoints               */
     /* ***************************************************** */
-    const prices = await getTokenPrices([tokenSymbol]);
+    // The address map matters: without it a token Binance does not list (SCR, wstETH) prices at
+    // nothing and the operation is registered as a zero-dollar transfer.
+    const prices = await getTokenPrices(
+      [tokenSymbol],
+      buildTokenAddressMap(tokensConfig, networkConfig.chainId),
+      networkConfig.chainId
+    );
     const price = prices.get(tokenSymbol.toUpperCase()) ?? 1;
     const amountInUsd = parseFloat(amount) * price;
 
