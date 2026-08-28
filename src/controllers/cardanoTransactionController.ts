@@ -458,7 +458,9 @@ export const makeCardanoTransaction = async (
     // is what the EVM path already does, and what the saved transaction already records: `fee` is
     // in the same token as `amount`, so `amount - fee` is what reached the destination.
     const displayAmount = Number(amount).toFixed(resolved.displayDecimals);
-    const displayAmountAfterFee = (Number(amount) - chatterPayFee).toFixed(resolved.displayDecimals);
+    const displayAmountAfterFee = (Number(amount) - chatterPayFee).toFixed(
+      resolved.displayDecimals
+    );
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
       result.toUser?.phone_number ?? result.toAddress,
