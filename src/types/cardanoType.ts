@@ -160,6 +160,45 @@ export interface CardanoTransferPlan {
     changeAddress: Uint8Array;
   };
   /**
+   * Whether the sponsor also funds the ADA attached to the token output.
+   *
+   * Off, that ADA comes out of the sender's own inputs and their ADA balance falls by roughly 1.16
+   * every time they move a token. On, the sponsor's inputs cover it and the sender's ADA balance
+   * does not move — which is the whole of what scheme 2 buys.
+   *
+   * Expressed here as a capability rather than as a scheme number on purpose: the builder balances
+   * a transaction, it has no business knowing which product decision put it in this mode.
+   */
+  sponsorMinAda?: boolean;
+  /**
+   * Whether change too small to be its own output is routed to the sponsor instead of refused.
+   *
+   * The remainder joins the sponsor's change output and is credited back to the user off-chain.
+   * Costs nothing — the transaction only has to balance — and it is what lets a wallet holding
+   * 10.5 send 10, which the ledger's floor otherwise forbids.
+   *
+   * Applies only when that change carries no tokens: residual assets have to come home to the
+   * sender, so their output can never be routed away.
+   */
+  routeDustToSponsor?: boolean;
+  /**
+   * Outputs of the **destination** to fold into the one this transfer creates.
+   *
+   * A token transfer normally builds the recipient a new output, and a new output needs a new
+   * min-ADA that somebody has to fund. When the recipient already holds this token, that ADA has
+   * already been funded once: spending their output and reissuing one with both quantities in it
+   * needs no new floor at all, because the floor is set by the output's size and an output holding
+   * 15 of something is the same size as one holding 5.
+   *
+   * Only outputs whose sole asset is the token being sent belong here. One carrying anything else
+   * would drag that into the destination's new output — harmless, since it is going back to its own
+   * owner, but it changes the floor and it is not this transfer's business to move.
+   *
+   * Spending them needs the destination's signature, so a plan that sets this must also count it in
+   * {@link witnessCount}.
+   */
+  recycleUtxos?: readonly CardanoUtxo[];
+  /**
    * ChatterPay's fee for this transfer, **in the units of whatever is moving** — lovelace on an ADA
    * transfer, the asset's own base units on a token transfer.
    *
@@ -241,6 +280,43 @@ export interface BuiltCardanoTransaction {
    * the amount, so what reached the destination is the amount minus this.
    */
   chatterPayFee: bigint;
+  /**
+   * Sender lovelace that rode home in the sponsor's change instead of the sender's own, because it
+   * was below the floor an output has to clear.
+   *
+   * Zero on every transfer that did not need it, which is most of them. When it is not zero it is a
+   * debt: the money left the sender's address, it is sitting in ChatterPay's, and the sender has to
+   * be credited for it. Reported rather than folded into the fee so that the credit has a figure to
+   * be made from and reconciliation can find it.
+   */
+  routedToSponsor: bigint;
+  /**
+   * Native assets riding home in the sponsor's change output.
+   *
+   * ChatterPay's fee on a token transfer, and empty on every other kind. Reported for the same
+   * reason {@link changeAssets} is: the caller records this output so the next transfer can spend it
+   * before any provider has indexed it, and an output recorded as pure ADA when it carries a token
+   * gets spent as pure ADA — which builds a transaction that does not conserve value and that the
+   * chain rejects.
+   */
+  sponsorChangeAssets: readonly CardanoAssetAmount[];
+  /**
+   * Lovelace the sponsor put into outputs that are not its own.
+   *
+   * The min-ADA attached to the token output, under scheme 2. It is what the sponsor gave away on
+   * this transfer, as opposed to the network fee it burned, and the two are worth telling apart:
+   * this one lands in a user's wallet and never comes back.
+   */
+  sponsorSuppliedLovelace: bigint;
+  /**
+   * Lovelace that came from the destination's own recycled outputs.
+   *
+   * It is part of {@link sentLovelace} — it sits in the output being paid — but it never belonged to
+   * the sender and never left their wallet. Without it, "what the sender put in" reads as the whole
+   * of the destination's balance being spent and reissued, which is exactly what recycling does and
+   * exactly what it must not be reported as.
+   */
+  recycledLovelace: bigint;
 }
 
 /** A wallet's Cardano identity: the address, its raw bytes, and the key behind it. */
@@ -296,8 +372,18 @@ export interface CardanoEnv {
 export interface CardanoFeeEnv {
   /** Whether ChatterPay was asked to cover the network fee. */
   sponsorFees: boolean;
-  /** ChatterPay's fee per transfer, in USD. */
+  /** ChatterPay's fee per transfer, in USD. Scheme 1 reads this one. */
   transferFeeUsd: number | null;
+  /** ChatterPay's fee per transfer, in ADA. Scheme 2 reads this one. */
+  transferFeeAda: number | null;
+  /** ChatterPay's fee, in ADA, when it also has to fund a new min-ADA for the destination. */
+  transferFeeAdaNewOutput: number | null;
+  /** Which fee scheme was asked for, as configured. Anything but `2` resolves to scheme 1. */
+  feeScheme: number | null;
+  /** Whether the destination's existing token output may be recycled. Scheme 2 only. */
+  recycleDestinationUtxo: boolean;
+  /** Whether change below the ledger's floor is routed to the sponsor. Scheme 2 only. */
+  routeDustToSponsor: boolean;
   /** Identifier the sponsor wallet derives from. */
   sponsorWalletId: string;
 }
@@ -355,12 +441,69 @@ export interface CardanoConfig {
  */
 export type CardanoSponsorDisabledReason = '' | 'sponsor_wallet_missing';
 
+/**
+ * Which of the two fee schemes a deployment runs.
+ *
+ * - `1` — the sender supplies the ADA a token drags along, and ChatterPay's fee is priced in USD.
+ *   What the wallet shows after sending a token is the token leaving *and* min-ADA leaving, because
+ *   that ADA is the sender's and it moves to the recipient.
+ * - `2` — ChatterPay supplies that ADA, and its fee is priced in ADA. The sender's ADA balance does
+ *   not move when they send a token, and the figure on screen is one number rather than two.
+ *
+ * They are a switch rather than a migration because scheme 2 changes who funds an output, which is
+ * the part of the builder where a mistake produces transactions the chain rejects. Being able to go
+ * back to 1 without a deploy is the point.
+ */
+export type CardanoFeeScheme = 1 | 2;
+
 /** ChatterPay's fee cannot be a Cardano output of its own: it is below the ledger's min-ADA. */
 export interface CardanoFeeConfig {
+  /** Which scheme this deployment runs. */
+  scheme: CardanoFeeScheme;
   /** Whether ChatterPay supplies an input to cover the network fee. */
   sponsorNetworkFee: boolean;
-  /** ChatterPay's fee per transfer, in USD. Zero disables charging entirely. */
+  /**
+   * Whether ChatterPay also supplies the min-ADA the token output must carry.
+   *
+   * Scheme 2 with a usable sponsor, and nothing else: without a sponsor there is no second wallet
+   * to supply it from, and under scheme 1 that ADA is the sender's by design.
+   */
+  sponsorMinAda: boolean;
+  /**
+   * Whether change too small to stand as its own output is routed to the sponsor.
+   *
+   * Only when it carries no tokens. A change output holding the sender's residual assets has to go
+   * to the sender: routing it would hand ChatterPay their token.
+   *
+   * **Its own setting, and off by default, because it moves the user's money.** The routed lovelace
+   * leaves their address and sits in ChatterPay's, and it is theirs: turning this on without the
+   * credit that gives it back turns an honest refusal — "your change would be lost" — into a silent
+   * charge of up to one min-ADA. Switch it on when the crediting exists, not before.
+   */
+  routeDustToSponsor: boolean;
+  /**
+   * Whether a destination output already holding this token may be spent and reissued as one.
+   *
+   * Its own setting rather than part of the scheme, because it brings a third signature and a
+   * third claim to race on, and that is worth being able to switch off without going back to
+   * scheme 1 wholesale.
+   */
+  recycleDestinationUtxo: boolean;
+  /** ChatterPay's fee per transfer, in USD. Scheme 1. Zero disables charging entirely. */
   transferFeeUsd: number;
+  /** ChatterPay's fee per transfer, in ADA. Scheme 2. Zero disables charging entirely. */
+  transferFeeAda: number;
+  /**
+   * ChatterPay's fee, in ADA, on the one transfer that costs it more than the network fee.
+   *
+   * A token going to somebody who does not hold it yet needs a brand new output, and under scheme 2
+   * ChatterPay funds its min-ADA — roughly 1.16 ADA that lands in the recipient's wallet and does
+   * not come back. The ordinary fee does not cover that, so this one is charged instead.
+   *
+   * It is the exception that keeps the headline number small: every other transfer, including one
+   * to somebody who already holds the token, pays {@link transferFeeAda}.
+   */
+  transferFeeAdaNewOutput: number;
   /**
    * Identifier the sponsor wallet derives from, when sponsoring is on.
    *

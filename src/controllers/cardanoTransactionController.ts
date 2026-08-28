@@ -28,7 +28,7 @@ import {
   userReachedOperationLimit,
   userWithinTokenOperationLimits
 } from '../services/blockchainService';
-import { chatterPayFeeUnits } from '../services/cardano/cardanoFeeService';
+import { chatterPayFeeFor } from '../services/cardano/cardanoFeeService';
 import {
   executeCardanoOperation,
   resolveCardanoToken
@@ -308,7 +308,21 @@ export const makeCardanoTransaction = async (
     const feeConfig = getCardanoFeeConfig();
     const estimatedChatterPayFee =
       feeConfig.sponsorNetworkFee && chargesTransferFee(feeConfig)
-        ? await chatterPayFeeUnits(feeConfig.transferFeeUsd, resolved.symbol, resolved.decimals)
+        ? await chatterPayFeeFor(
+            feeConfig,
+            resolved.symbol,
+            resolved.decimals,
+            // The dearer of the two on a token transfer. Whether this one funds a new min-ADA
+            // depends on what the destination holds, which is read inside the transfer and not
+            // here — and of the two ways to be wrong, estimating high refuses a transfer that
+            // would have worked while estimating low accepts one that then fails after the lock
+            // is taken and the user has been told it is under way.
+            !resolved.isAda,
+            // Read off the token catalogue's own answer rather than off its ticker: a deployment
+            // whose row is named `tADA` would otherwise fall through to a price lookup that
+            // answers nothing, and quietly make every ADA transfer free.
+            resolved.isAda
+          )
         : 0n;
     const preflight = await canAffordCardanoTransfer(
       senderAddress,
@@ -438,7 +452,13 @@ export const makeCardanoTransaction = async (
       await delaySeconds(lastBotMsgDelaySeconds);
     }
 
-    const displayAmount = Number(amount).toFixed(2);
+    // Two figures, because the two sides of a transfer are not told the same number. The sender is
+    // told what left their balance; the recipient is told what arrived, which is that less
+    // ChatterPay's fee, since the fee is deducted from the amount rather than charged on top. This
+    // is what the EVM path already does, and what the saved transaction already records: `fee` is
+    // in the same token as `amount`, so `amount - fee` is what reached the destination.
+    const displayAmount = Number(amount).toFixed(resolved.displayDecimals);
+    const displayAmountAfterFee = (Number(amount) - chatterPayFee).toFixed(resolved.displayDecimals);
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
       result.toUser?.phone_number ?? result.toAddress,
@@ -458,7 +478,7 @@ export const makeCardanoTransaction = async (
         fromUser.phone_number,
         fromUser.name,
         result.toUser.phone_number,
-        displayAmount,
+        displayAmountAfterFee,
         result.tokenSymbol,
         user_notes ?? ''
       );

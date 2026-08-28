@@ -32,6 +32,14 @@ export interface ResolvedCardanoToken {
   isAda: boolean;
   /** Decimals the asset carries, from the token document. */
   decimals: number;
+  /**
+   * Decimals a figure is shown with, from the token document.
+   *
+   * Distinct from `decimals`, which is what the ledger counts in: USDCx moves in millionths and is
+   * quoted to two. Carried here so the Cardano path formats off the catalogue the way the EVM path
+   * already does, rather than off a constant that happens to agree with it today.
+   */
+  displayDecimals: number;
   /** Policy and name, absent for ADA. */
   asset?: CardanoAsset;
 }
@@ -70,7 +78,12 @@ export async function resolveCardanoToken(
 
   const unit = (token.address ?? '').trim();
   if (unit.startsWith(ADA_ADDRESS_PREFIX)) {
-    return { symbol: token.symbol, isAda: true, decimals: token.decimals };
+    return {
+      symbol: token.symbol,
+      isAda: true,
+      decimals: token.decimals,
+      displayDecimals: token.display_decimals
+    };
   }
 
   // A native asset's unit is `policyId` (28 bytes) followed by `assetName` (0–32 bytes), all hex.
@@ -87,6 +100,7 @@ export async function resolveCardanoToken(
     symbol: token.symbol,
     isAda: false,
     decimals: token.decimals,
+    displayDecimals: token.display_decimals,
     asset: { policyId: normalised.slice(0, 56), assetName: normalised.slice(56) }
   };
 }
@@ -123,8 +137,25 @@ export interface CardanoOperationResult {
    * to travel with the token — around 1.2 ADA — which the sender pays and the recipient receives.
    * Surfaced because otherwise the sender's ADA balance drops by more than the fee with nothing to
    * explain it.
+   *
+   * Under scheme 2 that ADA is the sponsor's, so this is `"0.000000"` on a token transfer and there
+   * is nothing to explain: the sender's ADA balance does not move at all.
    */
   sentAda: string;
+  /**
+   * ADA the sponsor put into the destination's output, in display units.
+   *
+   * The other half of {@link sentAda}: between them they account for the whole of the ADA attached
+   * to a token output, and which of the two it came from is the difference between the schemes.
+   */
+  sponsorSuppliedAda: string;
+  /**
+   * Sender ADA that rode home in the sponsor's change, in display units.
+   *
+   * Below the ledger's floor it could not be an output of the sender's own. It is owed back to
+   * them, and this is the figure the credit is made from.
+   */
+  routedToSponsorAda: string;
   explorerUrl: string;
   /** Sender's Cardano address. */
   fromAddress: string;
@@ -220,6 +251,8 @@ function failure(code: string, message: string, symbol = 'ADA'): CardanoOperatio
     networkFeeAda: '0.000000',
     chatterPayFee: '0',
     sentAda: '0.000000',
+    sponsorSuppliedAda: '0.000000',
+    routedToSponsorAda: '0.000000',
     explorerUrl: '',
     fromAddress: '',
     toAddress: '',
@@ -309,6 +342,11 @@ export async function executeCardanoOperation(
   const result = await executeCardanoTransfer({
     fromPhoneNumber: fromUser.phone_number,
     toAddress: destination.address,
+    // Only when the destination resolved from a phone number. An address pasted in from outside
+    // may well be one of ours, but nothing here can prove it, and recycling asks for a signature
+    // that only its real owner can produce.
+    toPhoneNumber:
+      destination.resolvedFrom === 'phone' ? destination.user?.phone_number : undefined,
     amountLovelace,
     asset,
     tokenSymbol: token.symbol,
@@ -329,7 +367,14 @@ export async function executeCardanoOperation(
     networkFeeAda: lovelaceToAda(result.feeLovelace),
     // In the units of what moved, not in ADA: on a token transfer the fee is charged in the token.
     chatterPayFee: fromBaseUnits(result.chatterPayFee, token.decimals),
-    sentAda: lovelaceToAda(result.sentLovelace),
+    // What the *sender* put in, which is the whole attached ADA under scheme 1 and none of it under
+    // scheme 2. Stated this way rather than as the output's value because this figure exists to
+    // explain a fall in the sender's balance, and under scheme 2 there is no fall to explain.
+    sentAda: lovelaceToAda(
+      result.sentLovelace - result.sponsorSuppliedLovelace - result.recycledLovelace
+    ),
+    sponsorSuppliedAda: lovelaceToAda(result.sponsorSuppliedLovelace),
+    routedToSponsorAda: lovelaceToAda(result.routedToSponsor),
     explorerUrl: result.explorerUrl,
     fromAddress: senderAddress,
     toAddress: destination.address,

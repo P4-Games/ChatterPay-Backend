@@ -544,7 +544,8 @@ describe('selectableUtxos - what the sender can reach', () => {
     ];
 
     expect(selectableBalance(utxos)).toBe(8_000_000n);
-    // The ADA-only view is what the sponsor uses, and it still excludes them.
-    expect(spendableBalance(utxos)).toBe(5_000_000n);
+    // The sponsor's view counts them too: its own change carries the fee asset, so a filter that
+    // skipped token-bearing outputs would make the sponsor unable to reuse its own change.
+    expect(spendableBalance(utxos)).toBe(8_000_000n);
   });
 });

@@ -309,36 +309,59 @@ function byLovelaceThenOutpoint(left: CardanoUtxo, right: CardanoUtxo): number {
 }
 
 /**
- * Outputs holding nothing but ADA, largest first.
+ * What the **sponsor** can spend, ADA-only outputs first.
  *
- * This is the **sponsor's** view, and the filter is the point of it: a sponsor UTxO holding tokens
- * would drag them into a change output belonging to the sender, which is how a sponsor quietly
- * gives its assets away.
+ * This used to exclude outputs carrying tokens outright, and the reason was sound: a sponsor input
+ * holding tokens would drag them into a change output belonging to the *sender*, which is how a
+ * sponsor quietly gives its assets away. What was missed is that the sponsor has a change output of
+ * its own, and returning them there costs nothing but the bytes.
  *
- * Largest-first is chosen for being deterministic and for keeping the input count low, which is
- * what keeps the fee down. It fragments the wallet over time, and that is accepted debt: a
- * production selector would balance UTxO count against fee, and this one is auditable.
+ * Excluding them was not a small conservatism. ChatterPay's fee on a token transfer rides home in
+ * the sponsor's change, which makes that output token-bearing — so under the old filter **every
+ * token transfer permanently retired one of the sponsor's outputs**, and a wallet funded with a
+ * single large output was one transfer away from reporting itself empty while holding thousands of
+ * ADA. Observed on Preprod: 9794 ADA held, 3.64 spendable.
+ *
+ * ADA-only still comes first. Reaching for a token-bearing output grows the transaction, so it is a
+ * last resort rather than a refusal.
  *
  * @param utxos - Everything the address holds.
- * @returns The ADA-only subset, ordered by descending value and then by outpoint, so that equal
- *   values do not select in provider order — a selection that changes between two identical calls
- *   is a fee that changes for no reason.
+ * @returns All of them, ADA-only first and each group ordered by descending value and then by
+ *   outpoint, so that equal values do not select in provider order — a selection that changes
+ *   between two identical calls is a fee that changes for no reason.
  */
 export function spendableUtxos(utxos: readonly CardanoUtxo[]): CardanoUtxo[] {
-  return utxos
-    .filter((utxo) => !utxo.holdsOtherAssets)
-    .slice()
-    .sort(byLovelaceThenOutpoint);
+  const plain = utxos.filter((utxo) => !utxo.holdsOtherAssets).sort(byLovelaceThenOutpoint);
+  const bearing = utxos.filter((utxo) => utxo.holdsOtherAssets).sort(byLovelaceThenOutpoint);
+  return [...plain, ...bearing];
 }
 
 /**
- * What an ADA-only wallet can spend right now.
+ * What the sponsor can spend right now.
  *
  * @param utxos - Everything the address holds.
- * @returns Spendable lovelace, ignoring outputs that carry tokens.
+ * @returns Spendable lovelace, tokens' company included.
  */
 export function spendableBalance(utxos: readonly CardanoUtxo[]): bigint {
   return spendableUtxos(utxos).reduce((sum, utxo) => sum + utxo.lovelace, 0n);
+}
+
+/**
+ * Lovelace held in outputs that carry nothing else.
+ *
+ * A reporting figure, not a selection one: it answers "how much of this balance is not sitting
+ * beside a token", which is what a wallet view means by ADA that is spoken for. Kept apart from
+ * {@link spendableBalance} because that one answers a different question — what the builder may
+ * reach for — and the two stopped having the same answer once the sponsor learned to spend its own
+ * token-bearing outputs.
+ *
+ * @param utxos - Everything the address holds.
+ * @returns Lovelace in ADA-only outputs.
+ */
+export function adaOnlyBalance(utxos: readonly CardanoUtxo[]): bigint {
+  return utxos
+    .filter((utxo) => !utxo.holdsOtherAssets)
+    .reduce((sum, utxo) => sum + utxo.lovelace, 0n);
 }
 
 /**
@@ -432,6 +455,126 @@ export function totalAssets(utxos: readonly CardanoUtxo[]): CardanoAssetAmount[]
         current ? { ...current, quantity: current.quantity + asset.quantity } : { ...asset }
       );
     }
+  }
+  return [...totals.values()].sort((left, right) =>
+    compareCborKeys(assetUnit(left), assetUnit(right))
+  );
+}
+
+/**
+ * How many of the destination's outputs one transfer will fold in.
+ *
+ * The saving is almost all in the first one — after that the floor has already been funded and each
+ * extra input only adds bytes. Uncapped it is worse than pointless: a destination holding a few
+ * hundred outputs of a token produces a transaction over `maxTxSize`, and since nothing falls back
+ * to not recycling, **every transfer of that token to them fails from then on**. Addresses are
+ * public and small outputs are cheap to create, so that is reachable from outside.
+ */
+const MAX_RECYCLED_OUTPUTS = 5;
+
+/**
+ * The destination's outputs that may be folded into the one a transfer creates.
+ *
+ * Only those holding exactly this token and nothing else: an output carrying a second asset would
+ * drag it into the new output. It would go back to its own owner, so nothing is lost, but it
+ * changes that output's floor and it is not this transfer's business to move.
+ *
+ * Exported because the transfer service asks the same question before the build — to decide the
+ * fee and how many signatures to expect — and two copies of this rule is how the two answers come
+ * to disagree.
+ *
+ * @param utxos - Everything the destination holds.
+ * @param asset - The token being sent.
+ * @param limit - Ceiling on how many to take, largest first.
+ * @returns The outputs safe to recycle, which is often none.
+ */
+export function recyclableOutputs(
+  utxos: readonly CardanoUtxo[],
+  asset: CardanoAsset,
+  limit: number = MAX_RECYCLED_OUTPUTS
+): CardanoUtxo[] {
+  const policyId = asset.policyId.toLowerCase();
+  const assetName = asset.assetName.toLowerCase();
+  return utxos
+    .filter((utxo) => {
+      const assets = utxo.assets ?? [];
+      return (
+        assets.length === 1 &&
+        assets[0].policyId.toLowerCase() === policyId &&
+        assets[0].assetName.toLowerCase() === assetName
+      );
+    })
+    .sort(byLovelaceThenOutpoint)
+    .slice(0, limit);
+}
+
+/**
+ * Chooses the sponsor's inputs, and the floor its own change output has to clear.
+ *
+ * The two are circular: what the sponsor's change must hold depends on the tokens it carries home,
+ * and which tokens those are depends on which inputs were chosen. Solving it in one pass — pricing
+ * the floor as if the change were pure ADA — under-selects the moment the sponsor holds anything
+ * but ADA, and then refuses a transfer it could plainly afford. So it converges instead: price,
+ * select, re-price, and stop when the floor stops rising.
+ *
+ * @param available - The sponsor's outputs, in selection order.
+ * @param need - Lovelace the sponsor has to cover beyond its own change: the network fee, plus any
+ *   min-ADA it is supplying.
+ * @param changeAddress - Where its change returns.
+ * @param extraChangeAssets - Assets that will ride in that change without having come from these
+ *   inputs, which is ChatterPay's fee on a token transfer.
+ * @param needsChange - Whether the change output has to exist even holding no tokens, which is the
+ *   case when the sender's routed remainder is riding in it.
+ * @param coinsPerUtxoByte - Protocol parameter.
+ * @returns The chosen inputs and the assets of theirs that must come home.
+ * @throws Error `CARDANO_SPONSOR_FLOOR_DID_NOT_CONVERGE` when the loop fails to settle, which is a
+ *   defect rather than a wallet being short.
+ */
+function selectSponsorInputs(
+  available: readonly CardanoUtxo[],
+  need: bigint,
+  changeAddress: Uint8Array,
+  extraChangeAssets: readonly CardanoAssetAmount[],
+  needsChange: boolean,
+  coinsPerUtxoByte: bigint
+): { selected: CardanoUtxo[]; residual: CardanoAssetAmount[] } {
+  const floorFor = (assets: readonly CardanoAssetAmount[]): bigint =>
+    assets.length > 0 || needsChange ? minimumAdaFor(changeAddress, assets, coinsPerUtxoByte) : 0n;
+
+  let floor = floorFor(extraChangeAssets);
+  for (let pass = 0; pass < MAX_FEE_PASSES; pass++) {
+    const selected = selectFor(available, need + floor);
+    const residual = totalAssets(selected);
+    const next = floorFor(mergeAssets(residual, extraChangeAssets));
+    if (next <= floor) return { selected, residual };
+    floor = next;
+  }
+  throw new Error('CARDANO_SPONSOR_FLOOR_DID_NOT_CONVERGE');
+}
+
+/**
+ * Several asset lists as one, quantities of the same asset added together.
+ *
+ * The encoder already sums duplicates, so a list holding the same asset twice serializes correctly
+ * either way. What it does not do is fix the list, and that list is reported to the caller and
+ * written into the pending-change record — where anything reading `.length` or `[0].quantity` gets
+ * a wrong answer from a right transaction.
+ *
+ * @param lists - The lists to merge.
+ * @returns One list, in canonical order, with no asset appearing twice.
+ */
+export function mergeAssets(
+  ...lists: readonly (readonly CardanoAssetAmount[])[]
+): CardanoAssetAmount[] {
+  const totals = new Map<string, CardanoAssetAmount>();
+  for (const asset of lists.flat()) {
+    if (asset.quantity <= 0n) continue;
+    const unit = assetUnit(asset);
+    const current = totals.get(unit);
+    totals.set(
+      unit,
+      current ? { ...current, quantity: current.quantity + asset.quantity } : { ...asset }
+    );
   }
   return [...totals.values()].sort((left, right) =>
     compareCborKeys(assetUnit(left), assetUnit(right))
@@ -626,6 +769,10 @@ function buildAdaTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
   const sponsor = plan.sponsor;
   const sponsorAvailable = sponsor ? spendableUtxos(sponsor.utxos) : [];
 
+  // Routing needs somewhere to route to, so it is a sponsor's capability and reads as one here
+  // rather than being checked at each of the three places below.
+  const routeDust = sponsor !== undefined && plan.routeDustToSponsor === true;
+
   // The sender covers the amount, and only the amount: what the destination gets plus the fee that
   // joins the sponsor's change are the two halves of it. The sponsor covers the network fee.
   const senderOwes = amount;
@@ -636,6 +783,10 @@ function buildAdaTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
     let selected = selectFor(available, target);
     let total = selected.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
     let change = total - target;
+    // Sender lovelace that ends up in the sponsor's change output because it was too small to be an
+    // output of its own. The money still left the sender, so it is tracked rather than dropped: the
+    // caller credits it back off-chain.
+    let routed = 0n;
     // Tokens carried by the outputs that were selected. Nothing is being sent of them, so all of it
     // comes back — and unlike dust ADA it can never be folded into the fee: a transaction that does
     // not return its inputs' assets does not balance and the ledger rejects it.
@@ -662,6 +813,19 @@ function buildAdaTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
       try {
         widened = selectFor(available, target + floor);
       } catch {
+        // Nothing further to pull in. Routing the remainder to the sponsor is what turns this from
+        // a refusal into a transfer: the ledger only asks that the transaction balance, and an
+        // input of the sender's may pay an output of the sponsor's. The sender is credited for it
+        // off-chain, so the money is theirs either way — it just travels through ChatterPay's
+        // address rather than sitting in an output the network will not accept.
+        //
+        // Only when the remainder carries no tokens. Residual assets have to come home: routing
+        // them would be taking the sender's token, which is the one thing this must never do.
+        if (routeDust && residual.length === 0) {
+          routed = change;
+          change = 0n;
+          break;
+        }
         throw new Error(
           `CARDANO_CHANGE_WOULD_BE_BURNED: ${change} lovelace of change is below the ${floor} ` +
             `an output must hold${residual.length > 0 ? ` while carrying ${residual.length} token(s) home` : ''}, ` +
@@ -679,12 +843,24 @@ function buildAdaTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
     // network keeps, and the fee would go to the chain instead of to ChatterPay while the
     // destination had already been docked for it. Selecting for the floor as well is what rules
     // that out, rather than discovering it after the fact.
-    const sponsorFloor =
-      sponsor && chatterPayFee > 0n
-        ? minimumAdaFor(sponsor.changeAddress, [], parameters.coinsPerUtxoByte)
-        : 0n;
-    const sponsorSelected = sponsor ? selectFor(sponsorAvailable, fee + sponsorFloor) : [];
+    // ChatterPay's fee is lovelace on this path, so it folds into the change's value rather than
+    // riding in it as an asset: there is nothing extra for the floor to account for beyond whatever
+    // the sponsor's own inputs bring home.
+    const sponsorChoice = sponsor
+      ? selectSponsorInputs(
+          sponsorAvailable,
+          fee,
+          sponsor.changeAddress,
+          [],
+          chatterPayFee > 0n || routed > 0n,
+          parameters.coinsPerUtxoByte
+        )
+      : { selected: [] as CardanoUtxo[], residual: [] as CardanoAssetAmount[] };
+    const sponsorSelected = sponsorChoice.selected;
     const sponsorTotal = sponsorSelected.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
+    // Whatever the sponsor's own inputs carried. It goes back to the sponsor, and it has to: a
+    // transaction that does not return its inputs' assets does not balance.
+    const sponsorResidual = sponsorChoice.residual;
 
     const changeOutput = encodeOutput(plan.changeAddress, change, residual);
     const keepsChange =
@@ -697,15 +873,33 @@ function buildAdaTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
     if (!keepsChange) change = 0n;
 
     // ChatterPay's fee folds in here, and this is the whole trick: no new output, so no min-ADA to
-    // clear, so no reason to defer the fee until it has grown past one.
-    let sponsorChange = sponsor ? sponsorTotal - fee + chatterPayFee : 0n;
+    // clear, so no reason to defer the fee until it has grown past one. Routed change folds into the
+    // same output for the same reason, and is the one part of it that is owed back to the sender.
+    let sponsorChange = sponsor ? sponsorTotal - fee + chatterPayFee + routed : 0n;
     const sponsorChangeOutput = sponsor
-      ? encodeOutput(sponsor.changeAddress, sponsorChange)
+      ? encodeOutput(sponsor.changeAddress, sponsorChange, sponsorResidual)
       : new Uint8Array();
     const keepsSponsorChange =
       sponsor !== undefined &&
       sponsorChange > 0n &&
       sponsorChange >= minimumAdaForOutput(sponsorChangeOutput, parameters.coinsPerUtxoByte);
+    // Dropping the sponsor's leftover into the fee is a call the sponsor gets to make about its own
+    // money. It is not a call anybody gets to make about the sender's: routed change that cannot
+    // stand as an output would be the sender paying for the privilege of being refused politely.
+    if (!keepsSponsorChange && routed > 0n) {
+      throw new Error(
+        `CARDANO_ROUTED_CHANGE_WOULD_BE_BURNED: ${routed} lovelace of the sender's change was ` +
+          `routed to the sponsor, whose own change of ${sponsorChange} cannot stand as an output`
+      );
+    }
+    // Dropping the sponsor's leftover into the fee is a decision about lovelace. Tokens have no
+    // such escape: a body that does not return them does not balance and the chain rejects it.
+    if (!keepsSponsorChange && sponsorResidual.length > 0) {
+      throw new Error(
+        `CARDANO_SPONSOR_CHANGE_WOULD_BE_BURNED: ${sponsorChange} lovelace cannot stand as an ` +
+          `output while carrying ${sponsorResidual.length} token(s) home`
+      );
+    }
     if (!keepsSponsorChange) sponsorChange = 0n;
 
     const outputs = [
@@ -738,7 +932,14 @@ function buildAdaTransfer(plan: CardanoTransferPlan): BuiltCardanoTransaction {
         changeAssets: keepsChange ? residual : [],
         inputs,
         ttlSlot,
-        chatterPayFee
+        chatterPayFee,
+        routedToSponsor: routed,
+        sponsorChangeAssets: keepsSponsorChange ? sponsorResidual : [],
+        // Nothing on the ADA path: the min-ADA of the destination's output comes out of the amount
+        // the sender asked to send, so there is no output here for the sponsor to fund — and
+        // nothing of the destination's to fold into it either.
+        sponsorSuppliedLovelace: 0n,
+        recycledLovelace: 0n
       };
     }
     fee = required;
@@ -815,6 +1016,15 @@ function buildAssetTransfer(
   const sponsor = plan.sponsor;
   const sponsorAvailable = sponsor ? spendableUtxos(sponsor.utxos) : [];
 
+  // The two capabilities scheme 2 turns on, both of them things only a sponsor can do.
+  //
+  // `sponsorMinAda` is the one that matters here. Off, the ADA riding with the token comes out of
+  // the sender's inputs and their ADA balance falls by roughly 1.16 on every token transfer, which
+  // is the figure a user sees leave their wallet and reads as a charge. On, the sponsor's inputs
+  // cover it: the sender spends token and nothing else.
+  const sponsorMinAda = sponsor !== undefined && plan.sponsorMinAda === true;
+  const routeDust = sponsor !== undefined && plan.routeDustToSponsor === true;
+
   const placeholderWitnesses = Array.from({ length: Math.max(1, plan.witnessCount) }, () => ({
     publicKey: '00'.repeat(PUBLIC_KEY_BYTES),
     signature: '00'.repeat(SIGNATURE_BYTES)
@@ -835,24 +1045,44 @@ function buildAssetTransfer(
   const delivered: CardanoAssetAmount = { ...sent, quantity: sent.quantity - chatterPayFee };
   const feeAsset: CardanoAssetAmount = { ...sent, quantity: chatterPayFee };
 
-  // The ADA attached to the token output: what the caller asked for, or the protocol minimum.
+  // Outputs of the destination's own, folded into the one this transfer creates. Only those whose
+  // sole asset is this token: anything else is not this transfer's to move, and it would change the
+  // floor of an output somebody else has to live with.
+  const recycled = recyclableOutputs(plan.recycleUtxos ?? [], sent);
+  const recycledLovelace = recycled.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
+  const recycledQuantity = recycled.reduce((sum, utxo) => sum + quantityOf(utxo, sent), 0n);
+
+  // What the destination's single output ends up holding: what is being sent them plus what they
+  // already had. Same asset, so still one entry, and an output with more of one token is a couple
+  // of bytes larger at most — which is the whole reason this costs nothing.
+  const destinationHolds: CardanoAssetAmount = {
+    ...sent,
+    quantity: delivered.quantity + recycledQuantity
+  };
+
+  // The ADA attached to the token output: what the caller asked for, or the protocol minimum — but
+  // never less than what the recycled outputs already carried. Handing back less than they came
+  // with would be taking ADA off the recipient to pay for their own consolidation.
   const minimumAttached = minimumAdaFor(
     plan.destinationAddress,
-    [delivered],
+    [destinationHolds],
     parameters.coinsPerUtxoByte
   );
-  const attached = plan.amount > 0n ? plan.amount : minimumAttached;
+  const requestedAttached = plan.amount > 0n ? plan.amount : minimumAttached;
+  const attached = recycledLovelace > requestedAttached ? recycledLovelace : requestedAttached;
   if (attached < minimumAttached) {
     throw new Error(`CARDANO_AMOUNT_BELOW_MINIMUM_UTXO: ${minimumAttached} lovelace minimum`);
   }
-  const paymentOutput = encodeOutput(plan.destinationAddress, attached, [delivered]);
+  const paymentOutput = encodeOutput(plan.destinationAddress, attached, [destinationHolds]);
 
   // Carrying a token raises the floor of the sponsor's change output, so its inputs have to cover
-  // the network fee *and* that floor — see the note on the ADA path.
-  const sponsorFloor =
-    sponsor && chatterPayFee > 0n
-      ? minimumAdaFor(sponsor.changeAddress, [feeAsset], parameters.coinsPerUtxoByte)
-      : 0n;
+  // the network fee *and* that floor — see the note on the ADA path. Under scheme 2 they also have
+  // to cover the ADA attached to the token output, which is the sponsor's to supply.
+  // What the sponsor has to put in: the attached ADA less whatever the recycled outputs already
+  // carried. When the destination already held this token, that difference is zero — which is the
+  // entire economics of recycling, and the reason the ordinary fee can stay small.
+  const attachedShortfall = attached > recycledLovelace ? attached - recycledLovelace : 0n;
+  const sponsorSupplies = sponsorMinAda ? attachedShortfall : 0n;
 
   // One pass per extra ADA-only input. Each pass runs the fee loop to convergence; a pass that
   // cannot fund the mandatory change output asks for one more input rather than giving up.
@@ -868,14 +1098,29 @@ function buildAssetTransfer(
     let needsMoreAda = false;
 
     for (let pass = 0; pass < MAX_FEE_PASSES; pass++) {
-      const sponsorSelected = sponsor ? selectFor(sponsorAvailable, fee + sponsorFloor) : [];
+      const sponsorChoice = sponsor
+        ? selectSponsorInputs(
+            sponsorAvailable,
+            fee + sponsorSupplies,
+            sponsor.changeAddress,
+            chatterPayFee > 0n ? [feeAsset] : [],
+            plan.routeDustToSponsor === true,
+            parameters.coinsPerUtxoByte
+          )
+        : { selected: [] as CardanoUtxo[], residual: [] as CardanoAssetAmount[] };
+      const sponsorSelected = sponsorChoice.selected;
       const sponsorTotal = sponsorSelected.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
+      // Whatever the sponsor's own inputs carried, on its way back to the sponsor.
+      const sponsorResidual = sponsorChoice.residual;
 
-      // What the sender owes, in ADA: the ADA attached to the token output. ChatterPay's fee is not
-      // on this list — it is charged in the token, not in lovelace. The network fee is here only
-      // when nobody is sponsoring it.
-      const senderOwes = attached + (sponsor ? 0n : fee);
-      const change = inputAda - senderOwes;
+      // What the sender owes, in ADA: the ADA attached to the token output, unless the sponsor is
+      // supplying it. ChatterPay's fee is not on this list — it is charged in the token, not in
+      // lovelace. The network fee is here only when nobody is sponsoring it.
+      const senderOwes = attachedShortfall - sponsorSupplies + (sponsor ? 0n : fee);
+      let change = inputAda - senderOwes;
+      // Sender lovelace riding home in the sponsor's change because it was too small to stand as an
+      // output. Same rule as the ADA path: never when it would carry tokens away with it.
+      let routed = 0n;
       if (change < 0n) {
         shortfall = `CARDANO_INSUFFICIENT_FUNDS: ${inputAda} lovelace available, need at least ${senderOwes}`;
         needsMoreAda = true;
@@ -899,20 +1144,32 @@ function buildAssetTransfer(
       } else if (change > 0n && change < minimumChange) {
         // The same gap the ADA path guards: a remainder too small to stand as its own output is a
         // remainder the network keeps. Asking for more ADA pulls another input in, which is what
-        // closes it; running out of inputs ends the loop with the shortfall below.
-        shortfall =
-          `CARDANO_INSUFFICIENT_FUNDS: change of ${change} lovelace is below the ${minimumChange} ` +
-          `an output must hold, and would be lost to the network as fee`;
-        needsMoreAda = true;
-        break;
+        // closes it; running out of inputs is when routing becomes the answer.
+        //
+        // Held back until the last pass on purpose: another input of the sender's own leaves the
+        // money in their wallet, and routing only beats a refusal, not that.
+        if (routeDust && extra === spare.length) {
+          routed = change;
+          change = 0n;
+          keepsChange = false;
+        } else {
+          shortfall =
+            `CARDANO_INSUFFICIENT_FUNDS: change of ${change} lovelace is below the ${minimumChange} ` +
+            `an output must hold, and would be lost to the network as fee`;
+          needsMoreAda = true;
+          break;
+        }
       } else {
         keepsChange = change > 0n;
       }
 
       // The sponsor's ADA change is untouched by ChatterPay's fee — that fee is in tokens — but the
-      // output it comes back in is what carries them.
-      let sponsorChange = sponsor ? sponsorTotal - fee : 0n;
-      const sponsorChangeAssets = chatterPayFee > 0n ? [feeAsset] : [];
+      // output it comes back in is what carries them. What does come out of it: the network fee it
+      // is covering, the min-ADA it is supplying to the token output under scheme 2, and, added
+      // back, whatever of the sender's change had nowhere else to go.
+      let sponsorChange = sponsor ? sponsorTotal - fee - sponsorSupplies + routed : 0n;
+      const sponsorChangeAssets =
+        chatterPayFee > 0n ? mergeAssets(sponsorResidual, [feeAsset]) : sponsorResidual;
       const sponsorChangeOutput = sponsor
         ? encodeOutput(sponsor.changeAddress, sponsorChange, sponsorChangeAssets)
         : new Uint8Array();
@@ -922,6 +1179,19 @@ function buildAssetTransfer(
         sponsorChange >= minimumAdaForOutput(sponsorChangeOutput, parameters.coinsPerUtxoByte);
       // Below min-ADA the sponsor's leftover cannot be an output, so it stays in the fee. The
       // sponsor donates it — the same call the ADA path makes, and it never reaches the sender.
+      // What the sponsor may not donate is the sender's routed change, which is not its money.
+      if (!keepsSponsorChange && routed > 0n) {
+        throw new Error(
+          `CARDANO_ROUTED_CHANGE_WOULD_BE_BURNED: ${routed} lovelace of the sender's change was ` +
+            `routed to the sponsor, whose own change of ${sponsorChange} cannot stand as an output`
+        );
+      }
+      if (!keepsSponsorChange && sponsorChangeAssets.length > 0) {
+        throw new Error(
+          `CARDANO_SPONSOR_CHANGE_WOULD_BE_BURNED: ${sponsorChange} lovelace cannot stand as an ` +
+            `output while carrying ${sponsorChangeAssets.length} token(s) home`
+        );
+      }
       if (!keepsSponsorChange) sponsorChange = 0n;
 
       const outputs = [
@@ -929,8 +1199,9 @@ function buildAssetTransfer(
         ...(keepsChange ? [encodeOutput(plan.changeAddress, change, residual)] : []),
         ...(keepsSponsorChange ? [sponsorChangeOutput] : [])
       ];
-      const inputs = [...selected, ...sponsorSelected];
-      const bodyFee = inputAda + sponsorTotal - attached - change - sponsorChange;
+      const inputs = [...selected, ...recycled, ...sponsorSelected];
+      const bodyFee =
+        inputAda + recycledLovelace + sponsorTotal - attached - change - sponsorChange;
       const body = encodeBody(inputs, outputs, bodyFee, ttlSlot);
       const size = signedSizeOf(body);
       if (size > parameters.maxTxSize) {
@@ -950,7 +1221,11 @@ function buildAssetTransfer(
           changeAssets: residual,
           inputs,
           ttlSlot,
-          chatterPayFee
+          chatterPayFee,
+          routedToSponsor: routed,
+          sponsorSuppliedLovelace: sponsorSupplies,
+          recycledLovelace,
+          sponsorChangeAssets: keepsSponsorChange ? sponsorChangeAssets : []
         };
       }
       fee = required;

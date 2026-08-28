@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { decodeCardanoAddress } from '../../../src/services/cardano/cardanoAddressService';
 import {
   buildCardanoTransfer,
-  minimumAdaFor
+  minimumAdaFor,
+  spendableUtxos
 } from '../../../src/services/cardano/cardanoTxService';
 import type {
   CardanoAssetAmount,
@@ -155,18 +156,60 @@ describe('sponsoring a native-asset transfer', () => {
     expect(built.change).toBe(3_000_000n - ATTACHED - built.fee);
   });
 
-  it('ignores sponsor outputs that carry tokens of their own', () => {
-    // Spending one would drag the sponsor's assets into the *sender's* change output: a sponsor
-    // handing its tokens over to cover a fee.
-    expect(() =>
-      buildCardanoTransfer(
-        tokenPlan([tokenUtxo(3_000_000n, [{ ...USDM, quantity: 100_000_000n }])], {
-          sponsor: sponsoring([
-            tokenUtxo(10_000_000n, [{ ...USDA, quantity: 5n }], 0, SPONSOR_HASH)
-          ])
-        })
-      )
-    ).toThrow(/CARDANO_INSUFFICIENT_FUNDS/);
+  it('spends sponsor outputs that carry tokens, and sends those tokens back to the sponsor', () => {
+    // These used to be refused, on the grounds that spending one would drag the sponsor's assets
+    // into the *sender's* change output. The sponsor has a change output of its own, so they go
+    // there instead — and refusing them was expensive: ChatterPay's fee on a token transfer makes
+    // the sponsor's own change token-bearing, so the old rule retired one sponsor output per
+    // transfer and eventually reported a funded wallet as empty.
+    const built = buildCardanoTransfer(
+      tokenPlan([tokenUtxo(3_000_000n, [{ ...USDM, quantity: 100_000_000n }])], {
+        sponsor: sponsoring([tokenUtxo(10_000_000n, [{ ...USDA, quantity: 5n }], 0, SPONSOR_HASH)]),
+        chatterPayFee: 1_000_000n
+      })
+    );
+
+    expect(built.inputs.some((utxo) => utxo.txHash === SPONSOR_HASH)).toBe(true);
+    // The sponsor's own token comes home to the sponsor, whole, alongside the fee it charged.
+    expect(built.sponsorChangeAssets).toEqual([
+      { ...USDM, quantity: 1_000_000n },
+      { ...USDA, quantity: 5n }
+    ]);
+    // The invariant the old refusal existed to protect, now asserted directly rather than by
+    // refusing the input: whatever the sponsor brought must never end up in the *sender's* change.
+    expect(built.changeAssets.some((asset) => asset.policyId === USDA.policyId)).toBe(false);
+  });
+
+  it('reaches for its ADA-only outputs before the ones carrying tokens', () => {
+    // Spending a token-bearing output is allowed, not preferred: it grows the transaction, and the
+    // transaction size is the fee. The ordering is what keeps it a last resort.
+    const ordered = spendableUtxos([
+      tokenUtxo(50_000_000n, [{ ...USDA, quantity: 1n }], 0, SPONSOR_HASH),
+      adaUtxo(1_000_000n, 1, SPONSOR_HASH)
+    ]);
+    expect(ordered[0].holdsOtherAssets).toBe(false);
+    expect(ordered[1].holdsOtherAssets).toBe(true);
+  });
+
+  it('widens its selection rather than refusing when its own tokens raise its change floor', () => {
+    // The sponsor's change carries its tokens, so its floor is higher than a plain output's. Pricing
+    // it as if it were pure ADA under-selects, and the transfer used to die on a hard throw with
+    // funds plainly available.
+    const built = buildCardanoTransfer(
+      adaPlan([adaUtxo(50_000_000n)], {
+        sponsor: sponsoring([
+          tokenUtxo(1_200_000n, [{ ...USDA, quantity: 1n }], 0, SPONSOR_HASH),
+          tokenUtxo(1_200_000n, [{ ...USDA, quantity: 1n }], 1, SPONSOR_HASH),
+          tokenUtxo(1_200_000n, [{ ...USDA, quantity: 1n }], 2, SPONSOR_HASH)
+        ])
+      })
+    );
+    // It selects what it needs and no more, so the quantity depends on how many outputs that took.
+    // What matters is that it built at all, and that every token it picked up went home as one
+    // entry rather than as one entry per input.
+    expect(built.sponsorChangeAssets).toHaveLength(1);
+    expect(built.sponsorChangeAssets[0].policyId).toBe(USDA.policyId);
+    expect(built.sponsorChangeAssets[0].quantity).toBeGreaterThan(0n);
   });
 });
 

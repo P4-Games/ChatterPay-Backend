@@ -110,6 +110,24 @@ export async function canAffordCardanoTransfer(
       };
     }
 
+    // The fee comes out of the quantity, so a quantity at or below it leaves the destination
+    // nothing and the builder refuses with `CARDANO_INVALID_FEE`. Asked here rather than there:
+    // that refusal arrives after the lock is taken and the user has been told the transfer is
+    // under way, and it matters more under scheme 2, where the fee is several times larger.
+    if (chatterPayFee > 0n && quantity <= chatterPayFee) {
+      const scale = 10 ** decimals;
+      const smallest = (Number(chatterPayFee) / scale).toFixed(decimals > 4 ? 4 : decimals);
+      return {
+        checked: true,
+        ok: false,
+        requiredLovelace: 0n,
+        heldLovelace: 0n,
+        message:
+          `The amount has to be more than the ${smallest} fee for this transfer, ` +
+          `otherwise nothing would reach the destination.`
+      };
+    }
+
     return {
       checked: true,
       ...tokenTransferRequirement({ ...asset, quantity }, utxos, decoded.payload, parameters)

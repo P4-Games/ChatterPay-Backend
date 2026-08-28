@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { decodeCardanoAddress } from '../../../src/services/cardano/cardanoAddressService';
 import {
+  adaOnlyBalance,
   buildCardanoTransfer,
   encodeSignedTransaction,
   minimumAdaForOutput,
@@ -203,12 +204,16 @@ describe('cardanoTxService - coin selection', () => {
 });
 
 describe('cardanoTxService - spendableBalance', () => {
-  it('excludes ADA locked in outputs that also hold native assets', () => {
+  it('counts ADA sitting beside native assets, because the sponsor can spend it', () => {
     const utxos: CardanoUtxo[] = [
       utxo(5_000_000n, 0),
       { txHash: 'bb'.repeat(32), outputIndex: 0, lovelace: 100_000_000n, holdsOtherAssets: true }
     ];
-    expect(spendableBalance(utxos)).toBe(5_000_000n);
+    // Excluding these is what used to retire one of the sponsor's outputs on every token transfer:
+    // its own change carries the fee asset, and the filter then refused to look at it again.
+    expect(spendableBalance(utxos)).toBe(105_000_000n);
+    // The ADA-only figure still exists, for the wallet view that means "not beside a token".
+    expect(adaOnlyBalance(utxos)).toBe(5_000_000n);
   });
 
   it('is zero for an address nobody has funded', () => {
