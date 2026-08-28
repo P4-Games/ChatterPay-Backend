@@ -5,7 +5,8 @@ import Token from '../../../src/models/tokenModel';
 import { type IUser, UserModel } from '../../../src/models/userModel';
 import {
   executeCardanoOperation,
-  resolveCardanoDestination
+  resolveCardanoDestination,
+  resolveCardanoToken
 } from '../../../src/services/cardano/cardanoOperationService';
 import {
   deriveCardanoAccount,
@@ -168,6 +169,35 @@ describe('cardanoWalletService - provisioning', () => {
     expect(user.phone_number).toBe(NEW_PHONE);
     // The address is a function of the phone number, so it matches what a pure derivation gives.
     expect(wallet.address).toBe(deriveCardanoAccount(NEW_PHONE).address);
+  });
+});
+
+describe('resolveCardanoToken - what a figure is shown with', () => {
+  // Two different numbers that a single `decimals` would collapse into one. The ledger counts ADA
+  // in millionths and the product quotes it to two, so a notification formatted off `decimals`
+  // would read `10.000000 ADA`. The EVM path has always read the catalogue for this; the Cardano
+  // path could not, because the resolved token did not carry it.
+  it('carries the catalogue display_decimals alongside the ledger decimals, for ADA', async () => {
+    const resolved = await resolveCardanoToken('ADA', CARDANO_PREPROD_CHAIN_ID);
+
+    expect(resolved.isAda).toBe(true);
+    expect(resolved.decimals).toBe(6);
+    expect(resolved.displayDecimals).toBe(2);
+  });
+
+  it('carries it for a native asset too', async () => {
+    const resolved = await resolveCardanoToken('USDM', CARDANO_PREPROD_CHAIN_ID);
+
+    expect(resolved.isAda).toBe(false);
+    expect(resolved.decimals).toBe(6);
+    expect(resolved.displayDecimals).toBe(2);
+  });
+
+  it('reads it off the row the ticker resolves to, however the ticker was cased', async () => {
+    const resolved = await resolveCardanoToken('usdm', CARDANO_PREPROD_CHAIN_ID);
+
+    expect(resolved.symbol).toBe('USDM');
+    expect(resolved.displayDecimals).toBe(2);
   });
 });
 

@@ -32,6 +32,14 @@ export interface ResolvedCardanoToken {
   isAda: boolean;
   /** Decimals the asset carries, from the token document. */
   decimals: number;
+  /**
+   * Decimals a figure is shown with, from the token document.
+   *
+   * Distinct from `decimals`, which is what the ledger counts in: USDCx moves in millionths and is
+   * quoted to two. Carried here so the Cardano path formats off the catalogue the way the EVM path
+   * already does, rather than off a constant that happens to agree with it today.
+   */
+  displayDecimals: number;
   /** Policy and name, absent for ADA. */
   asset?: CardanoAsset;
 }
@@ -70,7 +78,12 @@ export async function resolveCardanoToken(
 
   const unit = (token.address ?? '').trim();
   if (unit.startsWith(ADA_ADDRESS_PREFIX)) {
-    return { symbol: token.symbol, isAda: true, decimals: token.decimals };
+    return {
+      symbol: token.symbol,
+      isAda: true,
+      decimals: token.decimals,
+      displayDecimals: token.display_decimals
+    };
   }
 
   // A native asset's unit is `policyId` (28 bytes) followed by `assetName` (0–32 bytes), all hex.
@@ -87,6 +100,7 @@ export async function resolveCardanoToken(
     symbol: token.symbol,
     isAda: false,
     decimals: token.decimals,
+    displayDecimals: token.display_decimals,
     asset: { policyId: normalised.slice(0, 56), assetName: normalised.slice(56) }
   };
 }

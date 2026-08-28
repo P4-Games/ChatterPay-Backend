@@ -452,7 +452,15 @@ export const makeCardanoTransaction = async (
       await delaySeconds(lastBotMsgDelaySeconds);
     }
 
-    const displayAmount = Number(amount).toFixed(2);
+    // Two figures, because the two sides of a transfer are not told the same number. The sender is
+    // told what left their balance; the recipient is told what arrived, which is that less
+    // ChatterPay's fee, since the fee is deducted from the amount rather than charged on top. This
+    // is what the EVM path already does, and what the saved transaction already records: `fee` is
+    // in the same token as `amount`, so `amount - fee` is what reached the destination.
+    const displayAmount = Number(amount).toFixed(resolved.displayDecimals);
+    const displayAmountAfterFee = (Number(amount) - chatterPayFee).toFixed(
+      resolved.displayDecimals
+    );
     await sendOutgoingTransferNotification(
       fromUser.phone_number,
       result.toUser?.phone_number ?? result.toAddress,
@@ -472,7 +480,7 @@ export const makeCardanoTransaction = async (
         fromUser.phone_number,
         fromUser.name,
         result.toUser.phone_number,
-        displayAmount,
+        displayAmountAfterFee,
         result.tokenSymbol,
         user_notes ?? ''
       );
