@@ -24,7 +24,7 @@ import type {
   CardanoUtxo
 } from '../../types/cardanoType';
 import { decodeCardanoAddress } from './cardanoAddressService';
-import { chatterPayFeeUnits } from './cardanoFeeService';
+import { chatterPayFeeFor } from './cardanoFeeService';
 import {
   type CardanoProvider,
   CardanoProviderError,
@@ -35,6 +35,7 @@ import {
   assetBalance,
   buildCardanoTransfer,
   encodeSignedTransaction,
+  recyclableOutputs,
   selectableBalance,
   spendableBalance
 } from './cardanoTxService';
@@ -66,6 +67,14 @@ export interface CardanoTransferInput {
   tokenDecimals: number;
   /** Bech32 destination address. */
   toAddress: string;
+  /**
+   * Phone number of the destination, when the destination is a ChatterPay wallet.
+   *
+   * Only used to recycle: folding the recipient's existing output for this token into the one being
+   * created spends that output, and spending it needs their signature. Absent for an address pasted
+   * in from outside, which is why recycling simply does not happen for those.
+   */
+  toPhoneNumber?: string;
   /**
    * Lovelace to send.
    *
@@ -120,6 +129,22 @@ export interface CardanoTransferResult {
    * was charged.
    */
   chatterPayFee: bigint;
+  /**
+   * Sender lovelace that rode home in the sponsor's change because it was below the ledger's floor.
+   *
+   * Zero on almost every transfer. When it is not, it is money that left the sender's address and is
+   * sitting in ChatterPay's, and the sender is owed it: the caller credits it back off-chain.
+   */
+  routedToSponsor: bigint;
+  /**
+   * Lovelace the sponsor put into an output that is not its own.
+   *
+   * The min-ADA of the token output under scheme 2. Told apart from the network fee because the fee
+   * is burned and this is given away: it lands in a user's wallet and does not come back.
+   */
+  sponsorSuppliedLovelace: bigint;
+  /** Lovelace in the destination's output that came from its own recycled outputs. */
+  recycledLovelace: bigint;
   /** Machine-readable failure code, empty on success. */
   errorCode: string;
   /** Human-readable failure detail, empty on success. */
@@ -173,6 +198,9 @@ function failure(code: string, message: string): CardanoTransferResult {
     feeLovelace: 0n,
     sentLovelace: 0n,
     chatterPayFee: 0n,
+    routedToSponsor: 0n,
+    sponsorSuppliedLovelace: 0n,
+    recycledLovelace: 0n,
     explorerUrl: '',
     errorCode: code,
     error: message
@@ -455,9 +483,34 @@ export async function executeCardanoTransfer(
     // ChatterPay's fee, priced in whatever is moving and taken out of the amount. It needs a
     // sponsor: the fee rides in the sponsor's change output, and without one there is no output to
     // ride in — a deployment that is not sponsoring is not charging either.
+    // Recycling: fold the destination's existing output for this token into the one being created,
+    // so no new min-ADA has to be funded. Needs three things at once — the scheme, a destination
+    // that is a wallet of ours (its signature is required to spend its output), and an output whose
+    // only asset is this token. Any of them missing and the transfer builds the ordinary way.
+    const recycleAccount =
+      feeConfig.recycleDestinationUtxo && input.asset && input.toPhoneNumber
+        ? cardanoSignerService.getAccount(input.toPhoneNumber, network, chainId)
+        : null;
+    const recycleUtxos: readonly CardanoUtxo[] =
+      recycleAccount && recycleAccount.address === toAddress
+        ? await unclaimedUtxos(recyclableOutputs(await provider.utxosFor(toAddress), input.asset!))
+        : [];
+    const recycling = recycleUtxos.length > 0;
+    if (recycleAccount && !recycling) {
+      Logger.log(
+        'cardanoTransfer',
+        logKey,
+        `Nothing to recycle at the destination; ChatterPay funds a new min-ADA for this transfer`
+      );
+    }
+
+    // The fee follows what this transfer actually costs ChatterPay. Funding a brand new output for
+    // somebody who does not hold the token yet is the expensive case and is charged as one; every
+    // other transfer, recycled ones included, pays the ordinary figure.
+    const fundsNewOutput = feeConfig.sponsorMinAda && input.asset !== undefined && !recycling;
     const chatterPayFee =
       sponsorAccount && chargesTransferFee(feeConfig)
-        ? await chatterPayFeeUnits(feeConfig.transferFeeUsd, input.tokenSymbol, input.tokenDecimals)
+        ? await chatterPayFeeFor(feeConfig, input.tokenSymbol, input.tokenDecimals, fundsNewOutput)
         : 0n;
 
     const built = buildCardanoTransfer({
@@ -470,9 +523,17 @@ export async function executeCardanoTransfer(
       sponsor: sponsorAccount
         ? { utxos: sponsorUtxos, changeAddress: sponsorAccount.addressBytes }
         : undefined,
+      // Both of these are the sponsor's to do and the config already reports them off without one,
+      // but they are passed guarded anyway: the builder reads them as capabilities and a capability
+      // that arrives on a plan with no sponsor has nothing to act on.
+      sponsorMinAda: sponsorAccount !== null && feeConfig.sponsorMinAda,
+      routeDustToSponsor: sponsorAccount !== null && feeConfig.routeDustToSponsor,
+      recycleUtxos,
       ttlSlot: tip.slot + ttlSlots,
       parameters,
-      witnessCount: sponsorAccount ? 2 : 1
+      // One key per owner of an input. Recycling spends an output of the destination's, so on those
+      // transfers the destination signs too, and the fee is charged for those bytes.
+      witnessCount: (sponsorAccount ? 2 : 1) + (recycling ? 1 : 0)
     });
 
     // The invariant reconciliation depends on, asserted where refusing is still free: what came in
@@ -549,6 +610,17 @@ export async function executeCardanoTransfer(
         )
       });
     }
+    if (recycling && recycleAccount) {
+      witnesses.push({
+        publicKey: recycleAccount.publicKey,
+        signature: cardanoSignerService.sign(
+          input.toPhoneNumber!,
+          network,
+          chainId,
+          built.transactionId
+        )
+      });
+    }
     const signed = encodeSignedTransaction(built.bodyBytes, witnesses);
 
     const transactionHash = await submitResolvingTimeout(
@@ -588,7 +660,12 @@ export async function executeCardanoTransfer(
           txHash: transactionHash,
           outputIndex: built.sponsorChangeIndex,
           lovelace: sponsorChange,
-          holdsOtherAssets: false
+          // Read off the build rather than assumed false. On a token transfer with a fee this
+          // output carries the fee asset, and recording it as pure ADA is how the next transfer
+          // comes to spend it as pure ADA — building a body that drops those tokens, does not
+          // conserve value, and is rejected by the node.
+          holdsOtherAssets: built.sponsorChangeAssets.length > 0,
+          assets: [...built.sponsorChangeAssets]
         },
         sponsorAccount.address,
         logKey
@@ -610,6 +687,9 @@ export async function executeCardanoTransfer(
       feeLovelace: built.fee,
       sentLovelace: built.sentLovelace,
       chatterPayFee: built.chatterPayFee,
+      routedToSponsor: built.routedToSponsor,
+      sponsorSuppliedLovelace: built.sponsorSuppliedLovelace,
+      recycledLovelace: built.recycledLovelace,
       explorerUrl: `${explorerUrl}${transactionHash}`,
       errorCode: '',
       error: ''

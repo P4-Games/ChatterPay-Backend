@@ -13,11 +13,16 @@ import {
   CARDANO_DEPOSIT_CONFIRMATIONS,
   CARDANO_ENABLED,
   CARDANO_EXPLORER_URL,
+  CARDANO_FEE_SCHEME,
   CARDANO_NETWORK,
   CARDANO_PROVIDER_TIMEOUT_MS,
   CARDANO_PROVIDER_URL,
+  CARDANO_RECYCLE_DESTINATION_UTXO,
+  CARDANO_ROUTE_DUST_TO_SPONSOR,
   CARDANO_SPONSOR_FEES,
   CARDANO_SPONSOR_WALLET_ID,
+  CARDANO_TRANSFER_FEE_ADA,
+  CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT,
   CARDANO_TRANSFER_FEE_USD,
   CARDANO_TTL_SLOTS,
   CDC1,
@@ -117,6 +122,11 @@ export function readCardanoFeeEnv(): CardanoFeeEnv {
   return {
     sponsorFees: CARDANO_SPONSOR_FEES.trim().toLowerCase() === 'true',
     transferFeeUsd: nonNegativeNumberOrNull(CARDANO_TRANSFER_FEE_USD),
+    transferFeeAda: nonNegativeNumberOrNull(CARDANO_TRANSFER_FEE_ADA),
+    transferFeeAdaNewOutput: nonNegativeNumberOrNull(CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT),
+    feeScheme: nonNegativeNumberOrNull(CARDANO_FEE_SCHEME),
+    recycleDestinationUtxo: CARDANO_RECYCLE_DESTINATION_UTXO.trim().toLowerCase() === 'true',
+    routeDustToSponsor: CARDANO_ROUTE_DUST_TO_SPONSOR.trim().toLowerCase() === 'true',
     sponsorWalletId: CARDANO_SPONSOR_WALLET_ID.trim()
   };
 }

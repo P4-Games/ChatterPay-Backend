@@ -58,6 +58,11 @@ function blank(): CardanoEnvState {
     feeEnv: {
       sponsorFees: false,
       transferFeeUsd: null,
+      transferFeeAda: null,
+      transferFeeAdaNewOutput: null,
+      feeScheme: null,
+      recycleDestinationUtxo: false,
+      routeDustToSponsor: false,
       sponsorWalletId: ''
     }
   };

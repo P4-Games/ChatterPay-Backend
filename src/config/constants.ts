@@ -88,7 +88,12 @@ const {
   CARDANO_DEPOSIT_CONFIRMATIONS: cardanoDepositConfirmations = '',
   CARDANO_EXPLORER_URL: cardanoExplorerUrl = '',
   CARDANO_SPONSOR_FEES: cardanoSponsorFees = 'false',
+  CARDANO_FEE_SCHEME: cardanoFeeScheme = '',
   CARDANO_TRANSFER_FEE_USD: cardanoTransferFeeUsd = '',
+  CARDANO_TRANSFER_FEE_ADA: cardanoTransferFeeAda = '',
+  CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT: cardanoTransferFeeAdaNewOutput = '',
+  CARDANO_RECYCLE_DESTINATION_UTXO: cardanoRecycleDestinationUtxo = 'false',
+  CARDANO_ROUTE_DUST_TO_SPONSOR: cardanoRouteDustToSponsor = 'false',
   CARDANO_SPONSOR_WALLET_ID: cardanoSponsorWalletId = '',
   CARDANO_DERIVATION_CHECK: cardanoDerivationCheck = '',
   TELEGRAM_BOT_API_KEY,
@@ -384,6 +389,11 @@ export const CARDANO_TTL_SLOTS: string = cardanoTtlSlots;
 export const CARDANO_DEPOSIT_CONFIRMATIONS: string = cardanoDepositConfirmations;
 export const CARDANO_EXPLORER_URL: string = cardanoExplorerUrl;
 export const CARDANO_SPONSOR_FEES: string = cardanoSponsorFees;
+export const CARDANO_FEE_SCHEME: string = cardanoFeeScheme;
 export const CARDANO_TRANSFER_FEE_USD: string = cardanoTransferFeeUsd;
+export const CARDANO_TRANSFER_FEE_ADA: string = cardanoTransferFeeAda;
+export const CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT: string = cardanoTransferFeeAdaNewOutput;
+export const CARDANO_RECYCLE_DESTINATION_UTXO: string = cardanoRecycleDestinationUtxo;
+export const CARDANO_ROUTE_DUST_TO_SPONSOR: string = cardanoRouteDustToSponsor;
 export const CARDANO_SPONSOR_WALLET_ID: string = cardanoSponsorWalletId;
 export const CARDANO_DERIVATION_CHECK: string = cardanoDerivationCheck.trim();

@@ -33,7 +33,7 @@ import {
   type CardanoProvider,
   logCardanoProviderError
 } from './cardanoProviderService';
-import { selectableBalance, spendableBalance, totalAssets } from './cardanoTxService';
+import { adaOnlyBalance, selectableBalance, totalAssets } from './cardanoTxService';
 
 /**
  * The whole Cardano token catalogue for this network, as configured.
@@ -153,7 +153,10 @@ export async function getCardanoBalance(
       totalAda: lovelaceToAda(total),
       spendableAda: lovelaceToAda(spendable),
       spendable: lovelaceToAdaNumber(spendable),
-      lockedWithAssetsAda: lovelaceToAda(total - spendableBalance(utxos)),
+      // Against the ADA-only figure, not the sponsor's spendable one: this reports what a user
+      // sees sitting beside a token, and the sponsor's view of what it may reach for is a
+      // different question with a different answer.
+      lockedWithAssetsAda: lovelaceToAda(total - adaOnlyBalance(utxos)),
       assets: held.map((asset) => {
         const unit = assetUnit(asset);
         const known = configured.get(unit);

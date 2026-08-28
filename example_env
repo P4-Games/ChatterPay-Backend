@@ -203,7 +203,8 @@ CARDANO_TTL_SLOTS=900
 CARDANO_DEPOSIT_CONFIRMATIONS=3
 CARDANO_EXPLORER_URL='https://preprod.cardanoscan.io/transaction/'
 
-# Cardano - who pays what on a transfer. The two settings are independent:
+# Cardano - who pays what on a transfer. The two settings are independent. This pair describes
+# scheme 1; see CARDANO_FEE_SCHEME below for the other one, which prices its fee in ADA instead.
 #
 #   CARDANO_SPONSOR_FEES  CARDANO_TRANSFER_FEE_USD
 #   false                 0        the user pays the network fee and is charged nothing
@@ -216,6 +217,34 @@ CARDANO_EXPLORER_URL='https://preprod.cardanoscan.io/transaction/'
 CARDANO_SPONSOR_FEES='true'
 CARDANO_TRANSFER_FEE_USD=0.08
 CARDANO_SPONSOR_WALLET_ID='some-text'
+
+# Cardano - which fee scheme runs. Scheme 2 is the default: only an exact '1' selects scheme 1.
+#
+#   CARDANO_FEE_SCHEME=1  opt out, back to the old behaviour: the sender supplies the ADA a token
+#                         drags along, and the ChatterPay fee is
+#                         priced in USD (CARDANO_TRANSFER_FEE_USD). Sending a token moves the
+#                         sender's ADA balance, because that min-ADA is theirs and it goes to the
+#                         recipient.
+#   CARDANO_FEE_SCHEME=2  ChatterPay supplies that ADA, and its fee is priced in ADA
+#                         (CARDANO_TRANSFER_FEE_ADA). The sender's ADA balance does not move and the
+#                         figure on screen is one number. Needs CARDANO_SPONSOR_FEES='true': without
+#                         a sponsor there is no wallet to supply it from, and the scheme reports
+#                         itself off.
+#
+# CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT is the fee for the one transfer that costs ChatterPay more than
+# the network fee: a token going to somebody who does not hold it yet needs a brand new output, and
+# ChatterPay funds its min-ADA — roughly 1.16 ADA that lands in the recipient's wallet and does not
+# come back. Every other transfer, recycled ones included, pays CARDANO_TRANSFER_FEE_ADA. Left unset
+# it falls back to CARDANO_TRANSFER_FEE_ADA, which charges too little rather than nothing.
+#
+# CARDANO_RECYCLE_DESTINATION_UTXO lets a transfer spend the destination's existing output for this
+# token and reissue it as one, so no new min-ADA is needed. Scheme 2 only. Its own setting because it
+# brings a third signature and a third output to race on, and that is worth switching off on its own.
+CARDANO_FEE_SCHEME=2
+CARDANO_TRANSFER_FEE_ADA=0.45
+CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT=1.6
+CARDANO_RECYCLE_DESTINATION_UTXO='false'
+CARDANO_ROUTE_DUST_TO_SPONSOR='false'
 
 # Address this deployment derives for its own startup check. If the backend stops producing it,
 # something the derivation depends on changed and the process refuses to start. Empty switches it off.
