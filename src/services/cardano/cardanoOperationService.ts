@@ -219,7 +219,8 @@ export interface CardanoOperationInput {
   provider?: CardanoProvider;
 }
 
-/** What the user is told when the failure is one nobody anticipated. */
+/** Why the operation stopped when the failure is one nobody anticipated. Log text: the controller
+ *  answers the user with the localized incident template. */
 const OPERATION_FAILED = 'We could not complete the transfer. Please try again in a few minutes.';
 
 /**

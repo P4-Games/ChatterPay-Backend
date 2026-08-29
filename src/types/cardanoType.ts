@@ -521,3 +521,57 @@ export type CardanoDerivationCheck =
   | { status: 'skipped'; detail: string }
   | { status: 'unrecorded'; address: string }
   | { status: 'changed'; expected: string; derived: string };
+
+/**
+ * Why a transfer was refused, in a form that can still be said in the user's language.
+ *
+ * The services that decide this are arithmetic: floors, fees and balances. What they must not do is
+ * write the sentence, because the sentence has to arrive in the language the user talks to the bot
+ * in, and that language is read from the user's settings by the notification layer. A service that
+ * returns prose has already chosen a language for everybody.
+ *
+ * So the refusal travels as a reason plus the figures it names, and the controller renders it from
+ * the localized template, exactly as the EVM path renders `amount_outside_limits`.
+ */
+export type CardanoRefusalReason =
+  /** The amount is under the ledger's own floor for an output. */
+  | 'amount_below_minimum'
+  /** The wallet holds less ADA than the transfer needs. */
+  | 'insufficient_ada'
+  /** The change output carries tokens, so its floor can never leave with the transfer. */
+  | 'change_carries_tokens'
+  /** The change this transfer would leave is below the floor, and the network would absorb it. */
+  | 'change_below_floor'
+  /** A token transfer needs ADA of its own, which this wallet does not hold. */
+  | 'token_needs_ada'
+  /**
+   * The same, when the sender keeps part of the token.
+   *
+   * Its own sentence because the figure is roughly double for a reason the user can act on: the
+   * change that keeps the rest of the token needs a floor of its own, and sending the whole balance
+   * does not.
+   */
+  | 'token_needs_ada_keeping_rest'
+  /** Sending part of a token needs the floor of the change that keeps the rest. */
+  | 'token_change_needs_ada'
+  /** The wallet holds less of the token than the user asked to send. */
+  | 'token_balance_not_enough'
+  /** The amount does not exceed ChatterPay's fee, so nothing would reach the destination. */
+  | 'amount_below_fee'
+  /** ChatterPay cannot cover the network fee right now. */
+  | 'sponsor_unavailable'
+  /** Discovered inside the transfer: the wallet has to be funded before this can work. */
+  | 'insufficient_funds';
+
+/** A refusal the user is going to read, before it has been put into words. */
+export interface CardanoRefusal {
+  /** Which sentence to say. */
+  reason: CardanoRefusalReason;
+  /**
+   * The figures that sentence names, keyed by the placeholder they replace.
+   *
+   * Bracketed keys (`[HELD]`) for the same reason the EVM templates use them: the value is
+   * substituted into a string a non-developer edits in Mongo.
+   */
+  params: Readonly<Record<string, string>>;
+}

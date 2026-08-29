@@ -15,7 +15,7 @@
 import { getCardanoConfig } from '../../config/cardanoConfig';
 import { getCardanoFeeConfig } from '../../config/cardanoFeeConfig';
 import { Logger } from '../../helpers/loggerHelper';
-import type { CardanoAssetAmount } from '../../types/cardanoType';
+import type { CardanoAssetAmount, CardanoRefusal } from '../../types/cardanoType';
 import { decodeCardanoAddress } from './cardanoAddressService';
 import { buildCardanoProvider } from './cardanoProviderService';
 import {
@@ -24,7 +24,6 @@ import {
   tokenTransferRequirement
 } from './cardanoRequirementsService';
 import { cardanoSignerService } from './cardanoSignerService';
-import { SPONSOR_UNAVAILABLE } from './cardanoTransferService';
 import { assetBalance, spendableBalance } from './cardanoTxService';
 
 /** Amount, in the asset's own base units. */
@@ -65,7 +64,7 @@ export async function canAffordCardanoTransfer(
     ok: true,
     requiredLovelace: 0n,
     heldLovelace: 0n,
-    message: ''
+    refusal: null
   };
 
   const decoded = decodeCardanoAddress(address);
@@ -104,9 +103,13 @@ export async function canAffordCardanoTransfer(
         ok: false,
         requiredLovelace: 0n,
         heldLovelace: 0n,
-        message:
-          `Not enough balance: you have ${(Number(held) / scale).toFixed(2)} and you are ` +
-          `trying to send ${(Number(quantity) / scale).toFixed(2)}.`
+        refusal: {
+          reason: 'token_balance_not_enough',
+          params: {
+            '[HELD]': (Number(held) / scale).toFixed(2),
+            '[AMOUNT]': (Number(quantity) / scale).toFixed(2)
+          }
+        }
       };
     }
 
@@ -122,9 +125,7 @@ export async function canAffordCardanoTransfer(
         ok: false,
         requiredLovelace: 0n,
         heldLovelace: 0n,
-        message:
-          `The amount has to be more than the ${smallest} fee for this transfer, ` +
-          `otherwise nothing would reach the destination.`
+        refusal: { reason: 'amount_below_fee', params: { '[FEE]': smallest } }
       };
     }
 
@@ -145,8 +146,8 @@ export async function canAffordCardanoTransfer(
 export interface CardanoSponsorPreflight {
   /** Whether the transfer may go ahead. */
   ok: boolean;
-  /** What to tell the user when it may not. Empty when it may. */
-  message: string;
+  /** Why it may not, ready to be put into words. Null when it may. */
+  refusal: CardanoRefusal | null;
 }
 
 /**
@@ -156,7 +157,7 @@ export interface CardanoSponsorPreflight {
  * inside the transfer, after the lock was open and the user had been told the operation was in
  * progress — and since nothing about it is theirs to fix, the failure read as silence.
  *
- * The message names nothing: the wallet is the product's, and handing every user its address along
+ * The sentence names nothing: the wallet is the product's, and handing every user its address along
  * with the news that it is empty is an operational detail that belongs in the log.
  *
  * @param logKey - Correlation key for the logs.
@@ -165,7 +166,7 @@ export interface CardanoSponsorPreflight {
  *   checks it again before signing, so a hiccup here must not refuse a transfer that would work.
  */
 export async function sponsorCanCoverFee(logKey: string): Promise<CardanoSponsorPreflight> {
-  const pass: CardanoSponsorPreflight = { ok: true, message: '' };
+  const pass: CardanoSponsorPreflight = { ok: true, refusal: null };
 
   const feeConfig = getCardanoFeeConfig();
   if (!feeConfig.sponsorNetworkFee) return pass;
@@ -190,7 +191,7 @@ export async function sponsorCanCoverFee(logKey: string): Promise<CardanoSponsor
       logKey,
       `CARDANO_SPONSOR_WALLET_EMPTY: ${sponsor.address} holds no spendable ADA`
     );
-    return { ok: false, message: SPONSOR_UNAVAILABLE };
+    return { ok: false, refusal: { reason: 'sponsor_unavailable', params: {} } };
   } catch (error) {
     Logger.warn(
       'sponsorCanCoverFee',

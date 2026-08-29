@@ -506,7 +506,7 @@ describe('what the wallet is told it needs, per scheme', () => {
     );
     expect(requirement.ok).toBe(false);
     expect(requirement.requiredLovelace).toBeGreaterThan(0n);
-    expect(requirement.message).toMatch(/Sending the whole balance needs none/);
+    expect(requirement.refusal?.reason).toBe('token_change_needs_ada');
   });
 
   it('scheme 1: the dust window is a refusal, with the figures to act on', () => {
@@ -520,7 +520,7 @@ describe('what the wallet is told it needs, per scheme', () => {
       false
     );
     expect(requirement.ok).toBe(false);
-    expect(requirement.message).toMatch(/below the minimum|send it all/);
+    expect(requirement.refusal?.reason).toBe('change_below_floor');
   });
 
   it('scheme 2: the dust window is not a refusal, because it gets routed', () => {
@@ -548,7 +548,7 @@ describe('what the wallet is told it needs, per scheme', () => {
         routes
       );
       expect(requirement.ok).toBe(false);
-      expect(requirement.message).toMatch(/minimum you can send/);
+      expect(requirement.refusal?.reason).toBe('amount_below_minimum');
     }
   });
 });
