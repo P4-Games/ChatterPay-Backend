@@ -537,6 +537,18 @@ it('should create and save a Template document successfully', async () => {
           pt: 'Sua carteira Cardano não tem ADA suficiente para esta transferência. Deposite neste endereço e tente novamente: [ADDRESS]'
         }
       },
+      user_blocked: {
+        title: {
+          en: 'ChatterPay - Account suspended',
+          es: 'ChatterPay - Cuenta suspendida',
+          pt: 'ChatterPay - Conta suspensa'
+        },
+        message: {
+          en: 'Your account was suspended after activity flagged as an attempt to attack the platform. Reach out through our support channels if you believe this is a mistake.',
+          es: 'Tu cuenta fue suspendida tras detectar actividad identificada como un intento de ataque a la plataforma. Contactanos por los canales de soporte si creés que es un error.',
+          pt: 'Sua conta foi suspensa após atividade identificada como uma tentativa de ataque à plataforma. Fale com o suporte se você acredita que é um engano.'
+        }
+      },
       wallet_not_created: {
         title: {
           en: 'ChatterPay: Wallet not created',
