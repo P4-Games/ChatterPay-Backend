@@ -220,6 +220,12 @@ export const ISSUER_TOKENS_ENABLED: boolean = issuerTokensEnabled.toLowerCase() 
 export const BOT_NOTIFICATIONS_ENABLED: boolean = botNotificationsEnabled.toLowerCase() === 'true';
 export const CHATTERPAY_DOMAIN: string = `https://${IS_DEVELOPMENT ? 'dev.' : ''}chatterpay.net`;
 export const CHATTERPAY_NFTS_SHARE_URL: string = `${CHATTERPAY_DOMAIN}/nfts/share`;
+
+export const USER_BLOCKED_FALLBACK_MESSAGE: string =
+  'Your account was suspended after activity flagged as an attempt to attack the platform. ' +
+  `Reach out through the support channels on ${CHATTERPAY_DOMAIN} if you believe this is a mistake.`;
+
+export const USER_BLOCKED_ERROR_CODE = 'USER_BLOCKED';
 export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
   minorLogLevel.toLowerCase() as LogLevel
 )
