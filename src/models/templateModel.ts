@@ -87,11 +87,32 @@ export type NotificationTemplatesTypes = {
   [key in NotificationEnum]: NotificationTemplateType;
 };
 
+/**
+ * A site-wide announcement rendered by the front as a one-line banner.
+ *
+ * Visibility is data, not code: an item shows while `enabled` is true and the current instant sits
+ * between `initAt` and `endAt`, so an announcement can be scheduled ahead of time and stops showing
+ * on its own without a deploy. `title` is the single line the banner shows collapsed; `message` is
+ * the full text behind the expander, and is also what the notification and WhatsApp scripts send.
+ */
+export interface NewsItemType {
+  title: LocalizedContentType;
+  message: LocalizedContentType;
+  enabled: boolean;
+  order: number;
+  createdAt: Date;
+  initAt: Date;
+  endAt: Date;
+}
+
+export type NewsTemplatesTypes = Record<string, NewsItemType>;
+
 export interface ITemplateSchema extends Document {
   notifications: {
     [key in NotificationEnum]: NotificationTemplateType;
   };
   security_questions: Record<string, LocalizedContentType>;
+  news: NewsTemplatesTypes;
 }
 
 const localizedContentSchema = new Schema<LocalizedContentType>({
@@ -126,6 +147,19 @@ const notificationSchema = new Schema<NotificationTemplateType>({
     required: false
   }
 });
+
+const newsSchema = new Schema<NewsItemType>(
+  {
+    title: { type: localizedContentSchema, required: true },
+    message: { type: localizedContentSchema, required: true },
+    enabled: { type: Boolean, required: true, default: true },
+    order: { type: Number, required: false, default: 0 },
+    createdAt: { type: Date, required: true, default: Date.now },
+    initAt: { type: Date, required: true },
+    endAt: { type: Date, required: true }
+  },
+  { _id: false }
+);
 
 const templateSchema = new Schema<ITemplateSchema>({
   notifications: {
@@ -186,7 +220,8 @@ const templateSchema = new Schema<ITemplateSchema>({
     cardano_insufficient_funds: { type: notificationSchema, required: false },
     user_blocked: { type: notificationSchema, required: false }
   },
-  security_questions: { type: Map, of: localizedContentSchema, required: false }
+  security_questions: { type: Map, of: localizedContentSchema, required: false },
+  news: { type: Map, of: newsSchema, required: false }
 });
 
 export const TemplateType = model<ITemplateSchema>('Template', templateSchema, 'templates');
