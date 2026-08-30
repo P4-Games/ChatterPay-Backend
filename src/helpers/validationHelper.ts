@@ -9,10 +9,14 @@ import { short_urls_domains } from '../config/shortUrlsDomains.json';
  * This function cleans the input by removing all non-numeric characters
  * and then checks if the remaining string has between 8 and 15 digits.
  *
- * @param number - The phone number string to be validated.
+ * @param number - The phone number to be validated. Anything not a string is invalid.
  * @returns `true` if the input is a valid phone number, `false` otherwise.
  */
-export function isValidPhoneNumber(number: string): boolean {
+export function isValidPhoneNumber(number: unknown): boolean {
+  if (typeof number !== 'string') {
+    return false;
+  }
+
   // Keep only numeric characters
   const cleanedNumber = number.replace(/\D/g, '');
 
