@@ -110,6 +110,7 @@ export interface IUser extends Document {
   referral_code?: string;
   referral_by_code?: string;
   polymarket_account?: IPolymarketAccount;
+  blocked?: boolean;
 }
 
 const walletSchema = new Schema<IUserWallet>(
@@ -203,6 +204,7 @@ const userSchema = new Schema<IUser>({
   telegram_id: { type: String, required: false, default: 0 },
   referral_code: { type: String, required: false, default: '' },
   referral_by_code: { type: String, required: false, default: '' },
+  blocked: { type: Boolean, required: false, default: false },
   polymarket_account: {
     type: {
       polygon_address: { type: String, required: true },
@@ -217,5 +219,10 @@ const userSchema = new Schema<IUser>({
     _id: false
   }
 });
+
+// Every request that names a user resolves it by one of these, so without them each one is a
+// collection scan.
+userSchema.index({ phone_number: 1 });
+userSchema.index({ telegram_id: 1 });
 
 export const UserModel = model<IUser>('User', userSchema, 'users');
