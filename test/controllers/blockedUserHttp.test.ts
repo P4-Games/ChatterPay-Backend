@@ -17,18 +17,6 @@ import { CacheNames } from '../../src/types/commonType';
 const TEMPLATE_ES = 'Cuenta suspendida. Contactanos por los canales de soporte.';
 const EXPECTED_MESSAGE = TEMPLATE_ES;
 
-/**
- * The block, and the `/nfts/` crash it was found next to, driven over real HTTP.
- *
- * Both are middleware-and-dispatch behaviour that a unit test structurally cannot reach: the block
- * lives in a `preHandler` hook registered on the root server instance, and the 500 came from a
- * validator throwing before the handler's own 400 could run. What is proven here is what a client
- * actually receives.
- *
- * A real socket rather than `server.inject()`, for the same reason as `cardanoHttp.test.ts`:
- * `light-my-request` reads a Node internal Bun does not expose, and this repository runs on Bun.
- */
-
 const EVM_CHAIN_ID = DEFAULT_CHAIN_ID;
 
 /** `CORS_ORIGINS` is `*` in development, but the middleware still demands the header be present. */
@@ -137,9 +125,6 @@ afterAll(async () => {
 });
 
 describe('GET /nfts/ without a channel_user_id', () => {
-  // The route is public, so this was reachable with one unauthenticated curl. The validator threw
-  // a TypeError on the missing query param, which escaped as a 500 before the handler's own 400
-  // could run, which is the error this was found as in the production logs.
   it('answers 400 rather than crashing with a 500', async () => {
     const { status, body } = await call('/nfts/', { token: undefined });
 
@@ -157,7 +142,6 @@ describe('GET /nfts/ without a channel_user_id', () => {
 });
 
 describe('a blocked account', () => {
-  // `/notifications` reports failed validations with a status code, so the block does too.
   it('is refused with 403 on a route that reports errors by status code', async () => {
     const { status, body } = await call(`/notifications?channel_user_id=${BLOCKED_PHONE}`, {
       token: FRONTEND_TOKEN
@@ -170,8 +154,6 @@ describe('a blocked account', () => {
     });
   });
 
-  // `/get_security_status/` reports every failed validation as a 200 carrying the reason, because
-  // the clients that reach it render the message body and cannot act on a status code.
   it('is refused with 200 and an error body on a route that reports errors as success', async () => {
     const { status, body } = await call('/get_security_status/', {
       method: 'POST',
@@ -186,9 +168,6 @@ describe('a blocked account', () => {
     });
   });
 
-  // The shape belongs to the endpoint, not to whoever is calling it: the same route answered 403
-  // to the frontend and 200 to the bot while the decision was keyed on the credential, which made
-  // the block the one refusal on that route shaped differently from every other.
   it('is refused the same way on one route whichever credential called it', async () => {
     const asBot = await call('/get_security_status/', {
       method: 'POST',
@@ -207,8 +186,6 @@ describe('a blocked account', () => {
 });
 
 describe('an account that is not blocked', () => {
-  // The point is only that the hook let the request reach its handler: whatever the handler then
-  // answers is its own business, and must not be the block.
   it('reaches the handler untouched', async () => {
     const { body } = await call('/get_security_status/', {
       method: 'POST',
