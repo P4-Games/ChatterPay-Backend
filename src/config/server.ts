@@ -6,6 +6,7 @@ import { setupRoutes } from '../api/routes';
 import { Logger } from '../helpers/loggerHelper';
 import { CURRENT_LOG_LEVEL, GCP_CLOUD_TRACE_ENABLED, PORT } from './constants';
 import { authMiddleware } from './middlewares/authMiddleware';
+import { blockedUserMiddleware } from './middlewares/blockedUserMiddleware';
 import { setupBodyParserMiddleware } from './middlewares/bodyParserMiddleware';
 import { ipBlacklistMiddleware } from './middlewares/ipsBlackListMiddleware';
 import { originMiddleware } from './middlewares/originMiddleware';
@@ -48,6 +49,8 @@ export async function buildServer(): Promise<FastifyInstance> {
   if (GCP_CLOUD_TRACE_ENABLED) {
     server.addHook('onRequest', traceMiddleware);
   }
+
+  server.addHook('preHandler', blockedUserMiddleware);
 
   await setupRateLimit(server);
   await setupNetworkConfigPlugin(server);
