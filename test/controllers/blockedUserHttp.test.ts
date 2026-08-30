@@ -5,12 +5,17 @@ import {
   CHATIZALO_TOKEN,
   DEFAULT_CHAIN_ID,
   FRONTEND_TOKEN,
-  USER_BLOCKED_ERROR_CODE,
-  USER_BLOCKED_MESSAGES
+  USER_BLOCKED_ERROR_CODE
 } from '../../src/config/constants';
 import { buildServer } from '../../src/config/server';
 import Blockchain from '../../src/models/blockchainModel';
+import { TemplateType } from '../../src/models/templateModel';
 import { UserModel } from '../../src/models/userModel';
+import { cacheService } from '../../src/services/cache/cacheService';
+import { CacheNames } from '../../src/types/commonType';
+
+const TEMPLATE_ES = 'Cuenta suspendida. Contactanos por los canales de soporte.';
+const EXPECTED_MESSAGE = TEMPLATE_ES;
 
 /**
  * The block, and the `/nfts/` crash it was found next to, driven over real HTTP.
@@ -69,6 +74,17 @@ async function seedEvmNetwork(): Promise<void> {
   });
 }
 
+async function seedTemplate(): Promise<void> {
+  await TemplateType.collection.insertOne({
+    notifications: {
+      user_blocked: {
+        title: { en: 'Suspended', es: 'Suspendida', pt: 'Suspensa' },
+        message: { en: TEMPLATE_ES, es: TEMPLATE_ES, pt: TEMPLATE_ES }
+      }
+    }
+  });
+}
+
 async function seedUsers(): Promise<void> {
   await UserModel.create([
     {
@@ -112,6 +128,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await seedEvmNetwork();
   await seedUsers();
+  await seedTemplate();
+  cacheService.clearCache(CacheNames.NOTIFICATION);
 });
 
 afterAll(async () => {
@@ -121,7 +139,7 @@ afterAll(async () => {
 describe('GET /nfts/ without a channel_user_id', () => {
   // The route is public, so this was reachable with one unauthenticated curl. The validator threw
   // a TypeError on the missing query param, which escaped as a 500 before the handler's own 400
-  // could run — that is the error found in the production logs of 2026-08-29.
+  // could run, which is the error this was found as in the production logs.
   it('answers 400 rather than crashing with a 500', async () => {
     const { status, body } = await call('/nfts/', { token: undefined });
 
@@ -139,23 +157,22 @@ describe('GET /nfts/ without a channel_user_id', () => {
 });
 
 describe('a blocked account', () => {
-  it('is refused with 403 when the frontend calls on its behalf', async () => {
-    const { status, body } = await call('/get_security_status/', {
-      method: 'POST',
-      body: { channel_user_id: BLOCKED_PHONE },
+  // `/notifications` reports failed validations with a status code, so the block does too.
+  it('is refused with 403 on a route that reports errors by status code', async () => {
+    const { status, body } = await call(`/notifications?channel_user_id=${BLOCKED_PHONE}`, {
       token: FRONTEND_TOKEN
     });
 
     expect(status).toBe(403);
     expect(body).toMatchObject({
       status: 'error',
-      data: { message: USER_BLOCKED_MESSAGES.es, details: USER_BLOCKED_ERROR_CODE }
+      data: { message: EXPECTED_MESSAGE, details: USER_BLOCKED_ERROR_CODE }
     });
   });
 
-  // The bot renders the message body and cannot act on a status code, so every refusal on its
-  // endpoints is a 200 carrying the reason. The block has to follow that same contract.
-  it('is refused with 200 and an error body when the bot calls on its behalf', async () => {
+  // `/get_security_status/` reports every failed validation as a 200 carrying the reason, because
+  // the clients that reach it render the message body and cannot act on a status code.
+  it('is refused with 200 and an error body on a route that reports errors as success', async () => {
     const { status, body } = await call('/get_security_status/', {
       method: 'POST',
       body: { channel_user_id: BLOCKED_PHONE },
@@ -165,17 +182,27 @@ describe('a blocked account', () => {
     expect(status).toBe(200);
     expect(body).toMatchObject({
       status: 'error',
-      data: { code: 200, message: USER_BLOCKED_MESSAGES.es, details: USER_BLOCKED_ERROR_CODE }
+      data: { code: 200, message: EXPECTED_MESSAGE, details: USER_BLOCKED_ERROR_CODE }
     });
   });
 
-  it('is refused on a GET that names it in the query string', async () => {
-    const { status, body } = await call(`/notifications?channel_user_id=${BLOCKED_PHONE}`, {
+  // The shape belongs to the endpoint, not to whoever is calling it: the same route answered 403
+  // to the frontend and 200 to the bot while the decision was keyed on the credential, which made
+  // the block the one refusal on that route shaped differently from every other.
+  it('is refused the same way on one route whichever credential called it', async () => {
+    const asBot = await call('/get_security_status/', {
+      method: 'POST',
+      body: { channel_user_id: BLOCKED_PHONE },
+      token: CHATIZALO_TOKEN
+    });
+    const asFrontend = await call('/get_security_status/', {
+      method: 'POST',
+      body: { channel_user_id: BLOCKED_PHONE },
       token: FRONTEND_TOKEN
     });
 
-    expect(status).toBe(403);
-    expect(body).toMatchObject({ data: { details: USER_BLOCKED_ERROR_CODE } });
+    expect(asFrontend.status).toBe(asBot.status);
+    expect(asFrontend.body).toMatchObject({ data: { details: USER_BLOCKED_ERROR_CODE } });
   });
 });
 

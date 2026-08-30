@@ -2,7 +2,7 @@ import {
   RESET_USER_OPERATION_THRESHOLD_MINUTES,
   SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT
 } from '../../config/constants';
-import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
+import { getPhoneNumberFormatted, getPhoneNumberVariants } from '../../helpers/formatHelper';
 import { Logger } from '../../helpers/loggerHelper';
 import { type IUser, UserModel } from '../../models/userModel';
 import { type NotificationLanguage, notificationLanguages } from '../../types/commonType';
@@ -448,14 +448,6 @@ export const mongoUserService = {
   /**
    * Reads the block state of one account, by whichever identifier the request carried.
    *
-   * Projected down to `blocked` and `settings.notifications.language` because that is everything
-   * `blockedUserMiddleware` needs: whether to refuse, and which language to refuse in. Pulling the
-   * whole document here would load wallets and counters on every single request.
-   *
-   * A malformed or unknown identifier resolves to "not blocked" rather than throwing: this runs in
-   * front of every handler, and a lookup failure must not turn a normal request into a 500. The
-   * handler behind it still does its own validation.
-   *
    * @param identity - Phone number, ChatterPay user id, or Telegram id.
    * @returns The block state and preferred language, or `null` when no account matches.
    */
@@ -467,13 +459,14 @@ export const mongoUserService = {
     if ('phoneNumber' in identity) {
       const formattedPhone = getPhoneNumberFormatted(identity.phoneNumber);
       if (!formattedPhone) return null;
-      filter = { phone_number: formattedPhone };
+      // Matched across variants for the same reason `telegramService` resolves users that way: the
+      // handler behind this hook would find an account this filter missed.
+      filter = { phone_number: { $in: await getPhoneNumberVariants(formattedPhone) } };
     } else if ('telegramId' in identity) {
       const telegramId = (identity.telegramId ?? '').trim();
       if (!/^\d+$/.test(telegramId)) return null;
       filter = { telegram_id: telegramId };
     } else {
-      // A caller-supplied id that is not an ObjectId would make mongoose throw on cast.
       if (!/^[0-9a-fA-F]{24}$/.test(identity.userId ?? '')) return null;
       filter = { _id: identity.userId };
     }

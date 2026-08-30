@@ -110,16 +110,6 @@ export interface IUser extends Document {
   referral_code?: string;
   referral_by_code?: string;
   polymarket_account?: IPolymarketAccount;
-  /**
-   * Whether this account is banned from operating.
-   *
-   * Set by hand on the record of an account caught abusing the API — the pen-testing sweep of
-   * 2026-08-29 is what motivated it. While `true`, `blockedUserMiddleware` refuses every request
-   * this user can be resolved from, on every channel, before it reaches a handler.
-   *
-   * Absent on every document written before this field existed, and read as `false` when missing:
-   * an account is only blocked by an explicit `true`.
-   */
   blocked?: boolean;
 }
 
@@ -229,5 +219,10 @@ const userSchema = new Schema<IUser>({
     _id: false
   }
 });
+
+// Every request that names a user resolves it by one of these, so without them each one is a
+// collection scan.
+userSchema.index({ phone_number: 1 });
+userSchema.index({ telegram_id: 1 });
 
 export const UserModel = model<IUser>('User', userSchema, 'users');

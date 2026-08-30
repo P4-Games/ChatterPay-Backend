@@ -6,9 +6,6 @@
 import { mongoCountryService } from '../services/mongo/mongoCountryService';
 
 export function getPhoneNumberFormatted(phone: unknown): string {
-  // Same reason as `isValidPhoneNumber`: the value comes from a query string or a request body,
-  // so an absent field reaches here as `undefined` and used to throw a `TypeError` that surfaced
-  // as a 500. An empty string matches no user, which is the answer a lookup wants.
   if (typeof phone !== 'string') {
     return '';
   }

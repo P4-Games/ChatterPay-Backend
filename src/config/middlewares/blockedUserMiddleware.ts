@@ -3,38 +3,84 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Logger } from '../../helpers/loggerHelper';
 import { returnErrorResponse, returnErrorResponseAsSuccess } from '../../helpers/requestHelper';
 import { isValidPhoneNumber } from '../../helpers/validationHelper';
+import { NotificationEnum } from '../../models/templateModel';
 import { mongoUserService } from '../../services/mongo/mongoUserService';
-import type { NotificationLanguage } from '../../types/commonType';
+import { getNotificationTemplateForLanguage } from '../../services/notificationService';
 import {
-  SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT,
   TELEGRAM_WEBHOOK_PATH,
   USER_BLOCKED_ERROR_CODE,
-  USER_BLOCKED_MESSAGES
+  USER_BLOCKED_FALLBACK_MESSAGE
 } from '../constants';
 
-/**
- * How a request names the account it acts on.
- *
- * This API has no per-user credential: the frontend and the bot each hold one shared bearer token,
- * and the user is whoever the request body or query string says it is. So the only place a block
- * can be enforced is on that same self-declared identifier — which is enough, because a blocked
- * account cannot operate without naming itself.
- */
-type RequestIdentity = { phoneNumber: string } | { userId: string } | { telegramId: string } | null;
+type RequestIdentity = { phoneNumber: string } | { userId: string } | { telegramId: string };
 
-/** Fields a request can carry a phone number in, in the order they are trusted. */
-const PHONE_FIELDS = ['channel_user_id', 'phone_number', 'identifier'] as const;
+type TelegramWebhookBody = {
+  message?: {
+    from?: { id?: unknown };
+    chat?: { id?: unknown };
+    contact?: { phone_number?: unknown };
+    text?: unknown;
+  };
+};
+
+const PHONE_FIELDS = ['channel_user_id', 'user_channel_id', 'phone_number', 'identifier'] as const;
 
 /**
- * Pulls a scalar string out of a parsed body or query object.
+ * Routes where the refusal is sent as HTTP 200 with an error body.
  *
- * A query string can repeat a key, in which case Fastify hands over an array; a JSON body can hold
- * anything at all. Neither is a usable identifier, so both read as absent.
- *
- * @param source - The parsed body or query object.
- * @param field - The field name to read.
- * @returns The trimmed string value, or an empty string when absent or not a string.
+ * These are the endpoints the WhatsApp bot calls. Its HTTP layer raises on any non-2xx before it
+ * reads the body, so a status code leaves the person with no message at all. Keyed by route and
+ * not by credential, so one endpoint answers the same way whoever called it.
  */
+const ROUTES_ANSWERING_ERRORS_AS_SUCCESS = [
+  '/make_transaction/',
+  '/swap',
+  '/get_referral_code/',
+  '/get_referral_by_code/',
+  '/get_referral_code_with_usage_count/',
+  '/submit_referral_by_code/',
+  '/get_security_status/',
+  '/get_security_questions/',
+  '/get_security_events/',
+  '/set_security_pin/',
+  '/verify_security_pin/',
+  '/set_security_recovery_questions/',
+  '/reset_security_pin/',
+  '/chatterpoints/play',
+  '/chatterpoints/stats',
+  '/chatterpoints/info',
+  '/chatterpoints/social',
+  '/chatterpoints/leaderboard',
+  '/chatterpoints/cycle/plays',
+  '/chatterpoints/user/history',
+  '/aave/create_supply',
+  '/aave/get_supply',
+  '/aave/update_supply',
+  '/aave/remove_supply',
+  '/balance_by_phone/',
+  '/balance_by_phone_sync/',
+  '/create_wallet/',
+  '/get_wallet/',
+  '/get_wallet_sync/',
+  '/get_ramp_wallet/',
+  '/deposit_info/',
+  '/multichain_deposit_cta/',
+  '/wallet_next_steps/',
+  '/mint_existing/',
+  '/nft/',
+  '/ramp/onramp/link',
+  TELEGRAM_WEBHOOK_PATH
+];
+
+const normalizeRoute = (route: string): string => {
+  const withoutQuery = route.split('?')[0];
+  return withoutQuery.length > 1 ? withoutQuery.replace(/\/+$/, '') : withoutQuery;
+};
+
+const NORMALIZED_SUCCESS_ROUTES = new Set(ROUTES_ANSWERING_ERRORS_AS_SUCCESS.map(normalizeRoute));
+
+const telegramRoute = normalizeRoute(TELEGRAM_WEBHOOK_PATH);
+
 const readStringField = (source: unknown, field: string): string => {
   if (typeof source !== 'object' || source === null) return '';
 
@@ -45,70 +91,68 @@ const readStringField = (source: unknown, field: string): string => {
 /**
  * Works out which account a request is acting on.
  *
- * Body first, then query string: an endpoint that accepts both reads the body, and a caller cannot
- * dodge the check by moving the identifier to the other one.
+ * This API has no per-user credential: the user is whoever the request says it is.
+ *
+ * Routes are matched on `routeOptions.url`, the registered pattern, never on the raw URL. The
+ * server runs with `ignoreDuplicateSlashes`, so `//users/:id` reaches the handler while
+ * `request.url` still carries both slashes and any prefix test on it silently misses.
  *
  * @param request - The incoming request.
  * @returns The identity the request names, or `null` when it names nobody.
  */
-const resolveRequestIdentity = (request: FastifyRequest): RequestIdentity => {
-  const { body, query, params, url } = request;
+const resolveRequestIdentities = (request: FastifyRequest): RequestIdentity[] => {
+  const { body, query, params } = request;
+  const route = normalizeRoute(request.routeOptions?.url ?? request.url);
 
   for (const field of PHONE_FIELDS) {
-    const value = readStringField(body, field) || readStringField(query, field);
-    // `identifier` also carries wallet addresses on the token issuer route; only a phone number
-    // identifies a user here, and a wallet reaches the handler's own validation untouched.
-    if (value && isValidPhoneNumber(value)) {
-      return { phoneNumber: value };
+    // Both sources are tested, never short-circuited: a truthy but invalid body value would
+    // otherwise suppress the query string the handler actually reads.
+    for (const value of [readStringField(body, field), readStringField(query, field)]) {
+      if (value && isValidPhoneNumber(value)) {
+        return [{ phoneNumber: value }];
+      }
     }
   }
 
-  // The Telegram webhook carries no ChatterPay identifier at all — the account is whoever the
-  // Telegram user is linked to.
-  if (url.startsWith(TELEGRAM_WEBHOOK_PATH.replace(/\/$/, ''))) {
-    const from = (body as { message?: { from?: { id?: unknown } } } | undefined)?.message?.from;
-    if (typeof from?.id === 'number' || typeof from?.id === 'string') {
-      return { telegramId: String(from.id) };
+  if (route === telegramRoute) {
+    const message = (body as TelegramWebhookBody | undefined)?.message;
+    const identities: RequestIdentity[] = [];
+
+    // `telegramController` links an account from `contact.phone_number || text`, so the typed
+    // number counts as an identity too. Both it and the Telegram account are collected: naming a
+    // second, unblocked number must not shadow a block on the account doing the naming.
+    for (const candidate of [message?.contact?.phone_number, message?.text]) {
+      if (typeof candidate === 'string' && isValidPhoneNumber(candidate)) {
+        identities.push({ phoneNumber: candidate });
+        break;
+      }
     }
+
+    const fromId = message?.from?.id;
+    if (typeof fromId === 'number' || typeof fromId === 'string') {
+      identities.push({ telegramId: String(fromId) });
+    }
+
+    return identities;
   }
 
-  // `/users/:id` and the routes under it address the account by its Mongo id.
-  if (url.startsWith('/users/')) {
+  if (route === '/users/:id') {
     const id = readStringField(params, 'id');
-    if (id) return { userId: id };
+    if (id) return [{ userId: id }];
   }
 
-  return null;
+  return [];
 };
 
-/**
- * Whether this route answers a failed validation with HTTP 200 and an error body.
- *
- * The bot renders whatever message it gets back and cannot act on a status code, so every endpoint
- * it calls reports refusals that way. A blocked user reaching one of those has to be told the same
- * way, or the bot shows nothing at all.
- *
- * @param request - The incoming request.
- * @returns `true` when the refusal must be sent as a 200.
- */
-const answersErrorsAsSuccess = (request: FastifyRequest): boolean => {
-  const { tokenType } = request as FastifyRequest & { tokenType?: 'frontend' | 'chatizalo' | null };
-
-  if (tokenType === 'chatizalo') return true;
-
-  // The Telegram webhook is authenticated by its own secret header, so it never gets a tokenType.
-  return request.url.startsWith(TELEGRAM_WEBHOOK_PATH.replace(/\/$/, ''));
-};
+const answersErrorsAsSuccess = (request: FastifyRequest): boolean =>
+  NORMALIZED_SUCCESS_ROUTES.has(normalizeRoute(request.routeOptions?.url ?? request.url));
 
 /**
  * Refuses every request made on behalf of a blocked account.
  *
- * Registered as a `preHandler` rather than an `onRequest` hook because the identifier usually
- * lives in the request body, which is not parsed yet at `onRequest` time. It is registered once on
- * the root instance so a route added later is covered without anyone remembering to opt in.
- *
- * A request that names no account passes through untouched: the public NFT and balance routes take
- * no user, and the handler behind this hook still runs its own validation.
+ * A `preHandler` and not an `onRequest` hook because the identifier usually lives in the request
+ * body, which is not parsed yet at `onRequest` time. Registered on the root instance so a route
+ * added later is covered without opting in.
  *
  * @param request - Fastify request.
  * @param reply - Fastify reply.
@@ -118,21 +162,43 @@ export async function blockedUserMiddleware(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
-  const identity = resolveRequestIdentity(request);
-  if (!identity) return;
+  let identity: RequestIdentity | null = null;
+  let blockState: Awaited<ReturnType<typeof mongoUserService.getUserBlockState>> = null;
 
-  const blockState = await mongoUserService.getUserBlockState(identity);
-  if (!blockState?.blocked) return;
+  for (const candidate of resolveRequestIdentities(request)) {
+    const state = await mongoUserService.getUserBlockState(candidate);
+    if (state?.blocked) {
+      identity = candidate;
+      blockState = state;
+      break;
+    }
+  }
 
-  const language: NotificationLanguage =
-    blockState.language ?? SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT;
-  const message = USER_BLOCKED_MESSAGES[language] ?? USER_BLOCKED_MESSAGES.en;
+  if (!identity || !blockState) return;
+
+  const template = await getNotificationTemplateForLanguage(
+    blockState.language,
+    NotificationEnum.user_blocked
+  );
+  const message = template.message || USER_BLOCKED_FALLBACK_MESSAGE;
 
   Logger.warn(
     'blockedUserMiddleware',
     `Blocked account refused on ${request.method} ${request.url}`,
     JSON.stringify(identity)
   );
+
+  // Telegram ignores any body that is not a method call, so the shared error envelope would leave
+  // the person with no message at all.
+  if (normalizeRoute(request.routeOptions?.url ?? request.url) === telegramRoute) {
+    const chatId = (request.body as TelegramWebhookBody | undefined)?.message?.chat?.id;
+    await reply
+      .status(200)
+      .send(
+        chatId === undefined ? undefined : { method: 'sendMessage', chat_id: chatId, text: message }
+      );
+    return;
+  }
 
   if (answersErrorsAsSuccess(request)) {
     await returnErrorResponseAsSuccess(

@@ -50,9 +50,6 @@ export async function buildServer(): Promise<FastifyInstance> {
     server.addHook('onRequest', traceMiddleware);
   }
 
-  // `preHandler`, not `onRequest`: the account a request acts on is usually named in its body, and
-  // the body is not parsed until after `onRequest`. Registered here on the root instance so it
-  // covers every route, including ones registered later inside the plugins below.
   server.addHook('preHandler', blockedUserMiddleware);
 
   await setupRateLimit(server);

@@ -59,15 +59,35 @@ export async function getNotificationTemplate(
   button?: string;
   buttons?: { id: string; title: string }[];
 }> {
+  const userLanguage: NotificationLanguage =
+    await mongoUserService.getUserSettingsLanguage(channelUserId);
+
+  return getNotificationTemplateForLanguage(userLanguage, typeOfNotification);
+}
+
+/**
+ * The same template lookup, for a caller that already knows the language.
+ *
+ * @param userLanguage - The language to render the template in.
+ * @param typeOfNotification - The type of notification to retrieve, defined by `NotificationEnum`.
+ * @returns A Promise resolving to the notification's localized parts.
+ */
+export async function getNotificationTemplateForLanguage(
+  userLanguage: NotificationLanguage,
+  typeOfNotification: NotificationEnum
+): Promise<{
+  title: string;
+  message: string;
+  footer?: string;
+  button?: string;
+  buttons?: { id: string; title: string }[];
+}> {
   const defaultNotification = { title: 'Chatterpay Message', message: '' };
   try {
     if (!Object.values(NotificationEnum).includes(typeOfNotification)) {
       Logger.warn('getNotificationTemplate', `Invalid notification type: ${typeOfNotification}`);
       return defaultNotification;
     }
-
-    const userLanguage: NotificationLanguage =
-      await mongoUserService.getUserSettingsLanguage(channelUserId);
 
     const cacheKey = `${typeOfNotification}:${userLanguage}`;
     const cachedTemplate = cacheService.get(CacheNames.NOTIFICATION, `${cacheKey}`);
