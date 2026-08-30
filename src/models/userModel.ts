@@ -110,6 +110,17 @@ export interface IUser extends Document {
   referral_code?: string;
   referral_by_code?: string;
   polymarket_account?: IPolymarketAccount;
+  /**
+   * Whether this account is banned from operating.
+   *
+   * Set by hand on the record of an account caught abusing the API — the pen-testing sweep of
+   * 2026-08-29 is what motivated it. While `true`, `blockedUserMiddleware` refuses every request
+   * this user can be resolved from, on every channel, before it reaches a handler.
+   *
+   * Absent on every document written before this field existed, and read as `false` when missing:
+   * an account is only blocked by an explicit `true`.
+   */
+  blocked?: boolean;
 }
 
 const walletSchema = new Schema<IUserWallet>(
@@ -203,6 +214,7 @@ const userSchema = new Schema<IUser>({
   telegram_id: { type: String, required: false, default: 0 },
   referral_code: { type: String, required: false, default: '' },
   referral_by_code: { type: String, required: false, default: '' },
+  blocked: { type: Boolean, required: false, default: false },
   polymarket_account: {
     type: {
       polygon_address: { type: String, required: true },

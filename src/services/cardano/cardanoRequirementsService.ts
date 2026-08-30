@@ -9,12 +9,17 @@
  * This is computed **before the operation lock is taken**, so a wallet that cannot pay is told why
  * while it can still do something about it, instead of being told after the lock, the notification
  * and the optimistic answer have already gone out.
+ *
+ * What this module does **not** do is write the sentence. It answers with a reason and the figures
+ * that reason names; the words come from the notification template in the user's own language, the
+ * same way the EVM path renders its limits. A number formatted here is a number, not a message.
  */
 
 import { getCardanoFeeConfig } from '../../config/cardanoFeeConfig';
 import type {
   CardanoAssetAmount,
   CardanoProtocolParameters,
+  CardanoRefusal,
   CardanoUtxo
 } from '../../types/cardanoType';
 import { minimumAdaFor, selectableBalance, selectionFor, totalAssets } from './cardanoTxService';
@@ -30,8 +35,8 @@ export interface CardanoRequirement {
   requiredLovelace: bigint;
   /** Lovelace the wallet actually holds. */
   heldLovelace: bigint;
-  /** A message for the user, empty when `ok`. */
-  message: string;
+  /** Why the transfer cannot be built, ready to be put into words. Null when `ok`. */
+  refusal: CardanoRefusal | null;
 }
 
 /** Lovelace as a human-readable ADA figure. */
@@ -75,10 +80,10 @@ export function adaTransferRequirement(
       ok: false,
       requiredLovelace: smallestSendable,
       heldLovelace: held,
-      message:
-        `The minimum you can send on Cardano is ${ada(smallestSendable)} ADA. ` +
-        `${ada(minOutput)} of it is a network limit, not a ChatterPay one: below that, the ` +
-        `transfer fails the whole transaction.`
+      refusal: {
+        reason: 'amount_below_minimum',
+        params: { '[MIN_AMOUNT]': ada(smallestSendable), '[NETWORK_MIN]': ada(minOutput) }
+      }
     };
   }
 
@@ -88,10 +93,16 @@ export function adaTransferRequirement(
       ok: false,
       requiredLovelace: required,
       heldLovelace: held,
-      message:
-        `Not enough balance. To send ${ada(amountLovelace)} ADA you need ` +
-        `${ada(required)} ADA in your wallet${sponsorNetworkFee ? '' : ' (network cost included)'} ` +
-        `and you have ${ada(held)} ADA.`
+      // `[REQUIRED]` already carries the network cost when there is one to carry, so the sentence
+      // does not have to say whether it did: the figure is the figure either way.
+      refusal: {
+        reason: 'insufficient_ada',
+        params: {
+          '[AMOUNT]': ada(amountLovelace),
+          '[REQUIRED]': ada(required),
+          '[HELD]': ada(held)
+        }
+      }
     };
   }
 
@@ -120,10 +131,14 @@ export function adaTransferRequirement(
       ok: false,
       requiredLovelace: required,
       heldLovelace: held,
-      message:
-        `With ${ada(held)} ADA you can send up to ${ada(gathered - fee - changeFloor)} ADA. ` +
-        `The rest has to stay in your wallet: it holds tokens, and the ${ada(changeFloor)} ADA ` +
-        `that carries them cannot leave with the transfer.`
+      refusal: {
+        reason: 'change_carries_tokens',
+        params: {
+          '[HELD]': ada(held),
+          '[MAX_AMOUNT]': ada(gathered - fee - changeFloor),
+          '[CHANGE_FLOOR]': ada(changeFloor)
+        }
+      }
     };
   }
 
@@ -131,7 +146,7 @@ export function adaTransferRequirement(
   // the sponsor's change and is credited back. The check above stays, because a remainder carrying
   // tokens can never be routed.
   if (routesDust) {
-    return { ok: true, requiredLovelace: required, heldLovelace: held, message: '' };
+    return { ok: true, requiredLovelace: required, heldLovelace: held, refusal: null };
   }
 
   if (change > 0n && change < changeFloor) {
@@ -140,14 +155,19 @@ export function adaTransferRequirement(
       ok: false,
       requiredLovelace: required,
       heldLovelace: held,
-      message:
-        `With ${ada(held)} ADA you can send up to ${ada(maxKeepingChange)} ADA, or send it all ` +
-        `(${ada(held - fee)} ADA). Between those two figures the change falls below the minimum ` +
-        `the network requires (${ada(changeFloor)} ADA) and is lost.`
+      refusal: {
+        reason: 'change_below_floor',
+        params: {
+          '[HELD]': ada(held),
+          '[MAX_AMOUNT]': ada(maxKeepingChange),
+          '[ALL_AMOUNT]': ada(held - fee),
+          '[CHANGE_FLOOR]': ada(changeFloor)
+        }
+      }
     };
   }
 
-  return { ok: true, requiredLovelace: required, heldLovelace: held, message: '' };
+  return { ok: true, requiredLovelace: required, heldLovelace: held, refusal: null };
 }
 
 /**
@@ -212,16 +232,25 @@ export function tokenTransferRequirement(
       ok: false,
       requiredLovelace: required,
       heldLovelace: held,
-      message: sponsorsMinAda
-        ? `To send part of a token you have to keep the rest in your wallet, and the network ` +
-          `requires ${ada(changeFloor)} ADA to carry it. You have ${ada(held)} ADA. ` +
-          `Sending the whole balance needs none.`
-        : `Sending a Cardano token also takes ADA: the network requires the transfer to carry ` +
-          `${ada(attached)} ADA attached${keepsSome ? `, and as much again for the change that keeps the rest of the token` : ''}` +
-          `${sponsorNetworkFee ? ' (ChatterPay covers the network cost)' : ' (plus the network cost)'}. ` +
-          `You need ${ada(required)} ADA in your wallet and you have ${ada(held)} ADA.`
+      // Two different problems, and the remedy differs: under scheme 2 the wallet is only short of
+      // the floor its *own* change needs, and sending the whole balance sidesteps it entirely.
+      refusal: sponsorsMinAda
+        ? {
+            reason: 'token_change_needs_ada',
+            params: { '[CHANGE_FLOOR]': ada(changeFloor), '[HELD]': ada(held) }
+          }
+        : {
+            // Keeping part of the token roughly doubles the figure, and a sentence that does not
+            // say why reads as an arbitrary number.
+            reason: keepsSome ? 'token_needs_ada_keeping_rest' : 'token_needs_ada',
+            params: {
+              '[ATTACHED]': ada(attached),
+              '[REQUIRED]': ada(required),
+              '[HELD]': ada(held)
+            }
+          }
     };
   }
 
-  return { ok: true, requiredLovelace: required, heldLovelace: held, message: '' };
+  return { ok: true, requiredLovelace: required, heldLovelace: held, refusal: null };
 }

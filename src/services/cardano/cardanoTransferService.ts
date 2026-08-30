@@ -152,32 +152,35 @@ export interface CardanoTransferResult {
 }
 
 /**
- * What the user is told when the chain could not be reached.
+ * Why the transfer stopped when the chain could not be reached.
  *
- * A sentence rather than the code behind it: this text is delivered as a chat message, and a person
- * reading `CARDANO_PROVIDER_TIMEOUT` learns nothing they can act on. The code is in the log.
+ * A sentence rather than the bare code, because it is what a person reading the log has to make
+ * sense of. It does not reach the user: the controller answers every failure but insufficient funds
+ * with the localized incident template, so what a user reads is never written here.
  */
 const PROVIDER_UNREACHABLE =
   'We could not reach the Cardano network. Please try again in a few minutes.';
 
 /**
- * What the user is told when ChatterPay cannot cover the fee right now.
+ * Why the transfer stopped when ChatterPay cannot cover the fee right now.
  *
- * Exported because the preflight answers the same question before the lock is taken, and two
- * copies of a sentence the user reads are two sentences that drift apart.
+ * This one does not reach the user from here: the preflight answers the same question before the
+ * lock is taken and says it in the user's language, and anything that still fails this far in is
+ * reported through the generic incident notification. What is left is the log line.
  */
-export const SPONSOR_UNAVAILABLE =
+const SPONSOR_UNAVAILABLE =
   'We could not process the transfer right now. Please try again in a few minutes.';
 
 /**
- * What the user is told when another transfer got to the outputs first.
+ * Why the transfer stopped when another one got to the outputs first.
  *
  * Worth its own sentence rather than the generic failure: this one clears by itself in seconds, and
- * telling somebody to try again in a moment is true here in a way it is not for the rest.
+ * the log should say so. Like the rest, it is reported to the user through the localized incident
+ * template.
  */
 const TRANSFER_BUSY = 'Another transfer of yours is still settling. Try again in a few seconds.';
 
-/** What the user is told when the failure is one nobody anticipated. */
+/** Why the transfer stopped when the failure is one nobody anticipated. */
 const TRANSFER_FAILED = 'We could not complete the transfer. Please try again in a few minutes.';
 
 /** A failure that happened before anything was signed, and therefore costs nothing to report. */

@@ -37,6 +37,7 @@ import {
   canAffordCardanoTransfer,
   sponsorCanCoverFee
 } from '../services/cardano/cardanoPreflightService';
+import { cardanoRefusalMessage } from '../services/cardano/cardanoUserMessagesService';
 import { deriveCardanoAccount } from '../services/cardano/cardanoWalletService';
 import {
   chatterpointsService,
@@ -259,7 +260,14 @@ export const makeCardanoTransaction = async (
         logKey,
         `No blockchain document for ${config.chainId}`
       );
-      await returnSuccessResponse(reply, 'Cardano is not configured on this environment');
+      // A misconfigured deployment is an incident, and an incident is reported with the same
+      // localized template the EVM path uses. The detail is one line above, in the log, where the
+      // person who can fix it will look for it.
+      const { message } = await getNotificationTemplate(
+        channel_user_id,
+        NotificationEnum.internal_error
+      );
+      await returnSuccessResponse(reply, message);
       return undefined;
     }
 
@@ -331,14 +339,17 @@ export const makeCardanoTransaction = async (
       resolved.asset,
       estimatedChatterPayFee
     );
-    if (!preflight.ok) {
-      await persistNotification(
-        channel_user_id,
-        preflight.message,
-        NotificationEnum.user_balance_not_enough
+    if (preflight.refusal) {
+      // Said in the user's language here, not written by the service that did the arithmetic: the
+      // figures travel as parameters and the sentence comes from the template, as on EVM.
+      const { message, template } = await cardanoRefusalMessage(channel_user_id, preflight.refusal);
+      await persistNotification(channel_user_id, message, template);
+      Logger.info(
+        'makeCardanoTransaction',
+        logKey,
+        `Preflight rejected: ${preflight.refusal.reason} ${JSON.stringify(preflight.refusal.params)}`
       );
-      Logger.info('makeCardanoTransaction', logKey, `Preflight rejected: ${preflight.message}`);
-      await returnSuccessResponse(reply, preflight.message);
+      await returnSuccessResponse(reply, message);
       return undefined;
     }
 
@@ -347,9 +358,10 @@ export const makeCardanoTransaction = async (
        the user can act on, and finding out inside the transfer means telling them the operation is
        in progress and then never mentioning it again. */
     const sponsor = await sponsorCanCoverFee(logKey);
-    if (!sponsor.ok) {
-      await persistNotification(channel_user_id, sponsor.message, NotificationEnum.internal_error);
-      await returnSuccessResponse(reply, sponsor.message);
+    if (sponsor.refusal) {
+      const { message, template } = await cardanoRefusalMessage(channel_user_id, sponsor.refusal);
+      await persistNotification(channel_user_id, message, template);
+      await returnSuccessResponse(reply, message);
       return undefined;
     }
 
@@ -378,19 +390,20 @@ export const makeCardanoTransaction = async (
       // Sent, not merely persisted. The optimistic answer at step 6 already used up the reply, so
       // a row in `notifications` is the whole of what the user would ever see — which is silence.
       if (result.errorCode === 'CARDANO_INSUFFICIENT_FUNDS') {
-        // The text sent is the service's own, not a template: it names the address to fund, the
-        // only remedy. The generic `user_balance_not_enough` template cannot say that, because on
-        // Cardano the wallet the user has to fund is one the product never had to mention before.
+        // Its own template rather than the generic `user_balance_not_enough`: it names the address
+        // to fund, the only remedy, and on Cardano that is a wallet the product never had to
+        // mention before. The service's own text stays in the log above -- it counts lovelace,
+        // which is a unit for the log and not for a person.
         if (lastBotMsgDelaySeconds > 0) await delaySeconds(lastBotMsgDelaySeconds);
-        const { title } = await getNotificationTemplate(
-          channel_user_id,
-          NotificationEnum.user_balance_not_enough
-        );
+        const { title, message, template } = await cardanoRefusalMessage(channel_user_id, {
+          reason: 'insufficient_funds',
+          params: { '[ADDRESS]': senderAddress }
+        });
         await persistAndSendNotification({
           to: channel_user_id,
-          messageBot: result.error,
-          messagePush: result.error,
-          template: NotificationEnum.user_balance_not_enough,
+          messageBot: message,
+          messagePush: message,
+          template,
           sendPush: true,
           sendBot: true,
           title

@@ -128,7 +128,7 @@ describe('adaTransferRequirement - minimum to move ADA', () => {
       expect(result.ok).toBe(false);
       expect(result.requiredLovelace).toBe(MIN_ADA);
       // The user has to be able to tell this apart from "you are broke".
-      expect(result.message).toContain('network limit');
+      expect(result.refusal?.reason).toBe('amount_below_minimum');
     }
   });
 
@@ -160,10 +160,10 @@ describe('adaTransferRequirement - minimum to move ADA', () => {
     // absorb it as fee and the user would lose it without the transfer failing.
     const result = adaTransferRequirement(2_400_000n, [utxo(3_494_785n)], ADDRESS, PREPROD);
     expect(result.ok).toBe(false);
-    expect(result.message).toContain('is lost');
+    expect(result.refusal?.reason).toBe('change_below_floor');
     // Both escapes are offered: keep change, or empty the wallet.
-    expect(result.message).toMatch(/up to 2\.3/);
-    expect(result.message).toMatch(/3\.29/);
+    expect(result.refusal?.params['[MAX_AMOUNT]']).toMatch(/^2\.3/);
+    expect(result.refusal?.params['[ALL_AMOUNT]']).toMatch(/^3\.29/);
   });
 
   it('allows emptying the wallet, which is the edge of that window', () => {
@@ -190,7 +190,7 @@ describe('tokenTransferRequirement - a token never travels alone', () => {
         PREPROD
       );
       expect(result.ok, 'a wallet with tokens and no ADA cannot send').toBe(false);
-      expect(result.message).toContain('also takes ADA');
+      expect(result.refusal?.reason).toBe('token_needs_ada');
     }
   });
 
@@ -211,7 +211,8 @@ describe('tokenTransferRequirement - a token never travels alone', () => {
     // The change output carries the remainder, so it needs min-ADA of its own.
     expect(part.requiredLovelace).toBeGreaterThan(whole.requiredLovelace);
     expect(part.requiredLovelace - whole.requiredLovelace).toBeGreaterThan(1_000_000n);
-    expect(part.message).toContain('change that keeps the rest of the token');
+    // The floor of that change is what the sentence has to name.
+    expect(part.refusal?.reason).toBe('token_needs_ada_keeping_rest');
   });
 
   it('C still needs the ADA the token drags along', () => {
@@ -228,7 +229,7 @@ describe('tokenTransferRequirement - a token never travels alone', () => {
     );
     expect(result.ok, 'a wallet with tokens and no ADA cannot send, sponsored or not').toBe(false);
     expect(result.requiredLovelace).toBeGreaterThan(1_000_000n);
-    expect(result.message).toContain('ChatterPay covers the network cost');
+    expect(result.refusal?.reason).toBe('token_needs_ada_keeping_rest');
   });
 
   it('C asks for less than A: the difference is exactly the network fee', () => {

@@ -405,6 +405,138 @@ it('should create and save a Template document successfully', async () => {
           pt: 'A operação está sendo processada. Avisaremos você assim que for concluída ou se ocorrer algum problema.'
         }
       },
+      cardano_amount_below_minimum: {
+        title: {
+          en: 'ChatterPay - Amount below the minimum',
+          es: 'ChatterPay - Monto por debajo del mínimo',
+          pt: 'ChatterPay - Valor abaixo do mínimo'
+        },
+        message: {
+          en: 'The minimum you can send on Cardano is [MIN_AMOUNT] ADA. [NETWORK_MIN] of it is a network limit, not a ChatterPay one: below that, the transfer fails the whole transaction.',
+          es: 'El mínimo que podés enviar en Cardano es [MIN_AMOUNT] ADA. De ese total, [NETWORK_MIN] ADA es un límite de la red y no de ChatterPay: por debajo de eso, la transferencia hace fallar toda la transacción.',
+          pt: 'O mínimo que você pode enviar na Cardano é [MIN_AMOUNT] ADA. Desse total, [NETWORK_MIN] ADA é um limite da rede e não da ChatterPay: abaixo disso, a transferência faz toda a transação falhar.'
+        }
+      },
+      cardano_insufficient_ada: {
+        title: {
+          en: 'ChatterPay - Insufficient balance',
+          es: 'ChatterPay - Saldo insuficiente',
+          pt: 'ChatterPay - Saldo insuficiente'
+        },
+        message: {
+          en: 'Not enough balance. To send [AMOUNT] ADA you need [REQUIRED] ADA in your wallet and you have [HELD] ADA.',
+          es: 'No te alcanza el saldo. Para enviar [AMOUNT] ADA necesitás [REQUIRED] ADA en tu wallet y tenés [HELD] ADA.',
+          pt: 'Saldo insuficiente. Para enviar [AMOUNT] ADA você precisa de [REQUIRED] ADA na sua carteira e tem [HELD] ADA.'
+        }
+      },
+      cardano_change_carries_tokens: {
+        title: {
+          en: 'ChatterPay - Maximum amount you can send',
+          es: 'ChatterPay - Monto máximo que podés enviar',
+          pt: 'ChatterPay - Valor máximo que você pode enviar'
+        },
+        message: {
+          en: 'With [HELD] ADA you can send up to [MAX_AMOUNT] ADA. The rest has to stay in your wallet: it holds tokens, and the [CHANGE_FLOOR] ADA that carries them cannot leave with the transfer.',
+          es: 'Con [HELD] ADA podés enviar hasta [MAX_AMOUNT] ADA. El resto tiene que quedarse en tu wallet: ahí hay tokens, y los [CHANGE_FLOOR] ADA que los transportan no pueden salir con la transferencia.',
+          pt: 'Com [HELD] ADA você pode enviar até [MAX_AMOUNT] ADA. O resto precisa ficar na sua carteira: ela tem tokens, e os [CHANGE_FLOOR] ADA que os transportam não podem sair com a transferência.'
+        }
+      },
+      cardano_change_below_floor: {
+        title: {
+          en: 'ChatterPay - Maximum amount you can send',
+          es: 'ChatterPay - Monto máximo que podés enviar',
+          pt: 'ChatterPay - Valor máximo que você pode enviar'
+        },
+        message: {
+          en: 'With [HELD] ADA you can send up to [MAX_AMOUNT] ADA, or send it all ([ALL_AMOUNT] ADA). Between those two figures the change falls below the minimum the network requires ([CHANGE_FLOOR] ADA) and is lost.',
+          es: 'Con [HELD] ADA podés enviar hasta [MAX_AMOUNT] ADA, o enviar todo ([ALL_AMOUNT] ADA). Entre esos dos montos, el vuelto queda por debajo del mínimo que exige la red ([CHANGE_FLOOR] ADA) y se pierde.',
+          pt: 'Com [HELD] ADA você pode enviar até [MAX_AMOUNT] ADA, ou enviar tudo ([ALL_AMOUNT] ADA). Entre esses dois valores, o troco fica abaixo do mínimo exigido pela rede ([CHANGE_FLOOR] ADA) e é perdido.'
+        }
+      },
+      cardano_token_needs_ada: {
+        title: {
+          en: 'ChatterPay - Not enough ADA to send the token',
+          es: 'ChatterPay - Falta ADA para enviar el token',
+          pt: 'ChatterPay - Falta ADA para enviar o token'
+        },
+        message: {
+          en: 'Sending a Cardano token also takes ADA: the network requires the transfer to carry [ATTACHED] ADA attached. You need [REQUIRED] ADA in your wallet and you have [HELD] ADA.',
+          es: 'Enviar un token de Cardano también consume ADA: la red exige que la transferencia lleve [ATTACHED] ADA adjuntos. Necesitás [REQUIRED] ADA en tu wallet y tenés [HELD] ADA.',
+          pt: 'Enviar um token na Cardano também consome ADA: a rede exige que a transferência leve [ATTACHED] ADA anexados. Você precisa de [REQUIRED] ADA na sua carteira e tem [HELD] ADA.'
+        }
+      },
+      cardano_token_needs_ada_keeping_rest: {
+        title: {
+          en: 'ChatterPay - Not enough ADA to send the token',
+          es: 'ChatterPay - Falta ADA para enviar el token',
+          pt: 'ChatterPay - Falta ADA para enviar o token'
+        },
+        message: {
+          en: 'Sending a Cardano token also takes ADA: the network requires the transfer to carry [ATTACHED] ADA attached, and as much again for the change that keeps the rest of the token. You need [REQUIRED] ADA in your wallet and you have [HELD] ADA.',
+          es: 'Enviar un token de Cardano también consume ADA: la red exige que la transferencia lleve [ATTACHED] ADA adjuntos, y otro tanto para el vuelto que conserva el resto del token. Necesitás [REQUIRED] ADA en tu wallet y tenés [HELD] ADA.',
+          pt: 'Enviar um token na Cardano também consome ADA: a rede exige que a transferência leve [ATTACHED] ADA anexados, e outro tanto para o troco que mantém o restante do token. Você precisa de [REQUIRED] ADA na sua carteira e tem [HELD] ADA.'
+        }
+      },
+      cardano_token_change_needs_ada: {
+        title: {
+          en: 'ChatterPay - Not enough ADA to send the token',
+          es: 'ChatterPay - Falta ADA para enviar el token',
+          pt: 'ChatterPay - Falta ADA para enviar o token'
+        },
+        message: {
+          en: 'To send part of a token you have to keep the rest in your wallet, and the network requires [CHANGE_FLOOR] ADA to carry it. You have [HELD] ADA. Sending the whole balance needs none.',
+          es: 'Para enviar una parte del token tenés que conservar el resto en tu wallet, y la red exige [CHANGE_FLOOR] ADA para transportarlo. Tenés [HELD] ADA. Enviar el saldo completo no requiere nada.',
+          pt: 'Para enviar parte do token você precisa manter o resto na sua carteira, e a rede exige [CHANGE_FLOOR] ADA para transportá-lo. Você tem [HELD] ADA. Enviar o saldo completo não exige nada.'
+        }
+      },
+      cardano_token_balance_not_enough: {
+        title: {
+          en: 'ChatterPay - Insufficient balance',
+          es: 'ChatterPay - Saldo insuficiente',
+          pt: 'ChatterPay - Saldo insuficiente'
+        },
+        message: {
+          en: 'Not enough balance: you have [HELD] and you are trying to send [AMOUNT].',
+          es: 'No te alcanza el saldo: tenés [HELD] y estás intentando enviar [AMOUNT].',
+          pt: 'Saldo insuficiente: você tem [HELD] e está tentando enviar [AMOUNT].'
+        }
+      },
+      cardano_amount_below_fee: {
+        title: {
+          en: 'ChatterPay - Amount below the minimum',
+          es: 'ChatterPay - Monto por debajo del mínimo',
+          pt: 'ChatterPay - Valor abaixo do mínimo'
+        },
+        message: {
+          en: 'The amount has to be more than the [FEE] fee for this transfer, otherwise nothing would reach the destination.',
+          es: 'El monto tiene que ser mayor a la comisión de [FEE] de esta transferencia; si no, no llegaría nada al destino.',
+          pt: 'O valor precisa ser maior que a taxa de [FEE] desta transferência; caso contrário, nada chegaria ao destino.'
+        }
+      },
+      cardano_sponsor_unavailable: {
+        title: {
+          en: 'ChatterPay - We could not process the transfer',
+          es: 'ChatterPay - No pudimos procesar la transferencia',
+          pt: 'ChatterPay - Não conseguimos processar a transferência'
+        },
+        message: {
+          en: 'We could not process the transfer right now. Please try again in a few minutes.',
+          es: 'No pudimos procesar la transferencia en este momento. Por favor, intentá de nuevo en unos minutos.',
+          pt: 'Não conseguimos processar a transferência neste momento. Por favor, tente novamente em alguns minutos.'
+        }
+      },
+      cardano_insufficient_funds: {
+        title: {
+          en: 'ChatterPay - Insufficient balance',
+          es: 'ChatterPay - Saldo insuficiente',
+          pt: 'ChatterPay - Saldo insuficiente'
+        },
+        message: {
+          en: 'Your Cardano wallet does not have enough ADA for this transfer. Fund this address and try again: [ADDRESS]',
+          es: 'Tu wallet de Cardano no tiene ADA suficiente para esta transferencia. Fondeá esta dirección y volvé a intentar: [ADDRESS]',
+          pt: 'Sua carteira Cardano não tem ADA suficiente para esta transferência. Deposite neste endereço e tente novamente: [ADDRESS]'
+        }
+      },
       wallet_not_created: {
         title: {
           en: 'ChatterPay: Wallet not created',

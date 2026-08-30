@@ -42,7 +42,18 @@ export enum NotificationEnum {
   pin_verified_success = 'pin_verified_success',
   pin_internal_error = 'pin_internal_error',
   operation_in_progress = 'operation_in_progress',
-  wallet_not_created = 'wallet_not_created'
+  wallet_not_created = 'wallet_not_created',
+  cardano_amount_below_minimum = 'cardano_amount_below_minimum',
+  cardano_insufficient_ada = 'cardano_insufficient_ada',
+  cardano_change_carries_tokens = 'cardano_change_carries_tokens',
+  cardano_change_below_floor = 'cardano_change_below_floor',
+  cardano_token_needs_ada = 'cardano_token_needs_ada',
+  cardano_token_needs_ada_keeping_rest = 'cardano_token_needs_ada_keeping_rest',
+  cardano_token_change_needs_ada = 'cardano_token_change_needs_ada',
+  cardano_token_balance_not_enough = 'cardano_token_balance_not_enough',
+  cardano_amount_below_fee = 'cardano_amount_below_fee',
+  cardano_sponsor_unavailable = 'cardano_sponsor_unavailable',
+  cardano_insufficient_funds = 'cardano_insufficient_funds'
 }
 
 export interface LocalizedContentType {
@@ -158,7 +169,20 @@ const templateSchema = new Schema<ITemplateSchema>({
     pin_verified_success: { type: notificationSchema, required: true },
     pin_internal_error: { type: notificationSchema, required: true },
     operation_in_progress: { type: notificationSchema, required: true },
-    wallet_not_created: { type: notificationSchema, required: true }
+    wallet_not_created: { type: notificationSchema, required: true },
+    // Optional like the polymarket ones: the code ships with an English fallback, so a document
+    // written before the templates were loaded still saves.
+    cardano_amount_below_minimum: { type: notificationSchema, required: false },
+    cardano_insufficient_ada: { type: notificationSchema, required: false },
+    cardano_change_carries_tokens: { type: notificationSchema, required: false },
+    cardano_change_below_floor: { type: notificationSchema, required: false },
+    cardano_token_needs_ada: { type: notificationSchema, required: false },
+    cardano_token_needs_ada_keeping_rest: { type: notificationSchema, required: false },
+    cardano_token_change_needs_ada: { type: notificationSchema, required: false },
+    cardano_token_balance_not_enough: { type: notificationSchema, required: false },
+    cardano_amount_below_fee: { type: notificationSchema, required: false },
+    cardano_sponsor_unavailable: { type: notificationSchema, required: false },
+    cardano_insufficient_funds: { type: notificationSchema, required: false }
   },
   security_questions: { type: Map, of: localizedContentSchema, required: false }
 });

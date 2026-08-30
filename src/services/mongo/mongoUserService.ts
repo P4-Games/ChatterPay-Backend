@@ -443,5 +443,58 @@ export const mongoUserService = {
     return UserModel.findOne({
       'polymarket_account.polygon_address': { $regex: new RegExp(`^${address}$`, 'i') }
     }).lean();
+  },
+
+  /**
+   * Reads the block state of one account, by whichever identifier the request carried.
+   *
+   * Projected down to `blocked` and `settings.notifications.language` because that is everything
+   * `blockedUserMiddleware` needs: whether to refuse, and which language to refuse in. Pulling the
+   * whole document here would load wallets and counters on every single request.
+   *
+   * A malformed or unknown identifier resolves to "not blocked" rather than throwing: this runs in
+   * front of every handler, and a lookup failure must not turn a normal request into a 500. The
+   * handler behind it still does its own validation.
+   *
+   * @param identity - Phone number, ChatterPay user id, or Telegram id.
+   * @returns The block state and preferred language, or `null` when no account matches.
+   */
+  getUserBlockState: async (
+    identity: { phoneNumber: string } | { userId: string } | { telegramId: string }
+  ): Promise<{ blocked: boolean; language: NotificationLanguage } | null> => {
+    let filter: Record<string, unknown>;
+
+    if ('phoneNumber' in identity) {
+      const formattedPhone = getPhoneNumberFormatted(identity.phoneNumber);
+      if (!formattedPhone) return null;
+      filter = { phone_number: formattedPhone };
+    } else if ('telegramId' in identity) {
+      const telegramId = (identity.telegramId ?? '').trim();
+      if (!/^\d+$/.test(telegramId)) return null;
+      filter = { telegram_id: telegramId };
+    } else {
+      // A caller-supplied id that is not an ObjectId would make mongoose throw on cast.
+      if (!/^[0-9a-fA-F]{24}$/.test(identity.userId ?? '')) return null;
+      filter = { _id: identity.userId };
+    }
+
+    try {
+      const user = await UserModel.findOne(filter, 'blocked settings.notifications.language').lean<{
+        blocked?: boolean;
+        settings?: { notifications?: { language?: string } };
+      }>();
+
+      if (!user) return null;
+
+      const rawLanguage = user.settings?.notifications?.language ?? '';
+      const language = notificationLanguages.includes(rawLanguage as NotificationLanguage)
+        ? (rawLanguage as NotificationLanguage)
+        : SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT;
+
+      return { blocked: user.blocked === true, language };
+    } catch (error) {
+      Logger.error('getUserBlockState', 'Error reading user block state', (error as Error).message);
+      return null;
+    }
   }
 };

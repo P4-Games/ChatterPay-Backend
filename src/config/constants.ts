@@ -220,6 +220,25 @@ export const ISSUER_TOKENS_ENABLED: boolean = issuerTokensEnabled.toLowerCase() 
 export const BOT_NOTIFICATIONS_ENABLED: boolean = botNotificationsEnabled.toLowerCase() === 'true';
 export const CHATTERPAY_DOMAIN: string = `https://${IS_DEVELOPMENT ? 'dev.' : ''}chatterpay.net`;
 export const CHATTERPAY_NFTS_SHARE_URL: string = `${CHATTERPAY_DOMAIN}/nfts/share`;
+
+/** Where a blocked user is told to appeal. Same invite the frontend links from its footer. */
+export const CHATTERPAY_DISCORD_URL: string = 'https://discord.com/invite/5VHk28uUeq';
+
+/**
+ * What a blocked account is told, per language.
+ *
+ * Hardcoded rather than served from the `notifications` template collection because the block has
+ * to work the moment the field is set on a record, with no document to seed first — and because a
+ * template lookup is one more database read on a request that is going to be refused anyway.
+ */
+export const USER_BLOCKED_MESSAGES: Record<NotificationLanguage, string> = {
+  en: `Your ChatterPay account has been suspended after activity our systems flagged as an attempt to attack the platform. You cannot operate while the suspension is in place. If you believe this is a mistake, open a ticket on our Discord and we will review your case: ${CHATTERPAY_DISCORD_URL}`,
+  es: `Tu cuenta de ChatterPay fue suspendida tras detectar actividad que nuestros sistemas identificaron como un intento de ataque a la plataforma. Mientras la suspensión esté activa no vas a poder operar. Si creés que es un error, abrí un ticket en nuestro Discord y revisamos tu caso: ${CHATTERPAY_DISCORD_URL}`,
+  pt: `Sua conta ChatterPay foi suspensa após atividade que nossos sistemas identificaram como tentativa de ataque à plataforma. Enquanto a suspensão estiver ativa você não poderá operar. Se você acredita que isso é um engano, abra um ticket no nosso Discord e vamos analisar seu caso: ${CHATTERPAY_DISCORD_URL}`
+};
+
+/** Machine-readable code every blocked-user refusal carries, so callers can branch on it. */
+export const USER_BLOCKED_ERROR_CODE = 'USER_BLOCKED';
 export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
   minorLogLevel.toLowerCase() as LogLevel
 )
