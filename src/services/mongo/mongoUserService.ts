@@ -2,7 +2,7 @@ import {
   RESET_USER_OPERATION_THRESHOLD_MINUTES,
   SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT
 } from '../../config/constants';
-import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
+import { getPhoneNumberFormatted, getPhoneNumberVariants } from '../../helpers/formatHelper';
 import { Logger } from '../../helpers/loggerHelper';
 import { type IUser, UserModel } from '../../models/userModel';
 import { type NotificationLanguage, notificationLanguages } from '../../types/commonType';
@@ -443,5 +443,51 @@ export const mongoUserService = {
     return UserModel.findOne({
       'polymarket_account.polygon_address': { $regex: new RegExp(`^${address}$`, 'i') }
     }).lean();
+  },
+
+  /**
+   * Reads the block state of one account, by whichever identifier the request carried.
+   *
+   * @param identity - Phone number, ChatterPay user id, or Telegram id.
+   * @returns The block state and preferred language, or `null` when no account matches.
+   */
+  getUserBlockState: async (
+    identity: { phoneNumber: string } | { userId: string } | { telegramId: string }
+  ): Promise<{ blocked: boolean; language: NotificationLanguage } | null> => {
+    let filter: Record<string, unknown>;
+
+    if ('phoneNumber' in identity) {
+      const formattedPhone = getPhoneNumberFormatted(identity.phoneNumber);
+      if (!formattedPhone) return null;
+      // Matched across variants for the same reason `telegramService` resolves users that way: the
+      // handler behind this hook would find an account this filter missed.
+      filter = { phone_number: { $in: await getPhoneNumberVariants(formattedPhone) } };
+    } else if ('telegramId' in identity) {
+      const telegramId = (identity.telegramId ?? '').trim();
+      if (!/^\d+$/.test(telegramId)) return null;
+      filter = { telegram_id: telegramId };
+    } else {
+      if (!/^[0-9a-fA-F]{24}$/.test(identity.userId ?? '')) return null;
+      filter = { _id: identity.userId };
+    }
+
+    try {
+      const user = await UserModel.findOne(filter, 'blocked settings.notifications.language').lean<{
+        blocked?: boolean;
+        settings?: { notifications?: { language?: string } };
+      }>();
+
+      if (!user) return null;
+
+      const rawLanguage = user.settings?.notifications?.language ?? '';
+      const language = notificationLanguages.includes(rawLanguage as NotificationLanguage)
+        ? (rawLanguage as NotificationLanguage)
+        : SETTINGS_NOTIFICATION_LANGUAGE_DEFAULT;
+
+      return { blocked: user.blocked === true, language };
+    } catch (error) {
+      Logger.error('getUserBlockState', 'Error reading user block state', (error as Error).message);
+      return null;
+    }
   }
 };
