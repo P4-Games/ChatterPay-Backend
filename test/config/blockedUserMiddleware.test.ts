@@ -11,10 +11,8 @@ import { CacheNames } from '../../src/types/commonType';
 const BLOCKED_PHONE = '5491122223333';
 const ACTIVE_PHONE = '5491144445555';
 
-/** A route whose handler answers failed validations with a status code. */
 const STATUS_ROUTE = '/notifications';
 
-/** A route whose handler answers failed validations with HTTP 200 and an error body. */
 const SUCCESS_SHAPED_ROUTE = '/make_transaction/';
 
 const TEMPLATE_ES = 'Cuenta suspendida. Contactanos por los canales de soporte.';
@@ -33,15 +31,6 @@ const seedTemplate = () =>
     }
   });
 
-/**
- * Builds a request shaped the way Fastify hands one to a `preHandler` hook.
- *
- * `routeOptions.url` carries the registered route pattern and is filled in from `url` unless a
- * case overrides it, which is how the double-slash cases are expressed.
- *
- * @param overrides - The parts of the request the case under test cares about.
- * @returns A request object the middleware can read.
- */
 const buildRequest = (overrides: Record<string, unknown> = {}) => {
   const request = {
     method: 'POST',
@@ -70,7 +59,6 @@ describe('blockedUserMiddleware', () => {
     reply = buildReply();
     cacheService.clearCache(CacheNames.NOTIFICATION);
     await seedTemplate();
-    // `getPhoneNumberVariants` reads the country off this collection to know a number has two shapes.
     await CountryModel.create({
       code: 'AR',
       name: 'Argentina',
@@ -215,8 +203,6 @@ describe('blockedUserMiddleware', () => {
     expect(reply.status).toHaveBeenCalledWith(403);
   });
 
-  // A truthy but invalid body value used to short-circuit the query read, so this reached the
-  // handler untouched while the handler itself acted on the query string.
   it('reads the query string even when the body carries a junk value in the same field', async () => {
     await blockedUserMiddleware(
       buildRequest({
@@ -260,9 +246,6 @@ describe('blockedUserMiddleware', () => {
     expect(reply.status).toHaveBeenCalledWith(403);
   });
 
-  // The server runs with `ignoreDuplicateSlashes`, so `//users/:id` reaches the handler while the
-  // raw URL keeps both slashes. Matching on the raw URL let a blocked user PUT `blocked: false`
-  // onto its own record and lift the ban.
   it('refuses a blocked account on a duplicated-slash path that still routes to /users/:id', async () => {
     const blockedUser = await UserModel.findOne({ phone_number: BLOCKED_PHONE });
 
@@ -280,8 +263,6 @@ describe('blockedUserMiddleware', () => {
     expect(reply.status).toHaveBeenCalledWith(403);
   });
 
-  // Telegram discards any body that is not a method call, so the shared error envelope would leave
-  // the person with nothing on screen.
   it('answers the Telegram webhook with a sendMessage call', async () => {
     await UserModel.updateOne({ phone_number: BLOCKED_PHONE }, { telegram_id: '778899' });
 
@@ -340,9 +321,6 @@ describe('blockedUserMiddleware', () => {
     );
   });
 
-  // `telegramController` links an account from `contact.phone_number || text`, so a blocked user
-  // who types the number instead of tapping "share contact" used to complete verification and make
-  // the platform send itself a WhatsApp code.
   it('refuses a blocked account that types its phone number on Telegram', async () => {
     await blockedUserMiddleware(
       buildRequest({
@@ -372,8 +350,6 @@ describe('blockedUserMiddleware', () => {
     expect(reply.send).not.toHaveBeenCalled();
   });
 
-  // Argentina stores numbers with and without the 9 after 54, and the handlers resolve users across
-  // both. An exact match on one shape left the other fully operable.
   it('refuses a blocked account named by a phone variant', async () => {
     await blockedUserMiddleware(
       buildRequest({ body: { channel_user_id: '541122223333' } }),
@@ -383,8 +359,6 @@ describe('blockedUserMiddleware', () => {
     expect(reply.status).toHaveBeenCalledWith(403);
   });
 
-  // Returning on the first identity let a Telegram-blocked account name a second, unblocked number
-  // and have that shadow its own block, which is how it kept triggering verification codes.
   it('refuses a Telegram-blocked account that types another number', async () => {
     await UserModel.updateOne({ phone_number: BLOCKED_PHONE }, { telegram_id: '778899' });
 

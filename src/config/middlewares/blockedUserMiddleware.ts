@@ -25,13 +25,7 @@ type TelegramWebhookBody = {
 
 const PHONE_FIELDS = ['channel_user_id', 'user_channel_id', 'phone_number', 'identifier'] as const;
 
-/**
- * Routes where the refusal is sent as HTTP 200 with an error body.
- *
- * These are the endpoints the WhatsApp bot calls. Its HTTP layer raises on any non-2xx before it
- * reads the body, so a status code leaves the person with no message at all. Keyed by route and
- * not by credential, so one endpoint answers the same way whoever called it.
- */
+/** Routes the bot calls: its HTTP layer raises on any non-2xx before reading the body. */
 const ROUTES_ANSWERING_ERRORS_AS_SUCCESS = [
   '/make_transaction/',
   '/swap',
@@ -89,24 +83,20 @@ const readStringField = (source: unknown, field: string): string => {
 };
 
 /**
- * Works out which account a request is acting on.
+ * Works out which accounts a request is acting on.
  *
- * This API has no per-user credential: the user is whoever the request says it is.
- *
- * Routes are matched on `routeOptions.url`, the registered pattern, never on the raw URL. The
- * server runs with `ignoreDuplicateSlashes`, so `//users/:id` reaches the handler while
- * `request.url` still carries both slashes and any prefix test on it silently misses.
+ * Matched on `routeOptions.url`, never the raw URL: the server runs with `ignoreDuplicateSlashes`,
+ * so `//users/:id` routes to the handler while `request.url` keeps both slashes.
  *
  * @param request - The incoming request.
- * @returns The identity the request names, or `null` when it names nobody.
+ * @returns The identities the request names, empty when it names nobody.
  */
 const resolveRequestIdentities = (request: FastifyRequest): RequestIdentity[] => {
   const { body, query, params } = request;
   const route = normalizeRoute(request.routeOptions?.url ?? request.url);
 
   for (const field of PHONE_FIELDS) {
-    // Both sources are tested, never short-circuited: a truthy but invalid body value would
-    // otherwise suppress the query string the handler actually reads.
+    // Not short-circuited: a truthy but invalid body value would suppress the query string.
     for (const value of [readStringField(body, field), readStringField(query, field)]) {
       if (value && isValidPhoneNumber(value)) {
         return [{ phoneNumber: value }];
@@ -118,9 +108,8 @@ const resolveRequestIdentities = (request: FastifyRequest): RequestIdentity[] =>
     const message = (body as TelegramWebhookBody | undefined)?.message;
     const identities: RequestIdentity[] = [];
 
-    // `telegramController` links an account from `contact.phone_number || text`, so the typed
-    // number counts as an identity too. Both it and the Telegram account are collected: naming a
-    // second, unblocked number must not shadow a block on the account doing the naming.
+    // `telegramController` links from `contact.phone_number || text`. Both identities are
+    // collected so naming another number cannot shadow a block on the account naming it.
     for (const candidate of [message?.contact?.phone_number, message?.text]) {
       if (typeof candidate === 'string' && isValidPhoneNumber(candidate)) {
         identities.push({ phoneNumber: candidate });
@@ -150,9 +139,7 @@ const answersErrorsAsSuccess = (request: FastifyRequest): boolean =>
 /**
  * Refuses every request made on behalf of a blocked account.
  *
- * A `preHandler` and not an `onRequest` hook because the identifier usually lives in the request
- * body, which is not parsed yet at `onRequest` time. Registered on the root instance so a route
- * added later is covered without opting in.
+ * A `preHandler` and not `onRequest`: the identifier lives in the body, unparsed at that point.
  *
  * @param request - Fastify request.
  * @param reply - Fastify reply.
@@ -188,8 +175,7 @@ export async function blockedUserMiddleware(
     JSON.stringify(identity)
   );
 
-  // Telegram ignores any body that is not a method call, so the shared error envelope would leave
-  // the person with no message at all.
+  // Telegram ignores any body that is not a method call.
   if (normalizeRoute(request.routeOptions?.url ?? request.url) === telegramRoute) {
     const chatId = (request.body as TelegramWebhookBody | undefined)?.message?.chat?.id;
     await reply
