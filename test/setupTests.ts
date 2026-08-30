@@ -24,6 +24,8 @@ process.env.ALCHEMY_SIGNING_KEY = 'test-signing-key-for-testing';
 process.env.SECURITY_PIN_HMAC_KEY = 'test-security-hmac-key';
 // Force SECURITY_PIN_ENABLED to true for tests (the tests expect PIN validation to be active)
 process.env.SECURITY_PIN_ENABLED = 'true';
+process.env.FRONTEND_TOKEN = 'test-frontend-token';
+process.env.CHATIZALO_TOKEN = 'test-chatizalo-token';
 
 // Silence logs to keep test output clean
 global.console = {
