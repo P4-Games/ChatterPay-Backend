@@ -8,7 +8,7 @@
  */
 
 import {
-  $S,
+  $SC,
   CARDANO_CHAIN_ID,
   CARDANO_DEPOSIT_CONFIRMATIONS,
   CARDANO_ENABLED,
@@ -108,7 +108,7 @@ export function readCardanoEnv(): CardanoEnv {
     ttlSlots: positiveIntOrNull(CARDANO_TTL_SLOTS),
     depositConfirmations: positiveIntOrNull(CARDANO_DEPOSIT_CONFIRMATIONS),
     explorerUrl: CARDANO_EXPLORER_URL.trim(),
-    hasSecret: Boolean($S),
+    hasSecret: Boolean($SC),
     labelsReadable: cardanoLabelsReadable()
   };
 }

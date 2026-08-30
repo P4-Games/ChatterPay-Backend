@@ -76,7 +76,8 @@ jobs:
       BUN_ENV: development
       APP_ENV: development
       # Placeholders
-      SEED_INTERNAL_SALT: ci-throwaway-salt-never-used-for-real-wallets
+      SEED_INTERNAL_SALT_EVM: ci-throwaway-salt-never-used-for-real-wallets
+      SEED_INTERNAL_SALT_CAR: ci-throwaway-salt-never-used-for-real-wallets
       ALCHEMY_AUTH_TOKEN: ci-placeholder
       CHATIZALO_TOKEN: ci-placeholder
       CDC1: ${{ vars.CDC1 }}

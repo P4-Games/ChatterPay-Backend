@@ -1,7 +1,7 @@
 import { ed25519 } from '@noble/curves/ed25519';
 import { hkdf } from '@noble/hashes/hkdf';
 import { sha256 } from '@noble/hashes/sha2';
-import { $B, $S, CDC1, CDC2, CDC3, CDC4, CDC5, CDC6 } from '../../config/constants';
+import { $B, $SC, CDC1, CDC2, CDC3, CDC4, CDC5, CDC6 } from '../../config/constants';
 import { $hx } from '../../helpers/envHelper';
 import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
 import type { CardanoAccount, CardanoNetwork } from '../../types/cardanoType';
@@ -12,8 +12,8 @@ const SEED_BYTES = 32;
 type KeyRole = 'payment' | 'stake';
 
 function sponsorSeed(walletId: string, network: CardanoNetwork, chainId: number): Buffer {
-  if (!$S) throw new Error('CARDANO_SEED_SALT_MISSING');
-  const ikm = Buffer.from(`${$S}${$B}${walletId}`, 'utf8');
+  if (!$SC) throw new Error('CARDANO_SEED_SALT_MISSING');
+  const ikm = Buffer.from(`${$SC}${$B}${walletId}`, 'utf8');
   const salt = Buffer.from(`${$hx(CDC1)}${network}`, 'utf8');
   const info = Buffer.from(`${$hx(CDC2)}${$hx(CDC5)}${$hx(CDC3)}:${chainId}`, 'utf8');
   return Buffer.from(hkdf(sha256, ikm, salt, info, SEED_BYTES));
@@ -25,8 +25,8 @@ function ed25519Seed(
   chainId: number,
   role: KeyRole = 'payment'
 ): Buffer {
-  if (!$S) throw new Error('CARDANO_SEED_SALT_MISSING');
-  const ikm = Buffer.from(`${$S}${$B}${getPhoneNumberFormatted(phoneNumber)}`, 'utf8');
+  if (!$SC) throw new Error('CARDANO_SEED_SALT_MISSING');
+  const ikm = Buffer.from(`${$SC}${$B}${getPhoneNumberFormatted(phoneNumber)}`, 'utf8');
   const salt = Buffer.from(`${$hx(CDC1)}${network}`, 'utf8');
   const label = role === 'stake' ? `${$hx(CDC4)}${$hx(CDC3)}` : $hx(CDC3);
   const info = Buffer.from(`${$hx(CDC2)}${label}:${chainId}`, 'utf8');

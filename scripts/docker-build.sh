@@ -10,7 +10,8 @@ docker build \
   --build-arg BUN_ENV="$BUN_ENV" \
   --build-arg INFURA_API_KEY="$INFURA_API_KEY" \
   --build-arg MONGO_URI="$MONGO_URI" \
-  --build-arg SEED_INTERNAL_SALT="$SEED_INTERNAL_SALT" \
+  --build-arg SEED_INTERNAL_SALT_EVM="$SEED_INTERNAL_SALT_EVM" \
+  --build-arg SEED_INTERNAL_SALT_CAR="$SEED_INTERNAL_SALT_CAR" \
   --build-arg SIGNING_KEY="$SIGNING_KEY" \
   --build-arg PINATA_JWT="$PINATA_JWT" \
   --build-arg BOT_NOTIFICATIONS_ENABLED="$BOT_NOTIFICATIONS_ENABLED" \
