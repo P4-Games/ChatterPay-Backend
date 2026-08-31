@@ -188,8 +188,10 @@ POLYMARKET_ADAPTER_AUTH_TOKEN=''
 # CARDANO_NETWORK decides the header byte of every address issued (CIP-19) — 'preprod' or 'mainnet'.
 # CARDANO_CHAIN_ID is the internal, non-EIP-155 id (9e11 + network magic). It is frozen once any
 # wallet, transaction or token row has been written with it.
-# CARDANO_PROVIDER_URL: Koios needs no API key, which is why it is the default. The free tier is
-# rate-limited, so a sustained 429 in production is the signal to revisit the provider choice.
+# CARDANO_PROVIDER_URL also picks the provider: a blockfrost.io root is Blockfrost, anything else
+# is Koios.
+# CARDANO_PROVIDER_API_KEY is a Blockfrost project id or a Koios bearer token. Koios runs without
+# it on the public tier; Blockfrost needs it. On Cloud Run it comes from Secret Manager.
 # CARDANO_TTL_SLOTS: a Preprod slot is one second, so 900 is fifteen minutes. Cardano has no
 # replace-by-fee and no nonce, so the TTL is what makes a stuck transaction resolvable.
 # CARDANO_DEPOSIT_CONFIRMATIONS: blocks required before an output is spendable. Not finality — the
@@ -199,6 +201,7 @@ CARDANO_ENABLED='false'
 CARDANO_NETWORK='preprod'
 CARDANO_CHAIN_ID=900000000001
 CARDANO_PROVIDER_URL='https://preprod.koios.rest/api/v1'
+CARDANO_PROVIDER_API_KEY=''
 CARDANO_PROVIDER_TIMEOUT_MS=20000
 CARDANO_TTL_SLOTS=900
 CARDANO_DEPOSIT_CONFIRMATIONS=3

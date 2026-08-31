@@ -103,6 +103,14 @@ describe('getCardanoConfig - the disabled reasons, in order', () => {
       ['flag_off', () => setCardanoEnv({ enabled: false })],
       ['network_unknown', () => setCardanoEnv({ network: 'mainet' })],
       ['provider_missing', () => setCardanoEnv({ providerUrl: '///' })],
+      [
+        'provider_key_missing',
+        () =>
+          setCardanoEnv({
+            providerUrl: 'https://cardano-preprod.blockfrost.io/api/v0',
+            providerApiKey: ''
+          })
+      ],
       ['secret_missing', () => setCardanoEnv({ hasSecret: false })],
       ['labels_unreadable', () => setCardanoEnv({ labelsReadable: false })]
     ];
@@ -159,6 +167,59 @@ describe('getCardanoConfig - providerUrl', () => {
     const config = getCardanoConfig();
     expect(config.enabled).toBe(false);
     expect(config.disabledReason).toBe('provider_missing');
+  });
+});
+
+describe('getCardanoConfig - the provider kind', () => {
+  it('reads Blockfrost off the host, whatever the path and the case', () => {
+    for (const url of [
+      'https://cardano-preprod.blockfrost.io/api/v0',
+      'https://cardano-mainnet.blockfrost.io/api/v0/',
+      'https://BLOCKFROST.IO/api/v0'
+    ]) {
+      setCardanoEnv({ network: 'preprod', providerUrl: url, providerApiKey: 'preprodkey' });
+      expect(getCardanoConfig().providerKind, url).toBe('blockfrost');
+    }
+  });
+
+  it('reads everything else as Koios, the default roots included', () => {
+    for (const url of [
+      '',
+      'https://preprod.koios.rest/api/v1',
+      // The host decides, not the string: a path or a query naming the other provider must not
+      // switch the dialect, because the client that results would misread every answer.
+      'https://preprod.koios.rest/api/v1/blockfrost.io',
+      'not a url at all'
+    ]) {
+      setCardanoEnv({ network: 'preprod', providerUrl: url });
+      expect(getCardanoConfig().providerKind, url || '(unset)').toBe('koios');
+    }
+  });
+
+  it('carries the credential through to the config, for either provider', () => {
+    setCardanoEnv({ network: 'preprod', providerApiKey: 'koios-bearer-token' });
+    expect(getCardanoConfig().providerApiKey).toBe('koios-bearer-token');
+  });
+
+  it('stays on for a Koios root with no credential, because the public tier answers without one', () => {
+    setCardanoEnv({ network: 'preprod', providerApiKey: '' });
+    const config = getCardanoConfig();
+    expect(config.enabled).toBe(true);
+    expect(config.providerApiKey).toBe('');
+  });
+
+  it('goes off for a Blockfrost root with no credential, rather than 403 on every call', () => {
+    // Starting would look like a chain that is down: every read and every submit fails, and the
+    // user sees an outage instead of a deployment that was never finished being configured.
+    setCardanoEnv({
+      network: 'preprod',
+      providerUrl: 'https://cardano-preprod.blockfrost.io/api/v0',
+      providerApiKey: ''
+    });
+    const config = getCardanoConfig();
+    expect(config.enabled).toBe(false);
+    expect(config.disabledReason).toBe('provider_key_missing');
+    expect(config.disabledReason).not.toMatch(/CARDANO_|_INTERNAL_/);
   });
 });
 
