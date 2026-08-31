@@ -54,7 +54,8 @@ export class CardanoProviderError extends Error {
   constructor(
     readonly failure: CardanoProviderFailure,
     message: string,
-    readonly undetermined = false
+    readonly undetermined = false,
+    readonly status?: number
   ) {
     super(message);
     this.name = 'CardanoProviderError';
@@ -133,27 +134,36 @@ interface KoiosTxStatus {
 }
 
 /**
- * Koios as the Cardano provider.
+ * The HTTP plumbing every hosted provider shares.
  *
- * Chosen for the pilot because it needs no API key, which keeps a secret out of the bootstrap path
- * of a testnet deployment. It reports `block_height` on every UTxO, so confirmations resolve
- * without a per-transaction lookup — the call pattern that earns a rate limit elsewhere.
- *
- * The interface above is what the rest of the code depends on, so swapping in Blockfrost later is
- * a new class and a config line, not a change to the transfer flow.
+ * What differs between one provider and the next is the dialect — paths, body shapes, and the name
+ * the credential goes under — not the failure handling, and the failure handling is the part that
+ * must not diverge. A submit that times out is undetermined whoever answered it, and a client that
+ * read a 429 as a hard failure on one provider and as a retry on the other would eventually send
+ * the same transfer twice. So the classification lives here once, and each provider below says
+ * only what its own dialect is.
  */
-export class KoiosProvider implements CardanoProvider {
+abstract class HttpCardanoProvider {
   /**
-   * @param baseUrl - Network-specific Koios root, e.g. `https://preprod.koios.rest/api/v1`. The
-   *   network lives in the URL: pointing a Preprod deployment at the mainnet root would read and
-   *   submit against a chain whose addresses this deployment cannot derive.
+   * @param baseUrl - Network-specific provider root. The network lives in the URL: pointing a
+   *   Preprod deployment at a mainnet root would read and submit against a chain whose addresses
+   *   this deployment cannot derive.
    * @param timeoutMs - Per-call ceiling. A provider that has not answered by then is reported as
    *   `timeout`, which for a submit means undetermined and not failed.
+   * @param apiKey - Credential for the provider, empty when it needs none.
    */
   constructor(
-    private readonly baseUrl: string,
-    private readonly timeoutMs: number = DEFAULT_TIMEOUT_MS
+    protected readonly baseUrl: string,
+    protected readonly timeoutMs: number = DEFAULT_TIMEOUT_MS,
+    protected readonly apiKey: string = ''
   ) {}
+
+  /**
+   * The header this provider wants its credential under.
+   *
+   * @returns The headers to add, empty when there is no credential to send.
+   */
+  protected abstract authHeaders(): Record<string, string>;
 
   /**
    * One provider call, with every failure mode classified.
@@ -163,7 +173,7 @@ export class KoiosProvider implements CardanoProvider {
    * @returns The parsed body.
    * @throws CardanoProviderError For every failure.
    */
-  private async call<T>(path: string, init?: RequestInit): Promise<T> {
+  protected async call<T>(path: string, init?: RequestInit): Promise<T> {
     const isWrite = init?.method === 'POST';
     let response: Response;
     try {
@@ -171,6 +181,7 @@ export class KoiosProvider implements CardanoProvider {
         ...init,
         headers: {
           accept: 'application/json',
+          ...this.authHeaders(),
           ...(init?.headers ?? {})
         },
         signal: AbortSignal.timeout(this.timeoutMs)
@@ -190,7 +201,9 @@ export class KoiosProvider implements CardanoProvider {
       const body = (await response.text()).slice(0, 500);
       throw new CardanoProviderError(
         classifyStatus(response.status, init?.method),
-        `CARDANO_PROVIDER_${response.status}: ${path}: ${body}`
+        `CARDANO_PROVIDER_${response.status}: ${path}: ${body}`,
+        false,
+        response.status
       );
     }
 
@@ -198,13 +211,55 @@ export class KoiosProvider implements CardanoProvider {
     try {
       return JSON.parse(text) as T;
     } catch {
-      // `/submittx` answers a bare quoted hash, which is valid JSON; anything else that does not
-      // parse is a provider that changed its contract, not a transaction that failed.
+      // A submit answers a bare quoted hash, which is valid JSON; anything else that does not parse
+      // is a provider that changed its contract, not a transaction that failed.
       throw new CardanoProviderError(
         'unexpected_response',
         `CARDANO_PROVIDER_UNREADABLE: ${path}: ${text.slice(0, 200)}`
       );
     }
+  }
+
+  /**
+   * The same call, with `404` answered as `null` rather than raised as a failure.
+   *
+   * Some providers report "this address has never been used" and "this transaction is not in a
+   * block" with a 404, and both are ordinary answers rather than outages: an address with no
+   * history holds no UTxOs, and a transaction nobody has seen yet is what an unconfirmed submit
+   * looks like. Reading either as an error would turn a brand new wallet into a failure.
+   *
+   * @param path - Path under the network root, leading slash included.
+   * @param init - Method, body and content type; absent for a plain read.
+   * @returns The parsed body, or `null` when the provider answered 404.
+   * @throws CardanoProviderError For every other failure.
+   */
+  protected async callOptional<T>(path: string, init?: RequestInit): Promise<T | null> {
+    try {
+      return await this.call<T>(path, init);
+    } catch (error) {
+      if (error instanceof CardanoProviderError && error.status === 404) return null;
+      throw error;
+    }
+  }
+}
+
+/**
+ * Koios as the Cardano provider.
+ *
+ * The default, because it answers without a credential at all: a testnet deployment can be brought
+ * up with nothing but a URL. It also reports `block_height` on every UTxO, so confirmations resolve
+ * without a per-output lookup — the call pattern that earns a rate limit elsewhere. What the public
+ * tier does not give is headroom, and that is what the optional token buys.
+ */
+export class KoiosProvider extends HttpCardanoProvider implements CardanoProvider {
+  /**
+   * Koios takes its token as a JWT bearer, and takes the absence of one as a request for the
+   * public tier — so an unconfigured deployment keeps working, on a smaller quota.
+   *
+   * @returns The authorization header, or nothing when no token is configured.
+   */
+  protected authHeaders(): Record<string, string> {
+    return this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {};
   }
 
   /**
@@ -358,6 +413,270 @@ export class KoiosProvider implements CardanoProvider {
   }
 }
 
+/** Outputs Blockfrost returns per page, and the most it accepts. */
+const BLOCKFROST_PAGE_SIZE = 100;
+
+/**
+ * Pages of UTxOs this client will walk for one address.
+ *
+ * A ceiling rather than an open loop: the paging protocol has no total to compare against, so the
+ * only stop condition is a short page, and a provider that kept answering full ones would spin
+ * forever. Ten thousand outputs is far past anything a wallet of this product holds.
+ */
+const BLOCKFROST_MAX_PAGES = 100;
+
+/** Hex length of a policy id, which is the prefix of every `unit` that is not `lovelace`. */
+const POLICY_ID_HEX_LENGTH = 56;
+
+interface BlockfrostBlock {
+  slot: number | null;
+  height: number | null;
+}
+
+interface BlockfrostEpochParams {
+  min_fee_a: number;
+  min_fee_b: number;
+  max_tx_size: number;
+  coins_per_utxo_size: string | number | null;
+}
+
+interface BlockfrostAmount {
+  unit: string;
+  quantity: string;
+}
+
+interface BlockfrostUtxo {
+  tx_hash: string;
+  output_index: number;
+  amount: BlockfrostAmount[] | null;
+  block: string;
+}
+
+interface BlockfrostTx {
+  block_height: number | null;
+}
+
+/**
+ * Blockfrost as the Cardano provider.
+ *
+ * The alternative to Koios when the public tier's quota runs out, and the reason the interface
+ * above exists: the transfer flow does not change, only what answers it. Three things about this
+ * dialect are worth knowing before reading the methods.
+ *
+ * A submit takes the transaction as **raw CBOR bytes**, not as hex in a JSON envelope. A UTxO
+ * names the block that created it by **hash rather than height**, so a depth threshold costs a
+ * lookup that Koios does not charge for. And a 404 is an ordinary answer for both an address with
+ * no history and a transaction that has not been included yet, which is why those two reads go
+ * through {@link HttpCardanoProvider.callOptional} instead of raising.
+ */
+export class BlockfrostProvider extends HttpCardanoProvider implements CardanoProvider {
+  /**
+   * Blockfrost takes its project id in a header of that name, and refuses every call without one —
+   * there is no anonymous tier to fall back to, which is why the configuration insists on a key
+   * before the family is allowed to start.
+   *
+   * @returns The project id header, or nothing when none is configured.
+   */
+  protected authHeaders(): Record<string, string> {
+    return this.apiKey ? { project_id: this.apiKey } : {};
+  }
+
+  /**
+   * The tip of the chain.
+   *
+   * @returns Absolute slot and block height of the latest block.
+   * @throws CardanoProviderError On any provider failure.
+   */
+  async tip(): Promise<CardanoTip> {
+    const block = await this.call<BlockfrostBlock>('/blocks/latest');
+    if (!block || typeof block.slot !== 'number' || typeof block.height !== 'number') {
+      throw new CardanoProviderError('unexpected_response', 'CARDANO_PROVIDER_TIP_SHAPE');
+    }
+    return { slot: block.slot, height: block.height };
+  }
+
+  /**
+   * Protocol parameters of the current epoch.
+   *
+   * Only `coins_per_utxo_size` is read, and its absence is a failure rather than a reason to fall
+   * back on the `coins_per_utxo_word` the same response still carries. The two are quoted in
+   * different units — bytes and eight-byte words — so the legacy field is roughly eight times the
+   * current one, and reading it by mistake would put a minimum on every output that no wallet can
+   * meet. A missing field is a provider contract that changed, and refusing is the only safe read.
+   *
+   * @returns The four values a transfer needs.
+   * @throws CardanoProviderError On any provider failure, or when a field is missing.
+   */
+  async protocolParameters(): Promise<CardanoProtocolParameters> {
+    const row = await this.call<BlockfrostEpochParams>('/epochs/latest/parameters');
+    const coinsPerUtxoSize = row?.coins_per_utxo_size;
+    if (
+      !row ||
+      typeof row.min_fee_a !== 'number' ||
+      typeof row.min_fee_b !== 'number' ||
+      coinsPerUtxoSize === null ||
+      coinsPerUtxoSize === undefined
+    ) {
+      throw new CardanoProviderError('unexpected_response', 'CARDANO_PROVIDER_PARAMETERS_SHAPE');
+    }
+    return {
+      minFeeA: row.min_fee_a,
+      minFeeB: row.min_fee_b,
+      coinsPerUtxoByte: BigInt(coinsPerUtxoSize),
+      maxTxSize: Number(row.max_tx_size)
+    };
+  }
+
+  /**
+   * The unspent outputs an address holds.
+   *
+   * @param address - Bech32 Cardano address.
+   * @returns Its UTxOs, with native assets flagged rather than dropped, and no block height: this
+   *   dialect does not report one, and {@link confirmedUtxosFor} is where it is paid for.
+   * @throws CardanoProviderError On any provider failure.
+   */
+  async utxosFor(address: string): Promise<CardanoUtxo[]> {
+    const rows = await this.utxoRows(address);
+    return rows.map((row) => toCardanoUtxo(row));
+  }
+
+  /**
+   * The unspent outputs an address holds that are deep enough to be treated as firm.
+   *
+   * The heights come from one lookup per **distinct block**, not per output: a wallet's outputs
+   * cluster in a handful of blocks, and a call per output is the pattern that earns a rate limit.
+   *
+   * @param address - Bech32 Cardano address.
+   * @param minConfirmations - Blocks required on top of the including block. `0` accepts anything
+   *   the provider reports as on chain, and skips the lookups entirely.
+   * @returns The UTxOs that meet the threshold, each carrying the height it was judged by.
+   * @throws CardanoProviderError On any provider failure.
+   */
+  async confirmedUtxosFor(address: string, minConfirmations: number): Promise<CardanoUtxo[]> {
+    const rows = await this.utxoRows(address);
+    if (minConfirmations <= 0 || rows.length === 0) return rows.map((row) => toCardanoUtxo(row));
+    const { height } = await this.tip();
+    const heights = new Map<string, number>();
+    for (const hash of new Set(rows.map((row) => row.block))) {
+      // Sequential on purpose: firing every block lookup at once is what earns a rate limit.
+      const block = await this.call<BlockfrostBlock>(`/blocks/${hash}`);
+      if (typeof block?.height !== 'number') {
+        throw new CardanoProviderError('unexpected_response', 'CARDANO_PROVIDER_BLOCK_SHAPE');
+      }
+      heights.set(hash, block.height);
+    }
+    return rows
+      .map((row) => ({ ...toCardanoUtxo(row), blockHeight: heights.get(row.block) }))
+      .filter(
+        (utxo) =>
+          utxo.blockHeight !== undefined && height - utxo.blockHeight + 1 >= minConfirmations
+      );
+  }
+
+  /**
+   * Submits a signed transaction.
+   *
+   * @param cborHex - The serialized signed transaction.
+   * @returns The transaction id the provider echoes back.
+   * @throws CardanoProviderError `rejected_by_chain` when the node refuses it — that is final and
+   *   the transaction does not exist. Everything else may be retried, and a `timeout` is
+   *   `undetermined`: the transaction may be on chain, so the caller looks it up by the id it
+   *   already knows instead of submitting again.
+   */
+  async submit(cborHex: string): Promise<string> {
+    const submitted = await this.call<string>('/tx/submit', {
+      method: 'POST',
+      // The bytes themselves, not the hex: this endpoint reads the body as CBOR, and a hex string
+      // is refused as a malformed transaction rather than as a malformed request.
+      headers: { 'content-type': 'application/cbor' },
+      body: Uint8Array.from(Buffer.from(cborHex, 'hex'))
+    });
+    if (typeof submitted !== 'string') {
+      throw new CardanoProviderError('unexpected_response', 'CARDANO_PROVIDER_SUBMIT_SHAPE');
+    }
+    return submitted;
+  }
+
+  /**
+   * Where a transaction stands.
+   *
+   * Blockfrost answers only for transactions that reached a block, so anything it does not know is
+   * reported as `known: false` — which before inclusion is the ordinary answer, and is also the
+   * answer that resolves an undetermined submit. The including block counts as the first
+   * confirmation, matching how {@link confirmedUtxosFor} counts, because the caller reads `>= 1` as
+   * "in a block" and a transaction this endpoint answers for is in one.
+   *
+   * @param transactionId - The id, hex without `0x`.
+   * @returns Its status.
+   * @throws CardanoProviderError On any provider failure.
+   */
+  async statusOf(transactionId: string): Promise<CardanoTransactionStatus> {
+    const transaction = await this.callOptional<BlockfrostTx>(`/txs/${transactionId}`);
+    if (!transaction || typeof transaction.block_height !== 'number') {
+      return { known: false, confirmations: 0 };
+    }
+    const { height } = await this.tip();
+    return { known: true, confirmations: Math.max(1, height - transaction.block_height + 1) };
+  }
+
+  /**
+   * Every UTxO page for an address, walked to the end.
+   *
+   * The paging is not optional detail: a read that stopped at the first page would hide funds, and
+   * the transfer that follows would fail for an insufficient balance the wallet actually has.
+   *
+   * @param address - Bech32 Cardano address.
+   * @returns The rows as the provider returned them, block hash included.
+   * @throws CardanoProviderError On any provider failure.
+   */
+  private async utxoRows(address: string): Promise<BlockfrostUtxo[]> {
+    const rows: BlockfrostUtxo[] = [];
+    for (let page = 1; page <= BLOCKFROST_MAX_PAGES; page += 1) {
+      // Sequential because the number of pages is only known once a short one comes back.
+      const batch = await this.callOptional<BlockfrostUtxo[]>(
+        `/addresses/${address}/utxos?count=${BLOCKFROST_PAGE_SIZE}&page=${page}`
+      );
+      // 404 is "this address has never been used", which is an empty wallet and not a failure.
+      if (batch === null) break;
+      if (!Array.isArray(batch)) {
+        throw new CardanoProviderError('unexpected_response', 'CARDANO_PROVIDER_UTXO_SHAPE');
+      }
+      rows.push(...batch);
+      if (batch.length < BLOCKFROST_PAGE_SIZE) break;
+    }
+    return rows;
+  }
+}
+
+/**
+ * One Blockfrost output in the shape the rest of the code reads.
+ *
+ * The amounts arrive as a flat list in which ADA is just another entry, under the unit
+ * `lovelace`; everything else is a policy id and an asset name concatenated into one hex string.
+ *
+ * @param row - The provider's row.
+ * @returns The UTxO, without a block height — this dialect reports the block by hash.
+ */
+function toCardanoUtxo(row: BlockfrostUtxo): CardanoUtxo {
+  const amounts = row.amount ?? [];
+  const assets = amounts
+    .filter((amount) => amount.unit !== 'lovelace')
+    .map((amount) => ({
+      policyId: amount.unit.slice(0, POLICY_ID_HEX_LENGTH).toLowerCase(),
+      // An asset with an empty name is legal, and leaves the unit as the policy id alone.
+      assetName: amount.unit.slice(POLICY_ID_HEX_LENGTH).toLowerCase(),
+      quantity: BigInt(amount.quantity)
+    }));
+  const lovelace = amounts.find((amount) => amount.unit === 'lovelace');
+  return {
+    txHash: row.tx_hash,
+    outputIndex: row.output_index,
+    lovelace: BigInt(lovelace?.quantity ?? '0'),
+    holdsOtherAssets: assets.length > 0,
+    assets
+  };
+}
+
 /**
  * What an HTTP status from the provider means.
  *
@@ -367,7 +686,7 @@ export class KoiosProvider implements CardanoProvider {
  * @returns The classified failure.
  */
 function classifyStatus(status: number, method?: string): CardanoProviderFailure {
-  if (status === 429) return 'rate_limited';
+  if (status === 429 || status === 418) return 'rate_limited';
   if (status === 401 || status === 402 || status === 403) return 'unauthorized';
   if (status >= 500) return 'provider_unavailable';
   if ((status === 400 || status === 422) && method === 'POST') return 'rejected_by_chain';
@@ -381,11 +700,18 @@ function classifyStatus(status: number, method?: string): CardanoProviderFailure
  * chain — a balance, a transaction status — does not have to import the operation layer, and with
  * it the database. The dependency would run the wrong way.
  *
- * @returns A provider bound to the configured network.
+ * @returns A provider bound to the configured network, of whichever kind the root URL names.
  */
 export function buildCardanoProvider(): CardanoProvider {
   const config = getCardanoConfig();
-  return new KoiosProvider(config.providerUrl, config.providerTimeoutMs);
+  if (config.providerKind === 'blockfrost') {
+    return new BlockfrostProvider(
+      config.providerUrl,
+      config.providerTimeoutMs,
+      config.providerApiKey
+    );
+  }
+  return new KoiosProvider(config.providerUrl, config.providerTimeoutMs, config.providerApiKey);
 }
 
 /**

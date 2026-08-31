@@ -48,6 +48,7 @@ function blank(): CardanoEnvState {
       network: '',
       chainId: null,
       providerUrl: '',
+      providerApiKey: '',
       providerTimeoutMs: null,
       ttlSlots: null,
       depositConfirmations: null,

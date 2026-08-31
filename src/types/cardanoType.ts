@@ -354,6 +354,14 @@ export interface CardanoEnv {
   /** Provider root as configured. Stripping its trailing slashes is the caller's job, so that a
    *  value of nothing but slashes still reads as a value and not as an absent one. */
   providerUrl: string;
+  /**
+   * Provider credential as configured, trimmed.
+   *
+   * What it stands for depends on the provider the root URL names — a Blockfrost project id, a
+   * Koios bearer token — which is why one setting serves both: a deployment swaps providers by
+   * changing the URL, and the credential follows it.
+   */
+  providerApiKey: string;
   /** Per-call ceiling for provider requests, in milliseconds. */
   providerTimeoutMs: number | null;
   /** Slots of validity given to a transaction, from the tip. */
@@ -399,6 +407,7 @@ export interface CardanoFeeEnv {
  * - `flag_off` — the family was not switched on.
  * - `network_unknown` — the configured network is not one this deployment can read.
  * - `provider_missing` — a provider root was configured, and it resolved to nothing.
+ * - `provider_key_missing` — the configured provider needs a credential, and none was set.
  * - `secret_missing` — the master secret every wallet derives from is absent.
  * - `labels_unreadable` — one of the configured derivation labels is absent or not readable.
  */
@@ -407,8 +416,18 @@ export type CardanoDisabledReason =
   | 'flag_off'
   | 'network_unknown'
   | 'provider_missing'
+  | 'provider_key_missing'
   | 'secret_missing'
   | 'labels_unreadable';
+
+/**
+ * The hosted providers this deployment can read the chain through.
+ *
+ * Not a setting of its own: it is read off the provider root URL, so swapping providers is one
+ * line of configuration and not two that can disagree. A URL naming neither is treated as Koios,
+ * which is the dialect the default roots speak.
+ */
+export type CardanoProviderKind = 'koios' | 'blockfrost';
 
 /** Everything the Cardano subsystem needs to run, resolved once. */
 export interface CardanoConfig {
@@ -420,6 +439,10 @@ export interface CardanoConfig {
   chainId: number;
   /** Provider root URL. */
   providerUrl: string;
+  /** Which provider dialect that root speaks, and so which client reads it. */
+  providerKind: CardanoProviderKind;
+  /** Credential sent with every provider call. Empty when the provider needs none. */
+  providerApiKey: string;
   /** Per-call ceiling for provider requests, in milliseconds. */
   providerTimeoutMs: number;
   /** Slots of validity given to a transaction, from the tip. */

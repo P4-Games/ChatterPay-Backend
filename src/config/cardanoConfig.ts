@@ -13,7 +13,12 @@
  */
 
 import { readCardanoEnv } from '../helpers/envHelper';
-import type { CardanoConfig, CardanoDisabledReason, CardanoNetwork } from '../types/cardanoType';
+import type {
+  CardanoConfig,
+  CardanoDisabledReason,
+  CardanoNetwork,
+  CardanoProviderKind
+} from '../types/cardanoType';
 
 /**
  * Internal chain ids for networks that have no EIP-155 chain id.
@@ -37,8 +42,8 @@ export const CARDANO_MAINNET_CHAIN_ID = 900764824073;
  */
 export const ADA_ADDRESS_PREFIX = 'cardano:';
 
-/** Default provider roots per network. Koios needs no API key, which keeps a secret out of the
- *  bootstrap path of a testnet deployment. */
+/** Default provider roots per network. Koios is the default because its public tier answers
+ *  without a credential, which keeps a secret out of the bootstrap path of a testnet deployment. */
 const DEFAULT_PROVIDER_URL: Readonly<Record<CardanoNetwork, string>> = {
   testnet: 'https://preprod.koios.rest/api/v1',
   mainnet: 'https://api.koios.rest/api/v1'
@@ -103,6 +108,30 @@ function resolveNetwork(raw: string): CardanoNetwork | null {
 }
 
 /**
+ * Reads which provider a root URL names.
+ *
+ * Off the URL rather than out of a setting of its own, so that swapping providers is one line of
+ * configuration instead of two that can contradict each other — a key paired with the wrong root
+ * is 403 on every call, and there would be nothing in the config to say which half was wrong.
+ *
+ * The host is what decides, not the whole string: matching anywhere would read a Koios root that
+ * happens to carry `blockfrost` in a path or a query as the wrong dialect.
+ *
+ * @param url - Provider root, already stripped of trailing slashes.
+ * @returns The dialect to speak. Anything this deployment does not recognise is treated as Koios,
+ *   which is what the defaults are and what an unconfigured deployment gets.
+ */
+function resolveProviderKind(url: string): CardanoProviderKind {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return 'koios';
+  }
+  return host === 'blockfrost.io' || host.endsWith('.blockfrost.io') ? 'blockfrost' : 'koios';
+}
+
+/**
  * Resolves the Cardano configuration from the environment.
  *
  * Read as a function rather than frozen at import so tests can drive it without reloading modules.
@@ -123,6 +152,11 @@ export function getCardanoConfig(): CardanoConfig {
   // slashes reads as a value that resolved to nothing -- which is a misconfiguration to report,
   // not an absent setting to paper over with the default.
   const providerUrl = (env.providerUrl || DEFAULT_PROVIDER_URL[network]).replace(/\/+$/, '');
+  const providerKind = resolveProviderKind(providerUrl);
+  // Koios answers without one, on a smaller quota; Blockfrost answers nothing at all. Missing here
+  // means the family stays off rather than starting and failing every call with a 403 — which
+  // reads to the user as a chain that is down.
+  const providerKeyMissing = providerKind === 'blockfrost' && !env.providerApiKey;
 
   // The last two are what the derivation is made of. Without either, this deployment would issue
   // well-formed addresses that are not the ones it issued yesterday — and nothing downstream can
@@ -133,17 +167,21 @@ export function getCardanoConfig(): CardanoConfig {
       ? 'network_unknown'
       : !providerUrl
         ? 'provider_missing'
-        : !env.hasSecret
-          ? 'secret_missing'
-          : !env.labelsReadable
-            ? 'labels_unreadable'
-            : '';
+        : providerKeyMissing
+          ? 'provider_key_missing'
+          : !env.hasSecret
+            ? 'secret_missing'
+            : !env.labelsReadable
+              ? 'labels_unreadable'
+              : '';
 
   return {
     enabled: disabledReason === '',
     network,
     chainId,
     providerUrl,
+    providerKind,
+    providerApiKey: env.providerApiKey,
     providerTimeoutMs: env.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS,
     ttlSlots: env.ttlSlots ?? DEFAULT_TTL_SLOTS,
     depositConfirmations: env.depositConfirmations ?? DEFAULT_DEPOSIT_CONFIRMATIONS,

@@ -84,6 +84,7 @@ const {
   CARDANO_NETWORK: cardanoNetwork = '',
   CARDANO_CHAIN_ID: cardanoChainId = '',
   CARDANO_PROVIDER_URL: cardanoProviderUrl = '',
+  CARDANO_PROVIDER_API_KEY: cardanoProviderApiKey = '',
   CARDANO_PROVIDER_TIMEOUT_MS: cardanoProviderTimeoutMs = '',
   CARDANO_TTL_SLOTS: cardanoTtlSlots = '',
   CARDANO_DEPOSIT_CONFIRMATIONS: cardanoDepositConfirmations = '',
@@ -392,6 +393,7 @@ export const CARDANO_ENABLED: string = cardanoEnabled;
 export const CARDANO_NETWORK: string = cardanoNetwork;
 export const CARDANO_CHAIN_ID: string = cardanoChainId;
 export const CARDANO_PROVIDER_URL: string = cardanoProviderUrl;
+export const CARDANO_PROVIDER_API_KEY: string = cardanoProviderApiKey;
 export const CARDANO_PROVIDER_TIMEOUT_MS: string = cardanoProviderTimeoutMs;
 export const CARDANO_TTL_SLOTS: string = cardanoTtlSlots;
 export const CARDANO_DEPOSIT_CONFIRMATIONS: string = cardanoDepositConfirmations;
