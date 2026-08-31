@@ -98,7 +98,7 @@ export function cardanoConstantsMock<T extends object>(actual: T): T {
   return Object.defineProperties(
     { ...actual },
     {
-      $S: { value: 'x', enumerable: true },
+      $SC: { value: 'x', enumerable: true },
       $B: { value: 'y', enumerable: true },
       CDC1: { value: '743a643a', enumerable: true },
       CDC2: { value: '743a633a', enumerable: true },

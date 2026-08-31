@@ -92,7 +92,8 @@ steps:
     secretEnv: [
       'CHATIZALO_TOKEN',
       'FRONTEND_TOKEN',
-      'SEED_INTERNAL_SALT',
+      'SEED_INTERNAL_SALT_EVM',
+      'SEED_INTERNAL_SALT_CAR',
       'SIGNING_KEY',
       'SECURITY_PIN_HMAC_KEY',
       'MANTECA_API_KEY',
@@ -125,7 +126,7 @@ steps:
       - '-c'
       - |
         set -euo pipefail
-        secrets=' CHATIZALO_TOKEN FRONTEND_TOKEN SEED_INTERNAL_SALT SIGNING_KEY SECURITY_PIN_HMAC_KEY MANTECA_API_KEY THE_GRAPH_API_KEY TELEGRAM_BOT_API_KEY ALCHEMY_AUTH_TOKEN ALCHEMY_SIGNING_KEY ALCHEMY_WEBHOOK_HEADER_API_KEY POLYMARKET_BUILDER_API_KEY POLYMARKET_BUILDER_SECRET POLYMARKET_BUILDER_PASSPHRASE POLYMARKET_POLYGON_RPC_URL POLYMARKET_ADAPTER_AUTH_TOKEN LIFI_API_KEY '
+        secrets=' CHATIZALO_TOKEN FRONTEND_TOKEN SEED_INTERNAL_SALT_EVM SEED_INTERNAL_SALT_CAR SIGNING_KEY SECURITY_PIN_HMAC_KEY MANTECA_API_KEY THE_GRAPH_API_KEY TELEGRAM_BOT_API_KEY ALCHEMY_AUTH_TOKEN ALCHEMY_SIGNING_KEY ALCHEMY_WEBHOOK_HEADER_API_KEY POLYMARKET_BUILDER_API_KEY POLYMARKET_BUILDER_SECRET POLYMARKET_BUILDER_PASSPHRASE POLYMARKET_POLYGON_RPC_URL POLYMARKET_ADAPTER_AUTH_TOKEN LIFI_API_KEY '
         build_args=()
         for name in $$(awk '/^ARG /{print $$2}' Dockerfile); do case "$$secrets" in *" $$name "*) continue;; esac; build_args+=(--build-arg "$$name=$$(sed -n "s/^$$name=//p" .env | head -n 1)"); done
         echo "assembled $$(( $${#build_args[@]} / 2 )) build args"
@@ -133,7 +134,8 @@ steps:
     secretEnv: [
       'CHATIZALO_TOKEN',
       'FRONTEND_TOKEN',
-      'SEED_INTERNAL_SALT',
+      'SEED_INTERNAL_SALT_EVM',
+      'SEED_INTERNAL_SALT_CAR',
       'SIGNING_KEY',
       'SECURITY_PIN_HMAC_KEY',
       'MANTECA_API_KEY',
@@ -182,8 +184,10 @@ availableSecrets:
       env: 'CHATIZALO_TOKEN'
     - versionName: projects/$PROJECT_ID/secrets/${_FRONTEND_TOKEN_SECRET_NAME}/versions/latest
       env: 'FRONTEND_TOKEN'
-    - versionName: projects/$PROJECT_ID/secrets/${_SEED_INTERNAL_SALT_SECRET_NAME}/versions/latest
-      env: 'SEED_INTERNAL_SALT'
+    - versionName: projects/$PROJECT_ID/secrets/${_SEED_INTERNAL_SALT_EVM_SECRET_NAME}/versions/latest
+      env: 'SEED_INTERNAL_SALT_EVM'
+    - versionName: projects/$PROJECT_ID/secrets/${_SEED_INTERNAL_SALT_CAR_SECRET_NAME}/versions/latest
+      env: 'SEED_INTERNAL_SALT_CAR'
     - versionName: projects/$PROJECT_ID/secrets/${_SIGNING_KEY_SECRET_NAME}/versions/latest
       env: 'SIGNING_KEY'
     - versionName: projects/$PROJECT_ID/secrets/${_SECURITY_PIN_HMAC_KEY_SECRET_NAME}/versions/latest

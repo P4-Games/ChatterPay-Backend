@@ -9,7 +9,7 @@ vi.mock('../../../src/config/constants', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/config/constants')>();
   return {
     ...actual,
-    $S: 'x',
+    $SC: 'x',
     $B: 'y',
     CDC1: '743a643a',
     CDC2: '743a633a',
