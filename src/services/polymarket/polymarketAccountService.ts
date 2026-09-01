@@ -11,7 +11,11 @@ import { Logger } from '../../helpers/loggerHelper';
 import { PolymarketTermsModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
 import { UserModel } from '../../models/userModel';
-import { encryptApiCredentials, getOrCreateApiCredentials } from './polymarketClientService';
+import {
+  derivePolygonAddress,
+  encryptApiCredentials,
+  getOrCreateApiCredentials
+} from './polymarketClientService';
 import { deployDepositWallet, setupDepositWalletApprovals } from './polymarketRelayerService';
 
 const LOG_PREFIX = 'polymarketAccountService';
@@ -69,7 +73,8 @@ export async function createPolymarketAccount(
             terms_accepted_version: 0,
             terms_accepted_at: null,
             created_at: new Date(),
-            wallet_type: 'deposit'
+            wallet_type: 'deposit',
+            signer_address: derivePolygonAddress(privateKey)
           }
         }
       },
