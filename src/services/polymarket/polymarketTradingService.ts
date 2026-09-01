@@ -21,7 +21,10 @@ import { Logger } from '../../helpers/loggerHelper';
 import { PolymarketOrderModel } from '../../models/polymarketModel';
 import type { IUser } from '../../models/userModel';
 import { mongoTransactionService } from '../mongo/mongoTransactionService';
-import { getAuthenticatedClientForUser } from './polymarketClientService';
+import {
+  getAuthenticatedClientForUser,
+  PolymarketAccountMismatchError
+} from './polymarketClientService';
 import {
   CTF_ADDRESS,
   FOK_SLIPPAGE_TOLERANCE,
@@ -43,6 +46,28 @@ import type {
 } from './polymarketTypes';
 
 const LOG_PREFIX = 'polymarketTradingService';
+
+/**
+ * Turn a CLOB SDK failure into a message that names the account it was made with.
+ *
+ * The SDK parses every response as a result set, so a rejected request surfaces as a spread over an
+ * undefined body rather than as its status. On its own that reads as a bug in our code; paired with
+ * the signer and funder it reads as what it is, credentials the CLOB refused.
+ */
+function describeClobFailure(error: unknown, user: IUser): string {
+  const account = user.polymarket_account;
+  const context = account
+    ? ` [signer=${account.signer_address ?? 'unrecorded'} funder=${account.polygon_address} walletType=${account.wallet_type ?? 'safe'}]`
+    : '';
+
+  if (error instanceof PolymarketAccountMismatchError) return error.message;
+
+  if (error instanceof TypeError && /spread syntax/i.test(error.message)) {
+    return `CLOB rejected the request and returned no result set (usually 401 on invalid or mismatched API credentials): ${String(error)}${context}`;
+  }
+
+  return `${String(error)}${context}`;
+}
 
 // CLOB error detection patterns — extracted to avoid brittle inline string matching
 const CLOB_ERROR_PATTERNS = {
@@ -564,8 +589,9 @@ export async function getOpenOrders(
 
     return orders as unknown as ClobOpenOrder[];
   } catch (error) {
-    Logger.log('error', fnLog, `${logKey} Failed: ${String(error)}`);
-    throw new Error(`Failed to fetch open orders: ${String(error)}`);
+    const detail = describeClobFailure(error, user);
+    Logger.log('error', fnLog, `${logKey} Failed: ${detail}`);
+    throw new Error(`Failed to fetch open orders: ${detail}`);
   }
 }
 

@@ -9,6 +9,15 @@ export interface IPolymarketAccount {
   terms_accepted_at: Date | null;
   created_at: Date;
   wallet_type: 'safe' | 'deposit';
+  /**
+   * EOA that signed the stored API credentials and that the deposit wallet is canonical for.
+   *
+   * The CLOB binds an API key to the signer, so credentials derived for one EOA are rejected with
+   * 401 when replayed with another. Absent on accounts created before this was recorded; when it is
+   * present and no longer matches the user's current EOA, the account has to be rebuilt rather than
+   * reused, because the deposit wallet is canonical for the old signer and may still hold funds.
+   */
+  signer_address?: string;
 }
 
 /**
@@ -212,7 +221,8 @@ const userSchema = new Schema<IUser>({
       terms_accepted_version: { type: Number, required: false, default: 0 },
       terms_accepted_at: { type: Date, required: false, default: null },
       created_at: { type: Date, required: true, default: Date.now },
-      wallet_type: { type: String, enum: ['safe', 'deposit'], default: 'safe' }
+      wallet_type: { type: String, enum: ['safe', 'deposit'], default: 'safe' },
+      signer_address: { type: String, required: false }
     },
     required: false,
     default: undefined,
