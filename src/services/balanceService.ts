@@ -514,7 +514,7 @@ export async function verifyWalletBalance(
   );
   const walletBalance = await tokenContract.balanceOf(walletAddress);
   const amountToCheckFormatted = ethers.utils.parseUnits(amountToCheck, decimals);
-  const walletBalanceFormatted = ethers.utils.formatEther(walletBalance);
+  const walletBalanceFormatted = ethers.utils.formatUnits(walletBalance, decimals);
 
   Logger.log(
     'verifyWalletBalance',
@@ -561,6 +561,10 @@ export async function verifyWalletBalanceInRpc(
  * @param reply - Fastify reply object
  * @param networkConfig - Fastify blockchain network configuration
  * @param tokens - Token metadata list for the target network
+ * @param includeEoa - Whether the EOA counts as part of the answer. Off by default: transfers are
+ * validated and executed against the proxy alone, so counting the EOA would report an amount the
+ * user cannot operate with and a transfer for the exact figure just shown would be rejected for
+ * insufficient funds. When off, the EOA holdings are left out and the EOA is not listed either.
  * @returns Plain data object with balances, totals, certificates and wallets
  */
 
@@ -569,9 +573,11 @@ export async function getAddressBalanceWithNfts(
   proxyAddress: string,
   eoaAddress: string,
   networkConfig: IBlockchain,
-  tokens: IToken[]
+  tokens: IToken[],
+  includeEoa = false
 ): Promise<AddressBalanceWithNfts> {
   const eoaProvided =
+    includeEoa &&
     !!eoaAddress &&
     eoaAddress.trim().length > 0 &&
     eoaAddress.toLowerCase() !== proxyAddress.toLowerCase();
