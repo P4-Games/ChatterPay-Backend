@@ -92,46 +92,60 @@ const isNonImageContentType = (contentType?: string | string[]): boolean => {
 };
 
 /**
- * Attempts to detect short URLs by resolving redirects. This helps catch
- * short domains not present in the static list.
+ * Reason why an image URL cannot be used.
  *
- * If the URL redirects to a different host, or the server blocks the request
- * (4xx/5xx), it is treated as a short/blocked URL.
+ * - `short_url`: the URL belongs to a known shortener, or resolves to a different host.
+ * - `not_accessible`: the URL does not answer with a downloadable image.
+ */
+export type ImageUrlRejection = 'short_url' | 'not_accessible';
+
+/**
+ * Checks whether an image URL can be used, resolving redirects to catch
+ * shorteners that are not present in the static list.
+ *
+ * A redirect landing on a different host is treated as a shortener. Anything
+ * else that prevents downloading the image (4xx/5xx, or a response that is not
+ * an image) is reported separately, so the caller can tell the user what really
+ * happened instead of blaming a shortener.
  *
  * @param url - The URL string to be checked.
- * @returns `true` if the URL is likely a short URL or blocked, `false` otherwise.
+ * @returns The rejection reason, or `null` if the URL looks usable.
  */
-export const isShortUrlByRedirect = async (url: string): Promise<boolean> => {
+export const checkImageUrl = async (url: string): Promise<ImageUrlRejection | null> => {
+  if (isShortUrl(url)) {
+    return 'short_url';
+  }
+
   let originalHost = '';
   const normalizedUrl = normalizeUrlForParsing(url);
   try {
     originalHost = new URL(normalizedUrl).hostname.toLowerCase();
   } catch {
-    return false;
+    return null;
   }
 
-  const checkResponse = async (response: AxiosResponse): Promise<boolean> => {
+  const checkResponse = async (response: AxiosResponse): Promise<ImageUrlRejection | null> => {
     const { finalUrl, redirectCount } = getRedirectInfo(response);
     if (finalUrl) {
       try {
         const finalHost = new URL(finalUrl).hostname.toLowerCase();
         if (redirectCount > 0 && finalHost !== originalHost) {
-          return true;
+          return 'short_url';
         }
       } catch {
-        return true;
+        return 'not_accessible';
       }
     }
 
     const contentTypeHeader = response.headers?.['content-type'] as string | string[] | undefined;
     if (isNonImageContentType(contentTypeHeader)) {
-      return true;
+      return 'not_accessible';
     }
 
     if (response.status >= 400) {
-      return true;
+      return 'not_accessible';
     }
-    return false;
+    return null;
   };
 
   try {
@@ -159,7 +173,7 @@ export const isShortUrlByRedirect = async (url: string): Promise<boolean> => {
     }
     return await checkResponse(getResponse);
   } catch {
-    return false;
+    return null;
   }
 };
 
