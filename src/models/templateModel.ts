@@ -94,11 +94,17 @@ export type NotificationTemplatesTypes = {
  * between `initAt` and `endAt`, so an announcement can be scheduled ahead of time and stops showing
  * on its own without a deploy. `title` is the single line the banner shows collapsed; `message` is
  * the full text behind the expander, and is also what the notification and WhatsApp scripts send.
+ *
+ * `showInLanding` and `showInDashboard` pick the surfaces the item reaches. Both are optional and
+ * an absent flag counts as visible, so an announcement written before the flags existed keeps
+ * showing everywhere it used to.
  */
 export interface NewsItemType {
   title: LocalizedContentType;
   message: LocalizedContentType;
   enabled: boolean;
+  showInLanding?: boolean;
+  showInDashboard?: boolean;
   order: number;
   createdAt: Date;
   initAt: Date;
@@ -153,6 +159,8 @@ const newsSchema = new Schema<NewsItemType>(
     title: { type: localizedContentSchema, required: true },
     message: { type: localizedContentSchema, required: true },
     enabled: { type: Boolean, required: true, default: true },
+    showInLanding: { type: Boolean, required: false, default: true },
+    showInDashboard: { type: Boolean, required: false, default: true },
     order: { type: Number, required: false, default: 0 },
     createdAt: { type: Date, required: true, default: Date.now },
     initAt: { type: Date, required: true },

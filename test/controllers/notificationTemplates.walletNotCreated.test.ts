@@ -95,7 +95,7 @@ vi.mock('../../src/helpers/validationHelper', () => ({
     (_value: string) => true,
   isValidUrl: (_value: string) => true,
   isShortUrl: (_value: string) => false,
-  isShortUrlByRedirect: async (_value: string) => false
+  checkImageUrl: async (_value: string) => null
 }));
 
 vi.mock('../../src/services/notificationService', () => ({
