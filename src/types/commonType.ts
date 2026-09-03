@@ -112,6 +112,21 @@ export interface TransactionData {
   chain_id: number;
   date?: Date;
   user_notes?: string;
+  /**
+   * Network fee the chain charged, in its own coin. Distinct from `fee`, which is the ChatterPay
+   * fee taken in the token being moved. On EVM the paymaster absorbs the network cost and the user
+   * never sees it; on Cardano the sender pays it directly out of their own inputs.
+   */
+  network_fee?: number;
+  /** Coin `network_fee` is denominated in, e.g. `ADA`. */
+  network_fee_token?: string;
+  /**
+   * ADA the ledger forced to travel with a token, on a Cardano token transfer.
+   *
+   * Not a fee: the recipient keeps it. Recorded because it is the only figure that explains why
+   * sending a token also moved ADA.
+   */
+  attached_ada?: number;
   polymarket_order_id?: string;
   polymarket_purchase_id?: string;
   polymarket_market_slug?: string;

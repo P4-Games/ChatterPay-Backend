@@ -4,6 +4,7 @@ import webhookRoutes from './alchemyRoutes';
 import { balanceRoutes } from './balanceRoutes';
 import chainRoutes from './chainRoutes';
 import { chatterpointsRoutes } from './chatterpointsRoutes';
+import newsRoutes from './newsRoutes';
 import nftRoutes from './nftRoutes';
 import notificationRoutes from './notificationRoutes';
 import { pingRoutes } from './pingRoutes';
@@ -33,6 +34,7 @@ export async function setupRoutes(server: FastifyInstance): Promise<void> {
   server.register(walletRouter);
   server.register(referralRoutes);
   server.register(notificationRoutes);
+  server.register(newsRoutes);
   server.register(securityRoutes);
   server.register(balanceRoutes);
   server.register(swapRoutes);

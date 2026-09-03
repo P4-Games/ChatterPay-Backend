@@ -13,7 +13,8 @@ const {
   BUN_ENV = 'localhost',
   PORT: envPort,
   MONGO_URI: envMongoUri,
-  SEED_INTERNAL_SALT,
+  SEED_INTERNAL_SALT_EVM,
+  SEED_INTERNAL_SALT_CAR,
   SIGNING_KEY,
   SECURITY_PIN_HMAC_KEY,
   PINATA_JWT,
@@ -72,6 +73,31 @@ const {
   CDO4,
   CDP1,
   CDP2,
+  CDC1,
+  CDC2,
+  CDC3,
+  CDC4,
+  CDC5,
+  CDC6,
+  NODE_ENV: nodeEnv = '',
+  CARDANO_ENABLED: cardanoEnabled = 'false',
+  CARDANO_NETWORK: cardanoNetwork = '',
+  CARDANO_CHAIN_ID: cardanoChainId = '',
+  CARDANO_PROVIDER_URL: cardanoProviderUrl = '',
+  CARDANO_PROVIDER_API_KEY: cardanoProviderApiKey = '',
+  CARDANO_PROVIDER_TIMEOUT_MS: cardanoProviderTimeoutMs = '',
+  CARDANO_TTL_SLOTS: cardanoTtlSlots = '',
+  CARDANO_DEPOSIT_CONFIRMATIONS: cardanoDepositConfirmations = '',
+  CARDANO_EXPLORER_URL: cardanoExplorerUrl = '',
+  CARDANO_SPONSOR_FEES: cardanoSponsorFees = 'false',
+  CARDANO_FEE_SCHEME: cardanoFeeScheme = '',
+  CARDANO_TRANSFER_FEE_USD: cardanoTransferFeeUsd = '',
+  CARDANO_TRANSFER_FEE_ADA: cardanoTransferFeeAda = '',
+  CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT: cardanoTransferFeeAdaNewOutput = '',
+  CARDANO_RECYCLE_DESTINATION_UTXO: cardanoRecycleDestinationUtxo = 'false',
+  CARDANO_ROUTE_DUST_TO_SPONSOR: cardanoRouteDustToSponsor = 'false',
+  CARDANO_SPONSOR_WALLET_ID: cardanoSponsorWalletId = '',
+  CARDANO_DERIVATION_CHECK: cardanoDerivationCheck = '',
   TELEGRAM_BOT_API_KEY,
   SECURITY_PIN_LENGTH: securityPinLength = 6,
   SECURITY_PIN_MAX_FAILED_ATTEMPTS: securityPinMaxFailedAttempts = 3,
@@ -109,6 +135,12 @@ export {
   CDO4,
   CDP1,
   CDP2,
+  CDC1,
+  CDC2,
+  CDC3,
+  CDC4,
+  CDC5,
+  CDC6,
   PINATA_JWT,
   BOT_API_URL,
   CORS_ORIGINS,
@@ -131,9 +163,10 @@ export {
   ALCHEMY_VAR_TOKENS_ID,
   ALCHEMY_VAR_WALLETS_ID,
   CHATIZALO_PHONE_NUMBER,
-  SEED_INTERNAL_SALT as $S,
   CHATTERPOINTS_WORDS_SEED,
   EXTERNAL_DEPOSITS_PROVIDER,
+  SEED_INTERNAL_SALT_EVM as $S,
+  SEED_INTERNAL_SALT_CAR as $SC,
   ALCHEMY_VAR_WALLETS_TOPIC_ID,
   ALCHEMY_WEBHOOK_HEADER_API_KEY,
   THE_GRAPH_EXTERNAL_DEPOSITS_URL,
@@ -190,6 +223,12 @@ export const ISSUER_TOKENS_ENABLED: boolean = issuerTokensEnabled.toLowerCase() 
 export const BOT_NOTIFICATIONS_ENABLED: boolean = botNotificationsEnabled.toLowerCase() === 'true';
 export const CHATTERPAY_DOMAIN: string = `https://${IS_DEVELOPMENT ? 'dev.' : ''}chatterpay.net`;
 export const CHATTERPAY_NFTS_SHARE_URL: string = `${CHATTERPAY_DOMAIN}/nfts/share`;
+
+export const USER_BLOCKED_FALLBACK_MESSAGE: string =
+  'Your account was suspended after activity flagged as an attempt to attack the platform. ' +
+  `Reach out through the support channels on ${CHATTERPAY_DOMAIN} if you believe this is a mistake.`;
+
+export const USER_BLOCKED_ERROR_CODE = 'USER_BLOCKED';
 export const CURRENT_LOG_LEVEL: LogLevel = validLogLevels.includes(
   minorLogLevel.toLowerCase() as LogLevel
 )
@@ -204,8 +243,10 @@ export const GAMES_LANGUAGE_DEFAULT: gamesLanguage = 'en';
 export const RESET_USER_OPERATION_THRESHOLD_MINUTES = 30;
 export const GCP_CLOUD_TRACE_ENABLED: boolean = gcpCloudTraceEnabled.toLowerCase() === 'true';
 
-export const FASTIFY_REFRESH_TOKENS_INTERVAL_MS: number = Number(fastifyRefreshNetworksIntervalMs);
-export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(fastifyRefreshTokensIntervalMs);
+export const FASTIFY_REFRESH_TOKENS_INTERVAL_MS: number = Number(fastifyRefreshTokensIntervalMs);
+export const FASTIFY_REFRESH_NETWORKS_INTERVAL_MS: number = Number(
+  fastifyRefreshNetworksIntervalMs
+);
 
 export const WHATSAPP_API_URL = 'https://api.whatsapp.com';
 
@@ -344,3 +385,25 @@ export const CACHE_POLYMARKET_MARKETS_TTL = 300; // 5 min
 export const CACHE_POLYMARKET_MARKETS_CHECK_PERIOD = 360; // 6 min
 export const CACHE_POLYMARKET_PRICES_TTL = 60; // 1 min
 export const CACHE_POLYMARKET_PRICES_CHECK_PERIOD = 120; // 2 min
+
+// Cardano Configuration
+// Read as the environment holds them. `envHelper` turns them into the shapes the subsystem uses.
+export const NODE_ENV: string = nodeEnv;
+export const CARDANO_ENABLED: string = cardanoEnabled;
+export const CARDANO_NETWORK: string = cardanoNetwork;
+export const CARDANO_CHAIN_ID: string = cardanoChainId;
+export const CARDANO_PROVIDER_URL: string = cardanoProviderUrl;
+export const CARDANO_PROVIDER_API_KEY: string = cardanoProviderApiKey;
+export const CARDANO_PROVIDER_TIMEOUT_MS: string = cardanoProviderTimeoutMs;
+export const CARDANO_TTL_SLOTS: string = cardanoTtlSlots;
+export const CARDANO_DEPOSIT_CONFIRMATIONS: string = cardanoDepositConfirmations;
+export const CARDANO_EXPLORER_URL: string = cardanoExplorerUrl;
+export const CARDANO_SPONSOR_FEES: string = cardanoSponsorFees;
+export const CARDANO_FEE_SCHEME: string = cardanoFeeScheme;
+export const CARDANO_TRANSFER_FEE_USD: string = cardanoTransferFeeUsd;
+export const CARDANO_TRANSFER_FEE_ADA: string = cardanoTransferFeeAda;
+export const CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT: string = cardanoTransferFeeAdaNewOutput;
+export const CARDANO_RECYCLE_DESTINATION_UTXO: string = cardanoRecycleDestinationUtxo;
+export const CARDANO_ROUTE_DUST_TO_SPONSOR: string = cardanoRouteDustToSponsor;
+export const CARDANO_SPONSOR_WALLET_ID: string = cardanoSponsorWalletId;
+export const CARDANO_DERIVATION_CHECK: string = cardanoDerivationCheck.trim();

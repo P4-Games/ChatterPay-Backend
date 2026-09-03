@@ -165,6 +165,57 @@ const getcallDataGasValues = async (
 };
 
 /**
+ * Tells a contract revert apart from a node that simply could not answer.
+ *
+ * ethers v5 marks a decoded revert with `CALL_EXCEPTION`, and carries the raw revert payload in
+ * `data` (or the decoded custom-error name in `errorName`) even when the outer code says
+ * `UNPREDICTABLE_GAS_LIMIT`. Everything else — `SERVER_ERROR`, `TIMEOUT`, `NETWORK_ERROR`,
+ * rate limits — means the call was never evaluated and says nothing about the transaction.
+ *
+ * @param {unknown} error - Error thrown by estimateGas or callStatic
+ * @returns {boolean} True when the error proves the transaction would revert
+ */
+const isRevert = (error: unknown): boolean => {
+  const err = error as { code?: string; data?: unknown; errorName?: string; error?: unknown };
+  if (!err) return false;
+  if (err.code === 'CALL_EXCEPTION') return true;
+  if (err.errorName || err.data) return true;
+  const inner = err.error as { code?: number; data?: unknown } | undefined;
+  // JSON-RPC error code 3 is the standard "execution reverted" response.
+  return Boolean(inner && (inner.code === 3 || inner.data));
+};
+
+/**
+ * Extracts the most informative description available from a revert.
+ *
+ * A `revert("msg")` sets `errorName` to the literal `'Error'` and puts the message in `reason`,
+ * so preferring `errorName` unconditionally would print `Error` and discard the message. A
+ * custom error such as `ChatterPay__SwapFailed` carries its name in `errorName` and no reason.
+ *
+ * @param {unknown} error - Error thrown by estimateGas or callStatic
+ * @returns {string} Human-readable revert description
+ */
+const describeRevert = (error: unknown): string => {
+  const err = error as { errorName?: string; reason?: string; message?: string };
+  if (err?.errorName && err.errorName !== 'Error') return err.errorName;
+  return err?.reason ?? err?.message ?? 'Unknown error';
+};
+
+/**
+ * Marker for the error this module raises on a proven revert.
+ *
+ * The revert is detected in an inner catch whose throw is caught again by the outer one. The
+ * error raised there is a plain Error carrying none of the provider's revert metadata, so
+ * without a marker `isRevert` would not recognise it and the outer handler would swallow it
+ * back into the default gas limit.
+ */
+const DOOMED_TX = Symbol('doomedTransaction');
+
+/** True when the error is the one this module raised for a proven revert. */
+const isDoomedTxError = (error: unknown): boolean =>
+  Boolean((error as Record<symbol, unknown>)?.[DOOMED_TX]);
+
+/**
  * Calculates a dynamic gas limit for a contract method, including a buffer percentage.
  * If estimation fails, it falls back to a default gas limit.
  *
@@ -173,6 +224,10 @@ const getcallDataGasValues = async (
  * @param {unknown[]} args - The arguments to pass to the contract method.
  * @param {number} [gasBufferPercentage=10] - The buffer percentage to add to the estimated gas.
  * @param {BigNumber} [defaultGasLimit=BigNumber.from('7000000')] - The fallback gas limit if estimation fails.
+ * @param {boolean} [throwOnStaticRevert=false] - Rethrow instead of falling back when the static
+ *   call reverts. A reverting static call means the transaction is guaranteed to fail on-chain,
+ *   so returning a default gas limit only broadcasts a doomed transaction and burns the gas.
+ *   Callers that can surface the failure to the user should opt in.
  * @returns {Promise<BigNumber>} - The calculated gas limit.
  */
 const getDynamicGas = async (
@@ -180,7 +235,8 @@ const getDynamicGas = async (
   methodName: string,
   args: unknown[],
   gasBufferPercentage: number = 20,
-  defaultGasLimit: BigNumber = BigNumber.from('250000')
+  defaultGasLimit: BigNumber = BigNumber.from('250000'),
+  throwOnStaticRevert: boolean = false
 ): Promise<BigNumber> => {
   const defaultGasMessage = `Default Estimated gas limit for ${methodName}: ${defaultGasLimit.toString()}`;
 
@@ -217,11 +273,24 @@ const getDynamicGas = async (
         return gasWithBuffer;
       } catch (staticError) {
         Logger.warn('getDynamicGas', `Static call also failed for ${methodName}:`, staticError);
+
+        // Only a genuine revert proves the transaction cannot succeed. This branch is also
+        // reached when the node itself could not answer — a timeout, a 429, a SERVER_ERROR —
+        // and aborting on those would turn a transient RPC blip into a failed user operation.
+        // Fall back to the default gas limit in that case, exactly as before.
+        if (throwOnStaticRevert && isRevert(staticError)) {
+          throw Object.assign(
+            new Error(`${methodName} would revert on-chain: ${describeRevert(staticError)}`),
+            { [DOOMED_TX]: true }
+          );
+        }
+
         Logger.debug('getDynamicGas', defaultGasMessage);
         return defaultGasLimit;
       }
     }
   } catch (error) {
+    if (throwOnStaticRevert && (isDoomedTxError(error) || isRevert(error))) throw error;
     Logger.warn('getDynamicGas', `Gas estimation completely failed for ${methodName}:`, error);
     Logger.debug('getDynamicGas', defaultGasMessage);
     return defaultGasLimit;

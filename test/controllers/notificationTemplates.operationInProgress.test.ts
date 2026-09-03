@@ -64,7 +64,7 @@ vi.mock('../../src/helpers/validationHelper', () => ({
   isValidEthereumWallet: (value: string) => value.startsWith('0x') && value.length >= 10,
   isValidUrl: (_value: string) => true,
   isShortUrl: (_value: string) => false,
-  isShortUrlByRedirect: async (_value: string) => false
+  checkImageUrl: async (_value: string) => null
 }));
 
 vi.mock('../../src/services/notificationService', () => ({

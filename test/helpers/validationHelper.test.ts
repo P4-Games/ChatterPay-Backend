@@ -22,6 +22,17 @@ describe('Validation Functions', () => {
       expect(isValidPhoneNumber('phone123')).toBe(false);
       expect(isValidPhoneNumber('')).toBe(false);
     });
+
+    // An absent query param arrives as `undefined` and a repeated one as an array. Both used to
+    // throw a TypeError that escaped the route handler as a 500 — `GET /nfts/` with no
+    // `channel_user_id` was reachable unauthenticated and answered 500 because of it.
+    it('should return false instead of throwing for non-string input', () => {
+      expect(isValidPhoneNumber(undefined)).toBe(false);
+      expect(isValidPhoneNumber(null)).toBe(false);
+      expect(isValidPhoneNumber(12345678)).toBe(false);
+      expect(isValidPhoneNumber(['12345678'])).toBe(false);
+      expect(isValidPhoneNumber({})).toBe(false);
+    });
   });
 
   describe('isValidUrl', () => {

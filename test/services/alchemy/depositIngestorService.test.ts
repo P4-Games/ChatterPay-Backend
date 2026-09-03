@@ -10,7 +10,7 @@ import type {
 
 describe('depositIngestorService', () => {
   beforeEach(() => {
-    // Podrías limpiar mocks o resetear estados si el servicio los tuviera
+    // Clear mocks or reset state here, once the service has any to reset
   });
 
   describe('processWebhookPayload', () => {

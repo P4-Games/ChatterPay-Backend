@@ -15,7 +15,7 @@ import type {
 import { chatterpointsService, type LeaderboardResult } from '../services/chatterpointsService';
 
 // -------------------------------------------------------------------------------------------------------------
-// Local, controller-only types (mínimos, sin repetir lo que ya existe en el modelo)
+// Local, controller-only types (minimal, without repeating what the model already declares)
 type IncludeKind = 'games' | 'operations' | 'social' | 'prizes';
 
 interface CreateCycleBody {
@@ -368,7 +368,7 @@ export const userHistory = async (
   reply: FastifyReply
 ): Promise<void> => {
   try {
-    // Body puede venir undefined, protegemos y tipamos
+    // The body may arrive undefined, so it is guarded and typed here
     type UB = Partial<UserHistoryBody>;
     const body: UB = (req.body ?? {}) as UB;
 
@@ -379,7 +379,7 @@ export const userHistory = async (
       throw new Error('Missing required fields');
     }
 
-    // Defaults MUTABLES (evitan el problema de readonly tuples)
+    // MUTABLE defaults: readonly tuples do not assign to the array types below
     const include: IncludeKind[] =
       Array.isArray(body.include) && body.include.length > 0
         ? body.include.filter(

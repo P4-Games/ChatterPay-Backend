@@ -5,7 +5,8 @@ INFURA_API_KEY=
 MONGO_URI=
 
 # Blockchain Keys
-SEED_INTERNAL_SALT=
+SEED_INTERNAL_SALT_EVM=
+SEED_INTERNAL_SALT_CAR=
 SIGNING_KEY=
 
 # Security PIN Configuration
@@ -93,6 +94,12 @@ CDO3=
 CDO4=
 CDP1=
 CDP2=
+CDC1=
+CDC2=
+CDC3=
+CDC4=
+CDC5=
+CDC6=
 
 # telegram bot
 TELEGRAM_BOT_API_KEY=''
@@ -173,3 +180,76 @@ POLYMARKET_BUILDER_SECRET=''
 POLYMARKET_BUILDER_PASSPHRASE=''
 POLYMARKET_POLYGON_RPC_URL=''
 POLYMARKET_ADAPTER_AUTH_TOKEN=''
+
+# Cardano
+# Set CARDANO_ENABLED='true' to enable ADA and native-asset (USDCx / USDM / USDA) transfers.
+# The family stays off unless a provider URL is present too: a half-configured Cardano is worse than
+# none, because a transfer would get as far as building and then fail to submit.
+# CARDANO_NETWORK decides the header byte of every address issued (CIP-19) — 'preprod' or 'mainnet'.
+# CARDANO_CHAIN_ID is the internal, non-EIP-155 id (9e11 + network magic). It is frozen once any
+# wallet, transaction or token row has been written with it.
+# CARDANO_PROVIDER_URL also picks the provider: a blockfrost.io root is Blockfrost, anything else
+# is Koios.
+# CARDANO_PROVIDER_API_KEY is a Blockfrost project id or a Koios bearer token. Koios runs without
+# it on the public tier; Blockfrost needs it. On Cloud Run it comes from Secret Manager.
+# CARDANO_TTL_SLOTS: a Preprod slot is one second, so 900 is fifteen minutes. Cardano has no
+# replace-by-fee and no nonce, so the TTL is what makes a stuck transaction resolvable.
+# CARDANO_DEPOSIT_CONFIRMATIONS: blocks required before an output is spendable. Not finality — the
+# guarantee is probabilistic — but the declared answer to the rollback question.
+
+CARDANO_ENABLED='false'
+CARDANO_NETWORK='preprod'
+CARDANO_CHAIN_ID=900000000001
+CARDANO_PROVIDER_URL='https://preprod.koios.rest/api/v1'
+CARDANO_PROVIDER_API_KEY=''
+CARDANO_PROVIDER_TIMEOUT_MS=20000
+CARDANO_TTL_SLOTS=900
+CARDANO_DEPOSIT_CONFIRMATIONS=3
+CARDANO_EXPLORER_URL='https://preprod.cardanoscan.io/transaction/'
+
+# Cardano - who pays what on a transfer. The two settings are independent. This pair describes
+# scheme 1; see CARDANO_FEE_SCHEME below for the other one, which prices its fee in ADA instead.
+#
+#   CARDANO_SPONSOR_FEES  CARDANO_TRANSFER_FEE_USD
+#   false                 0        the user pays the network fee and is charged nothing
+#   false                 0.08     the user pays the network fee and owes the ChatterPay fee
+#   true                  0.08     ChatterPay pays the network fee and charges its own
+#
+# CARDANO_SPONSOR_WALLET_ID names the wallet that funds sponsored transfers.
+#
+# The sponsor wallet has to hold ADA: if it is empty the transfer is refused, rather than charging the user a fee that was promised to be covered.
+CARDANO_SPONSOR_FEES='true'
+CARDANO_TRANSFER_FEE_USD=0.08
+CARDANO_SPONSOR_WALLET_ID='some-text'
+
+# Cardano - which fee scheme runs. Scheme 2 is the default: only an exact '1' selects scheme 1.
+#
+#   CARDANO_FEE_SCHEME=1  opt out, back to the old behaviour: the sender supplies the ADA a token
+#                         drags along, and the ChatterPay fee is
+#                         priced in USD (CARDANO_TRANSFER_FEE_USD). Sending a token moves the
+#                         sender's ADA balance, because that min-ADA is theirs and it goes to the
+#                         recipient.
+#   CARDANO_FEE_SCHEME=2  ChatterPay supplies that ADA, and its fee is priced in ADA
+#                         (CARDANO_TRANSFER_FEE_ADA). The sender's ADA balance does not move and the
+#                         figure on screen is one number. Needs CARDANO_SPONSOR_FEES='true': without
+#                         a sponsor there is no wallet to supply it from, and the scheme reports
+#                         itself off.
+#
+# CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT is the fee for the one transfer that costs ChatterPay more than
+# the network fee: a token going to somebody who does not hold it yet needs a brand new output, and
+# ChatterPay funds its min-ADA — roughly 1.16 ADA that lands in the recipient's wallet and does not
+# come back. Every other transfer, recycled ones included, pays CARDANO_TRANSFER_FEE_ADA. Left unset
+# it falls back to CARDANO_TRANSFER_FEE_ADA, which charges too little rather than nothing.
+#
+# CARDANO_RECYCLE_DESTINATION_UTXO lets a transfer spend the destination's existing output for this
+# token and reissue it as one, so no new min-ADA is needed. Scheme 2 only. Its own setting because it
+# brings a third signature and a third output to race on, and that is worth switching off on its own.
+CARDANO_FEE_SCHEME=2
+CARDANO_TRANSFER_FEE_ADA=0.45
+CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT=1.6
+CARDANO_RECYCLE_DESTINATION_UTXO='false'
+CARDANO_ROUTE_DUST_TO_SPONSOR='false'
+
+# Address this deployment derives for its own startup check. If the backend stops producing it,
+# something the derivation depends on changed and the process refuses to start. Empty switches it off.
+CARDANO_DERIVATION_CHECK=''
