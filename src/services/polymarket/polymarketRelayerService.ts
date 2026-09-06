@@ -380,6 +380,15 @@ export async function deployDepositWallet(
 
   try {
     const client = createRelayClient(privateKey);
+    const expectedAddress = await client.deriveDepositWalletAddress();
+
+    // The relayer rejects a redeploy, so check the registry first: a user whose
+    // account row was lost still has a usable wallet on-chain.
+    const isDeployed = await client.getDeployed(expectedAddress);
+    if (isDeployed) {
+      Logger.log('info', fnLog, `${logKey} Deposit wallet already deployed: ${expectedAddress}`);
+      return { address: expectedAddress };
+    }
 
     Logger.log('info', fnLog, `${logKey} Deploying deposit wallet`);
     const response = await client.deployDepositWallet();
@@ -401,7 +410,7 @@ export async function deployDepositWallet(
     return { address };
   } catch (error) {
     const msg = String(error);
-    if (msg.includes('already deployed') || msg.includes('DEPOSIT_WALLET_DEPLOYED')) {
+    if (/already (deployed|exists)/i.test(msg) || msg.includes('DEPOSIT_WALLET_DEPLOYED')) {
       // Wallet already exists — derive address and wait for registry confirmation
       // by polling for STATE_CONFIRMED on its deployment tx (best-effort: just derive)
       const client = createRelayClient(privateKey);

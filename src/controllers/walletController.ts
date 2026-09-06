@@ -1,12 +1,14 @@
 import { once as onceEvent } from 'events';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { IncomingMessage, ServerResponse } from 'http';
+import { getCardanoConfig } from '../config/cardanoConfig';
 import { IS_DEVELOPMENT, ISSUER_TOKENS_ENABLED } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { delaySeconds } from '../helpers/timeHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { NotificationEnum } from '../models/templateModel';
+import { mongoBlockchainService } from '../services/mongo/mongoBlockchainService';
 import {
   getNotificationTemplate,
   sendDepositCta,
@@ -15,6 +17,14 @@ import {
   sendWalletNotificationSequence
 } from '../services/notificationService';
 import { createOrReturnWallet, tryIssueTokens } from '../services/walletService';
+
+/**
+ * Returned by the endpoints whose message the backend already delivered over WhatsApp.
+ * The wallet address is deliberately left out of the payload: handing it back invites the
+ * model to echo it, which is the duplicate message this contract exists to prevent.
+ */
+const NO_REPLY_REQUIRED_MESSAGE =
+  'NO_REPLY_REQUIRED. The information has already been delivered to the user via separate WhatsApp messages sent by the backend. Do not produce any user-facing text in this turn. Your assistant message content MUST be an empty string. Do not repeat the address, do not narrate or summarise what was sent, and do not ask follow-up questions. Any visible output you generate will appear as a duplicate noise message to the user, which is a bug.';
 
 /**
  * Retrieves the ChatterPay wallet address associated with the given user.
@@ -124,12 +134,8 @@ export const createWallet = async (
 
       const { networkConfig, tokens } = request.server;
 
-      const { message, walletAddress, wasWalletCreated } = await createOrReturnWallet(
-        channel_user_id,
-        networkConfig,
-        logKey,
-        referral_by_code
-      );
+      const { message, walletAddress, wasWalletCreated, cardanoAddress } =
+        await createOrReturnWallet(channel_user_id, networkConfig, logKey, referral_by_code);
 
       const processingTimeMs = Date.now() - startTime;
       const delayMs = delaySecondsValue * 1000;
@@ -152,7 +158,8 @@ export const createWallet = async (
         walletAddress,
         channel_user_id,
         networkConfig.name,
-        wasWalletCreated
+        wasWalletCreated,
+        cardanoAddress
       );
 
       if (
@@ -206,7 +213,8 @@ export const createWalletSync = async (
     const {
       message: walletResultMessage,
       walletAddress,
-      wasWalletCreated
+      wasWalletCreated,
+      cardanoAddress
     } = await createOrReturnWallet(channel_user_id, networkConfig, logKey, referral_by_code);
 
     const notificationType = wasWalletCreated
@@ -222,12 +230,25 @@ export const createWalletSync = async (
       walletAddress,
       channel_user_id,
       networkConfig.name,
-      wasWalletCreated
+      wasWalletCreated,
+      cardanoAddress
     );
 
+    // The network's display name comes from the `blockchains` document, not from a literal here:
+    // the database is what names a network, and this path must not disagree with the balance and
+    // history views that read it from there.
+    const cardanoNetwork = cardanoAddress
+      ? await mongoBlockchainService.getBlockchain(getCardanoConfig().chainId)
+      : null;
+    const cardanoNetworkName = cardanoNetwork?.name ?? '';
+
+    // `[CARDANO_ADDRESS]` is honoured but never required: the template in the database decides
+    // whether the Cardano address is shown. A deployment with Cardano off, or a template that does
+    // not mention it, is unaffected — the placeholder simply resolves to nothing.
     const notificationMessage = templateMessage
       .replace('[WALLET_ADDRESS]', walletAddress)
-      .replace('[NETWORK_NAME]', networkConfig.name);
+      .replace('[NETWORK_NAME]', networkConfig.name)
+      .replace('[CARDANO_ADDRESS]', cardanoAddress);
 
     if (
       wasWalletCreated &&
@@ -246,7 +267,31 @@ export const createWalletSync = async (
       data: {
         message: notificationMessage,
         walletAddress,
-        wasWalletCreated
+        wasWalletCreated,
+        /**
+         * Every address the user holds, one per network family.
+         *
+         * `walletAddress` stays as it was so no existing caller breaks, but a user now has more
+         * than one address and they are not interchangeable: funds sent to the EVM address never
+         * arrive on Cardano. A client that wants to answer "what is my wallet?" completely reads
+         * this instead.
+         */
+        wallets: [
+          {
+            chain_id: networkConfig.chainId,
+            network: networkConfig.name,
+            address: walletAddress
+          },
+          ...(cardanoAddress
+            ? [
+                {
+                  chain_id: getCardanoConfig().chainId,
+                  network: cardanoNetworkName,
+                  address: cardanoAddress
+                }
+              ]
+            : [])
+        ]
       }
     });
   } catch (error) {
@@ -300,16 +345,18 @@ export const getDepositInfo = async (
     const { networkConfig } = request.server;
 
     // Get or create wallet
-    const { walletAddress } = await createOrReturnWallet(channel_user_id, networkConfig, logKey);
+    const { walletAddress, cardanoAddress } = await createOrReturnWallet(
+      channel_user_id,
+      networkConfig,
+      logKey
+    );
 
     // Send deposit info sequence
-    await sendDepositInfo(walletAddress, channel_user_id, networkConfig.name);
+    await sendDepositInfo(walletAddress, channel_user_id, networkConfig.name, cardanoAddress);
 
     Logger.log('getDepositInfo', logKey, `Deposit info sent for ${walletAddress}`);
 
-    return await returnSuccessResponse(reply, 'Deposit information sent successfully', {
-      walletAddress
-    });
+    return await returnSuccessResponse(reply, NO_REPLY_REQUIRED_MESSAGE);
   } catch (error) {
     const err = error as Error;
     return returnErrorResponse(
@@ -372,9 +419,7 @@ export const getMultichainDepositCta = async (
       `Multichain deposit CTA sent for ${walletAddress}`
     );
 
-    return await returnSuccessResponse(reply, 'Multichain deposit CTA sent successfully', {
-      walletAddress
-    });
+    return await returnSuccessResponse(reply, NO_REPLY_REQUIRED_MESSAGE);
   } catch (error) {
     const err = error as Error;
     return returnErrorResponse(

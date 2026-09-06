@@ -10,7 +10,7 @@ import { delaySeconds } from '../helpers/timeHelper';
 import { isValidPhoneNumber } from '../helpers/validationHelper';
 import { NotificationEnum } from '../models/templateModel';
 import type { IUser, IUserWallet } from '../models/userModel';
-import { getTokenPrices } from '../services/balanceService';
+import { buildTokenAddressMap, getTokenPrices } from '../services/balanceService';
 import {
   checkBlockchainConditions,
   getSwapTokensData,
@@ -405,7 +405,13 @@ export const swap = async (
     /* ***************************************************** */
     /* 11. swap: Chatterpoints Operation                     */
     /* ***************************************************** */
-    const prices = await getTokenPrices([inputCurrency]);
+    // The address map matters: without it a token Binance does not list (SCR, wstETH) prices at
+    // nothing and the operation is registered as a zero-dollar swap.
+    const prices = await getTokenPrices(
+      [inputCurrency],
+      buildTokenAddressMap(blockchainTokens, networkConfig.chainId),
+      networkConfig.chainId
+    );
     const price = prices.get(inputCurrency.toUpperCase()) ?? 1;
     const amountInUsd = toTokensReceivedInUnits * price;
 

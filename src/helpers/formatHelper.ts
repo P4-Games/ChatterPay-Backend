@@ -5,7 +5,11 @@
  */
 import { mongoCountryService } from '../services/mongo/mongoCountryService';
 
-export function getPhoneNumberFormatted(phone: string): string {
+export function getPhoneNumberFormatted(phone: unknown): string {
+  if (typeof phone !== 'string') {
+    return '';
+  }
+
   return phone.replace(/\D/g, '');
 }
 

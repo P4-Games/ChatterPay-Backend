@@ -71,12 +71,12 @@ export async function setupNetworkConfigPlugin(server: FastifyInstance): Promise
    * Adds hooks to refresh network configuration and tokens periodically.
    */
   server.addHook('onReady', async () => {
-    // Refresh the network configuration every hour
+    // Refresh the network configuration on the interval from FASTIFY_REFRESH_NETWORKS_INTERVAL_MS.
     setInterval(async () => {
       await server.refreshBlockchains();
     }, FASTIFY_REFRESH_NETWORKS_INTERVAL_MS);
 
-    // Refresh the tokens every 5 minutes
+    // Refresh the tokens on the interval from FASTIFY_REFRESH_TOKENS_INTERVAL_MS.
     setInterval(async () => {
       await server.refreshTokens();
     }, FASTIFY_REFRESH_TOKENS_INTERVAL_MS);

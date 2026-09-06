@@ -9,7 +9,31 @@ export interface IPolymarketAccount {
   terms_accepted_at: Date | null;
   created_at: Date;
   wallet_type: 'safe' | 'deposit';
+  /**
+   * EOA that signed the stored API credentials and that the deposit wallet is canonical for.
+   *
+   * The CLOB binds an API key to the signer, so credentials derived for one EOA are rejected with
+   * 401 when replayed with another. Absent on accounts created before this was recorded; when it is
+   * present and no longer matches the user's current EOA, the account has to be rebuilt rather than
+   * reused, because the deposit wallet is canonical for the old signer and may still hold funds.
+   */
+  signer_address?: string;
 }
+
+/**
+ * What kind of address a wallet entry holds.
+ *
+ * Absent on every wallet written before Cardano existed, and read as `evm_aa` when missing: those
+ * are all ERC-4337 accounts. A Cardano entry has no proxy, no factory and no EOA — it carries the
+ * same bech32 address in `wallet_proxy` and `wallet_eoa` so that every existing reader (bot,
+ * dashboard, balance) keeps working unchanged.
+ *
+ * `cardano_base` is a CIP-19 type-0 address: payment credential plus staking credential, the
+ * staking one written into the address but registered nowhere. `cardano_enterprise` was the shape
+ * of the first implementation and **was never written to any database** — it is absent from this
+ * union on purpose, so that a row carrying it fails loudly rather than being read as current.
+ */
+export type UserWalletAddressType = 'evm_aa' | 'cardano_base';
 
 export interface IUserWallet {
   wallet_proxy: string;
@@ -19,6 +43,25 @@ export interface IUserWallet {
   chain_id: number;
   status: string;
   alchemy_registered?: boolean; // flag to indicate if the wallet is registered with Alchemy webHook
+  /** Address family of this entry. Missing means `evm_aa`. */
+  address_type?: UserWalletAddressType;
+  /**
+   * Raw Ed25519 **payment** public key behind a Cardano address, hex with `0x`.
+   *
+   * Stored rather than re-derived on every read because it is what goes into the witness of a
+   * transaction, and because it lets an address be audited against its key without touching the
+   * signing path.
+   */
+  cardano_public_key?: string;
+  /**
+   * Raw Ed25519 **staking** public key behind a Cardano address, hex with `0x`.
+   *
+   * Signs nothing: a transfer is authorised by the payment key alone. It is stored because it is
+   * half of what the address hashes, so an address can be audited against both its credentials —
+   * and because whatever registers or delegates this stake credential later will need the key, not
+   * just the hash the address carries.
+   */
+  cardano_stake_public_key?: string;
 }
 
 export interface IRecoveryQuestion {
@@ -76,6 +119,7 @@ export interface IUser extends Document {
   referral_code?: string;
   referral_by_code?: string;
   polymarket_account?: IPolymarketAccount;
+  blocked?: boolean;
 }
 
 const walletSchema = new Schema<IUserWallet>(
@@ -94,7 +138,14 @@ const walletSchema = new Schema<IUserWallet>(
     },
     chain_id: { type: Number, required: true, default: DEFAULT_CHAIN_ID },
     status: { type: String, required: true, default: 'active' },
-    alchemy_registered: { type: Boolean, required: false, default: false }
+    alchemy_registered: { type: Boolean, required: false, default: false },
+    address_type: {
+      type: String,
+      enum: ['evm_aa', 'cardano_base'],
+      required: false
+    },
+    cardano_public_key: { type: String, required: false },
+    cardano_stake_public_key: { type: String, required: false }
   },
   { _id: false }
 );
@@ -162,6 +213,7 @@ const userSchema = new Schema<IUser>({
   telegram_id: { type: String, required: false, default: 0 },
   referral_code: { type: String, required: false, default: '' },
   referral_by_code: { type: String, required: false, default: '' },
+  blocked: { type: Boolean, required: false, default: false },
   polymarket_account: {
     type: {
       polygon_address: { type: String, required: true },
@@ -169,12 +221,18 @@ const userSchema = new Schema<IUser>({
       terms_accepted_version: { type: Number, required: false, default: 0 },
       terms_accepted_at: { type: Date, required: false, default: null },
       created_at: { type: Date, required: true, default: Date.now },
-      wallet_type: { type: String, enum: ['safe', 'deposit'], default: 'safe' }
+      wallet_type: { type: String, enum: ['safe', 'deposit'], default: 'safe' },
+      signer_address: { type: String, required: false }
     },
     required: false,
     default: undefined,
     _id: false
   }
 });
+
+// Every request that names a user resolves it by one of these, so without them each one is a
+// collection scan.
+userSchema.index({ phone_number: 1 });
+userSchema.index({ telegram_id: 1 });
 
 export const UserModel = model<IUser>('User', userSchema, 'users');

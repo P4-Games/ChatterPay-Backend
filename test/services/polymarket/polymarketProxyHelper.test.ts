@@ -25,6 +25,12 @@ vi.mock('../../../src/config/constants', () => ({
   POLYMARKET_DATA_API_URL: 'https://data-api.polymarket.com'
 }));
 
+vi.mock('../../../src/helpers/envHelper', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/helpers/envHelper')>();
+  // This suite is the test run the reset hook asks about.
+  return { ...actual, isTestRun: () => true };
+});
+
 vi.mock('../../../src/helpers/loggerHelper', () => ({
   Logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() }
 }));
@@ -130,12 +136,9 @@ describe('targetsProxiedHost', () => {
 // ---------------------------------------------------------------------------
 describe('registerPolymarketApiAdapter', () => {
   let mock: MockAdapter;
-  const originalNodeEnv = process.env.NODE_ENV;
 
   beforeEach(() => {
-    process.env.NODE_ENV = 'test';
-    // Clear any interceptors left by a previous test and reset the flag
-    // @ts-expect-error – accessing internal Axios property for test isolation
+    // Clear any interceptors left by a previous test and reset the flag.
     axios.interceptors.request.handlers = [];
     _resetAdapterForTesting();
     mock = new MockAdapter(axios);
@@ -144,7 +147,6 @@ describe('registerPolymarketApiAdapter', () => {
   afterEach(() => {
     mock.restore();
     vi.restoreAllMocks();
-    process.env.NODE_ENV = originalNodeEnv;
   });
 
   // ── Idempotency ──────────────────────────────────────────────────────────
@@ -153,7 +155,6 @@ describe('registerPolymarketApiAdapter', () => {
     registerPolymarketApiAdapter();
     registerPolymarketApiAdapter();
 
-    // @ts-expect-error – internal property
     const active = (axios.interceptors.request.handlers as unknown[]).filter(Boolean);
     expect(active).toHaveLength(1);
   });
@@ -167,7 +168,6 @@ describe('registerPolymarketApiAdapter', () => {
 
     registerPolymarketApiAdapter();
 
-    // @ts-expect-error – internal property
     const active = (axios.interceptors.request.handlers as unknown[]).filter(Boolean);
     expect(active).toHaveLength(0);
 
