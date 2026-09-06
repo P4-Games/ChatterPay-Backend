@@ -535,10 +535,6 @@ export const makeTransaction = async (
     } = request.body;
     const lastBotMsgDelaySeconds = request.query?.lastBotMsgDelaySeconds || 0;
     const { networkConfig, tokens: tokensConfig } = request.server as FastifyInstance;
-    const santizedUserNotes = sanitizeUserNotesWhatsApp(user_notes || '', {
-      maxLen: 500,
-      preserveWaFormatting: true
-    });
 
     /* ***************************************************** */
     /* 1.1 makeTransaction: route non-EVM families           */

@@ -79,8 +79,6 @@ async function enrichWithCardanoBalances(
   } catch (error) {
     Logger.warn('enrichWithCardanoBalances', `Skipping Cardano balances: ${String(error)}`);
   }
-
-  return data;
 }
 
 /**

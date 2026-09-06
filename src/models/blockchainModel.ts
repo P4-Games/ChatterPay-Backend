@@ -161,38 +161,6 @@ function evmOnly(this: IBlockchain): boolean {
   return (this?.family ?? 'evm') === 'evm';
 }
 
-const opGasSchema = new Schema<OpGasValues>({
-  perGasInitialMultiplier: { type: Number, required: true, default: 1.5 },
-  perGasIncrement: { type: Number, required: true, default: 1.1 },
-  callDataInitialMultiplier: { type: Number, required: true, default: 1.2 },
-  maxRetries: { type: Number, required: true, default: 5 },
-  timeoutMsBetweenRetries: { type: Number, required: true, default: 5000 },
-  maxFeePerGas: { type: String, required: true, default: '0.5' },
-  maxPriorityFeePerGas: { type: String, required: true, default: '0.05' },
-  verificationGasLimit: { type: Number, required: true, default: 80000 },
-  callGasLimit: { type: Number, required: true, default: 149456 },
-  preVerificationGas: { type: Number, required: true, default: 80000 }
-});
-
-const limitDetailSchema = new Schema<BlockchainLimitDetail>(
-  {},
-  { typeKey: '$type', strict: false }
-);
-
-const operationLimitsSchema = new Schema<BlockchainOperationLimits>({
-  L1: { type: limitDetailSchema, required: true },
-  L2: { type: limitDetailSchema, required: true }
-});
-
-const externalDepositsSchema = new Schema<ExternalDeposits>(
-  {
-    lastBlockProcessed: { type: Number, required: true },
-    lastBlockTimestampProcessed: { type: Number, required: false },
-    updatedAt: { type: Date, default: Date.now }
-  },
-  { _id: false }
-);
-
 const blockchainSchema = new Schema<IBlockchain>({
   name: { type: String, required: true },
   family: { type: String, enum: ['evm', 'cardano'], required: true, default: 'evm' },
