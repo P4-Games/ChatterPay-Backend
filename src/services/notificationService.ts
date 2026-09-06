@@ -59,15 +59,35 @@ export async function getNotificationTemplate(
   button?: string;
   buttons?: { id: string; title: string }[];
 }> {
+  const userLanguage: NotificationLanguage =
+    await mongoUserService.getUserSettingsLanguage(channelUserId);
+
+  return getNotificationTemplateForLanguage(userLanguage, typeOfNotification);
+}
+
+/**
+ * The same template lookup, for a caller that already knows the language.
+ *
+ * @param userLanguage - The language to render the template in.
+ * @param typeOfNotification - The type of notification to retrieve, defined by `NotificationEnum`.
+ * @returns A Promise resolving to the notification's localized parts.
+ */
+export async function getNotificationTemplateForLanguage(
+  userLanguage: NotificationLanguage,
+  typeOfNotification: NotificationEnum
+): Promise<{
+  title: string;
+  message: string;
+  footer?: string;
+  button?: string;
+  buttons?: { id: string; title: string }[];
+}> {
   const defaultNotification = { title: 'Chatterpay Message', message: '' };
   try {
     if (!Object.values(NotificationEnum).includes(typeOfNotification)) {
       Logger.warn('getNotificationTemplate', `Invalid notification type: ${typeOfNotification}`);
       return defaultNotification;
     }
-
-    const userLanguage: NotificationLanguage =
-      await mongoUserService.getUserSettingsLanguage(channelUserId);
 
     const cacheKey = `${typeOfNotification}:${userLanguage}`;
     const cachedTemplate = cacheService.get(CacheNames.NOTIFICATION, `${cacheKey}`);
@@ -151,7 +171,8 @@ export async function sendWalletNotificationSequence(
   user_wallet_proxy: string,
   channel_user_id: string,
   network_name: string,
-  was_created: boolean
+  was_created: boolean,
+  cardanoAddress?: string
 ) {
   try {
     Logger.log(
@@ -173,12 +194,20 @@ export async function sendWalletNotificationSequence(
       message: formattedIntro
     });
 
-    // 2. Wallet Address (separate message for easy copying)
+    // 2. Wallet addresses as separate messages (plain text, easy to long-press and copy)
     await chatizaloService.sendBotNotification({
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message: user_wallet_proxy
     });
+
+    if (cardanoAddress) {
+      await chatizaloService.sendBotNotification({
+        data_token: BOT_DATA_TOKEN!,
+        channel_user_id,
+        message: cardanoAddress
+      });
+    }
 
     // 3. Next Steps Interactive Message (quick-reply buttons)
     const {
@@ -276,19 +305,22 @@ export async function sendWalletNextSteps(
 }
 
 /**
- * Sends a 3-message sequence with deposit information.
+ * Sends the deposit information sequence.
  * 1. Deposit info intro message (translated)
- * 2. Wallet address (for Scroll network)
- * 3. CTA to deposit from other networks (EVM, Bitcoin, Solana, etc)
+ * 2. EVM wallet address
+ * 3. Cardano address, when the user has one
+ * 4. CTA to deposit from other networks (EVM, Bitcoin, Solana, etc)
  *
  * @param user_wallet_proxy - The blockchain address of the wallet.
  * @param channel_user_id - The user's identifier within the communication channel.
  * @param network_name - The network name (e.g., "Scroll Sepolia").
+ * @param cardanoAddress - The user's Cardano address, or empty when the family is off.
  */
 export async function sendDepositInfo(
   user_wallet_proxy: string,
   channel_user_id: string,
-  network_name: string
+  network_name: string,
+  cardanoAddress?: string
 ) {
   try {
     Logger.log(
@@ -309,14 +341,22 @@ export async function sendDepositInfo(
       message: formattedIntro
     });
 
-    // 2. Wallet Address (separate message for easy copying)
+    // 2. Wallet addresses as separate messages (plain text, easy to long-press and copy)
     await chatizaloService.sendBotNotification({
       data_token: BOT_DATA_TOKEN!,
       channel_user_id,
       message: user_wallet_proxy
     });
 
-    // 3. CTA Interactive Message (deposit from OTHER networks)
+    if (cardanoAddress) {
+      await chatizaloService.sendBotNotification({
+        data_token: BOT_DATA_TOKEN!,
+        channel_user_id,
+        message: cardanoAddress
+      });
+    }
+
+    // 4. CTA Interactive Message (deposit from OTHER networks)
     const { title, message, footer, button } = await getNotificationTemplate(
       channel_user_id,
       NotificationEnum.deposit_from_other_networks
@@ -721,13 +761,18 @@ export async function sendOutgoingTransferNotification(
   notes: string,
   txHash: string,
   chatterpointsOpResult: RegisterOperationResult | null,
-  traceHeader?: string
+  traceHeader?: string,
+  explorerUrlOverride?: string
 ): Promise<unknown> {
   try {
     Logger.log('sendOutgoingTransferNotification', 'Sending outgoing transfer notification');
     if (!isValidPhoneNumber(phoneNumberFrom)) return '';
 
     const networkConfig: IBlockchain = await mongoBlockchainService.getNetworkConfig();
+    // The default network config is the EVM chain this instance operates on. A transfer that
+    // settled somewhere else — Cardano — has to carry its own explorer, or the notification links
+    // a real transaction hash to a chain that never saw it.
+    const explorer = explorerUrlOverride || networkConfig.explorer;
 
     const { title, message } = await getNotificationTemplate(
       phoneNumberFrom,
@@ -750,8 +795,14 @@ export async function sendOutgoingTransferNotification(
       let base = message
         .replaceAll('[AMOUNT]', amount)
         .replaceAll('[TOKEN]', token)
-        .replaceAll('[TO]', toNumberAndName)
-        .replaceAll('[EXPLORER]', networkConfig.explorer)
+        .replaceAll('[TO]', toNumberAndName);
+      // When the caller supplies a full explorer path (Cardano: /transaction/), replace the
+      // whole pattern so the template's /tx/ does not end up in the middle of the URL.
+      if (explorerUrlOverride) {
+        base = base.replaceAll('[EXPLORER]/tx/[TX_HASH]', `${explorer}${txHash}`);
+      }
+      base = base
+        .replaceAll('[EXPLORER]', explorer)
         .replaceAll('[TX_HASH]', txHash)
         .replaceAll('[NOTES]', notes ? `\n('${notes}')` : '');
       if (messageChp) {

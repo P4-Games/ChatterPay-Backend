@@ -12,6 +12,25 @@ export interface ITransaction extends Document {
   token: string;
   chain_id: number;
   user_notes: string;
+  /**
+   * Network fee the chain actually charged, in the network's own coin.
+   *
+   * Distinct from `fee`, which is the ChatterPay fee taken in the token being moved. On EVM the two
+   * never coexist: the paymaster absorbs the network cost and the user never sees it. On Cardano
+   * the sender pays the network directly out of the inputs of their own transaction, so a history
+   * that only showed `fee` would hide a cost the user really paid.
+   */
+  network_fee?: number;
+  /** Coin `network_fee` is denominated in, e.g. `ADA`. */
+  network_fee_token?: string;
+  /**
+   * ADA the ledger forced to travel with a token, on a Cardano token transfer.
+   *
+   * Not a fee and not ours: the recipient keeps it. It is recorded because it is the only figure
+   * that explains why sending USDCx also moved ADA — without it the sender's ADA balance drops by
+   * something no line of the history accounts for, which is a support ticket every time.
+   */
+  attached_ada?: number;
   /** CLOB order id for Polymarket order transactions (links to PolymarketOrderModel). */
   polymarket_order_id?: string;
   /** Purchase flow id for Polymarket order transactions (links to PolymarketPurchaseModel). */
@@ -44,6 +63,9 @@ const transactionSchema = new Schema<ITransaction>({
   token: { type: String, required: true },
   chain_id: { type: Number, required: true },
   user_notes: { type: String, required: false },
+  network_fee: { type: Number, required: false },
+  network_fee_token: { type: String, required: false },
+  attached_ada: { type: Number, required: false },
   polymarket_order_id: { type: String, required: false },
   polymarket_purchase_id: { type: String, required: false },
   polymarket_market_slug: { type: String, required: false },
