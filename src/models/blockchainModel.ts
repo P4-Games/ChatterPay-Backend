@@ -28,8 +28,31 @@ export interface ExternalDeposits {
   updatedAt: Date;
 }
 
+/**
+ * Which execution family a network belongs to.
+ *
+ * Absent on every document written before Cardano existed, which is why `evm` is the default: a
+ * network with no family is an EVM network, and every field below that only makes sense for EVM
+ * keeps being required for it.
+ */
+export type BlockchainFamily = 'evm' | 'cardano';
+
+/** Settings that only a Cardano network has. Absent on every EVM document. */
+export interface CardanoNetworkSettings {
+  /** `testnet` or `mainnet`. Decides the header byte of every address issued (CIP-19). */
+  network: string;
+  /** Provider root URL. The API key, when the provider needs one, lives in the environment. */
+  providerUrl: string;
+  /** Slots of validity given to a transaction, counted from the tip. */
+  ttlSlots: number;
+  /** Confirmations required before an output is spendable. */
+  depositConfirmations: number;
+}
+
 export interface IBlockchain extends Document {
   name: string;
+  /** Execution family. Defaults to `evm` so existing documents keep their meaning. */
+  family: BlockchainFamily;
   manteca_name: string;
   chainId: number;
   rpc: string;
@@ -40,6 +63,8 @@ export interface IBlockchain extends Document {
   environment: string;
   supportsEIP1559: boolean;
   externalDeposits: ExternalDeposits;
+  /** Present only on Cardano networks. */
+  cardano?: CardanoNetworkSettings;
   contracts: {
     entryPoint: string;
     factoryAddress: string;
@@ -65,10 +90,16 @@ export interface IBlockchain extends Document {
     userSignerBalanceToTransfer: string;
   };
   limits: {
+    /** Daily operation count per user level. Required on every family. */
     transfer: BlockchainOperationLimits;
-    swap: BlockchainOperationLimits;
-    mint_nft: BlockchainOperationLimits;
-    mint_nft_copy: BlockchainOperationLimits;
+    /**
+     * Absent on non-EVM networks, which is why these are optional here and conditionally required
+     * in the schema. A Cardano document has no swap and no NFT operations to limit, and typing them
+     * as always present would make every reader believe a value that is not there.
+     */
+    swap?: BlockchainOperationLimits;
+    mint_nft?: BlockchainOperationLimits;
+    mint_nft_copy?: BlockchainOperationLimits;
   };
 }
 
@@ -85,15 +116,20 @@ const opGasSchema = new Schema<OpGasValues>({
   preVerificationGas: { type: Number, required: true, default: 80000 }
 });
 
+// See the note in tokenModel: nested limits are value objects, and stamping an ObjectId into each
+// one makes seeded documents differ in shape from the ones already stored.
 const limitDetailSchema = new Schema<BlockchainLimitDetail>(
   {},
-  { typeKey: '$type', strict: false }
+  { typeKey: '$type', strict: false, _id: false }
 );
 
-const operationLimitsSchema = new Schema<BlockchainOperationLimits>({
-  L1: { type: limitDetailSchema, required: true },
-  L2: { type: limitDetailSchema, required: true }
-});
+const operationLimitsSchema = new Schema<BlockchainOperationLimits>(
+  {
+    L1: { type: limitDetailSchema, required: true },
+    L2: { type: limitDetailSchema, required: true }
+  },
+  { _id: false }
+);
 
 const externalDepositsSchema = new Schema<ExternalDeposits>(
   {
@@ -104,18 +140,41 @@ const externalDepositsSchema = new Schema<ExternalDeposits>(
   { _id: false }
 );
 
+const cardanoSettingsSchema = new Schema<CardanoNetworkSettings>(
+  {
+    network: { type: String, required: true },
+    providerUrl: { type: String, required: true },
+    ttlSlots: { type: Number, required: true, default: 900 },
+    depositConfirmations: { type: Number, required: true, default: 3 }
+  },
+  { _id: false }
+);
+
+/**
+ * Required for EVM networks, optional for everything else.
+ *
+ * The alternative — filling a Cardano document with dummy values so it satisfies an EVM-shaped
+ * schema — produces a row that *says* it has an RPC endpoint and a paymaster. Something would
+ * eventually believe it, far from here.
+ */
+function evmOnly(this: IBlockchain): boolean {
+  return (this?.family ?? 'evm') === 'evm';
+}
+
 const blockchainSchema = new Schema<IBlockchain>({
   name: { type: String, required: true },
-  manteca_name: { type: String, required: true },
+  family: { type: String, enum: ['evm', 'cardano'], required: true, default: 'evm' },
+  manteca_name: { type: String, required: evmOnly },
   chainId: { type: Number, required: true },
-  rpc: { type: String, required: true },
-  rpcBundler: { type: String, required: true },
-  logo: { type: String, required: true },
+  rpc: { type: String, required: evmOnly },
+  rpcBundler: { type: String, required: evmOnly },
+  logo: { type: String, required: false },
   explorer: { type: String, required: true },
-  marketplaceOpenseaUrl: { type: String, required: true },
+  marketplaceOpenseaUrl: { type: String, required: evmOnly },
   environment: { type: String, required: true },
-  supportsEIP1559: { type: Boolean, required: true },
-  externalDeposits: { type: externalDepositsSchema, required: true },
+  supportsEIP1559: { type: Boolean, required: evmOnly },
+  externalDeposits: { type: externalDepositsSchema, required: evmOnly },
+  cardano: { type: cardanoSettingsSchema, required: false },
   contracts: {
     entryPoint: { type: String, required: false },
     factoryAddress: { type: String, required: false },
@@ -126,25 +185,29 @@ const blockchainSchema = new Schema<IBlockchain>({
     poolAddress: { type: String, required: false },
     quoterAddress: { type: String, required: false }
   },
+  // Cardano has no gas: the fee comes out of the inputs of the transaction itself, sized by the
+  // serialized bytes rather than metered by execution.
   gas: {
-    useFixedValues: { type: Boolean, required: true },
+    useFixedValues: { type: Boolean, required: evmOnly },
     operations: {
-      transfer: { type: opGasSchema, required: true },
-      swap: { type: opGasSchema, required: true }
+      transfer: { type: opGasSchema, required: evmOnly },
+      swap: { type: opGasSchema, required: evmOnly }
     }
   },
+  // No paymaster and no backend signer to keep funded: on Cardano the sender pays, always.
   balances: {
-    paymasterMinBalance: { type: String, required: true },
-    paymasterTargetBalance: { type: String, required: true },
-    backendSignerMinBalance: { type: String, required: true },
-    userSignerMinBalance: { type: String, required: true },
-    userSignerBalanceToTransfer: { type: String, required: true }
+    paymasterMinBalance: { type: String, required: evmOnly },
+    paymasterTargetBalance: { type: String, required: evmOnly },
+    backendSignerMinBalance: { type: String, required: evmOnly },
+    userSignerMinBalance: { type: String, required: evmOnly },
+    userSignerBalanceToTransfer: { type: String, required: evmOnly }
   },
   limits: {
+    // Transfer limits apply to every family — they are product policy, not an EVM detail.
     transfer: { type: operationLimitsSchema, required: true },
-    swap: { type: operationLimitsSchema, required: true },
-    mint_nft: { type: operationLimitsSchema, required: true },
-    mint_nft_copy: { type: operationLimitsSchema, required: true }
+    swap: { type: operationLimitsSchema, required: evmOnly },
+    mint_nft: { type: operationLimitsSchema, required: evmOnly },
+    mint_nft_copy: { type: operationLimitsSchema, required: evmOnly }
   }
 });
 

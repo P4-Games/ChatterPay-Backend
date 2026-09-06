@@ -42,7 +42,19 @@ export enum NotificationEnum {
   pin_verified_success = 'pin_verified_success',
   pin_internal_error = 'pin_internal_error',
   operation_in_progress = 'operation_in_progress',
-  wallet_not_created = 'wallet_not_created'
+  wallet_not_created = 'wallet_not_created',
+  cardano_amount_below_minimum = 'cardano_amount_below_minimum',
+  cardano_insufficient_ada = 'cardano_insufficient_ada',
+  cardano_change_carries_tokens = 'cardano_change_carries_tokens',
+  cardano_change_below_floor = 'cardano_change_below_floor',
+  cardano_token_needs_ada = 'cardano_token_needs_ada',
+  cardano_token_needs_ada_keeping_rest = 'cardano_token_needs_ada_keeping_rest',
+  cardano_token_change_needs_ada = 'cardano_token_change_needs_ada',
+  cardano_token_balance_not_enough = 'cardano_token_balance_not_enough',
+  cardano_amount_below_fee = 'cardano_amount_below_fee',
+  cardano_sponsor_unavailable = 'cardano_sponsor_unavailable',
+  cardano_insufficient_funds = 'cardano_insufficient_funds',
+  user_blocked = 'user_blocked'
 }
 
 export interface LocalizedContentType {
@@ -75,11 +87,38 @@ export type NotificationTemplatesTypes = {
   [key in NotificationEnum]: NotificationTemplateType;
 };
 
+/**
+ * A site-wide announcement rendered by the front as a one-line banner.
+ *
+ * Visibility is data, not code: an item shows while `enabled` is true and the current instant sits
+ * between `initAt` and `endAt`, so an announcement can be scheduled ahead of time and stops showing
+ * on its own without a deploy. `title` is the single line the banner shows collapsed; `message` is
+ * the full text behind the expander, and is also what the notification and WhatsApp scripts send.
+ *
+ * `showInLanding` and `showInDashboard` pick the surfaces the item reaches. Both are optional and
+ * an absent flag counts as visible, so an announcement written before the flags existed keeps
+ * showing everywhere it used to.
+ */
+export interface NewsItemType {
+  title: LocalizedContentType;
+  message: LocalizedContentType;
+  enabled: boolean;
+  showInLanding?: boolean;
+  showInDashboard?: boolean;
+  order: number;
+  createdAt: Date;
+  initAt: Date;
+  endAt: Date;
+}
+
+export type NewsTemplatesTypes = Record<string, NewsItemType>;
+
 export interface ITemplateSchema extends Document {
   notifications: {
     [key in NotificationEnum]: NotificationTemplateType;
   };
   security_questions: Record<string, LocalizedContentType>;
+  news: NewsTemplatesTypes;
 }
 
 const localizedContentSchema = new Schema<LocalizedContentType>({
@@ -114,6 +153,21 @@ const notificationSchema = new Schema<NotificationTemplateType>({
     required: false
   }
 });
+
+const newsSchema = new Schema<NewsItemType>(
+  {
+    title: { type: localizedContentSchema, required: true },
+    message: { type: localizedContentSchema, required: true },
+    enabled: { type: Boolean, required: true, default: true },
+    showInLanding: { type: Boolean, required: false, default: true },
+    showInDashboard: { type: Boolean, required: false, default: true },
+    order: { type: Number, required: false, default: 0 },
+    createdAt: { type: Date, required: true, default: Date.now },
+    initAt: { type: Date, required: true },
+    endAt: { type: Date, required: true }
+  },
+  { _id: false }
+);
 
 const templateSchema = new Schema<ITemplateSchema>({
   notifications: {
@@ -158,9 +212,24 @@ const templateSchema = new Schema<ITemplateSchema>({
     pin_verified_success: { type: notificationSchema, required: true },
     pin_internal_error: { type: notificationSchema, required: true },
     operation_in_progress: { type: notificationSchema, required: true },
-    wallet_not_created: { type: notificationSchema, required: true }
+    wallet_not_created: { type: notificationSchema, required: true },
+    // Optional like the polymarket ones: the code ships with an English fallback, so a document
+    // written before the templates were loaded still saves.
+    cardano_amount_below_minimum: { type: notificationSchema, required: false },
+    cardano_insufficient_ada: { type: notificationSchema, required: false },
+    cardano_change_carries_tokens: { type: notificationSchema, required: false },
+    cardano_change_below_floor: { type: notificationSchema, required: false },
+    cardano_token_needs_ada: { type: notificationSchema, required: false },
+    cardano_token_needs_ada_keeping_rest: { type: notificationSchema, required: false },
+    cardano_token_change_needs_ada: { type: notificationSchema, required: false },
+    cardano_token_balance_not_enough: { type: notificationSchema, required: false },
+    cardano_amount_below_fee: { type: notificationSchema, required: false },
+    cardano_sponsor_unavailable: { type: notificationSchema, required: false },
+    cardano_insufficient_funds: { type: notificationSchema, required: false },
+    user_blocked: { type: notificationSchema, required: false }
   },
-  security_questions: { type: Map, of: localizedContentSchema, required: false }
+  security_questions: { type: Map, of: localizedContentSchema, required: false },
+  news: { type: Map, of: newsSchema, required: false }
 });
 
 export const TemplateType = model<ITemplateSchema>('Template', templateSchema, 'templates');

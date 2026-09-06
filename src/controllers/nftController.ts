@@ -15,12 +15,7 @@ import {
   returnSuccessResponse
 } from '../helpers/requestHelper';
 import { delaySeconds } from '../helpers/timeHelper';
-import {
-  isShortUrl,
-  isShortUrlByRedirect,
-  isValidPhoneNumber,
-  isValidUrl
-} from '../helpers/validationHelper';
+import { checkImageUrl, isValidPhoneNumber, isValidUrl } from '../helpers/validationHelper';
 import type { IBlockchain } from '../models/blockchainModel';
 import NFTModel, { type INFT, type INFTMetadata } from '../models/nftModel';
 import { NotificationEnum } from '../models/templateModel';
@@ -272,8 +267,15 @@ export const generateNftOriginal = async (
     );
   }
 
-  if (isShortUrl(url) || (await isShortUrlByRedirect(url))) {
-    return returnSuccessResponse(reply, 'Short Url not allowed');
+  const urlRejection = await checkImageUrl(url);
+  if (urlRejection) {
+    // must return 200, so the bot displays the message instead of an error!
+    return returnSuccessResponse(
+      reply,
+      urlRejection === 'short_url'
+        ? 'Short Url not allowed'
+        : 'The image could not be downloaded from the provided URL'
+    );
   }
 
   const fromUser: IUser | null = await getUser(channel_user_id);

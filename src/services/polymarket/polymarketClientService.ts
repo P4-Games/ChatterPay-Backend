@@ -19,6 +19,28 @@ import { deriveSafeAddress } from './polymarketRelayerService';
 
 const LOG_PREFIX = 'polymarketClientService';
 
+/**
+ * The stored Polymarket account belongs to an EOA the user no longer signs with.
+ *
+ * The CLOB binds an API key to the signer that derived it and only accepts the deposit wallet that
+ * is canonical for that signer, so every call fails with 401 once the EOA changes. Recovering means
+ * rebuilding the account for the new signer, which is not automatic: the old deposit wallet may
+ * still hold funds, so a human has to move them first.
+ */
+export class PolymarketAccountMismatchError extends Error {
+  constructor(
+    readonly storedSigner: string,
+    readonly currentSigner: string,
+    readonly funderAddress: string
+  ) {
+    super(
+      `Polymarket account belongs to signer ${storedSigner} but the user now signs with ${currentSigner} ` +
+        `(deposit wallet ${funderAddress}). Credentials and deposit wallet must be rebuilt for the new signer.`
+    );
+    this.name = 'PolymarketAccountMismatchError';
+  }
+}
+
 // ============================================================================
 // Encryption Helpers (AES-256-GCM)
 // ============================================================================
@@ -196,6 +218,16 @@ export async function getAuthenticatedClientForUser(
     if (walletType === 'deposit') {
       // Deposit wallet flow: funder = stored deposit wallet address, sigType = POLY_1271
       const depositWalletAddress = user.polymarket_account.polygon_address;
+      const storedSigner = user.polymarket_account.signer_address;
+      const currentSigner = new Wallet(privateKey).address;
+
+      // Replaying credentials under a different EOA earns a 401 on every call and the deposit
+      // wallet stops being canonical, so refuse here instead of letting the CLOB reject it as an
+      // unexplained failure. Accounts predating signer_address skip the check and keep working.
+      if (storedSigner && storedSigner.toLowerCase() !== currentSigner.toLowerCase()) {
+        throw new PolymarketAccountMismatchError(storedSigner, currentSigner, depositWalletAddress);
+      }
+
       const credentials = decryptApiCredentials(user.polymarket_account.api_credentials_encrypted);
       return createAuthenticatedClobClient(
         privateKey,
@@ -237,6 +269,9 @@ export async function getAuthenticatedClientForUser(
     return createAuthenticatedClobClient(privateKey, credentials, safeAddress, 'safe');
   } catch (error) {
     Logger.log('error', logKey, `Failed to get authenticated client: ${String(error)}`);
+    // Keep the mismatch typed: callers turn it into an actionable message, and wrapping it in a
+    // generic Error is exactly what hid this failure behind "Failed to fetch open orders".
+    if (error instanceof PolymarketAccountMismatchError) throw error;
     throw new Error(`Failed to initialize Polymarket client: ${String(error)}`);
   }
 }

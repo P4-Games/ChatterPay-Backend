@@ -14,6 +14,7 @@
 import axios, { InternalAxiosRequestConfig } from 'axios';
 
 import * as constants from '../../config/constants';
+import { isTestRun } from '../../helpers/envHelper';
 import { Logger } from '../../helpers/loggerHelper';
 
 const LOG_PREFIX = 'polymarketAdapterHelper';
@@ -78,6 +79,6 @@ export function registerPolymarketApiAdapter(): void {
  * @internal
  */
 export function _resetAdapterForTesting(): void {
-  if (process.env.NODE_ENV !== 'test') return;
+  if (!isTestRun()) return;
   adapterRegistered = false;
 }

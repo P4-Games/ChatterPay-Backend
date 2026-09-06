@@ -66,10 +66,34 @@ steps:
       - POLYMARKET_CHAIN_ID=${_POLYMARKET_CHAIN_ID}
       - POLYMARKET_TERMS_VERSION=${_POLYMARKET_TERMS_VERSION}
       - POLYMARKET_DEFAULT_SLIPPAGE=${_POLYMARKET_DEFAULT_SLIPPAGE}
+      - CARDANO_ENABLED=${_CARDANO_ENABLED}
+      - CARDANO_NETWORK=${_CARDANO_NETWORK}
+      - CARDANO_CHAIN_ID=${_CARDANO_CHAIN_ID}
+      - CARDANO_PROVIDER_URL=${_CARDANO_PROVIDER_URL}
+      - CARDANO_PROVIDER_TIMEOUT_MS=${_CARDANO_PROVIDER_TIMEOUT_MS}
+      - CARDANO_TTL_SLOTS=${_CARDANO_TTL_SLOTS}
+      - CARDANO_DEPOSIT_CONFIRMATIONS=${_CARDANO_DEPOSIT_CONFIRMATIONS}
+      - CARDANO_EXPLORER_URL=${_CARDANO_EXPLORER_URL}
+      - CARDANO_SPONSOR_FEES=${_CARDANO_SPONSOR_FEES}
+      - CARDANO_TRANSFER_FEE_USD=${_CARDANO_TRANSFER_FEE_USD}
+      - CARDANO_SPONSOR_WALLET_ID=${_CARDANO_SPONSOR_WALLET_ID}
+      - CARDANO_FEE_SCHEME=${_CARDANO_FEE_SCHEME}
+      - CARDANO_TRANSFER_FEE_ADA=${_CARDANO_TRANSFER_FEE_ADA}
+      - CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT=${_CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT}
+      - CARDANO_RECYCLE_DESTINATION_UTXO=${_CARDANO_RECYCLE_DESTINATION_UTXO}
+      - CARDANO_ROUTE_DUST_TO_SPONSOR=${_CARDANO_ROUTE_DUST_TO_SPONSOR}
+      - CDC1=${_CDC1}
+      - CDC2=${_CDC2}
+      - CDC3=${_CDC3}
+      - CDC4=${_CDC4}
+      - CDC5=${_CDC5}
+      - CDC6=${_CDC6}
+      - CARDANO_DERIVATION_CHECK=${_CARDANO_DERIVATION_CHECK}
     secretEnv: [
       'CHATIZALO_TOKEN',
       'FRONTEND_TOKEN',
-      'SEED_INTERNAL_SALT',
+      'SEED_INTERNAL_SALT_EVM',
+      'SEED_INTERNAL_SALT_CAR',
       'SIGNING_KEY',
       'SECURITY_PIN_HMAC_KEY',
       'MANTECA_API_KEY',
@@ -83,104 +107,36 @@ steps:
       'POLYMARKET_BUILDER_PASSPHRASE',
       'POLYMARKET_POLYGON_RPC_URL',
       'POLYMARKET_ADAPTER_AUTH_TOKEN',
-      'LIFI_API_KEY'
+      'LIFI_API_KEY',
+      'CARDANO_PROVIDER_API_KEY'
     ]
 
   - name: 'gcr.io/cloud-builders/docker'
     id: Build
-    args: [
-      'build',
-      '--no-cache',
-      '-t',
-      '$_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA',
-      '-f',
-      'Dockerfile',
-      '--build-arg=BUN_ENV=${_BUN_ENV}',
-      '--build-arg=INFURA_API_KEY=${_INFURA_API_KEY}',
-      '--build-arg=MONGO_URI=${_MONGO_URI}',
-      '--build-arg=SEED_INTERNAL_SALT=$$SEED_INTERNAL_SALT',
-      '--build-arg=SIGNING_KEY=$$SIGNING_KEY',
-      '--build-arg=PINATA_JWT=${_PINATA_JWT}',
-      '--build-arg=BOT_API_URL=${_BOT_API_URL}',
-      '--build-arg=BOT_DATA_TOKEN=${_BOT_DATA_TOKEN}',
-      '--build-arg=NFT_UPLOAD_IMAGE_IPFS=${_NFT_UPLOAD_IMAGE_IPFS}',
-      '--build-arg=GCP_BUCKET_BASE_URL=${_GCP_BUCKET_BASE_URL}',
-      '--build-arg=CHATIZALO_TOKEN=$$CHATIZALO_TOKEN',
-      '--build-arg=FRONTEND_TOKEN=$$FRONTEND_TOKEN',
-      '--build-arg=MINOR_LOG_LEVEL=${_MINOR_LOG_LEVEL}',
-      '--build-arg=MANTECA_API_KEY=$$MANTECA_API_KEY',
-      '--build-arg=MANTECA_BASE_URL=${_MANTECA_BASE_URL}',
-      '--build-arg=GCP_CLOUD_TRACE_ENABLED=${_GCP_CLOUD_TRACE_ENABLED}',
-      '--build-arg=CORS_ORIGINS=${_CORS_ORIGINS}',
-      '--build-arg=BLACKLIST_IPS=${_BLACKLIST_IPS}',
-      '--build-arg=DEFAULT_CHAIN_ID=${_DEFAULT_CHAIN_ID}',
-      '--build-arg=ABIS_VERSION=${_ABIS_VERSION}',
-      '--build-arg=CORS_ORIGINS_CHECK_POSTMAN=${_CORS_ORIGINS_CHECK_POSTMAN}',
-      '--build-arg=SWAP_SLIPPAGE_CONFIG_STABLE=${_SWAP_SLIPPAGE_CONFIG_STABLE}',
-      '--build-arg=SWAP_SLIPPAGE_CONFIG_DEFAULT=${_SWAP_SLIPPAGE_CONFIG_DEFAULT}',
-      '--build-arg=SWAP_SLIPPAGE_CONFIG_EXTRA=${_SWAP_SLIPPAGE_CONFIG_EXTRA}',
-      '--build-arg=SWAP_ZERO_FEE_MODE=${_SWAP_ZERO_FEE_MODE}',
-      '--build-arg=SWAP_EXECUTE_SIMPLE=${_SWAP_EXECUTE_SIMPLE}',
-      '--build-arg=SWAP_USE_QUOTER=${_SWAP_USE_QUOTER}',
-      '--build-arg=ABIS_READ_FROM=${_ABIS_READ_FROM}',
-      '--build-arg=CHATIZALO_PHONE_NUMBER=${_CHATIZALO_PHONE_NUMBER}',
-      '--build-arg=QUEUE_BUNDLER_INTERVAL=${_QUEUE_BUNDLER_INTERVAL}',
-      '--build-arg=QUEUE_GAS_INTERVAL=${_QUEUE_GAS_INTERVAL}',
-      '--build-arg=QUEUE_CREATE_PROXY_INTERVAL=${_QUEUE_CREATE_PROXY_INTERVAL}',
-      '--build-arg=ISSUER_TOKENS_ENABLED=${_ISSUER_TOKENS_ENABLED}',
-      '--build-arg=MAX_REQUESTS_PER_MINUTE=${_MAX_REQUESTS_PER_MINUTE}',
-      '--build-arg=THE_GRAPH_EXTERNAL_DEPOSITS_URL=${_THE_GRAPH_EXTERNAL_DEPOSITS_URL}',
-      '--build-arg=THE_GRAPH_API_KEY=$$THE_GRAPH_API_KEY',
-      '--build-arg=CHATTERPOINTS_WORDS_SEED=${_CHATTERPOINTS_WORDS_SEED}',
-      '--build-arg=CHATTERPOINTS_WORDS_READ_FROM=${_CHATTERPOINTS_WORDS_READ_FROM}',
-      '--build-arg=CDS1=${_CDS1}',
-      '--build-arg=CDS2=${_CDS2}',
-      '--build-arg=CDS3=${_CDS3}',
-      '--build-arg=CDO1=${_CDO1}',
-      '--build-arg=CDO2=${_CDO2}',
-      '--build-arg=CDO3=${_CDO3}',
-      '--build-arg=CDO4=${_CDO4}',
-      '--build-arg=CDP1=${_CDP1}',
-      '--build-arg=CDP2=${_CDP2}',
-      '--build-arg=TELEGRAM_BOT_API_KEY=$$TELEGRAM_BOT_API_KEY',
-      '--build-arg=EXTERNAL_DEPOSITS_PROVIDER=${_EXTERNAL_DEPOSITS_PROVIDER}',
-      '--build-arg=SECURITY_PIN_LENGTH=${_SECURITY_PIN_LENGTH}',
-      '--build-arg=SECURITY_PIN_MAX_FAILED_ATTEMPTS=${_SECURITY_PIN_MAX_FAILED_ATTEMPTS}',
-      '--build-arg=SECURITY_PIN_BLOCK_MINUTES=${_SECURITY_PIN_BLOCK_MINUTES}',
-      '--build-arg=SECURITY_PIN_ENABLED=${_SECURITY_PIN_ENABLED}',
-      '--build-arg=SECURITY_PIN_HMAC_KEY=$$SECURITY_PIN_HMAC_KEY',
-      '--build-arg=ALCHEMY_VAR_WALLETS_ID=${_ALCHEMY_VAR_WALLETS_ID}',
-      '--build-arg=ALCHEMY_VAR_WALLETS_TOPIC_ID=${_ALCHEMY_VAR_WALLETS_TOPIC_ID}',
-      '--build-arg=ALCHEMY_VAR_TOKENS_ID=${_ALCHEMY_VAR_TOKENS_ID}',
-      '--build-arg=ALCHEMY_AUTH_TOKEN=$$ALCHEMY_AUTH_TOKEN',
-      '--build-arg=ALCHEMY_SIGNING_KEY=$$ALCHEMY_SIGNING_KEY',
-      '--build-arg=ALCHEMY_WEBHOOK_HEADER_API_KEY=$$ALCHEMY_WEBHOOK_HEADER_API_KEY',
-      '--build-arg=ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY=${_ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY}',
-      '--build-arg=LIFI_API_BASE_URL=${_LIFI_API_BASE_URL}',
-      '--build-arg=LIFI_INTEGRATOR_KEY=${_LIFI_INTEGRATOR_KEY}',
-      '--build-arg=LIFI_INTEGRATOR_FEE=${_LIFI_INTEGRATOR_FEE}',
-      '--build-arg=LIFI_DEFAULT_SLIPPAGE=${_LIFI_DEFAULT_SLIPPAGE}',
-      '--build-arg=USE_LIFI=${_USE_LIFI}',
-      '--build-arg=LIFI_API_KEY=$$LIFI_API_KEY',
-      '--build-arg=POLYMARKET_ENABLED=${_POLYMARKET_ENABLED}',
-      '--build-arg=POLYMARKET_CLOB_API_URL=${_POLYMARKET_CLOB_API_URL}',
-      '--build-arg=POLYMARKET_GAMMA_API_URL=${_POLYMARKET_GAMMA_API_URL}',
-      '--build-arg=POLYMARKET_DATA_API_URL=${_POLYMARKET_DATA_API_URL}',
-      '--build-arg=POLYMARKET_RELAYER_URL=${_POLYMARKET_RELAYER_URL}',
-      '--build-arg=POLYMARKET_CHAIN_ID=${_POLYMARKET_CHAIN_ID}',
-      '--build-arg=POLYMARKET_TERMS_VERSION=${_POLYMARKET_TERMS_VERSION}',
-      '--build-arg=POLYMARKET_DEFAULT_SLIPPAGE=${_POLYMARKET_DEFAULT_SLIPPAGE}',
-      '--build-arg=POLYMARKET_BUILDER_API_KEY=${_POLYMARKET_BUILDER_API_KEY}',
-      '--build-arg=POLYMARKET_BUILDER_SECRET=${_POLYMARKET_BUILDER_SECRET}',
-      '--build-arg=POLYMARKET_BUILDER_PASSPHRASE=${_POLYMARKET_BUILDER_PASSPHRASE}',
-      '--build-arg=POLYMARKET_POLYGON_RPC_URL=${_POLYMARKET_POLYGON_RPC_URL}',
-      '--build-arg=POLYMARKET_ADAPTER_AUTH_TOKEN=${_POLYMARKET_ADAPTER_AUTH_TOKEN}',
-      '.'
-    ]
+    # The --build-arg list is assembled in bash from the .env that CreateEnv left behind, and the
+    # names come from the Dockerfile's own ARG lines. That keeps this step at two arguments -- Cloud
+    # Build allows at most 100, and spelling them out one by one had already exceeded it -- and a new
+    # variable only has to be declared in CreateEnv and in the Dockerfile. Nothing changes here.
+    #
+    # Secrets are skipped on purpose. Cloud Run injects them into the service through secretKeyRef
+    # and that value overrides the image's ENV, so baking them in would change nothing at runtime --
+    # it would only leave the salt every wallet derives from, and every token, in clear inside the
+    # registry.
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        set -euo pipefail
+        secrets=' CHATIZALO_TOKEN FRONTEND_TOKEN SEED_INTERNAL_SALT_EVM SEED_INTERNAL_SALT_CAR SIGNING_KEY SECURITY_PIN_HMAC_KEY MANTECA_API_KEY THE_GRAPH_API_KEY TELEGRAM_BOT_API_KEY ALCHEMY_AUTH_TOKEN ALCHEMY_SIGNING_KEY ALCHEMY_WEBHOOK_HEADER_API_KEY POLYMARKET_BUILDER_API_KEY POLYMARKET_BUILDER_SECRET POLYMARKET_BUILDER_PASSPHRASE POLYMARKET_POLYGON_RPC_URL POLYMARKET_ADAPTER_AUTH_TOKEN LIFI_API_KEY CARDANO_PROVIDER_API_KEY '
+        build_args=()
+        for name in $$(awk '/^ARG /{print $$2}' Dockerfile); do case "$$secrets" in *" $$name "*) continue;; esac; build_args+=(--build-arg "$$name=$$(sed -n "s/^$$name=//p" .env | head -n 1)"); done
+        echo "assembled $$(( $${#build_args[@]} / 2 )) build args"
+        docker build --no-cache -f Dockerfile "$${build_args[@]}" -t '$_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA' .
     secretEnv: [
       'CHATIZALO_TOKEN',
       'FRONTEND_TOKEN',
-      'SEED_INTERNAL_SALT',
+      'SEED_INTERNAL_SALT_EVM',
+      'SEED_INTERNAL_SALT_CAR',
       'SIGNING_KEY',
       'SECURITY_PIN_HMAC_KEY',
       'MANTECA_API_KEY',
@@ -194,7 +150,8 @@ steps:
       'POLYMARKET_BUILDER_PASSPHRASE',
       'POLYMARKET_POLYGON_RPC_URL',
       'POLYMARKET_ADAPTER_AUTH_TOKEN',
-      'LIFI_API_KEY'
+      'LIFI_API_KEY',
+      'CARDANO_PROVIDER_API_KEY'
     ]
 
   - name: 'gcr.io/cloud-builders/docker'
@@ -229,8 +186,10 @@ availableSecrets:
       env: 'CHATIZALO_TOKEN'
     - versionName: projects/$PROJECT_ID/secrets/${_FRONTEND_TOKEN_SECRET_NAME}/versions/latest
       env: 'FRONTEND_TOKEN'
-    - versionName: projects/$PROJECT_ID/secrets/${_SEED_INTERNAL_SALT_SECRET_NAME}/versions/latest
-      env: 'SEED_INTERNAL_SALT'
+    - versionName: projects/$PROJECT_ID/secrets/${_SEED_INTERNAL_SALT_EVM_SECRET_NAME}/versions/latest
+      env: 'SEED_INTERNAL_SALT_EVM'
+    - versionName: projects/$PROJECT_ID/secrets/${_SEED_INTERNAL_SALT_CAR_SECRET_NAME}/versions/latest
+      env: 'SEED_INTERNAL_SALT_CAR'
     - versionName: projects/$PROJECT_ID/secrets/${_SIGNING_KEY_SECRET_NAME}/versions/latest
       env: 'SIGNING_KEY'
     - versionName: projects/$PROJECT_ID/secrets/${_SECURITY_PIN_HMAC_KEY_SECRET_NAME}/versions/latest
@@ -259,6 +218,8 @@ availableSecrets:
       env: 'POLYMARKET_ADAPTER_AUTH_TOKEN'
     - versionName: projects/$PROJECT_ID/secrets/${_LIFI_API_KEY_NAME}/versions/latest
       env: 'LIFI_API_KEY'
+    - versionName: projects/$PROJECT_ID/secrets/${_CARDANO_PROVIDER_API_KEY_SECRET_NAME}/versions/latest
+      env: 'CARDANO_PROVIDER_API_KEY'
 images:
   - $_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
 

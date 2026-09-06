@@ -32,4 +32,12 @@ describe('getPhoneNumberFormatted', () => {
     const expectedOutput = '';
     expect(getPhoneNumberFormatted(input)).toBe(expectedOutput);
   });
+
+  // Callers pass values read straight out of a query string or a request body, where an absent
+  // field is `undefined`. Throwing here turned a missing parameter into a 500.
+  it('should return an empty string instead of throwing for non-string input', () => {
+    expect(getPhoneNumberFormatted(undefined)).toBe('');
+    expect(getPhoneNumberFormatted(null)).toBe('');
+    expect(getPhoneNumberFormatted(['123'])).toBe('');
+  });
 });

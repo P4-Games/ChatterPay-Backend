@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { getCardanoConfig } from '../config/cardanoConfig';
 import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { isValidEthereumWallet, isValidPhoneNumber } from '../helpers/validationHelper';
@@ -6,7 +7,18 @@ import type { IBlockchain } from '../models/blockchainModel';
 import { NotificationEnum } from '../models/templateModel';
 import type { IToken } from '../models/tokenModel';
 import type { IUser, IUserWallet } from '../models/userModel';
-import { getAddressBalanceWithNfts } from '../services/balanceService';
+import {
+  calculateBalances,
+  calculateBalancesTotals,
+  getAddressBalanceWithNfts,
+  getTokenPrices
+} from '../services/balanceService';
+import {
+  getCardanoTokenBalances,
+  getCardanoTokenSymbols,
+  isCardanoWalletAddress
+} from '../services/cardano/cardanoBalanceService';
+import { deriveCardanoAccount } from '../services/cardano/cardanoWalletService';
 import { getFiatQuotes } from '../services/criptoya/criptoYaService';
 import { fetchExternalDeposits } from '../services/externalDepositsService';
 import { getNotificationTemplate } from '../services/notificationService';
@@ -22,6 +34,52 @@ import type { AddressBalanceWithNfts, BalanceInfo, Currency } from '../types/com
 type CheckExternalDepositsQuery = {
   sendNotification?: string;
 };
+
+/**
+ * Adds the user's Cardano wallet and its balances to a portfolio response.
+ *
+ * The address is **derived rather than looked up**, and nothing is written. On Cardano an address
+ * is a pure function of a key, so it exists and can receive funds before the user has ever touched
+ * the chain — which is exactly what a user in V1 needs, because funding that address themselves is
+ * how they get started. Requiring a transfer first in order to see where to send funds would be a
+ * loop with no entry point.
+ *
+ * Best effort: when Cardano is off, or the provider is unreachable, the portfolio comes back
+ * unchanged rather than failing. A balance endpoint that throws takes the whole wallet view down.
+ *
+ * @param data - Portfolio being enriched, mutated in place.
+ * @param phoneNumber - The user's phone number.
+ */
+async function enrichWithCardanoBalances(
+  data: AddressBalanceWithNfts,
+  phoneNumber: string
+): Promise<void> {
+  const config = getCardanoConfig();
+  if (!config.enabled) return;
+
+  try {
+    const account = deriveCardanoAccount(phoneNumber);
+    const catalogue = await getCardanoTokenSymbols();
+    // Prices are asked for by ticker, so the catalogue decides which ones to look up. A token with
+    // no feed simply comes back without a rate.
+    const [prices, fiatQuotes] = await Promise.all([getTokenPrices(catalogue), getFiatQuotes()]);
+    const { networkName, balances } = await getCardanoTokenBalances(
+      account.address,
+      (symbol) => prices.get(symbol.toUpperCase()) ?? 0
+    );
+
+    // Zero rows are dropped, the same way `getAddressBalanceWithNfts` drops them for EVM. Keeping
+    // them here would put an "ADA 0" row in a list that hides "USDC 0" right next to it, and the
+    // address the user has to fund is already in `wallets`.
+    data.balances.push(
+      ...calculateBalances(balances, fiatQuotes, networkName).filter((entry) => entry.balance > 0)
+    );
+    data.wallets.push(account.address);
+    data.totals = calculateBalancesTotals(data.balances);
+  } catch (error) {
+    Logger.warn('enrichWithCardanoBalances', `Skipping Cardano balances: ${String(error)}`);
+  }
+}
 
 /**
  * Enrich balance data with Polymarket balances (idle USDC.e + active positions value).
@@ -121,6 +179,47 @@ export const walletBalance = async (
     return returnErrorResponse('walletBalance', '', reply, 400, 'Wallet address is required');
   }
 
+  // A Cardano address is answered from the chain's UTxO set rather than from token contracts. The
+  // response keeps the `balances` / `totals` shape every existing caller already reads, so nothing
+  // downstream has to learn a second contract to show an ADA balance.
+  if (isCardanoWalletAddress(wallet)) {
+    try {
+      // Every display attribute comes from the token catalogue, exactly as the EVM rows do — the
+      // database is what says which assets exist on this network, how they are named and how they
+      // are scaled. The same price and fiat path is reused so an ADA row converts to USD/ARS/BRL/UYU
+      // like a USDC row does.
+      const catalogue = await getCardanoTokenSymbols();
+      const [prices, fiatQuotes] = await Promise.all([getTokenPrices(catalogue), getFiatQuotes()]);
+      const {
+        networkName,
+        balances: tokenBalances,
+        raw
+      } = await getCardanoTokenBalances(wallet, (symbol) => prices.get(symbol.toUpperCase()) ?? 0);
+      // Same rule as the EVM branch: a token the address does not hold is not a row.
+      const balances = calculateBalances(tokenBalances, fiatQuotes, networkName).filter(
+        (entry) => entry.balance > 0
+      );
+
+      return await returnSuccessResponse(reply, 'Wallet balance fetched successfully', {
+        balances,
+        totals: calculateBalancesTotals(balances),
+        certificates: [],
+        wallets: [wallet],
+        // The UTxO detail the generic shape has nowhere to put: how much ADA sits beside native
+        // assets and therefore cannot be reached by an ADA transfer.
+        cardano: raw
+      });
+    } catch (err) {
+      return returnErrorResponse(
+        'walletBalance',
+        (err as Error).message ?? '',
+        reply,
+        500,
+        'Internal Server Error'
+      );
+    }
+  }
+
   if (!isValidEthereumWallet(wallet)) {
     return returnErrorResponse(
       'walletBalance',
@@ -145,6 +244,10 @@ export const walletBalance = async (
     // Enrich with Polymarket balances if the user has a Polymarket account
     const user = await getUserByWalletAndChainid(wallet, networkConfig.chainId);
     await enrichWithPolymarketBalances(data, user);
+    // The dashboard reads balances by address, not by phone, so the Cardano rows have to be
+    // reachable from here too — otherwise the wallet view never shows ADA at all. The phone comes
+    // from the same lookup Polymarket already does.
+    if (user) await enrichWithCardanoBalances(data, user.phone_number);
 
     return await returnSuccessResponse(reply, 'Wallet balance fetched successfully', data);
   } catch (err) {
@@ -211,6 +314,7 @@ export const balanceByPhoneNumber = async (
     );
 
     await enrichWithPolymarketBalances(data, user);
+    await enrichWithCardanoBalances(data, user.phone_number);
 
     return await returnSuccessResponse(reply, 'Wallet balance fetched successfully', data);
   } catch (err) {
@@ -276,6 +380,9 @@ export const balanceByPhoneNumberSync = async (
     );
 
     await enrichWithPolymarketBalances(data, user);
+    // Same treatment as the async variant: both answer the same question, and having one of them
+    // omit an asset class is how two screens end up disagreeing about what a user holds.
+    await enrichWithCardanoBalances(data, user.phone_number);
 
     const USD = 'USD' as const satisfies Currency;
 

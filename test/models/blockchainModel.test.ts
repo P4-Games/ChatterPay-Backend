@@ -104,7 +104,10 @@ describe('Blockchain Model', () => {
     expect(savedBlockchain.gas.operations.transfer.maxFeePerGas).toBe('0.5');
     expect(savedBlockchain.balances.paymasterMinBalance).toBe('0.05');
     expect(savedBlockchain.limits.transfer.L1.D).toBe(30);
-    expect(savedBlockchain.limits.mint_nft.L2.D).toBe(40);
+    // `mint_nft` is optional on the interface since non-EVM networks have no NFT operations to
+    // limit. This document is an EVM one, so it is present — asserted rather than assumed.
+    expect(savedBlockchain.limits.mint_nft).toBeDefined();
+    expect(savedBlockchain.limits.mint_nft?.L2.D).toBe(40);
     expect(savedBlockchain.externalDeposits.lastBlockProcessed).toBe(123456);
     expect(savedBlockchain.externalDeposits.updatedAt).toBeInstanceOf(Date);
   });

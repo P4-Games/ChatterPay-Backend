@@ -1,8 +1,10 @@
 import { ethers } from 'ethers';
+import { getCardanoConfig } from '../config/cardanoConfig';
 import { Logger } from '../helpers/loggerHelper';
 import type { IBlockchain } from '../models/blockchainModel';
 import type { IToken } from '../models/tokenModel';
 import { type MintResult, rpcProviders } from '../types/commonType';
+import { ensureCardanoWalletForUser } from './cardano/cardanoWalletService';
 import { mongoReferralService } from './mongo/mongoReferralService';
 import { mongoUserService } from './mongo/mongoUserService';
 import { secService } from './secService';
@@ -143,6 +145,31 @@ export async function tryIssueTokens(
   }
 }
 
+/**
+ * Provisions the user's Cardano wallet, when the family is enabled.
+ *
+ * Done at wallet creation rather than lazily on first transfer, because "what is my wallet?" is a
+ * question the user asks *before* they ever move funds — and on Cardano they have to fund the
+ * address themselves, so an address they cannot see yet is an address they cannot use.
+ *
+ * Best effort: Cardano being unavailable must not fail the creation of the EVM wallet, which is
+ * what the rest of the product runs on.
+ *
+ * @param phoneNumber - The user's phone number.
+ * @returns The bech32 address, or an empty string when Cardano is off or provisioning failed.
+ */
+async function provisionCardanoWallet(phoneNumber: string): Promise<string> {
+  if (!getCardanoConfig().enabled) return '';
+  try {
+    const user = await mongoUserService.getUser(phoneNumber);
+    if (!user) return '';
+    return (await ensureCardanoWalletForUser(user)).address;
+  } catch (error) {
+    Logger.error('provisionCardanoWallet', `Could not provision for ${phoneNumber}`, error);
+    return '';
+  }
+}
+
 export async function createOrReturnWallet(
   channelUserId: string,
   networkConfig: IBlockchain,
@@ -152,6 +179,8 @@ export async function createOrReturnWallet(
   message: string;
   walletAddress: string;
   wasWalletCreated: boolean;
+  /** The user's Cardano address, or '' when the family is off. */
+  cardanoAddress: string;
 }> {
   const { chainId } = networkConfig;
   const chatterpayProxyAddress = networkConfig.contracts.chatterPayAddress;
@@ -174,7 +203,8 @@ ChatterPay can’t reverse transactions made outside of our app, such as when th
       return {
         message: `The user already exists, your wallet is ${existingWallet.wallet_proxy}. ${NETWORK_WARNING}`,
         walletAddress: existingWallet.wallet_proxy,
-        wasWalletCreated: false
+        wasWalletCreated: false,
+        cardanoAddress: await provisionCardanoWallet(channelUserId)
       };
     }
 
@@ -199,7 +229,8 @@ ChatterPay can’t reverse transactions made outside of our app, such as when th
     return {
       message: `The wallet was created successfully!. ${NETWORK_WARNING}`,
       walletAddress: result.newWallet.wallet_proxy,
-      wasWalletCreated: true
+      wasWalletCreated: true,
+      cardanoAddress: await provisionCardanoWallet(channelUserId)
     };
   }
 
@@ -217,6 +248,7 @@ ChatterPay can’t reverse transactions made outside of our app, such as when th
   return {
     message: `The wallet was created successfully!. ${NETWORK_WARNING}`,
     walletAddress: wallet.wallet_proxy,
-    wasWalletCreated: true
+    wasWalletCreated: true,
+    cardanoAddress: await provisionCardanoWallet(channelUserId)
   };
 }

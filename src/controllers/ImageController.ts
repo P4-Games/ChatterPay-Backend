@@ -6,7 +6,7 @@ import {
   returnErrorResponse500,
   returnSuccessResponse
 } from '../helpers/requestHelper';
-import { isShortUrl, isShortUrlByRedirect } from '../helpers/validationHelper';
+import { checkImageUrl } from '../helpers/validationHelper';
 import { downloadAndProcessImage } from '../services/imageService';
 import { ipfsService } from '../services/ipfs/ipfsService';
 import { getUser } from '../services/userService';
@@ -81,8 +81,17 @@ export const uploadImage: RouteHandlerMethod = async (
       return await returnErrorResponse('uploadImage', '', reply, 400, 'Image URL not provided');
     }
 
-    if (isShortUrl(image_url) || (await isShortUrlByRedirect(image_url))) {
-      return await returnErrorResponse('uploadImage', '', reply, 400, 'Short Url not allowed');
+    const urlRejection = await checkImageUrl(image_url);
+    if (urlRejection) {
+      return await returnErrorResponse(
+        'uploadImage',
+        '',
+        reply,
+        400,
+        urlRejection === 'short_url'
+          ? 'Short Url not allowed'
+          : 'The image could not be downloaded from the provided URL'
+      );
     }
 
     const user = await getUser(phone_number);
