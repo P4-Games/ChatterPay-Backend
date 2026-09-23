@@ -94,6 +94,24 @@ export interface CardanoRewardCredit {
   sourceKey: string;
 }
 
+/**
+ * A registration or deregistration, as the chain recorded it.
+ *
+ * The `deposit` is what makes this worth reading. A deregistration must refund exactly what was
+ * paid, which is not necessarily today's `stakeAddressDeposit` — the parameter is governable and can
+ * have moved since. For a credential this backend registered itself the figure is on the confirmed
+ * operation; for one that was already registered when the wallet arrived, this is the only place it
+ * exists, and without it an exit cannot be built at all rather than being built wrong.
+ */
+export interface CardanoRegistrationRecord {
+  action: 'registered' | 'deregistered';
+  txHash: string;
+  /** Lovelace locked by this registration, when the provider reports it. */
+  depositLovelace: bigint | null;
+  /** Absolute slot of the transaction, so the records can be ordered. */
+  slot: number | null;
+}
+
 /** A page of reward history, and whether it is the whole of it. */
 export interface CardanoRewardHistory {
   credits: readonly CardanoRewardCredit[];
@@ -158,6 +176,7 @@ export interface CardanoStakingProvider {
   stakingProtocolParameters(): Promise<CardanoStakingProtocolParameters>;
   stakeAccount(rewardAddress: string): Promise<CardanoStakeAccountState>;
   rewardHistory(rewardAddress: string): Promise<CardanoRewardHistory>;
+  registrationHistory(rewardAddress: string): Promise<readonly CardanoRegistrationRecord[]>;
   poolState(poolId: string): Promise<CardanoPoolState | null>;
   drepState(id: string): Promise<CardanoDRepState | null>;
   listDReps(limit: number): Promise<readonly CardanoDRepState[]>;
@@ -452,6 +471,11 @@ interface KoiosAccountRewardsRow {
   rewards: KoiosAccountReward[] | null;
 }
 
+interface KoiosAccountUpdate {
+  stake_address: string;
+  updates: { action_type: string; tx_hash: string; absolute_slot: number }[] | null;
+}
+
 interface KoiosPoolInfo {
   pool_id_bech32: string;
   pool_status: string;
@@ -605,6 +629,40 @@ export class KoiosStakingProvider extends HttpCardanoProvider implements Cardano
   }
 
   /**
+   * Every registration and deregistration this credential has been through.
+   *
+   * This dialect reports the updates but not the deposit each one locked, so the records come back
+   * with `depositLovelace: null` and the figure has to come from `account_info.deposit`, which it
+   * does report for the registration currently in force.
+   *
+   * @param rewardAddress - Bech32 reward address.
+   * @returns The records, each without a deposit figure.
+   * @throws CardanoProviderError On any provider failure, or when a field cannot be read.
+   */
+  async registrationHistory(
+    rewardAddress: string
+  ): Promise<readonly CardanoRegistrationRecord[]> {
+    const rows = await this.call<KoiosAccountUpdate[]>('/account_updates', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ _stake_addresses: [rewardAddress] })
+    });
+    if (!Array.isArray(rows)) {
+      throw new CardanoProviderError('unexpected_response', 'CARDANO_PROVIDER_REGISTRATION_SHAPE');
+    }
+    return rows
+      .filter((entry) => entry.stake_address === rewardAddress)
+      .flatMap((entry) => entry.updates ?? [])
+      .filter((update) => /^(de)?registration$/i.test(String(update.action_type)))
+      .map((update) => ({
+        action: readRegistrationAction(update.action_type),
+        txHash: String(update.tx_hash ?? ''),
+        depositLovelace: null,
+        slot: typeof update.absolute_slot === 'number' ? update.absolute_slot : null
+      }));
+  }
+
+  /**
    * Where a pool stands.
    *
    * @param poolId - Bech32 `pool1…`.
@@ -716,6 +774,13 @@ interface BlockfrostReward {
 interface BlockfrostPool {
   retirement: string[] | null;
   active_stake: string | null;
+}
+
+interface BlockfrostRegistration {
+  tx_hash: string;
+  action: string;
+  deposit: string | number | null;
+  tx_slot: number | null;
 }
 
 interface BlockfrostDRep {
@@ -854,6 +919,31 @@ export class BlockfrostStakingProvider
   }
 
   /**
+   * Every registration and deregistration this credential has been through.
+   *
+   * @param rewardAddress - Bech32 reward address.
+   * @returns The records, oldest first, each carrying the deposit it locked.
+   * @throws CardanoProviderError On any provider failure, or when a field cannot be read.
+   */
+  async registrationHistory(
+    rewardAddress: string
+  ): Promise<readonly CardanoRegistrationRecord[]> {
+    const rows = await this.callOptional<BlockfrostRegistration[]>(
+      `/accounts/${encodeURIComponent(rewardAddress)}/registrations?count=${REWARD_PAGE_SIZE}&page=1`
+    );
+    if (rows === null) return [];
+    if (!Array.isArray(rows)) {
+      throw new CardanoProviderError('unexpected_response', 'CARDANO_PROVIDER_REGISTRATION_SHAPE');
+    }
+    return rows.map((row) => ({
+      action: readRegistrationAction(row.action),
+      txHash: String(row.tx_hash ?? ''),
+      depositLovelace: optionalLovelace(row.deposit, 'deposit'),
+      slot: typeof row.tx_slot === 'number' ? row.tx_slot : null
+    }));
+  }
+
+  /**
    * Where a pool stands.
    *
    * @param poolId - Bech32 `pool1…`.
@@ -941,6 +1031,45 @@ function unregisteredAccount(): CardanoStakeAccountState {
     withdrawnLovelace: null,
     depositLovelace: null
   };
+}
+
+/**
+ * Reads a registration record's action.
+ *
+ * @param action - The reported action.
+ * @returns Which of the two it is.
+ * @throws CardanoProviderError `unexpected_response` for anything else. An unreadable action would
+ *   have to be guessed at, and guessing wrong here means reading a deregistration as the
+ *   registration whose deposit an exit must refund.
+ */
+export function readRegistrationAction(action: unknown): 'registered' | 'deregistered' {
+  const normalized = typeof action === 'string' ? action.toLowerCase().replace(/[^a-z]/g, '') : '';
+  if (normalized === 'registered' || normalized === 'registration') return 'registered';
+  if (normalized === 'deregistered' || normalized === 'deregistration') return 'deregistered';
+  throw new CardanoProviderError(
+    'unexpected_response',
+    `CARDANO_PROVIDER_REGISTRATION_ACTION_UNREADABLE: ${String(action).slice(0, 40)}`
+  );
+}
+
+/**
+ * The deposit a credential currently has locked, from its registration history.
+ *
+ * Reads the record that is still in force: the last registration with no deregistration after it.
+ * A credential that registered, exited and registered again locked a deposit at the price of the
+ * *second* registration, and the first record's figure would refund the wrong amount.
+ *
+ * @param records - The history, in any order.
+ * @returns The deposit in force, or `null` when the credential is not currently registered or the
+ *   provider did not report a figure. `null` is a refusal to guess, not a zero.
+ */
+export function depositInForce(records: readonly CardanoRegistrationRecord[]): bigint | null {
+  // Ordered here rather than trusting the provider's order: a page read newest-first and one read
+  // oldest-first are both plausible, and the difference decides which record is "last".
+  const ordered = [...records].sort((left, right) => (left.slot ?? 0) - (right.slot ?? 0));
+  const last = ordered[ordered.length - 1];
+  if (last === undefined || last.action !== 'registered') return null;
+  return last.depositLovelace;
 }
 
 /**

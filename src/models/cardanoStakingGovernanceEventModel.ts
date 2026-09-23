@@ -25,9 +25,19 @@ export interface ICardanoStakingGovernanceEvent extends Document {
   credential: CardanoDRepCredential | null;
   previousKind: CardanoGovernanceDelegationKind | null;
   previousDrepIdCip129: string | null;
-  /** Who asked for the change: the authenticated channel, or `cron` for a reconciliation. */
+  /**
+   * Who asked for the change: the authenticated channel, `cron` for a reconciliation, or `chain`
+   * for a change this service found already made.
+   */
   actor: string;
-  operationId: Types.ObjectId;
+  /**
+   * The operation that produced the change, or `null` when nobody here produced it.
+   *
+   * A wallet can be delegated outside ChatterPay — in a browser wallet, by the user, at any time —
+   * and the change is then a fact to record rather than an operation to attribute. Writing a
+   * borrowed id for it would make the audit trail claim this service did something it did not.
+   */
+  operationId: Types.ObjectId | null;
   requestedAt: Date;
   txId: string | null;
   confirmedAt: Date | null;
@@ -55,7 +65,7 @@ const cardanoStakingGovernanceEventSchema = new Schema<ICardanoStakingGovernance
     previousKind: { type: String, required: false, default: null },
     previousDrepIdCip129: { type: String, required: false, default: null },
     actor: { type: String, required: true },
-    operationId: { type: Schema.Types.ObjectId, required: true },
+    operationId: { type: Schema.Types.ObjectId, required: false, default: null },
     requestedAt: { type: Date, required: true, default: Date.now },
     txId: { type: String, required: false, default: null },
     confirmedAt: { type: Date, required: false, default: null }
@@ -72,9 +82,24 @@ cardanoStakingGovernanceEventSchema.index(
   { name: 'governance_history' }
 );
 // One event per operation: a reconciler that re-reads a confirmed change must not log it twice.
+//
+// Partial rather than plain, because a change observed on chain has no operation behind it and
+// carries `null`. A plain unique index admits exactly one null across the whole collection, which
+// would let the first externally-made delegation ever recorded block every other one.
 cardanoStakingGovernanceEventSchema.index(
   { operationId: 1 },
-  { unique: true, name: 'governance_operation_unique' }
+  {
+    unique: true,
+    name: 'governance_operation_unique',
+    partialFilterExpression: { operationId: { $type: 'objectId' } }
+  }
+);
+// Observed changes have no operation to be keyed by, so they are deduplicated by reading the most
+// recent event for the account and comparing the transition. This index is what makes that read
+// cheap enough to do on every sync.
+cardanoStakingGovernanceEventSchema.index(
+  { accountId: 1, requestedAt: -1 },
+  { name: 'governance_latest' }
 );
 
 const CardanoStakingGovernanceEvent = model<ICardanoStakingGovernanceEvent>(

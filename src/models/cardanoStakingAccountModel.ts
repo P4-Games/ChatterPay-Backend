@@ -63,6 +63,22 @@ export interface CardanoGovernanceDelegation {
 }
 
 /**
+ * Who registered the stake credential.
+ *
+ * A wallet can arrive already registered and already delegating — the user staked it elsewhere
+ * before ChatterPay ever looked, and on Cardano the credential belongs to the key, not to whoever
+ * happens to be reading it. Recording that is what keeps this service from doing two wrong things:
+ * registering a credential that is already registered, which the ledger refuses and which costs a
+ * sponsor fee to discover, and writing a deposit event as though ChatterPay had paid a deposit it
+ * never paid.
+ *
+ * `unknown` is a real state, not a placeholder for `external`. Before a confirmed on-chain read
+ * there is nothing to conclude, and concluding `external` early would attribute a user's deposit to
+ * nobody in particular while concluding `chatterpay` would claim one that was never made.
+ */
+export type CardanoStakingRegistrationOrigin = 'unknown' | 'chatterpay' | 'external';
+
+/**
  * On-chain facts, as last read.
  *
  * Everything here is a snapshot with an `asOf`, not a ledger this service maintains. A stale or
@@ -80,8 +96,13 @@ export interface CardanoStakingOnChain {
    * Read from the confirmed transaction, not from the current protocol parameter. Cardano refunds
    * what was deposited, so a parameter that changed between registration and exit would make an
    * unregistration built from the current value fail to balance.
+   *
+   * `null` on a credential registered outside ChatterPay whose provider does not report the figure.
+   * That is a refusal to guess and it blocks an exit rather than producing one that cannot balance.
    */
   depositLovelace: string | null;
+  /** Who paid that deposit. See {@link CardanoStakingRegistrationOrigin}. */
+  registrationOrigin: CardanoStakingRegistrationOrigin;
   /** Rewards sitting in the reward account, withdrawable now. Counts towards net worth. */
   withdrawableRewardsLovelace: string;
   /** Calculated but not yet distributed. Not withdrawable, and never counted as net worth. */
@@ -171,6 +192,12 @@ const onChainSchema = new Schema<CardanoStakingOnChain>(
     poolId: { type: String, required: false, default: null },
     governanceDelegation: { type: governanceDelegationSchema, required: false, default: null },
     depositLovelace: { type: String, required: false, default: null },
+    registrationOrigin: {
+      type: String,
+      enum: ['unknown', 'chatterpay', 'external'],
+      required: true,
+      default: 'unknown'
+    },
     withdrawableRewardsLovelace: { type: String, required: true, default: '0' },
     pendingRewardsLovelace: { type: String, required: true, default: '0' },
     lifetimeRewardsLovelace: { type: String, required: true, default: '0' },
