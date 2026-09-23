@@ -254,6 +254,75 @@ export function decodeCardanoAddress(address: string): DecodedCardanoAddress | n
   };
 }
 
+/** Reward address type carrying a script hash, the counterpart of {@link REWARD_KEY_HASH_TYPE}. */
+const REWARD_SCRIPT_HASH_TYPE = 15;
+
+/** What a reward address says about itself. */
+export interface DecodedRewardAddress {
+  network: CardanoNetwork;
+  /** `key_hash` for CIP-19 type 14, `script_hash` for type 15. */
+  credentialType: 'key_hash' | 'script_hash';
+  /** The 28-byte credential, lowercase hex without `0x`. */
+  credentialHex: string;
+  /**
+   * Header byte and credential, 29 bytes.
+   *
+   * This is what a `reward_account` is in the transaction CBOR — a byte string, not the bech32
+   * text. A withdrawal keyed by the bech32 string is a withdrawal from an account that does not
+   * exist, and the ledger rejects the whole transaction.
+   */
+  payload: Uint8Array;
+}
+
+/**
+ * Reads a reward address, checksum included.
+ *
+ * Separate from {@link decodeCardanoAddress} because the two answer different questions and a
+ * caller must not be able to confuse them: a payment address is where value goes, a reward address
+ * is what a withdrawal or a certificate addresses. Passing one where the other belongs is how a
+ * withdrawal ends up naming a payment credential.
+ *
+ * @param address - The address to read, `stake1…` or `stake_test1…`.
+ * @returns What the address says about itself, or `null` when it is not a readable reward address:
+ *   bad checksum, unknown prefix, wrong length, a header that is not a reward type, or a network
+ *   whose prefix and header byte disagree.
+ */
+export function decodeRewardAddress(address: string): DecodedRewardAddress | null {
+  const prefix: CardanoNetwork | null = address.startsWith(`${REWARD_HRP.testnet}1`)
+    ? 'testnet'
+    : address.startsWith(`${REWARD_HRP.mainnet}1`)
+      ? 'mainnet'
+      : null;
+  if (prefix === null) return null;
+
+  let words: number[];
+  try {
+    const decoded = bech32.decode(address as `${string}1${string}`, BECH32_LIMIT);
+    if (decoded.prefix !== REWARD_HRP[prefix]) return null;
+    words = [...decoded.words];
+  } catch {
+    return null;
+  }
+
+  const payload = bech32.fromWords(words);
+  const header = payload[0];
+  if (header === undefined) return null;
+  if (payload.length !== 1 + CREDENTIAL_HASH_BYTES) return null;
+
+  const addressType = header >> 4;
+  if (addressType !== REWARD_KEY_HASH_TYPE && addressType !== REWARD_SCRIPT_HASH_TYPE) return null;
+  // The prefix and the header both carry the network, and a disagreement between them is an address
+  // that reads as one network and would settle on another.
+  if ((header & 0x0f) !== NETWORK_ID[prefix]) return null;
+
+  return {
+    network: prefix,
+    credentialType: addressType === REWARD_KEY_HASH_TYPE ? 'key_hash' : 'script_hash',
+    credentialHex: Buffer.from(payload.slice(1)).toString('hex'),
+    payload: Uint8Array.from(payload)
+  };
+}
+
 /**
  * Whether `address` is a usable Cardano destination for `network`.
  *

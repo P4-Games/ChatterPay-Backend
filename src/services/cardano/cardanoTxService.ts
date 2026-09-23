@@ -20,6 +20,7 @@
  */
 
 import { blake2b } from '@noble/hashes/blake2';
+
 import type {
   BuiltCardanoTransaction,
   CardanoAsset,
@@ -30,20 +31,20 @@ import type {
   CardanoVkeyWitness
 } from '../../types/cardanoType';
 import { assetUnit } from '../../types/cardanoType';
-
-/** CBOR major types, shifted into the high three bits of a head byte. */
-const MAJOR_UNSIGNED = 0 << 5;
-const MAJOR_BYTES = 2 << 5;
-const MAJOR_ARRAY = 4 << 5;
-const MAJOR_MAP = 5 << 5;
-const MAJOR_TAG = 6 << 5;
-
-/** `#6.258`, the tag Conway's CDDL puts in front of every set. */
-const SET_TAG = 258;
-
-/** `true` and `null` as CBOR simple values: the validity flag and the absent auxiliary data. */
-const CBOR_TRUE = Uint8Array.from([0xf5]);
-const CBOR_NULL = Uint8Array.from([0xf6]);
+import {
+  array,
+  bytes,
+  bytesToHex,
+  CBOR_NULL,
+  CBOR_TRUE,
+  compareCborKeys,
+  hexToBytes,
+  map,
+  set,
+  uint
+} from './cardanoCborService';
+import type { CardanoStakingCertificate, CardanoWithdrawal } from './cardanoCertificateService';
+import { encodeCertificates, encodeWithdrawals } from './cardanoCertificateService';
 
 /** Constant overhead the ledger adds to a UTxO's serialized size when charging for it. */
 const UTXO_ENTRY_SIZE_OVERHEAD = 160n;
@@ -64,79 +65,6 @@ const SIGNATURE_BYTES = 64;
 const MAX_FEE_PASSES = 8;
 
 /**
- * A CBOR head: the major type and either the value itself or the width of what follows.
- *
- * Always the shortest form that fits, which is what canonical CBOR requires and what makes the
- * transaction id reproducible: a body encoded two ways hashes to two different transactions.
- */
-function head(major: number, value: bigint): Uint8Array {
-  if (value < 24n) return Uint8Array.from([major | Number(value)]);
-  if (value < 0x100n) return Uint8Array.from([major | 24, Number(value)]);
-  if (value < 0x10000n) {
-    return Uint8Array.from([major | 25, Number(value >> 8n), Number(value & 0xffn)]);
-  }
-  if (value < 0x100000000n) {
-    const parts = [24n, 16n, 8n, 0n].map((shift) => Number((value >> shift) & 0xffn));
-    return Uint8Array.from([major | 26, ...parts]);
-  }
-  const parts = [56n, 48n, 40n, 32n, 24n, 16n, 8n, 0n].map((shift) =>
-    Number((value >> shift) & 0xffn)
-  );
-  return Uint8Array.from([major | 27, ...parts]);
-}
-
-function concat(parts: readonly Uint8Array[]): Uint8Array {
-  const total = parts.reduce((sum, part) => sum + part.length, 0);
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const part of parts) {
-    out.set(part, offset);
-    offset += part.length;
-  }
-  return out;
-}
-
-function uint(value: bigint | number): Uint8Array {
-  return head(MAJOR_UNSIGNED, BigInt(value));
-}
-
-function bytes(value: Uint8Array): Uint8Array {
-  return concat([head(MAJOR_BYTES, BigInt(value.length)), value]);
-}
-
-function array(items: readonly Uint8Array[]): Uint8Array {
-  return concat([head(MAJOR_ARRAY, BigInt(items.length)), ...items]);
-}
-
-/**
- * A definite-length map. Entries are written in the order given, which for the transaction body
- * means ascending integer keys — the canonical order.
- */
-function map(entries: readonly (readonly [Uint8Array, Uint8Array])[]): Uint8Array {
-  return concat([head(MAJOR_MAP, BigInt(entries.length)), ...entries.flat()]);
-}
-
-function tagged(tag: number, value: Uint8Array): Uint8Array {
-  return concat([head(MAJOR_TAG, BigInt(tag)), value]);
-}
-
-function set(items: readonly Uint8Array[]): Uint8Array {
-  return tagged(SET_TAG, array(items));
-}
-
-function hexToBytes(value: string): Uint8Array {
-  const hex = value.startsWith('0x') ? value.slice(2) : value;
-  if (hex.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(hex)) {
-    throw new Error('CARDANO_INVALID_HEX');
-  }
-  return Uint8Array.from(Buffer.from(hex, 'hex'));
-}
-
-function bytesToHex(value: Uint8Array): string {
-  return Buffer.from(value).toString('hex');
-}
-
-/**
  * The minimum lovelace an output is allowed to hold, given its own size.
  *
  * An output below this is not a small payment: the ledger rejects the whole transaction. It is what
@@ -148,22 +76,6 @@ function bytesToHex(value: Uint8Array): string {
  */
 export function minimumAdaForOutput(output: Uint8Array, coinsPerUtxoByte: bigint): bigint {
   return (UTXO_ENTRY_SIZE_OVERHEAD + BigInt(output.length)) * coinsPerUtxoByte;
-}
-
-/**
- * Orders map keys the way canonical CBOR does: shorter first, then bytewise.
- *
- * Asset names run from 0 to 32 bytes, so length has to come first — and the order matters beyond
- * tidiness, because the transaction id is the hash of these exact bytes. Two encodings of the same
- * value are two different transactions.
- *
- * @param left - Hex of the first key.
- * @param right - Hex of the second key.
- * @returns Negative, zero or positive, for `sort`.
- */
-function compareCborKeys(left: string, right: string): number {
-  if (left.length !== right.length) return left.length - right.length;
-  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 /**
@@ -215,7 +127,7 @@ export function encodeValue(lovelace: bigint, assets: readonly CardanoAssetAmoun
 }
 
 /** A `transaction_output` in the legacy array form: address bytes and the value it holds. */
-function encodeOutput(
+export function encodeOutput(
   addressBytes: Uint8Array,
   lovelace: bigint,
   assets: readonly CardanoAssetAmount[] = []
@@ -226,6 +138,12 @@ function encodeOutput(
 /** A `transaction_input`: the id of the transaction that created the output, and its index. */
 function encodeInput(utxo: CardanoUtxo): Uint8Array {
   return array([bytes(hexToBytes(utxo.txHash)), uint(utxo.outputIndex)]);
+}
+
+/** The two body fields staking adds to a transfer: certificates and reward withdrawals. */
+export interface CardanoStakingBodyFields {
+  certificates?: readonly CardanoStakingCertificate[];
+  withdrawals?: readonly CardanoWithdrawal[];
 }
 
 /**
@@ -241,14 +159,54 @@ function encodeBody(
   inputs: readonly CardanoUtxo[],
   outputs: readonly Uint8Array[],
   fee: bigint,
-  ttlSlot: number
+  ttlSlot: number,
+  staking: CardanoStakingBodyFields = {}
 ): Uint8Array {
-  return map([
+  const entries: (readonly [Uint8Array, Uint8Array])[] = [
     [uint(0), set(inputs.map(encodeInput))],
     [uint(1), array(outputs)],
     [uint(2), uint(fee)],
     [uint(3), uint(ttlSlot)]
-  ]);
+  ];
+
+  // Keys 4 and 5, in ascending order after the four a transfer needs. A key out of order is a
+  // different body, and a different body is a different transaction id.
+  //
+  // Absent rather than empty when there is nothing to say: `certificates` is a *non-empty* set and
+  // `withdrawals` a non-empty map, so emitting either with no members is malformed CBOR, not a
+  // transaction that does nothing.
+  if (staking.certificates !== undefined && staking.certificates.length > 0) {
+    entries.push([uint(4), encodeCertificates(staking.certificates)]);
+  }
+  if (staking.withdrawals !== undefined && staking.withdrawals.length > 0) {
+    entries.push([uint(5), encodeWithdrawals(staking.withdrawals)]);
+  }
+
+  return map(entries);
+}
+
+/**
+ * Serializes a `transaction_body` that carries certificates, withdrawals, or neither.
+ *
+ * Exported so the staking side can build and inspect a body without going through coin selection,
+ * which is what makes the encoding testable against an independent CBOR implementation before any
+ * of it is wired to money.
+ *
+ * @param inputs - Outputs being spent.
+ * @param outputs - Already-serialized outputs, in order.
+ * @param fee - Fee in lovelace.
+ * @param ttlSlot - Slot after which the transaction is no longer valid.
+ * @param staking - Certificates and withdrawals, both optional.
+ * @returns The canonical CBOR of the body.
+ */
+export function encodeTransactionBody(
+  inputs: readonly CardanoUtxo[],
+  outputs: readonly Uint8Array[],
+  fee: bigint,
+  ttlSlot: number,
+  staking: CardanoStakingBodyFields = {}
+): Uint8Array {
+  return encodeBody(inputs, outputs, fee, ttlSlot, staking);
 }
 
 /**
