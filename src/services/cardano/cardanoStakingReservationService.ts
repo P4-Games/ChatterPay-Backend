@@ -29,23 +29,24 @@ import {
   claimsHeldBy,
   claimUtxos,
   outpointOf,
+  pinClaims,
   releaseUtxos,
-  renewClaims,
   unclaimedUtxosStrict
 } from './cardanoUtxoClaimService';
 
 /**
- * How long a staking claim stands before the store expires it on its own.
+ * How long a staking claim stands **before anything has been signed**.
  *
- * Deliberately far beyond a transaction's validity window, and far beyond the transfer default. An
- * expiry here is not a release: it is a release *without proof*, performed silently by a TTL index,
- * past every guard in this module. An operation whose submit never resolved can sit undetermined
- * for as long as the provider takes to catch up, and for that whole time its inputs must stay held.
+ * This window is the one place a bounded expiry is still correct for staking, and it is correct for
+ * a specific reason: between claiming the inputs and producing a signature, no transaction exists.
+ * Nothing was sent, so nothing can be on chain, so letting the store drop the claim releases inputs
+ * that provably nothing is spending. If the process dies here and does not come back for a day, the
+ * expiry is the recovery rather than a hazard.
  *
- * The number is a backstop for a process that dies holding a claim, not the mechanism that frees
- * one. {@link renewStakingInputs} is what keeps a live operation's claims from reaching it.
+ * The moment a signature exists that stops being true, and the claim is pinned instead — see
+ * {@link pinStakingInputs}. An hour is simply longer than any single build takes.
  */
-export const STAKING_CLAIM_SECONDS = 6 * 60 * 60;
+export const STAKING_UNSIGNED_CLAIM_SECONDS = 60 * 60;
 
 /**
  * The holder string a staking operation's claims carry.
@@ -109,7 +110,11 @@ export async function reserveStakingInputs(
   const inputs = [...built.selectedUserUtxos, ...built.selectedSponsorUtxos];
   if (inputs.length === 0) return { outcome: 'reserved', outpoints: [] };
 
-  const claimed = await claimUtxos(inputs, stakingClaimHolder(operationId), STAKING_CLAIM_SECONDS);
+  const claimed = await claimUtxos(
+    inputs,
+    stakingClaimHolder(operationId),
+    STAKING_UNSIGNED_CLAIM_SECONDS
+  );
   if (claimed === null) {
     Logger.info(
       'reserveStakingInputs',
@@ -148,18 +153,23 @@ export async function releaseStakingInputs(
 }
 
 /**
- * Keeps a live operation's claims from reaching their backstop expiry.
+ * Puts an operation's claims beyond any automatic expiry.
  *
- * Called by whatever reconciles an operation that is still undetermined. See
- * {@link STAKING_CLAIM_SECONDS} for why an expiry would otherwise act as a release nothing proved.
+ * Called at the moment a signature exists and before anything is submitted, which is the moment the
+ * inputs stop being provably free. From then on the claim is dropped by an explicit release or not
+ * at all: no timer, no index, and nothing that depends on a process still running.
  *
- * @param operationId - The operation whose claims to renew.
- * @returns How many claims it still holds.
+ * Idempotent, and called again from reconciliation so that an operation which was pinned by a
+ * process that then died — or one whose pin raced with a crash — is pinned by whatever picks it up
+ * next.
+ *
+ * @param operationId - The operation whose claims to pin.
+ * @returns How many claims it holds.
  */
-export async function renewStakingInputs(operationId: Types.ObjectId): Promise<number> {
+export async function pinStakingInputs(operationId: Types.ObjectId): Promise<number> {
   const holder = stakingClaimHolder(operationId);
   const held = await claimsHeldBy(holder);
-  return renewClaims(held, holder, STAKING_CLAIM_SECONDS);
+  return pinClaims(held, holder);
 }
 
 /**

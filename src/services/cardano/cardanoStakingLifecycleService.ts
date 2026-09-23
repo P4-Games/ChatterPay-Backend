@@ -15,12 +15,20 @@
  * 2. **Build.** Pure. Produces the body, its id, and the exact inputs it spends.
  * 3. **Claim the inputs.** All or nothing. A collision means another operation got there first and
  *    this one has to be rebuilt, not retried.
- * 4. **Sign, and store the signed bytes before submitting.** This is the step that makes recovery
- *    possible at all: a process that dies between signing and submitting comes back holding the
- *    exact transaction it was about to send, and can ask the chain about it instead of guessing.
+ * 4. **Sign, pin the claims, then store the signed bytes — in that order, before submitting.**
+ *    Storing the bytes is what makes recovery possible at all: a process that dies afterwards comes
+ *    back holding the exact transaction it was about to send, and can ask the chain about it
+ *    instead of guessing. Pinning first is what stops the claim store from expiring those inputs
+ *    while nothing is running to notice.
  * 5. **Submit.** Three outcomes, not two — accepted, refused, and *unknown*. An unknown submit is
  *    the dangerous one and is treated as live: the transaction may be propagating.
  * 6. **Reconcile.** Only a lookup settles an unknown, and only a settled absence releases anything.
+ *
+ * **Nothing here depends on staying running.** The sync that drives reconciliation runs once a day
+ * on an instance that scales to zero in between, so any guarantee that had to be refreshed on a
+ * timer would be no stronger than that gap. The claims are pinned rather than renewed, the budget
+ * reservation is a stored document rather than a lease, and an operation that is uncertain stays
+ * uncertain for as long as it takes.
  *
  * **A retry never builds a different economic transaction.** If the operation already carries signed
  * bytes, the retry resubmits *those*; it does not re-select inputs, re-quote or rebuild. Rebuilding
@@ -48,8 +56,8 @@ import {
 import {
   claimKeysOf,
   outpointsOf,
+  pinStakingInputs,
   releaseStakingInputs,
-  renewStakingInputs,
   reserveStakingInputs
 } from './cardanoStakingReservationService';
 import { encodeSignedTransaction } from './cardanoTxService';
@@ -157,6 +165,13 @@ export async function executeStakingOperation(
 
   const witnesses = signer.witnessesFor(built.transactionId);
   const signedCbor = encodeSignedTransaction(built.bodyBytes, witnesses);
+
+  // Pinned **before** the bytes are stored, not after, and the order is the whole point. A claim
+  // that is pinned while no signature is recorded is recoverable — `releaseUnsignedStakingInputs`
+  // establishes that nothing was sent and gives it back. A signature that is recorded while the
+  // claim can still expire is not: the store would release inputs a live transaction spends, on a
+  // timer, with nothing watching. So the reversible ordering is the one taken.
+  await pinStakingInputs(operationId);
 
   // Written **before** the submit, and this is the load-bearing line of the whole module. Without
   // it a process that dies here cannot tell whether the transaction exists, and rebuilding a
@@ -350,7 +365,7 @@ export async function reconcileStakingOperation(
     status = await provider.statusOf(operation.txId);
   } catch {
     // A provider that cannot answer has not told us the transaction is absent.
-    await renewStakingInputs(operationId);
+    await pinStakingInputs(operationId);
     return 'undetermined';
   }
 
@@ -362,7 +377,7 @@ export async function reconcileStakingOperation(
         { _id: operationId },
         { $set: { chainOutcome: 'pending', absentObservations: 0, firstAbsentAtSlot: null } }
       );
-      await renewStakingInputs(operationId);
+      await pinStakingInputs(operationId);
       return 'still_pending';
     }
     await CardanoStakingOperation.updateOne(
@@ -405,11 +420,11 @@ export async function reconcileStakingOperation(
   // Without a validity window there is no slot past which absence becomes final, so nothing can be
   // concluded from not seeing it.
   if (operation.ttlSlot === null) {
-    await renewStakingInputs(operationId);
+    await pinStakingInputs(operationId);
     return 'undetermined';
   }
   if (tipSlot <= operation.ttlSlot + policy.absenceMarginSlots) {
-    await renewStakingInputs(operationId);
+    await pinStakingInputs(operationId);
     return 'still_pending';
   }
 
@@ -424,7 +439,7 @@ export async function reconcileStakingOperation(
   // one stale provider; spread alone is satisfied by a single reading taken late.
   const spreadEnough = tipSlot - firstAbsentAtSlot >= policy.absenceMarginSlots;
   if (observations < policy.requiredAbsentObservations || !spreadEnough) {
-    await renewStakingInputs(operationId);
+    await pinStakingInputs(operationId);
     return 'still_pending';
   }
 

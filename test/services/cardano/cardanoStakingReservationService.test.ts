@@ -6,11 +6,11 @@ import type { BuiltCardanoStakingTransaction } from '../../../src/services/carda
 import {
   claimKeysOf,
   outpointsOf,
+  pinStakingInputs,
   releaseStakingInputs,
   releaseUnsignedStakingInputs,
-  renewStakingInputs,
   reserveStakingInputs,
-  STAKING_CLAIM_SECONDS,
+  STAKING_UNSIGNED_CLAIM_SECONDS,
   selectableStakingUtxos,
   stakingClaimHolder
 } from '../../../src/services/cardano/cardanoStakingReservationService';
@@ -223,10 +223,9 @@ describe('cardanoStakingReservationService', () => {
   });
 
   describe('not letting an expiry act as a release', () => {
-    it('holds a staking claim far longer than a transfer claim', async () => {
-      // The expiry is a backstop against a process that died holding a claim, not the mechanism
-      // that frees one. An operation whose submit never resolved can sit undetermined for as long
-      // as the provider takes to catch up, and its inputs have to stay held for all of it.
+    it('gives an unsigned claim a bounded life, because nothing can be on chain yet', async () => {
+      // Before a signature exists no transaction exists, so letting the store drop the claim
+      // releases inputs provably nothing is spending. Here the expiry is the recovery, not a hazard.
       const operationId = new Types.ObjectId();
       const before = Date.now();
 
@@ -234,29 +233,70 @@ describe('cardanoStakingReservationService', () => {
 
       const claim = await claims().findOne({});
       const heldForSeconds = ((claim?.expiresAt as Date).getTime() - before) / 1000;
-      expect(heldForSeconds).toBeGreaterThan(STAKING_CLAIM_SECONDS - 60);
+      expect(heldForSeconds).toBeGreaterThan(STAKING_UNSIGNED_CLAIM_SECONDS - 60);
+      expect(heldForSeconds).toBeLessThanOrEqual(STAKING_UNSIGNED_CLAIM_SECONDS);
     });
 
-    it('pushes the expiry out again while the operation is still live', async () => {
+    it('pins a claim out of the TTL monitor’s reach once asked to', async () => {
+      // MongoDB's TTL monitor only ever selects documents whose field holds a past date. A null
+      // there is not a candidate, so nothing but an explicit release can drop the claim.
       const operationId = new Types.ObjectId();
       await reserveStakingInputs(built([utxo('a')], []), operationId);
-      // Pull the expiry back to where a lapsed claim would sit.
-      await claims().updateMany({}, { $set: { expiresAt: new Date(Date.now() + 1_000) } });
 
-      const renewed = await renewStakingInputs(operationId);
+      expect(await pinStakingInputs(operationId)).toBe(1);
 
-      expect(renewed).toBe(1);
       const claim = await claims().findOne({});
-      expect((claim?.expiresAt as Date).getTime()).toBeGreaterThan(Date.now() + 60_000);
+      expect(claim?.expiresAt).toBeNull();
     });
 
-    it('will not renew a claim that now belongs to somebody else', async () => {
-      // Renewing on the strength of a stale list would extend another operation's hold.
-      const mine = new Types.ObjectId();
-      const shared = utxo('a');
-      await claimUtxos([shared], 'someone-else');
+    it('leaves a pinned claim standing against the query the TTL monitor runs', async () => {
+      // The monitor's selection criterion, asserted directly: whatever date it compares against, a
+      // pinned claim is not in the set it deletes. A bounded one, once lapsed, is.
+      const pinned = new Types.ObjectId();
+      const lapsing = new Types.ObjectId();
+      await reserveStakingInputs(built([utxo('a')], []), pinned);
+      await reserveStakingInputs(built([utxo('b')], []), lapsing);
+      await pinStakingInputs(pinned);
+      // Two days on, with nothing having run in between.
+      const twoDaysOn = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
-      expect(await renewStakingInputs(mine)).toBe(0);
+      const doomed = await claims()
+        .find({ expiresAt: { $lte: twoDaysOn } })
+        .toArray();
+
+      expect(doomed).toHaveLength(1);
+      expect(doomed[0]?.holder).toBe(stakingClaimHolder(lapsing));
+    });
+
+    it('pins every claim the holder took, not only the ones it was handed', async () => {
+      const operationId = new Types.ObjectId();
+      await reserveStakingInputs(built([utxo('a')], [utxo('b'), utxo('c')]), operationId);
+
+      expect(await pinStakingInputs(operationId)).toBe(3);
+      expect(await claims().countDocuments({ expiresAt: null })).toBe(3);
+    });
+
+    it('will not pin a claim that belongs to somebody else', async () => {
+      // Pinning on the strength of a stale list would freeze another operation's input for good,
+      // which is worse than the expiry it was meant to prevent.
+      const mine = new Types.ObjectId();
+      await claimUtxos([utxo('a')], 'someone-else');
+
+      expect(await pinStakingInputs(mine)).toBe(0);
+      expect((await claims().findOne({}))?.expiresAt).toBeInstanceOf(Date);
+    });
+
+    it('leaves the transfer claim lifetime exactly where it was', async () => {
+      // Transfers keep a bounded claim on purpose: the fate settles inside one validity window and
+      // a stale claim costs a retry. Nothing about staking may change that.
+      const before = Date.now();
+
+      await claimUtxos([utxo('a')], 'transfer');
+
+      const claim = await claims().findOne({});
+      const heldForSeconds = ((claim?.expiresAt as Date).getTime() - before) / 1000;
+      expect(heldForSeconds).toBeGreaterThan(1_140);
+      expect(heldForSeconds).toBeLessThanOrEqual(1_200);
     });
   });
 

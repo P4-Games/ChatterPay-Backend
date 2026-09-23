@@ -20,6 +20,7 @@ import CardanoStakingOperation from './cardanoStakingOperationModel';
 import CardanoStakingReward from './cardanoStakingRewardModel';
 import CardanoStakingSponsorFeeEvent from './cardanoStakingSponsorFeeEventModel';
 import CardanoStakingSyncRun from './cardanoStakingSyncRunModel';
+import CardanoUtxoClaim from './cardanoUtxoClaimModel';
 
 export interface StakingCollection {
   model: Model<never>;
@@ -56,7 +57,12 @@ export const STAKING_COLLECTIONS: readonly StakingCollection[] = [
   {
     model: CardanoStakingSyncRun as unknown as Model<never>,
     collection: 'cardano_staking_sync_runs'
-  }
+  },
+  // Not introduced by this rollout — transfers have used it all along — but its expiry behaviour is
+  // what keeps a staking operation's inputs held while its outcome is unknown, and an index that
+  // load-bearing has to be built by the migration and checked by the guard rather than created
+  // lazily by whichever process reaches the store first.
+  { model: CardanoUtxoClaim as unknown as Model<never>, collection: 'cardano_utxo_claims' }
 ];
 
 /**

@@ -282,9 +282,34 @@ describe('cardanoStakingOperationService', () => {
       // installs waves through the deployment where the migration never ran.
       const collections = STAKING_COLLECTIONS.map((entry) => entry.collection);
 
-      expect(collections).toHaveLength(8);
+      expect(collections).toHaveLength(9);
       expect(mongoose.connection.readyState).toBe(1);
       expect(await missingStakingIndexes()).toEqual([]);
+    });
+
+    it('covers the claim store, whose expiry a staking operation depends on', async () => {
+      // It is not a collection this rollout introduced — transfers have used it all along — but the
+      // way it expires is what keeps an uncertain operation's inputs held. An index that
+      // load-bearing cannot go on being created lazily by whichever process gets there first.
+      const collections = STAKING_COLLECTIONS.map((entry) => entry.collection);
+
+      expect(collections).toContain('cardano_utxo_claims');
+    });
+
+    it('refuses staking operations when the claim store has no expiry index', async () => {
+      // Without it, a pinned claim and a lapsed one are the same document to the server, and the
+      // whole hold is imaginary.
+      const database = mongoose.connection.db;
+      if (database === undefined) throw new Error('no database connection');
+      await database.collection('cardano_utxo_claims').dropIndex('expiresAt_1');
+      resetStakingSchemaVerification();
+
+      expect(await missingStakingIndexes()).toEqual(['cardano_utxo_claims.expiresAt_1']);
+
+      await database
+        .collection('cardano_utxo_claims')
+        .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'expiresAt_1' });
+      resetStakingSchemaVerification();
     });
   });
 });
