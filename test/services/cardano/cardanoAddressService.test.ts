@@ -6,7 +6,9 @@ import {
   decodeCardanoAddress,
   enterpriseAddress,
   isValidCardanoAddress,
-  paymentCredential
+  paymentCredential,
+  rewardAddress,
+  stakeCredentialHex
 } from '../../../src/services/cardano/cardanoAddressService';
 
 /**
@@ -210,5 +212,106 @@ describe('cardanoAddressService - isValidCardanoAddress', () => {
     expect(isValidCardanoAddress(CIP19.testnet.type06, 'testnet')).toBe(true);
     expect(isValidCardanoAddress(CIP19.testnet.type00, 'testnet')).toBe(true);
     expect(isValidCardanoAddress(CIP19.mainnet.type06, 'mainnet')).toBe(true);
+  });
+});
+
+describe('cardanoAddressService - rewardAddress', () => {
+  /**
+   * Reward addresses for the staking key of the CIP-19 vectors above.
+   *
+   * Built from `CIP19.stakeKeyHash` — which *is* from the specification, and which
+   * `paymentCredential` is already tested against — plus the type-14 header CIP-19 defines. They
+   * are not quoted type-14 vectors, so on their own they would only prove the code agrees with
+   * itself; the assertions below about the header byte, the payload length and the credential
+   * shared with the base address are what give them teeth.
+   */
+  const REWARD = {
+    mainnet: 'stake1uyehkck0lajq8gr28t9uxnuvgcqrc6070x3k9r8048z8y5gh6ffgw',
+    testnet: 'stake_test1uqehkck0lajq8gr28t9uxnuvgcqrc6070x3k9r8048z8y5gssrtvn'
+  };
+
+  it('derives the reward address of the CIP-19 staking key on mainnet', () => {
+    expect(rewardAddress(STAKE_PUBLIC_KEY, 'mainnet')).toBe(REWARD.mainnet);
+  });
+
+  it('derives the reward address of the CIP-19 staking key on testnet', () => {
+    expect(rewardAddress(STAKE_PUBLIC_KEY, 'testnet')).toBe(REWARD.testnet);
+  });
+
+  it('is built on the stake key hash the specification gives', () => {
+    const payload = Buffer.from(
+      bech32.fromWords(
+        bech32.decode(REWARD.testnet as `${string}1${string}`, 256).words
+      )
+    );
+
+    expect(payload.subarray(1).toString('hex')).toBe(CIP19.stakeKeyHash);
+  });
+
+  it('derives from the same credential the base address carries', () => {
+    // The property that matters and that a vector alone does not prove: a reward address built from
+    // a different staking key is perfectly well-formed, reads as empty forever, and looks exactly
+    // like "no rewards yet".
+    const base = baseAddress(PUBLIC_KEY, STAKE_PUBLIC_KEY, 'testnet');
+    const basePayload = Buffer.from(
+      bech32.fromWords(bech32.decode(base as `${string}1${string}`, 256).words)
+    );
+    const reward = rewardAddress(STAKE_PUBLIC_KEY, 'testnet');
+    const rewardPayload = Buffer.from(
+      bech32.fromWords(bech32.decode(reward as `${string}1${string}`, 256).words)
+    );
+
+    // Base address: header, payment credential, staking credential. Reward: header, staking.
+    expect(rewardPayload.subarray(1).toString('hex')).toBe(
+      basePayload.subarray(29).toString('hex')
+    );
+  });
+
+  it('carries a header and one credential, and nothing else', () => {
+    const payload = Buffer.from(
+      bech32.fromWords(
+        bech32.decode(rewardAddress(STAKE_PUBLIC_KEY, 'testnet') as `${string}1${string}`, 256)
+          .words
+      )
+    );
+
+    expect(payload).toHaveLength(29);
+    // Type 14 in the high nibble, network id in the low one.
+    expect(payload[0]).toBe((14 << 4) | 0);
+  });
+
+  it('puts the network in the header, not only in the prefix', () => {
+    const testnet = Buffer.from(
+      bech32.fromWords(
+        bech32.decode(rewardAddress(STAKE_PUBLIC_KEY, 'testnet') as `${string}1${string}`, 256)
+          .words
+      )
+    );
+    const mainnet = Buffer.from(
+      bech32.fromWords(
+        bech32.decode(rewardAddress(STAKE_PUBLIC_KEY, 'mainnet') as `${string}1${string}`, 256)
+          .words
+      )
+    );
+
+    expect(testnet[0]).toBe(0xe0);
+    expect(mainnet[0]).toBe(0xe1);
+    expect(testnet.subarray(1).toString('hex')).toBe(mainnet.subarray(1).toString('hex'));
+  });
+
+  it('refuses a key of the wrong size', () => {
+    expect(() => rewardAddress('00'.repeat(31), 'testnet')).toThrow(
+      'CARDANO_PUBLIC_KEY_MUST_BE_32_BYTES'
+    );
+  });
+});
+
+describe('cardanoAddressService - stakeCredentialHex', () => {
+  it('reproduces the stake key hash of the CIP-19 vectors', () => {
+    expect(stakeCredentialHex(STAKE_PUBLIC_KEY)).toBe(CIP19.stakeKeyHash);
+  });
+
+  it('accepts a key with the 0x prefix the database stores', () => {
+    expect(stakeCredentialHex(`0x${STAKE_PUBLIC_KEY}`)).toBe(CIP19.stakeKeyHash);
   });
 });

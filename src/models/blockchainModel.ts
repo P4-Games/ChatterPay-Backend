@@ -37,6 +37,83 @@ export interface ExternalDeposits {
  */
 export type BlockchainFamily = 'evm' | 'cardano';
 
+/** Who funds the registration deposit, and who funds the network fees around it. */
+export type CardanoStakingFinancingMode = 'user_deposit_sponsor_fees' | 'sponsor_deposit_and_fees';
+
+/** Vote delegation a newly registered credential starts with. */
+export type CardanoGovernanceDefault = 'always_abstain' | 'always_no_confidence';
+
+/** A pool the network is allowed to delegate to, and whether it is currently offered. */
+export interface CardanoAllowlistedPool {
+  poolId: string;
+  enabled: boolean;
+}
+
+/**
+ * Staking settings, per network. Absent on a Cardano network that does not stake, which is why the
+ * whole subdocument is optional: a network with no `staking` behaves exactly as it did before.
+ *
+ * Every lovelace amount is a decimal string. `number` loses precision above 2^53 and these are
+ * budgets that get compared against on-chain values, so they are read as `bigint` and never as a
+ * float.
+ */
+export interface CardanoStakingSettings {
+  /**
+   * Whether this network may sign staking operations. Off by default, and the environment flag has
+   * to agree: either one being false is enough to refuse. Reads and reconciliation keep working.
+   */
+  enabled: boolean;
+  /** Who funds the registration deposit. Fixed per registration cycle, never rewritten in place. */
+  financingMode: CardanoStakingFinancingMode;
+  /** Pool every new registration delegates to. Must be present and enabled in `allowlistedPools`. */
+  defaultPoolId: string | null;
+  /** Pools this network may delegate to. Validated against the pool's own network before signing. */
+  allowlistedPools: CardanoAllowlistedPool[];
+  /** Vote delegation set on first registration, as accepted in the terms. */
+  defaultGovernance: CardanoGovernanceDefault;
+  /** Version of the staking terms a user has to have accepted for this network to enrol them. */
+  termsVersion: string;
+  /**
+   * Commercial entry threshold, unrelated to the protocol deposit.
+   *
+   * It has to clear the deposit **plus** the minimum transfer amount plus room for fees, or a user
+   * lands registered and unable to move anything: the deposit leaves their UTxOs, and what is left
+   * falls under the token's own transfer minimum. This is a product decision, not a derived value,
+   * so it is stored rather than computed — but it is validated against the ADA token's transfer
+   * minimum at read time.
+   */
+  minimumUserAdaForEnrollmentLovelace: string;
+  /** Ceiling on wallets touched per scheduler run, so a run finishes inside its deadline. */
+  maxWalletsPerRun: number;
+  /** Ceiling on provider calls per run, to stay inside the provider's quota. */
+  maxProviderRequestsPerRun: number;
+  /** Anti-churn: sponsored registrations allowed per account inside the rolling window. */
+  maxSponsoredRegistrationsPerAccountRollingWindow: number;
+  /** Length of that rolling window, in days. */
+  sponsorRollingWindowDays: number;
+  /** Budget the sponsor may spend on fees per window. Enforced by an atomic counter, not by a scan. */
+  dailySponsorFeeBudgetLovelace: string;
+  /** Whether a retiring pool triggers redelegation to another allowlisted pool. */
+  autoRedelegateRetiredPools: boolean;
+  /** Whether the governance surface is offered at all on this network. */
+  governanceEnabled: boolean;
+  /**
+   * DReps a user may delegate to. **Empty means no restriction**, unlike `allowlistedPools`.
+   *
+   * Narrowing who can represent a user is ChatterPay choosing their governance, which is a different
+   * thing from picking a default pool. The list exists so the decision can be made, not because one
+   * was made here.
+   */
+  allowlistedDReps: string[];
+  /**
+   * Whether registering ChatterPay's own DRep credential and casting votes is available.
+   *
+   * Separate from `enabled` on purpose: that flag being off must not be what keeps this off. It
+   * needs its own deposit policy, custody model and scope before it can be turned on.
+   */
+  drepOwnEnabled: boolean;
+}
+
 /** Settings that only a Cardano network has. Absent on every EVM document. */
 export interface CardanoNetworkSettings {
   /** `testnet` or `mainnet`. Decides the header byte of every address issued (CIP-19). */
@@ -47,6 +124,8 @@ export interface CardanoNetworkSettings {
   ttlSlots: number;
   /** Confirmations required before an output is spendable. */
   depositConfirmations: number;
+  /** Present only where staking is configured. A network without it does not stake. */
+  staking?: CardanoStakingSettings;
 }
 
 export interface IBlockchain extends Document {
@@ -140,12 +219,55 @@ const externalDepositsSchema = new Schema<ExternalDeposits>(
   { _id: false }
 );
 
+const allowlistedPoolSchema = new Schema<CardanoAllowlistedPool>(
+  {
+    poolId: { type: String, required: true },
+    enabled: { type: Boolean, required: true, default: false }
+  },
+  { _id: false }
+);
+
+// Defaults are the refusing ones. A staking subdocument written without them should not sign, enrol
+// or sponsor anything: the values that decide money are the ones an operator has to state.
+const cardanoStakingSchema = new Schema<CardanoStakingSettings>(
+  {
+    enabled: { type: Boolean, required: true, default: false },
+    financingMode: {
+      type: String,
+      enum: ['user_deposit_sponsor_fees', 'sponsor_deposit_and_fees'],
+      required: true,
+      default: 'user_deposit_sponsor_fees'
+    },
+    defaultPoolId: { type: String, required: false, default: null },
+    allowlistedPools: { type: [allowlistedPoolSchema], required: true, default: () => [] },
+    defaultGovernance: {
+      type: String,
+      enum: ['always_abstain', 'always_no_confidence'],
+      required: true,
+      default: 'always_abstain'
+    },
+    termsVersion: { type: String, required: true },
+    minimumUserAdaForEnrollmentLovelace: { type: String, required: true },
+    maxWalletsPerRun: { type: Number, required: true, default: 500 },
+    maxProviderRequestsPerRun: { type: Number, required: true, default: 1000 },
+    maxSponsoredRegistrationsPerAccountRollingWindow: { type: Number, required: true, default: 2 },
+    sponsorRollingWindowDays: { type: Number, required: true, default: 30 },
+    dailySponsorFeeBudgetLovelace: { type: String, required: true, default: '0' },
+    autoRedelegateRetiredPools: { type: Boolean, required: true, default: false },
+    governanceEnabled: { type: Boolean, required: true, default: false },
+    allowlistedDReps: { type: [String], required: true, default: () => [] },
+    drepOwnEnabled: { type: Boolean, required: true, default: false }
+  },
+  { _id: false }
+);
+
 const cardanoSettingsSchema = new Schema<CardanoNetworkSettings>(
   {
     network: { type: String, required: true },
     providerUrl: { type: String, required: true },
     ttlSlots: { type: Number, required: true, default: 900 },
-    depositConfirmations: { type: Number, required: true, default: 3 }
+    depositConfirmations: { type: Number, required: true, default: 3 },
+    staking: { type: cardanoStakingSchema, required: false }
   },
   { _id: false }
 );
