@@ -98,6 +98,12 @@ const {
   CARDANO_ROUTE_DUST_TO_SPONSOR: cardanoRouteDustToSponsor = 'false',
   CARDANO_SPONSOR_WALLET_ID: cardanoSponsorWalletId = '',
   CARDANO_DERIVATION_CHECK: cardanoDerivationCheck = '',
+  CARDANO_STAKING_ENABLED: cardanoStakingEnabled = 'false',
+  CARDANO_STAKING_MIN_ENROLMENT_ADA: cardanoStakingMinEnrolmentAda = '',
+  CARDANO_STAKING_DEFAULT_POOL_ID: cardanoStakingDefaultPoolId = '',
+  CARDANO_STAKING_TERMS_VERSION: cardanoStakingTermsVersion = '',
+  CARDANO_STAKING_FEE_DAILY_CAP_ADA: cardanoStakingFeeDailyCapAda = '',
+  CARDANO_STAKING_DREP_OWN_ENABLED: cardanoStakingDrepOwnEnabled = 'false',
   TELEGRAM_BOT_API_KEY,
   SECURITY_PIN_LENGTH: securityPinLength = 6,
   SECURITY_PIN_MAX_FAILED_ATTEMPTS: securityPinMaxFailedAttempts = 3,
@@ -407,3 +413,9 @@ export const CARDANO_RECYCLE_DESTINATION_UTXO: string = cardanoRecycleDestinatio
 export const CARDANO_ROUTE_DUST_TO_SPONSOR: string = cardanoRouteDustToSponsor;
 export const CARDANO_SPONSOR_WALLET_ID: string = cardanoSponsorWalletId;
 export const CARDANO_DERIVATION_CHECK: string = cardanoDerivationCheck.trim();
+export const CARDANO_STAKING_ENABLED: string = cardanoStakingEnabled;
+export const CARDANO_STAKING_MIN_ENROLMENT_ADA: string = cardanoStakingMinEnrolmentAda;
+export const CARDANO_STAKING_DEFAULT_POOL_ID: string = cardanoStakingDefaultPoolId;
+export const CARDANO_STAKING_TERMS_VERSION: string = cardanoStakingTermsVersion;
+export const CARDANO_STAKING_FEE_DAILY_CAP_ADA: string = cardanoStakingFeeDailyCapAda;
+export const CARDANO_STAKING_DREP_OWN_ENABLED: string = cardanoStakingDrepOwnEnabled;
