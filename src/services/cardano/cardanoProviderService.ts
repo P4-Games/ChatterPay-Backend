@@ -144,8 +144,8 @@ interface KoiosTxStatus {
  * only what its own dialect is.
  *
  * Exported so that the staking reads can extend it rather than reimplement it. They are a
- * separate surface from the transfer flow — a deployment can transfer without ever reading a
- * stake account — but they fail in exactly the same ways, and a second copy of this
+ * separate surface from the transfer flow â€” a deployment can transfer without ever reading a
+ * stake account â€” but they fail in exactly the same ways, and a second copy of this
  * classification is a second place for the two to drift apart.
  */
 export abstract class HttpCardanoProvider {
