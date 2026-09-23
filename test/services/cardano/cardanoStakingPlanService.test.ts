@@ -1,0 +1,480 @@
+import { Types } from 'mongoose';
+import { describe, expect, it } from 'vitest';
+
+import type { CardanoStakingConfig } from '../../../src/config/cardanoStakingConfig';
+import type { ICardanoStakingAccount } from '../../../src/models/cardanoStakingAccountModel';
+import {
+  baseAddress,
+  decodeCardanoAddress
+} from '../../../src/services/cardano/cardanoAddressService';
+import {
+  decideAutomaticAction,
+  decideRequestedAction,
+  type StakingDecisionContext
+} from '../../../src/services/cardano/cardanoStakingPlanService';
+import type { CardanoStakingProtocolParameters } from '../../../src/services/cardano/cardanoStakingProviderService';
+
+const POOL = 'pool1vvkurfxhajtj4f7x8wjkeet7rg8amz34duy5nux76per5sn3npx';
+const OTHER_POOL = 'pool190dapqls3y9dxuqtexmm80sppjha7e8rhu62xydgwn4jjj07pqm';
+const DREP = 'drep1ytcw6qzpqqclx2yd0zy64ztvlkkhnf6yrzza8whgnq4vz5gh89626';
+
+const ADDRESS =
+  decodeCardanoAddress(
+    baseAddress(
+      '0x7c3ca0ade35d250f5706a17cbbc9e97402b5c230b26b24b940c77e4c00154636',
+      '0xce3b525279e269bac5368d404508d9fa9c527bda6eadbf639fed17673ed50d18',
+      'testnet'
+    )
+  )?.payload ?? new Uint8Array();
+
+/** Protocol parameters as Preprod reported them. */
+const PARAMETERS: CardanoStakingProtocolParameters = {
+  minFeeA: 44,
+  minFeeB: 155_381,
+  coinsPerUtxoByte: 4_310n,
+  maxTxSize: 16_384,
+  stakeAddressDeposit: 2_000_000n,
+  drepDeposit: 500_000_000n
+};
+
+/**
+ * A staking configuration.
+ *
+ * @param overrides - What differs.
+ * @returns The configuration.
+ */
+function config(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingConfig {
+  return {
+    enabled: true,
+    disabledReason: '',
+    minimumEnrolmentLovelace: 5_000_000n,
+    defaultPoolId: POOL,
+    termsVersion: 'v1',
+    feeDailyCapLovelace: 50_000_000n,
+    drepOwnEnabled: false,
+    ...overrides
+  };
+}
+
+/**
+ * An account, shaped like the document without needing a database.
+ *
+ * @param onChain - The snapshot.
+ * @param overrides - Anything else that differs.
+ * @returns A stand-in for the account.
+ */
+function account(
+  onChain: Record<string, unknown> = {},
+  overrides: Record<string, unknown> = {}
+): ICardanoStakingAccount {
+  return {
+    _id: new Types.ObjectId(),
+    preference: { enabled: true, version: 1, updatedAt: new Date() },
+    termsConsent: { version: 'v1', acceptedAt: new Date(), source: 'web' },
+    onChain: {
+      registered: false,
+      poolId: null,
+      governanceDelegation: null,
+      depositLovelace: null,
+      registrationOrigin: 'unknown',
+      withdrawableRewardsLovelace: '0',
+      pendingRewardsLovelace: '0',
+      lifetimeRewardsLovelace: '0',
+      historicalCompleteness: 'complete',
+      asOf: new Date(),
+      ...onChain
+    },
+    ...overrides
+  } as unknown as ICardanoStakingAccount;
+}
+
+/**
+ * The context a decision is taken in.
+ *
+ * @param overrides - What differs.
+ * @returns The context.
+ */
+function context(overrides: Partial<StakingDecisionContext> = {}): StakingDecisionContext {
+  return {
+    config: config(),
+    parameters: PARAMETERS,
+    addressBytes: ADDRESS,
+    spendableLovelace: 10_000_000n,
+    poolState: null,
+    operationInFlight: false,
+    ...overrides
+  };
+}
+
+/** A wallet that was already staking before ChatterPay looked, as the live chain has it. */
+const ALREADY_STAKING = {
+  registered: true,
+  poolId: POOL,
+  registrationOrigin: 'external' as const,
+  depositLovelace: '2000000',
+  governanceDelegation: { kind: 'drep' as const, idCip129: DREP },
+  withdrawableRewardsLovelace: '8183734'
+};
+
+describe('cardanoStakingPlanService', () => {
+  describe('nothing is decided on an unknown', () => {
+    it('refuses every automatic action before a confirmed read', () => {
+      // `asOf: null` is not "not registered" and not "no rewards". It is unknown, and an economic
+      // decision taken on it is taken on a default that happens to look like a fact.
+      const decision = decideAutomaticAction(account({ asOf: null }), context());
+
+      expect(decision.action).toBe('none');
+      expect(decision.refusal).toBe('no_confirmed_chain_read');
+    });
+
+    it('refuses a requested exit before a confirmed read, too', () => {
+      const decision = decideRequestedAction(
+        account({ ...ALREADY_STAKING, asOf: null }),
+        'exit_and_send_max',
+        context()
+      );
+
+      expect(decision.refusal).toBe('no_confirmed_chain_read');
+    });
+
+    it('refuses anything while an operation is in flight', () => {
+      const decision = decideAutomaticAction(
+        account(ALREADY_STAKING),
+        context({ operationInFlight: true })
+      );
+
+      expect(decision.refusal).toBe('operation_in_flight');
+    });
+  });
+
+  describe('a wallet that is already registered', () => {
+    it('is never registered again', () => {
+      const decision = decideRequestedAction(
+        account(ALREADY_STAKING),
+        'register_and_delegate',
+        context()
+      );
+
+      expect(decision.action).toBe('none');
+      expect(decision.refusal).toBe('already_registered');
+    });
+
+    it('is not registered again by the sweep either, however much ada it holds', () => {
+      const decision = decideAutomaticAction(
+        account(ALREADY_STAKING),
+        context({ spendableLovelace: 1_000_000_000n })
+      );
+
+      expect(decision.action).not.toBe('register_and_delegate');
+    });
+
+    it('is offered its rewards like any other, whoever registered it', () => {
+      // The origin decides what this service may claim to have done, not what the user may do.
+      const decision = decideAutomaticAction(account(ALREADY_STAKING), context());
+
+      expect(decision.action).toBe('withdraw_rewards');
+    });
+
+    it('can exit on the deposit somebody else paid, once that figure is known', () => {
+      const decision = decideRequestedAction(
+        account(ALREADY_STAKING),
+        'exit_and_send_max',
+        context()
+      );
+
+      expect(decision.action).toBe('exit_and_send_max');
+    });
+
+    it('cannot exit while the deposit it would refund is unknown', () => {
+      // A deregistration built on a guessed refund does not balance, and the ledger refuses it
+      // after a sponsor fee has already been spent finding out.
+      const decision = decideRequestedAction(
+        account({ ...ALREADY_STAKING, depositLovelace: null }),
+        'exit_and_send_max',
+        context()
+      );
+
+      expect(decision.action).toBe('none');
+      expect(decision.refusal).toBe('deposit_unknown');
+    });
+  });
+
+  describe('the Conway rule that reorders everything', () => {
+    it('delegates the vote before withdrawing, for a credential that never has', () => {
+      // `none` is a real state: registered, delegated to a pool, and never having delegated a vote.
+      // Conway refuses a withdrawal from such a credential outright, so the withdrawal that the
+      // rewards call for cannot be the next step.
+      const decision = decideAutomaticAction(
+        account({
+          registered: true,
+          poolId: POOL,
+          governanceDelegation: { kind: 'none' },
+          withdrawableRewardsLovelace: '8183734'
+        }),
+        context()
+      );
+
+      expect(decision.action).toBe('delegate_vote');
+    });
+
+    it('says so plainly when a user asks to withdraw', () => {
+      // Not "no rewards": the user has rewards, and what stands between them and the money is a
+      // vote delegation nobody mentioned.
+      const decision = decideRequestedAction(
+        account({
+          registered: true,
+          poolId: POOL,
+          governanceDelegation: { kind: 'none' },
+          withdrawableRewardsLovelace: '8183734'
+        }),
+        'withdraw_rewards',
+        context()
+      );
+
+      expect(decision.refusal).toBe('vote_delegation_required');
+    });
+
+    it('withdraws once the vote is delegated, abstaining included', () => {
+      // Abstaining is a delegation. It is what the ledger asks for, and it leaves the user's voice
+      // uncommitted, which is why it is the default on first activation.
+      const decision = decideAutomaticAction(
+        account({
+          registered: true,
+          poolId: POOL,
+          governanceDelegation: { kind: 'always_abstain' },
+          withdrawableRewardsLovelace: '8183734'
+        }),
+        context()
+      );
+
+      expect(decision.action).toBe('withdraw_rewards');
+    });
+
+    it('treats a snapshot with no delegation field at all the same way', () => {
+      const decision = decideAutomaticAction(
+        account({ registered: true, poolId: POOL, governanceDelegation: null }),
+        context()
+      );
+
+      expect(decision.action).toBe('delegate_vote');
+    });
+  });
+
+  describe('a pool that stops paying', () => {
+    it('moves the delegation when a retirement is on record', () => {
+      const decision = decideAutomaticAction(
+        account(ALREADY_STAKING),
+        context({
+          poolState: {
+            poolId: POOL,
+            retirementScheduled: true,
+            retiringEpoch: null,
+            activeStakeLovelace: 0n
+          }
+        })
+      );
+
+      expect(decision.action).toBe('redelegate_pool');
+    });
+
+    it('moves it before withdrawing, because the rewards stop either way', () => {
+      const decision = decideAutomaticAction(
+        account({ ...ALREADY_STAKING, withdrawableRewardsLovelace: '8183734' }),
+        context({
+          poolState: {
+            poolId: POOL,
+            retirementScheduled: true,
+            retiringEpoch: 318,
+            activeStakeLovelace: 0n
+          }
+        })
+      );
+
+      expect(decision.action).toBe('redelegate_pool');
+    });
+
+    it('delegates a registered credential that points at no pool at all', () => {
+      const decision = decideAutomaticAction(
+        account({ ...ALREADY_STAKING, poolId: null }),
+        context()
+      );
+
+      expect(decision.action).toBe('redelegate_pool');
+    });
+
+    it('refuses a redelegation to the pool it already uses', () => {
+      const decision = decideRequestedAction(
+        account(ALREADY_STAKING),
+        'redelegate_pool',
+        context()
+      );
+
+      expect(decision.refusal).toBe('already_delegated');
+    });
+
+    it('allows one away from a pool that is retiring, even to the configured default', () => {
+      const decision = decideRequestedAction(
+        account(ALREADY_STAKING),
+        'redelegate_pool',
+        context({
+          poolState: {
+            poolId: POOL,
+            retirementScheduled: true,
+            retiringEpoch: null,
+            activeStakeLovelace: 0n
+          }
+        })
+      );
+
+      expect(decision.action).toBe('redelegate_pool');
+    });
+
+    it('allows one from a different pool to the configured default', () => {
+      const decision = decideRequestedAction(
+        account({ ...ALREADY_STAKING, poolId: OTHER_POOL }),
+        'redelegate_pool',
+        context()
+      );
+
+      expect(decision.action).toBe('redelegate_pool');
+    });
+  });
+
+  describe('enrolling a wallet that is not registered', () => {
+    it('registers one that clears the threshold', () => {
+      const decision = decideAutomaticAction(account(), context());
+
+      expect(decision.action).toBe('register_and_delegate');
+    });
+
+    it('leaves one below the configured threshold alone, and says which bar it missed', () => {
+      // 4.5 ada clears the chain's floor of ~3.97 and misses the configured 5. The distinction is
+      // worth carrying: this wallet *could* be enrolled, and this deployment has chosen not to.
+      const decision = decideAutomaticAction(account(), context({ spendableLovelace: 4_500_000n }));
+
+      expect(decision.action).toBe('none');
+      expect(decision.refusal).toBe('not_eligible');
+      expect(decision.detail).toBe('below_threshold');
+    });
+
+    it('distinguishes one that cannot be enrolled at all', () => {
+      // Below the chain's own floor: not a preference, an impossibility. Three ada cannot cover a
+      // two-ada deposit and still leave an output that exists.
+      const decision = decideAutomaticAction(account(), context({ spendableLovelace: 3_000_000n }));
+
+      expect(decision.refusal).toBe('not_eligible');
+      expect(decision.detail).toBe('below_chain_floor');
+    });
+
+    it('does nothing at all while no pool is configured', () => {
+      const decision = decideAutomaticAction(
+        account(),
+        context({ config: config({ defaultPoolId: null }) })
+      );
+
+      expect(decision.refusal).toBe('no_pool_configured');
+    });
+  });
+
+  describe('consent, and the one thing it does not gate', () => {
+    it('holds back an automatic registration without it', () => {
+      const decision = decideAutomaticAction(account({}, { termsConsent: null }), context());
+
+      expect(decision.refusal).toBe('no_terms_consent');
+    });
+
+    it('holds back a withdrawal without it', () => {
+      const decision = decideRequestedAction(
+        account(ALREADY_STAKING, { termsConsent: null }),
+        'withdraw_rewards',
+        context()
+      );
+
+      expect(decision.refusal).toBe('no_terms_consent');
+    });
+
+    it('lets a user leave without it', () => {
+      // A user must be able to get their own ada out regardless of what they did or did not accept
+      // on the way in — including every wallet that was staking before this service existed.
+      const decision = decideRequestedAction(
+        account(ALREADY_STAKING, { termsConsent: null }),
+        'exit_and_send_max',
+        context()
+      );
+
+      expect(decision.action).toBe('exit_and_send_max');
+    });
+
+    it('lets a user deregister without it', () => {
+      const decision = decideRequestedAction(
+        account(ALREADY_STAKING, {
+          termsConsent: null,
+          preference: { enabled: false, version: 1 }
+        }),
+        'deregister',
+        context()
+      );
+
+      expect(decision.action).toBe('deregister');
+    });
+
+    it('holds back the sweep for a user who has not opted in', () => {
+      const decision = decideAutomaticAction(
+        account(ALREADY_STAKING, { preference: { enabled: false, version: 1 } }),
+        context()
+      );
+
+      expect(decision.refusal).toBe('not_opted_in');
+    });
+  });
+
+  describe('what is deliberately not available', () => {
+    it('refuses the DRep-of-our-own kinds while the flag is off', () => {
+      for (const kind of ['register_drep', 'update_drep', 'cast_drep_vote'] as const) {
+        const decision = decideRequestedAction(account(ALREADY_STAKING), kind, context());
+
+        expect(decision.action).toBe('none');
+        expect(decision.refusal).toBe('not_available');
+      }
+    });
+
+    it('refuses everything while staking is switched off', () => {
+      const decision = decideRequestedAction(
+        account(ALREADY_STAKING),
+        'withdraw_rewards',
+        context({ config: config({ enabled: false, disabledReason: 'flag_off' }) })
+      );
+
+      expect(decision.refusal).toBe('staking_disabled');
+      expect(decision.detail).toBe('flag_off');
+    });
+  });
+
+  describe('when there is simply nothing to do', () => {
+    it('answers none without a refusal for a healthy, settled account', () => {
+      const decision = decideAutomaticAction(
+        account({ ...ALREADY_STAKING, withdrawableRewardsLovelace: '0' }),
+        context()
+      );
+
+      expect(decision.action).toBe('none');
+      expect(decision.refusal).toBeNull();
+    });
+
+    it('refuses a withdrawal of nothing', () => {
+      const decision = decideRequestedAction(
+        account({ ...ALREADY_STAKING, withdrawableRewardsLovelace: '0' }),
+        'withdraw_rewards',
+        context()
+      );
+
+      expect(decision.refusal).toBe('no_rewards');
+    });
+
+    it('refuses to withdraw from a credential that is not registered', () => {
+      const decision = decideRequestedAction(account(), 'withdraw_rewards', context());
+
+      expect(decision.refusal).toBe('not_registered');
+    });
+  });
+});

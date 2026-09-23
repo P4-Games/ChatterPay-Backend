@@ -639,9 +639,7 @@ export class KoiosStakingProvider extends HttpCardanoProvider implements Cardano
    * @returns The records, each without a deposit figure.
    * @throws CardanoProviderError On any provider failure, or when a field cannot be read.
    */
-  async registrationHistory(
-    rewardAddress: string
-  ): Promise<readonly CardanoRegistrationRecord[]> {
+  async registrationHistory(rewardAddress: string): Promise<readonly CardanoRegistrationRecord[]> {
     const rows = await this.call<KoiosAccountUpdate[]>('/account_updates', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -925,9 +923,7 @@ export class BlockfrostStakingProvider
    * @returns The records, oldest first, each carrying the deposit it locked.
    * @throws CardanoProviderError On any provider failure, or when a field cannot be read.
    */
-  async registrationHistory(
-    rewardAddress: string
-  ): Promise<readonly CardanoRegistrationRecord[]> {
+  async registrationHistory(rewardAddress: string): Promise<readonly CardanoRegistrationRecord[]> {
     const rows = await this.callOptional<BlockfrostRegistration[]>(
       `/accounts/${encodeURIComponent(rewardAddress)}/registrations?count=${REWARD_PAGE_SIZE}&page=1`
     );
