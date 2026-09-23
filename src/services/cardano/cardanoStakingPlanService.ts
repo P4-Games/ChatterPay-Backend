@@ -65,6 +65,8 @@ export type StakingDecisionRefusal =
   | 'already_delegated'
   /** No pool is configured to delegate to. */
   | 'no_pool_configured'
+  /** This wallet is not on the list automatic enrolment is confined to. */
+  | 'not_allowlisted'
   /** The action is not available in this deployment. */
   | 'not_available';
 
@@ -140,6 +142,10 @@ export function decideAutomaticAction(
 
   if (!onChain.registered) {
     if (context.config.defaultPoolId === null) return refuse('no_pool_configured');
+    // The confinement is checked here and not in the eligibility arithmetic, because it is not a
+    // statement about the wallet: the wallet may be perfectly enrollable and simply not be one of
+    // the ones this deployment has been told to touch yet.
+    if (!allowlisted(account, context.config)) return refuse('not_allowlisted');
     const assessment = assessStakingEnrolment(
       context.config,
       context.parameters,
@@ -208,6 +214,9 @@ export function decideRequestedAction(
     case 'register_and_delegate': {
       if (onChain.registered) return refuse('already_registered');
       if (context.config.defaultPoolId === null) return refuse('no_pool_configured');
+      // The confinement binds a user asking as well as the sweep. A rollout limited to a handful of
+      // test wallets that anybody could opt into by pressing a button is not limited.
+      if (!allowlisted(account, context.config)) return refuse('not_allowlisted');
       const assessment = assessStakingEnrolment(
         context.config,
         context.parameters,
@@ -278,6 +287,22 @@ function commonRefusals(
   if (account.onChain.asOf === null) return refuse('no_confirmed_chain_read');
   if (context.operationInFlight) return refuse('operation_in_flight');
   return null;
+}
+
+/**
+ * Whether this wallet is one automatic enrolment has been allowed to touch.
+ *
+ * Only registration is confined. An account that is already registered — whoever registered it —
+ * must still be able to withdraw its rewards and, above all, to leave: confining an exit to a list
+ * would strand a user's own ada behind a rollout setting.
+ *
+ * @param account - The account.
+ * @param config - The staking configuration.
+ * @returns `true` when there is no confinement, or when the wallet is named by it.
+ */
+function allowlisted(account: ICardanoStakingAccount, config: CardanoStakingConfig): boolean {
+  if (config.enrolmentAllowlist === null) return true;
+  return config.enrolmentAllowlist.includes(account.walletAddress);
 }
 
 /**

@@ -26,6 +26,7 @@ import {
   CARDANO_STAKING_DEFAULT_POOL_ID,
   CARDANO_STAKING_DREP_OWN_ENABLED,
   CARDANO_STAKING_ENABLED,
+  CARDANO_STAKING_ENROLMENT_ALLOWLIST,
   CARDANO_STAKING_FEE_DAILY_CAP_ADA,
   CARDANO_STAKING_MIN_ENROLMENT_ADA,
   CARDANO_STAKING_TERMS_VERSION
@@ -85,6 +86,15 @@ export interface CardanoStakingConfig {
    * product decision that has not been made; nothing routes to those kinds while it is false.
    */
   drepOwnEnabled: boolean;
+  /**
+   * Addresses automatic enrolment is confined to, or `null` for no confinement.
+   *
+   * A list that is **present and empty is not the same as absent**. Configuring an empty list means
+   * "enrol nobody", which is a usable state while a rollout is being prepared; leaving the setting
+   * out entirely means "no confinement". Collapsing the two would turn a typo in the setting into an
+   * unrestricted sweep across every wallet in the database.
+   */
+  enrolmentAllowlist: readonly string[] | null;
 }
 
 /**
@@ -146,6 +156,26 @@ export function getCardanoStakingConfig(): CardanoStakingConfig {
     termsVersion: CARDANO_STAKING_TERMS_VERSION.trim() || DEFAULT_TERMS_VERSION,
     feeDailyCapLovelace:
       feeDailyCapLovelace ?? BigInt(DEFAULT_FEE_DAILY_CAP_ADA) * LOVELACE_PER_ADA,
-    drepOwnEnabled: CARDANO_STAKING_DREP_OWN_ENABLED.trim().toLowerCase() === 'true'
+    drepOwnEnabled: CARDANO_STAKING_DREP_OWN_ENABLED.trim().toLowerCase() === 'true',
+    enrolmentAllowlist: readAllowlist(CARDANO_STAKING_ENROLMENT_ALLOWLIST)
   };
+}
+
+/**
+ * Reads the enrolment allowlist.
+ *
+ * The distinction this makes is between a setting that was never given and one that was given as
+ * nothing. Only an entirely absent setting means "no confinement"; a setting present but holding no
+ * usable address means "nobody", because the alternative is that a stray comma opens the sweep to
+ * every wallet there is.
+ *
+ * @param raw - The configured value: addresses separated by commas, whitespace, or both.
+ * @returns The addresses, or `null` when the setting is absent.
+ */
+function readAllowlist(raw: string): readonly string[] | null {
+  if (raw.trim() === '') return null;
+  return raw
+    .split(/[,\s]+/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '');
 }

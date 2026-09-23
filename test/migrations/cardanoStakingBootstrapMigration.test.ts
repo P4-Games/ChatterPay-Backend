@@ -3,6 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import migration, { MIGRATION_NAME } from '../../src/migrations/0001-cardano-staking-bootstrap';
 import {
+  databaseName,
   type MigrationOptions,
   type MigrationReport,
   parseMigrationOptions,
@@ -696,6 +697,31 @@ describe('0001-cardano-staking-bootstrap', () => {
       expect(() => resolveMigrationRequest([], MIGRATIONS)).toThrow('MIGRATION_NOT_NAMED');
 
       expect(await databaseSnapshot()).toEqual(before);
+    });
+  });
+
+  describe('which database a run is about', () => {
+    // A real incident. A run meant for `chatterpay-dev` created eight collections in `chatterpay`,
+    // because the command line does not inherit the server's environment and the application falls
+    // back to a default connection string when `MONGO_URI` is absent. Nothing in the output said
+    // which database was being talked to, so the report read as a success wherever it landed.
+    it('reads the database out of a connection string', () => {
+      expect(databaseName('mongodb://localhost:27017/chatterpay-dev?retryWrites=true')).toBe(
+        'chatterpay-dev'
+      );
+      expect(databaseName('mongodb://user:pass@host:27017/chatterpay')).toBe('chatterpay');
+      expect(databaseName('mongodb+srv://u:p@cluster.example.net/prod-db?w=majority')).toBe(
+        'prod-db'
+      );
+    });
+
+    it('says so rather than guessing when the string names none', () => {
+      // A connection string with no database is another way to end up somewhere unintended, so it
+      // is shown as what it is instead of being resolved to whatever the server would pick.
+      expect(databaseName('mongodb://localhost:27017')).toContain('none in URI');
+      expect(databaseName('mongodb://localhost:27017/')).toContain('none in URI');
+      expect(databaseName('not a uri at all')).toContain('unreadable');
+      expect(databaseName('')).toContain('unreadable');
     });
   });
 });

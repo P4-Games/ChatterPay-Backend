@@ -43,6 +43,7 @@ function config(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingCo
     termsVersion: 'v1',
     feeDailyCapLovelace: 50_000_000n,
     drepOwnEnabled: false,
+    enrolmentAllowlist: null,
     ...overrides
   };
 }

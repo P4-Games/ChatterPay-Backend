@@ -104,6 +104,7 @@ const {
   CARDANO_STAKING_TERMS_VERSION: cardanoStakingTermsVersion = '',
   CARDANO_STAKING_FEE_DAILY_CAP_ADA: cardanoStakingFeeDailyCapAda = '',
   CARDANO_STAKING_DREP_OWN_ENABLED: cardanoStakingDrepOwnEnabled = 'false',
+  CARDANO_STAKING_ENROLMENT_ALLOWLIST: cardanoStakingEnrolmentAllowlist = '',
   TELEGRAM_BOT_API_KEY,
   SECURITY_PIN_LENGTH: securityPinLength = 6,
   SECURITY_PIN_MAX_FAILED_ATTEMPTS: securityPinMaxFailedAttempts = 3,
@@ -419,3 +420,4 @@ export const CARDANO_STAKING_DEFAULT_POOL_ID: string = cardanoStakingDefaultPool
 export const CARDANO_STAKING_TERMS_VERSION: string = cardanoStakingTermsVersion;
 export const CARDANO_STAKING_FEE_DAILY_CAP_ADA: string = cardanoStakingFeeDailyCapAda;
 export const CARDANO_STAKING_DREP_OWN_ENABLED: string = cardanoStakingDrepOwnEnabled;
+export const CARDANO_STAKING_ENROLMENT_ALLOWLIST: string = cardanoStakingEnrolmentAllowlist;

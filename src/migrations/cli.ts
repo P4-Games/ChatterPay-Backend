@@ -11,6 +11,12 @@
  * Without `--apply` it is a dry run and writes nothing at all.
  */
 
+// Loaded here, first, and not left to whoever starts the process. This file is run by hand rather
+// than by the server, so it does not inherit the server's environment — and a migration whose
+// `MONGO_URI` is absent does not fail, it silently targets whatever the application's default
+// connection string names. That is how a run meant for one database lands in another.
+import 'dotenv/config';
+
 import {
   formatMigrationReport,
   type MigrationRequest,

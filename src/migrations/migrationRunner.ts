@@ -18,7 +18,7 @@
  */
 
 import mongoose, { type Model } from 'mongoose';
-
+import { MONGO_URI } from '../config/constants';
 import { connectToDatabase } from '../config/database';
 
 /** How a migration was asked to run. */
@@ -294,6 +294,9 @@ export function resolveMigrationRequest(
 export function formatMigrationReport(report: MigrationReport): string {
   const lines = [
     `migration: ${report.name}`,
+    // The target is printed first and always. A report that does not say which database it
+    // is about is a report that reads as a success wherever it landed.
+    `database:  ${databaseName(MONGO_URI ?? '')}`,
     `mode:      ${report.dryRun ? 'DRY RUN (nothing written)' : 'APPLY'}`,
     ''
   ];
@@ -333,11 +336,55 @@ export async function runMigration(
   migration: Migration,
   options: MigrationOptions
 ): Promise<MigrationReport> {
+  requireExplicitDatabase();
   await connectToDatabase();
   try {
     return await runMigrationOnConnection(migration, options);
   } finally {
     await mongoose.disconnect();
+  }
+}
+
+/**
+ * Refuses to run unless the database was named explicitly.
+ *
+ * The application falls back to a default connection string when `MONGO_URI` is absent, which is
+ * reasonable for a server: it comes up against a local database and somebody notices. It is not
+ * reasonable here. A migration inherits that fallback and writes to a *different database from the
+ * one it was meant for*, and every safeguard this module has is aimed at the wrong target: the dry
+ * run reports what would happen there, the apply happens there, and the report reads as a success.
+ *
+ * This is not hypothetical. It happened: a run intended for `chatterpay-dev` created eight
+ * collections in `chatterpay`, and nothing in the output said so, because nothing in the output
+ * said which database was being talked to at all.
+ *
+ * So the fallback is refused rather than accepted, and {@link databaseName} puts the target in the
+ * report where it cannot be missed.
+ *
+ * @throws Error `MIGRATION_NO_DATABASE_CONFIGURED` when nothing names a database.
+ */
+function requireExplicitDatabase(): void {
+  if (!MONGO_URI || MONGO_URI.trim() === '') {
+    throw new Error(
+      'MIGRATION_NO_DATABASE_CONFIGURED: MONGO_URI is not set. A migration will not fall back to a default database — name the one you mean.'
+    );
+  }
+}
+
+/**
+ * The database a connection string names, for the report.
+ *
+ * @param uri - The connection string.
+ * @returns The database name, or a marker when the string does not carry one. A connection string
+ *   with no database is another way to end up somewhere unintended, so it is shown rather than
+ *   resolved.
+ */
+export function databaseName(uri: string): string {
+  try {
+    const path = new URL(uri.replace(/^mongodb\+srv:/, 'mongodb:')).pathname.replace(/^\//, '');
+    return path === '' ? '(none in URI — server default)' : decodeURIComponent(path);
+  } catch {
+    return '(unreadable URI)';
   }
 }
 

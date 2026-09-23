@@ -52,6 +52,7 @@ function config(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingCo
     termsVersion: 'v1',
     feeDailyCapLovelace: 50_000_000n,
     drepOwnEnabled: false,
+    enrolmentAllowlist: null,
     ...overrides
   };
 }
@@ -364,6 +365,57 @@ describe('cardanoStakingPlanService', () => {
 
       expect(decision.refusal).toBe('not_eligible');
       expect(decision.detail).toBe('below_chain_floor');
+    });
+
+    it('confines enrolment to the wallets it was told to touch', () => {
+      const allowed = account({}, { walletAddress: 'addr_test1_allowed' });
+      const other = account({}, { walletAddress: 'addr_test1_other' });
+      const confined = context({
+        config: config({ enrolmentAllowlist: ['addr_test1_allowed'] })
+      });
+
+      expect(decideAutomaticAction(allowed, confined).action).toBe('register_and_delegate');
+      expect(decideAutomaticAction(other, confined).refusal).toBe('not_allowlisted');
+    });
+
+    it('confines a user who asks as well as the sweep', () => {
+      // A rollout limited to a handful of test wallets that anybody could opt into by pressing a
+      // button is not limited.
+      const other = account({}, { walletAddress: 'addr_test1_other' });
+
+      const decision = decideRequestedAction(
+        other,
+        'register_and_delegate',
+        context({ config: config({ enrolmentAllowlist: ['addr_test1_allowed'] }) })
+      );
+
+      expect(decision.refusal).toBe('not_allowlisted');
+    });
+
+    it('reads a list that is present and empty as nobody', () => {
+      // Not the same as absent. A stray comma in the setting must not open the sweep to every
+      // wallet in the database.
+      const decision = decideAutomaticAction(
+        account({}, { walletAddress: 'addr_test1_allowed' }),
+        context({ config: config({ enrolmentAllowlist: [] }) })
+      );
+
+      expect(decision.refusal).toBe('not_allowlisted');
+    });
+
+    it('never confines an exit, a withdrawal or a redelegation', () => {
+      // The confinement is about who gets registered. A user's own ada must not sit behind a
+      // rollout setting, and an account that is already registered has to be able to leave.
+      const confined = context({ config: config({ enrolmentAllowlist: ['somebody-else'] }) });
+      const staking = account(ALREADY_STAKING, { walletAddress: 'addr_test1_other' });
+
+      expect(decideRequestedAction(staking, 'exit_and_send_max', confined).action).toBe(
+        'exit_and_send_max'
+      );
+      expect(decideRequestedAction(staking, 'withdraw_rewards', confined).action).toBe(
+        'withdraw_rewards'
+      );
+      expect(decideRequestedAction(staking, 'deregister', confined).action).toBe('deregister');
     });
 
     it('does nothing at all while no pool is configured', () => {
