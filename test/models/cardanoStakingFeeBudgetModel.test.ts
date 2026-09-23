@@ -7,12 +7,12 @@ const WINDOW = '2026-09-22';
 const WINDOW_ID = `${CHAIN_ID}:${WINDOW}`;
 
 /**
- * The reservation, exactly as the service performs it.
+ * The cap check and the increment, in one document update.
  *
- * Kept here rather than imported because this suite is about the storage guarantee: that the check
- * and the increment happen in one atomic document update, with no read-then-write in between. The
- * service will call the same shape; if it ever stops, this test stops covering it and the service's
- * own suite has to.
+ * Deliberately *not* the service's `reserveStakingFee`: this suite is about the storage guarantee
+ * alone -- that the check and the increment happen atomically, with no read-then-write in between
+ * -- while the service adds an exactly-once condition on top of it. Their own guarantees are
+ * covered in `test/services/cardano/cardanoStakingBudgetService.test.ts`.
  *
  * @param amount - Lovelace to reserve.
  * @param cap - Ceiling for the window.
@@ -74,9 +74,7 @@ describe('cardano_staking_fee_budget', () => {
     const cap = 1000000;
     const amount = 100000;
 
-    const outcomes = await Promise.all(
-      Array.from({ length: 25 }, () => reserve(amount, cap))
-    );
+    const outcomes = await Promise.all(Array.from({ length: 25 }, () => reserve(amount, cap)));
 
     const granted = outcomes.filter(Boolean).length;
     expect(granted).toBe(cap / amount);

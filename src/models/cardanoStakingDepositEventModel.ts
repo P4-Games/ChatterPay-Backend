@@ -45,7 +45,11 @@ const cardanoStakingDepositEventSchema = new Schema<ICardanoStakingDepositEvent>
     refundTxId: { type: String, required: false, default: null },
     economicOwner: { type: String, enum: ['user', 'sponsor'], required: true, default: 'user' }
   },
-  { timestamps: true }
+  // The migration owns this collection's existence, not whichever process touches the model
+  // first. Mongoose otherwise creates the collection and builds its indexes in the background
+  // when the model is compiled, which is at import time: a read-only process would bring the
+  // collection into being, and a dry run would leave exactly the trace it promises not to.
+  { autoCreate: false, autoIndex: false, timestamps: true }
 );
 
 // One deposit per registration cycle. A retry of the same cycle must not open a second one.

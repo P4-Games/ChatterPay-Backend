@@ -48,7 +48,11 @@ const cardanoStakingSponsorFeeEventSchema = new Schema<ICardanoStakingSponsorFee
     budgetWindow: { type: String, required: true },
     confirmedAt: { type: Date, required: false, default: null }
   },
-  { timestamps: true }
+  // The migration owns this collection's existence, not whichever process touches the model
+  // first. Mongoose otherwise creates the collection and builds its indexes in the background
+  // when the model is compiled, which is at import time: a read-only process would bring the
+  // collection into being, and a dry run would leave exactly the trace it promises not to.
+  { autoCreate: false, autoIndex: false, timestamps: true }
 );
 
 // One entry per operation. A scheduler retry charges the budget once.

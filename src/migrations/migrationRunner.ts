@@ -1,0 +1,336 @@
+/**
+ * The shared shape of a migration and the harness that runs one.
+ *
+ * There was no migration mechanism in this repository before this file. What is here is the minimum
+ * that the Cardano staking rollout needs, and the conventions it fixes are in `README.md` next to
+ * it. Three of them are load-bearing:
+ *
+ * - **A migration never runs at boot.** It is its own process, started by hand. A schema change that
+ *   rides along with a container start happens once per instance, at the worst possible moment, and
+ *   with no way to inspect it first.
+ * - **`--dry-run` writes nothing at all.** Not documents, not collections, not indexes, not a record
+ *   that it ran. That is why {@link MigrationWriter} exists: in a dry run the migration is handed a
+ *   writer that records intentions and performs none of them, so "wrote nothing" is a property of
+ *   the object it was given rather than a promise about its branches.
+ * - **A migration reports rather than repairs.** Data it did not expect is described in
+ *   {@link MigrationReport.findings} and left exactly as it was found. Overwriting something
+ *   unexpected is how a migration turns a detectable inconsistency into a silent one.
+ */
+
+import mongoose, { type Model } from 'mongoose';
+
+import { connectToDatabase } from '../config/database';
+
+/** How a migration was asked to run. */
+export interface MigrationOptions {
+  /** Report what would happen and touch nothing. */
+  dryRun: boolean;
+  /** Restrict the run to one network. Absent means every configured network. */
+  chainId: number | null;
+  /** Restrict the run to one user, for re-checking a single case. */
+  userId: string | null;
+  /** Resume a scan past this `_id`. See {@link MigrationReport.lastProcessedId}. */
+  resumeAfter: string | null;
+  /** Stop after this many subjects. Absent means all of them. */
+  limit: number | null;
+}
+
+/** Something the migration found and deliberately did not touch. */
+export interface MigrationFinding {
+  /** Stable machine-readable reason, so a report can be diffed between runs. */
+  code: string;
+  /** What the finding is about: a user id, a wallet address, an index name. */
+  subject: string;
+  detail: string;
+}
+
+export interface MigrationReport {
+  name: string;
+  dryRun: boolean;
+  /** What a dry run would do, or what a real run did. One line per effect. */
+  effects: string[];
+  findings: MigrationFinding[];
+  /** Counters the migration keeps, printed as-is. */
+  counts: Record<string, number>;
+  /**
+   * Highest `_id` the scan reached.
+   *
+   * This is what makes a long run resumable without writing a checkpoint anywhere: an interrupted
+   * run is continued with `--resume-after <id>`. Keeping the cursor out of the database is also
+   * what lets a dry run stay free of any trace at all.
+   */
+  lastProcessedId: string | null;
+  /** False when there are findings, so a caller can key off the exit code alone. */
+  ok: boolean;
+}
+
+/**
+ * Where a migration's writes go.
+ *
+ * The real implementation performs them; the dry-run one records the same sentences and performs
+ * nothing. A migration holds no other route to the database for writing.
+ */
+export interface MigrationWriter {
+  readonly dryRun: boolean;
+  /** Effects performed, or that would have been performed. */
+  readonly effects: string[];
+  /**
+   * Creates the indexes a model declares.
+   *
+   * Only ever creates. Indexes present on the collection that the schema does not declare are
+   * reported by the migration and left in place: dropping an index a migration does not recognise
+   * is how a query that nothing in this repository issues loses its support in production.
+   *
+   * @param model - Model whose declared indexes to build.
+   * @param description - Line for the report.
+   */
+  createIndexes(model: Model<never>, description: string): Promise<void>;
+  /**
+   * Inserts one document.
+   *
+   * @param model - Model to insert into.
+   * @param doc - Document to insert.
+   * @param description - Line for the report.
+   * @returns `'inserted'`, or `'duplicate'` when a unique index already held an equivalent row —
+   *   which is the normal outcome of a second run and of two instances racing.
+   */
+  insert<T>(
+    model: Model<T>,
+    doc: Record<string, unknown>,
+    description: string
+  ): Promise<'inserted' | 'duplicate'>;
+}
+
+/** Mongo's duplicate-key error code. */
+const DUPLICATE_KEY = 11000;
+
+/** A writer that records what it was asked to do and does none of it. */
+class DryRunWriter implements MigrationWriter {
+  readonly dryRun = true;
+
+  readonly effects: string[] = [];
+
+  /**
+   * Records an index build.
+   *
+   * @param _model - Ignored: a dry run does not reach the collection.
+   * @param description - Line for the report.
+   */
+  async createIndexes(_model: Model<never>, description: string): Promise<void> {
+    this.effects.push(`would create indexes: ${description}`);
+  }
+
+  /**
+   * Records an insert.
+   *
+   * @param _model - Ignored.
+   * @param _doc - Ignored.
+   * @param description - Line for the report.
+   * @returns Always `'inserted'`: nothing exists to collide with in a run that writes nothing.
+   */
+  async insert<T>(
+    _model: Model<T>,
+    _doc: Record<string, unknown>,
+    description: string
+  ): Promise<'inserted' | 'duplicate'> {
+    this.effects.push(`would insert: ${description}`);
+    return 'inserted';
+  }
+}
+
+/** A writer that performs what it is asked. */
+class LiveWriter implements MigrationWriter {
+  readonly dryRun = false;
+
+  readonly effects: string[] = [];
+
+  /**
+   * Builds the model's declared indexes.
+   *
+   * @param model - Model whose declared indexes to build.
+   * @param description - Line for the report.
+   */
+  async createIndexes(model: Model<never>, description: string): Promise<void> {
+    await model.createIndexes();
+    this.effects.push(`created indexes: ${description}`);
+  }
+
+  /**
+   * Inserts one document, treating a duplicate key as the expected result of a repeat.
+   *
+   * @param model - Model to insert into.
+   * @param doc - Document to insert.
+   * @param description - Line for the report.
+   * @returns Whether the row was created by this call.
+   */
+  async insert<T>(
+    model: Model<T>,
+    doc: Record<string, unknown>,
+    description: string
+  ): Promise<'inserted' | 'duplicate'> {
+    try {
+      await model.create(doc);
+      this.effects.push(`inserted: ${description}`);
+      return 'inserted';
+    } catch (error) {
+      if ((error as { code?: number }).code === DUPLICATE_KEY) {
+        this.effects.push(`already present: ${description}`);
+        return 'duplicate';
+      }
+      throw error;
+    }
+  }
+}
+
+/**
+ * Builds the writer a run should use.
+ *
+ * @param dryRun - Whether the run may touch the database.
+ * @returns The writer to hand the migration.
+ */
+export function createMigrationWriter(dryRun: boolean): MigrationWriter {
+  return dryRun ? new DryRunWriter() : new LiveWriter();
+}
+
+export interface Migration {
+  /** Ordered, unique, and never reused: `NNNN-kebab-case`. */
+  name: string;
+  /**
+   * Performs the migration.
+   *
+   * @param options - How the run was invoked.
+   * @param writer - The only route to writing. A dry run gets one that performs nothing.
+   * @returns What happened, or would have.
+   */
+  run(options: MigrationOptions, writer: MigrationWriter): Promise<MigrationReport>;
+}
+
+/**
+ * Reads command-line arguments into options.
+ *
+ * `--dry-run` defaults to **on**. A migration that needs no flag to start writing is one flag away
+ * from being run by accident against the wrong database; making the safe mode the default inverts
+ * that, and `--apply` is the deliberate act.
+ *
+ * @param argv - Arguments, without the interpreter and script path.
+ * @returns The options, with every unrecognised flag refused rather than ignored.
+ * @throws Error when a flag is unknown or a numeric value is not a number.
+ */
+export function parseMigrationOptions(argv: readonly string[]): MigrationOptions {
+  const options: MigrationOptions = {
+    dryRun: true,
+    chainId: null,
+    userId: null,
+    resumeAfter: null,
+    limit: null
+  };
+
+  const number = (flag: string, raw: string): number => {
+    const value = Number(raw);
+    if (!Number.isInteger(value) || value < 0) {
+      throw new Error(`MIGRATION_BAD_VALUE: ${flag}=${raw}`);
+    }
+    return value;
+  };
+
+  for (const arg of argv) {
+    const [flag, ...rest] = arg.split('=');
+    const raw = rest.join('=');
+
+    if (flag === '--dry-run') options.dryRun = true;
+    else if (flag === '--apply') options.dryRun = false;
+    else if (flag === '--chain-id') options.chainId = number(flag, raw);
+    else if (flag === '--user-id') options.userId = raw;
+    else if (flag === '--resume-after') options.resumeAfter = raw;
+    else if (flag === '--limit') options.limit = number(flag, raw);
+    // Silently ignoring a misspelled flag would run a different migration than the one asked for,
+    // and `--aply` reads as `--apply` to a hurried eye.
+    else throw new Error(`MIGRATION_UNKNOWN_FLAG: ${arg}`);
+  }
+
+  return options;
+}
+
+/**
+ * Renders a report for a terminal.
+ *
+ * @param report - The report to render.
+ * @returns The lines to print.
+ */
+export function formatMigrationReport(report: MigrationReport): string {
+  const lines = [
+    `migration: ${report.name}`,
+    `mode:      ${report.dryRun ? 'DRY RUN (nothing written)' : 'APPLY'}`,
+    ''
+  ];
+
+  for (const [key, value] of Object.entries(report.counts)) lines.push(`  ${key}: ${value}`);
+  lines.push('');
+
+  for (const effect of report.effects) lines.push(`  - ${effect}`);
+
+  if (report.findings.length > 0) {
+    lines.push('', `findings (${report.findings.length}) — nothing was changed for any of these:`);
+    for (const finding of report.findings) {
+      lines.push(`  ! ${finding.code}  ${finding.subject}  ${finding.detail}`);
+    }
+  }
+
+  if (report.lastProcessedId !== null) {
+    lines.push('', `resume with: --resume-after=${report.lastProcessedId}`);
+  }
+
+  lines.push('', report.ok ? 'result: ok' : 'result: finished with findings');
+  return lines.join('\n');
+}
+
+/**
+ * Connects, runs one migration, and disconnects.
+ *
+ * `autoIndex` and `autoCreate` are turned off for the process before anything connects. Mongoose
+ * builds a model's indexes on first use by default, which in a dry run would be a write — and one
+ * nothing in the migration asked for.
+ *
+ * @param migration - The migration to run.
+ * @param options - How to run it.
+ * @returns The report, so a caller can decide the exit code.
+ */
+export async function runMigration(
+  migration: Migration,
+  options: MigrationOptions
+): Promise<MigrationReport> {
+  await connectToDatabase();
+  try {
+    return await runMigrationOnConnection(migration, options);
+  } finally {
+    await mongoose.disconnect();
+  }
+}
+
+/**
+ * Runs one migration on a connection someone else opened and closes.
+ *
+ * Split out so that the guarantees a run makes -- chief among them that a dry run writes nothing --
+ * are exercised by the same function the command line uses, rather than by a copy of it that the
+ * tests keep in step by hand.
+ *
+ * @param migration - The migration to run.
+ * @param options - How to run it.
+ * @returns The report.
+ */
+export async function runMigrationOnConnection(
+  migration: Migration,
+  options: MigrationOptions
+): Promise<MigrationReport> {
+  // Set on the connection as well as globally. Mongoose initialises a model lazily, on its first
+  // operation, and that initialisation reads the *connection's* configuration -- which was fixed
+  // when the connection opened, so the global setting alone can arrive too late. A migration that
+  // merely reads would then create the collection it was reading.
+  mongoose.set('autoIndex', false);
+  mongoose.set('autoCreate', false);
+  mongoose.connection.config.autoIndex = false;
+  mongoose.connection.config.autoCreate = false;
+
+  const writer = createMigrationWriter(options.dryRun);
+  return migration.run(options, writer);
+}

@@ -17,6 +17,7 @@
     "format": "biome format . --write",
     "pre-commit": "bun run lint:fix && bun run type-check",
     "create-env": "printenv > .env",
+    "migrate": "bun run src/migrations/cli.ts",
     "docker:build": "bash ./scripts/docker-build.sh",
     "docker:run": "bash docker run -d -p 3000:3000 --name chatterpay-back-app-container chatterpay-back-app",
     "test": "rm -rf node_modules/.vite node_modules/.vitest && vitest",

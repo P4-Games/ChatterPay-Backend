@@ -230,7 +230,12 @@ const cardanoStakingAccountSchema = new Schema<ICardanoStakingAccount>(
       default: 'awaiting_consent'
     },
     onChain: { type: onChainSchema, required: true, default: () => ({}) },
-    depositEconomicOwner: { type: String, enum: ['user', 'sponsor'], required: true, default: 'user' },
+    depositEconomicOwner: {
+      type: String,
+      enum: ['user', 'sponsor'],
+      required: true,
+      default: 'user'
+    },
     financingMode: { type: String, required: false, default: null },
     currentLifecycleId: { type: String, required: false, default: null },
     lastPositiveBalanceAt: { type: Date, required: false, default: null },
@@ -239,11 +244,18 @@ const cardanoStakingAccountSchema = new Schema<ICardanoStakingAccount>(
     lastError: { type: String, required: false, default: null },
     autoEnrollSuspendedReason: { type: String, required: false, default: null }
   },
-  { timestamps: true }
+  // The migration owns this collection's existence, not whichever process touches the model
+  // first. Mongoose otherwise creates the collection and builds its indexes in the background
+  // when the model is compiled, which is at import time: a read-only process would bring the
+  // collection into being, and a dry run would leave exactly the trace it promises not to.
+  { autoCreate: false, autoIndex: false, timestamps: true }
 );
 
 // One account per wallet per network.
-cardanoStakingAccountSchema.index({ userId: 1, chainId: 1 }, { unique: true, name: 'user_chain_unique' });
+cardanoStakingAccountSchema.index(
+  { userId: 1, chainId: 1 },
+  { unique: true, name: 'user_chain_unique' }
+);
 // One account per stake credential per network. Two accounts sharing a credential would both claim
 // the same deposit and both try to register it.
 cardanoStakingAccountSchema.index(

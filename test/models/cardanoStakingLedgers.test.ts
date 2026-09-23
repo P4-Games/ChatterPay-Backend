@@ -67,9 +67,7 @@ describe('cardano staking ledgers', () => {
       await CardanoStakingReward.create(
         reward(accountId, { sourceKey: 'a', amountLovelace: '9007199254740993' })
       );
-      await CardanoStakingReward.create(
-        reward(accountId, { sourceKey: 'b', amountLovelace: '1' })
-      );
+      await CardanoStakingReward.create(reward(accountId, { sourceKey: 'b', amountLovelace: '1' }));
 
       const rows = await CardanoStakingReward.find({ accountId });
       const total = rows.reduce((sum, row) => sum + BigInt(row.amountLovelace), 0n);

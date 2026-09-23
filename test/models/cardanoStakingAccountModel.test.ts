@@ -115,29 +115,31 @@ describe('cardano_staking_accounts', () => {
       expect(created.onChain.governanceDelegation?.credential?.type).toBe('script_hash');
     });
 
-    it.each(['always_abstain', 'always_no_confidence', 'none', 'not_registered'] as const)(
-      'stores %s without a credential',
-      async (kind) => {
-        const created = await CardanoStakingAccount.create(
-          account({
-            onChain: {
-              registered: kind !== 'not_registered',
-              poolId: null,
-              governanceDelegation: { kind },
-              depositLovelace: null,
-              withdrawableRewardsLovelace: '0',
-              pendingRewardsLovelace: '0',
-              lifetimeRewardsLovelace: '0',
-              historicalCompleteness: 'partial',
-              asOf: new Date()
-            }
-          } as Partial<ICardanoStakingAccount>)
-        );
+    it.each([
+      'always_abstain',
+      'always_no_confidence',
+      'none',
+      'not_registered'
+    ] as const)('stores %s without a credential', async (kind) => {
+      const created = await CardanoStakingAccount.create(
+        account({
+          onChain: {
+            registered: kind !== 'not_registered',
+            poolId: null,
+            governanceDelegation: { kind },
+            depositLovelace: null,
+            withdrawableRewardsLovelace: '0',
+            pendingRewardsLovelace: '0',
+            lifetimeRewardsLovelace: '0',
+            historicalCompleteness: 'partial',
+            asOf: new Date()
+          }
+        } as Partial<ICardanoStakingAccount>)
+      );
 
-        expect(created.onChain.governanceDelegation?.kind).toBe(kind);
-        expect(created.onChain.governanceDelegation?.credential).toBeUndefined();
-      }
-    );
+      expect(created.onChain.governanceDelegation?.kind).toBe(kind);
+      expect(created.onChain.governanceDelegation?.credential).toBeUndefined();
+    });
   });
 
   describe('lovelace precision', () => {

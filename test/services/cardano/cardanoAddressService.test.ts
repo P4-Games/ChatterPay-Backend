@@ -240,9 +240,7 @@ describe('cardanoAddressService - rewardAddress', () => {
 
   it('is built on the stake key hash the specification gives', () => {
     const payload = Buffer.from(
-      bech32.fromWords(
-        bech32.decode(REWARD.testnet as `${string}1${string}`, 256).words
-      )
+      bech32.fromWords(bech32.decode(REWARD.testnet as `${string}1${string}`, 256).words)
     );
 
     expect(payload.subarray(1).toString('hex')).toBe(CIP19.stakeKeyHash);
