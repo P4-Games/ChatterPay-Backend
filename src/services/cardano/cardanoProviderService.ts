@@ -142,8 +142,13 @@ interface KoiosTxStatus {
  * read a 429 as a hard failure on one provider and as a retry on the other would eventually send
  * the same transfer twice. So the classification lives here once, and each provider below says
  * only what its own dialect is.
+ *
+ * Exported so that the staking reads can extend it rather than reimplement it. They are a
+ * separate surface from the transfer flow — a deployment can transfer without ever reading a
+ * stake account — but they fail in exactly the same ways, and a second copy of this
+ * classification is a second place for the two to drift apart.
  */
-abstract class HttpCardanoProvider {
+export abstract class HttpCardanoProvider {
   /**
    * @param baseUrl - Network-specific provider root. The network lives in the URL: pointing a
    *   Preprod deployment at a mainnet root would read and submit against a chain whose addresses
