@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.11",
+    "@emurgo/cardano-serialization-lib-nodejs": "17.0.0",
     "@types/bun": "latest",
     "@types/fs-extra": "^11.0.4",
     "@types/mongoose": "^5.11.97",
