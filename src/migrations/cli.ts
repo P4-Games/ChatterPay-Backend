@@ -11,18 +11,13 @@
  * Without `--apply` it is a dry run and writes nothing at all.
  */
 
-import migration0001, { MIGRATION_NAME as NAME_0001 } from './0001-cardano-staking-bootstrap';
 import {
   formatMigrationReport,
-  type Migration,
-  parseMigrationOptions,
+  type MigrationRequest,
+  resolveMigrationRequest,
   runMigration
 } from './migrationRunner';
-
-/** Every migration this repository knows how to run, by name. */
-export const MIGRATIONS: Readonly<Record<string, Migration>> = {
-  [NAME_0001]: migration0001
-};
+import { MIGRATIONS } from './registry';
 
 /**
  * Parses the command line, runs the named migration and prints its report.
@@ -31,23 +26,19 @@ export const MIGRATIONS: Readonly<Record<string, Migration>> = {
  *   whose report nobody reads still fails the step that started it.
  */
 async function main(): Promise<number> {
-  const [name, ...flags] = process.argv.slice(2);
-
-  if (name === undefined || name.startsWith('--')) {
+  // Resolution first, and nothing else until it succeeds. `--aply` is a typo for `--apply`, and a
+  // command line that is not understood must not reach the database even to read it.
+  let request: MigrationRequest;
+  try {
+    request = resolveMigrationRequest(process.argv.slice(2), MIGRATIONS);
+  } catch (error) {
+    console.error((error as Error).message);
     console.error(`usage: bun run src/migrations/cli.ts <migration> [--apply] [--chain-id=<id>]`);
     console.error(`migrations: ${Object.keys(MIGRATIONS).join(', ')}`);
     return 2;
   }
 
-  const migration = MIGRATIONS[name];
-  if (migration === undefined) {
-    console.error(`unknown migration: ${name}`);
-    console.error(`migrations: ${Object.keys(MIGRATIONS).join(', ')}`);
-    return 2;
-  }
-
-  const options = parseMigrationOptions(flags);
-  const report = await runMigration(migration, options);
+  const report = await runMigration(request.migration, request.options);
   console.log(formatMigrationReport(report));
   return report.ok ? 0 : 1;
 }

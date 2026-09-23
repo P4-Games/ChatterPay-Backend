@@ -251,6 +251,40 @@ export function parseMigrationOptions(argv: readonly string[]): MigrationOptions
   return options;
 }
 
+/** A resolved command line: which migration, and how to run it. */
+export interface MigrationRequest {
+  migration: Migration;
+  options: MigrationOptions;
+}
+
+/**
+ * Turns a command line into a migration and its options.
+ *
+ * Pure, and deliberately separate from running one. Everything that can be rejected about an
+ * invocation -- an unknown migration, a misspelled flag, a non-numeric limit -- is rejected here,
+ * before anything opens a connection. A command line that does not resolve therefore cannot reach
+ * the database at all, which is a stronger statement than "the flag is validated".
+ *
+ * @param argv - Arguments, without the interpreter and script path.
+ * @param registry - The migrations this repository knows how to run.
+ * @returns The migration and the options it was asked for.
+ * @throws Error `MIGRATION_NOT_NAMED`, `MIGRATION_UNKNOWN`, or whatever
+ *   {@link parseMigrationOptions} refuses.
+ */
+export function resolveMigrationRequest(
+  argv: readonly string[],
+  registry: Readonly<Record<string, Migration>>
+): MigrationRequest {
+  const [name, ...flags] = argv;
+
+  if (name === undefined || name.startsWith('--')) throw new Error('MIGRATION_NOT_NAMED');
+
+  const migration = registry[name];
+  if (migration === undefined) throw new Error(`MIGRATION_UNKNOWN: ${name}`);
+
+  return { migration, options: parseMigrationOptions(flags) };
+}
+
 /**
  * Renders a report for a terminal.
  *

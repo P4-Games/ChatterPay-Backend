@@ -23,17 +23,11 @@
  * second, less tested copy of it.
  */
 
-import mongoose, { type Model, Types } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 
 import { CARDANO_MAINNET_CHAIN_ID, CARDANO_PREPROD_CHAIN_ID } from '../config/cardanoConfig';
 import CardanoStakingAccount from '../models/cardanoStakingAccountModel';
-import CardanoStakingDepositEvent from '../models/cardanoStakingDepositEventModel';
-import CardanoStakingFeeBudget from '../models/cardanoStakingFeeBudgetModel';
-import CardanoStakingGovernanceEvent from '../models/cardanoStakingGovernanceEventModel';
-import CardanoStakingOperation from '../models/cardanoStakingOperationModel';
-import CardanoStakingReward from '../models/cardanoStakingRewardModel';
-import CardanoStakingSponsorFeeEvent from '../models/cardanoStakingSponsorFeeEventModel';
-import CardanoStakingSyncRun from '../models/cardanoStakingSyncRunModel';
+import { declaredIndexNames, STAKING_COLLECTIONS } from '../models/cardanoStakingCollections';
 import {
   decodeCardanoAddress,
   rewardAddress,
@@ -49,39 +43,6 @@ import type {
 } from './migrationRunner';
 
 export const MIGRATION_NAME = '0001-cardano-staking-bootstrap';
-
-/** Every collection this rollout introduces. Order is irrelevant; none references another. */
-const STAKING_MODELS: readonly { model: Model<never>; collection: string }[] = [
-  {
-    model: CardanoStakingAccount as unknown as Model<never>,
-    collection: 'cardano_staking_accounts'
-  },
-  {
-    model: CardanoStakingOperation as unknown as Model<never>,
-    collection: 'cardano_staking_operations'
-  },
-  {
-    model: CardanoStakingDepositEvent as unknown as Model<never>,
-    collection: 'cardano_staking_deposit_events'
-  },
-  { model: CardanoStakingReward as unknown as Model<never>, collection: 'cardano_staking_rewards' },
-  {
-    model: CardanoStakingGovernanceEvent as unknown as Model<never>,
-    collection: 'cardano_staking_governance_events'
-  },
-  {
-    model: CardanoStakingSponsorFeeEvent as unknown as Model<never>,
-    collection: 'cardano_staking_sponsor_fee_events'
-  },
-  {
-    model: CardanoStakingFeeBudget as unknown as Model<never>,
-    collection: 'cardano_staking_fee_budget'
-  },
-  {
-    model: CardanoStakingSyncRun as unknown as Model<never>,
-    collection: 'cardano_staking_sync_runs'
-  }
-];
 
 /** Which network a Cardano chain id belongs to. */
 const NETWORK_BY_CHAIN_ID: Readonly<Record<number, CardanoNetwork>> = {
@@ -151,26 +112,16 @@ async function buildIndexes(
   findings: MigrationFinding[],
   counts: Record<string, number>
 ): Promise<void> {
-  for (const { model, collection: name } of STAKING_MODELS) {
-    // What the schema asks for, read from the schema object itself: no I/O, no model start-up.
-    const declared = new Set(
-      model.schema.indexes().map(([spec, options]) => indexName(spec, options))
-    );
+  for (const { model, collection: name } of STAKING_COLLECTIONS) {
+    const declared = new Set(declaredIndexNames(model));
+    const before = await presentIndexes(name);
 
-    let present: string[] = [];
-    try {
-      present = (await collection(name).listIndexes().toArray()).map((index) => String(index.name));
-    } catch {
-      // The collection does not exist yet, which on a first run is the ordinary case and means
-      // everything is still to create.
-      present = [];
-    }
-
-    const missing = [...declared].filter((declaredName) => !present.includes(declaredName));
+    const missing = [...declared].filter((declaredName) => !before.includes(declaredName));
     await writer.createIndexes(model, `${name} (${missing.length} missing)`);
     counts.indexedCollections += 1;
+    counts.indexesCreated += missing.length;
 
-    for (const found of present) {
+    for (const found of before) {
       // `_id_` is the collection's own, and no schema declares it.
       if (found === '_id_' || declared.has(found)) continue;
       findings.push({
@@ -179,26 +130,40 @@ async function buildIndexes(
         detail: 'index present on the collection and not declared by the schema; left in place'
       });
     }
+
+    if (writer.dryRun) continue;
+
+    // Read the collection back rather than trusting the create to have done what it said. An index
+    // build can fail on its own -- a duplicate key already in the data is the ordinary way a unique
+    // index refuses to come into being -- and that failure has to be a finding, because the whole
+    // safety of this rollout rests on uniqueness the collection has not got.
+    const after = await presentIndexes(name);
+    const stillMissing = [...declared].filter((declaredName) => !after.includes(declaredName));
+    counts.indexesVerified += declared.size - stillMissing.length;
+
+    for (const absent of stillMissing) {
+      findings.push({
+        code: 'index_verification_failed',
+        subject: `${name}.${absent}`,
+        detail: 'declared index is still absent after the migration tried to build it'
+      });
+    }
   }
 }
 
 /**
- * The name Mongo will give an index, so that what a schema declares can be compared with what a
- * collection already has.
+ * The index names a collection currently has.
  *
- * Every index in this rollout is declared with an explicit `name`, which is the whole reason they
- * are: an index compared by its generated name changes identity whenever a key is reordered. The
- * generated form is kept as a fallback for an index declared without one.
- *
- * @param spec - The index key specification.
- * @param options - Options it was declared with.
- * @returns The index name.
+ * @param name - Collection to inspect.
+ * @returns The names, or nothing at all when the collection does not exist yet -- which on a first
+ *   run is the ordinary case and means everything is still to create.
  */
-function indexName(spec: Record<string, unknown>, options?: { name?: string }): string {
-  if (options?.name !== undefined) return options.name;
-  return Object.entries(spec)
-    .map(([field, direction]) => `${field}_${String(direction)}`)
-    .join('_');
+async function presentIndexes(name: string): Promise<string[]> {
+  try {
+    return (await collection(name).listIndexes().toArray()).map((index) => String(index.name));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -389,6 +354,8 @@ async function run(options: MigrationOptions, writer: MigrationWriter): Promise<
   const findings: MigrationFinding[] = [];
   const counts: Record<string, number> = {
     indexedCollections: 0,
+    indexesCreated: 0,
+    indexesVerified: 0,
     usersScanned: 0,
     walletsScanned: 0,
     accountsCreated: 0,

@@ -6,11 +6,21 @@ import {
   type MigrationOptions,
   type MigrationReport,
   parseMigrationOptions,
+  resolveMigrationRequest,
   runMigrationOnConnection
 } from '../../src/migrations/migrationRunner';
+import { MIGRATIONS } from '../../src/migrations/registry';
 import CardanoStakingAccount from '../../src/models/cardanoStakingAccountModel';
+import {
+  declaredIndexNames,
+  STAKING_COLLECTIONS
+} from '../../src/models/cardanoStakingCollections';
 import CardanoStakingOperation from '../../src/models/cardanoStakingOperationModel';
 import { UserModel } from '../../src/models/userModel';
+import {
+  missingStakingIndexes,
+  resetStakingSchemaVerification
+} from '../../src/services/cardano/cardanoStakingOperationService';
 
 const PREPROD = 900000000001;
 const MAINNET = 900764824073;
@@ -175,6 +185,18 @@ async function rawUsers(): Promise<string> {
   const db = mongoose.connection.db;
   if (db === undefined) throw new Error('no database connection');
   return JSON.stringify(await db.collection('users').find({}).sort({ _id: 1 }).toArray());
+}
+
+/**
+ * Removes every staking collection, so a case can observe the migration building them.
+ */
+async function dropStakingCollections(): Promise<void> {
+  const db = mongoose.connection.db;
+  if (db === undefined) throw new Error('no database connection');
+  const names = (await db.listCollections().toArray())
+    .map((entry) => entry.name)
+    .filter((name) => name.startsWith('cardano_staking_'));
+  for (const name of names) await db.dropCollection(name);
 }
 
 describe('0001-cardano-staking-bootstrap', () => {
@@ -542,6 +564,69 @@ describe('0001-cardano-staking-bootstrap', () => {
     });
   });
 
+  describe('indexes are verified, not assumed', () => {
+    beforeEach(async () => {
+      // Documents are cleared between tests but collections are not, so a staking collection built
+      // by an earlier case would make every count here read zero. Each case starts from nothing.
+      await dropStakingCollections();
+      await seedUser('+5491100000001', [cardanoWallet(KEYS.A.baseTestnet, KEYS.A)]);
+      resetStakingSchemaVerification();
+    });
+
+    it('leaves every declared index in place and says how many it checked', async () => {
+      const declared = STAKING_COLLECTIONS.reduce(
+        (total, entry) => total + declaredIndexNames(entry.model).length,
+        0
+      );
+
+      const report = await run({ dryRun: false });
+
+      expect(report.counts.indexesVerified).toBe(declared);
+      expect(await missingStakingIndexes()).toEqual([]);
+      expect(report.ok).toBe(true);
+    });
+
+    it('reports an index that did not come into being, instead of trusting the create', async () => {
+      // An index build fails on its own -- a duplicate key already in the data is the ordinary way
+      // a unique index refuses to exist -- and the whole safety of this rollout rests on uniqueness
+      // the collection would then not have.
+      vi.spyOn(CardanoStakingOperation, 'createIndexes').mockResolvedValue(
+        undefined as unknown as never
+      );
+
+      const report = await run({ dryRun: false });
+
+      const failures = report.findings.filter(
+        (finding) => finding.code === 'index_verification_failed'
+      );
+      expect(failures.length).toBeGreaterThan(0);
+      expect(failures.map((finding) => finding.subject)).toContain(
+        'cardano_staking_operations.one_live_op_per_account'
+      );
+      expect(report.ok).toBe(false);
+    });
+
+    it('rebuilds an index dropped after an earlier run', async () => {
+      await run({ dryRun: false });
+      await CardanoStakingAccount.collection.dropIndex('chain_credential_unique');
+      expect(await missingStakingIndexes()).toContain(
+        'cardano_staking_accounts.chain_credential_unique'
+      );
+
+      const report = await run({ dryRun: false });
+
+      expect(await missingStakingIndexes()).toEqual([]);
+      expect(report.findings.filter((f) => f.code === 'index_verification_failed')).toEqual([]);
+    });
+
+    it('verifies nothing in a dry run, because it built nothing', async () => {
+      const report = await run({ dryRun: true });
+
+      expect(report.counts.indexesVerified).toBe(0);
+      expect(report.counts.indexesCreated).toBeGreaterThan(0);
+    });
+  });
+
   describe('command line', () => {
     it('is a dry run unless asked otherwise', () => {
       expect(parseMigrationOptions([]).dryRun).toBe(true);
@@ -575,6 +660,42 @@ describe('0001-cardano-staking-bootstrap', () => {
 
     it('names itself the way the registry does', () => {
       expect(migration.name).toBe(MIGRATION_NAME);
+      expect(MIGRATIONS[MIGRATION_NAME]).toBe(migration);
+    });
+
+    it('resolves a good command line into the migration and its options', () => {
+      const request = resolveMigrationRequest([MIGRATION_NAME, '--apply'], MIGRATIONS);
+
+      expect(request.migration).toBe(migration);
+      expect(request.options.dryRun).toBe(false);
+    });
+
+    it.each([
+      '--aply',
+      '--appl y',
+      '--chain',
+      '--limit=many',
+      '-apply'
+    ])('refuses %s without touching the database', async (flag) => {
+      // Resolution happens before anything connects, so a command line that is not understood
+      // cannot reach the database even to read it.
+      const before = await databaseSnapshot();
+
+      expect(() => resolveMigrationRequest([MIGRATION_NAME, flag], MIGRATIONS)).toThrow();
+
+      expect(await databaseSnapshot()).toEqual(before);
+    });
+
+    it('refuses a migration it does not know, and one that was never named', async () => {
+      const before = await databaseSnapshot();
+
+      expect(() => resolveMigrationRequest(['0002-not-a-migration'], MIGRATIONS)).toThrow(
+        'MIGRATION_UNKNOWN'
+      );
+      expect(() => resolveMigrationRequest(['--apply'], MIGRATIONS)).toThrow('MIGRATION_NOT_NAMED');
+      expect(() => resolveMigrationRequest([], MIGRATIONS)).toThrow('MIGRATION_NOT_NAMED');
+
+      expect(await databaseSnapshot()).toEqual(before);
     });
   });
 });
