@@ -179,6 +179,21 @@ export interface ICardanoStakingOperation extends Document {
   availableRewardWithdrawalLovelace: string | null;
   errorCode: string | null;
   attempts: number;
+  /**
+   * How many times a lookup has found the transaction absent past its validity window.
+   *
+   * One such reading is not evidence. A provider whose chain follower is current while its
+   * transaction index lags reports a transaction it has already included as unknown, and the
+   * follower is where the slot used to decide "past the window" comes from — so the two agree on
+   * being late and disagree with the chain. Absence is therefore counted, over separate readings
+   * spread across slots, rather than concluded from one.
+   *
+   * Reset to zero the moment a lookup finds the transaction, so a provider that catches up undoes
+   * its own earlier readings.
+   */
+  absentObservations: number;
+  /** The slot at which the transaction was first found absent, for measuring that spread. */
+  firstAbsentAtSlot: number | null;
 }
 
 const outpointSchema = new Schema<CardanoStakingOutpoint>(
@@ -270,7 +285,9 @@ const cardanoStakingOperationSchema = new Schema<ICardanoStakingOperation>(
     recipientAddress: { type: String, required: false, default: null },
     availableRewardWithdrawalLovelace: { type: String, required: false, default: null },
     errorCode: { type: String, required: false, default: null },
-    attempts: { type: Number, required: true, default: 0 }
+    attempts: { type: Number, required: true, default: 0 },
+    absentObservations: { type: Number, required: true, default: 0 },
+    firstAbsentAtSlot: { type: Number, required: false, default: null }
   },
   // The migration owns this collection's existence, not whichever process touches the model
   // first. Mongoose otherwise creates the collection and builds its indexes in the background

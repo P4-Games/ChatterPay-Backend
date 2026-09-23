@@ -12,13 +12,44 @@ import {
 import { CardanoProviderError } from '../../../src/services/cardano/cardanoProviderService';
 import type { CardanoStakingPlan } from '../../../src/services/cardano/cardanoStakingBuilderService';
 import {
+  DEFAULT_RECONCILIATION_POLICY,
   executeStakingOperation,
-  reconcileStakingOperation
+  reconcileStakingOperation,
+  type StakingReconciliationOutcome
 } from '../../../src/services/cardano/cardanoStakingLifecycleService';
 import type { CardanoProtocolParameters, CardanoUtxo } from '../../../src/types/cardanoType';
 
 const CHAIN_ID = 900000000001;
 const WINDOW = '2026-09-23';
+
+/**
+ * Reconciles repeatedly, advancing the chain between readings, until something settles.
+ *
+ * Absence is established over separate readings spread across slots, so a test that wants a settled
+ * absence has to give the reconciler a chain that moves — which is exactly the condition a stale
+ * provider cannot produce, and the reason the rule is there.
+ *
+ * @param operationId - The operation to reconcile.
+ * @param provider - What to ask.
+ * @returns The outcome that settled, or the last one seen.
+ */
+async function reconcileUntilSettled(
+  operationId: Types.ObjectId,
+  provider: { statusOf: () => Promise<{ known: boolean; confirmations: number }> }
+): Promise<StakingReconciliationOutcome> {
+  const step = DEFAULT_RECONCILIATION_POLICY.absenceMarginSlots;
+  let outcome: StakingReconciliationOutcome = 'undetermined';
+  for (
+    let reading = 0;
+    reading <= DEFAULT_RECONCILIATION_POLICY.requiredAbsentObservations;
+    reading += 1
+  ) {
+    const current = await CardanoStakingOperation.findById(operationId);
+    outcome = await reconcileStakingOperation(current!, provider, 99_999 + reading * step);
+    if (outcome !== 'still_pending') return outcome;
+  }
+  return outcome;
+}
 
 const USER_PAYMENT = '0x7c3ca0ade35d250f5706a17cbbc9e97402b5c230b26b24b940c77e4c00154636';
 const USER_STAKE = '0xce3b525279e269bac5368d404508d9fa9c527bda6eadbf639fed17673ed50d18';
@@ -410,9 +441,31 @@ describe('cardanoStakingLifecycleService', () => {
       expect((await CardanoStakingOperation.findById(operation._id))?.liveness).toBe('live');
     });
 
-    it('releases the inputs only once absence past the TTL is established', async () => {
-      // Both conditions: the TTL has passed *and* a lookup found nothing. Past its TTL a Cardano
-      // transaction can never become valid, so at that point absence is final.
+    it('does not settle a sighting that has no blocks on top of it yet', async () => {
+      // A transaction in the tip block is reported as known and is off chain again if that block
+      // loses a short fork. Settling on the first sighting is what makes a deposit appear, be
+      // recorded as paid, and then not exist.
+      const operation = await seedOperation();
+      await executeStakingOperation(request(operation, { submit: async () => 'ok' }));
+      const submitted = await CardanoStakingOperation.findById(operation._id);
+
+      const outcome = await reconcileStakingOperation(
+        submitted!,
+        { statusOf: async () => ({ known: true, confirmations: 0 }) },
+        5_000
+      );
+
+      expect(outcome).toBe('still_pending');
+      const stored = await CardanoStakingOperation.findById(operation._id);
+      expect(stored?.chainOutcome).toBe('pending');
+      expect(stored?.liveness).toBe('live');
+      expect(await claims().countDocuments({})).toBe(2);
+    });
+
+    it('refuses to call one empty lookup past the TTL an absence', async () => {
+      // The slot that says the window has closed and the index that says the transaction is unknown
+      // come from the same provider. A provider whose follower is current while its transaction
+      // index lags is internally consistent and wrong, and one reading cannot tell the difference.
       const operation = await seedOperation();
       await executeStakingOperation(request(operation, { submit: async () => 'ok' }));
       const submitted = await CardanoStakingOperation.findById(operation._id);
@@ -423,6 +476,67 @@ describe('cardanoStakingLifecycleService', () => {
         99_999
       );
 
+      expect(outcome).toBe('still_pending');
+      const stored = await CardanoStakingOperation.findById(operation._id);
+      expect(stored?.absenceProof).toBeNull();
+      expect(stored?.liveness).toBe('live');
+      expect(await claims().countDocuments({})).toBe(2);
+    });
+
+    it('refuses three readings taken at the same slot, however many there are', async () => {
+      // Counting alone is satisfied by a tight loop against one stale provider. The readings have
+      // to be spread across slots, and a stale provider's tip does not advance.
+      const operation = await seedOperation();
+      await executeStakingOperation(request(operation, { submit: async () => 'ok' }));
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const current = await CardanoStakingOperation.findById(operation._id);
+        const outcome = await reconcileStakingOperation(
+          current!,
+          { statusOf: async () => ({ known: false, confirmations: 0 }) },
+          99_999
+        );
+        expect(outcome).toBe('still_pending');
+      }
+
+      expect(await claims().countDocuments({})).toBe(2);
+      expect((await CardanoStakingOperation.findById(operation._id))?.liveness).toBe('live');
+    });
+
+    it('lets a provider that catches up undo every absence it reported while behind', async () => {
+      const operation = await seedOperation();
+      await executeStakingOperation(request(operation, { submit: async () => 'ok' }));
+      const absent = { statusOf: async () => ({ known: false, confirmations: 0 }) };
+
+      await reconcileStakingOperation(
+        (await CardanoStakingOperation.findById(operation._id))!,
+        absent,
+        99_999
+      );
+      await reconcileStakingOperation(
+        (await CardanoStakingOperation.findById(operation._id))!,
+        absent,
+        100_600
+      );
+      const caughtUp = await reconcileStakingOperation(
+        (await CardanoStakingOperation.findById(operation._id))!,
+        { statusOf: async () => ({ known: true, confirmations: 5 }) },
+        101_200
+      );
+
+      expect(caughtUp).toBe('confirmed');
+      const stored = await CardanoStakingOperation.findById(operation._id);
+      expect(stored?.absentObservations).toBe(0);
+      expect(stored?.firstAbsentAtSlot).toBeNull();
+    });
+
+    it('releases the inputs once absence is established over readings spread across slots', async () => {
+      const operation = await seedOperation();
+      await executeStakingOperation(request(operation, { submit: async () => 'ok' }));
+      const absent = { statusOf: async () => ({ known: false, confirmations: 0 }) };
+
+      const outcome = await reconcileUntilSettled(operation._id as Types.ObjectId, absent);
+
       expect(outcome).toBe('absent_past_ttl');
       const stored = await CardanoStakingOperation.findById(operation._id);
       expect(stored?.absenceProof).toBe('ttl_expired_and_absent');
@@ -430,15 +544,39 @@ describe('cardanoStakingLifecycleService', () => {
       expect(await claims().countDocuments({})).toBe(0);
     });
 
+    it('puts a confirmed transaction that left the chain under review rather than settling it', async () => {
+      // A rollback deeper than the confirmation threshold. The deposit recorded as paid, the
+      // rewards withdrawn and the certificates placed all have to be re-established by hand, and
+      // `unknown` is what puts the credential back under lock while that happens.
+      const operation = await seedOperation();
+      await executeStakingOperation(request(operation, { submit: async () => 'ok' }));
+      await reconcileStakingOperation(
+        (await CardanoStakingOperation.findById(operation._id))!,
+        { statusOf: async () => ({ known: true, confirmations: 9 }) },
+        5_000
+      );
+
+      const outcome = await reconcileStakingOperation(
+        (await CardanoStakingOperation.findById(operation._id))!,
+        { statusOf: async () => ({ known: false, confirmations: 0 }) },
+        999_999
+      );
+
+      expect(outcome).toBe('reorg_suspected');
+      const stored = await CardanoStakingOperation.findById(operation._id);
+      expect(stored?.status).toBe('manual_review');
+      expect(stored?.chainOutcome).toBe('unknown');
+      // No absence proof was invented, so nothing may be released on the strength of this.
+      expect(stored?.absenceProof).toBeNull();
+      expect(stored?.liveness).toBe('live');
+    });
+
     it('frees the account for a new operation once it has settled', async () => {
       const operation = await seedOperation();
       await executeStakingOperation(request(operation, { submit: async () => 'ok' }));
-      const submitted = await CardanoStakingOperation.findById(operation._id);
-      await reconcileStakingOperation(
-        submitted!,
-        { statusOf: async () => ({ known: false, confirmations: 0 }) },
-        99_999
-      );
+      await reconcileUntilSettled(operation._id as Types.ObjectId, {
+        statusOf: async () => ({ known: false, confirmations: 0 })
+      });
 
       const next = await CardanoStakingOperation.create({
         accountId: operation.accountId,

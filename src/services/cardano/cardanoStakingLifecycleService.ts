@@ -49,6 +49,7 @@ import {
   claimKeysOf,
   outpointsOf,
   releaseStakingInputs,
+  renewStakingInputs,
   reserveStakingInputs
 } from './cardanoStakingReservationService';
 import { encodeSignedTransaction } from './cardanoTxService';
@@ -266,51 +267,166 @@ async function mark(
 
 /** What a reconciliation concluded. */
 export type StakingReconciliationOutcome =
+  /** Seen on chain with enough blocks on top to be treated as settled. */
   | 'confirmed'
+  /** Nothing settled yet; the operation stays live and its claims were renewed. */
   | 'still_pending'
-  /** The TTL has passed and the chain does not know the transaction. It can never become valid. */
+  /** Absent past its validity window, established over repeated readings. It can never land. */
   | 'absent_past_ttl'
+  /** A transaction this service had already settled is no longer on chain. Needs a human. */
+  | 'reorg_suspected'
   /** Nothing could be established. The operation stays live and keeps everything it holds. */
   | 'undetermined';
 
 /**
+ * How sure a reconciliation has to be before it settles anything.
+ *
+ * Every field here exists because a provider can be wrong in a specific way, and the defaults are
+ * the answers to those ways rather than round numbers.
+ */
+export interface StakingReconciliationPolicy {
+  /**
+   * Blocks on top of the including block before a sighting counts as settled.
+   *
+   * A transaction in the tip block is on chain in the sense that a provider will report it, and off
+   * chain again if that block loses a short fork. Settling on the first sighting is what makes a
+   * deposit appear, be recorded as paid, and then not exist.
+   */
+  minConfirmations: number;
+  /**
+   * Slots past the validity window before an empty lookup may begin to count as absence.
+   *
+   * A transaction submitted in its last valid slot can still be included, and then indexed some
+   * slots after that. Concluding absence the moment the window closes reads that lag as a
+   * transaction that never existed.
+   */
+  absenceMarginSlots: number;
+  /**
+   * Separate readings, spread over at least {@link absenceMarginSlots}, before absence is declared.
+   *
+   * This is the guard against a desynchronised provider, and it is the reason a single reading is
+   * never enough: the slot that says the window has closed and the index that says the transaction
+   * is unknown come from the same provider, so a provider that is behind is internally consistent
+   * and wrong. Readings spread across slots cannot all come from one stale moment — either the
+   * provider catches up and the count resets, or it stays behind and the tip stops advancing, which
+   * keeps the margin from ever being cleared.
+   */
+  requiredAbsentObservations: number;
+}
+
+/** The defaults, for a chain whose slot is one second. */
+export const DEFAULT_RECONCILIATION_POLICY: StakingReconciliationPolicy = {
+  minConfirmations: 3,
+  absenceMarginSlots: 600,
+  requiredAbsentObservations: 3
+};
+
+/**
  * Asks the chain what became of a submitted transaction, and settles what can be settled.
  *
- * The only path that frees anything. A transaction is declared absent only when **both** its TTL
- * has passed and a lookup found nothing: past its TTL a Cardano transaction can never become valid,
- * so at that point absence is final rather than merely current.
+ * The only path that frees anything, and it is deliberately reluctant. Absence is not concluded
+ * from one empty lookup: see {@link StakingReconciliationPolicy} for what each condition defends
+ * against. While nothing is settled, the operation's input claims are renewed — an expiry would
+ * otherwise release them silently, past every guard here.
  *
  * @param operation - The operation to reconcile.
- * @param provider - Where to ask.
+ * @param provider - Where to ask. Its tip and its transaction index must be the same provider's,
+ *   so that one being behind shows up as the other being behind rather than as a contradiction.
  * @param tipSlot - The chain's current slot, from the chain and not from this machine's clock.
+ * @param policy - How sure to be before settling.
  * @returns What was established.
  */
 export async function reconcileStakingOperation(
   operation: ICardanoStakingOperation,
   provider: Pick<CardanoProvider, 'statusOf'>,
-  tipSlot: number
+  tipSlot: number,
+  policy: StakingReconciliationPolicy = DEFAULT_RECONCILIATION_POLICY
 ): Promise<StakingReconciliationOutcome> {
   const operationId = operation._id as Types.ObjectId;
   if (operation.txId === null) return 'undetermined';
 
-  let known: boolean;
+  let status: { known: boolean; confirmations: number };
   try {
-    known = (await provider.statusOf(operation.txId)).known;
+    status = await provider.statusOf(operation.txId);
   } catch {
     // A provider that cannot answer has not told us the transaction is absent.
+    await renewStakingInputs(operationId);
     return 'undetermined';
   }
 
-  if (known) {
+  if (status.known) {
+    // Any sighting undoes earlier absences: a provider that has caught up has just contradicted
+    // every reading taken while it was behind.
+    if (status.confirmations < policy.minConfirmations) {
+      await CardanoStakingOperation.updateOne(
+        { _id: operationId },
+        { $set: { chainOutcome: 'pending', absentObservations: 0, firstAbsentAtSlot: null } }
+      );
+      await renewStakingInputs(operationId);
+      return 'still_pending';
+    }
     await CardanoStakingOperation.updateOne(
       { _id: operationId },
-      { $set: { status: 'confirmed', chainOutcome: 'confirmed' } }
+      {
+        $set: {
+          status: 'confirmed',
+          chainOutcome: 'confirmed',
+          absentObservations: 0,
+          firstAbsentAtSlot: null
+        }
+      }
     );
     return 'confirmed';
   }
 
-  const ttlPassed = operation.ttlSlot !== null && tipSlot > operation.ttlSlot;
-  if (!ttlPassed) return 'still_pending';
+  // A transaction this service already settled has stopped existing. That is a rollback deeper than
+  // the confirmation threshold, and nothing here may act on it: the deposit it recorded as paid,
+  // the rewards it withdrew and the certificates it placed all have to be re-established by hand.
+  // `unknown` is what puts the credential back under lock while that happens.
+  if (operation.status === 'confirmed' || operation.chainOutcome === 'confirmed') {
+    await CardanoStakingOperation.updateOne(
+      { _id: operationId },
+      {
+        $set: {
+          status: 'manual_review',
+          chainOutcome: 'unknown',
+          absenceProof: null,
+          errorCode: 'reorg_suspected'
+        }
+      }
+    );
+    Logger.error(
+      'reconcileStakingOperation',
+      `Cardano staking transaction ${operation.txId} was confirmed and is no longer on chain; operation ${operationId.toHexString()} needs review`
+    );
+    return 'reorg_suspected';
+  }
+
+  // Without a validity window there is no slot past which absence becomes final, so nothing can be
+  // concluded from not seeing it.
+  if (operation.ttlSlot === null) {
+    await renewStakingInputs(operationId);
+    return 'undetermined';
+  }
+  if (tipSlot <= operation.ttlSlot + policy.absenceMarginSlots) {
+    await renewStakingInputs(operationId);
+    return 'still_pending';
+  }
+
+  const firstAbsentAtSlot = operation.firstAbsentAtSlot ?? tipSlot;
+  const observations = operation.absentObservations + 1;
+  await CardanoStakingOperation.updateOne(
+    { _id: operationId },
+    { $set: { firstAbsentAtSlot }, $inc: { absentObservations: 1 } }
+  );
+
+  // Both conditions, not either. Counting alone is satisfied by three calls in a tight loop against
+  // one stale provider; spread alone is satisfied by a single reading taken late.
+  const spreadEnough = tipSlot - firstAbsentAtSlot >= policy.absenceMarginSlots;
+  if (observations < policy.requiredAbsentObservations || !spreadEnough) {
+    await renewStakingInputs(operationId);
+    return 'still_pending';
+  }
 
   await CardanoStakingOperation.updateOne(
     { _id: operationId },
@@ -330,7 +446,7 @@ export async function reconcileStakingOperation(
   );
   Logger.info(
     'reconcileStakingOperation',
-    `Cardano staking operation ${operationId.toHexString()} is absent past its TTL; inputs ${released}`
+    `Cardano staking operation ${operationId.toHexString()} is absent past its TTL after ${observations} readings; inputs ${released}`
   );
 
   return 'absent_past_ttl';

@@ -26,11 +26,36 @@ import CardanoStakingOperation from '../../models/cardanoStakingOperationModel';
 import type { CardanoUtxo } from '../../types/cardanoType';
 import type { BuiltCardanoStakingTransaction } from './cardanoStakingBuilderService';
 import {
+  claimsHeldBy,
   claimUtxos,
   outpointOf,
   releaseUtxos,
+  renewClaims,
   unclaimedUtxosStrict
 } from './cardanoUtxoClaimService';
+
+/**
+ * How long a staking claim stands before the store expires it on its own.
+ *
+ * Deliberately far beyond a transaction's validity window, and far beyond the transfer default. An
+ * expiry here is not a release: it is a release *without proof*, performed silently by a TTL index,
+ * past every guard in this module. An operation whose submit never resolved can sit undetermined
+ * for as long as the provider takes to catch up, and for that whole time its inputs must stay held.
+ *
+ * The number is a backstop for a process that dies holding a claim, not the mechanism that frees
+ * one. {@link renewStakingInputs} is what keeps a live operation's claims from reaching it.
+ */
+export const STAKING_CLAIM_SECONDS = 6 * 60 * 60;
+
+/**
+ * The holder string a staking operation's claims carry.
+ *
+ * @param operationId - The operation.
+ * @returns Its holder string.
+ */
+export function stakingClaimHolder(operationId: Types.ObjectId): string {
+  return `staking:${operationId.toHexString()}`;
+}
 
 /** How a reservation attempt ended. */
 export type StakingInputReservationOutcome =
@@ -84,7 +109,7 @@ export async function reserveStakingInputs(
   const inputs = [...built.selectedUserUtxos, ...built.selectedSponsorUtxos];
   if (inputs.length === 0) return { outcome: 'reserved', outpoints: [] };
 
-  const claimed = await claimUtxos(inputs, `staking:${operationId.toHexString()}`);
+  const claimed = await claimUtxos(inputs, stakingClaimHolder(operationId), STAKING_CLAIM_SECONDS);
   if (claimed === null) {
     Logger.info(
       'reserveStakingInputs',
@@ -114,7 +139,65 @@ export async function releaseStakingInputs(
   const operation = await CardanoStakingOperation.findById(operationId).select('absenceProof');
   if (operation === null || operation.absenceProof === null) return 'no_absence_proof';
 
-  await releaseUtxos(outpoints);
+  // Everything the holder has, not only what the caller remembered. A crash between claiming the
+  // inputs and recording them leaves a hold the operation cannot describe, and releasing the short
+  // list would leave the rest frozen until the backstop expiry.
+  const held = await claimsHeldBy(stakingClaimHolder(operationId));
+  await releaseUtxos([...new Set([...outpoints, ...held])]);
+  return 'released';
+}
+
+/**
+ * Keeps a live operation's claims from reaching their backstop expiry.
+ *
+ * Called by whatever reconciles an operation that is still undetermined. See
+ * {@link STAKING_CLAIM_SECONDS} for why an expiry would otherwise act as a release nothing proved.
+ *
+ * @param operationId - The operation whose claims to renew.
+ * @returns How many claims it still holds.
+ */
+export async function renewStakingInputs(operationId: Types.ObjectId): Promise<number> {
+  const holder = stakingClaimHolder(operationId);
+  const held = await claimsHeldBy(holder);
+  return renewClaims(held, holder, STAKING_CLAIM_SECONDS);
+}
+
+/**
+ * Gives back the inputs of an operation that was never signed.
+ *
+ * This is the one release that does not need the chain, and the reason it is sound is the order the
+ * lifecycle works in: inputs are claimed, then the transaction is signed and its bytes stored, and
+ * only then is anything submitted. An operation holding claims with no signed bytes therefore never
+ * produced a transaction at all — nothing was sent, so nothing can be on chain, and the absence is
+ * proved by this backend's own history rather than by a provider that might be lagging.
+ *
+ * This is what recovers a crash between claiming the inputs and recording them on the operation.
+ * That window leaves a hold nothing else can find, because the operation does not know what it
+ * took; the claims are found by holder instead.
+ *
+ * @param operationId - The operation to recover.
+ * @returns What happened. `still_signed` when the operation does carry signed bytes, in which case
+ *   a transaction may exist and only the chain can settle it.
+ */
+export async function releaseUnsignedStakingInputs(
+  operationId: Types.ObjectId
+): Promise<'released' | 'still_signed' | 'nothing_held'> {
+  const held = await claimsHeldBy(stakingClaimHolder(operationId));
+  if (held.length === 0) return 'nothing_held';
+
+  const operation = await CardanoStakingOperation.findById(operationId).select(
+    'signedCborProtected txId'
+  );
+  // A missing operation is treated as signed, not as unsigned. The claim is the only evidence left,
+  // and it does not say which side of the signing step the process died on.
+  if (operation === null) return 'still_signed';
+  if (operation.signedCborProtected !== null || operation.txId !== null) return 'still_signed';
+
+  await CardanoStakingOperation.updateOne(
+    { _id: operationId, signedCborProtected: null, txId: null },
+    { $set: { absenceProof: 'never_submitted', chainOutcome: 'rejected', status: 'cancelled' } }
+  );
+  await releaseUtxos(held);
   return 'released';
 }
 

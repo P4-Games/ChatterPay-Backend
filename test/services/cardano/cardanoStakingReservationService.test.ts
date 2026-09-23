@@ -7,8 +7,12 @@ import {
   claimKeysOf,
   outpointsOf,
   releaseStakingInputs,
+  releaseUnsignedStakingInputs,
+  renewStakingInputs,
   reserveStakingInputs,
-  selectableStakingUtxos
+  STAKING_CLAIM_SECONDS,
+  selectableStakingUtxos,
+  stakingClaimHolder
 } from '../../../src/services/cardano/cardanoStakingReservationService';
 import { claimUtxos } from '../../../src/services/cardano/cardanoUtxoClaimService';
 import type { CardanoUtxo } from '../../../src/types/cardanoType';
@@ -215,6 +219,118 @@ describe('cardanoStakingReservationService', () => {
       const second = await reserveStakingInputs(built([shared], []), new Types.ObjectId());
 
       expect(second.outcome).toBe('reserved');
+    });
+  });
+
+  describe('not letting an expiry act as a release', () => {
+    it('holds a staking claim far longer than a transfer claim', async () => {
+      // The expiry is a backstop against a process that died holding a claim, not the mechanism
+      // that frees one. An operation whose submit never resolved can sit undetermined for as long
+      // as the provider takes to catch up, and its inputs have to stay held for all of it.
+      const operationId = new Types.ObjectId();
+      const before = Date.now();
+
+      await reserveStakingInputs(built([utxo('a')], []), operationId);
+
+      const claim = await claims().findOne({});
+      const heldForSeconds = ((claim?.expiresAt as Date).getTime() - before) / 1000;
+      expect(heldForSeconds).toBeGreaterThan(STAKING_CLAIM_SECONDS - 60);
+    });
+
+    it('pushes the expiry out again while the operation is still live', async () => {
+      const operationId = new Types.ObjectId();
+      await reserveStakingInputs(built([utxo('a')], []), operationId);
+      // Pull the expiry back to where a lapsed claim would sit.
+      await claims().updateMany({}, { $set: { expiresAt: new Date(Date.now() + 1_000) } });
+
+      const renewed = await renewStakingInputs(operationId);
+
+      expect(renewed).toBe(1);
+      const claim = await claims().findOne({});
+      expect((claim?.expiresAt as Date).getTime()).toBeGreaterThan(Date.now() + 60_000);
+    });
+
+    it('will not renew a claim that now belongs to somebody else', async () => {
+      // Renewing on the strength of a stale list would extend another operation's hold.
+      const mine = new Types.ObjectId();
+      const shared = utxo('a');
+      await claimUtxos([shared], 'someone-else');
+
+      expect(await renewStakingInputs(mine)).toBe(0);
+    });
+  });
+
+  describe('recovering a crash before the operation recorded what it took', () => {
+    it('finds the claims by holder when the operation never learnt of them', async () => {
+      // The window between claiming the inputs and writing them onto the operation. The claim is
+      // the only trace, and the operation cannot describe it — so the holder string is what finds
+      // it. Nothing was signed in that window, so nothing can be on chain.
+      const operationId = new Types.ObjectId();
+      await CardanoStakingOperation.create({
+        _id: operationId,
+        accountId: new Types.ObjectId(),
+        chainId: CHAIN_ID,
+        lifecycleId: 'cycle-1',
+        kind: 'register_and_delegate',
+        actor: 'cron',
+        idempotencyKey: `unsigned-${operationId.toHexString()}`
+      });
+      await reserveStakingInputs(built([utxo('a')], [utxo('b')]), operationId);
+
+      expect(await releaseUnsignedStakingInputs(operationId)).toBe('released');
+      expect(await claims().countDocuments({})).toBe(0);
+      const stored = await CardanoStakingOperation.findById(operationId);
+      expect(stored?.absenceProof).toBe('never_submitted');
+      expect(stored?.liveness).toBe('settled');
+    });
+
+    it('refuses to recover an operation that does carry signed bytes', async () => {
+      // Past the signing step a transaction may exist, and only the chain can settle it.
+      const operationId = new Types.ObjectId();
+      await CardanoStakingOperation.create({
+        _id: operationId,
+        accountId: new Types.ObjectId(),
+        chainId: CHAIN_ID,
+        lifecycleId: 'cycle-1',
+        kind: 'register_and_delegate',
+        actor: 'cron',
+        idempotencyKey: `signed-${operationId.toHexString()}`,
+        signedCborProtected: '84a4',
+        txId: 'ab'.repeat(32)
+      });
+      await reserveStakingInputs(built([utxo('a')], []), operationId);
+
+      expect(await releaseUnsignedStakingInputs(operationId)).toBe('still_signed');
+      expect(await claims().countDocuments({})).toBe(1);
+    });
+
+    it('treats a claim whose operation vanished as signed, not as unsigned', async () => {
+      // The claim does not say which side of the signing step the process died on, and guessing
+      // the safe-sounding side is the one that can free an input a live transaction spends.
+      const operationId = new Types.ObjectId();
+      await reserveStakingInputs(built([utxo('a')], []), operationId);
+
+      expect(await releaseUnsignedStakingInputs(operationId)).toBe('still_signed');
+      expect(await claims().countDocuments({})).toBe(1);
+    });
+
+    it('releases everything the holder took, not only what the caller remembered', async () => {
+      const operationId = new Types.ObjectId();
+      await seedOperation(operationId, 'never_submitted');
+      const reservation = await reserveStakingInputs(built([utxo('a')], [utxo('b')]), operationId);
+
+      // What a crash between claiming and recording leaves: the operation knows about one of them.
+      await releaseStakingInputs(operationId, reservation.outpoints.slice(0, 1));
+
+      expect(await claims().countDocuments({})).toBe(0);
+    });
+
+    it('names claims after the operation that holds them', async () => {
+      const operationId = new Types.ObjectId();
+
+      await reserveStakingInputs(built([utxo('a')], []), operationId);
+
+      expect((await claims().findOne({}))?.holder).toBe(stakingClaimHolder(operationId));
     });
   });
 

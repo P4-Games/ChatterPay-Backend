@@ -116,11 +116,16 @@ async function ensureIndex(): Promise<void> {
  *
  * @param utxos - Exactly the outputs the built transaction consumes.
  * @param holder - What the claim is for, recorded for diagnosis.
+ * @param lifetimeSeconds - How long the claim stands before the store expires it on its own. The
+ *   default suits a transfer, whose fate settles inside one validity window. A caller whose
+ *   operation can stay undetermined for longer passes a longer one and keeps it alive through
+ *   {@link renewClaims} — see the note there for why an expiry is not a release.
  * @returns The outpoints claimed, or `null` when any of them was already taken.
  */
 export async function claimUtxos(
   utxos: readonly CardanoUtxo[],
-  holder: string
+  holder: string,
+  lifetimeSeconds: number = CLAIM_SECONDS
 ): Promise<string[] | null> {
   await ensureIndex();
 
@@ -131,7 +136,7 @@ export async function claimUtxos(
       await collection().insertOne({
         _id: outpoint,
         holder,
-        expiresAt: new Date(Date.now() + CLAIM_SECONDS * 1000)
+        expiresAt: new Date(Date.now() + lifetimeSeconds * 1000)
       });
       taken.push(outpoint);
     } catch {
@@ -164,6 +169,58 @@ export async function releaseUtxos(outpoints: readonly string[]): Promise<void> 
       `could not release ${outpoints.length} claim(s): ${error instanceof Error ? error.message : String(error)}`
     );
   }
+}
+
+/**
+ * Pushes a holder's claims further out, so they do not expire while its operation is still live.
+ *
+ * The expiry on a claim is a safety valve against a process that dies holding one, not a statement
+ * that the operation finished. For a transfer the two are close enough: its fate settles inside one
+ * validity window, and a stale claim costs a retry. For an operation that can sit undetermined —
+ * a submit whose outcome was never established, a provider that has not caught up — letting the
+ * store expire the claim is a *release without proof*, and it happens silently, past every guard
+ * that exists to stop exactly that. A second transaction can then be built around inputs the first
+ * one may still spend.
+ *
+ * So whatever keeps such an operation alive renews its claims on every pass. If that stops running,
+ * the claims do eventually expire, which is the safety valve doing its job — but it is then a
+ * failure an operator can see, not a quiet one.
+ *
+ * Scoped to the holder: renewing a claim somebody else now owns would extend their hold on the
+ * strength of our stale list.
+ *
+ * @param outpoints - The claims to renew. An empty list is a no-op.
+ * @param holder - Who must still hold them.
+ * @param lifetimeSeconds - How much longer they should stand, counted from now.
+ * @returns How many claims were still held by that holder and got renewed.
+ */
+export async function renewClaims(
+  outpoints: readonly string[],
+  holder: string,
+  lifetimeSeconds: number
+): Promise<number> {
+  if (outpoints.length === 0) return 0;
+  const result = await collection().updateMany(
+    { _id: { $in: [...outpoints] }, holder },
+    { $set: { expiresAt: new Date(Date.now() + lifetimeSeconds * 1000) } }
+  );
+  return result.modifiedCount;
+}
+
+/**
+ * The claims a given holder currently has.
+ *
+ * Exists because a claim is the only durable trace of a step that may have been interrupted before
+ * anything recorded it. A process that claims its inputs and dies before writing them onto its
+ * operation leaves a hold that the operation itself cannot describe — and a recovery that reads
+ * only the operation would never find it. The holder string is what makes the claim self-describing.
+ *
+ * @param holder - The holder to look up.
+ * @returns Its outpoints, empty when it holds none.
+ */
+export async function claimsHeldBy(holder: string): Promise<string[]> {
+  const rows = await collection().find({ holder }).project({ _id: 1 }).toArray();
+  return rows.map((row) => String(row._id));
 }
 
 /**
