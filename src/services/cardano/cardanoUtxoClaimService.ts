@@ -79,8 +79,17 @@ function collection() {
   return mongoose.connection.db!.collection<ClaimDoc>(COLLECTION);
 }
 
-/** The outpoint of a UTxO, in the form a claim uses. */
-export function outpointOf(utxo: CardanoUtxo): string {
+/**
+ * The outpoint of a UTxO, in the form a claim uses.
+ *
+ * Takes the two fields it reads rather than a whole `CardanoUtxo`, so that a caller holding only a
+ * stored outpoint — the operation document keeps them without their amounts — builds the same key
+ * instead of formatting a second one that has to stay in step by hand.
+ *
+ * @param utxo - Anything carrying a transaction hash and an output index.
+ * @returns The claim key.
+ */
+export function outpointOf(utxo: { txHash: string; outputIndex: number }): string {
   return `${utxo.txHash}#${utxo.outputIndex}`;
 }
 
