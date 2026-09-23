@@ -188,6 +188,42 @@ export async function unclaimedUtxos(
 }
 
 /**
+ * The same filter, refusing to answer when the claim store cannot be read.
+ *
+ * {@link unclaimedUtxos} fails **open**: on a database failure it hands back everything, because
+ * refusing every transfer when the claim store is unreachable is worse than a collision the chain
+ * would reject cleanly. That trade is right for a transfer and wrong for staking, where a collision
+ * does not bounce off the chain harmlessly — it builds a second certificate for a stake credential
+ * whose first one may still be settling, and spends UTxOs another operation has already committed
+ * to. So staking gets a variant that fails closed, and transfers keep the behaviour they have.
+ *
+ * @param utxos - What the provider reports the address holds.
+ * @returns The ones nothing else is spending.
+ * @throws Error `CARDANO_CLAIM_STORE_UNAVAILABLE` when the claim store cannot be read.
+ */
+export async function unclaimedUtxosStrict(
+  utxos: readonly CardanoUtxo[]
+): Promise<readonly CardanoUtxo[]> {
+  if (utxos.length === 0) return utxos;
+
+  try {
+    await ensureIndex();
+    const outpoints = utxos.map(outpointOf);
+    const claimed = await collection()
+      .find({ _id: { $in: outpoints } }, { projection: { _id: 1 } })
+      .toArray();
+    const taken = new Set(claimed.map((doc) => doc._id));
+    return utxos.filter((utxo) => !taken.has(outpointOf(utxo)));
+  } catch (error) {
+    Logger.error(
+      'unclaimedUtxosStrict',
+      `claim store unreachable; refusing to select staking inputs: ${error instanceof Error ? error.message : String(error)}`
+    );
+    throw new Error('CARDANO_CLAIM_STORE_UNAVAILABLE');
+  }
+}
+
+/**
  * Records a transaction this deployment submitted.
  *
  * What it buys is the right to spend that transaction's outputs before they are confirmed: they are
