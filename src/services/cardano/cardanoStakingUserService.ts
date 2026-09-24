@@ -20,6 +20,7 @@
 import type { Types } from 'mongoose';
 
 import { getCardanoConfig } from '../../config/cardanoConfig';
+import { chargesTransferFee, getCardanoFeeConfig } from '../../config/cardanoFeeConfig';
 import { getCardanoStakingConfig } from '../../config/cardanoStakingConfig';
 import { SECURITY_PIN_ENABLED } from '../../config/constants';
 import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
@@ -37,6 +38,7 @@ import CardanoStakingOperation, {
 import CardanoStakingReward from '../../models/cardanoStakingRewardModel';
 import { type IUser, UserModel } from '../../models/userModel';
 import { securityService } from '../securityService';
+import { chatterPayFeeFor } from './cardanoFeeService';
 import { buildCardanoProvider } from './cardanoProviderService';
 import { assembleStakingPlan } from './cardanoStakingAssemblyService';
 import {
@@ -48,6 +50,7 @@ import {
   verifyPinGrant
 } from './cardanoStakingAssertionService';
 import { type CardanoStakingBalance, resolveStakingBalance } from './cardanoStakingBalanceService';
+import { buildCardanoStakingTransaction } from './cardanoStakingBuilderService';
 import { executeStakingOperation } from './cardanoStakingLifecycleService';
 import { createStakingOperation } from './cardanoStakingOperationService';
 import { decideRequestedAction, type StakingDecisionRefusal } from './cardanoStakingPlanService';
@@ -678,6 +681,126 @@ export async function authorizeStakingAction(
   return {
     ok: true,
     data: { grant: issued.grant, expiresAt: issued.expiresAt, action }
+  };
+}
+
+/** What an exit would move. Every figure in lovelace, as a string, because these can be large. */
+export interface StakingExitQuote {
+  grossLovelace: string;
+  networkFeeLovelace: string;
+  commercialFeeLovelace: string;
+  refundLovelace: string;
+  netLovelace: string;
+}
+
+/**
+ * What sending everything would actually send.
+ *
+ * Built, not estimated. The transaction is assembled and balanced exactly as the real one would be —
+ * same inputs, same certificates, same fee arithmetic — and then thrown away. An estimate would be a
+ * second implementation of the balancing rules, and the one number a user is asked to agree to is the
+ * worst place for two implementations to disagree.
+ *
+ * Nothing is created, claimed, signed or submitted. The plan is assembled and built in memory; no
+ * operation row exists afterwards and no input is held, so a user who opens the dialog and changes
+ * their mind leaves no trace.
+ *
+ * The commercial fee comes from the same function the transfer path uses, with `isAda` passed rather
+ * than inferred from a ticker: a deployment whose catalogue row is named `tADA` would otherwise fall
+ * through to a price lookup and quote a fee of zero.
+ *
+ * @param phoneNumber - The authenticated user's phone number.
+ * @param recipientAddress - Where the exit would send.
+ * @returns The quote, or a refusal — including every refusal the exit itself would give, so the dialog
+ *   reports "you cannot leave yet" before asking for a PIN rather than after.
+ */
+export async function quoteStakingExit(
+  phoneNumber: string,
+  recipientAddress: string
+): Promise<StakingUserResult<StakingExitQuote>> {
+  const cardano = getCardanoConfig();
+  if (!cardano.enabled) {
+    return { ok: false, refusal: 'staking_disabled', detail: cardano.disabledReason };
+  }
+
+  const own = await resolveOwn(phoneNumber);
+  if (!own.ok) return own;
+  const { user, account } = own.data;
+
+  const config = getCardanoStakingConfig();
+  const base = buildCardanoProvider();
+  const staking = stakingProvider();
+
+  const signer = stakingSignerFor(account, user);
+  const utxos = signer.available
+    ? await selectableStakingUtxos(await base.utxosFor(account.walletAddress))
+    : [];
+  const spendable = utxos.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
+
+  const decision = decideRequestedAction(account, 'exit_and_send_max', {
+    config,
+    parameters: await staking.stakingProtocolParameters(),
+    addressBytes: signer.available ? signer.material.user.addressBytes : new Uint8Array(),
+    spendableLovelace: spendable,
+    poolState:
+      account.onChain.poolId === null ? null : await staking.poolState(account.onChain.poolId),
+    operationInFlight: await hasLiveOperation(account._id as Types.ObjectId),
+    signerAvailable: signer.available
+  });
+  if (decision.action === 'none') {
+    return { ok: false, refusal: 'refused', detail: decision.refusal ?? 'nothing_to_do' };
+  }
+
+  const feeConfig = getCardanoFeeConfig();
+  // The same schedule a transfer of the same ada would pay, and nothing bespoke. `isAda` is stated
+  // rather than read off a ticker.
+  const commercialFeeLovelace = chargesTransferFee(feeConfig)
+    ? await chatterPayFeeFor(feeConfig, 'ADA', 6, false, true)
+    : 0n;
+
+  const assembly = await assembleStakingPlan({
+    account,
+    user,
+    action: 'exit_and_send_max',
+    provider: {
+      tip: () => base.tip(),
+      utxosFor: (address: string) => base.utxosFor(address),
+      stakingProtocolParameters: () => staking.stakingProtocolParameters(),
+      stakeAccount: (reward: string) => staking.stakeAccount(reward)
+    },
+    recipientAddress,
+    commercialFeeLovelace
+  });
+  if (assembly.outcome === 'refused') {
+    return {
+      ok: false,
+      refusal: 'not_assembled',
+      detail: `${assembly.refusal}: ${assembly.detail}`
+    };
+  }
+
+  let built: ReturnType<typeof buildCardanoStakingTransaction>;
+  try {
+    built = buildCardanoStakingTransaction(assembly.plan);
+  } catch (error) {
+    // A plan that cannot be balanced is not a quote of zero. It is a reason the exit cannot happen, and
+    // the builder's own code says which rule it broke.
+    return {
+      ok: false,
+      refusal: 'not_assembled',
+      detail: error instanceof Error ? error.message : String(error)
+    };
+  }
+
+  return {
+    ok: true,
+    data: {
+      grossLovelace: String(spendable),
+      networkFeeLovelace: String(built.networkFeeLovelace),
+      commercialFeeLovelace: String(built.commercialFeeLovelace),
+      refundLovelace: String(built.refundLovelace),
+      netLovelace: String(built.recipientLovelace)
+    }
   };
 }
 

@@ -28,6 +28,7 @@ import {
   getGovernanceHistory,
   getStakingView,
   listGovernanceOptions,
+  quoteStakingExit,
   requestStakingAction,
   type StakingUserRefusal,
   setStakingConsent,
@@ -175,6 +176,40 @@ export async function cardanoStakingAction(
     return returnSuccessResponse(reply, 'Cardano staking action started', { ...result.data });
   } catch (error) {
     return failed(reply, 'cardanoStakingAction', error);
+  }
+}
+
+/**
+ * Handles `GET /cardano/staking/exit-quote`.
+ *
+ * Read-only: it assembles and balances the exit to find out what it would move, and keeps nothing.
+ *
+ * @param request - The Fastify request.
+ * @param reply - The Fastify reply.
+ */
+export async function cardanoStakingExitQuote(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<unknown> {
+  const { channel_user_id: channelUserId, recipient_address: recipient } = (request.query ??
+    {}) as { channel_user_id?: string; recipient_address?: string };
+  if (!channelUserId) return missingUser(reply);
+  if (!recipient || recipient.trim() === '') {
+    return returnErrorResponse(
+      'cardanoStakingExitQuote',
+      '',
+      reply,
+      400,
+      'recipient_address is required'
+    );
+  }
+
+  try {
+    const result = await quoteStakingExit(channelUserId, recipient.trim());
+    if (!result.ok) return refuse(reply, result.refusal, result.detail);
+    return returnSuccessResponse(reply, 'Cardano staking exit quote', { ...result.data });
+  } catch (error) {
+    return failed(reply, 'cardanoStakingExitQuote', error);
   }
 }
 

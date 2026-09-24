@@ -6,6 +6,7 @@ import {
   cardanoStakingAction,
   cardanoStakingAuthorize,
   cardanoStakingConsent,
+  cardanoStakingExitQuote,
   cardanoStakingState
 } from '../controllers/cardanoStakingController';
 import { cardanoStakingSync } from '../controllers/cardanoStakingSyncController';
@@ -48,6 +49,13 @@ export const cardanoStakingRoutes = async (fastify: FastifyInstance): Promise<vo
    * @route POST /cardano/staking/consent
    */
   fastify.post('/cardano/staking/consent', cardanoStakingConsent);
+
+  /**
+   * What sending everything would move: gross, fees, refund and net.
+   *
+   * @route GET /cardano/staking/exit-quote?channel_user_id=<id>&recipient_address=<addr>
+   */
+  fastify.get('/cardano/staking/exit-quote', cardanoStakingExitQuote);
 
   /**
    * Verifies the PIN for one action and issues a grant bound to it.
