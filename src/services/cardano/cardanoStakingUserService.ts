@@ -684,6 +684,102 @@ export async function authorizeStakingAction(
   };
 }
 
+/** A staking position as a conversation needs it: figures and facts, no controls. */
+export interface StakingChatSummary {
+  /** Whether this wallet is staking at all. */
+  staking: boolean;
+  state: CardanoStakingAccountState;
+  /** `false` when the chain could not be read. Every amount below is then absent. */
+  figuresKnown: boolean;
+  totalAdaLovelace: string | null;
+  utxoLovelace: string | null;
+  depositLovelace: string | null;
+  withdrawableRewardsLovelace: string | null;
+  pendingRewardsLovelace: string | null;
+  poolId: string | null;
+  voteDelegation: string;
+  /** True when rewards exist and Conway will not let them be withdrawn yet. */
+  rewardsBlockedByGovernance: boolean;
+  /** True when the user has left and only a fresh opt-in brings them back. */
+  optedOut: boolean;
+  lastReadAt: Date | null;
+}
+
+/**
+ * The staking position, for a channel that can only ask questions.
+ *
+ * Deliberately a different surface from {@link getStakingView} rather than a subset of it. What is
+ * missing is the `actions` map, and its absence is the design: a channel that receives a list of
+ * permitted operations is a channel somebody will eventually wire a button to. This one carries
+ * figures and facts and nothing that reads as an offer.
+ *
+ * The wallet comes from the phone number, as everywhere else here, so a caller cannot ask about
+ * somebody else's position by naming it.
+ *
+ * @param phoneNumber - The authenticated channel user's phone number.
+ * @returns The summary, or a refusal.
+ */
+export async function getStakingChatSummary(
+  phoneNumber: string
+): Promise<StakingUserResult<StakingChatSummary>> {
+  const cardano = getCardanoConfig();
+  if (!cardano.enabled) {
+    return { ok: false, refusal: 'staking_disabled', detail: cardano.disabledReason };
+  }
+
+  const own = await resolveOwn(phoneNumber);
+  if (!own.ok) return own;
+  const { account } = own.data;
+
+  const balance = await resolveStakingBalance(
+    account,
+    account.walletAddress,
+    buildCardanoProvider()
+  );
+
+  const live = await CardanoStakingOperation.findOne({
+    accountId: account._id as Types.ObjectId,
+    status: {
+      $in: ['queued', 'executing', 'signed', 'submitted', 'unknown_submit', 'manual_review']
+    }
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const delegation = account.onChain.governanceDelegation;
+  const voteDelegated =
+    delegation !== null && delegation.kind !== 'none' && delegation.kind !== 'not_registered';
+  const known = balance.availability !== 'unavailable';
+
+  return {
+    ok: true,
+    data: {
+      staking: account.onChain.registered,
+      state: deriveStakingAccountState(
+        account,
+        live === null ? null : { kind: live.kind, status: live.status },
+        null
+      ),
+      // The one thing a chat answer must never get wrong: an unreadable balance has to be absent, not
+      // zero. "You have no rewards" and "we could not check" are different answers to give somebody.
+      figuresKnown: known,
+      totalAdaLovelace: known ? String(balance.totalAdaLovelace) : null,
+      utxoLovelace: known ? String(balance.utxoLovelace) : null,
+      depositLovelace: known ? String(balance.userOwnedRefundableDepositLovelace) : null,
+      withdrawableRewardsLovelace: known ? String(balance.withdrawableRewardsLovelace) : null,
+      pendingRewardsLovelace: known ? String(balance.pendingRewardsLovelace) : null,
+      poolId: account.onChain.poolId,
+      voteDelegation: delegation?.kind ?? 'none',
+      rewardsBlockedByGovernance:
+        account.onChain.registered &&
+        !voteDelegated &&
+        BigInt(account.onChain.withdrawableRewardsLovelace) > 0n,
+      optedOut: (account.optOut ?? null) !== null,
+      lastReadAt: account.onChain.asOf
+    }
+  };
+}
+
 /** What an exit would move. Every figure in lovelace, as a string, because these can be large. */
 export interface StakingExitQuote {
   grossLovelace: string;

@@ -7,7 +7,8 @@ import {
   cardanoStakingAuthorize,
   cardanoStakingConsent,
   cardanoStakingExitQuote,
-  cardanoStakingState
+  cardanoStakingState,
+  cardanoStakingSummary
 } from '../controllers/cardanoStakingController';
 import { cardanoStakingSync } from '../controllers/cardanoStakingSyncController';
 
@@ -49,6 +50,13 @@ export const cardanoStakingRoutes = async (fastify: FastifyInstance): Promise<vo
    * @route POST /cardano/staking/consent
    */
   fastify.post('/cardano/staking/consent', cardanoStakingConsent);
+
+  /**
+   * The position as a conversational channel needs it: figures and facts, no controls.
+   *
+   * @route GET /cardano/staking/summary?channel_user_id=<id>
+   */
+  fastify.get('/cardano/staking/summary', cardanoStakingSummary);
 
   /**
    * What sending everything would move: gross, fees, refund and net.

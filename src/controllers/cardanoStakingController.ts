@@ -26,6 +26,7 @@ import type { CardanoStakingOperationKind } from '../models/cardanoStakingOperat
 import {
   authorizeStakingAction,
   getGovernanceHistory,
+  getStakingChatSummary,
   getStakingView,
   listGovernanceOptions,
   quoteStakingExit,
@@ -176,6 +177,32 @@ export async function cardanoStakingAction(
     return returnSuccessResponse(reply, 'Cardano staking action started', { ...result.data });
   } catch (error) {
     return failed(reply, 'cardanoStakingAction', error);
+  }
+}
+
+/**
+ * Handles `GET /cardano/staking/summary`.
+ *
+ * The read-only surface a conversational channel gets. It carries figures and facts and no list of
+ * permitted operations, because a channel that receives one is a channel somebody eventually wires a
+ * button to.
+ *
+ * @param request - The Fastify request.
+ * @param reply - The Fastify reply.
+ */
+export async function cardanoStakingSummary(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<unknown> {
+  const { channel_user_id: channelUserId } = (request.query ?? {}) as { channel_user_id?: string };
+  if (!channelUserId) return missingUser(reply);
+
+  try {
+    const result = await getStakingChatSummary(channelUserId);
+    if (!result.ok) return refuse(reply, result.refusal, result.detail);
+    return returnSuccessResponse(reply, 'Cardano staking summary', { ...result.data });
+  } catch (error) {
+    return failed(reply, 'cardanoStakingSummary', error);
   }
 }
 
