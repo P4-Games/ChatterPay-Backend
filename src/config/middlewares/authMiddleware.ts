@@ -54,7 +54,17 @@ const PUBLIC_ROUTES = [
   '/last_nft*',
   '/nft_info*',
   '/balance/*',
-  '/polymarket/terms'
+  '/polymarket/terms',
+  // Not public in the sense the others are. This one authenticates its own caller, with a Google OIDC
+  // identity token verified in the handler, and it is listed here so that the shared-token check does
+  // not reject a scheduler *before* that verification runs. The two checks answer different questions:
+  // the shared token proves somebody holds a secret, an OIDC token proves which identity is calling,
+  // and only the second one is usable for a job configured outside this repository.
+  //
+  // The handler fails closed. A deployment with no audience and no accepted principal configured
+  // verifies nothing and therefore allows nobody, so a route that lost its verification would refuse
+  // every call rather than becoming genuinely open.
+  '/internal/cardano/staking/sync'
 ];
 
 /**
