@@ -782,10 +782,34 @@ export async function getStakingChatSummary(
 
 /** What an exit would move. Every figure in lovelace, as a string, because these can be large. */
 export interface StakingExitQuote {
-  grossLovelace: string;
-  networkFeeLovelace: string;
-  commercialFeeLovelace: string;
+  /**
+   * The ada sitting in the wallet's own outputs.
+   *
+   * Not the user's balance, and the distinction is the reason this field exists separately: calling
+   * it the balance reads as "everything you have", which is short by exactly the deposit and makes
+   * the net figure below look like it came from nowhere.
+   */
+  utxoLovelace: string;
+  /** The registration deposit the ledger returns when the credential is deregistered. */
   refundLovelace: string;
+  /** What the user owns before any fee: the outputs plus the deposit coming back. */
+  grossLovelace: string;
+  /** What the transaction costs the chain. */
+  networkFeeLovelace: string;
+  /**
+   * Who pays it, which for a staking exit is always the sponsor.
+   *
+   * Carried rather than left to be inferred, because a fee shown next to an amount is read as
+   * subtracted from it, and this one is not: the arithmetic below is gross minus the commercial
+   * fee, with the network fee coming out of ChatterPay's own inputs. The type has one member
+   * because the assembly refuses outright when no sponsor is available, so there is no shape of
+   * this quote in which the user pays. Should that ever change, the type changes with it and
+   * every screen reading the field is told by the compiler.
+   */
+  networkFeePaidBy: 'sponsor';
+  /** What ChatterPay charges, on the same schedule a transfer of the same ada would pay. */
+  commercialFeeLovelace: string;
+  /** What actually arrives at the destination. */
   netLovelace: string;
 }
 
@@ -891,10 +915,14 @@ export async function quoteStakingExit(
   return {
     ok: true,
     data: {
-      grossLovelace: String(spendable),
-      networkFeeLovelace: String(built.networkFeeLovelace),
-      commercialFeeLovelace: String(built.commercialFeeLovelace),
+      utxoLovelace: String(spendable),
       refundLovelace: String(built.refundLovelace),
+      // The two together, because that is what leaving is worth before anybody charges for it. The
+      // outputs alone understate it by the deposit, which the user paid and is getting back.
+      grossLovelace: String(spendable + built.refundLovelace),
+      networkFeeLovelace: String(built.networkFeeLovelace),
+      networkFeePaidBy: 'sponsor',
+      commercialFeeLovelace: String(built.commercialFeeLovelace),
       netLovelace: String(built.recipientLovelace)
     }
   };
