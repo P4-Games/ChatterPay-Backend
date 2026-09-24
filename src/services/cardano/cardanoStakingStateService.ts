@@ -62,12 +62,17 @@ export type StakingFundsVerdict = 'sufficient' | 'insufficient' | null;
  * @param account - The account, carrying consent, opt-in and the last snapshot.
  * @param live - The operation holding the credential, or `null` when none does.
  * @param funds - Whether the wallet clears the enrolment bar, when the caller knows.
+ * @param consentRequired - Whether this deployment requires the terms to have been accepted. Passed
+ *   in rather than read here so the derivation stays a pure function of what it is given, and
+ *   defaulted to requiring it so a caller that does not know cannot announce a wallet is on its way
+ *   in when it is not.
  * @returns The state.
  */
 export function deriveStakingAccountState(
   account: ICardanoStakingAccount,
   live: StakingLiveOperation | null,
-  funds: StakingFundsVerdict = null
+  funds: StakingFundsVerdict = null,
+  consentRequired = true
 ): CardanoStakingAccountState {
   // First, and not folded in with the rest: an operator is looking at something, and every other
   // branch below would hide that behind a state that reads as normal.
@@ -104,8 +109,19 @@ export function deriveStakingAccountState(
   // answer rather than a gap: what it is waiting for *is* a fresh opt-in, which is the only thing that
   // puts it back. The copy the user sees comes from the opt-out record, so "you left on the 3rd" and
   // "start staking" are told apart by the view without the stored state having to encode both.
-  if (account.termsConsent === null) return 'awaiting_consent';
-  if (!account.preference.enabled) return 'awaiting_consent';
+  // A wallet that left reads this way whatever the deployment's consent setting says, because what
+  // it is waiting for really is an explicit opt-in: that is the only thing that puts it back, and
+  // automatic enrolment is precisely what an opt-out switched off.
+  if ((account.optOut ?? null) !== null) return 'awaiting_consent';
+
+  // Where the terms are not required, never having been asked says nothing about this wallet, so the
+  // state falls through to what does say something: whether it has been read, and whether it holds
+  // enough. Reporting `awaiting_consent` here would show a wallet the sweep is about to enrol as one
+  // that is waiting for the user to do something.
+  if (consentRequired) {
+    if (account.termsConsent === null) return 'awaiting_consent';
+    if (!account.preference.enabled) return 'awaiting_consent';
+  }
 
   // Never read. Not "awaiting funds" — there is no basis for saying anything about the funds — and
   // the sweep refuses to act on it for the same reason.

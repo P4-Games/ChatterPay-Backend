@@ -451,7 +451,11 @@ async function refreshAccount(
   // Recomputed on every pass, before anything is started and again after. The state is derived from
   // facts held elsewhere, so recomputing it is how an account whose state drifted is corrected —
   // rather than by somebody noticing that a registered wallet still reads `awaiting_consent`.
-  await writeState(account._id as Types.ObjectId, decision.refusal);
+  await writeState(
+    account._id as Types.ObjectId,
+    decision.refusal,
+    (request.config ?? getCardanoStakingConfig()).consentRequired
+  );
 
   if (decision.action === 'none') {
     count(result, decision.refusal ?? 'nothing_to_do');
@@ -467,7 +471,11 @@ async function refreshAccount(
   if (started === 'started') result.actionsStarted += 1;
   else count(result, started);
 
-  await writeState(account._id as Types.ObjectId, decision.refusal);
+  await writeState(
+    account._id as Types.ObjectId,
+    decision.refusal,
+    (request.config ?? getCardanoStakingConfig()).consentRequired
+  );
 }
 
 /**
@@ -476,10 +484,13 @@ async function refreshAccount(
  * @param accountId - The account.
  * @param refusal - Why the sweep did nothing, which is what says whether the wallet is short of funds
  *   or simply had nothing to do.
+ * @param consentRequired - Whether this deployment requires the terms to have been accepted, which
+ *   decides whether a wallet nobody asked reads as waiting for the user or as waiting for funds.
  */
 async function writeState(
   accountId: Types.ObjectId,
-  refusal: StakingDecision['refusal']
+  refusal: StakingDecision['refusal'],
+  consentRequired: boolean
 ): Promise<void> {
   const account = await CardanoStakingAccount.findById(accountId).exec();
   if (account === null) return;
@@ -500,7 +511,8 @@ async function writeState(
   const state = deriveStakingAccountState(
     account,
     live === null ? null : { kind: live.kind, status: live.status },
-    funds
+    funds,
+    consentRequired
   );
 
   if (state !== account.state) {

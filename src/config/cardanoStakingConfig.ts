@@ -23,6 +23,7 @@
  */
 
 import {
+  CARDANO_STAKING_CONSENT_REQUIRED,
   CARDANO_STAKING_DEFAULT_POOL_ID,
   CARDANO_STAKING_DREP_OWN_ENABLED,
   CARDANO_STAKING_ENABLED,
@@ -79,6 +80,18 @@ export interface CardanoStakingConfig {
   defaultPoolId: string | null;
   /** Version stamped on a consent, so a change of terms is visible per user. */
   termsVersion: string;
+  /**
+   * Whether a wallet must have accepted the terms before anything enrols it.
+   *
+   * With this off, staking is automatic: a wallet that was never asked is treated as one that
+   * agreed, and the sweep enrols it on the technical and economic checks alone. Nothing else about
+   * those checks changes — the allowlist, the minimum balance, the signer, the sponsored-entry limit
+   * and the on-chain state all still apply, and they become the whole of what bounds a rollout.
+   *
+   * What this never weakens is an explicit opt-out. Consent is the absence of a decision; an opt-out
+   * is a decision, and no setting turns one into the other.
+   */
+  consentRequired: boolean;
   /** What ChatterPay will spend on staking network fees per window. */
   feeDailyCapLovelace: bigint;
   /**
@@ -196,6 +209,9 @@ export function getCardanoStakingConfig(): CardanoStakingConfig {
       minimumEnrolmentLovelace ?? BigInt(DEFAULT_MIN_ENROLMENT_ADA) * LOVELACE_PER_ADA,
     defaultPoolId,
     termsVersion: CARDANO_STAKING_TERMS_VERSION.trim() || DEFAULT_TERMS_VERSION,
+    // Anything but an explicit `false` requires it, so a typo in the setting fails towards asking
+    // people rather than towards enrolling them.
+    consentRequired: CARDANO_STAKING_CONSENT_REQUIRED.trim().toLowerCase() !== 'false',
     feeDailyCapLovelace:
       feeDailyCapLovelace ?? BigInt(DEFAULT_FEE_DAILY_CAP_ADA) * LOVELACE_PER_ADA,
     drepOwnEnabled: CARDANO_STAKING_DREP_OWN_ENABLED.trim().toLowerCase() === 'true',

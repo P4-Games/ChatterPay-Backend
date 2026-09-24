@@ -102,6 +102,7 @@ const {
   CARDANO_STAKING_MIN_ENROLMENT_ADA: cardanoStakingMinEnrolmentAda = '',
   CARDANO_STAKING_DEFAULT_POOL_ID: cardanoStakingDefaultPoolId = '',
   CARDANO_STAKING_TERMS_VERSION: cardanoStakingTermsVersion = '',
+  CARDANO_STAKING_CONSENT_REQUIRED: cardanoStakingConsentRequired = 'true',
   CARDANO_STAKING_FEE_DAILY_CAP_ADA: cardanoStakingFeeDailyCapAda = '',
   CARDANO_STAKING_DREP_OWN_ENABLED: cardanoStakingDrepOwnEnabled = 'false',
   CARDANO_STAKING_ENROLMENT_ALLOWLIST: cardanoStakingEnrolmentAllowlist = '',
@@ -434,6 +435,17 @@ export const CARDANO_STAKING_ENABLED: string = cardanoStakingEnabled;
 export const CARDANO_STAKING_MIN_ENROLMENT_ADA: string = cardanoStakingMinEnrolmentAda;
 export const CARDANO_STAKING_DEFAULT_POOL_ID: string = cardanoStakingDefaultPoolId;
 export const CARDANO_STAKING_TERMS_VERSION: string = cardanoStakingTermsVersion;
+// Whether a wallet has to have accepted the terms before anything may enrol it.
+//
+// When this is off, never having been asked is not a reason to stay out: the sweep treats a wallet
+// with no consent and no preference the same as one that agreed, and enrols it on the ordinary
+// technical and economic checks. What still keeps a wallet out — always, and regardless of this
+// setting — is an explicit opt-out, which is a decision the user made rather than one nobody asked
+// them for.
+//
+// Defaults to requiring it. A deployment that enrols people who were never asked should have said
+// so, and the refusal it produces otherwise is visible in the sync counters rather than silent.
+export const CARDANO_STAKING_CONSENT_REQUIRED: string = cardanoStakingConsentRequired;
 export const CARDANO_STAKING_FEE_DAILY_CAP_ADA: string = cardanoStakingFeeDailyCapAda;
 export const CARDANO_STAKING_DREP_OWN_ENABLED: string = cardanoStakingDrepOwnEnabled;
 export const CARDANO_STAKING_ENROLMENT_ALLOWLIST: string = cardanoStakingEnrolmentAllowlist;

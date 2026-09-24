@@ -25,8 +25,11 @@
 
 import { type Types } from 'mongoose';
 
+import { getCardanoStakingConfig } from '../../config/cardanoStakingConfig';
 import { Logger } from '../../helpers/loggerHelper';
-import type { ICardanoStakingAccount } from '../../models/cardanoStakingAccountModel';
+import CardanoStakingAccount, {
+  type ICardanoStakingAccount
+} from '../../models/cardanoStakingAccountModel';
 import { declaredIndexNames, STAKING_COLLECTIONS } from '../../models/cardanoStakingCollections';
 import CardanoStakingOperation, {
   type CardanoStakingOperationKind,
@@ -37,20 +40,26 @@ import CardanoStakingOperation, {
 export type StakingOperationRefusal =
   | 'indexes_missing'
   | 'no_confirmed_chain_read'
-  | 'no_terms_consent';
+  | 'no_terms_consent'
+  | 'opted_out';
 
 export type StakingOperationReadiness =
   | { ok: true }
   | { ok: false; refusal: StakingOperationRefusal; detail: string };
 
 /**
- * Kinds that start or extend the user's participation, and so need their consent on record.
+ * Kinds that start or extend the user's participation.
  *
- * Withdrawing, deregistering and exiting are deliberately absent: a user must be able to leave
- * whatever the state of a consent record, and a reconciliation that has to unwind a registration
- * must not be blocked by one.
+ * Two checks read this list, and they are the two things that may stand in the way of joining: a
+ * consent that a deployment requires and does not have, and a decision to leave that the user has
+ * already made.
+ *
+ * Withdrawing, deregistering and exiting are deliberately absent from both. A user must be able to
+ * leave whatever the state of a consent record, a reconciliation that has to unwind a registration
+ * must not be blocked by one, and a decision to leave must never be a reason to hold on to
+ * somebody's money.
  */
-const CONSENT_REQUIRED_KINDS: readonly CardanoStakingOperationKind[] = [
+const PARTICIPATION_KINDS: readonly CardanoStakingOperationKind[] = [
   'register_and_delegate',
   'redelegate_pool',
   'delegate_vote',
@@ -139,11 +148,36 @@ export async function checkStakingOperationReadiness(
     };
   }
 
-  if (CONSENT_REQUIRED_KINDS.includes(kind) && account.termsConsent === null) {
+  if (!PARTICIPATION_KINDS.includes(kind)) return { ok: true };
+
+  if (getCardanoStakingConfig().consentRequired && account.termsConsent === null) {
     return {
       ok: false,
       refusal: 'no_terms_consent',
       detail: `${kind} starts or extends participation and no consent is on record`
+    };
+  }
+
+  // Re-read, and this is the whole point of the check rather than an optimisation.
+  //
+  // Every caller decided on a snapshot taken earlier — the sweep reads an account, observes it on
+  // chain, assembles a plan and only then arrives here — and a user pressing "turn staking off" in
+  // that window writes an opt-out that the snapshot cannot know about. Deciding on the stale copy
+  // means putting a credential back on chain seconds after its owner asked to take it off, at the
+  // sponsor's expense and with a deposit that then has to be recovered again.
+  //
+  // This is the last point at which that is still catchable: nothing is created, signed or sent
+  // before it. Ordering the opt-out write ahead of the exit closes the other half of the same
+  // window, and neither half is sufficient alone.
+  const current = await CardanoStakingAccount.findById(account._id as Types.ObjectId)
+    .select('optOut')
+    .lean();
+  const optOut = current?.optOut ?? null;
+  if (optOut !== null) {
+    return {
+      ok: false,
+      refusal: 'opted_out',
+      detail: `${kind} would re-enter a wallet that opted out (${optOut.reason})`
     };
   }
 

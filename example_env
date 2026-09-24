@@ -262,12 +262,16 @@ CARDANO_DERIVATION_CHECK=''
 # because the network fee of registering it would outweigh what it can earn.
 # CARDANO_STAKING_DEFAULT_POOL_ID is the pool a newly enrolled credential delegates to.
 # CARDANO_STAKING_TERMS_VERSION is the version a user consents to. Bumping it asks everyone again.
+# CARDANO_STAKING_CONSENT_REQUIRED decides whether a wallet has to have accepted those terms before
+# anything enrols it. Off means staking is automatic: a wallet nobody ever asked is enrolled on the
+# technical and economic checks alone, and the only thing that keeps one out is an explicit opt-out.
 # CARDANO_STAKING_FEE_DAILY_CAP_ADA is the most ChatterPay will spend on network fees in a day,
 # across every account. Reached, the sweep stops starting new operations and says so.
 CARDANO_STAKING_ENABLED='false'
 CARDANO_STAKING_MIN_ENROLMENT_ADA=10
 CARDANO_STAKING_DEFAULT_POOL_ID=''
 CARDANO_STAKING_TERMS_VERSION='1'
+CARDANO_STAKING_CONSENT_REQUIRED='false'
 CARDANO_STAKING_FEE_DAILY_CAP_ADA=5
 
 # Cardano staking - who the automatic sweep may enrol. A comma separated list of phone numbers;

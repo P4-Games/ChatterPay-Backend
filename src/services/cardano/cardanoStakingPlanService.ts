@@ -212,8 +212,16 @@ export function decideAutomaticAction(
     return refuse('opted_out', optOut.reason);
   }
 
-  if (!account.preference.enabled) return refuse('not_opted_in');
-  if (account.termsConsent === null) return refuse('no_terms_consent');
+  // The opt-in and the consent are one gate, and whether it stands at all is a deployment setting.
+  //
+  // Where the terms are required, a wallet nobody asked stays out. Where they are not, staking is
+  // automatic and the absence of both records is not a decision to stay out — it is the absence of
+  // any decision, and the sweep enrols on the technical and economic checks below. The one thing
+  // that is a decision is the opt-out, and it is already checked above, ahead of everything.
+  if (context.config.consentRequired) {
+    if (!account.preference.enabled) return refuse('not_opted_in');
+    if (account.termsConsent === null) return refuse('no_terms_consent');
+  }
 
   if (!onChain.registered) {
     if (context.config.defaultPoolId === null) return refuse('no_pool_configured');
@@ -302,7 +310,11 @@ export function decideRequestedAction(
   if (DREP_OWN_KINDS.includes(requested) && !context.config.drepOwnEnabled) {
     return refuse('not_available', requested);
   }
-  if (CONSENT_REQUIRED.includes(requested) && account.termsConsent === null) {
+  if (
+    context.config.consentRequired &&
+    CONSENT_REQUIRED.includes(requested) &&
+    account.termsConsent === null
+  ) {
     return refuse('no_terms_consent');
   }
   // A wallet that left is not re-entered by asking for a participation action. Pressing "delegate my

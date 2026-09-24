@@ -1,5 +1,5 @@
 import mongoose, { Types } from 'mongoose';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CardanoStakingAccount, {
   type ICardanoStakingAccount
@@ -12,6 +12,27 @@ import {
   missingStakingIndexes,
   resetStakingSchemaVerification
 } from '../../../src/services/cardano/cardanoStakingOperationService';
+
+/**
+ * Whether this deployment requires the terms to have been accepted.
+ *
+ * Mocked rather than left to the environment. The setting is real configuration with a real default,
+ * and a suite that read it from whatever `.env` the machine happens to hold would pass or fail
+ * according to a file nobody changed on purpose — which is exactly what happened when staking was
+ * switched to automatic enrolment.
+ */
+const stakingConfig = vi.hoisted(() => ({ current: null as unknown }));
+
+vi.mock('../../../src/config/cardanoStakingConfig', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/config/cardanoStakingConfig')>();
+  return {
+    ...actual,
+    getCardanoStakingConfig: () => ({
+      ...actual.getCardanoStakingConfig(),
+      ...(stakingConfig.current ?? {})
+    })
+  };
+});
 
 const CHAIN_ID = 900000000001;
 const CREDENTIAL = 'cc2f0b60ee5c4edb7bcc46410787d389539cddf5b64f0012304b91da';
@@ -74,6 +95,7 @@ function intent(kind: Parameters<typeof createStakingOperation>[1]['kind']) {
 
 describe('cardanoStakingOperationService', () => {
   beforeEach(async () => {
+    stakingConfig.current = null;
     await CardanoStakingAccount.deleteMany({});
     await CardanoStakingOperation.deleteMany({});
     await installSchema();
@@ -209,7 +231,9 @@ describe('cardanoStakingOperationService', () => {
   });
 
   describe('consent', () => {
-    it('refuses to start participation without it', async () => {
+    it('refuses to start participation without it, where it is required', async () => {
+      stakingConfig.current = { consentRequired: true };
+
       const account = await seedAccount({
         onChain: {
           registered: false,
@@ -230,6 +254,29 @@ describe('cardanoStakingOperationService', () => {
         ok: false,
         refusal: 'no_terms_consent',
         detail: expect.stringContaining('no consent is on record')
+      });
+    });
+
+    it('does not ask for it where the deployment does not require it', async () => {
+      // Automatic enrolment: a wallet nobody asked is not a wallet that said no, and the only thing
+      // that keeps one out is a recorded opt-out.
+      stakingConfig.current = { consentRequired: false };
+      const account = await seedAccount({
+        onChain: {
+          registered: false,
+          poolId: null,
+          governanceDelegation: null,
+          depositLovelace: null,
+          withdrawableRewardsLovelace: '0',
+          pendingRewardsLovelace: '0',
+          lifetimeRewardsLovelace: '0',
+          historicalCompleteness: 'partial',
+          asOf: new Date()
+        }
+      });
+
+      expect(await checkStakingOperationReadiness(account, 'register_and_delegate')).toEqual({
+        ok: true
       });
     });
 

@@ -41,6 +41,7 @@ function config(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingCo
     minimumEnrolmentLovelace: 5_000_000n,
     defaultPoolId: 'pool1vvkurfxhajtj4f7x8wjkeet7rg8amz34duy5nux76per5sn3npx',
     termsVersion: 'v1',
+    consentRequired: true,
     feeDailyCapLovelace: 50_000_000n,
     drepOwnEnabled: false,
     enrolmentAllowlist: null,

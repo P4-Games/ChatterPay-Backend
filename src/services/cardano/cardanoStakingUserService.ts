@@ -344,7 +344,8 @@ export async function getStakingView(
       state: deriveStakingAccountState(
         account,
         live === null ? null : { kind: live.kind, status: live.status },
-        null
+        null,
+        getCardanoStakingConfig().consentRequired
       ),
       optedIn: account.preference.enabled,
       // Normalised: a document written before the field existed carries no `optOut` at all, and the
@@ -834,7 +835,8 @@ export async function getStakingChatSummary(
       state: deriveStakingAccountState(
         account,
         live === null ? null : { kind: live.kind, status: live.status },
-        null
+        null,
+        getCardanoStakingConfig().consentRequired
       ),
       // The one thing a chat answer must never get wrong: an unreadable balance has to be absent, not
       // zero. "You have no rewards" and "we could not check" are different answers to give somebody.
