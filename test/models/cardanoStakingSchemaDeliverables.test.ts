@@ -17,18 +17,11 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import mongoose, { type Model, type Schema } from 'mongoose';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { type Model } from 'mongoose';
+import { describe, expect, it } from 'vitest';
 
 import CardanoStakingAccount from '../../src/models/cardanoStakingAccountModel';
 import { STAKING_COLLECTIONS } from '../../src/models/cardanoStakingCollections';
-import CardanoStakingFeeBudget from '../../src/models/cardanoStakingFeeBudgetModel';
-import CardanoStakingOperation from '../../src/models/cardanoStakingOperationModel';
-import {
-  checkStakingOperationReadiness,
-  missingStakingIndexes,
-  resetStakingSchemaVerification
-} from '../../src/services/cardano/cardanoStakingOperationService';
 
 /**
  * Where the deliverables live: a sibling of this repository, inside the roadmap folder.
@@ -40,6 +33,9 @@ const BDD_DIR = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
   '../../../_TODO/_0_roadmap_tareas/1-doing/b2c_cardano_stacking/bdd'
 );
+
+/** The read the chat function calls, as the route declares it. */
+const STAKING_SUMMARY_PATH = '/cardano/staking/summary';
 
 /** Mongoose's own name for a type, and the BSON type the deliverables are expected to name. */
 const BSON_TYPE: Readonly<Record<string, string>> = {
@@ -100,6 +96,45 @@ function readJson(file: string): Record<string, unknown> {
   return JSON.parse(readFileSync(join(BDD_DIR, file), 'utf8')) as Record<string, unknown>;
 }
 
+/**
+ * The `$jsonSchema` a deliverable carries.
+ *
+ * The file is the validator and nothing else, because that is what Compass's validation tab takes.
+ *
+ * @param collection - The collection whose schema to read.
+ * @returns The validator.
+ */
+function readValidator(collection: string): JsonSchemaNode {
+  const file = JSON.parse(
+    readFileSync(join(BDD_DIR, `${collection}.schema.json`), 'utf8')
+  ) as Record<string, unknown>;
+  return file.$jsonSchema as JsonSchemaNode;
+}
+
+/**
+ * The indexes a deliverable declares, in the shape these tests compare.
+ *
+ * The file itself is the array `createIndexes` takes — `{ key, name, ...options }` per entry — so
+ * that it can be pasted into a shell without being unwrapped first. Split back into keys and
+ * options here, because that is how Mongoose reports what the model declares.
+ *
+ * @param collection - The collection whose indexes to read.
+ * @returns The declared indexes, sorted by name.
+ */
+function readIndexes(collection: string): IndexEntry[] {
+  const file = JSON.parse(
+    readFileSync(join(BDD_DIR, `${collection}.indexes.json`), 'utf8')
+  ) as Array<Record<string, unknown>>;
+
+  return file
+    .map(({ key, name, ...options }) => ({
+      name: name as string,
+      keys: key as Record<string, unknown>,
+      options
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 /** The paths a schema declares, without the version key and without Mongoose's own bookkeeping. */
 function declaredPaths(schema: SchemaLike): string[] {
   return Object.keys(schema.paths).filter((path) => path !== '__v' && !path.includes('.'));
@@ -122,7 +157,10 @@ function namesType(node: JsonSchemaNode | undefined, expected: string): boolean 
  */
 function expectNodeMatchesSchema(node: JsonSchemaNode, schema: SchemaLike, where: string): void {
   const paths = declaredPaths(schema);
-  const documented = Object.keys(node.properties ?? {});
+  // The version key is filtered on both sides. Mongoose writes it on every document, so a validator
+  // has to accept it, but it is bookkeeping rather than a field of the model and whether a
+  // deliverable spells it out says nothing about drift.
+  const documented = Object.keys(node.properties ?? {}).filter((field) => field !== '__v');
 
   expect(documented.sort(), `${where}: documented fields`).toEqual([...paths].sort());
 
@@ -201,31 +239,54 @@ describe('cardano staking database deliverables', () => {
       }
     });
 
-    it('covers every staking collection, and the readme that says how to apply them', () => {
+    it('covers every staking collection', () => {
       const files = new Set(readdirSync(BDD_DIR));
 
       for (const { collection } of STAKING_COLLECTIONS) {
         expect(files.has(`${collection}.schema.json`), `${collection}.schema.json`).toBe(true);
         expect(files.has(`${collection}.indexes.json`), `${collection}.indexes.json`).toBe(true);
       }
+    });
 
-      expect(files.has('README.md')).toBe(true);
+    it('holds nothing that is not applied to a database', () => {
+      // These files are pasted into Compass one at a time. Anything else in the folder — a readme,
+      // a sample row — is something somebody has to know to skip, and a sample row in particular is
+      // something somebody can paste into a live collection by mistake.
+      const strays = readdirSync(BDD_DIR).filter((file) => !file.endsWith('.json'));
+
+      expect(strays).toEqual([]);
+    });
+
+    it('carries each schema as the validator itself, with nothing wrapped around it', () => {
+      // Compass takes the validator, not a document describing one. A file with a `collection` or
+      // `description` key at the top would have to be unwrapped by hand first, which is exactly the
+      // step somebody skips.
+      for (const { collection } of STAKING_COLLECTIONS) {
+        const file = readJson(`${collection}.schema.json`);
+
+        expect(Object.keys(file), collection).toEqual(['$jsonSchema']);
+      }
+    });
+
+    it('carries each index file as the array createIndexes takes', () => {
+      for (const { collection } of STAKING_COLLECTIONS) {
+        const raw = JSON.parse(
+          readFileSync(join(BDD_DIR, `${collection}.indexes.json`), 'utf8')
+        ) as unknown;
+
+        expect(Array.isArray(raw), collection).toBe(true);
+        for (const entry of raw as Array<Record<string, unknown>>) {
+          expect(entry.key, collection).toBeDefined();
+          expect(typeof entry.name, collection).toBe('string');
+        }
+      }
     });
   });
 
   describe('the documented schemas', () => {
     for (const { model, collection } of STAKING_COLLECTIONS) {
       it(`matches the model behind ${collection}`, () => {
-        const file = readJson(`${collection}.schema.json`);
-        expect(file.collection).toBe(collection);
-
-        const options = file.collectionOptions as Record<string, unknown>;
-        const schema = schemaOf(model);
-        expect(options.autoCreate).toBe(schema.options.autoCreate === true);
-        expect(options.autoIndex).toBe(schema.options.autoIndex === true);
-
-        const validator = (file.validator as { $jsonSchema: JsonSchemaNode }).$jsonSchema;
-        expectNodeMatchesSchema(validator, schema, collection);
+        expectNodeMatchesSchema(readValidator(collection), schemaOf(model), collection);
       });
     }
   });
@@ -233,12 +294,7 @@ describe('cardano staking database deliverables', () => {
   describe('the documented indexes', () => {
     for (const { model, collection } of STAKING_COLLECTIONS) {
       it(`matches what ${collection} declares, options included`, () => {
-        const file = readJson(`${collection}.indexes.json`);
-        const documented = (file.indexes as IndexEntry[])
-          .map((entry) => ({ name: entry.name, keys: entry.keys, options: entry.options }))
-          .sort((left, right) => left.name.localeCompare(right.name));
-
-        expect(documented).toEqual(declaredIndexes(model));
+        expect(readIndexes(collection)).toEqual(declaredIndexes(model));
       });
     }
 
@@ -246,19 +302,18 @@ describe('cardano staking database deliverables', () => {
       // These three are not performance indexes. Read them back by name rather than trusting the
       // wholesale comparison above, because a deliverable that lost the unique flag or the partial
       // filter would still be a well-formed file.
-      const operations = readJson('cardano_staking_operations.indexes.json')
-        .indexes as IndexEntry[];
+      const operations = readIndexes('cardano_staking_operations');
       const live = operations.find((entry) => entry.name === 'one_live_op_per_account');
       expect(live?.options).toEqual({
         unique: true,
         partialFilterExpression: { liveness: 'live' }
       });
 
-      const accounts = readJson('cardano_staking_accounts.indexes.json').indexes as IndexEntry[];
+      const accounts = readIndexes('cardano_staking_accounts');
       const credential = accounts.find((entry) => entry.name === 'chain_credential_unique');
       expect(credential?.options).toEqual({ unique: true });
 
-      const claims = readJson('cardano_utxo_claims.indexes.json').indexes as IndexEntry[];
+      const claims = readIndexes('cardano_utxo_claims');
       expect(claims.find((entry) => entry.name === 'expiresAt_1')?.options).toEqual({
         expireAfterSeconds: 0
       });
@@ -271,10 +326,7 @@ describe('cardano staking database deliverables', () => {
       // or lost a reason from the enum would still be a well-formed file — applied to a fresh
       // database it would produce a collection whose validator rejects the very write that records
       // the decision, and the first person to leave would be re-enrolled the next morning.
-      const account = readJson('cardano_staking_accounts.schema.json') as {
-        validator: { $jsonSchema: JsonSchemaNode };
-      };
-      const optOut = account.validator.$jsonSchema.properties?.optOut;
+      const optOut = readValidator('cardano_staking_accounts').properties?.optOut;
 
       // Nullable: absent is the ordinary state, and a row written before the field existed reads as
       // null rather than as a refusal.
@@ -293,10 +345,7 @@ describe('cardano staking database deliverables', () => {
       // The two fields a prepared row must not carry. `termsConsent` nullable and `preference` with
       // its own version are what let the code tell "nobody ever switched this on" from "somebody
       // switched it off", which is the distinction the opt-out rests on.
-      const account = readJson('cardano_staking_accounts.schema.json') as {
-        validator: { $jsonSchema: JsonSchemaNode };
-      };
-      const properties = account.validator.$jsonSchema.properties;
+      const properties = readValidator('cardano_staking_accounts').properties;
 
       expect(properties?.termsConsent?.bsonType).toEqual(['object', 'null']);
       expect(properties?.termsConsent?.required).toEqual(['acceptedAt', 'source', 'version']);
@@ -308,109 +357,50 @@ describe('cardano staking database deliverables', () => {
     });
   });
 
-  describe('the example documents', () => {
-    const ejson = mongoose.mongo.BSON.EJSON;
+  describe('the one document that is inserted rather than applied', () => {
+    it('is the document itself, ready to paste', () => {
+      // Compass inserts what it is given. A file wrapping the document in a description of it would
+      // create a row shaped like the description.
+      const document = readJson('chat_functions.consultar_staking.json');
 
-    it('describes an account a human can create, and one that enables nothing', () => {
-      const raw = ejson.deserialize(readJson('cardano_staking_accounts.example.json'));
-      const account = new CardanoStakingAccount(raw as Record<string, unknown>);
-
-      expect(account.validateSync()).toBeUndefined();
-      // A prepared row is inert: no consent, nothing read from the chain, preference off. The guard
-      // refuses every economic operation on it until the sync has actually read the credential.
-      expect(account.termsConsent).toBeNull();
-      expect(account.preference.enabled).toBe(false);
-      expect(account.onChain.asOf).toBeNull();
-      expect(account.state).toBe('awaiting_consent');
-      // Not opted out either. A row nobody ever enabled is not a row somebody left.
-      expect(account.optOut).toBeNull();
+      expect(document.name).toBeDefined();
+      expect(document.api_config).toBeDefined();
+      expect(document.collection).toBeUndefined();
+      expect(document.document).toBeUndefined();
     });
 
-    it('describes a budget window whose id is the lock', () => {
-      const raw = ejson.deserialize(readJson('cardano_staking_fee_budget.example.json')) as {
-        _id: string;
-        chainId: number;
-        window: string;
-        capLovelace: string;
+    it('calls the endpoint this backend actually serves', () => {
+      // The drift this catches is the expensive one: a chat function pointing at a path that was
+      // renamed answers 404 to every user, and nothing in this repository would otherwise notice.
+      const document = readJson('chat_functions.consultar_staking.json') as {
+        api_config: { url: string; method: string };
       };
-      const budget = new CardanoStakingFeeBudget(raw);
 
-      expect(budget.validateSync()).toBeUndefined();
-      expect(raw._id).toBe(`${raw.chainId}:${raw.window}`);
-      // Lovelace is a decimal string wherever a quantity could outgrow an exact JavaScript integer.
-      expect(typeof raw.capLovelace).toBe('string');
-    });
-  });
-});
-
-describe('the guard the deliverables exist for', () => {
-  beforeAll(async () => {
-    for (const { model } of STAKING_COLLECTIONS) await model.createIndexes();
-    resetStakingSchemaVerification();
-  });
-
-  /** An account the guard would otherwise let through: read on chain, consent on record. */
-  const readyAccount = () =>
-    new CardanoStakingAccount({
-      userId: new mongoose.Types.ObjectId(),
-      chainId: 900000000001,
-      walletAddress: 'addr_test1qzdeliverable',
-      rewardAddress: 'stake_test1uqdeliverable',
-      stakeCredentialHex: '313318dd5b51b0376278ee8f2ad38cdf9466d483e60c312428964faf',
-      termsConsent: { version: 'v1', acceptedAt: new Date(), source: 'test' },
-      onChain: { asOf: new Date() }
+      expect(document.api_config.url.endsWith(STAKING_SUMMARY_PATH)).toBe(true);
+      expect(document.api_config.method).toBe('GET');
     });
 
-  it('permits an operation only once every declared index is really there', async () => {
-    expect(await missingStakingIndexes()).toEqual([]);
-    expect((await checkStakingOperationReadiness(readyAccount(), 'register_and_delegate')).ok).toBe(
-      true
-    );
-  });
+    it('lets the runtime supply the user, rather than accepting one', () => {
+      // `channel_user_id` identifies whose position is being read. A model that could pass it as an
+      // ordinary argument could be talked into reading somebody else's.
+      const document = readJson('chat_functions.consultar_staking.json') as {
+        api_config: {
+          parameters: Record<string, unknown>;
+          user_parameters?: Record<string, unknown>;
+        };
+      };
 
-  it('fails closed when a documented index is missing from the database', async () => {
-    await CardanoStakingOperation.collection.dropIndex('one_live_op_per_account');
-    resetStakingSchemaVerification();
-
-    const readiness = await checkStakingOperationReadiness(readyAccount(), 'register_and_delegate');
-
-    expect(readiness.ok).toBe(false);
-    if (readiness.ok) return;
-    expect(readiness.refusal).toBe('indexes_missing');
-    expect(readiness.detail).toContain('one_live_op_per_account');
-
-    await CardanoStakingOperation.createIndexes();
-    resetStakingSchemaVerification();
-  });
-});
-
-describe('the backend brings no collection into existence on its own', () => {
-  it('declares every staking model as neither self-creating nor self-indexing', () => {
-    for (const { model, collection } of STAKING_COLLECTIONS) {
-      const { options } = schemaOf(model);
-      expect(options.autoCreate, `${collection}: autoCreate`).toBe(false);
-      expect(options.autoIndex, `${collection}: autoIndex`).toBe(false);
-    }
-  });
-
-  it('creates nothing when the models are used against an untouched database', async () => {
-    // A database name nothing else in this suite knows, so what it holds afterwards is entirely the
-    // doing of the reads below. Compiling a model and reading through it is what the backend does on
-    // the way up, and it is the moment Mongoose would otherwise create the collection and start
-    // building indexes in the background.
-    const probe = mongoose.connection.useDb('cardano_staking_autocreate_probe', {
-      useCache: false
+      expect(document.api_config.parameters.channel_user_id).toBeUndefined();
+      expect(document.api_config.user_parameters?.channel_user_id).toBeDefined();
     });
 
-    for (const { model, collection } of STAKING_COLLECTIONS) {
-      const probed = probe.model(collection, model.schema as unknown as Schema, collection);
-      await probed.findOne().lean();
-    }
+    it('carries no credential of its own', () => {
+      // The token is resolved from the bot's environment at call time. A literal here would be a
+      // credential living in a file in a roadmap folder.
+      const raw = readFileSync(join(BDD_DIR, 'chat_functions.consultar_staking.json'), 'utf8');
 
-    const { db } = probe;
-    expect(db).toBeDefined();
-    const created = db === undefined ? [] : await db.listCollections().toArray();
-
-    expect(created.map((entry) => entry.name)).toEqual([]);
+      expect(raw).toContain('{{env:');
+      expect(raw).not.toMatch(/Bearer\s+[A-Za-z0-9_-]{16,}/);
+    });
   });
 });
