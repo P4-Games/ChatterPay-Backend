@@ -26,6 +26,8 @@ import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
 import { Logger } from '../../helpers/loggerHelper';
 import CardanoStakingAccount, {
   type CardanoStakingAccountState,
+  type CardanoStakingOptOut,
+  type CardanoStakingOptOutReason,
   type ICardanoStakingAccount
 } from '../../models/cardanoStakingAccountModel';
 import CardanoStakingGovernanceEvent from '../../models/cardanoStakingGovernanceEventModel';
@@ -101,6 +103,13 @@ export interface StakingUserView {
   rewardAddress: string;
   state: CardanoStakingAccountState;
   optedIn: boolean;
+  /**
+   * The recorded decision to be out, when there is one.
+   *
+   * Carried separately from `optedIn` because the screen has to say which of the two it is: a wallet
+   * that was never switched on offers to join, and one that left says so and offers to come back.
+   */
+  optOut: CardanoStakingOptOut | null;
   termsVersion: string | null;
   /** The version this deployment currently asks for, so a change of terms is visible. */
   currentTermsVersion: string;
@@ -121,6 +130,15 @@ export interface StakingUserView {
 export type StakingUserResult<T> =
   | { ok: true; data: T }
   | { ok: false; refusal: StakingUserRefusal; detail: string };
+
+/**
+ * The actions that mean the user is leaving.
+ *
+ * Both of them end participation, so both record the decision before they build anything. A withdrawal
+ * is not here: taking your rewards out is not leaving, and treating it as such would take a wallet out
+ * of staking every time it collected.
+ */
+const LEAVING_ACTIONS: readonly CardanoStakingOperationKind[] = ['deregister', 'exit_and_send_max'];
 
 /** How many rows the history surfaces carry. */
 const HISTORY_LIMIT = 50;
@@ -237,6 +255,7 @@ export async function getStakingView(
         null
       ),
       optedIn: account.preference.enabled,
+      optOut: account.optOut,
       termsVersion: account.termsConsent?.version ?? null,
       currentTermsVersion: config.termsVersion,
       registered: account.onChain.registered,
@@ -296,13 +315,12 @@ export async function setStakingConsent(
     // Switching off is not a withdrawal of consent, and the record is kept. A position that is
     // already on chain does not disappear because the switch moved, and the consent is what says the
     // user agreed to the terms it was opened under.
-    await CardanoStakingAccount.updateOne(
-      { _id: account._id },
-      {
-        $set: { 'preference.enabled': false, 'preference.updatedAt': now },
-        $inc: { 'preference.version': 1 }
-      }
-    );
+    //
+    // It *is* a recorded decision to be out, though, and that is a separate fact from the flag. The
+    // flag alone would leave the wallet indistinguishable from one nobody ever switched on, and the
+    // sweep enrols those the moment a consent and a balance line up — both of which are still true
+    // here.
+    await recordOptOut(account, 'user_request', source);
     return {
       ok: true,
       data: { optedIn: false, termsVersion: account.termsConsent?.version ?? null }
@@ -321,11 +339,62 @@ export async function setStakingConsent(
         financingMode: account.financingMode ?? 'user',
         currentLifecycleId: account.currentLifecycleId ?? `${String(account._id)}:${now.getTime()}`
       },
+      // The one thing that clears a recorded opt-out, and it has to be explicit. Nothing else puts a
+      // wallet back in: not a balance arriving, not a sync, not a reconciliation, and not a request
+      // for some other action that happens to need staking to be on.
+      $unset: { optOut: '' },
       $inc: { 'preference.version': 1 }
     }
   );
 
   return { ok: true, data: { optedIn: true, termsVersion: config.termsVersion } };
+}
+
+/**
+ * Records that this wallet is out, and switches staking off.
+ *
+ * Two writes, in this order, and the order is the point. The opt-out record goes in first because it
+ * is the durable decision; a process that dies between the two leaves a wallet that the sweep refuses,
+ * which is the residue that matches what the user asked for. The flag alone would not survive the next
+ * time a consent and a balance line up.
+ *
+ * Idempotent. A retry finds the record already there and leaves its timestamp alone, so the moment the
+ * decision was taken does not drift forward every time somebody presses the button again.
+ *
+ * @param account - The account, as read.
+ * @param reason - Why it is out.
+ * @param source - Where the decision came from.
+ */
+async function recordOptOut(
+  account: ICardanoStakingAccount,
+  reason: CardanoStakingOptOutReason,
+  source: string
+): Promise<void> {
+  const now = new Date();
+
+  // Conditional on there being none: the filter is the condition, so two concurrent requests cannot
+  // both write one and the first one's timestamp stands.
+  await CardanoStakingAccount.updateOne(
+    { _id: account._id, optOut: null },
+    {
+      $set: {
+        optOut: {
+          at: now,
+          reason,
+          source: source.slice(0, 60),
+          preferenceVersion: account.preference.version
+        }
+      }
+    }
+  );
+
+  await CardanoStakingAccount.updateOne(
+    { _id: account._id },
+    {
+      $set: { 'preference.enabled': false, 'preference.updatedAt': now },
+      $inc: { 'preference.version': 1 }
+    }
+  );
 }
 
 /** What a started action reports back. */
@@ -419,6 +488,17 @@ export async function requestStakingAction(
       refusal: 'not_assembled',
       detail: `${assembly.refusal}: ${assembly.detail}`
     };
+  }
+
+  // Recorded **before** anything is created, signed or sent, and this is the line that closes the
+  // re-enrolment hole. The dangerous window is between a deregistration confirming and the account
+  // being marked as out: in it the credential is unregistered while the consent, the balance and the
+  // allowlist all still say "enrol this", and the next sweep does exactly that — spending a sponsor
+  // fee to undo what the user just asked for. Writing the decision first means there is no such
+  // window, at the cost of a wallet that is marked out after an attempt that failed to build, which is
+  // both the safe residue and one explicit opt-in away from being undone.
+  if (LEAVING_ACTIONS.includes(action)) {
+    await recordOptOut(account, 'user_exit', options.actor);
   }
 
   const operation = await createStakingOperation(account, {

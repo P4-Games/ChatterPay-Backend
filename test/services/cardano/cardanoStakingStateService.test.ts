@@ -123,6 +123,32 @@ describe('deriveStakingAccountState', () => {
     expect(deriveStakingAccountState(account({ registered: true }), live)).not.toBe('active');
   });
 
+  it('keeps a wallet on its way out reported as active', () => {
+    // It is registered and it is earning until the deregistration lands. The screen distinguishes this
+    // from a wallet that is simply staking through the opt-out record the view carries, not through a
+    // state value that would have to encode both facts at once.
+    const leaving = account(
+      { registered: true },
+      { optOut: { at: new Date(), reason: 'user_exit', source: 'web', preferenceVersion: 1 } }
+    );
+
+    expect(deriveStakingAccountState(leaving, null)).toBe('active');
+  });
+
+  it('reports a wallet that finished leaving as waiting for a fresh opt-in', () => {
+    // Accurate rather than a gap: a fresh opt-in is exactly what it is waiting for, and the only thing
+    // that puts it back.
+    const left = account(
+      { registered: false },
+      {
+        preference: { enabled: false, version: 2, updatedAt: new Date() },
+        optOut: { at: new Date(), reason: 'user_exit', source: 'web', preferenceVersion: 1 }
+      }
+    );
+
+    expect(deriveStakingAccountState(left, null)).toBe('awaiting_consent');
+  });
+
   it('puts manual review above everything', () => {
     const live = { kind: 'register_and_delegate' as const, status: 'manual_review' as const };
 

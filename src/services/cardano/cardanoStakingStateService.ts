@@ -90,10 +90,20 @@ export function deriveStakingAccountState(
     }
   }
 
+  // Registered stays `active` even for a wallet that has decided to leave, because it is: the
+  // credential is registered and the stake is earning until the deregistration lands. What the screen
+  // needs in order to say something different is the opt-out record itself, which the view carries
+  // beside this — a state value cannot express "active, and on the way out" without either lying or
+  // growing a variant for every combination.
   if (onChain.registered) return 'active';
 
   // Not registered, nothing in flight. What is missing decides, and the order is the order the user
   // encounters it in: agree, then switch on, then fund.
+  //
+  // A wallet that left and has finished leaving reads as `awaiting_consent`, and that is the accurate
+  // answer rather than a gap: what it is waiting for *is* a fresh opt-in, which is the only thing that
+  // puts it back. The copy the user sees comes from the opt-out record, so "you left on the 3rd" and
+  // "start staking" are told apart by the view without the stored state having to encode both.
   if (account.termsConsent === null) return 'awaiting_consent';
   if (!account.preference.enabled) return 'awaiting_consent';
 

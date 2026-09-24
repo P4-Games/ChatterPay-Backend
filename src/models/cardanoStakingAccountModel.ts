@@ -122,6 +122,43 @@ export interface CardanoStakingTermsConsent {
   source: string;
 }
 
+/**
+ * Why a wallet is out.
+ *
+ * `user_exit` is the one that matters most: it is recorded **before** a deregistration is built, so
+ * that a crash anywhere between the decision and the confirmation leaves the account out rather than
+ * in. The alternative ordering — deregister, then record — has a window in which the credential is
+ * unregistered and the account still reads as opted in, and the sweep's next pass enrols it again,
+ * paying a fee to undo what the user just asked for.
+ */
+export type CardanoStakingOptOutReason =
+  /** Recorded as part of leaving: a deregistration or an exit. */
+  | 'user_exit'
+  /** The user switched staking off without leaving a position. */
+  | 'user_request'
+  /** An operator took the wallet out. */
+  | 'operator';
+
+/**
+ * A recorded decision to be out, as opposed to never having been in.
+ *
+ * `preference.enabled` being false answers "is this wallet staking", which is also false for a wallet
+ * nobody ever asked about. This answers "did somebody decide to leave", and only the second one may
+ * survive a consent that is still on file, a balance that still clears the threshold and an address
+ * that is still on the enrolment list. Without it, all three of those read as reasons to enrol.
+ *
+ * It is cleared by exactly one thing: a fresh, explicit opt-in. Nothing else — not a balance
+ * arriving, not a sync, not a reconciliation — puts a wallet back in.
+ */
+export interface CardanoStakingOptOut {
+  at: Date;
+  reason: CardanoStakingOptOutReason;
+  /** Where the decision came from, recorded verbatim. */
+  source: string;
+  /** The preference version it was recorded against, so an audit can order it against the opt-ins. */
+  preferenceVersion: number;
+}
+
 /** The user's opt-in, versioned for compare-and-swap. */
 export interface CardanoStakingPreference {
   enabled: boolean;
@@ -140,6 +177,13 @@ export interface ICardanoStakingAccount extends Document {
   stakeCredentialHex: string;
   termsConsent: CardanoStakingTermsConsent | null;
   preference: CardanoStakingPreference;
+  /**
+   * The standing decision to be out, or `null` when there is none.
+   *
+   * Checked before anything that would enrol, delegate or re-delegate, and deliberately **not**
+   * checked before a withdrawal or an exit: leaving does not forfeit the ada that is already yours.
+   */
+  optOut: CardanoStakingOptOut | null;
   state: CardanoStakingAccountState;
   onChain: CardanoStakingOnChain;
   /** Always `user` under Plan B. The deposit is the user's asset, not a debt to ChatterPay. */
@@ -230,6 +274,16 @@ const preferenceSchema = new Schema<CardanoStakingPreference>(
   { _id: false }
 );
 
+const optOutSchema = new Schema<CardanoStakingOptOut>(
+  {
+    at: { type: Date, required: true },
+    reason: { type: String, enum: ['user_exit', 'user_request', 'operator'], required: true },
+    source: { type: String, required: true },
+    preferenceVersion: { type: Number, required: true }
+  },
+  { _id: false }
+);
+
 const cardanoStakingAccountSchema = new Schema<ICardanoStakingAccount>(
   {
     userId: { type: Schema.Types.ObjectId, required: true },
@@ -239,6 +293,7 @@ const cardanoStakingAccountSchema = new Schema<ICardanoStakingAccount>(
     stakeCredentialHex: { type: String, required: true },
     termsConsent: { type: termsConsentSchema, required: false, default: null },
     preference: { type: preferenceSchema, required: true, default: () => ({}) },
+    optOut: { type: optOutSchema, required: false, default: null },
     state: {
       type: String,
       enum: [

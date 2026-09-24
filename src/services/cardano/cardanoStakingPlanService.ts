@@ -47,6 +47,15 @@ export type StakingDecisionRefusal =
   | 'no_terms_consent'
   /** The user has not switched staking on. */
   | 'not_opted_in'
+  /**
+   * Somebody decided this wallet is out, and nothing puts it back except a fresh opt-in.
+   *
+   * Distinct from `not_opted_in` because the two have to behave differently. A wallet that was never
+   * switched on becomes enrollable the moment it is; a wallet that *left* stays out even though its
+   * consent is still on file, its balance still clears the threshold and its address is still on the
+   * enrolment list — all three of which otherwise read as reasons to enrol it.
+   */
+  | 'opted_out'
   /** The wallet does not clear the bar. */
   | 'not_eligible'
   /** Already registered. Registering again is refused by the ledger. */
@@ -102,6 +111,22 @@ const CONSENT_REQUIRED: readonly StakingAction[] = [
   'cast_drep_vote'
 ];
 
+/**
+ * Actions that amount to joining, or to extending participation.
+ *
+ * Refused for a wallet with a recorded opt-out. What is deliberately **not** here is every way out and
+ * every way of getting one's own ada back — `withdraw_rewards`, `deregister`, `exit_and_send_max` —
+ * because a decision to leave must never be a reason to hold on to somebody's money.
+ */
+const REENTRY_KINDS: readonly StakingAction[] = [
+  'register_and_delegate',
+  'redelegate_pool',
+  'delegate_vote',
+  'register_drep',
+  'update_drep',
+  'cast_drep_vote'
+];
+
 /** Kinds that exist so the shape is settled and are refused while the flag is off. */
 const DREP_OWN_KINDS: readonly StakingAction[] = [
   'register_drep',
@@ -150,10 +175,30 @@ export function decideAutomaticAction(
   const blocked = commonRefusals(account, context);
   if (blocked !== null) return blocked;
 
+  const onChain = account.onChain;
+
+  // Before the opt-in, the consent, the allowlist and the arithmetic, because each of those on its own
+  // reads as a reason to enrol and this is the one fact that outranks all of them. A wallet that left
+  // and still has a consent on file, a balance over the threshold and a place on the enrolment list is
+  // exactly the wallet that used to get re-enrolled the day after it walked out.
+  //
+  // One exception, and it is not a weakening: rewards already earned still come back. Leaving is a
+  // decision about future participation, not a forfeit of ada that is already the user's.
+  if (account.optOut !== null) {
+    if (
+      onChain.registered &&
+      onChain.governanceDelegation !== null &&
+      onChain.governanceDelegation.kind !== 'none' &&
+      onChain.governanceDelegation.kind !== 'not_registered' &&
+      BigInt(onChain.withdrawableRewardsLovelace) > 0n
+    ) {
+      return act('withdraw_rewards');
+    }
+    return refuse('opted_out', account.optOut.reason);
+  }
+
   if (!account.preference.enabled) return refuse('not_opted_in');
   if (account.termsConsent === null) return refuse('no_terms_consent');
-
-  const onChain = account.onChain;
 
   if (!onChain.registered) {
     if (context.config.defaultPoolId === null) return refuse('no_pool_configured');
@@ -235,6 +280,12 @@ export function decideRequestedAction(
   }
   if (CONSENT_REQUIRED.includes(requested) && account.termsConsent === null) {
     return refuse('no_terms_consent');
+  }
+  // A wallet that left is not re-entered by asking for a participation action. Pressing "delegate my
+  // vote" is not an opt-in, and treating it as one would make the recorded decision to leave
+  // revocable by any button that happens to need staking to be on. The way back is the opt-in itself.
+  if (account.optOut !== null && REENTRY_KINDS.includes(requested)) {
+    return refuse('opted_out', account.optOut.reason);
   }
 
   const onChain = account.onChain;
