@@ -18,7 +18,7 @@
  */
 
 import mongoose, { type Model } from 'mongoose';
-import { MONGO_URI } from '../config/constants';
+import { MONGO_URI, NODE_ENV } from '../config/constants';
 import { connectToDatabase } from '../config/database';
 
 /** How a migration was asked to run. */
@@ -33,6 +33,13 @@ export interface MigrationOptions {
   resumeAfter: string | null;
   /** Stop after this many subjects. Absent means all of them. */
   limit: number | null;
+  /**
+   * The database the caller says they mean.
+   *
+   * Required by {@link runMigration} for a write, and compared with the database the connection
+   * string actually resolves to. See {@link requireConfirmedTarget}.
+   */
+  confirmDatabase: string | null;
 }
 
 /** Something the migration found and deliberately did not touch. */
@@ -222,7 +229,8 @@ export function parseMigrationOptions(argv: readonly string[]): MigrationOptions
     chainId: null,
     userId: null,
     resumeAfter: null,
-    limit: null
+    limit: null,
+    confirmDatabase: null
   };
 
   const number = (flag: string, raw: string): number => {
@@ -243,6 +251,7 @@ export function parseMigrationOptions(argv: readonly string[]): MigrationOptions
     else if (flag === '--user-id') options.userId = raw;
     else if (flag === '--resume-after') options.resumeAfter = raw;
     else if (flag === '--limit') options.limit = number(flag, raw);
+    else if (flag === '--confirm-database') options.confirmDatabase = raw;
     // Silently ignoring a misspelled flag would run a different migration than the one asked for,
     // and `--aply` reads as `--apply` to a hurried eye.
     else throw new Error(`MIGRATION_UNKNOWN_FLAG: ${arg}`);
@@ -296,6 +305,8 @@ export function formatMigrationReport(report: MigrationReport): string {
     `migration: ${report.name}`,
     // The target is printed first and always. A report that does not say which database it
     // is about is a report that reads as a success wherever it landed.
+    `environment: ${NODE_ENV || '(unset)'}`,
+    `host:      ${databaseHost(MONGO_URI ?? '')}`,
     `database:  ${databaseName(MONGO_URI ?? '')}`,
     `mode:      ${report.dryRun ? 'DRY RUN (nothing written)' : 'APPLY'}`,
     ''
@@ -337,6 +348,7 @@ export async function runMigration(
   options: MigrationOptions
 ): Promise<MigrationReport> {
   requireExplicitDatabase();
+  if (!options.dryRun) requireConfirmedTarget(options.confirmDatabase);
   await connectToDatabase();
   try {
     return await runMigrationOnConnection(migration, options);
@@ -385,6 +397,64 @@ export function databaseName(uri: string): string {
     return path === '' ? '(none in URI — server default)' : decodeURIComponent(path);
   } catch {
     return '(unreadable URI)';
+  }
+}
+
+/**
+ * The server a connection string points at, with its credentials removed.
+ *
+ * Host and database are two separate ways to end up somewhere unintended, and a report that names
+ * only the database reads identically whether it is talking to a container on this laptop or to a
+ * managed cluster. Both are printed, so the line that says what happened also says where.
+ *
+ * The username and password are stripped rather than masked. This string is printed to a terminal,
+ * pasted into tickets and scrolled past in CI logs, and a migration report is not a place any part
+ * of a credential belongs — not even the username, which names the account that holds the rights.
+ *
+ * @param uri - The connection string.
+ * @returns `host:port`, or a marker when the string cannot be read.
+ */
+export function databaseHost(uri: string): string {
+  try {
+    const parsed = new URL(uri.replace(/^mongodb\+srv:/, 'mongodb:'));
+    return parsed.host === '' ? '(none in URI)' : parsed.host;
+  } catch {
+    return '(unreadable URI)';
+  }
+}
+
+/**
+ * Refuses to write until the caller has named the database they mean.
+ *
+ * `requireExplicitDatabase` catches the absent setting. This catches the one that is present and
+ * wrong — a shell with the previous environment still loaded, a `.env` that resolves differently
+ * than the operator expects, a copied command line from another deployment. In all of those the
+ * connection string is set, the run succeeds, and the only thing that was ever wrong was an
+ * assumption nobody was asked to state.
+ *
+ * So a write states it. `--confirm-database` is compared against what the connection string
+ * actually resolves to, and a mismatch stops the run before it connects. Reading is untouched: a
+ * dry run writes nothing, and making it ceremonial would only discourage the inspection that is
+ * supposed to happen first.
+ *
+ * @param confirmed - What the caller said the target is.
+ * @throws Error `MIGRATION_TARGET_UNCONFIRMED` when nothing was named, and
+ *   `MIGRATION_TARGET_MISMATCH` when what was named is not where the run would land.
+ */
+function requireConfirmedTarget(confirmed: string | null): void {
+  const actual = databaseName(MONGO_URI ?? '');
+
+  if (confirmed === null || confirmed.trim() === '') {
+    throw new Error(
+      `MIGRATION_TARGET_UNCONFIRMED: this would write to "${actual}" on ${databaseHost(MONGO_URI ?? '')}. ` +
+        `Re-run with --confirm-database=${actual} if that is the database you mean.`
+    );
+  }
+
+  if (confirmed.trim() !== actual) {
+    throw new Error(
+      `MIGRATION_TARGET_MISMATCH: --confirm-database=${confirmed.trim()} but the connection string resolves to "${actual}". Nothing was written.`
+    );
   }
 }
 

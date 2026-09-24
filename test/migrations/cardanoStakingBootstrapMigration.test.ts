@@ -3,11 +3,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import migration, { MIGRATION_NAME } from '../../src/migrations/0001-cardano-staking-bootstrap';
 import {
+  databaseHost,
   databaseName,
+  formatMigrationReport,
   type MigrationOptions,
   type MigrationReport,
   parseMigrationOptions,
   resolveMigrationRequest,
+  runMigration,
   runMigrationOnConnection
 } from '../../src/migrations/migrationRunner';
 import { MIGRATIONS } from '../../src/migrations/registry';
@@ -73,7 +76,8 @@ const DEFAULTS: MigrationOptions = {
   chainId: null,
   userId: null,
   resumeAfter: null,
-  limit: null
+  limit: null,
+  confirmDatabase: null
 };
 
 /**
@@ -648,7 +652,8 @@ describe('0001-cardano-staking-bootstrap', () => {
         chainId: PREPROD,
         userId: '000000000000000000000001',
         resumeAfter: null,
-        limit: 10
+        limit: 10,
+        confirmDatabase: null
       });
     });
 
@@ -722,6 +727,92 @@ describe('0001-cardano-staking-bootstrap', () => {
       expect(databaseName('mongodb://localhost:27017/')).toContain('none in URI');
       expect(databaseName('not a uri at all')).toContain('unreadable');
       expect(databaseName('')).toContain('unreadable');
+    });
+
+    it('names the host without carrying any credential', () => {
+      // Printed to terminals, pasted into tickets, scrolled past in CI. The username is stripped
+      // along with the password: it names the account that holds the rights.
+      const host = databaseHost('mongodb+srv://admin:s3cret@cluster.example.net/prod-db');
+
+      expect(host).toBe('cluster.example.net');
+      expect(host).not.toContain('admin');
+      expect(host).not.toContain('s3cret');
+    });
+
+    it('keeps the port, which is part of which server this is', () => {
+      expect(databaseHost('mongodb://localhost:27017/chatterpay-dev')).toBe('localhost:27017');
+      expect(databaseHost('not a uri at all')).toContain('unreadable');
+    });
+
+    it('puts the environment, host and database above the result', () => {
+      const rendered = formatMigrationReport({
+        name: '0001-cardano-staking-bootstrap',
+        dryRun: false,
+        effects: [],
+        findings: [],
+        counts: {},
+        lastProcessedId: null,
+        ok: true
+      });
+      const lines = rendered.split(String.fromCharCode(10));
+
+      expect(lines[1]).toContain('environment:');
+      expect(lines[2]).toContain('host:');
+      expect(lines[3]).toContain('database:');
+      expect(rendered.indexOf('database:')).toBeLessThan(rendered.indexOf('result:'));
+    });
+  });
+
+  describe('confirming the target before writing', () => {
+    it('refuses an apply that does not name the database', async () => {
+      await expect(runMigration(migration, { ...DEFAULTS, dryRun: false })).rejects.toThrow(
+        /MIGRATION_TARGET_UNCONFIRMED/
+      );
+    });
+
+    it('names the database it would have written to, so the fix is the error message', async () => {
+      await expect(runMigration(migration, { ...DEFAULTS, dryRun: false })).rejects.toThrow(
+        /--confirm-database=/
+      );
+    });
+
+    it('refuses an apply that names a different database', async () => {
+      await expect(
+        runMigration(migration, {
+          ...DEFAULTS,
+          dryRun: false,
+          confirmDatabase: 'some-other-database'
+        })
+      ).rejects.toThrow(/MIGRATION_TARGET_MISMATCH/);
+    });
+
+    it('leaves the database untouched when the confirmation does not match', async () => {
+      const before = await databaseSnapshot();
+
+      await expect(
+        runMigration(migration, {
+          ...DEFAULTS,
+          dryRun: false,
+          confirmDatabase: 'some-other-database'
+        })
+      ).rejects.toThrow();
+
+      expect(await databaseSnapshot()).toEqual(before);
+    });
+
+    it('does not ask a dry run to confirm anything', async () => {
+      // A dry run writes nothing. Making inspection ceremonial only discourages the step that is
+      // supposed to happen before the write.
+      const report = await runMigrationOnConnection(migration, DEFAULTS);
+
+      expect(report.dryRun).toBe(true);
+    });
+
+    it('reads --confirm-database off the command line', () => {
+      expect(
+        parseMigrationOptions(['--apply', '--confirm-database=chatterpay-dev']).confirmDatabase
+      ).toBe('chatterpay-dev');
+      expect(parseMigrationOptions([]).confirmDatabase).toBeNull();
     });
   });
 });

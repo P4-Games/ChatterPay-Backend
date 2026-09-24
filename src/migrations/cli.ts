@@ -6,9 +6,11 @@
  * file for the procedure and for what a rollback of a migration is allowed to touch.
  *
  *     bun run src/migrations/cli.ts 0001-cardano-staking-bootstrap
- *     bun run src/migrations/cli.ts 0001-cardano-staking-bootstrap --apply
+ *     bun run src/migrations/cli.ts 0001-cardano-staking-bootstrap --apply --confirm-database=chatterpay-dev
  *
- * Without `--apply` it is a dry run and writes nothing at all.
+ * Without `--apply` it is a dry run and writes nothing at all. With it, the database has to be named
+ * as well: the run compares `--confirm-database` against what the connection string resolves to and
+ * stops before connecting when the two disagree.
  */
 
 // Loaded here, first, and not left to whoever starts the process. This file is run by hand rather
@@ -39,7 +41,9 @@ async function main(): Promise<number> {
     request = resolveMigrationRequest(process.argv.slice(2), MIGRATIONS);
   } catch (error) {
     console.error((error as Error).message);
-    console.error(`usage: bun run src/migrations/cli.ts <migration> [--apply] [--chain-id=<id>]`);
+    console.error(
+      `usage: bun run src/migrations/cli.ts <migration> [--apply --confirm-database=<name>] [--chain-id=<id>]`
+    );
     console.error(`migrations: ${Object.keys(MIGRATIONS).join(', ')}`);
     return 2;
   }
