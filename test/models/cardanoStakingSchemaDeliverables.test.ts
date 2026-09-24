@@ -263,6 +263,49 @@ describe('cardano staking database deliverables', () => {
         expireAfterSeconds: 0
       });
     });
+
+    it('documents the opt-out exactly as the model declares it', () => {
+      // Read back by name rather than trusting the wholesale comparison, for the same reason as the
+      // indexes above: this one carries a security property. An opt-out is what stops the sweep
+      // re-enrolling somebody who left, and a deliverable that dropped the field, made it optional
+      // or lost a reason from the enum would still be a well-formed file — applied to a fresh
+      // database it would produce a collection whose validator rejects the very write that records
+      // the decision, and the first person to leave would be re-enrolled the next morning.
+      const account = readJson('cardano_staking_accounts.schema.json') as {
+        validator: { $jsonSchema: JsonSchemaNode };
+      };
+      const optOut = account.validator.$jsonSchema.properties?.optOut;
+
+      // Nullable: absent is the ordinary state, and a row written before the field existed reads as
+      // null rather than as a refusal.
+      expect(optOut?.bsonType).toEqual(['object', 'null']);
+      expect(optOut?.required).toEqual(['at', 'preferenceVersion', 'reason', 'source']);
+      expect(optOut?.properties?.reason?.enum).toEqual(
+        (
+          CardanoStakingAccount.schema.path('optOut') as unknown as {
+            schema: { path(name: string): { options: { enum: string[] } } };
+          }
+        ).schema.path('reason').options.enum
+      );
+    });
+
+    it('describes consent as something only a person can give', () => {
+      // The two fields a prepared row must not carry. `termsConsent` nullable and `preference` with
+      // its own version are what let the code tell "nobody ever switched this on" from "somebody
+      // switched it off", which is the distinction the opt-out rests on.
+      const account = readJson('cardano_staking_accounts.schema.json') as {
+        validator: { $jsonSchema: JsonSchemaNode };
+      };
+      const properties = account.validator.$jsonSchema.properties;
+
+      expect(properties?.termsConsent?.bsonType).toEqual(['object', 'null']);
+      expect(properties?.termsConsent?.required).toEqual(['acceptedAt', 'source', 'version']);
+      // A string: the terms version is a label, and bumping it asks everybody again.
+      expect(properties?.termsConsent?.properties?.version?.bsonType).toBe('string');
+      // A number: the preference version is a counter the opt-out records, so a later opt-in is
+      // distinguishable from the switch that was on before somebody left.
+      expect(properties?.preference?.properties?.version?.bsonType).toBe('number');
+    });
   });
 
   describe('the example documents', () => {
@@ -279,6 +322,8 @@ describe('cardano staking database deliverables', () => {
       expect(account.preference.enabled).toBe(false);
       expect(account.onChain.asOf).toBeNull();
       expect(account.state).toBe('awaiting_consent');
+      // Not opted out either. A row nobody ever enabled is not a row somebody left.
+      expect(account.optOut).toBeNull();
     });
 
     it('describes a budget window whose id is the lock', () => {
