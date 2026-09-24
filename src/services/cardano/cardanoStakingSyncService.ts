@@ -59,6 +59,7 @@ import {
 import type { CardanoStakingProvider } from './cardanoStakingProviderService';
 import { selectableStakingUtxos } from './cardanoStakingReservationService';
 import { stakingSignerFor } from './cardanoStakingSignerService';
+import { deriveStakingAccountState, type StakingFundsVerdict } from './cardanoStakingStateService';
 
 /**
  * How long an instance's claim on a run lasts.
@@ -443,6 +444,12 @@ async function refreshAccount(
   }
 
   const decision = await decide(account, user, request);
+
+  // Recomputed on every pass, before anything is started and again after. The state is derived from
+  // facts held elsewhere, so recomputing it is how an account whose state drifted is corrected —
+  // rather than by somebody noticing that a registered wallet still reads `awaiting_consent`.
+  await writeState(account._id as Types.ObjectId, decision.refusal);
+
   if (decision.action === 'none') {
     count(result, decision.refusal ?? 'nothing_to_do');
     return;
@@ -456,6 +463,46 @@ async function refreshAccount(
   const started = await startAction(account, user, decision.action, request);
   if (started === 'started') result.actionsStarted += 1;
   else count(result, started);
+
+  await writeState(account._id as Types.ObjectId, decision.refusal);
+}
+
+/**
+ * Recomputes and stores the state an account is shown as.
+ *
+ * @param accountId - The account.
+ * @param refusal - Why the sweep did nothing, which is what says whether the wallet is short of funds
+ *   or simply had nothing to do.
+ */
+async function writeState(
+  accountId: Types.ObjectId,
+  refusal: StakingDecision['refusal']
+): Promise<void> {
+  const account = await CardanoStakingAccount.findById(accountId).exec();
+  if (account === null) return;
+
+  const live = await CardanoStakingOperation.findOne({
+    accountId,
+    status: {
+      $in: ['queued', 'executing', 'signed', 'submitted', 'unknown_submit', 'manual_review']
+    }
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  // Only one refusal says anything about the funds. Every other one leaves the verdict absent, which
+  // the derivation reads as no opinion rather than as "sufficient".
+  const funds: StakingFundsVerdict = refusal === 'not_eligible' ? 'insufficient' : null;
+
+  const state = deriveStakingAccountState(
+    account,
+    live === null ? null : { kind: live.kind, status: live.status },
+    funds
+  );
+
+  if (state !== account.state) {
+    await CardanoStakingAccount.updateOne({ _id: accountId }, { $set: { state } });
+  }
 }
 
 /**
