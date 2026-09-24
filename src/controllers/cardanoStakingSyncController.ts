@@ -16,11 +16,13 @@
  *
  *     { "jobName": "cardano-staking-sync", "scheduledTime": "2026-01-01T03:00:00Z" }
  *
- * Both body fields are optional. `scheduledTime` is what makes a retry idempotent — Cloud Scheduler
- * sends the same value when it redelivers, and the run's identity is derived from it — so a caller
- * that omits it gets a fresh run per call, which is right for a manual invocation and wrong for a
- * schedule. `X-CloudScheduler-ScheduleTime` is read when the body does not carry one, which is the
- * header Cloud Scheduler sets.
+ * Both body fields are optional, and a schedule should send neither.
+ *
+ * The tick comes from `X-CloudScheduler-ScheduleTime`, the header Cloud Scheduler sets per
+ * delivery. It is what makes a retry idempotent: the same value comes back on a redelivery, the
+ * run's identity is derived from it, and the second delivery finds the first run and adds nothing.
+ * A `scheduledTime` in the body is read only when that header is absent, because a job's body is
+ * static and a fixed date there would give every tick the same identity.
  *
  * Status codes carry the distinction a scheduler needs in order to decide whether to retry:
  *
@@ -106,9 +108,9 @@ export async function cardanoStakingSync(
   }
 
   const body = (request.body ?? {}) as SyncRequestBody;
-  const headerTime = request.headers['x-cloudscheduler-scheduletime'];
-  const scheduledTime = readScheduledTime(
-    body.scheduledTime ?? (typeof headerTime === 'string' ? headerTime : undefined)
+  const scheduledTime = scheduledTimeFrom(
+    request.headers['x-cloudscheduler-scheduletime'],
+    body.scheduledTime
   );
 
   const provider = stakingSyncProvider();
@@ -177,17 +179,49 @@ export async function cardanoStakingSync(
 }
 
 /**
- * The scheduled time a delivery names.
+ * The tick a delivery belongs to.
  *
- * @param raw - What the body or the header carried.
- * @returns The time, or now when there is none. A caller with no scheduled time gets a run of its
- *   own, which is right for a manual invocation: the idempotency this provides is between retries of
- *   one tick, and a hand-made call is not a tick.
+ * The header wins over the body, and that order is the whole point rather than a preference.
+ *
+ * Cloud Scheduler sets `X-CloudScheduler-ScheduleTime` per delivery, from the schedule, and sends
+ * the same value again when it retries one. The body, by contrast, is configured once and sent
+ * unchanged forever. So a `scheduledTime` in the body is a *fixed* date, and taking it would give
+ * every tick for the rest of the job's life the same run id — after which the first day would run
+ * and every following day would be told the run had already completed. The failure is silent, looks
+ * like a healthy 200, and would be found by noticing that nothing had been reconciled in a month.
+ *
+ * The body field is kept for a hand-made call that wants to name a tick, which is the only caller
+ * that can set it to something different each time.
+ *
+ * @param header - What `X-CloudScheduler-ScheduleTime` carried, if anything.
+ * @param body - What the body named, if anything.
+ * @param now - The current time, injectable for tests.
+ * @returns The tick. With neither source, a time of its own, so a caller with no schedule behind it
+ *   gets a fresh run rather than colliding with one: the idempotency on offer here is between
+ *   retries of one tick, and a hand-made call is not a tick.
  */
-function readScheduledTime(raw: string | undefined): Date {
-  if (raw === undefined || raw.trim() === '') return new Date();
-  const parsed = new Date(raw.trim());
-  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+export function scheduledTimeFrom(
+  header: unknown,
+  body: string | undefined,
+  now: Date = new Date()
+): Date {
+  return readTime(header) ?? readTime(body) ?? now;
+}
+
+/**
+ * One source, parsed.
+ *
+ * @param raw - The value, which may be anything a header or a JSON body can hold.
+ * @returns The time, or null when there is nothing usable. An unparseable value is treated as
+ *   absent rather than as an error: a delivery that arrives with a malformed timestamp should still
+ *   do the work, and refusing it would mean a header format change could stop the schedule dead.
+ */
+function readTime(raw: unknown): Date | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 /**
