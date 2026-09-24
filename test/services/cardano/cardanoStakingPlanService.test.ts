@@ -103,6 +103,7 @@ function context(overrides: Partial<StakingDecisionContext> = {}): StakingDecisi
     spendableLovelace: 10_000_000n,
     poolState: null,
     operationInFlight: false,
+    signerAvailable: true,
     ...overrides
   };
 }
@@ -527,6 +528,141 @@ describe('cardanoStakingPlanService', () => {
       const decision = decideRequestedAction(account(), 'withdraw_rewards', context());
 
       expect(decision.refusal).toBe('not_registered');
+    });
+  });
+
+  describe('signer availability', () => {
+    it('refuses the sweep for a credential this deployment cannot witness', () => {
+      const decision = decideAutomaticAction(
+        account(ALREADY_STAKING),
+        context({ signerAvailable: false })
+      );
+
+      expect(decision.refusal).toBe('signer_unavailable');
+    });
+
+    it('refuses a requested action for a credential this deployment cannot witness', () => {
+      const decision = decideRequestedAction(
+        account(ALREADY_STAKING),
+        'withdraw_rewards',
+        context({ signerAvailable: false })
+      );
+
+      expect(decision.refusal).toBe('signer_unavailable');
+    });
+
+    it('refuses an exit for a wallet nobody here holds the keys to', () => {
+      // The one action that is otherwise always permitted. The protocol would accept it; this
+      // deployment cannot produce it, and saying so is the whole point.
+      const decision = decideRequestedAction(
+        account({ ...ALREADY_STAKING, depositLovelace: '2000000' }),
+        'exit_and_send_max',
+        context({ signerAvailable: false })
+      );
+
+      expect(decision.refusal).toBe('signer_unavailable');
+    });
+
+    it('reports the missing signer ahead of the missing snapshot', () => {
+      // Both are true. The signer is the one that no further reading can change.
+      const decision = decideAutomaticAction(
+        account({ asOf: null }),
+        context({ signerAvailable: false })
+      );
+
+      expect(decision.refusal).toBe('signer_unavailable');
+    });
+  });
+
+  describe('what the sweep may start on its own', () => {
+    const OUTSIDE = config({ enrolmentAllowlist: ['addr_test1_somebody_else'] });
+
+    it('does not delegate a vote for an account outside the confinement', () => {
+      const decision = decideAutomaticAction(
+        account({ ...ALREADY_STAKING, governanceDelegation: { kind: 'none' } }),
+        context({ config: OUTSIDE })
+      );
+
+      expect(decision).toMatchObject({ refusal: 'not_allowlisted', detail: 'delegate_vote' });
+    });
+
+    it('delegates a vote for an account ChatterPay itself registered', () => {
+      // Dropped from the list after being enrolled. It is a commitment now, not a candidate.
+      const decision = decideAutomaticAction(
+        account({
+          ...ALREADY_STAKING,
+          governanceDelegation: { kind: 'none' },
+          registrationOrigin: 'chatterpay'
+        }),
+        context({ config: OUTSIDE })
+      );
+
+      expect(decision.action).toBe('delegate_vote');
+    });
+
+    it('still withdraws rewards for an account outside the confinement', () => {
+      // A rollout setting has no business standing between a user and their own ada.
+      const decision = decideAutomaticAction(
+        account({
+          ...ALREADY_STAKING,
+          governanceDelegation: { kind: 'always_abstain' },
+          withdrawableRewardsLovelace: '8183734'
+        }),
+        context({ config: OUTSIDE })
+      );
+
+      expect(decision.action).toBe('withdraw_rewards');
+    });
+
+    it('does not move a retiring pool for an account outside the confinement', () => {
+      const decision = decideAutomaticAction(
+        account({ ...ALREADY_STAKING, governanceDelegation: { kind: 'always_abstain' } }),
+        context({
+          config: OUTSIDE,
+          poolState: {
+            poolId: POOL,
+            retirementScheduled: true,
+            retiringEpoch: 320,
+            activeStakeLovelace: null
+          }
+        })
+      );
+
+      expect(decision).toMatchObject({ refusal: 'not_allowlisted', detail: 'redelegate_pool' });
+    });
+  });
+
+  describe('leaving with rewards on the account', () => {
+    it('refuses an exit that would have to withdraw without a vote delegation', () => {
+      // The ledger will not deregister a credential whose reward account holds something, and Conway
+      // will not let that credential withdraw. Offering the exit anyway produces a rejected node call.
+      const decision = decideRequestedAction(
+        account({
+          ...ALREADY_STAKING,
+          depositLovelace: '2000000',
+          governanceDelegation: { kind: 'none' },
+          withdrawableRewardsLovelace: '8183734'
+        }),
+        'exit_and_send_max',
+        context()
+      );
+
+      expect(decision.refusal).toBe('vote_delegation_required');
+    });
+
+    it('allows an exit with an empty reward account and no vote delegation', () => {
+      const decision = decideRequestedAction(
+        account({
+          ...ALREADY_STAKING,
+          depositLovelace: '2000000',
+          governanceDelegation: { kind: 'none' },
+          withdrawableRewardsLovelace: '0'
+        }),
+        'exit_and_send_max',
+        context()
+      );
+
+      expect(decision.action).toBe('exit_and_send_max');
     });
   });
 });

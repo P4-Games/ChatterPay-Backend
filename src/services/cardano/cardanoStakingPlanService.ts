@@ -67,6 +67,13 @@ export type StakingDecisionRefusal =
   | 'no_pool_configured'
   /** This wallet is not on the list automatic enrolment is confined to. */
   | 'not_allowlisted'
+  /**
+   * The chain would accept this operation and this deployment cannot produce it.
+   *
+   * A credential whose keys are not derivable here is read like any other and mutated by nobody. See
+   * `cardanoStakingSignerService` for why the two questions are separate.
+   */
+  | 'signer_unavailable'
   /** The action is not available in this deployment. */
   | 'not_available';
 
@@ -115,6 +122,14 @@ export interface StakingDecisionContext {
   poolState: CardanoPoolState | null;
   /** Whether an operation is already live for this credential. */
   operationInFlight: boolean;
+  /**
+   * Whether this deployment holds the keys that witness this credential.
+   *
+   * Required rather than defaulted, and deliberately so: a default of `true` would let any caller
+   * that forgot the check declare an unsignable wallet executable, which is the exact failure this
+   * field exists to prevent. Resolved by `stakingSignerFor`.
+   */
+  signerAvailable: boolean;
 }
 
 /**
@@ -161,19 +176,33 @@ export function decideAutomaticAction(
 
   // Conway first: a credential that has never delegated its vote cannot withdraw anything, so this
   // comes before the withdrawal that the rewards would otherwise call for.
+  //
+  // Confined, though, and this is the one place where that distinction has teeth. A vote delegation
+  // assigns the user's voting power; it is something ChatterPay *initiates*, not something it
+  // returns. So the sweep only initiates it for an account this deployment has been told it may
+  // enrol. The withdrawal further down is not confined, because that is the user's own money coming
+  // back and a rollout setting has no business standing in front of it.
   if (onChain.governanceDelegation === null || onChain.governanceDelegation.kind === 'none') {
-    return act('delegate_vote');
+    return sweepMayInitiate(account, context.config)
+      ? act('delegate_vote')
+      : refuse('not_allowlisted', 'delegate_vote');
   }
 
   // A pool with a retirement on record stops paying. Moving the delegation is the only remedy, and
   // it is the same remedy whether the retirement is scheduled or already in effect.
-  if (context.poolState?.retirementScheduled === true) return act('redelegate_pool');
+  if (context.poolState?.retirementScheduled === true) {
+    return sweepMayInitiate(account, context.config)
+      ? act('redelegate_pool')
+      : refuse('not_allowlisted', 'redelegate_pool');
+  }
 
   // Delegated to no pool at all, while registered. Reachable for a credential registered elsewhere
   // and never delegated, and for one whose pool was retired long enough ago to be forgotten.
   if (onChain.poolId === null) {
     if (context.config.defaultPoolId === null) return refuse('no_pool_configured');
-    return act('redelegate_pool');
+    return sweepMayInitiate(account, context.config)
+      ? act('redelegate_pool')
+      : refuse('not_allowlisted', 'redelegate_pool');
   }
 
   if (BigInt(onChain.withdrawableRewardsLovelace) > 0n) return act('withdraw_rewards');
@@ -262,6 +291,20 @@ export function decideRequestedAction(
       // The refund has to be exact. A deregistration built on a guessed figure does not balance and
       // is refused by the ledger — after a sponsor fee has already been spent to find out.
       if (onChain.depositLovelace === null) return refuse('deposit_unknown');
+      // The ledger refuses to deregister a credential whose reward account still holds something, so
+      // leaving means emptying it in the same transaction — and Conway refuses that withdrawal from a
+      // credential that has not delegated its voting power. Rewards plus no vote delegation is
+      // therefore a state that has to be resolved before an exit can be built at all, and saying so
+      // is better than offering an exit that the node rejects.
+      if (
+        BigInt(onChain.withdrawableRewardsLovelace) > 0n &&
+        (onChain.governanceDelegation === null || onChain.governanceDelegation.kind === 'none')
+      ) {
+        return refuse(
+          'vote_delegation_required',
+          'the reward account must be emptied to deregister'
+        );
+      }
       return act(requested);
     }
 
@@ -282,19 +325,19 @@ function commonRefusals(
   context: StakingDecisionContext
 ): StakingDecision | null {
   if (!context.config.enabled) return refuse('staking_disabled', context.config.disabledReason);
-  // The one check that comes before everything, including "is it registered": without a confirmed
-  // read there is no snapshot to reason from, only defaults that happen to look like facts.
+  // Before the snapshot, because no amount of reading changes the answer. A credential this
+  // deployment cannot witness is legible, displayable and immutable: every branch below decides what
+  // *should* happen, and none of them can make it happen without a key.
+  if (!context.signerAvailable) return refuse('signer_unavailable');
+  // The one check that comes before everything else, including "is it registered": without a
+  // confirmed read there is no snapshot to reason from, only defaults that happen to look like facts.
   if (account.onChain.asOf === null) return refuse('no_confirmed_chain_read');
   if (context.operationInFlight) return refuse('operation_in_flight');
   return null;
 }
 
 /**
- * Whether this wallet is one automatic enrolment has been allowed to touch.
- *
- * Only registration is confined. An account that is already registered — whoever registered it —
- * must still be able to withdraw its rewards and, above all, to leave: confining an exit to a list
- * would strand a user's own ada behind a rollout setting.
+ * Whether this wallet is one the enrolment confinement names.
  *
  * @param account - The account.
  * @param config - The staking configuration.
@@ -303,6 +346,32 @@ function commonRefusals(
 function allowlisted(account: ICardanoStakingAccount, config: CardanoStakingConfig): boolean {
   if (config.enrolmentAllowlist === null) return true;
   return config.enrolmentAllowlist.includes(account.walletAddress);
+}
+
+/**
+ * Whether the sweep may start something on this account of its own accord.
+ *
+ * Two things are true at once and the confinement has to respect both.
+ *
+ * A rollout limited to a handful of wallets has to actually limit what runs unattended. Registration,
+ * vote delegation and re-delegation are all things nobody asked for at the moment they happen, and
+ * confining them is the whole point of having a list.
+ *
+ * But a wallet this deployment *already enrolled* is not a candidate any more, it is a commitment.
+ * Dropping it from the list — or widening the list and later narrowing it — must not leave a position
+ * ChatterPay opened delegated to a retired pool with nothing coming to fix it. So an account
+ * ChatterPay registered stays serviced whatever the list says.
+ *
+ * Withdrawals and exits never consult this at all. Those return the user's own ada, and a rollout
+ * setting is not a reason to hold on to it.
+ *
+ * @param account - The account.
+ * @param config - The staking configuration.
+ * @returns `true` when the sweep may initiate an action for this account.
+ */
+function sweepMayInitiate(account: ICardanoStakingAccount, config: CardanoStakingConfig): boolean {
+  if (account.onChain.registrationOrigin === 'chatterpay') return true;
+  return allowlisted(account, config);
 }
 
 /**
