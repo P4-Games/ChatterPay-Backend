@@ -2,16 +2,16 @@
  * The endpoint a scheduler calls, and the only route in this repository that a browser never reaches.
  *
  * Everything else here is authenticated by an `Origin` header and a shared token. Neither works for
- * this: `Origin` is absent from every server-to-server call, and a shared token proves that somebody
- * has the token rather than which identity is calling. So this route is exempt from the origin check
- * and verifies a Google OIDC identity token instead — see `googleOidcService` for the four claims
- * that have to hold and why skipping the audience is the expensive mistake.
+ * this: `Origin` is absent from every server-to-server call, and the shared token is held by the web
+ * routes and by the bot, so accepting it here would let every component holding it start a run that
+ * spends sponsor fees. So this route is exempt from the origin check and carries a credential of its
+ * own instead — see `cardanoStakingSyncAuthService` for what makes it usable as one.
  *
  * The HTTP contract is deliberately small, because the scheduler is configured outside this
  * repository and by hand:
  *
  *     POST /internal/cardano/staking/sync
- *     Authorization: Bearer <Google OIDC id token, aud = CARDANO_STAKING_SYNC_AUDIENCE>
+ *     Authorization: Bearer <CARDANO_STAKING_SYNC_SECRET>
  *     Content-Type: application/json
  *
  *     { "jobName": "cardano-staking-sync", "scheduledTime": "2026-01-01T03:00:00Z" }
@@ -26,8 +26,8 @@
  *
  * - `200` the run did something, or deliberately did nothing. Includes a lease held by another
  *   instance and a tick that already completed: both mean "no work for you", not "try again".
- * - `401` the token did not verify. Retrying will not help.
- * - `403` the token verified and the identity is not accepted.
+ * - `401` the credential did not verify, or this deployment has none configured. Retrying will not
+ *   help; the body names which of the two it was.
  * - `409` staking is off or misconfigured in this deployment.
  * - `500` the run failed part way. A retry resumes it from its checkpoint.
  */
@@ -36,20 +36,18 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { getCardanoConfig } from '../config/cardanoConfig';
 import {
-  CARDANO_STAKING_SYNC_AUDIENCE,
   CARDANO_STAKING_SYNC_BATCH_LIMIT,
-  CARDANO_STAKING_SYNC_EXECUTE,
-  CARDANO_STAKING_SYNC_PRINCIPALS
+  CARDANO_STAKING_SYNC_EXECUTE
 } from '../config/constants';
 import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { buildCardanoProvider } from '../services/cardano/cardanoProviderService';
 import { buildStakingProvider } from '../services/cardano/cardanoStakingProviderService';
+import { verifyStakingSyncCredential } from '../services/cardano/cardanoStakingSyncAuthService';
 import {
   runStakingSync,
   type StakingSyncProvider
 } from '../services/cardano/cardanoStakingSyncService';
-import { bearerToken, verifyGoogleOidcToken } from '../services/googleOidcService';
 
 /** Accounts refreshed in one pass when nothing is configured. */
 const DEFAULT_BATCH_LIMIT = 50;
@@ -75,21 +73,21 @@ export async function cardanoStakingSync(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<unknown> {
-  const verification = await verifyGoogleOidcToken(bearerToken(request.headers.authorization), {
-    audience: CARDANO_STAKING_SYNC_AUDIENCE,
-    principals: CARDANO_STAKING_SYNC_PRINCIPALS.split(/[,\s]+/).filter((entry) => entry !== '')
-  });
+  // Checked here as well as in the auth hook, and both on purpose. The hook is what keeps the route
+  // from ever being unauthenticated; this one is what keeps the handler from depending on a hook
+  // ordering that a future plugin registration could change. Neither is decorative and the cost is one
+  // hash comparison.
+  const verification = verifyStakingSyncCredential(request.headers.authorization);
 
   if (!verification.ok) {
-    // `not_configured` is a 401 rather than a 500 on purpose: a deployment that cannot verify anything
-    // has not authorised anybody, and saying so as a server error would invite a retry that will fail
-    // the same way for the same reason.
-    const code = verification.rejection === 'principal_not_allowed' ? 403 : 401;
+    // A deployment that cannot verify anything has authorised nobody, so an unconfigured secret is a
+    // 401 rather than a 500: saying it as a server error would invite a retry that fails the same way
+    // for the same reason.
     return returnErrorResponse(
       'cardanoStakingSync',
       '',
       reply,
-      code,
+      401,
       'Unauthorized',
       verification.rejection
     );

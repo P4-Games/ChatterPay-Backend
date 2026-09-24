@@ -33,8 +33,8 @@ import type { CardanoEnv, CardanoFeeEnv } from '../../src/types/cardanoType';
 export interface CardanoEnvState {
   /** The address recorded for the startup check. */
   derivationCheck: string;
-  /** What the staking sync endpoint verifies identity tokens against. */
-  sync: { audience: string; principals: string };
+  /** The credential the staking sync endpoint accepts. */
+  syncSecret: string;
   /** Everything `getCardanoConfig` resolves from. */
   env: CardanoEnv;
   /** Everything `getCardanoFeeConfig` resolves from. */
@@ -45,7 +45,7 @@ export interface CardanoEnvState {
 function blank(): CardanoEnvState {
   return {
     derivationCheck: '',
-    sync: { audience: '', principals: '' },
+    syncSecret: '',
     env: {
       enabled: false,
       network: '',
@@ -111,14 +111,10 @@ export function cardanoConstantsMock<T extends object>(actual: T): T {
       CDC5: { value: '743a733a', enumerable: true },
       CDC6: { value: '743a73733a', enumerable: true },
       CARDANO_DERIVATION_CHECK: { get: () => cardanoEnvState.derivationCheck, enumerable: true },
-      // Read through getters so a suite can change them between cases. The endpoint fails closed when
-      // they are empty, which is the blank state every suite starts from.
-      CARDANO_STAKING_SYNC_AUDIENCE: {
-        get: () => cardanoEnvState.sync.audience,
-        enumerable: true
-      },
-      CARDANO_STAKING_SYNC_PRINCIPALS: {
-        get: () => cardanoEnvState.sync.principals,
+      // Read through a getter so a suite can change it between cases. The endpoint fails closed when
+      // it is empty, which is the blank state every suite starts from.
+      CARDANO_STAKING_SYNC_SECRET: {
+        get: () => cardanoEnvState.syncSecret,
         enumerable: true
       }
     }
@@ -133,7 +129,7 @@ export function cardanoConstantsMock<T extends object>(actual: T): T {
 export function resetCardanoEnv(overrides: Partial<CardanoEnvState> = {}): void {
   const fresh = blank();
   cardanoEnvState.derivationCheck = overrides.derivationCheck ?? fresh.derivationCheck;
-  cardanoEnvState.sync = { ...fresh.sync, ...overrides.sync };
+  cardanoEnvState.syncSecret = overrides.syncSecret ?? fresh.syncSecret;
   cardanoEnvState.env = { ...fresh.env, ...overrides.env };
   cardanoEnvState.feeEnv = { ...fresh.feeEnv, ...overrides.feeEnv };
 }
@@ -163,11 +159,10 @@ export function enableCardanoPreprod(patch: Partial<CardanoEnv> = {}): void {
 }
 
 /**
- * Configures what the staking sync endpoint accepts.
+ * Configures the credential the staking sync endpoint accepts.
  *
- * @param audience - The `aud` an identity token must carry.
- * @param principals - The identities allowed to call, comma separated.
+ * @param secret - The secret, or an empty string to leave the deployment unconfigured.
  */
-export function setCardanoSyncAuth(audience: string, principals: string): void {
-  cardanoEnvState.sync = { audience, principals };
+export function setCardanoSyncSecret(secret: string): void {
+  cardanoEnvState.syncSecret = secret;
 }

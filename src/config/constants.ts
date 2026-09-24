@@ -105,8 +105,7 @@ const {
   CARDANO_STAKING_FEE_DAILY_CAP_ADA: cardanoStakingFeeDailyCapAda = '',
   CARDANO_STAKING_DREP_OWN_ENABLED: cardanoStakingDrepOwnEnabled = 'false',
   CARDANO_STAKING_ENROLMENT_ALLOWLIST: cardanoStakingEnrolmentAllowlist = '',
-  CARDANO_STAKING_SYNC_AUDIENCE: cardanoStakingSyncAudience = '',
-  CARDANO_STAKING_SYNC_PRINCIPALS: cardanoStakingSyncPrincipals = '',
+  CARDANO_STAKING_SYNC_SECRET: cardanoStakingSyncSecret = '',
   CARDANO_STAKING_SYNC_BATCH_LIMIT: cardanoStakingSyncBatchLimit = '',
   CARDANO_STAKING_SYNC_EXECUTE: cardanoStakingSyncExecute = 'false',
   CARDANO_STAKING_BFF_SECRET: cardanoStakingBffSecret = '',
@@ -287,16 +286,22 @@ export const ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY: boolean =
 
 export const TELEGRAM_WEBHOOK_PATH = '/telegram/webhook';
 
+// The scheduler endpoint, named once. The route registration, the origin exemption and the auth hook
+// all have to agree on this string: a path that drifts in one of the three either stops working or
+// stops being checked, and only one of those two is noisy.
+export const CARDANO_STAKING_SYNC_PATH = '/internal/cardano/staking/sync';
+
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
 // Paths exempt from the origin check. They must match the routes as registered in
 // `src/api/*.ts`, since the check compares against the full request path: the NFT
 // metadata entry read `/metadata/opensea` while the route is `/nft/metadata/opensea/:id`,
 // so it never matched and every request without an Origin header was rejected — which is
 // exactly how explorers, marketplaces and link previews fetch the tokenURI.
-// `/internal/` is exempt from the Origin check and authenticated by Google OIDC instead. The check
-// asks "did a browser page ask for this", which is the wrong question about a scheduler: the header
-// is absent from every server-to-server call and forgeable by anything that is not a browser.
-export const CORS_ORIGINS_EXCEPTIONS: string = `/nft/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH},/polymarket/terms,/internal/cardano/staking/sync`;
+// The staking sync endpoint is exempt from the Origin check and carries a credential of its own
+// instead. The check asks "did a browser page ask for this", which is the wrong question about a
+// scheduler: the header is absent from every server-to-server call and forgeable by anything that is
+// not a browser.
+export const CORS_ORIGINS_EXCEPTIONS: string = `/nft/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH},/polymarket/terms,${CARDANO_STAKING_SYNC_PATH}`;
 
 export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/price';
 export const TOKEN_IDS = ['usd-coin', 'tether', 'ethereum', 'bitcoin', 'wrapped-bitcoin', 'dai'];
@@ -430,13 +435,11 @@ export const CARDANO_STAKING_TERMS_VERSION: string = cardanoStakingTermsVersion;
 export const CARDANO_STAKING_FEE_DAILY_CAP_ADA: string = cardanoStakingFeeDailyCapAda;
 export const CARDANO_STAKING_DREP_OWN_ENABLED: string = cardanoStakingDrepOwnEnabled;
 export const CARDANO_STAKING_ENROLMENT_ALLOWLIST: string = cardanoStakingEnrolmentAllowlist;
-// The `aud` a Google identity token must carry to reach the sync endpoint: the URL Cloud Scheduler
-// was configured with. Google mints a valid token for any audience anybody asks for, so this is what
-// binds a token to this endpoint rather than to some other service.
-export const CARDANO_STAKING_SYNC_AUDIENCE: string = cardanoStakingSyncAudience;
-// The identities allowed to call the sync endpoint. The scheduler's service account, and optionally
-// an operator's own account so a manual invocation needs no second authentication mechanism.
-export const CARDANO_STAKING_SYNC_PRINCIPALS: string = cardanoStakingSyncPrincipals;
+// The one credential that reaches the staking sync endpoint. Held by this deployment and by the
+// schedule, and by nothing else: it is deliberately not one of the product tokens, so holding the
+// frontend or bot token does not let anything start a run that spends sponsor fees. Empty means the
+// endpoint authorises nobody.
+export const CARDANO_STAKING_SYNC_SECRET: string = cardanoStakingSyncSecret;
 export const CARDANO_STAKING_SYNC_BATCH_LIMIT: string = cardanoStakingSyncBatchLimit;
 // Whether a sync run may build, sign and submit. Off by default: a deployment that starts spending
 // sponsor fees the moment the schedule fires should have been told to.

@@ -18,9 +18,9 @@ import { cardanoStakingSync } from '../controllers/cardanoStakingSyncController'
  * Two kinds, authenticated two different ways, and the split is the point.
  *
  * `/internal/` is a convention this repository did not have before: a path no browser reaches, exempt
- * from the `Origin` check, authenticated by a Google OIDC identity token. The schedule that calls it
- * is configured in GCP, outside this repository — nothing here creates, deploys or assumes a
- * scheduler; the endpoint answers whoever presents an accepted identity.
+ * from the `Origin` check and carrying a credential of its own rather than the shared product token.
+ * The schedule that calls it is configured in GCP, outside this repository — nothing here creates,
+ * deploys or assumes a scheduler; the endpoint answers whoever presents that one secret.
  *
  * The rest are the user-facing ones, and they use what the product already uses: the internal token
  * from a Next.js route that resolved the session itself. None of them takes a wallet. Every one takes

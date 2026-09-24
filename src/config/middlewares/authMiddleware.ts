@@ -2,10 +2,12 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { verifyAlchemySignature } from '../../helpers/alchemyHelper';
 import { Logger } from '../../helpers/loggerHelper';
 import { returnErrorResponse } from '../../helpers/requestHelper';
+import { verifyStakingSyncCredential } from '../../services/cardano/cardanoStakingSyncAuthService';
 import {
   ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY,
   ALCHEMY_WEBHOOK_HEADER_API_KEY,
   ALCHEMY_WEBHOOKS_PATH,
+  CARDANO_STAKING_SYNC_PATH,
   CHATIZALO_TOKEN,
   FRONTEND_TOKEN,
   TELEGRAM_BOT_API_KEY,
@@ -54,17 +56,7 @@ const PUBLIC_ROUTES = [
   '/last_nft*',
   '/nft_info*',
   '/balance/*',
-  '/polymarket/terms',
-  // Not public in the sense the others are. This one authenticates its own caller, with a Google OIDC
-  // identity token verified in the handler, and it is listed here so that the shared-token check does
-  // not reject a scheduler *before* that verification runs. The two checks answer different questions:
-  // the shared token proves somebody holds a secret, an OIDC token proves which identity is calling,
-  // and only the second one is usable for a job configured outside this repository.
-  //
-  // The handler fails closed. A deployment with no audience and no accepted principal configured
-  // verifies nothing and therefore allows nobody, so a route that lost its verification would refuse
-  // every call rather than becoming genuinely open.
-  '/internal/cardano/staking/sync'
+  '/polymarket/terms'
 ];
 
 /**
@@ -124,6 +116,21 @@ const isAlchemyWebhookRoute = (route: string): boolean => {
   const cleanRoute = route.replace(/\/+$/, ''); // remove trailing slashes
   const cleanBase = ALCHEMY_WEBHOOKS_PATH.replace(/\/+$/, '');
   return cleanRoute === cleanBase || cleanRoute.startsWith(`${cleanBase}/`);
+};
+
+/**
+ * Checks whether the incoming request targets the staking sync endpoint.
+ *
+ * Exact match, and deliberately not a prefix: `/internal/` is a convention, not a blanket exemption,
+ * and a matcher that accepted subpaths would hand the same treatment to every route anybody adds
+ * under it later.
+ *
+ * @param route - The request URL.
+ * @returns True when this is the staking sync endpoint.
+ */
+const isCardanoStakingSyncRoute = (route: string): boolean => {
+  const path = route.split('?')[0].replace(/\/+$/, '');
+  return path === CARDANO_STAKING_SYNC_PATH;
 };
 
 /**
@@ -232,6 +239,36 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     }
 
     Logger.debug('authMiddleware', 'Valid Alchemy webhook verified successfully');
+    return;
+  }
+
+  /**
+   * The staking sync endpoint: its own credential, checked here.
+   *
+   * It is handled in this hook, next to the two webhooks, rather than listed as a public route. That
+   * is the whole difference: a route on the public list is one nothing checks, and if the handler's
+   * own verification were ever removed or refactored away, the route would silently become open to
+   * the internet while still starting transactions. Checked here, losing the check means losing this
+   * branch, and losing this branch means falling through to the shared-token check below — which
+   * refuses the scheduler and is noticed within one tick.
+   *
+   * The shared product token is not accepted: `verifyStakingSyncCredential` compares against one
+   * secret and refuses a configuration that points it at a product token.
+   */
+  if (isCardanoStakingSyncRoute(url)) {
+    const verification = verifyStakingSyncCredential(request.headers.authorization);
+    if (!verification.ok) {
+      Logger.warn('authMiddleware', `Staking sync call refused: ${verification.rejection}`);
+      await returnErrorResponse(
+        'authMiddleware',
+        '',
+        reply,
+        401,
+        'Unauthorized staking sync request',
+        verification.rejection
+      );
+      return;
+    }
     return;
   }
 
