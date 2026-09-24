@@ -49,7 +49,11 @@ import {
   verifyBffAssertion,
   verifyPinGrant
 } from './cardanoStakingAssertionService';
-import { type CardanoStakingBalance, resolveStakingBalance } from './cardanoStakingBalanceService';
+import {
+  type CardanoStakingBalance,
+  type CardanoStakingBalanceReason,
+  resolveStakingBalance
+} from './cardanoStakingBalanceService';
 import { buildCardanoStakingTransaction } from './cardanoStakingBuilderService';
 import { executeStakingOperation } from './cardanoStakingLifecycleService';
 import {
@@ -120,6 +124,67 @@ export interface StakingOperationView {
   settled: boolean;
 }
 
+/**
+ * The balance as an HTTP response carries it.
+ *
+ * Identical to `CardanoStakingBalance` except that every lovelace figure is a decimal string. The
+ * conversion happens here, at the edge, rather than in the resolver: the arithmetic upstream needs
+ * `bigint` because a lovelace figure can exceed what a JavaScript number holds exactly, and
+ * `JSON.stringify` throws on a bigint rather than formatting it. A figure that reaches the
+ * serialiser unconverted is not a wrong number on screen, it is a 500 on a read-only endpoint.
+ *
+ * The `unavailable` shape still carries no amounts. That is the property the resolver exists for and
+ * it survives the conversion: a zero in that position reads as "the wallet is empty" to anybody who
+ * does not check `availability`.
+ */
+export type StakingBalanceView =
+  | {
+      availability: 'complete' | 'stale';
+      reason: CardanoStakingBalanceReason | null;
+      economicallyUsable: boolean;
+      utxoLovelace: string;
+      spendableLovelace: string;
+      userOwnedRefundableDepositLovelace: string;
+      withdrawableRewardsLovelace: string;
+      pendingRewardsLovelace: string;
+      totalAdaLovelace: string;
+      asOf: Date | null;
+    }
+  | {
+      availability: 'unavailable';
+      reason: CardanoStakingBalanceReason;
+      economicallyUsable: false;
+    };
+
+/**
+ * Converts a balance for transport.
+ *
+ * @param balance - The balance as the resolver produced it.
+ * @returns The same balance with its figures as strings.
+ */
+function balanceView(balance: CardanoStakingBalance): StakingBalanceView {
+  if (balance.availability === 'unavailable') {
+    return {
+      availability: 'unavailable',
+      reason: balance.reason,
+      economicallyUsable: false
+    };
+  }
+
+  return {
+    availability: balance.availability,
+    reason: balance.reason,
+    economicallyUsable: balance.economicallyUsable,
+    utxoLovelace: String(balance.utxoLovelace),
+    spendableLovelace: String(balance.spendableLovelace),
+    userOwnedRefundableDepositLovelace: String(balance.userOwnedRefundableDepositLovelace),
+    withdrawableRewardsLovelace: String(balance.withdrawableRewardsLovelace),
+    pendingRewardsLovelace: String(balance.pendingRewardsLovelace),
+    totalAdaLovelace: String(balance.totalAdaLovelace),
+    asOf: balance.asOf
+  };
+}
+
 /** What the staking screen needs, in one read. */
 export interface StakingUserView {
   walletAddress: string;
@@ -140,7 +205,7 @@ export interface StakingUserView {
   registrationOrigin: string;
   poolId: string | null;
   governanceDelegation: unknown;
-  balance: CardanoStakingBalance;
+  balance: StakingBalanceView;
   /** Whether this deployment can sign for the credential at all. */
   signable: boolean;
   /** Each requestable action, and `null` or the reason it is refused. */
@@ -291,7 +356,7 @@ export async function getStakingView(
       registrationOrigin: account.onChain.registrationOrigin,
       poolId: account.onChain.poolId,
       governanceDelegation: account.onChain.governanceDelegation,
-      balance,
+      balance: balanceView(balance),
       signable: signer.available,
       actions,
       rewards: rewards.map((reward) => ({
@@ -968,7 +1033,18 @@ export async function listGovernanceOptions(
         // Abstaining is the default and the neutral choice, and it is a real delegation on chain
         // rather than the absence of one — which is what unblocks a withdrawal under Conway.
         predefined: ['always_abstain', 'always_no_confidence'],
-        dreps: dreps.filter((drep) => drep.status === 'active')
+        // Mapped rather than passed through: `votingPowerLovelace` is a bigint and would throw in
+        // the serialiser, which is a 500 on a read-only endpoint with nothing else wrong with it.
+        dreps: dreps
+          .filter((drep) => drep.status === 'active')
+          .map((drep) => ({
+            idCip129: drep.idCip129,
+            idCip105: drep.idCip105,
+            credential: drep.credential,
+            status: drep.status,
+            votingPowerLovelace:
+              drep.votingPowerLovelace === null ? null : String(drep.votingPowerLovelace)
+          }))
       }
     };
   } catch (error) {
