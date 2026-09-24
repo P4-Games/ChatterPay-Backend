@@ -1,11 +1,13 @@
+import { createSign, generateKeyPairSync } from 'crypto';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CARDANO_PREPROD_CHAIN_ID } from '../../src/config/cardanoConfig';
 import { CHATIZALO_TOKEN, DEFAULT_CHAIN_ID } from '../../src/config/constants';
 import { buildServer } from '../../src/config/server';
 import Blockchain from '../../src/models/blockchainModel';
-import { enableCardanoPreprod } from '../support/cardanoEnv';
+import { resetGoogleOidcKeys } from '../../src/services/googleOidcService';
+import { enableCardanoPreprod, setCardanoSyncAuth } from '../support/cardanoEnv';
 
 vi.mock('../../src/helpers/envHelper', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/helpers/envHelper')>();
@@ -17,6 +19,29 @@ vi.mock('../../src/config/constants', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/config/constants')>();
   const { cardanoConstantsMock } = await import('../support/cardanoEnv');
   return cardanoConstantsMock(actual);
+});
+
+/**
+ * Google's key set, when the suite is standing in for Google.
+ *
+ * `null` means behave as if the endpoint were unreachable, which is the ordinary state: only the
+ * positive case below puts a key set here.
+ */
+const googleKeys: { value: unknown | null } = vi.hoisted(() => ({ value: null }));
+
+// Only the certificate fetch is intercepted; everything else goes to the real axios. Replacing axios
+// wholesale would also replace the provider's transport, and this file boots the whole application.
+vi.mock('axios', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('axios')>();
+  const get: typeof actual.default.get = async (url, config) => {
+    if (typeof url === 'string' && url.includes('googleapis.com/oauth2/v3/certs')) {
+      if (googleKeys.value === null) throw new Error('google is unreachable in this suite');
+      return { data: googleKeys.value } as never;
+    }
+    return actual.default.get(url, config);
+  };
+  const wrapped = Object.assign(Object.create(actual.default), actual.default, { get });
+  return { ...actual, default: wrapped, get };
 });
 
 /**
@@ -255,5 +280,107 @@ describe('the user-facing staking routes', () => {
     const { status } = await call('/cardano/governance/options');
 
     expect(status).toBe(200);
+  });
+});
+
+describe('a Google identity token the endpoint accepts', () => {
+  const AUDIENCE = 'https://backend.example.net/internal/cardano/staking/sync';
+  const SCHEDULER = 'cardano-staking-sync@chatterpay-dev.iam.gserviceaccount.com';
+  const KEY_ID = 'suite-key-1';
+  const pair = generateKeyPairSync('rsa', { modulusLength: 2048 });
+
+  /**
+   * Mints a token, signed for real.
+   *
+   * @param claims - Claims to override.
+   * @returns The token.
+   */
+  function token(claims: Record<string, unknown> = {}): string {
+    const now = Math.floor(Date.now() / 1000);
+    const header = { alg: 'RS256', kid: KEY_ID, typ: 'JWT' };
+    const payload = {
+      iss: 'https://accounts.google.com',
+      aud: AUDIENCE,
+      email: SCHEDULER,
+      email_verified: true,
+      iat: now,
+      exp: now + 3600,
+      ...claims
+    };
+    const encode = (value: unknown): string =>
+      Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+    const signing = `${encode(header)}.${encode(payload)}`;
+    const signer = createSign('RSA-SHA256');
+    signer.update(signing);
+    return `${signing}.${signer.sign(pair.privateKey).toString('base64url')}`;
+  }
+
+  beforeEach(() => {
+    resetGoogleOidcKeys();
+    setCardanoSyncAuth(AUDIENCE, SCHEDULER);
+    googleKeys.value = {
+      keys: [
+        {
+          ...(pair.publicKey.export({ format: 'jwk' }) as Record<string, unknown>),
+          kid: KEY_ID,
+          use: 'sig',
+          alg: 'RS256'
+        }
+      ]
+    };
+  });
+
+  afterEach(() => {
+    googleKeys.value = null;
+    setCardanoSyncAuth('', '');
+    resetGoogleOidcKeys();
+  });
+
+  it('lets a correctly signed token through to the run', async () => {
+    // The positive case, end to end over a socket: signed by the key the endpoint fetches, for this
+    // audience, by an accepted principal. Cardano staking is off in this suite, so the run refuses on
+    // configuration — which is the answer *past* authentication and is what proves the token was taken.
+    const { status, text } = await call('/internal/cardano/staking/sync', {
+      method: 'POST',
+      authorization: `Bearer ${token()}`,
+      body: { jobName: 'cardano-staking-sync' }
+    });
+
+    expect(status).not.toBe(401);
+    expect(status).not.toBe(403);
+    expect(text).not.toContain('not_configured');
+  });
+
+  it('refuses the same token minted for another audience', async () => {
+    // Google mints a valid token for whatever audience is asked for, so this one is genuine and proves
+    // a genuine identity. The audience is what binds a token to this endpoint.
+    const { status } = await call('/internal/cardano/staking/sync', {
+      method: 'POST',
+      authorization: `Bearer ${token({ aud: 'https://some-other-service.example.net' })}`,
+      body: {}
+    });
+
+    expect(status).toBe(401);
+  });
+
+  it('refuses a correctly signed token from an identity it does not accept', async () => {
+    const { status } = await call('/internal/cardano/staking/sync', {
+      method: 'POST',
+      authorization: `Bearer ${token({ email: 'somebody@example.net' })}`,
+      body: {}
+    });
+
+    expect(status).toBe(403);
+  });
+
+  it('refuses an expired token', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const { status } = await call('/internal/cardano/staking/sync', {
+      method: 'POST',
+      authorization: `Bearer ${token({ iat: now - 7200, exp: now - 3600 })}`,
+      body: {}
+    });
+
+    expect(status).toBe(401);
   });
 });

@@ -4,6 +4,7 @@ import {
   cardanoGovernanceHistory,
   cardanoGovernanceOptions,
   cardanoStakingAction,
+  cardanoStakingAuthorize,
   cardanoStakingConsent,
   cardanoStakingState
 } from '../controllers/cardanoStakingController';
@@ -47,6 +48,13 @@ export const cardanoStakingRoutes = async (fastify: FastifyInstance): Promise<vo
    * @route POST /cardano/staking/consent
    */
   fastify.post('/cardano/staking/consent', cardanoStakingConsent);
+
+  /**
+   * Verifies the PIN for one action and issues a grant bound to it.
+   *
+   * @route POST /cardano/staking/authorize
+   */
+  fastify.post('/cardano/staking/authorize', cardanoStakingAuthorize);
 
   /**
    * Takes an action on the authenticated user's own position.

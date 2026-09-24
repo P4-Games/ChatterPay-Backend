@@ -24,6 +24,7 @@ import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import type { CardanoStakingOperationKind } from '../models/cardanoStakingOperationModel';
 import {
+  authorizeStakingAction,
   getGovernanceHistory,
   getStakingView,
   listGovernanceOptions,
@@ -40,6 +41,10 @@ const STATUS_OF: Record<StakingUserRefusal, number> = {
   staking_disabled: 409,
   // A gate that would not allow it is the user's situation to resolve, not a malformed request.
   security_gate: 403,
+  // Not 400: the request was well formed. What is missing is proof that a session was authenticated
+  // for it, which is an authentication failure and reads as one.
+  assertion: 401,
+  pin_grant: 401,
   action_not_allowed: 400,
   // The request was understood and the state does not permit it. 409 rather than 400: nothing about
   // the request was wrong, and a client that retries it unchanged after the state changes is right.
@@ -53,6 +58,19 @@ interface ActionBody {
   channel_user_id?: string;
   action?: string;
   recipient_address?: string | null;
+  /** Signed by the Next.js route over the user it authenticated and the action asked for. */
+  bff_assertion?: string;
+  /** Issued by `/cardano/staking/authorize` once the PIN verified for this exact action. */
+  pin_grant?: string;
+}
+
+/** What the authorise endpoint accepts. */
+interface AuthorizeBody {
+  channel_user_id?: string;
+  action?: string;
+  recipient_address?: string | null;
+  pin?: string;
+  bff_assertion?: string;
 }
 
 /**
@@ -144,7 +162,9 @@ export async function cardanoStakingAction(
     const result = await requestStakingAction(body.channel_user_id, action, {
       recipientAddress: body.recipient_address ?? null,
       // Recorded on the operation so an audit can tell a user's request from the sweep's decision.
-      actor: 'web'
+      actor: 'web',
+      bffAssertion: body.bff_assertion ?? null,
+      pinGrant: body.pin_grant ?? null
     });
     if (!result.ok) return refuse(reply, result.refusal, result.detail);
 
@@ -155,6 +175,51 @@ export async function cardanoStakingAction(
     return returnSuccessResponse(reply, 'Cardano staking action started', { ...result.data });
   } catch (error) {
     return failed(reply, 'cardanoStakingAction', error);
+  }
+}
+
+/**
+ * Handles `POST /cardano/staking/authorize`.
+ *
+ * Verifies the PIN for one action and hands back a grant bound to it. Separate from the action itself
+ * so that the PIN is entered against a named operation — "authorise withdrawing your rewards" — rather
+ * than against a session that then permits anything.
+ *
+ * @param request - The Fastify request.
+ * @param reply - The Fastify reply.
+ */
+export async function cardanoStakingAuthorize(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<unknown> {
+  const body = (request.body ?? {}) as AuthorizeBody;
+  if (!body.channel_user_id) return missingUser(reply);
+
+  const action = body.action as CardanoStakingOperationKind | undefined;
+  if (action === undefined || !USER_REQUESTABLE_ACTIONS.includes(action)) {
+    return returnErrorResponse(
+      'cardanoStakingAuthorize',
+      '',
+      reply,
+      400,
+      `action must be one of: ${USER_REQUESTABLE_ACTIONS.join(', ')}`
+    );
+  }
+  if (typeof body.pin !== 'string' || body.pin.trim() === '') {
+    return returnErrorResponse('cardanoStakingAuthorize', '', reply, 400, 'pin is required');
+  }
+
+  try {
+    const result = await authorizeStakingAction(body.channel_user_id, action, {
+      pin: body.pin,
+      recipientAddress: body.recipient_address ?? null,
+      bffAssertion: body.bff_assertion ?? null,
+      actor: 'web'
+    });
+    if (!result.ok) return refuse(reply, result.refusal, result.detail);
+    return returnSuccessResponse(reply, 'Cardano staking action authorised', { ...result.data });
+  } catch (error) {
+    return failed(reply, 'cardanoStakingAuthorize', error);
   }
 }
 

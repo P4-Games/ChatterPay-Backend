@@ -39,6 +39,14 @@ import { type IUser, UserModel } from '../../models/userModel';
 import { securityService } from '../securityService';
 import { buildCardanoProvider } from './cardanoProviderService';
 import { assembleStakingPlan } from './cardanoStakingAssemblyService';
+import {
+  assertionIdempotencyKey,
+  bffAssertionRequired,
+  issuePinGrant,
+  pinGrantRequired,
+  verifyBffAssertion,
+  verifyPinGrant
+} from './cardanoStakingAssertionService';
 import { type CardanoStakingBalance, resolveStakingBalance } from './cardanoStakingBalanceService';
 import { executeStakingOperation } from './cardanoStakingLifecycleService';
 import { createStakingOperation } from './cardanoStakingOperationService';
@@ -68,6 +76,15 @@ export type StakingUserRefusal =
   | 'no_staking_account'
   /** The security gate did not allow the operation, or could not be consulted. */
   | 'security_gate'
+  /**
+   * The request carried no valid proof that a session was authenticated for it.
+   *
+   * Holding the internal token is not enough for a staking mutation: the request has to be signed by
+   * the BFF, over this user and this action. See `cardanoStakingAssertionService`.
+   */
+  | 'assertion'
+  /** No valid PIN grant for this exact operation. */
+  | 'pin_grant'
   /** The action is not one a user may ask for. */
   | 'action_not_allowed'
   /** The decision refused it. Carries the decision's own reason. */
@@ -255,7 +272,9 @@ export async function getStakingView(
         null
       ),
       optedIn: account.preference.enabled,
-      optOut: account.optOut,
+      // Normalised: a document written before the field existed carries no `optOut` at all, and the
+      // screen must read that as no decision rather than as a wallet that left.
+      optOut: account.optOut ?? null,
       termsVersion: account.termsConsent?.version ?? null,
       currentTermsVersion: config.termsVersion,
       registered: account.onChain.registered,
@@ -420,7 +439,14 @@ export interface StakingActionStarted {
 export async function requestStakingAction(
   phoneNumber: string,
   action: CardanoStakingOperationKind,
-  options: { recipientAddress?: string | null; actor: string }
+  options: {
+    recipientAddress?: string | null;
+    actor: string;
+    /** Signed by the BFF over this user and this action. */
+    bffAssertion?: string | null;
+    /** Issued by `authorizeStakingAction` after the PIN verified for this action. */
+    pinGrant?: string | null;
+  }
 ): Promise<StakingUserResult<StakingActionStarted>> {
   if (!USER_REQUESTABLE_ACTIONS.includes(action)) {
     return { ok: false, refusal: 'action_not_allowed', detail: action };
@@ -429,6 +455,38 @@ export async function requestStakingAction(
   const cardano = getCardanoConfig();
   if (!cardano.enabled) {
     return { ok: false, refusal: 'staking_disabled', detail: cardano.disabledReason };
+  }
+
+  const recipient = options.recipientAddress ?? null;
+  const expectation = { sub: phoneNumber, act: action, rcp: recipient };
+
+  // Before the gate and before any read. Both of these say *who is asking and for what*, and there is
+  // no reason to look anything up on behalf of a request that has not established that.
+  if (bffAssertionRequired()) {
+    const asserted = verifyBffAssertion(options.bffAssertion ?? null, expectation);
+    if (!asserted.ok) {
+      return {
+        ok: false,
+        refusal: 'assertion',
+        detail: `${asserted.rejection}: ${asserted.detail}`
+      };
+    }
+  } else {
+    // A decision somebody wrote down, logged every time it is taken, so it cannot be a gap nobody
+    // remembers opening.
+    Logger.warn(
+      'requestStakingAction',
+      `Cardano staking ${action} accepted without a BFF assertion: CARDANO_STAKING_ASSERTION_REQUIRED is false`
+    );
+  }
+
+  let grantNonce: string | null = null;
+  if (pinGrantRequired()) {
+    const granted = verifyPinGrant(options.pinGrant ?? null, expectation);
+    if (!granted.ok) {
+      return { ok: false, refusal: 'pin_grant', detail: `${granted.rejection}: ${granted.detail}` };
+    }
+    grantNonce = granted.claims.nonce;
   }
 
   const gate = await stakingSecurityGate(phoneNumber);
@@ -480,7 +538,7 @@ export async function requestStakingAction(
     user,
     action,
     provider,
-    recipientAddress: options.recipientAddress ?? null
+    recipientAddress: recipient
   });
   if (assembly.outcome === 'refused') {
     return {
@@ -504,7 +562,13 @@ export async function requestStakingAction(
   const operation = await createStakingOperation(account, {
     kind: action,
     actor: options.actor,
-    idempotencyKey: `user:${String(account._id)}:${action}:${Date.now()}`,
+    // From the grant's nonce when there is one, so a replayed grant collides with the unique index on
+    // `(chainId, idempotencyKey)` rather than starting a second operation. Without a grant there is
+    // nothing to be single-use about, and the key falls back to being merely unique.
+    idempotencyKey:
+      grantNonce === null
+        ? `user:${String(account._id)}:${action}:${Date.now()}`
+        : assertionIdempotencyKey(grantNonce),
     recipientAddress: options.recipientAddress ?? null
   });
 
@@ -540,6 +604,80 @@ export async function requestStakingAction(
       txId: execution.transactionId,
       outcome: execution.outcome
     }
+  };
+}
+
+/** What an authorisation produced. */
+export interface StakingAuthorization {
+  grant: string;
+  expiresAt: Date;
+  action: CardanoStakingOperationKind;
+}
+
+/**
+ * Verifies the PIN for one specific operation and issues a grant for it.
+ *
+ * This is what makes the PIN specific to an operation rather than a fact about a session. The PIN is
+ * checked here, and what the caller gets back is bound by signature to this user, this action and this
+ * destination — so it cannot be presented for a different action, and it cannot be used twice, because
+ * its nonce becomes the operation's idempotency key.
+ *
+ * The BFF assertion is required here too. Issuing a grant is not a read: a caller that could ask for
+ * one on somebody else's behalf would be able to brute-force their PIN.
+ *
+ * @param phoneNumber - The authenticated user's phone number.
+ * @param action - The action being authorised.
+ * @param options - The PIN, the exit destination, the BFF assertion, and where the request came from.
+ * @returns The grant, or a refusal.
+ */
+export async function authorizeStakingAction(
+  phoneNumber: string,
+  action: CardanoStakingOperationKind,
+  options: {
+    pin: string;
+    recipientAddress?: string | null;
+    bffAssertion?: string | null;
+    actor: string;
+  }
+): Promise<StakingUserResult<StakingAuthorization>> {
+  if (!USER_REQUESTABLE_ACTIONS.includes(action)) {
+    return { ok: false, refusal: 'action_not_allowed', detail: action };
+  }
+
+  const recipient = options.recipientAddress ?? null;
+  const expectation = { sub: phoneNumber, act: action, rcp: recipient };
+
+  if (bffAssertionRequired()) {
+    const asserted = verifyBffAssertion(options.bffAssertion ?? null, expectation);
+    if (!asserted.ok) {
+      return {
+        ok: false,
+        refusal: 'assertion',
+        detail: `${asserted.rejection}: ${asserted.detail}`
+      };
+    }
+  }
+
+  // The account is resolved before the PIN is checked, so a call about a user with no staking account
+  // does not become a way to test PINs against the security service.
+  const own = await resolveOwn(phoneNumber);
+  if (!own.ok) return own;
+
+  const verified = await securityService.verifyPin(phoneNumber, options.pin, options.actor);
+  if (!verified.ok) {
+    // The status travels and the PIN never does. `blocked` and `not_set` are different situations for
+    // the user to resolve, and the failed-attempt counter is the security service's to keep.
+    return { ok: false, refusal: 'security_gate', detail: verified.status ?? 'pin_rejected' };
+  }
+
+  const issued = issuePinGrant(phoneNumber, action, recipient);
+  if (issued === null) {
+    return { ok: false, refusal: 'pin_grant', detail: 'not_configured' };
+  }
+
+  return {
+    ok: true,
+    data: { grant: issued.grant, expiresAt: issued.expiresAt, action }
   };
 }
 

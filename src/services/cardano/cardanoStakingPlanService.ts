@@ -26,7 +26,10 @@
  */
 
 import type { CardanoStakingConfig } from '../../config/cardanoStakingConfig';
-import type { ICardanoStakingAccount } from '../../models/cardanoStakingAccountModel';
+import type {
+  CardanoStakingOptOut,
+  ICardanoStakingAccount
+} from '../../models/cardanoStakingAccountModel';
 import type { CardanoStakingOperationKind } from '../../models/cardanoStakingOperationModel';
 import { assessStakingEnrolment } from './cardanoStakingEligibilityService';
 import type {
@@ -184,7 +187,8 @@ export function decideAutomaticAction(
   //
   // One exception, and it is not a weakening: rewards already earned still come back. Leaving is a
   // decision about future participation, not a forfeit of ada that is already the user's.
-  if (account.optOut !== null) {
+  const optOut = optOutOf(account);
+  if (optOut !== null) {
     if (
       onChain.registered &&
       onChain.governanceDelegation !== null &&
@@ -194,7 +198,7 @@ export function decideAutomaticAction(
     ) {
       return act('withdraw_rewards');
     }
-    return refuse('opted_out', account.optOut.reason);
+    return refuse('opted_out', optOut.reason);
   }
 
   if (!account.preference.enabled) return refuse('not_opted_in');
@@ -284,8 +288,9 @@ export function decideRequestedAction(
   // A wallet that left is not re-entered by asking for a participation action. Pressing "delegate my
   // vote" is not an opt-in, and treating it as one would make the recorded decision to leave
   // revocable by any button that happens to need staking to be on. The way back is the opt-in itself.
-  if (account.optOut !== null && REENTRY_KINDS.includes(requested)) {
-    return refuse('opted_out', account.optOut.reason);
+  const optOut = optOutOf(account);
+  if (optOut !== null && REENTRY_KINDS.includes(requested)) {
+    return refuse('opted_out', optOut.reason);
   }
 
   const onChain = account.onChain;
@@ -385,6 +390,21 @@ function commonRefusals(
   if (account.onChain.asOf === null) return refuse('no_confirmed_chain_read');
   if (context.operationInFlight) return refuse('operation_in_flight');
   return null;
+}
+
+/**
+ * The recorded decision to be out, normalised.
+ *
+ * An absent field and a `null` one mean the same thing and arrive differently: documents written
+ * before this field existed carry no `optOut` at all, so a strict comparison against `null` reads
+ * every one of them as a wallet that left and refuses everything. Reading the absence as "no decision
+ * recorded" is both correct and the only answer that does not strand accounts that predate the field.
+ *
+ * @param account - The account.
+ * @returns The decision, or `null` when there is none.
+ */
+function optOutOf(account: ICardanoStakingAccount): CardanoStakingOptOut | null {
+  return account.optOut ?? null;
 }
 
 /**

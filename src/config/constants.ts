@@ -109,6 +109,8 @@ const {
   CARDANO_STAKING_SYNC_PRINCIPALS: cardanoStakingSyncPrincipals = '',
   CARDANO_STAKING_SYNC_BATCH_LIMIT: cardanoStakingSyncBatchLimit = '',
   CARDANO_STAKING_SYNC_EXECUTE: cardanoStakingSyncExecute = 'false',
+  CARDANO_STAKING_BFF_SECRET: cardanoStakingBffSecret = '',
+  CARDANO_STAKING_ASSERTION_REQUIRED: cardanoStakingAssertionRequired = 'true',
   TELEGRAM_BOT_API_KEY,
   SECURITY_PIN_LENGTH: securityPinLength = 6,
   SECURITY_PIN_MAX_FAILED_ATTEMPTS: securityPinMaxFailedAttempts = 3,
@@ -439,3 +441,10 @@ export const CARDANO_STAKING_SYNC_BATCH_LIMIT: string = cardanoStakingSyncBatchL
 // Whether a sync run may build, sign and submit. Off by default: a deployment that starts spending
 // sponsor fees the moment the schedule fires should have been told to.
 export const CARDANO_STAKING_SYNC_EXECUTE: string = cardanoStakingSyncExecute;
+// Shared with the Next.js routes and with nothing else. It is what lets the backend tell a request
+// that came from a route which authenticated a session apart from anything else holding the internal
+// token, and it must never reach a browser bundle.
+export const CARDANO_STAKING_BFF_SECRET: string = cardanoStakingBffSecret;
+// Whether staking mutations must carry that signature. Required unless a deployment says otherwise in
+// so many words, so an unprovisioned secret refuses rather than quietly lowering the bar.
+export const CARDANO_STAKING_ASSERTION_REQUIRED: string = cardanoStakingAssertionRequired;
