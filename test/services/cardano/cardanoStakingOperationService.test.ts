@@ -17,7 +17,7 @@ const CHAIN_ID = 900000000001;
 const CREDENTIAL = 'cc2f0b60ee5c4edb7bcc46410787d389539cddf5b64f0012304b91da';
 
 /**
- * Builds every declared staking index, the way the migration does.
+ * Builds every declared staking index, the way an administrator does by hand.
  */
 async function installSchema(): Promise<void> {
   for (const { model } of STAKING_COLLECTIONS) await model.createIndexes();
@@ -84,14 +84,14 @@ describe('cardanoStakingOperationService', () => {
   });
 
   describe('the schema has to be installed first', () => {
-    it('reports nothing missing once the migration has run', async () => {
+    it('reports nothing missing once the indexes have been created', async () => {
       expect(await missingStakingIndexes()).toEqual([]);
     });
 
     it('refuses an economic operation while a mandatory index is absent', async () => {
       // Uniqueness in this rollout comes entirely from indexes. Mongo creates a collection
-      // implicitly on first insert without any of them, so a deployment where the migration never
-      // ran would accept every write and let two accounts claim one deposit.
+      // implicitly on first insert without any of them, so a deployment whose indexes were never
+      // created would accept every write and let two accounts claim one deposit.
       await CardanoStakingOperation.collection.dropIndex('one_live_op_per_account');
       resetStakingSchemaVerification();
       const account = await seedReadyAccount();
@@ -127,7 +127,7 @@ describe('cardanoStakingOperationService', () => {
       expect(await CardanoStakingOperation.countDocuments({})).toBe(0);
     });
 
-    it('does not remember a failure, so running the migration while up is enough to recover', async () => {
+    it('does not remember a failure, so creating the indexes while up is enough to recover', async () => {
       await CardanoStakingOperation.collection.dropIndex('one_live_op_per_account');
       resetStakingSchemaVerification();
       const account = await seedReadyAccount();
@@ -166,7 +166,7 @@ describe('cardanoStakingOperationService', () => {
     });
 
     it('creates no operation for an account the backfill has only just made', async () => {
-      // Exactly what the migration leaves behind: an account row and no on-chain read.
+      // Exactly what preparing an account by hand leaves behind: a row and no on-chain read.
       const account = await seedAccount();
 
       await expect(
@@ -277,9 +277,9 @@ describe('cardanoStakingOperationService', () => {
 
   describe('the index list is one list', () => {
     it('checks exactly what the schemas declare, across every staking collection', async () => {
-      // The guard and the migration read the same source. Two lists would drift, and the direction
-      // that drift takes is the dangerous one: a guard checking fewer indexes than the migration
-      // installs waves through the deployment where the migration never ran.
+      // The guard and the documented deliverables read the same source. Two lists would drift, and
+      // the direction that drift takes is the dangerous one: a guard checking fewer indexes than the
+      // database was supposed to get waves through the deployment where they were never created.
       const collections = STAKING_COLLECTIONS.map((entry) => entry.collection);
 
       expect(collections).toHaveLength(9);

@@ -1,10 +1,12 @@
 /**
  * The staking collections as a set, and the index names they declare.
  *
- * One list, read by both the migration that builds the indexes and the guard that refuses to start
- * an economic operation without them. Two lists would drift, and the direction the drift takes is
- * the dangerous one: a guard that checks fewer indexes than the migration installs waves through
- * exactly the deployment where the migration never ran.
+ * Collections and indexes in this database are created by hand, so this list is what tells the
+ * guard which ones an economic operation depends on, and it is also what the documented deliverables
+ * an administrator applies are generated from. The names are derived from the schemas rather than
+ * written down twice, because a second list drifts, and the direction the drift takes is the
+ * dangerous one: a guard that checks fewer indexes than the database was supposed to get waves
+ * through exactly the deployment where the indexes were never created.
  *
  * Nothing here opens a connection or touches a collection. The index names come from the schema
  * objects themselves.
@@ -60,8 +62,8 @@ export const STAKING_COLLECTIONS: readonly StakingCollection[] = [
   },
   // Not introduced by this rollout — transfers have used it all along — but its expiry behaviour is
   // what keeps a staking operation's inputs held while its outcome is unknown, and an index that
-  // load-bearing has to be built by the migration and checked by the guard rather than created
-  // lazily by whichever process reaches the store first.
+  // load-bearing has to be checked by the guard rather than trusted to whichever process reaches
+  // the store first.
   { model: CardanoUtxoClaim as unknown as Model<never>, collection: 'cardano_utxo_claims' }
 ];
 

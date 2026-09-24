@@ -11,9 +11,10 @@
  *
  * - **The schema is not installed.** Uniqueness in this rollout comes entirely from indexes: one
  *   account per stake credential, one live operation per account, one deposit per registration
- *   cycle. Mongo creates a collection implicitly on first insert, without any of them, so a
- *   deployment where the migration never ran would accept every write and quietly allow two
- *   accounts to claim one deposit. A missing index is therefore not a performance question here.
+ *   cycle. Mongo creates a collection implicitly on first insert, without any of them, and the
+ *   collections and indexes here are created by hand, so a deployment where that was never done
+ *   would accept every write and quietly allow two accounts to claim one deposit. A missing index
+ *   is therefore not a performance question here.
  * - **Nothing has read the chain yet.** `onChain.asOf: null` means exactly that — never read. It is
  *   not "registered: false", and it is not "no rewards". Building a registration on it would submit
  *   a certificate for a credential that may already be registered, and building an exit on it would
@@ -61,10 +62,10 @@ const CONSENT_REQUIRED_KINDS: readonly CardanoStakingOperationKind[] = [
 /**
  * Whether the staking schema has been verified in this process.
  *
- * Only a success is remembered. A deployment either ran the migration or it did not, so the answer
- * does not change from one operation to the next and re-reading eight collections before every
- * staking action would be eight round trips for a constant. A *failure* is never cached, so a
- * deployment that runs the migration while the service is up recovers on the next attempt instead
+ * Only a success is remembered. A deployment either has the indexes or it does not, so the answer
+ * does not change from one operation to the next and re-reading nine collections before every
+ * staking action would be nine round trips for a constant. A *failure* is never cached, so a
+ * deployment whose indexes are created while the service is up recovers on the next attempt instead
  * of needing a restart.
  */
 let schemaVerified = false;
@@ -119,7 +120,7 @@ export async function checkStakingOperationReadiness(
     if (missing.length > 0) {
       Logger.error(
         'checkStakingOperationReadiness',
-        `Cardano staking schema is incomplete; run the 0001-cardano-staking-bootstrap migration. Missing: ${missing.join(', ')}`
+        `Cardano staking schema is incomplete; the collections and indexes have to be created by hand before staking runs. Missing: ${missing.join(', ')}`
       );
       return {
         ok: false,

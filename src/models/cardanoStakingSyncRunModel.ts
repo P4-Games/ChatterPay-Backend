@@ -100,10 +100,11 @@ const cardanoStakingSyncRunSchema = new Schema<ICardanoStakingSyncRun>(
     backlogOldestAt: { type: Date, required: false, default: null },
     lastError: { type: String, required: false, default: null }
   },
-  // The migration owns this collection's existence, not whichever process touches the model
-  // first. Mongoose otherwise creates the collection and builds its indexes in the background
-  // when the model is compiled, which is at import time: a read-only process would bring the
-  // collection into being, and a dry run would leave exactly the trace it promises not to.
+  // Collections and indexes in this database are administered by hand, so the model must not bring
+  // either into existence. Mongoose otherwise creates the collection and builds its indexes in the
+  // background when the model is compiled, which is at import time: importing this file from a
+  // read-only process would create the collection, and an index built that way is one nobody
+  // reviewed.
   { autoCreate: false, autoIndex: false, _id: false, timestamps: true }
 );
 

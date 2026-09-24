@@ -175,7 +175,7 @@ describe('cardanoStakingLifecycleService', () => {
   beforeEach(async () => {
     await CardanoStakingOperation.deleteMany({});
     // The schemas carry `autoIndex: false`, so the credential lock only exists once something builds
-    // it. In production that is the migration; here it is this line.
+    // it. In production an administrator creates it by hand; here it is this line.
     await CardanoStakingOperation.syncIndexes();
     await CardanoStakingFeeBudget.deleteMany({});
     await CardanoStakingSponsorFeeEvent.deleteMany({});

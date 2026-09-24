@@ -1,7 +1,7 @@
 import { type Document, model, Schema } from 'mongoose';
 
 /**
- * The UTxO claim store, declared so that the migration and the guard can own its index.
+ * The UTxO claim store, declared so that the guard can verify its index.
  *
  * **This model is not how the collection is read or written.** Every claim is taken, released and
  * inspected through the raw driver in `cardanoUtxoClaimService`, because claiming is an atomic
@@ -10,9 +10,9 @@ import { type Document, model, Schema } from 'mongoose';
  * staking, and an index that matters that much cannot go on being created lazily by whichever
  * process happens to touch the store first.
  *
- * With it declared here, the collection joins the list the migration builds and the guard verifies,
- * so a deployment whose migration never ran refuses staking operations instead of running them
- * against a store whose expiry is not what this code assumes.
+ * With it declared here, the collection joins the list the guard verifies, so a deployment whose
+ * index was never created refuses staking operations instead of running them against a store whose
+ * expiry is not what this code assumes.
  *
  * The index name is pinned to `expiresAt_1` on purpose. That is the name Mongo generates, and it is
  * the name already on every collection the lazy creation reached. Declaring the same key under a
@@ -39,9 +39,9 @@ const cardanoUtxoClaimSchema = new Schema<ICardanoUtxoClaim>(
     holder: { type: String, required: true },
     expiresAt: { type: Date, required: false, default: null }
   },
-  // The migration owns this collection's indexes. `autoIndex: false` keeps Mongoose from building
-  // them in the background at import time, which is what would let a read-only process bring the
-  // index into being and a dry run leave a trace it promised not to.
+  // This collection's indexes are administered by hand. `autoIndex: false` keeps Mongoose from
+  // building them in the background at import time, which is what would let merely importing this
+  // file from a read-only process bring an index into being.
   { autoCreate: false, autoIndex: false, _id: false, versionKey: false }
 );
 

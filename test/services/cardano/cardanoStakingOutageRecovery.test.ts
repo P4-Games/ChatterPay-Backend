@@ -326,7 +326,7 @@ describe('surviving two days with nothing running', () => {
   });
 
   describe('the index the whole thing rests on', () => {
-    it('is declared by a model, so the migration builds it and the guard checks it', async () => {
+    it('is declared by a model, so it can be created by hand and the guard checks it', async () => {
       // It used to be created lazily by whichever process touched the store first, which is not a
       // thing to rely on once a staking operation's safety depends on how it expires.
       const declared = CardanoUtxoClaim.schema.indexes();

@@ -131,13 +131,13 @@ let indexReady = false;
 /**
  * Makes sure expired claims are removed without anybody sweeping them.
  *
- * The migration is what owns this index now, and the staking guard refuses to run an economic
- * operation without it — because how this collection expires decides whether an uncertain staking
- * operation still holds its inputs. This lazy creation stays for the transfer path, which predates
- * all of that and must keep working on a deployment where the staking migration never ran.
+ * The staking guard refuses to run an economic operation without this index — because how this
+ * collection expires decides whether an uncertain staking operation still holds its inputs. The
+ * lazy creation here stays for the transfer path, which predates all of that and must keep working
+ * on a deployment whose store was never prepared by hand.
  *
  * The name is given explicitly and is the one Mongo would generate anyway, so that what this
- * creates and what the migration declares are the same index rather than two that conflict.
+ * creates and what the schema declares are the same index rather than two that conflict.
  */
 async function ensureIndex(): Promise<void> {
   if (indexReady) return;
