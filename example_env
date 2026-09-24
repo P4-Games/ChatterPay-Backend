@@ -312,3 +312,18 @@ CARDANO_STAKING_SYNC_BATCH_LIMIT=50
 # than quietly lowering the bar.
 CARDANO_STAKING_BFF_SECRET=''
 CARDANO_STAKING_ASSERTION_REQUIRED='true'
+
+# Cardano staking - how often ChatterPay will pay to put the same credential back on chain.
+#
+# Registering costs a network fee that the sponsor pays; the deposit is the user's and comes back to
+# them. So a wallet that joins, leaves, is funded again and rejoins costs ChatterPay a fee every turn
+# and costs the user nothing, and each turn looks like an ordinary enrolment from the inside. Without
+# a limit the only bound is the daily fee cap, and reaching that stops enrolment for everybody.
+#
+# It bounds entry only. Withdrawing rewards, deregistering and leaving with the balance are never
+# refused by it, whatever the count says.
+#
+# Zero means no sponsored registration at all, which is a usable state while a rollout is prepared.
+# It is not read as unlimited.
+CARDANO_STAKING_MAX_SPONSORED_REGISTRATIONS=2
+CARDANO_STAKING_SPONSOR_WINDOW_DAYS=30

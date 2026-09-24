@@ -28,7 +28,9 @@ import {
   CARDANO_STAKING_ENABLED,
   CARDANO_STAKING_ENROLMENT_ALLOWLIST,
   CARDANO_STAKING_FEE_DAILY_CAP_ADA,
+  CARDANO_STAKING_MAX_SPONSORED_REGISTRATIONS,
   CARDANO_STAKING_MIN_ENROLMENT_ADA,
+  CARDANO_STAKING_SPONSOR_WINDOW_DAYS,
   CARDANO_STAKING_TERMS_VERSION
 } from './constants';
 
@@ -95,6 +97,46 @@ export interface CardanoStakingConfig {
    * unrestricted sweep across every wallet in the database.
    */
   enrolmentAllowlist: readonly string[] | null;
+  /**
+   * How many times ChatterPay will pay to put the same credential back on chain in one window.
+   *
+   * Registering a stake credential costs a network fee, and the sponsor pays it. The deposit is the
+   * user's and comes back to them, so the only party out of pocket when a wallet joins, leaves and
+   * is funded again is ChatterPay — and nothing about that loop is abusive enough to notice, which
+   * is what makes a limit the right instrument rather than an alarm.
+   *
+   * It bounds **entry only**. Withdrawing rewards, deregistering and leaving with the balance are
+   * never counted and never refused by it: a limit that could strand somebody's ada inside a
+   * position they are trying to leave would be a far worse failure than the cost it saves.
+   *
+   * Zero means no sponsored registration at all, which is a usable state while a rollout is
+   * prepared. It is deliberately not read as "unlimited".
+   */
+  maxSponsoredRegistrationsPerWindow: number;
+  /** How far back that count reaches, in days. */
+  sponsorWindowDays: number;
+}
+
+/** Sponsored registrations allowed per window when nothing is configured. */
+const DEFAULT_MAX_SPONSORED_REGISTRATIONS = 2;
+
+/** Length of that window, in days, when nothing is configured. */
+const DEFAULT_SPONSOR_WINDOW_DAYS = 30;
+
+/**
+ * Reads a whole-number setting.
+ *
+ * @param raw - The configured value.
+ * @param fallback - What to use when it is absent or unusable.
+ * @returns The number. A negative value falls back rather than being clamped to zero, because zero
+ *   is a meaningful setting here — it means "sponsor nothing" — and silently turning a typo into it
+ *   would switch enrolment off across a deployment without saying so.
+ */
+function readCount(raw: string, fallback: number): number {
+  const trimmed = raw.trim();
+  if (trimmed === '') return fallback;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 /**
@@ -157,7 +199,12 @@ export function getCardanoStakingConfig(): CardanoStakingConfig {
     feeDailyCapLovelace:
       feeDailyCapLovelace ?? BigInt(DEFAULT_FEE_DAILY_CAP_ADA) * LOVELACE_PER_ADA,
     drepOwnEnabled: CARDANO_STAKING_DREP_OWN_ENABLED.trim().toLowerCase() === 'true',
-    enrolmentAllowlist: readAllowlist(CARDANO_STAKING_ENROLMENT_ALLOWLIST)
+    enrolmentAllowlist: readAllowlist(CARDANO_STAKING_ENROLMENT_ALLOWLIST),
+    maxSponsoredRegistrationsPerWindow: readCount(
+      CARDANO_STAKING_MAX_SPONSORED_REGISTRATIONS,
+      DEFAULT_MAX_SPONSORED_REGISTRATIONS
+    ),
+    sponsorWindowDays: readCount(CARDANO_STAKING_SPONSOR_WINDOW_DAYS, DEFAULT_SPONSOR_WINDOW_DAYS)
   };
 }
 

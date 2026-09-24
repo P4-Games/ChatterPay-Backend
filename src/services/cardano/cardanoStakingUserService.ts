@@ -52,7 +52,10 @@ import {
 import { type CardanoStakingBalance, resolveStakingBalance } from './cardanoStakingBalanceService';
 import { buildCardanoStakingTransaction } from './cardanoStakingBuilderService';
 import { executeStakingOperation } from './cardanoStakingLifecycleService';
-import { createStakingOperation } from './cardanoStakingOperationService';
+import {
+  countSponsoredRegistrations,
+  createStakingOperation
+} from './cardanoStakingOperationService';
 import { decideRequestedAction, type StakingDecisionRefusal } from './cardanoStakingPlanService';
 import { buildStakingProvider, type CardanoStakingProvider } from './cardanoStakingProviderService';
 import { selectableStakingUtxos } from './cardanoStakingReservationService';
@@ -245,7 +248,11 @@ export async function getStakingView(
     spendableLovelace: spendable,
     poolState,
     operationInFlight: live !== null && live.status !== 'manual_review',
-    signerAvailable: signer.available
+    signerAvailable: signer.available,
+    sponsoredRegistrationsInWindow: await countSponsoredRegistrations(
+      account._id as Types.ObjectId,
+      config.sponsorWindowDays
+    )
   };
 
   const actions: Record<string, StakingDecisionRefusal | null> = {};
@@ -517,7 +524,11 @@ export async function requestStakingAction(
     poolState:
       account.onChain.poolId === null ? null : await staking.poolState(account.onChain.poolId),
     operationInFlight: await hasLiveOperation(account._id as Types.ObjectId),
-    signerAvailable: signer.available
+    signerAvailable: signer.available,
+    sponsoredRegistrationsInWindow: await countSponsoredRegistrations(
+      account._id as Types.ObjectId,
+      config.sponsorWindowDays
+    )
   });
 
   if (decision.action === 'none') {
@@ -865,7 +876,11 @@ export async function quoteStakingExit(
     poolState:
       account.onChain.poolId === null ? null : await staking.poolState(account.onChain.poolId),
     operationInFlight: await hasLiveOperation(account._id as Types.ObjectId),
-    signerAvailable: signer.available
+    signerAvailable: signer.available,
+    sponsoredRegistrationsInWindow: await countSponsoredRegistrations(
+      account._id as Types.ObjectId,
+      config.sponsorWindowDays
+    )
   });
   if (decision.action === 'none') {
     return { ok: false, refusal: 'refused', detail: decision.refusal ?? 'nothing_to_do' };

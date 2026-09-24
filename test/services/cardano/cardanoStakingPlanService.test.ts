@@ -53,6 +53,8 @@ function config(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingCo
     feeDailyCapLovelace: 50_000_000n,
     drepOwnEnabled: false,
     enrolmentAllowlist: null,
+    maxSponsoredRegistrationsPerWindow: 2,
+    sponsorWindowDays: 30,
     ...overrides
   };
 }
@@ -104,6 +106,7 @@ function context(overrides: Partial<StakingDecisionContext> = {}): StakingDecisi
     poolState: null,
     operationInFlight: false,
     signerAvailable: true,
+    sponsoredRegistrationsInWindow: 0,
     ...overrides
   };
 }

@@ -151,6 +151,57 @@ export async function checkStakingOperationReadiness(
 }
 
 /** What an economic operation is being asked to do. */
+/**
+ * Operation statuses that mean a transaction reached, or may have reached, the chain.
+ *
+ * What this list is for is counting what ChatterPay has already paid for, so it errs towards
+ * counting. `signed` and `unknown_submit` are here because a signed transaction may have been
+ * submitted and an unknown one may have landed; `expired_unconfirmed` is here because the attempt
+ * was made even where no fee was ultimately taken. `queued`, `executing`, `cancelled` and
+ * `rejected` are not: nothing was spent and nothing can land.
+ *
+ * Counting one attempt too many costs a wallet one sponsored registration it could have had.
+ * Counting one too few lets a retry loop spend the sponsor's ada without bound. The second failure
+ * is the expensive one, so the ambiguous cases count.
+ */
+const REACHED_CHAIN_STATUSES = [
+  'signed',
+  'submitted',
+  'unknown_submit',
+  'confirmed',
+  'expired_unconfirmed',
+  'manual_review'
+] as const;
+
+/**
+ * How many times this credential has been put on chain at ChatterPay's expense, recently.
+ *
+ * Only registrations. A delegation change or a withdrawal also costs a fee, but neither is a
+ * re-entry: what the limit is about is the loop of joining, leaving and joining again, and only the
+ * registration reopens it.
+ *
+ * @param accountId - The staking account.
+ * @param windowDays - How far back to look.
+ * @param now - The current time, injectable for tests.
+ * @returns The count. Zero when the window is zero or negative, since nothing can fall inside it.
+ */
+export async function countSponsoredRegistrations(
+  accountId: Types.ObjectId,
+  windowDays: number,
+  now: Date = new Date()
+): Promise<number> {
+  if (!Number.isFinite(windowDays) || windowDays <= 0) return 0;
+
+  const since = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
+
+  return CardanoStakingOperation.countDocuments({
+    accountId,
+    kind: 'register_and_delegate',
+    status: { $in: REACHED_CHAIN_STATUSES },
+    createdAt: { $gte: since }
+  });
+}
+
 export interface StakingOperationIntent {
   kind: CardanoStakingOperationKind;
   /** `cron`, or the authenticated channel that asked for it. */

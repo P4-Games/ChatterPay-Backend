@@ -59,6 +59,8 @@ export type StakingDecisionRefusal =
    * enrolment list — all three of which otherwise read as reasons to enrol it.
    */
   | 'opted_out'
+  /** ChatterPay has already paid to put this credential on chain as often as it will. */
+  | 'sponsored_reentry_limit'
   /** The wallet does not clear the bar. */
   | 'not_eligible'
   /** Already registered. Registering again is refused by the ledger. */
@@ -158,6 +160,15 @@ export interface StakingDecisionContext {
    * field exists to prevent. Resolved by `stakingSignerFor`.
    */
   signerAvailable: boolean;
+  /**
+   * How many times this credential has already been put on chain inside the sponsor window.
+   *
+   * Required rather than defaulted for the same reason `signerAvailable` is: a default of zero
+   * would let any caller that forgot to count declare a wallet enrollable, and the whole point of
+   * the limit is that the caller cannot forget. Counted by
+   * `countSponsoredRegistrations`.
+   */
+  sponsoredRegistrationsInWindow: number;
 }
 
 /**
@@ -217,6 +228,15 @@ export function decideAutomaticAction(
       context.spendableLovelace
     );
     if (!assessment.eligible) return refuse('not_eligible', assessment.refusal);
+    // Last, because it is the only refusal here that is about ChatterPay rather than about the
+    // wallet. Reported after eligibility so an account that is refused for its own reasons says
+    // so, rather than being told it has used up a budget it never reached.
+    if (!withinSponsoredReentryLimit(context)) {
+      return refuse(
+        'sponsored_reentry_limit',
+        `${context.sponsoredRegistrationsInWindow} in ${context.config.sponsorWindowDays}d`
+      );
+    }
     return act('register_and_delegate');
   }
 
@@ -308,9 +328,17 @@ export function decideRequestedAction(
         context.addressBytes,
         context.spendableLovelace
       );
-      return assessment.eligible
-        ? act('register_and_delegate')
-        : refuse('not_eligible', assessment.refusal);
+      if (!assessment.eligible) return refuse('not_eligible', assessment.refusal);
+      // The limit binds a user asking as well as the sweep, because the fee is ChatterPay's
+      // either way. What it never binds is leaving: `withdraw_rewards`, `deregister` and
+      // `exit_and_send_max` do not reach this branch.
+      if (!withinSponsoredReentryLimit(context)) {
+        return refuse(
+          'sponsored_reentry_limit',
+          `${context.sponsoredRegistrationsInWindow} in ${context.config.sponsorWindowDays}d`
+        );
+      }
+      return act('register_and_delegate');
     }
 
     case 'withdraw_rewards': {
@@ -405,6 +433,25 @@ function commonRefusals(
  */
 function optOutOf(account: ICardanoStakingAccount): CardanoStakingOptOut | null {
   return account.optOut ?? null;
+}
+
+/**
+ * Whether ChatterPay will pay to register this credential again.
+ *
+ * Registering costs a network fee the sponsor pays; the deposit is the user's and comes back to
+ * them. So a wallet that joins, leaves, is funded again and rejoins costs ChatterPay a fee per turn
+ * and costs the user nothing, and nothing about that loop looks wrong from the inside — which is
+ * what makes a limit the right instrument. Without one the only bound is the daily fee budget, and
+ * reaching that stops enrolment for *everybody*, which turns one wallet's churn into an outage.
+ *
+ * It bounds entry and nothing else. Every way out and every way of getting one's own ada back is
+ * decided elsewhere and is never consulted here.
+ *
+ * @param context - The decision context, carrying the count and the configured limit.
+ * @returns `true` when another sponsored registration is within the limit.
+ */
+function withinSponsoredReentryLimit(context: StakingDecisionContext): boolean {
+  return context.sponsoredRegistrationsInWindow < context.config.maxSponsoredRegistrationsPerWindow;
 }
 
 /**

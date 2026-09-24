@@ -54,6 +54,8 @@ function stakingConfig(overrides: Partial<CardanoStakingConfig> = {}): CardanoSt
     feeDailyCapLovelace: 50_000_000n,
     drepOwnEnabled: false,
     enrolmentAllowlist: null,
+    maxSponsoredRegistrationsPerWindow: 2,
+    sponsorWindowDays: 30,
     ...overrides
   };
 }

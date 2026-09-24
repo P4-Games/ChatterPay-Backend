@@ -50,7 +50,10 @@ import {
   reconcileStakingOperation
 } from './cardanoStakingLifecycleService';
 import { observeStakingAccount } from './cardanoStakingObservationService';
-import { createStakingOperation } from './cardanoStakingOperationService';
+import {
+  countSponsoredRegistrations,
+  createStakingOperation
+} from './cardanoStakingOperationService';
 import {
   decideAutomaticAction,
   type StakingAction,
@@ -536,7 +539,11 @@ async function decide(
     spendableLovelace: spendable,
     poolState: null,
     operationInFlight: await hasLiveOperation(subject._id as Types.ObjectId),
-    signerAvailable: signer.available
+    signerAvailable: signer.available,
+    sponsoredRegistrationsInWindow: await countSponsoredRegistrations(
+      subject._id as Types.ObjectId,
+      config.sponsorWindowDays
+    )
   });
 }
 

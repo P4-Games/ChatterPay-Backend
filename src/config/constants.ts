@@ -105,6 +105,8 @@ const {
   CARDANO_STAKING_FEE_DAILY_CAP_ADA: cardanoStakingFeeDailyCapAda = '',
   CARDANO_STAKING_DREP_OWN_ENABLED: cardanoStakingDrepOwnEnabled = 'false',
   CARDANO_STAKING_ENROLMENT_ALLOWLIST: cardanoStakingEnrolmentAllowlist = '',
+  CARDANO_STAKING_MAX_SPONSORED_REGISTRATIONS: cardanoStakingMaxSponsoredRegistrations = '',
+  CARDANO_STAKING_SPONSOR_WINDOW_DAYS: cardanoStakingSponsorWindowDays = '',
   CARDANO_STAKING_SYNC_SECRET: cardanoStakingSyncSecret = '',
   CARDANO_STAKING_SYNC_BATCH_LIMIT: cardanoStakingSyncBatchLimit = '',
   CARDANO_STAKING_SYNC_EXECUTE: cardanoStakingSyncExecute = 'false',
@@ -435,6 +437,13 @@ export const CARDANO_STAKING_TERMS_VERSION: string = cardanoStakingTermsVersion;
 export const CARDANO_STAKING_FEE_DAILY_CAP_ADA: string = cardanoStakingFeeDailyCapAda;
 export const CARDANO_STAKING_DREP_OWN_ENABLED: string = cardanoStakingDrepOwnEnabled;
 export const CARDANO_STAKING_ENROLMENT_ALLOWLIST: string = cardanoStakingEnrolmentAllowlist;
+// How many times ChatterPay will pay to put the same credential back on chain within the window
+// below. Registering costs a network fee that the sponsor pays and the deposit is the user's, so a
+// wallet that joins, leaves and is funded again is a loop ChatterPay pays for every turn of.
+export const CARDANO_STAKING_MAX_SPONSORED_REGISTRATIONS: string =
+  cardanoStakingMaxSponsoredRegistrations;
+// The length of that window, in days.
+export const CARDANO_STAKING_SPONSOR_WINDOW_DAYS: string = cardanoStakingSponsorWindowDays;
 // The one credential that reaches the staking sync endpoint. Held by this deployment and by the
 // schedule, and by nothing else: it is deliberately not one of the product tokens, so holding the
 // frontend or bot token does not let anything start a run that spends sponsor fees. Empty means the
