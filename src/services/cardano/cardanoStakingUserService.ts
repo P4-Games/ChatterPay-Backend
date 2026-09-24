@@ -201,6 +201,16 @@ export interface StakingUserView {
   termsVersion: string | null;
   /** The version this deployment currently asks for, so a change of terms is visible. */
   currentTermsVersion: string;
+  /**
+   * Whether this deployment requires the terms to have been accepted before enrolling a wallet.
+   *
+   * A product setting, not a credential: it says which flow the screen is in. False means enrolment
+   * is automatic and there is nothing for the user to accept, so a screen offering to join would be
+   * offering a step that does not exist.
+   */
+  consentRequired: boolean;
+  /** The balance a wallet must hold before automatic enrolment considers it, in lovelace. */
+  minimumEnrolmentLovelace: string;
   registered: boolean;
   registrationOrigin: string;
   poolId: string | null;
@@ -325,6 +335,8 @@ export async function getStakingView(
     actions[action] = decideRequestedAction(account, action, context).refusal;
   }
 
+  const enrolment = actions.register_and_delegate ?? null;
+
   const [rewards, operations] = await Promise.all([
     CardanoStakingReward.find({ accountId: account._id })
       .sort({ epoch: -1 })
@@ -344,8 +356,12 @@ export async function getStakingView(
       state: deriveStakingAccountState(
         account,
         live === null ? null : { kind: live.kind, status: live.status },
-        null,
-        getCardanoStakingConfig().consentRequired
+        // Taken from the decision that was just made for this account rather than left unanswered.
+        // Without it every unregistered wallet reads `awaiting_funds`, including one that clears the
+        // threshold and is about to be enrolled — which tells the user to send ada they already have.
+        // Only these two refusals say anything about the balance; the rest leave no opinion.
+        enrolment === null ? 'sufficient' : enrolment === 'not_eligible' ? 'insufficient' : null,
+        config.consentRequired
       ),
       optedIn: account.preference.enabled,
       // Normalised: a document written before the field existed carries no `optOut` at all, and the
@@ -353,6 +369,8 @@ export async function getStakingView(
       optOut: account.optOut ?? null,
       termsVersion: account.termsConsent?.version ?? null,
       currentTermsVersion: config.termsVersion,
+      consentRequired: config.consentRequired,
+      minimumEnrolmentLovelace: String(config.minimumEnrolmentLovelace),
       registered: account.onChain.registered,
       registrationOrigin: account.onChain.registrationOrigin,
       poolId: account.onChain.poolId,

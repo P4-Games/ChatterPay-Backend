@@ -95,6 +95,35 @@ describe('the staking credentials reach the process at run time only', () => {
   });
 });
 
+describe('what the staking screen is told about the configuration', () => {
+  /** The module that builds the payload the dashboard reads. */
+  const view = repoFile('src/services/cardano/cardanoStakingUserService.ts');
+
+  it.each(RUNTIME_ONLY)('does not carry %s', (name) => {
+    // The payload crosses to a browser. A credential named in the module that builds it is one
+    // rename away from being sent, and the two here are the ones that would matter.
+    expect(view.includes(name)).toBe(false);
+  });
+
+  it('carries whether the terms have to be accepted', () => {
+    // The screen has two flows and no way to choose between them without this. Reading it from a
+    // setting the browser cannot see is why it is answered rather than inferred.
+    expect(view).toContain('consentRequired: config.consentRequired');
+  });
+
+  it('carries the balance automatic enrolment requires', () => {
+    // Shown to a user who has not reached it. A copy of the figure on the other side would be a
+    // second source of truth for a number that decides whether somebody is enrolled.
+    expect(view).toContain('minimumEnrolmentLovelace: String(config.minimumEnrolmentLovelace)');
+  });
+
+  it('reads both from the resolved configuration rather than from the environment', () => {
+    // `process.env` in this module would bypass the parsing and the defaults that the configuration
+    // applies, and would make the payload depend on a variable nobody validated.
+    expect(view).not.toContain('process.env');
+  });
+});
+
 describe('the staking settings that are configuration', () => {
   it.each(BUILD_TIME_SETTINGS)('%s is declared in the Dockerfile', (name) => {
     // The other half of the rule. These are not credentials, they belong in the image like every
