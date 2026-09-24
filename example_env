@@ -253,3 +253,62 @@ CARDANO_ROUTE_DUST_TO_SPONSOR='false'
 # Address this deployment derives for its own startup check. If the backend stops producing it,
 # something the derivation depends on changed and the process refuses to start. Empty switches it off.
 CARDANO_DERIVATION_CHECK=''
+
+# Cardano staking - the whole family, off by default. Nothing below does anything while
+# CARDANO_STAKING_ENABLED is 'false': the plan service refuses every action and the sync endpoint
+# answers that staking is not enabled in this deployment.
+#
+# CARDANO_STAKING_MIN_ENROLMENT_ADA is the balance below which a wallet is not worth enrolling,
+# because the network fee of registering it would outweigh what it can earn.
+# CARDANO_STAKING_DEFAULT_POOL_ID is the pool a newly enrolled credential delegates to.
+# CARDANO_STAKING_TERMS_VERSION is the version a user consents to. Bumping it asks everyone again.
+# CARDANO_STAKING_FEE_DAILY_CAP_ADA is the most ChatterPay will spend on network fees in a day,
+# across every account. Reached, the sweep stops starting new operations and says so.
+CARDANO_STAKING_ENABLED='false'
+CARDANO_STAKING_MIN_ENROLMENT_ADA=10
+CARDANO_STAKING_DEFAULT_POOL_ID=''
+CARDANO_STAKING_TERMS_VERSION='1'
+CARDANO_STAKING_FEE_DAILY_CAP_ADA=5
+
+# Cardano staking - who the automatic sweep may enrol. A comma separated list of phone numbers;
+# empty enrols nobody, which is how a deployment starts. It gates entry only: an account already
+# registered can always withdraw its rewards and leave, whatever this says, because a list that
+# could trap funds would be a list nobody should be able to edit.
+#
+# It holds phone numbers, so keep the pilot list short and drop it once the pilot is over.
+CARDANO_STAKING_ENROLMENT_ALLOWLIST=''
+
+# Cardano staking - own DRep registration. Off, and the code paths behind it are not wired to any
+# route: the models and the flag exist so the feature has somewhere to land, not because it runs.
+CARDANO_STAKING_DREP_OWN_ENABLED='false'
+
+# Cardano staking - the scheduled sync pass.
+#
+# CARDANO_STAKING_SYNC_SECRET is the credential the schedule presents, and the only thing standing
+# in front of an endpoint that can start transactions. Generate it, never type it, and do not point
+# it at FRONTEND_TOKEN or CHATIZALO_TOKEN: those are held by the web routes and by the bot, and the
+# backend refuses a configuration that reuses them. Under 32 characters is refused as well. Empty
+# means the endpoint authorises nobody, which is the safe state and also a broken schedule.
+#
+#   openssl rand -base64 48
+#
+# CARDANO_STAKING_SYNC_EXECUTE is what makes a run able to build, sign and submit. Off by default:
+# a deployment that starts spending sponsor fees the moment the schedule fires should have been
+# told to. With it off the run still reconciles and refreshes, which is the useful half.
+# CARDANO_STAKING_SYNC_BATCH_LIMIT is how many accounts one pass refreshes. Empty means 50.
+CARDANO_STAKING_SYNC_SECRET=''
+CARDANO_STAKING_SYNC_EXECUTE='false'
+CARDANO_STAKING_SYNC_BATCH_LIMIT=50
+
+# Cardano staking - the signature the web routes put on a staking mutation.
+#
+# CARDANO_STAKING_BFF_SECRET is shared with the Next.js routes and with nothing else. It is what
+# lets the backend tell a request that came from a route which resolved a session apart from
+# anything else holding the internal token, and it must never reach a browser bundle. The same
+# value goes in the frontend environment under the same name.
+#
+# CARDANO_STAKING_ASSERTION_REQUIRED is whether mutations must carry that signature. Required
+# unless a deployment says otherwise in so many words, so an unprovisioned secret refuses rather
+# than quietly lowering the bar.
+CARDANO_STAKING_BFF_SECRET=''
+CARDANO_STAKING_ASSERTION_REQUIRED='true'
