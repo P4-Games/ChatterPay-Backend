@@ -98,8 +98,9 @@ const {
   CARDANO_ROUTE_DUST_TO_SPONSOR: cardanoRouteDustToSponsor = 'false',
   CARDANO_SPONSOR_WALLET_ID: cardanoSponsorWalletId = '',
   CARDANO_DERIVATION_CHECK: cardanoDerivationCheck = '',
+  CARDANO_SPONSOR_DERIVATION_CHECK: cardanoSponsorDerivationCheck = '',
   CARDANO_STAKING_SYNC_SECRET: cardanoStakingSyncSecret = '',
-  CARDANO_STAKING_BFF_SECRET: cardanoStakingBffSecret = '',
+  CARDANO_STAKING_FRONTEND_BFF_SECRET: cardanoStakingFrontendBffSecret = '',
   TELEGRAM_BOT_API_KEY,
   SECURITY_PIN_LENGTH: securityPinLength = 6,
   SECURITY_PIN_MAX_FAILED_ATTEMPTS: securityPinMaxFailedAttempts = 3,
@@ -418,6 +419,7 @@ export const CARDANO_RECYCLE_DESTINATION_UTXO: string = cardanoRecycleDestinatio
 export const CARDANO_ROUTE_DUST_TO_SPONSOR: string = cardanoRouteDustToSponsor;
 export const CARDANO_SPONSOR_WALLET_ID: string = cardanoSponsorWalletId;
 export const CARDANO_DERIVATION_CHECK: string = cardanoDerivationCheck.trim();
+export const CARDANO_SPONSOR_DERIVATION_CHECK: string = cardanoSponsorDerivationCheck.trim();
 // The one credential that reaches the staking sync endpoint. Held by this deployment and by the
 // schedule, and by nothing else: it is deliberately not one of the product tokens, so holding the
 // frontend or bot token does not let anything start a run that spends sponsor fees. Empty means the
@@ -425,7 +427,6 @@ export const CARDANO_DERIVATION_CHECK: string = cardanoDerivationCheck.trim();
 export const CARDANO_STAKING_SYNC_SECRET: string = cardanoStakingSyncSecret;
 // Shared with the Next.js routes and with nothing else. It is what lets the backend tell a request
 // that came from a route which authenticated a session apart from anything else holding the internal
-// token, and it must never reach a browser bundle.
-export const CARDANO_STAKING_BFF_SECRET: string = cardanoStakingBffSecret;
-// Whether staking mutations must carry that signature. Required unless a deployment says otherwise in
-// so many words, so an unprovisioned secret refuses rather than quietly lowering the bar.
+// token, and it must never reach a browser bundle. Empty means every staking mutation is refused:
+// the signature is not optional.
+export const CARDANO_STAKING_FRONTEND_BFF_SECRET: string = cardanoStakingFrontendBffSecret;

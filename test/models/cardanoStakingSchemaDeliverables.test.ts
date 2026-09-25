@@ -35,7 +35,7 @@ import { STAKING_COLLECTIONS } from '../../src/models/cardanoStakingCollections'
  */
 const BDD_DIR = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
-  '../../../_TODO/_0_roadmap_tareas/1-doing/b2c_cardano_stacking/bdd'
+  '../../../_TODO/_0_roadmap_tareas/1-doing/b2c_cardano_staking/bdd'
 );
 
 /** The database deliverables for the ChatterPay database. */

@@ -45,7 +45,7 @@ vi.mock('../../../src/config/constants', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/config/constants')>();
   const { cardanoConstantsMock } = await import('../../support/cardanoEnv');
   return Object.defineProperties(cardanoConstantsMock(actual), {
-    CARDANO_STAKING_BFF_SECRET: { get: () => state.bffSecret, enumerable: true },
+    CARDANO_STAKING_FRONTEND_BFF_SECRET: { get: () => state.bffSecret, enumerable: true },
     SECURITY_PIN_ENABLED: { get: () => state.pinEnabled, enumerable: true },
     SECURITY_PIN_HMAC_KEY: { get: () => state.pinKey, enumerable: true }
   });

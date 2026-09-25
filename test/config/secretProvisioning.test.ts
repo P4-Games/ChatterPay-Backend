@@ -3,32 +3,41 @@ import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Where the staking credentials are allowed to exist.
+ * Where the staking credentials are allowed to go, and where their values are not.
  *
  * `CARDANO_STAKING_SYNC_SECRET` is the whole authorisation in front of an endpoint that starts
- * transactions, and `CARDANO_STAKING_BFF_SECRET` signs the assertion that says which session a
- * mutation came from. Both are set on the Cloud Run service, from Secret Manager, and reach the
- * process at run time only.
+ * transactions, and `CARDANO_STAKING_FRONTEND_BFF_SECRET` signs the assertion that says which
+ * session a mutation came from. Both are held in Secret Manager and injected into the Cloud Run
+ * service, which is where the running process reads them.
  *
- * This is asserted here rather than left to a comment because it is a property that breaks silently
- * and usefully. Adding a variable to the Dockerfile is the ordinary way to make a new setting reach
- * the container, it works, and nothing about the result looks wrong — except that the value is now
- * baked into a layer in the registry, where it outlives every rotation and is readable by anybody
- * who can pull the image. The same applies to Cloud Build: routing a credential through it puts the
- * value in the `.env` that `CreateEnv` writes and in the build's own logs and caches.
+ * The build declares both names — Cloud Build pulls them for the step that writes the workspace
+ * `.env`, and the Dockerfile declares the `ARG`/`ENV` pair every setting has. What must not happen
+ * is the *value* travelling into the image: the Build step assembles one `--build-arg` per `ARG`
+ * it finds in the Dockerfile, so a credential that is not excluded from that loop ends up in an
+ * `ENV` layer in the registry, where it outlives every rotation and is readable by anybody who can
+ * pull the image.
  *
- * Neither is needed while the application is built. A credential only the running service reads
- * should exist only where the service runs.
+ * That exclusion is a single word in a space-separated list inside a bash line, which is exactly
+ * the kind of thing that gets lost in an edit and shows no symptom when it does. So it is asserted
+ * rather than left to review.
  *
- * Mentions inside comments are fine and expected: the files explain why the variables are missing,
- * and that explanation is what keeps somebody from helpfully adding them back.
+ * What this does not assert: that the values never reach the build at all. They do — the step that
+ * writes `.env` runs `printenv`, and that is the mechanism this deployment uses. Narrowing that is
+ * a separate decision about the pipeline, not something a test can pin.
  */
 
-/** The credentials that must never travel through a build. */
-const RUNTIME_ONLY = ['CARDANO_STAKING_SYNC_SECRET', 'CARDANO_STAKING_BFF_SECRET'];
+/** The credentials whose values must never be passed into the image. */
+const RUNTIME_ONLY = ['CARDANO_STAKING_SYNC_SECRET', 'CARDANO_STAKING_FRONTEND_BFF_SECRET'];
 
-/** The staking settings that are configuration rather than credentials, and do travel normally. */
-const BUILD_TIME_SETTINGS = [
+/**
+ * Settings that used to travel through the build and no longer exist.
+ *
+ * Every one of them became a field of `blockchains.staking`, read from the network's own document.
+ * They are listed here so that adding one back — to the Dockerfile, to Cloud Build, or to the local
+ * build script — fails instead of quietly reintroducing a second source of truth that the code no
+ * longer reads.
+ */
+const RETIRED_SETTINGS = [
   'CARDANO_STAKING_ENABLED',
   'CARDANO_STAKING_MIN_ENROLMENT_ADA',
   'CARDANO_STAKING_DEFAULT_POOL_ID',
@@ -67,31 +76,66 @@ function instructionLines(text: string, commentPrefix: string): string[] {
     .filter((line) => line.trim() !== '' && !line.trim().startsWith(commentPrefix));
 }
 
-describe('the staking credentials reach the process at run time only', () => {
-  it.each(RUNTIME_ONLY)('%s is not an ARG or ENV in the Dockerfile', (name) => {
-    const lines = instructionLines(repoFile('Dockerfile'), '#');
+/**
+ * The names the Build step refuses to turn into a `--build-arg`.
+ *
+ * Read out of the bash line itself rather than restated here, so the assertion fails when the list
+ * changes and not when somebody reformats around it.
+ *
+ * @returns The excluded names.
+ */
+function buildArgExclusions(): string[] {
+  const line = instructionLines(repoFile('cloudbuild.yaml'), '#').find((candidate) =>
+    candidate.includes("secrets='")
+  );
+  if (line === undefined) throw new Error('the Build step no longer declares a skip list');
+  return (/secrets='([^']*)'/.exec(line)?.[1] ?? '').trim().split(/\s+/);
+}
 
-    expect(lines.filter((line) => line.includes(name))).toEqual([]);
+describe('the staking credentials never reach a layer of the image', () => {
+  it.each(RUNTIME_ONLY)('%s is excluded from the build arguments', (name) => {
+    // The one assertion that matters. Everything else about these two — the ARG, the ENV, the
+    // secretEnv entries — is inert as long as the loop that reads the Dockerfile skips them.
+    expect(buildArgExclusions()).toContain(name);
   });
 
-  it.each(RUNTIME_ONLY)('%s does not travel through Cloud Build', (name) => {
-    // Covers all four ways it could: the two `secretEnv` lists, `availableSecrets`, the substitution
-    // block and the bash guard that assembles build arguments.
-    const lines = instructionLines(repoFile('cloudbuild.yaml'), '#');
+  it.each(
+    RUNTIME_ONLY
+  )('%s is declared in the Dockerfile, which is why the above matters', (name) => {
+    // Not a requirement, a premise. An ARG is what makes the assembly loop consider a name at all,
+    // so if this ever stops being true the exclusion above has nothing left to protect and the
+    // reasoning in this file has to be revisited rather than silently kept.
+    const lines = instructionLines(repoFile('Dockerfile'), '#');
 
-    expect(lines.filter((line) => line.includes(name))).toEqual([]);
+    expect(lines.filter((line) => line.startsWith(`ARG ${name}`))).toHaveLength(1);
   });
 
   it.each(RUNTIME_ONLY)('%s is not passed as a build argument locally either', (name) => {
+    // The local script has no assembly loop and no skip list: it spells its `--build-arg` list out.
+    // A credential added there is a credential baked into every image built on a developer machine.
     const lines = instructionLines(repoFile('scripts/docker-build.sh'), '#');
 
     expect(lines.filter((line) => line.includes(name))).toEqual([]);
   });
 
   it.each(RUNTIME_ONLY)('%s is still documented in example_env', (name) => {
-    // Absent from the build is not the same as undocumented. Somebody configuring a deployment has
-    // to be told the variable exists, and what happens when it does not.
+    // Absent from the build arguments is not the same as undocumented. Somebody configuring a
+    // deployment has to be told the variable exists, and what happens when it does not.
     expect(repoFile('example_env')).toContain(name);
+  });
+
+  it('keeps excluding the credentials that were already excluded', () => {
+    // The list is shared with every other secret in the project. A change made for the two staking
+    // ones must not drop somebody else's on the way through.
+    expect(buildArgExclusions()).toEqual(
+      expect.arrayContaining([
+        'SEED_INTERNAL_SALT_EVM',
+        'SEED_INTERNAL_SALT_CAR',
+        'SIGNING_KEY',
+        'SECURITY_PIN_HMAC_KEY',
+        'CARDANO_PROVIDER_API_KEY'
+      ])
+    );
   });
 });
 
@@ -124,31 +168,28 @@ describe('what the staking screen is told about the configuration', () => {
   });
 });
 
-describe('the staking settings that are configuration', () => {
-  it.each(BUILD_TIME_SETTINGS)('%s is declared in the Dockerfile', (name) => {
-    // The other half of the rule. These are not credentials, they belong in the image like every
-    // other setting, and a missing one is a deployment that silently runs on a default.
-    const text = repoFile('Dockerfile');
+describe('the retired staking settings', () => {
+  it.each(RETIRED_SETTINGS)('%s is gone from the Dockerfile', (name) => {
+    const lines = instructionLines(repoFile('Dockerfile'), '#');
 
-    expect(text).toContain(`ARG ${name}\n`);
-    expect(text).toContain(`ENV ${name} $${name}\n`);
+    expect(lines.filter((line) => line.includes(name))).toEqual([]);
   });
 
-  it.each(BUILD_TIME_SETTINGS)('%s is passed by Cloud Build', (name) => {
-    expect(repoFile('cloudbuild.yaml')).toContain(`- ${name}=\${_${name}}`);
+  it.each(RETIRED_SETTINGS)('%s is gone from Cloud Build', (name) => {
+    const lines = instructionLines(repoFile('cloudbuild.yaml'), '#');
+
+    expect(lines.filter((line) => line.includes(name))).toEqual([]);
   });
 
-  it.each(BUILD_TIME_SETTINGS)('%s has a default so an unaware trigger still builds', (name) => {
-    // Cloud Build fails on a substitution the trigger does not define, so a variable added here
-    // without a default would break every deployment until somebody edited the trigger.
-    expect(repoFile('cloudbuild.yaml')).toMatch(new RegExp(`^\\s+_${name}:`, 'm'));
+  it.each(RETIRED_SETTINGS)('%s is gone from the local build script', (name) => {
+    const lines = instructionLines(repoFile('scripts/docker-build.sh'), '#');
+
+    expect(lines.filter((line) => line.includes(name))).toEqual([]);
   });
 
-  it.each(BUILD_TIME_SETTINGS)('%s is passed by the local build script', (name) => {
-    expect(repoFile('scripts/docker-build.sh')).toContain(`--build-arg ${name}=`);
-  });
+  it.each(RETIRED_SETTINGS)('%s is gone from example_env', (name) => {
+    const lines = instructionLines(repoFile('example_env'), '#');
 
-  it.each(BUILD_TIME_SETTINGS)('%s is documented in example_env', (name) => {
-    expect(repoFile('example_env')).toContain(name);
+    expect(lines.filter((line) => line.includes(name))).toEqual([]);
   });
 });

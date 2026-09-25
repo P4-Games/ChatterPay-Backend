@@ -38,7 +38,7 @@
 import crypto from 'crypto';
 
 import {
-  CARDANO_STAKING_BFF_SECRET,
+  CARDANO_STAKING_FRONTEND_BFF_SECRET,
   SECURITY_PIN_ENABLED,
   SECURITY_PIN_HMAC_KEY
 } from '../../config/constants';
@@ -142,7 +142,7 @@ export function pinGrantRequired(): boolean {
  * @returns The secret, or `null` when none is configured.
  */
 function bffKey(): string | null {
-  const secret = CARDANO_STAKING_BFF_SECRET.trim();
+  const secret = CARDANO_STAKING_FRONTEND_BFF_SECRET.trim();
   return secret === '' ? null : secret;
 }
 

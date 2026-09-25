@@ -35,7 +35,7 @@ const RETIRED = [
  * Secrets. A credential in `blockchains` is readable by anything with read access to the database
  * and travels in every dump of it; these verify callers, so they live where secrets live.
  */
-const KEPT = ['CARDANO_STAKING_SYNC_SECRET', 'CARDANO_STAKING_BFF_SECRET'] as const;
+const KEPT = ['CARDANO_STAKING_SYNC_SECRET', 'CARDANO_STAKING_FRONTEND_BFF_SECRET'] as const;
 
 /**
  * Every TypeScript file under a directory.

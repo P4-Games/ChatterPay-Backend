@@ -188,21 +188,6 @@ POLYMARKET_POLYGON_RPC_URL=''
 POLYMARKET_ADAPTER_AUTH_TOKEN=''
 
 # Cardano
-# Set CARDANO_ENABLED='true' to enable ADA and native-asset (USDCx / USDM / USDA) transfers.
-# The family stays off unless a provider URL is present too: a half-configured Cardano is worse than
-# none, because a transfer would get as far as building and then fail to submit.
-# CARDANO_NETWORK decides the header byte of every address issued (CIP-19) — 'preprod' or 'mainnet'.
-# CARDANO_CHAIN_ID is the internal, non-EIP-155 id (9e11 + network magic). It is frozen once any
-# wallet, transaction or token row has been written with it.
-# CARDANO_PROVIDER_URL also picks the provider: a blockfrost.io root is Blockfrost, anything else
-# is Koios.
-# CARDANO_PROVIDER_API_KEY is a Blockfrost project id or a Koios bearer token. Koios runs without
-# it on the public tier; Blockfrost needs it. On Cloud Run it comes from Secret Manager.
-# CARDANO_TTL_SLOTS: a Preprod slot is one second, so 900 is fifteen minutes. Cardano has no
-# replace-by-fee and no nonce, so the TTL is what makes a stuck transaction resolvable.
-# CARDANO_DEPOSIT_CONFIRMATIONS: blocks required before an output is spendable. Not finality — the
-# guarantee is probabilistic — but the declared answer to the rollback question.
-
 CARDANO_ENABLED='false'
 CARDANO_NETWORK='preprod'
 CARDANO_CHAIN_ID=900000000001
@@ -212,134 +197,29 @@ CARDANO_PROVIDER_TIMEOUT_MS=20000
 CARDANO_TTL_SLOTS=900
 CARDANO_DEPOSIT_CONFIRMATIONS=3
 CARDANO_EXPLORER_URL='https://preprod.cardanoscan.io/transaction/'
-
-# Cardano - who pays what on a transfer. The two settings are independent. This pair describes
-# scheme 1; see CARDANO_FEE_SCHEME below for the other one, which prices its fee in ADA instead.
-#
-#   CARDANO_SPONSOR_FEES  CARDANO_TRANSFER_FEE_USD
-#   false                 0        the user pays the network fee and is charged nothing
-#   false                 0.08     the user pays the network fee and owes the ChatterPay fee
-#   true                  0.08     ChatterPay pays the network fee and charges its own
-#
-# CARDANO_SPONSOR_WALLET_ID names the wallet that funds sponsored transfers.
-#
-# The sponsor wallet has to hold ADA: if it is empty the transfer is refused, rather than charging the user a fee that was promised to be covered.
 CARDANO_SPONSOR_FEES='true'
 CARDANO_TRANSFER_FEE_USD=0.08
 CARDANO_SPONSOR_WALLET_ID='some-text'
-
-# Cardano - which fee scheme runs. Scheme 2 is the default: only an exact '1' selects scheme 1.
-#
-#   CARDANO_FEE_SCHEME=1  opt out, back to the old behaviour: the sender supplies the ADA a token
-#                         drags along, and the ChatterPay fee is
-#                         priced in USD (CARDANO_TRANSFER_FEE_USD). Sending a token moves the
-#                         sender's ADA balance, because that min-ADA is theirs and it goes to the
-#                         recipient.
-#   CARDANO_FEE_SCHEME=2  ChatterPay supplies that ADA, and its fee is priced in ADA
-#                         (CARDANO_TRANSFER_FEE_ADA). The sender's ADA balance does not move and the
-#                         figure on screen is one number. Needs CARDANO_SPONSOR_FEES='true': without
-#                         a sponsor there is no wallet to supply it from, and the scheme reports
-#                         itself off.
-#
-# CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT is the fee for the one transfer that costs ChatterPay more than
-# the network fee: a token going to somebody who does not hold it yet needs a brand new output, and
-# ChatterPay funds its min-ADA — roughly 1.16 ADA that lands in the recipient's wallet and does not
-# come back. Every other transfer, recycled ones included, pays CARDANO_TRANSFER_FEE_ADA. Left unset
-# it falls back to CARDANO_TRANSFER_FEE_ADA, which charges too little rather than nothing.
-#
-# CARDANO_RECYCLE_DESTINATION_UTXO lets a transfer spend the destination's existing output for this
-# token and reissue it as one, so no new min-ADA is needed. Scheme 2 only. Its own setting because it
-# brings a third signature and a third output to race on, and that is worth switching off on its own.
 CARDANO_FEE_SCHEME=2
 CARDANO_TRANSFER_FEE_ADA=0.45
 CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT=1.6
 CARDANO_RECYCLE_DESTINATION_UTXO='false'
 CARDANO_ROUTE_DUST_TO_SPONSOR='false'
 
-# Address this deployment derives for its own startup check. If the backend stops producing it,
-# something the derivation depends on changed and the process refuses to start. Empty switches it off.
+# The two addresses this deployment is verified against at startup, not switches.
+#
+# CARDANO_DERIVATION_CHECK is the address the internal check identifier resolves to, and
+# CARDANO_SPONSOR_DERIVATION_CHECK the one the sponsor wallet resolves to. Both are compared once,
+# before the port opens. While either is missing or no longer matches, Cardano reports itself off
+# and the rest of the backend runs untouched.
+#
+# The sponsor one is only needed while CARDANO_SPONSOR_FEES is on, which is the only state in which
+# that key is derived at all.
+#
+# Neither is generated by the deployment that reads it: an address this process derives and then
+# adopts as its own reference verifies nothing. In an environment that has already issued wallets,
+# the value is taken from an address known to be in use and checked against it before being set.
 CARDANO_DERIVATION_CHECK=''
-
-# Cardano staking - the whole family, off by default. Nothing below does anything while
-# CARDANO_STAKING_ENABLED is 'false': the plan service refuses every action and the sync endpoint
-# answers that staking is not enabled in this deployment.
-#
-# CARDANO_STAKING_MIN_ENROLMENT_ADA is the balance below which a wallet is not worth enrolling,
-# because the network fee of registering it would outweigh what it can earn.
-# CARDANO_STAKING_DEFAULT_POOL_ID is the pool a newly enrolled credential delegates to.
-# CARDANO_STAKING_TERMS_VERSION is the version a user consents to. Bumping it asks everyone again.
-# CARDANO_STAKING_CONSENT_REQUIRED decides whether a wallet has to have accepted those terms before
-# anything enrols it. Off means staking is automatic: a wallet nobody ever asked is enrolled on the
-# technical and economic checks alone, and the only thing that keeps one out is an explicit opt-out.
-# CARDANO_STAKING_FEE_DAILY_CAP_ADA is the most ChatterPay will spend on network fees in a day,
-# across every account. Reached, the sweep stops starting new operations and says so.
-CARDANO_STAKING_ENABLED='false'
-CARDANO_STAKING_MIN_ENROLMENT_ADA=10
-CARDANO_STAKING_DEFAULT_POOL_ID=''
-CARDANO_STAKING_TERMS_VERSION='1'
-CARDANO_STAKING_CONSENT_REQUIRED='false'
-CARDANO_STAKING_FEE_DAILY_CAP_ADA=5
-
-# Cardano staking - who the automatic sweep may enrol. A comma separated list of phone numbers;
-# empty enrols nobody, which is how a deployment starts. It gates entry only: an account already
-# registered can always withdraw its rewards and leave, whatever this says, because a list that
-# could trap funds would be a list nobody should be able to edit.
-#
-# It holds phone numbers, so keep the pilot list short and drop it once the pilot is over.
-CARDANO_STAKING_ENROLMENT_ALLOWLIST=''
-
-# Cardano staking - own DRep registration. Off, and the code paths behind it are not wired to any
-# route: the models and the flag exist so the feature has somewhere to land, not because it runs.
-CARDANO_STAKING_DREP_OWN_ENABLED='false'
-
-# Cardano staking - the scheduled sync pass.
-#
-# CARDANO_STAKING_SYNC_SECRET is the credential the schedule presents, and the only thing standing
-# in front of an endpoint that can start transactions. Generate it, never type it, and do not point
-# it at FRONTEND_TOKEN or CHATIZALO_TOKEN: those are held by the web routes and by the bot, and the
-# backend refuses a configuration that reuses them. Under 32 characters is refused as well. Empty
-# means the endpoint authorises nobody, which is the safe state and also a broken schedule.
-#
-#   openssl rand -base64 48
-#
-# Deployed, it is set on the Cloud Run service from Secret Manager and reaches the process at run
-# time only. It is deliberately absent from the Dockerfile and from cloudbuild.yaml: a credential
-# declared as a Docker ENV is baked into a layer in the registry, where it outlives every rotation
-# and is readable by anybody who can pull the image.
-#
-# CARDANO_STAKING_SYNC_EXECUTE is what makes a run able to build, sign and submit. Off by default:
-# a deployment that starts spending sponsor fees the moment the schedule fires should have been
-# told to. With it off the run still reconciles and refreshes, which is the useful half.
-# CARDANO_STAKING_SYNC_BATCH_LIMIT is how many accounts one pass refreshes. Empty means 50.
+CARDANO_SPONSOR_DERIVATION_CHECK=''
 CARDANO_STAKING_SYNC_SECRET=''
-CARDANO_STAKING_SYNC_EXECUTE='false'
-CARDANO_STAKING_SYNC_BATCH_LIMIT=50
-
-# Cardano staking - the signature the web routes put on a staking mutation.
-#
-# CARDANO_STAKING_BFF_SECRET is shared with the Next.js routes and with nothing else. It is what
-# lets the backend tell a request that came from a route which resolved a session apart from
-# anything else holding the internal token, and it must never reach a browser bundle. The same
-# value goes in the frontend environment under the same name. Deployed, it is set on the Cloud Run
-# service from Secret Manager, like the sync secret above and for the same reason.
-#
-# CARDANO_STAKING_ASSERTION_REQUIRED is whether mutations must carry that signature. Required
-# unless a deployment says otherwise in so many words, so an unprovisioned secret refuses rather
-# than quietly lowering the bar.
-CARDANO_STAKING_BFF_SECRET=''
-CARDANO_STAKING_ASSERTION_REQUIRED='true'
-
-# Cardano staking - how often ChatterPay will pay to put the same credential back on chain.
-#
-# Registering costs a network fee that the sponsor pays; the deposit is the user's and comes back to
-# them. So a wallet that joins, leaves, is funded again and rejoins costs ChatterPay a fee every turn
-# and costs the user nothing, and each turn looks like an ordinary enrolment from the inside. Without
-# a limit the only bound is the daily fee cap, and reaching that stops enrolment for everybody.
-#
-# It bounds entry only. Withdrawing rewards, deregistering and leaving with the balance are never
-# refused by it, whatever the count says.
-#
-# Zero means no sponsored registration at all, which is a usable state while a rollout is prepared.
-# It is not read as unlimited.
-CARDANO_STAKING_MAX_SPONSORED_REGISTRATIONS=2
-CARDANO_STAKING_SPONSOR_WINDOW_DAYS=30
+CARDANO_STAKING_FRONTEND_BFF_SECRET=''

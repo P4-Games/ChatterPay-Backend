@@ -50,11 +50,10 @@ vi.mock('../../../src/config/constants', async (importOriginal) => {
     SECURITY_PIN_LENGTH: { value: 6, enumerable: true },
     SECURITY_PIN_MAX_FAILED_ATTEMPTS: { value: 3, enumerable: true },
     SECURITY_PIN_BLOCK_MINUTES: { value: 5, enumerable: true },
-    CARDANO_STAKING_BFF_SECRET: {
+    CARDANO_STAKING_FRONTEND_BFF_SECRET: {
       value: 'a-fabricated-bff-secret-for-this-suite',
       enumerable: true
-    },
-    CARDANO_STAKING_ASSERTION_REQUIRED: { value: 'true', enumerable: true }
+    }
   });
 });
 
