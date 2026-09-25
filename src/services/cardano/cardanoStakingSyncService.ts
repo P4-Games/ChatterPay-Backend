@@ -597,6 +597,25 @@ async function startAction(
   });
   if (assembly.outcome === 'refused') return `assembly_${assembly.refusal}`;
 
+  // Opened here when the sweep is the one starting the cycle.
+  //
+  // A cycle groups every operation and deposit event of one registration, and an operation cannot
+  // exist without one. The consent write opens a cycle for a wallet whose owner joined deliberately;
+  // a wallet enrolled automatically has no consent write, so without this the sweep decides to enrol
+  // it and then cannot create the operation that would.
+  //
+  // `financingMode` is fixed in the same write and for the same reason it is fixed at consent time:
+  // it says whose the deposit is, and reading it from configuration when the position is unwound
+  // would let a settings change reassign ownership of ada that is already on chain.
+  if (action === 'register_and_delegate' && !account.currentLifecycleId) {
+    const opened = `${String(account._id)}:${Date.now()}`;
+    await CardanoStakingAccount.updateOne(
+      { _id: account._id as Types.ObjectId },
+      { $set: { currentLifecycleId: opened, financingMode: account.financingMode ?? 'user' } }
+    );
+    account.currentLifecycleId = opened;
+  }
+
   const runId = syncRunId(request.chainId, request.jobName, request.scheduledTime);
   let operation: Awaited<ReturnType<typeof createStakingOperation>>;
   try {
