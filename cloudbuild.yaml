@@ -89,6 +89,7 @@ steps:
       - CDC5=${_CDC5}
       - CDC6=${_CDC6}
       - CARDANO_DERIVATION_CHECK=${_CARDANO_DERIVATION_CHECK}
+      - CARDANO_SPONSOR_DERIVATION_CHECK=${_CARDANO_SPONSOR_DERIVATION_CHECK}
     secretEnv: [
       'CHATIZALO_TOKEN',
       'FRONTEND_TOKEN',
@@ -184,7 +185,16 @@ steps:
       '--allow-unauthenticated'
     ]
 
+# Default for the sponsor derivation reference.
+#
+# Here as well as in the trigger so that a deployment that has never been told about it still
+# builds. A trigger that sets it overrides this. Empty is the safe value: the startup check finds
+# no address to compare the sponsor wallet against, reports Cardano off, and leaves every other
+# family running — which is what an environment that has not verified its sponsor key should get.
+#
+# It is not a credential. The address is public, and the check needs it before the port opens.
 substitutions:
+  _CARDANO_SPONSOR_DERIVATION_CHECK: ''
 
 availableSecrets:
   secretManager:
