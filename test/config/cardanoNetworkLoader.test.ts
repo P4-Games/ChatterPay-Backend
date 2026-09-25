@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { loadCardanoNetworkSettings } from '../../src/config/cardanoNetworkLoader';
 import {
   CARDANO_MAINNET_CHAIN_ID,
   CARDANO_PREPROD_CHAIN_ID,
   getCardanoNetworkSettingsState,
-  loadCardanoNetworkSettings,
   resetCardanoNetworkSettings
 } from '../../src/config/cardanoNetworkSettings';
 import Blockchain, { type IBlockchain } from '../../src/models/blockchainModel';

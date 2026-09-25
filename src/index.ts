@@ -1,7 +1,7 @@
 import { start } from '@google-cloud/trace-agent';
 import type { FastifyInstance } from 'fastify/types/instance';
 import mongoose from 'mongoose';
-import { loadCardanoNetworkSettings } from './config/cardanoNetworkSettings';
+import { loadCardanoNetworkSettings } from './config/cardanoNetworkLoader';
 import { $B, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
 import { connectToDatabaseWithRetry } from './config/database';
 import { startServer } from './config/server';
