@@ -42,7 +42,6 @@ import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { buildCardanoProvider } from '../services/cardano/cardanoProviderService';
 import { buildStakingProvider } from '../services/cardano/cardanoStakingProviderService';
-import { verifyStakingSyncCredential } from '../services/cardano/cardanoStakingSyncAuthService';
 import {
   runStakingSync,
   type StakingSyncProvider
@@ -72,26 +71,6 @@ export async function cardanoStakingSync(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<unknown> {
-  // Checked here as well as in the auth hook, and both on purpose. The hook is what keeps the route
-  // from ever being unauthenticated; this one is what keeps the handler from depending on a hook
-  // ordering that a future plugin registration could change. Neither is decorative and the cost is one
-  // hash comparison.
-  const verification = verifyStakingSyncCredential(request.headers.authorization);
-
-  if (!verification.ok) {
-    // A deployment that cannot verify anything has authorised nobody, so an unconfigured secret is a
-    // 401 rather than a 500: saying it as a server error would invite a retry that fails the same way
-    // for the same reason.
-    return returnErrorResponse(
-      'cardanoStakingSync',
-      '',
-      reply,
-      401,
-      'Unauthorized',
-      verification.rejection
-    );
-  }
-
   const config = getCardanoConfig();
   if (!config.enabled) {
     return returnErrorResponse(
