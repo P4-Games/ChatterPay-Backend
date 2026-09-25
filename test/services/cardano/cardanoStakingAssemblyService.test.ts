@@ -20,6 +20,7 @@ import {
   stakingSponsorFor
 } from '../../../src/services/cardano/cardanoStakingSignerService';
 import type { CardanoUtxo } from '../../../src/types/cardanoType';
+import { stakingConfigFixture } from '../../helpers/stakingConfigFixture';
 import { enableCardanoPreprod, setCardanoEnv, setCardanoFeeEnv } from '../../support/cardanoEnv';
 
 vi.mock('../../../src/helpers/envHelper', async (importOriginal) => {
@@ -45,20 +46,12 @@ const RECIPIENT = 'addr_test1vrhdandhv2ngazdseql7v5fkg5utnu629anv9zt25x8vrsqn2mh
  * @returns The configuration.
  */
 function stakingConfig(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingConfig {
-  return {
-    enabled: true,
-    disabledReason: '',
-    minimumEnrolmentLovelace: 5_000_000n,
+  return stakingConfigFixture({
     defaultPoolId: POOL,
     termsVersion: 'dev-v1',
     consentRequired: true,
-    feeDailyCapLovelace: 50_000_000n,
-    drepOwnEnabled: false,
-    enrolmentAllowlist: null,
-    maxSponsoredRegistrationsPerWindow: 2,
-    sponsorWindowDays: 30,
     ...overrides
-  };
+  });
 }
 
 /**

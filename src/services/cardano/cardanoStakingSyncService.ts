@@ -30,7 +30,7 @@ import type { Types } from 'mongoose';
 
 import {
   type CardanoStakingConfig,
-  getCardanoStakingConfig
+  loadCardanoStakingConfig
 } from '../../config/cardanoStakingConfig';
 import { Logger } from '../../helpers/loggerHelper';
 import CardanoStakingAccount, {
@@ -150,10 +150,13 @@ export function syncRunId(chainId: number, jobName: string, scheduledTime: Date)
  * @param request - What to run and how far.
  * @returns What happened.
  */
-export async function runStakingSync(request: StakingSyncRequest): Promise<StakingSyncResult> {
+export async function runStakingSync(input: StakingSyncRequest): Promise<StakingSyncResult> {
+  const config = input.config ?? (await loadCardanoStakingConfig(input.chainId));
+  // Resolved once and carried down. The passes below need the same settings per account, and
+  // re-reading the network document per wallet would multiply one lookup by the batch size.
+  const request: StakingSyncRequest = { ...input, config };
   const now = request.now ?? new Date();
   const runId = syncRunId(request.chainId, request.jobName, request.scheduledTime);
-  const config = request.config ?? getCardanoStakingConfig();
 
   const empty: StakingSyncResult = {
     runId,
@@ -454,7 +457,7 @@ async function refreshAccount(
   await writeState(
     account._id as Types.ObjectId,
     decision.refusal,
-    (request.config ?? getCardanoStakingConfig()).consentRequired
+    (request.config ?? (await loadCardanoStakingConfig(request.chainId))).consentRequired
   );
 
   if (decision.action === 'none') {
@@ -474,7 +477,7 @@ async function refreshAccount(
   await writeState(
     account._id as Types.ObjectId,
     decision.refusal,
-    (request.config ?? getCardanoStakingConfig()).consentRequired
+    (request.config ?? (await loadCardanoStakingConfig(request.chainId))).consentRequired
   );
 }
 
@@ -533,7 +536,7 @@ async function decide(
   user: IUser,
   request: StakingSyncRequest
 ): Promise<StakingDecision> {
-  const config = request.config ?? getCardanoStakingConfig();
+  const config = request.config ?? (await loadCardanoStakingConfig(request.chainId));
   const fresh = await CardanoStakingAccount.findById(account._id).exec();
   const subject = fresh ?? account;
 
@@ -639,7 +642,9 @@ async function startAction(
     budget: {
       chainId: request.chainId,
       window: windowFor(request.now ?? new Date()),
-      capLovelace: String((request.config ?? getCardanoStakingConfig()).feeDailyCapLovelace),
+      capLovelace: String(
+        (request.config ?? (await loadCardanoStakingConfig(request.chainId))).feeDailyCapLovelace
+      ),
       lifecycleId: operation.lifecycleId,
       kind: action
     }

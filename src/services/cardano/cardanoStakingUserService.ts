@@ -21,7 +21,7 @@ import type { Types } from 'mongoose';
 
 import { getCardanoConfig } from '../../config/cardanoConfig';
 import { chargesTransferFee, getCardanoFeeConfig } from '../../config/cardanoFeeConfig';
-import { getCardanoStakingConfig } from '../../config/cardanoStakingConfig';
+import { loadCardanoStakingConfig } from '../../config/cardanoStakingConfig';
 import { SECURITY_PIN_ENABLED } from '../../config/constants';
 import { getPhoneNumberFormatted } from '../../helpers/formatHelper';
 import { Logger } from '../../helpers/loggerHelper';
@@ -48,7 +48,6 @@ import { buildCardanoProvider } from './cardanoProviderService';
 import { assembleStakingPlan } from './cardanoStakingAssemblyService';
 import {
   assertionIdempotencyKey,
-  bffAssertionRequired,
   issuePinGrant,
   pinGrantRequired,
   verifyBffAssertion,
@@ -305,7 +304,7 @@ export async function getStakingView(
   if (!own.ok) return own;
   const { user, account } = own.data;
 
-  const config = getCardanoStakingConfig();
+  const config = await loadCardanoStakingConfig(account.chainId);
   const base = buildCardanoProvider();
   const staking = stakingProvider();
 
@@ -433,7 +432,7 @@ export async function setStakingConsent(
   if (!own.ok) return own;
   const { account } = own.data;
 
-  const config = getCardanoStakingConfig();
+  const config = await loadCardanoStakingConfig(account.chainId);
   const now = new Date();
 
   if (!accept) {
@@ -593,22 +592,13 @@ export async function requestStakingAction(
 
   // Before the gate and before any read. Both of these say *who is asking and for what*, and there is
   // no reason to look anything up on behalf of a request that has not established that.
-  if (bffAssertionRequired()) {
-    const asserted = verifyBffAssertion(options.bffAssertion ?? null, expectation);
-    if (!asserted.ok) {
-      return {
-        ok: false,
-        refusal: 'assertion',
-        detail: `${asserted.rejection}: ${asserted.detail}`
-      };
-    }
-  } else {
-    // A decision somebody wrote down, logged every time it is taken, so it cannot be a gap nobody
-    // remembers opening.
-    Logger.warn(
-      'requestStakingAction',
-      `Cardano staking ${action} accepted without a BFF assertion: CARDANO_STAKING_ASSERTION_REQUIRED is false`
-    );
+  const asserted = verifyBffAssertion(options.bffAssertion ?? null, expectation);
+  if (!asserted.ok) {
+    return {
+      ok: false,
+      refusal: 'assertion',
+      detail: `${asserted.rejection}: ${asserted.detail}`
+    };
   }
 
   let grantNonce: string | null = null;
@@ -627,7 +617,7 @@ export async function requestStakingAction(
   if (!own.ok) return own;
   const { user, account } = own.data;
 
-  const config = getCardanoStakingConfig();
+  const config = await loadCardanoStakingConfig(account.chainId);
   const base = buildCardanoProvider();
   const staking = stakingProvider();
 
@@ -826,15 +816,13 @@ export async function authorizeStakingAction(
     gov: governanceTargetCanonical(target)
   };
 
-  if (bffAssertionRequired()) {
-    const asserted = verifyBffAssertion(options.bffAssertion ?? null, expectation);
-    if (!asserted.ok) {
-      return {
-        ok: false,
-        refusal: 'assertion',
-        detail: `${asserted.rejection}: ${asserted.detail}`
-      };
-    }
+  const asserted = verifyBffAssertion(options.bffAssertion ?? null, expectation);
+  if (!asserted.ok) {
+    return {
+      ok: false,
+      refusal: 'assertion',
+      detail: `${asserted.rejection}: ${asserted.detail}`
+    };
   }
 
   // The account is resolved before the PIN is checked, so a call about a user with no staking account
@@ -955,7 +943,7 @@ export async function getStakingChatSummary(
         account,
         live === null ? null : { kind: live.kind, status: live.status },
         null,
-        getCardanoStakingConfig().consentRequired
+        (await loadCardanoStakingConfig(account.chainId)).consentRequired
       ),
       // The one thing a chat answer must never get wrong: an unreadable balance has to be absent, not
       // zero. "You have no rewards" and "we could not check" are different answers to give somebody.
@@ -1044,7 +1032,7 @@ export async function quoteStakingExit(
   if (!own.ok) return own;
   const { user, account } = own.data;
 
-  const config = getCardanoStakingConfig();
+  const config = await loadCardanoStakingConfig(account.chainId);
   const base = buildCardanoProvider();
   const staking = stakingProvider();
 

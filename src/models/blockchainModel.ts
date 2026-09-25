@@ -74,6 +74,23 @@ export interface CardanoStakingSettings {
   /** Version of the staking terms a user has to have accepted for this network to enrol them. */
   termsVersion: string;
   /**
+   * Whether a wallet must have accepted the terms before anything enrols it.
+   *
+   * With this off, staking is automatic: a wallet that was never asked is treated as one that
+   * agreed, and the sweep enrols it on the technical and economic checks alone. What it never
+   * weakens is an explicit opt-out — consent is the absence of a decision, an opt-out is a
+   * decision, and no setting turns one into the other.
+   */
+  consentRequired: boolean;
+  /**
+   * Addresses automatic enrolment is confined to. Empty means no confinement.
+   *
+   * Unlike `allowlistedPools`, the empty list cannot mean "nobody" here: a list that arrives empty
+   * because nobody filled it would stop every enrolment without saying so. Confinement during a
+   * rollout is expressed by naming the addresses.
+   */
+  enrolmentAllowlist: string[];
+  /**
    * Commercial entry threshold, unrelated to the protocol deposit.
    *
    * It has to clear the deposit **plus** the minimum transfer amount plus room for fees, or a user
@@ -83,6 +100,14 @@ export interface CardanoStakingSettings {
    * minimum at read time.
    */
   minimumUserAdaForEnrollmentLovelace: string;
+  /**
+   * Whether a scheduler run may act, or only observe.
+   *
+   * Off means the sweep still reads the chain, reconciles and records what it found, and signs
+   * nothing. It is what a network runs on while its numbers are being watched, and it is separate
+   * from `enabled` because switching the family off also switches the reads off.
+   */
+  sweepExecutionEnabled: boolean;
   /** Ceiling on wallets touched per scheduler run, so a run finishes inside its deadline. */
   maxWalletsPerRun: number;
   /** Ceiling on provider calls per run, to stay inside the provider's quota. */
@@ -114,20 +139,6 @@ export interface CardanoStakingSettings {
   drepOwnEnabled: boolean;
 }
 
-/** Settings that only a Cardano network has. Absent on every EVM document. */
-export interface CardanoNetworkSettings {
-  /** `testnet` or `mainnet`. Decides the header byte of every address issued (CIP-19). */
-  network: string;
-  /** Provider root URL. The API key, when the provider needs one, lives in the environment. */
-  providerUrl: string;
-  /** Slots of validity given to a transaction, counted from the tip. */
-  ttlSlots: number;
-  /** Confirmations required before an output is spendable. */
-  depositConfirmations: number;
-  /** Present only where staking is configured. A network without it does not stake. */
-  staking?: CardanoStakingSettings;
-}
-
 export interface IBlockchain extends Document {
   name: string;
   /** Execution family. Defaults to `evm` so existing documents keep their meaning. */
@@ -142,8 +153,27 @@ export interface IBlockchain extends Document {
   environment: string;
   supportsEIP1559: boolean;
   externalDeposits: ExternalDeposits;
-  /** Present only on Cardano networks. */
-  cardano?: CardanoNetworkSettings;
+  /**
+   * `testnet` or `mainnet`. Decides the header byte of every address issued (CIP-19).
+   *
+   * This and the three fields below belong to a Cardano network and are absent on an EVM one. They
+   * sit at the top level rather than inside a `cardano` object: the document already says which
+   * family it is, and a wrapper holding four values added a level to every path without adding
+   * anything a reader could not see from `family`.
+   */
+  network?: string;
+  /** Provider root URL. The API key, when the provider needs one, lives in the environment. */
+  providerUrl?: string;
+  /** Slots of validity given to a transaction, counted from the tip. */
+  ttlSlots?: number;
+  /** Confirmations required before an output is spendable. */
+  depositConfirmations?: number;
+  /**
+   * Staking settings for this network. Absent on a network that does not stake, which is why it
+   * stays a section of its own: it is a policy an operator edits as a unit, unlike the four fields
+   * above, which describe how to reach the chain.
+   */
+  staking?: CardanoStakingSettings;
   contracts: {
     entryPoint: string;
     factoryAddress: string;
@@ -247,7 +277,13 @@ const cardanoStakingSchema = new Schema<CardanoStakingSettings>(
       default: 'always_abstain'
     },
     termsVersion: { type: String, required: true },
+    // Automatic staking is the default once the network is enabled: the terms are accepted in the
+    // product surface, and an operator who wants a gate has to ask for it. The opt-out is unaffected
+    // either way.
+    consentRequired: { type: Boolean, required: true, default: false },
+    enrolmentAllowlist: { type: [String], required: true, default: () => [] },
     minimumUserAdaForEnrollmentLovelace: { type: String, required: true },
+    sweepExecutionEnabled: { type: Boolean, required: true, default: false },
     maxWalletsPerRun: { type: Number, required: true, default: 500 },
     maxProviderRequestsPerRun: { type: Number, required: true, default: 1000 },
     maxSponsoredRegistrationsPerAccountRollingWindow: { type: Number, required: true, default: 2 },
@@ -257,17 +293,6 @@ const cardanoStakingSchema = new Schema<CardanoStakingSettings>(
     governanceEnabled: { type: Boolean, required: true, default: false },
     allowlistedDReps: { type: [String], required: true, default: () => [] },
     drepOwnEnabled: { type: Boolean, required: true, default: false }
-  },
-  { _id: false }
-);
-
-const cardanoSettingsSchema = new Schema<CardanoNetworkSettings>(
-  {
-    network: { type: String, required: true },
-    providerUrl: { type: String, required: true },
-    ttlSlots: { type: Number, required: true, default: 900 },
-    depositConfirmations: { type: Number, required: true, default: 3 },
-    staking: { type: cardanoStakingSchema, required: false }
   },
   { _id: false }
 );
@@ -283,6 +308,16 @@ function evmOnly(this: IBlockchain): boolean {
   return (this?.family ?? 'evm') === 'evm';
 }
 
+/**
+ * Required on a Cardano network, absent everywhere else.
+ *
+ * The mirror of {@link evmOnly}: an EVM document has no provider URL to give, and demanding one
+ * would be asking every existing row for a value that means nothing on it.
+ */
+function cardanoOnly(this: IBlockchain): boolean {
+  return this?.family === 'cardano';
+}
+
 const blockchainSchema = new Schema<IBlockchain>({
   name: { type: String, required: true },
   family: { type: String, enum: ['evm', 'cardano'], required: true, default: 'evm' },
@@ -296,7 +331,11 @@ const blockchainSchema = new Schema<IBlockchain>({
   environment: { type: String, required: true },
   supportsEIP1559: { type: Boolean, required: evmOnly },
   externalDeposits: { type: externalDepositsSchema, required: evmOnly },
-  cardano: { type: cardanoSettingsSchema, required: false },
+  network: { type: String, required: cardanoOnly },
+  providerUrl: { type: String, required: cardanoOnly },
+  ttlSlots: { type: Number, required: cardanoOnly, default: 900 },
+  depositConfirmations: { type: Number, required: cardanoOnly, default: 3 },
+  staking: { type: cardanoStakingSchema, required: false },
   contracts: {
     entryPoint: { type: String, required: false },
     factoryAddress: { type: String, required: false },

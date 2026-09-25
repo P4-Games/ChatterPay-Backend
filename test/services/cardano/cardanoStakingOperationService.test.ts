@@ -27,10 +27,10 @@ vi.mock('../../../src/config/cardanoStakingConfig', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/config/cardanoStakingConfig')>();
   return {
     ...actual,
-    getCardanoStakingConfig: () => ({
-      ...actual.getCardanoStakingConfig(),
-      ...(stakingConfig.current ?? {})
-    })
+    loadCardanoStakingConfig: async () => {
+      const { stakingConfigFixture } = await import('../../helpers/stakingConfigFixture');
+      return { ...stakingConfigFixture(), ...(stakingConfig.current ?? {}) };
+    }
   };
 });
 

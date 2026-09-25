@@ -2,7 +2,6 @@ import { Types } from 'mongoose';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CARDANO_PREPROD_CHAIN_ID } from '../../../src/config/cardanoConfig';
-import { getCardanoStakingConfig } from '../../../src/config/cardanoStakingConfig';
 import CardanoStakingAccount from '../../../src/models/cardanoStakingAccountModel';
 import CardanoStakingGovernanceEvent from '../../../src/models/cardanoStakingGovernanceEventModel';
 import { UserModel } from '../../../src/models/userModel';
@@ -17,6 +16,7 @@ import {
   USER_REQUESTABLE_ACTIONS
 } from '../../../src/services/cardano/cardanoStakingUserService';
 import { enableCardanoPreprod } from '../../support/cardanoEnv';
+import { seedStakingNetwork } from '../../support/cardanoStakingNetwork';
 
 vi.mock('../../../src/helpers/envHelper', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/helpers/envHelper')>();
@@ -60,11 +60,15 @@ async function seed(phoneNumber: string): Promise<Types.ObjectId> {
   return account._id as Types.ObjectId;
 }
 
+/** The terms version the seeded network carries, and the one a consent has to be stamped with. */
+const TERMS_VERSION = 'dev-v1';
+
 beforeEach(async () => {
   enableCardanoPreprod();
   await CardanoStakingAccount.deleteMany({});
   await CardanoStakingGovernanceEvent.deleteMany({});
   await UserModel.deleteMany({});
+  await seedStakingNetwork({ termsVersion: TERMS_VERSION });
 });
 
 describe('USER_REQUESTABLE_ACTIONS', () => {
@@ -109,7 +113,7 @@ describe('setStakingConsent', () => {
     expect(result).toMatchObject({ ok: true });
     const stored = await CardanoStakingAccount.findById(accountId).lean();
     expect(stored?.preference.enabled).toBe(true);
-    expect(stored?.termsConsent?.version).toBe(getCardanoStakingConfig().termsVersion);
+    expect(stored?.termsConsent?.version).toBe(TERMS_VERSION);
     expect(stored?.termsConsent?.source).toBe('web');
   });
 
@@ -148,7 +152,7 @@ describe('setStakingConsent', () => {
 
     const stored = await CardanoStakingAccount.findById(accountId).lean();
     expect(stored?.preference.enabled).toBe(false);
-    expect(stored?.termsConsent?.version).toBe(getCardanoStakingConfig().termsVersion);
+    expect(stored?.termsConsent?.version).toBe(TERMS_VERSION);
   });
 
   it('bumps the preference version on every change', async () => {

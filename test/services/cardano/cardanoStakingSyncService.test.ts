@@ -17,6 +17,7 @@ import {
   type StakingSyncProvider,
   syncRunId
 } from '../../../src/services/cardano/cardanoStakingSyncService';
+import { stakingConfigFixture } from '../../helpers/stakingConfigFixture';
 import { enableCardanoPreprod, setCardanoFeeEnv } from '../../support/cardanoEnv';
 
 vi.mock('../../../src/helpers/envHelper', async (importOriginal) => {
@@ -43,20 +44,12 @@ const TICK = new Date('2026-01-01T03:00:00.000Z');
  * @returns The configuration.
  */
 function config(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingConfig {
-  return {
-    enabled: true,
-    disabledReason: '',
-    minimumEnrolmentLovelace: 5_000_000n,
+  return stakingConfigFixture({
     defaultPoolId: POOL,
     termsVersion: 'dev-v1',
     consentRequired: true,
-    feeDailyCapLovelace: 50_000_000n,
-    drepOwnEnabled: false,
-    enrolmentAllowlist: null,
-    maxSponsoredRegistrationsPerWindow: 2,
-    sponsorWindowDays: 30,
     ...overrides
-  };
+  });
 }
 
 /**

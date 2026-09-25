@@ -28,6 +28,7 @@ import {
 } from '../../../src/services/cardano/cardanoStakingSyncService';
 import { setStakingConsent } from '../../../src/services/cardano/cardanoStakingUserService';
 import type { CardanoUtxo } from '../../../src/types/cardanoType';
+import { stakingConfigFixture } from '../../helpers/stakingConfigFixture';
 import { enableCardanoPreprod, setCardanoFeeEnv } from '../../support/cardanoEnv';
 
 vi.mock('../../../src/helpers/envHelper', async (importOriginal) => {
@@ -76,20 +77,12 @@ const PARAMETERS: CardanoStakingProtocolParameters = {
  * @returns The configuration.
  */
 function config(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingConfig {
-  return {
-    enabled: true,
-    disabledReason: '',
-    minimumEnrolmentLovelace: 5_000_000n,
+  return stakingConfigFixture({
     defaultPoolId: POOL,
     termsVersion: 'dev-v1',
     consentRequired: true,
-    feeDailyCapLovelace: 50_000_000n,
-    drepOwnEnabled: false,
-    enrolmentAllowlist: null,
-    maxSponsoredRegistrationsPerWindow: 2,
-    sponsorWindowDays: 30,
     ...overrides
-  };
+  });
 }
 
 const ADDRESS_BYTES = cardanoSignerService.getAccount(

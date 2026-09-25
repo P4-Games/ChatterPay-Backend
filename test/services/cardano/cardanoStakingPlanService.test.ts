@@ -13,6 +13,7 @@ import {
   type StakingDecisionContext
 } from '../../../src/services/cardano/cardanoStakingPlanService';
 import type { CardanoStakingProtocolParameters } from '../../../src/services/cardano/cardanoStakingProviderService';
+import { stakingConfigFixture } from '../../helpers/stakingConfigFixture';
 
 const POOL = 'pool1vvkurfxhajtj4f7x8wjkeet7rg8amz34duy5nux76per5sn3npx';
 const OTHER_POOL = 'pool190dapqls3y9dxuqtexmm80sppjha7e8rhu62xydgwn4jjj07pqm';
@@ -44,20 +45,12 @@ const PARAMETERS: CardanoStakingProtocolParameters = {
  * @returns The configuration.
  */
 function config(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingConfig {
-  return {
-    enabled: true,
-    disabledReason: '',
-    minimumEnrolmentLovelace: 5_000_000n,
+  return stakingConfigFixture({
     defaultPoolId: POOL,
     termsVersion: 'v1',
     consentRequired: true,
-    feeDailyCapLovelace: 50_000_000n,
-    drepOwnEnabled: false,
-    enrolmentAllowlist: null,
-    maxSponsoredRegistrationsPerWindow: 2,
-    sponsorWindowDays: 30,
     ...overrides
-  };
+  });
 }
 
 /**
@@ -260,6 +253,44 @@ describe('cardanoStakingPlanService', () => {
       const decision = decideAutomaticAction(
         account({ registered: true, poolId: POOL, governanceDelegation: null }),
         context()
+      );
+
+      expect(decision.action).toBe('delegate_vote');
+    });
+  });
+
+  describe('the governance surface, as the network document configures it', () => {
+    it('is not offered to a user when the network has it switched off', () => {
+      const decision = decideRequestedAction(
+        account({ registered: true, poolId: POOL, governanceDelegation: { kind: 'none' } }),
+        'delegate_vote',
+        context({ config: config({ governanceEnabled: false }) })
+      );
+
+      expect(decision).toMatchObject({ refusal: 'not_available', detail: 'governance' });
+    });
+
+    it('is offered again when the same document switches it on', () => {
+      const decision = decideRequestedAction(
+        account({ registered: true, poolId: POOL, governanceDelegation: { kind: 'none' } }),
+        'delegate_vote',
+        context({ config: config({ governanceEnabled: true }) })
+      );
+
+      expect(decision.action).toBe('delegate_vote');
+    });
+
+    it('still delegates the vote automatically when a withdrawal depends on it', () => {
+      // Conway refuses a withdrawal from a credential that has not delegated its voting power, so
+      // this one is not the governance feature being offered — it is the rewards being reachable.
+      const decision = decideAutomaticAction(
+        account({
+          registered: true,
+          poolId: POOL,
+          governanceDelegation: { kind: 'none' },
+          withdrawableRewardsLovelace: '8183734'
+        }),
+        context({ config: config({ governanceEnabled: false }) })
       );
 
       expect(decision.action).toBe('delegate_vote');

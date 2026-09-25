@@ -9,6 +9,7 @@ import {
   type StakingDecisionContext
 } from '../../../src/services/cardano/cardanoStakingPlanService';
 import type { CardanoStakingProtocolParameters } from '../../../src/services/cardano/cardanoStakingProviderService';
+import { stakingConfigFixture } from '../../helpers/stakingConfigFixture';
 
 /**
  * How often ChatterPay will pay to put the same credential back on chain.
@@ -48,20 +49,12 @@ const ADDRESS = new Uint8Array(57).fill(7);
  * @returns The configuration.
  */
 function config(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingConfig {
-  return {
-    enabled: true,
-    disabledReason: '',
-    minimumEnrolmentLovelace: 5_000_000n,
+  return stakingConfigFixture({
     defaultPoolId: POOL,
     termsVersion: 'v1',
     consentRequired: true,
-    feeDailyCapLovelace: 50_000_000n,
-    drepOwnEnabled: false,
-    enrolmentAllowlist: null,
-    maxSponsoredRegistrationsPerWindow: 2,
-    sponsorWindowDays: 30,
     ...overrides
-  };
+  });
 }
 
 /**

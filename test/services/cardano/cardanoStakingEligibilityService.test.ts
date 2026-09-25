@@ -11,6 +11,7 @@ import {
   stakingEnrolmentReadiness
 } from '../../../src/services/cardano/cardanoStakingEligibilityService';
 import type { CardanoStakingProtocolParameters } from '../../../src/services/cardano/cardanoStakingProviderService';
+import { stakingConfigFixture } from '../../helpers/stakingConfigFixture';
 
 const PAYMENT = '0x7c3ca0ade35d250f5706a17cbbc9e97402b5c230b26b24b940c77e4c00154636';
 const STAKE = '0xce3b525279e269bac5368d404508d9fa9c527bda6eadbf639fed17673ed50d18';
@@ -35,20 +36,7 @@ const PARAMETERS: CardanoStakingProtocolParameters = {
  * @returns The configuration.
  */
 function config(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingConfig {
-  return {
-    enabled: true,
-    disabledReason: '',
-    minimumEnrolmentLovelace: 5_000_000n,
-    defaultPoolId: 'pool1vvkurfxhajtj4f7x8wjkeet7rg8amz34duy5nux76per5sn3npx',
-    termsVersion: 'v1',
-    consentRequired: true,
-    feeDailyCapLovelace: 50_000_000n,
-    drepOwnEnabled: false,
-    enrolmentAllowlist: null,
-    maxSponsoredRegistrationsPerWindow: 2,
-    sponsorWindowDays: 30,
-    ...overrides
-  };
+  return stakingConfigFixture({ termsVersion: 'v1', consentRequired: true, ...overrides });
 }
 
 describe('cardanoStakingEligibilityService', () => {

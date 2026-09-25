@@ -85,6 +85,8 @@ export type StakingDecisionRefusal =
   | 'no_pool_configured'
   /** This wallet is not on the list automatic enrolment is confined to. */
   | 'not_allowlisted'
+  /** The representative asked for is not on the list this network confines delegation to. */
+  | 'drep_not_allowlisted'
   /**
    * The chain would accept this operation and this deployment cannot produce it.
    *
@@ -390,10 +392,25 @@ export function decideRequestedAction(
 
     case 'delegate_vote': {
       if (!onChain.registered) return refuse('not_registered');
+      // The governance surface is offered per network. What this does not gate is the sweep's own
+      // vote delegation: Conway refuses a withdrawal from a credential that has not delegated its
+      // voting power, so that one is what makes the rewards reachable rather than a feature being
+      // offered, and it is decided in `decideAutomaticAction`.
+      if (!context.config.governanceEnabled) return refuse('not_available', 'governance');
       // Compared by what the identifiers decode to, never as text: the same DRep is spelled three
       // ways across CIP-105, its revision and CIP-129, so a text comparison would read "already
       // there" as a change worth building a transaction for.
       const target = context.governanceTarget ?? null;
+      // An allowlist is confinement only when it names somebody. Empty means the user may delegate
+      // to any registered DRep, which is the opposite of how the pool allowlist reads — narrowing
+      // who may represent a user is ChatterPay choosing their politics.
+      if (
+        target?.kind === 'drep' &&
+        context.config.allowlistedDReps !== null &&
+        !context.config.allowlistedDReps.includes(target.idCip129 ?? '')
+      ) {
+        return refuse('drep_not_allowlisted', target.idCip129 ?? target.kind);
+      }
       if (target !== null && governanceTargetAlreadyInPlace(onChain.governanceDelegation, target)) {
         return refuse('already_delegated', target.idCip129 ?? target.kind);
       }

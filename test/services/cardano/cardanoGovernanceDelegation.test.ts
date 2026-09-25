@@ -28,6 +28,7 @@ import {
 } from '../../../src/services/cardano/cardanoStakingPlanService';
 import type { CardanoStakingProtocolParameters } from '../../../src/services/cardano/cardanoStakingProviderService';
 import type { CardanoProtocolParameters, CardanoUtxo } from '../../../src/types/cardanoType';
+import { stakingConfigFixture } from '../../helpers/stakingConfigFixture';
 
 /**
  * Delegating a vote to each of the three targets, from the decision down to the certificate.
@@ -100,20 +101,12 @@ function target(raw: unknown): ParsedGovernanceTarget {
  * @returns The configuration.
  */
 function config(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingConfig {
-  return {
-    enabled: true,
-    disabledReason: '',
-    minimumEnrolmentLovelace: 5_000_000n,
+  return stakingConfigFixture({
     defaultPoolId: POOL,
     termsVersion: 'v1',
     consentRequired: true,
-    feeDailyCapLovelace: 50_000_000n,
-    drepOwnEnabled: false,
-    enrolmentAllowlist: null,
-    maxSponsoredRegistrationsPerWindow: 2,
-    sponsorWindowDays: 30,
     ...overrides
-  };
+  });
 }
 
 /**

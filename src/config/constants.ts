@@ -98,21 +98,8 @@ const {
   CARDANO_ROUTE_DUST_TO_SPONSOR: cardanoRouteDustToSponsor = 'false',
   CARDANO_SPONSOR_WALLET_ID: cardanoSponsorWalletId = '',
   CARDANO_DERIVATION_CHECK: cardanoDerivationCheck = '',
-  CARDANO_STAKING_ENABLED: cardanoStakingEnabled = 'false',
-  CARDANO_STAKING_MIN_ENROLMENT_ADA: cardanoStakingMinEnrolmentAda = '',
-  CARDANO_STAKING_DEFAULT_POOL_ID: cardanoStakingDefaultPoolId = '',
-  CARDANO_STAKING_TERMS_VERSION: cardanoStakingTermsVersion = '',
-  CARDANO_STAKING_CONSENT_REQUIRED: cardanoStakingConsentRequired = 'true',
-  CARDANO_STAKING_FEE_DAILY_CAP_ADA: cardanoStakingFeeDailyCapAda = '',
-  CARDANO_STAKING_DREP_OWN_ENABLED: cardanoStakingDrepOwnEnabled = 'false',
-  CARDANO_STAKING_ENROLMENT_ALLOWLIST: cardanoStakingEnrolmentAllowlist = '',
-  CARDANO_STAKING_MAX_SPONSORED_REGISTRATIONS: cardanoStakingMaxSponsoredRegistrations = '',
-  CARDANO_STAKING_SPONSOR_WINDOW_DAYS: cardanoStakingSponsorWindowDays = '',
   CARDANO_STAKING_SYNC_SECRET: cardanoStakingSyncSecret = '',
-  CARDANO_STAKING_SYNC_BATCH_LIMIT: cardanoStakingSyncBatchLimit = '',
-  CARDANO_STAKING_SYNC_EXECUTE: cardanoStakingSyncExecute = 'false',
   CARDANO_STAKING_BFF_SECRET: cardanoStakingBffSecret = '',
-  CARDANO_STAKING_ASSERTION_REQUIRED: cardanoStakingAssertionRequired = 'true',
   TELEGRAM_BOT_API_KEY,
   SECURITY_PIN_LENGTH: securityPinLength = 6,
   SECURITY_PIN_MAX_FAILED_ATTEMPTS: securityPinMaxFailedAttempts = 3,
@@ -431,44 +418,14 @@ export const CARDANO_RECYCLE_DESTINATION_UTXO: string = cardanoRecycleDestinatio
 export const CARDANO_ROUTE_DUST_TO_SPONSOR: string = cardanoRouteDustToSponsor;
 export const CARDANO_SPONSOR_WALLET_ID: string = cardanoSponsorWalletId;
 export const CARDANO_DERIVATION_CHECK: string = cardanoDerivationCheck.trim();
-export const CARDANO_STAKING_ENABLED: string = cardanoStakingEnabled;
-export const CARDANO_STAKING_MIN_ENROLMENT_ADA: string = cardanoStakingMinEnrolmentAda;
-export const CARDANO_STAKING_DEFAULT_POOL_ID: string = cardanoStakingDefaultPoolId;
-export const CARDANO_STAKING_TERMS_VERSION: string = cardanoStakingTermsVersion;
-// Whether a wallet has to have accepted the terms before anything may enrol it.
-//
-// When this is off, never having been asked is not a reason to stay out: the sweep treats a wallet
-// with no consent and no preference the same as one that agreed, and enrols it on the ordinary
-// technical and economic checks. What still keeps a wallet out — always, and regardless of this
-// setting — is an explicit opt-out, which is a decision the user made rather than one nobody asked
-// them for.
-//
-// Defaults to requiring it. A deployment that enrols people who were never asked should have said
-// so, and the refusal it produces otherwise is visible in the sync counters rather than silent.
-export const CARDANO_STAKING_CONSENT_REQUIRED: string = cardanoStakingConsentRequired;
-export const CARDANO_STAKING_FEE_DAILY_CAP_ADA: string = cardanoStakingFeeDailyCapAda;
-export const CARDANO_STAKING_DREP_OWN_ENABLED: string = cardanoStakingDrepOwnEnabled;
-export const CARDANO_STAKING_ENROLMENT_ALLOWLIST: string = cardanoStakingEnrolmentAllowlist;
-// How many times ChatterPay will pay to put the same credential back on chain within the window
-// below. Registering costs a network fee that the sponsor pays and the deposit is the user's, so a
-// wallet that joins, leaves and is funded again is a loop ChatterPay pays for every turn of.
-export const CARDANO_STAKING_MAX_SPONSORED_REGISTRATIONS: string =
-  cardanoStakingMaxSponsoredRegistrations;
-// The length of that window, in days.
-export const CARDANO_STAKING_SPONSOR_WINDOW_DAYS: string = cardanoStakingSponsorWindowDays;
 // The one credential that reaches the staking sync endpoint. Held by this deployment and by the
 // schedule, and by nothing else: it is deliberately not one of the product tokens, so holding the
 // frontend or bot token does not let anything start a run that spends sponsor fees. Empty means the
 // endpoint authorises nobody.
 export const CARDANO_STAKING_SYNC_SECRET: string = cardanoStakingSyncSecret;
-export const CARDANO_STAKING_SYNC_BATCH_LIMIT: string = cardanoStakingSyncBatchLimit;
-// Whether a sync run may build, sign and submit. Off by default: a deployment that starts spending
-// sponsor fees the moment the schedule fires should have been told to.
-export const CARDANO_STAKING_SYNC_EXECUTE: string = cardanoStakingSyncExecute;
 // Shared with the Next.js routes and with nothing else. It is what lets the backend tell a request
 // that came from a route which authenticated a session apart from anything else holding the internal
 // token, and it must never reach a browser bundle.
 export const CARDANO_STAKING_BFF_SECRET: string = cardanoStakingBffSecret;
 // Whether staking mutations must carry that signature. Required unless a deployment says otherwise in
 // so many words, so an unprovisioned secret refuses rather than quietly lowering the bar.
-export const CARDANO_STAKING_ASSERTION_REQUIRED: string = cardanoStakingAssertionRequired;

@@ -37,10 +37,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { getCardanoConfig } from '../config/cardanoConfig';
-import {
-  CARDANO_STAKING_SYNC_BATCH_LIMIT,
-  CARDANO_STAKING_SYNC_EXECUTE
-} from '../config/constants';
+import { loadCardanoStakingConfig } from '../config/cardanoStakingConfig';
 import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
 import { buildCardanoProvider } from '../services/cardano/cardanoProviderService';
@@ -113,6 +110,9 @@ export async function cardanoStakingSync(
     body.scheduledTime
   );
 
+  // The network's own settings decide how far a run reaches and whether it may act. Read once here
+  // and handed to the run, so every account in the pass is judged by the same document.
+  const staking = await loadCardanoStakingConfig(config.chainId);
   const provider = stakingSyncProvider();
 
   try {
@@ -124,9 +124,10 @@ export async function cardanoStakingSync(
       // instance id to application code, so this is the best available: it changes per process, which
       // is exactly the granularity a lease needs.
       owner: `${process.pid}@${new Date().toISOString()}`,
-      batchLimit: batchLimit(body.batchLimit),
+      batchLimit: batchLimit(body.batchLimit, staking.maxWalletsPerRun),
       provider,
-      execute: CARDANO_STAKING_SYNC_EXECUTE.trim().toLowerCase() === 'true'
+      execute: staking.sweepExecutionEnabled,
+      config: staking
     });
 
     if (result.refusal === 'staking_disabled') {
@@ -228,11 +229,11 @@ function readTime(raw: unknown): Date | null {
  * How many accounts one pass may refresh.
  *
  * @param requested - What the body asked for, if anything.
+ * @param configured - The network's own ceiling, from `staking.maxWalletsPerRun`.
  * @returns The limit, clamped. A caller may lower it and not raise it past the ceiling: the limit is
  *   what keeps one run from holding its lease for an hour.
  */
-function batchLimit(requested: number | undefined): number {
-  const configured = Number.parseInt(CARDANO_STAKING_SYNC_BATCH_LIMIT.trim(), 10);
+function batchLimit(requested: number | undefined, configured: number): number {
   const base = Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_BATCH_LIMIT;
   if (requested === undefined || !Number.isInteger(requested) || requested <= 0) {
     return Math.min(base, MAX_BATCH_LIMIT);

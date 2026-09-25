@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   assertionIdempotencyKey,
-  bffAssertionRequired,
   issuePinGrant,
   pinGrantRequired,
   signBffAssertion,
@@ -19,7 +18,6 @@ import {
  */
 const state = vi.hoisted(() => ({
   bffSecret: 'a-shared-secret-between-the-bff-and-the-backend',
-  assertionRequired: 'true',
   pinEnabled: true,
   pinKey: 'the-pin-hmac-key'
 }));
@@ -30,7 +28,6 @@ vi.mock('../../../src/config/constants', async (importOriginal) => {
     { ...actual },
     {
       CARDANO_STAKING_BFF_SECRET: { get: () => state.bffSecret, enumerable: true },
-      CARDANO_STAKING_ASSERTION_REQUIRED: { get: () => state.assertionRequired, enumerable: true },
       SECURITY_PIN_ENABLED: { get: () => state.pinEnabled, enumerable: true },
       SECURITY_PIN_HMAC_KEY: { get: () => state.pinKey, enumerable: true }
     }
@@ -64,35 +61,11 @@ const ABSTAIN = {
 
 beforeEach(() => {
   state.bffSecret = 'a-shared-secret-between-the-bff-and-the-backend';
-  state.assertionRequired = 'true';
   state.pinEnabled = true;
   state.pinKey = 'the-pin-hmac-key';
 });
 
 describe('whether assertions are required', () => {
-  it('requires a BFF assertion unless a deployment says otherwise', () => {
-    expect(bffAssertionRequired()).toBe(true);
-  });
-
-  it('accepts an explicit decision to do without one', () => {
-    state.assertionRequired = 'false';
-    expect(bffAssertionRequired()).toBe(false);
-  });
-
-  it('does not read anything else as permission to do without one', () => {
-    // A typo in the setting must not open the gap it was meant to close. Only the word itself does,
-    // whatever its case and whitespace.
-    for (const value of ['', 'no', '0', 'off', 'true']) {
-      state.assertionRequired = value;
-      expect(bffAssertionRequired()).toBe(true);
-    }
-
-    for (const value of ['false', 'FALSE ', ' False']) {
-      state.assertionRequired = value;
-      expect(bffAssertionRequired()).toBe(false);
-    }
-  });
-
   it('ties the PIN grant to the PIN switch', () => {
     // A deployment that turned the PIN off has nothing for a grant to prove.
     state.pinEnabled = false;

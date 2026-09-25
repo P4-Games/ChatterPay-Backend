@@ -31,7 +31,7 @@
 import { getCardanoConfig } from '../../config/cardanoConfig';
 import {
   type CardanoStakingConfig,
-  getCardanoStakingConfig
+  loadCardanoStakingConfig
 } from '../../config/cardanoStakingConfig';
 import { Logger } from '../../helpers/loggerHelper';
 import type { ICardanoStakingAccount } from '../../models/cardanoStakingAccountModel';
@@ -157,7 +157,7 @@ export async function assembleStakingPlan(
   const shape = SHAPE_OF[request.action];
   if (shape === undefined) return refuse('unsupported_action', request.action);
 
-  const config = request.config ?? getCardanoStakingConfig();
+  const config = request.config ?? (await loadCardanoStakingConfig(account.chainId));
 
   // The signer first, before a single chain call. A credential this deployment cannot witness is not
   // going to become signable further down, and asking a provider four questions to arrive at the

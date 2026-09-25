@@ -25,7 +25,7 @@
 
 import { type Types } from 'mongoose';
 
-import { getCardanoStakingConfig } from '../../config/cardanoStakingConfig';
+import { loadCardanoStakingConfig } from '../../config/cardanoStakingConfig';
 import { Logger } from '../../helpers/loggerHelper';
 import CardanoStakingAccount, {
   type ICardanoStakingAccount
@@ -151,7 +151,8 @@ export async function checkStakingOperationReadiness(
 
   if (!PARTICIPATION_KINDS.includes(kind)) return { ok: true };
 
-  if (getCardanoStakingConfig().consentRequired && account.termsConsent === null) {
+  const { consentRequired } = await loadCardanoStakingConfig(account.chainId);
+  if (consentRequired && account.termsConsent === null) {
     return {
       ok: false,
       refusal: 'no_terms_consent',

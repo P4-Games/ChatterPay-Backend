@@ -38,7 +38,6 @@
 import crypto from 'crypto';
 
 import {
-  CARDANO_STAKING_ASSERTION_REQUIRED,
   CARDANO_STAKING_BFF_SECRET,
   SECURITY_PIN_ENABLED,
   SECURITY_PIN_HMAC_KEY
@@ -122,19 +121,6 @@ export type StakingAssertionRejection =
 export type StakingAssertionVerification =
   | { ok: true; claims: StakingAssertionClaims }
   | { ok: false; rejection: StakingAssertionRejection; detail: string };
-
-/**
- * Whether mutations must carry a BFF assertion.
- *
- * Defaults to **required**. A deployment that has not provisioned the secret yet can set the flag to
- * `false` explicitly, which is a decision somebody has to write down rather than a gap that happens to
- * be open — and every call that takes that path says so in the log.
- *
- * @returns `true` when an assertion is mandatory.
- */
-export function bffAssertionRequired(): boolean {
-  return CARDANO_STAKING_ASSERTION_REQUIRED.trim().toLowerCase() !== 'false';
-}
 
 /**
  * Whether a PIN grant must accompany a mutation.

@@ -89,12 +89,10 @@ async function seedCardanoNetwork(): Promise<void> {
     chainId: CARDANO_PREPROD_CHAIN_ID,
     environment: 'TEST',
     explorer: 'https://preprod.cardanoscan.io/transaction/',
-    cardano: {
-      network: 'testnet',
-      providerUrl: 'http://127.0.0.1:1',
-      ttlSlots: 900,
-      depositConfirmations: 3
-    },
+    network: 'testnet',
+    providerUrl: 'http://127.0.0.1:1',
+    ttlSlots: 900,
+    depositConfirmations: 3,
     limits: { transfer: { L1: { D: 14 }, L2: { D: 100 } } }
   });
 }

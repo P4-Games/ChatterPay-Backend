@@ -17,6 +17,7 @@ import {
 } from '../../../src/services/cardano/cardanoStakingPlanService';
 import type { CardanoStakingProtocolParameters } from '../../../src/services/cardano/cardanoStakingProviderService';
 import { deriveStakingAccountState } from '../../../src/services/cardano/cardanoStakingStateService';
+import { stakingConfigFixture } from '../../helpers/stakingConfigFixture';
 
 /**
  * Staking that happens without being asked for, and the one thing that still stops it.
@@ -51,7 +52,8 @@ vi.mock('../../../src/config/cardanoStakingConfig', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/config/cardanoStakingConfig')>();
   return {
     ...actual,
-    getCardanoStakingConfig: () => stakingConfig.current ?? actual.getCardanoStakingConfig()
+    loadCardanoStakingConfig: async () =>
+      stakingConfig.current ?? (await actual.loadCardanoStakingConfig())
   };
 });
 
@@ -80,20 +82,12 @@ const CHAIN_ID = 900000000001;
  * @returns The configuration.
  */
 function config(overrides: Partial<CardanoStakingConfig> = {}): CardanoStakingConfig {
-  return {
-    enabled: true,
-    disabledReason: '',
-    minimumEnrolmentLovelace: 5_000_000n,
+  return stakingConfigFixture({
     defaultPoolId: POOL,
     termsVersion: 'v1',
     consentRequired: false,
-    feeDailyCapLovelace: 50_000_000n,
-    drepOwnEnabled: false,
-    enrolmentAllowlist: null,
-    maxSponsoredRegistrationsPerWindow: 2,
-    sponsorWindowDays: 30,
     ...overrides
-  };
+  });
 }
 
 /**

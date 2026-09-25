@@ -31,7 +31,6 @@ import { enableCardanoPreprod } from '../../support/cardanoEnv';
 
 const state = vi.hoisted(() => ({
   bffSecret: 'a-shared-secret-between-the-bff-and-the-backend',
-  assertionRequired: 'true',
   pinEnabled: true,
   pinKey: 'the-pin-hmac-key'
 }));
@@ -47,7 +46,6 @@ vi.mock('../../../src/config/constants', async (importOriginal) => {
   const { cardanoConstantsMock } = await import('../../support/cardanoEnv');
   return Object.defineProperties(cardanoConstantsMock(actual), {
     CARDANO_STAKING_BFF_SECRET: { get: () => state.bffSecret, enumerable: true },
-    CARDANO_STAKING_ASSERTION_REQUIRED: { get: () => state.assertionRequired, enumerable: true },
     SECURITY_PIN_ENABLED: { get: () => state.pinEnabled, enumerable: true },
     SECURITY_PIN_HMAC_KEY: { get: () => state.pinKey, enumerable: true }
   });
@@ -109,7 +107,6 @@ async function ask(options: {
 beforeEach(() => {
   enableCardanoPreprod();
   state.bffSecret = 'a-shared-secret-between-the-bff-and-the-backend';
-  state.assertionRequired = 'true';
   state.pinEnabled = true;
   state.pinKey = 'the-pin-hmac-key';
 });
