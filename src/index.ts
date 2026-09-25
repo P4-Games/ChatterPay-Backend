@@ -5,7 +5,7 @@ import { $B, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
 import { connectToDatabaseWithRetry } from './config/database';
 import { startServer } from './config/server';
 import { Logger } from './helpers/loggerHelper';
-import { assertCardanoDerivationUnchanged } from './services/cardano/cardanoDerivationCheck';
+import { verifyCardanoDerivation } from './services/cardano/cardanoDerivationCheck';
 import { registerPolymarketApiAdapter } from './services/polymarket/polymarketProxyHelper';
 
 /**
@@ -70,8 +70,10 @@ async function main(): Promise<void> {
     await connectToDatabaseWithRetry();
 
     // Before the port opens: an address issued by a deployment whose derivation moved is an address
-    // nobody can sign for, and no request should be served until that is ruled out.
-    assertCardanoDerivationUnchanged();
+    // nobody can sign for, and no request should be served until that is ruled out. It answers by
+    // switching Cardano off, never by stopping the process — the rest of the product has nothing to
+    // do with this deployment's Cardano keys.
+    verifyCardanoDerivation();
 
     const server = await startServer();
     setupGracefulShutdown(server);

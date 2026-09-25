@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CARDANO_PREPROD_CHAIN_ID } from '../../../src/config/cardanoConfig';
 import type { CardanoStakingConfig } from '../../../src/config/cardanoStakingConfig';
+import Blockchain from '../../../src/models/blockchainModel';
 import CardanoStakingAccount, {
   type ICardanoStakingAccount
 } from '../../../src/models/cardanoStakingAccountModel';
@@ -30,6 +31,7 @@ import { setStakingConsent } from '../../../src/services/cardano/cardanoStakingU
 import type { CardanoUtxo } from '../../../src/types/cardanoType';
 import { stakingConfigFixture } from '../../helpers/stakingConfigFixture';
 import { enableCardanoPreprod, setCardanoFeeEnv } from '../../support/cardanoEnv';
+import { seedStakingNetwork } from '../../support/cardanoStakingNetwork';
 
 vi.mock('../../../src/helpers/envHelper', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/helpers/envHelper')>();
@@ -151,6 +153,11 @@ function account(
 beforeEach(async () => {
   enableCardanoPreprod();
   setCardanoFeeEnv({ sponsorFees: true, sponsorWalletId: 'test-sponsor' });
+  await Blockchain.deleteMany({});
+  // Opting back in is a write that stamps the network's terms version, so it reads the network's
+  // own document. Seeded here rather than mocked: what the write records has to be what the
+  // document says.
+  await seedStakingNetwork();
   await CardanoStakingAccount.deleteMany({});
   await CardanoStakingOperation.deleteMany({});
   await UserModel.deleteMany({});

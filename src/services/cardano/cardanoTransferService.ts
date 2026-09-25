@@ -20,6 +20,7 @@ import { Logger } from '../../helpers/loggerHelper';
 import type {
   CardanoAccount,
   CardanoAssetAmount,
+  CardanoFeeQuote,
   CardanoNetwork,
   CardanoUtxo
 } from '../../types/cardanoType';
@@ -65,6 +66,15 @@ export interface CardanoTransferInput {
   tokenSymbol: string;
   /** Decimals that ticker carries. */
   tokenDecimals: number;
+  /**
+   * Whether what is moving is ADA itself.
+   *
+   * Carried rather than read off the ticker. The catalogue decides this — ADA's row is the one
+   * whose address is the chain's own coin — and a deployment that named that row `tADA` would
+   * otherwise send the fee through a price lookup that answers nothing. Required for the same
+   * reason the ticker is: a caller that forgets it prices the wrong thing.
+   */
+  isAda: boolean;
   /** Bech32 destination address. */
   toAddress: string;
   /**
@@ -511,10 +521,30 @@ export async function executeCardanoTransfer(
     // somebody who does not hold the token yet is the expensive case and is charged as one; every
     // other transfer, recycled ones included, pays the ordinary figure.
     const fundsNewOutput = feeConfig.sponsorMinAda && input.asset !== undefined && !recycling;
-    const chatterPayFee =
+    // `isAda` is passed rather than left to the ticker. The catalogue's own answer is what decides
+    // whether ADA is moving, and a row named something other than `ADA` would otherwise fall
+    // through to a price lookup — pricing a transfer that needs no price, and disagreeing with the
+    // preflight, which reads the same field and passes it.
+    const quote: CardanoFeeQuote =
       sponsorAccount && chargesTransferFee(feeConfig)
-        ? await chatterPayFeeFor(feeConfig, input.tokenSymbol, input.tokenDecimals, fundsNewOutput)
-        : 0n;
+        ? await chatterPayFeeFor(
+            feeConfig,
+            input.tokenSymbol,
+            input.tokenDecimals,
+            fundsNewOutput,
+            input.isAda
+          )
+        : { ok: true, units: 0n };
+    if (!quote.ok) {
+      // Before the build, before any signature and before a UTxO is committed to anything. What
+      // ChatterPay is about to put in — the network fee, and the min-ADA of a new output — is not
+      // recoverable, so a transfer it cannot charge for is one it does not start.
+      throw new CardanoTransferRefusal(
+        'CARDANO_FEE_PRICE_UNAVAILABLE',
+        `no usable price to charge the transfer fee for ${input.tokenSymbol}`
+      );
+    }
+    const chatterPayFee = quote.units;
 
     const built = buildCardanoTransfer({
       utxos,

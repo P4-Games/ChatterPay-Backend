@@ -58,6 +58,26 @@ export function $hx(value: string | undefined): string {
   return Buffer.from(value, 'hex').toString();
 }
 
+/**
+ * A chain id as configured.
+ *
+ * Stricter than the other numbers here, and deliberately so: this one is an input to the key
+ * derivation, so the difference between "nothing was configured" and "something unusable was
+ * configured" decides between the network's own constant and a refusal. `Number.parseInt` is not
+ * used because it reads `900000000001abc` as a number and drops the rest, which is exactly the
+ * typo this has to catch.
+ *
+ * @param raw - The value as configured.
+ * @returns The id, `'invalid'` when a value is present and unusable, or `null` when absent.
+ */
+function chainIdOrInvalid(raw: string | undefined): number | 'invalid' | null {
+  const trimmed = (raw ?? '').trim();
+  if (trimmed === '') return null;
+  if (!/^\d+$/.test(trimmed)) return 'invalid';
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 'invalid';
+}
+
 /** A positive integer, or `null` when the value is absent or unusable. */
 function positiveIntOrNull(raw: string | undefined): number | null {
   if (raw === undefined || raw.trim() === '') return null;
@@ -103,7 +123,7 @@ export function readCardanoEnv(): CardanoEnv {
   return {
     enabled: CARDANO_ENABLED.trim().toLowerCase() === 'true',
     network: CARDANO_NETWORK.trim(),
-    chainId: positiveIntOrNull(CARDANO_CHAIN_ID),
+    chainId: chainIdOrInvalid(CARDANO_CHAIN_ID),
     providerUrl: CARDANO_PROVIDER_URL.trim(),
     providerApiKey: CARDANO_PROVIDER_API_KEY.trim(),
     providerTimeoutMs: positiveIntOrNull(CARDANO_PROVIDER_TIMEOUT_MS),

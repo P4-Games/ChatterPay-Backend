@@ -28,6 +28,7 @@
 
 import type { Types } from 'mongoose';
 
+import { getCardanoConfig } from '../../config/cardanoConfig';
 import {
   type CardanoStakingConfig,
   loadCardanoStakingConfig
@@ -170,7 +171,13 @@ export async function runStakingSync(input: StakingSyncRequest): Promise<Staking
     refusal: null
   };
 
-  if (!config.enabled) {
+  // Two flags, because they answer two questions. `config` is the network's staking settings, and
+  // the one below is whether this deployment may act on Cardano at all — an unverified derivation
+  // or an unusable chain id switches it off, and a sweep is the one caller that signs without
+  // anybody having asked it to. The controller checks it too; this is the service refusing on its
+  // own behalf, so a second caller cannot start a sweep the endpoint would have turned away.
+  const cardano = getCardanoConfig();
+  if (!config.enabled || !cardano.enabled) {
     return { ...empty, status: 'failed', refusal: 'staking_disabled' };
   }
 

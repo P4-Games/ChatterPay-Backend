@@ -19,6 +19,7 @@ import type {
   CardanoNetwork,
   CardanoProviderKind
 } from '../types/cardanoType';
+import { cardanoDerivationDisabledReason } from './cardanoDerivationState';
 
 /**
  * Internal chain ids for networks that have no EIP-155 chain id.
@@ -132,22 +133,39 @@ function resolveProviderKind(url: string): CardanoProviderKind {
 }
 
 /**
+ * The chain id a network is identified by.
+ *
+ * @param network - The resolved network.
+ * @returns Its frozen internal id.
+ */
+function chainIdOf(network: CardanoNetwork): number {
+  return network === 'mainnet' ? CARDANO_MAINNET_CHAIN_ID : CARDANO_PREPROD_CHAIN_ID;
+}
+
+/**
  * Resolves the Cardano configuration from the environment.
  *
  * Read as a function rather than frozen at import so tests can drive it without reloading modules.
  *
+ * @param withDerivationState - Whether the startup derivation verdict takes part in the answer.
+ *   Only the check itself passes `false`, because it has to know which network and chain id to
+ *   derive against before there is a verdict to consult.
  * @returns The configuration, with `enabled` false and `disabledReason` set whenever anything the
  *   family needs is missing.
  */
-export function getCardanoConfig(): CardanoConfig {
+function resolveCardanoConfig(withDerivationState: boolean): CardanoConfig {
   const env = readCardanoEnv();
   const readNetwork = resolveNetwork(env.network);
   // Unreadable network: everything below still resolves, against testnet, so the shape of the
   // returned config is the usual one -- but `disabledReason` further down keeps the family off, so
   // none of it is ever used.
   const network: CardanoNetwork = readNetwork ?? 'testnet';
-  const chainId =
-    env.chainId ?? (network === 'mainnet' ? CARDANO_MAINNET_CHAIN_ID : CARDANO_PREPROD_CHAIN_ID);
+  // The network's own constant, always -- never the configured value, even when one was set. A
+  // configured id is checked against this and the family goes off when they disagree, so the only
+  // number that ever leaves here is one of the two frozen ids. That is what keeps a typo, or the
+  // chain id of an EVM network, out of the catalogue queries and the wallet rows that are written
+  // with it.
+  const chainId = chainIdOf(network);
   // Stripped after the fallback rather than before it, so a configured value of nothing but
   // slashes reads as a value that resolved to nothing -- which is a misconfiguration to report,
   // not an absent setting to paper over with the default.
@@ -158,22 +176,36 @@ export function getCardanoConfig(): CardanoConfig {
   // reads to the user as a chain that is down.
   const providerKeyMissing = providerKind === 'blockfrost' && !env.providerApiKey;
 
-  // The last two are what the derivation is made of. Without either, this deployment would issue
-  // well-formed addresses that are not the ones it issued yesterday — and nothing downstream can
-  // tell the difference — so the family stays off instead.
+  // Both chain id reasons are read after the network, because which id is the right one is a
+  // question the network answers. A value that is present and unusable is refused rather than
+  // defaulted, for the same reason an unrecognised network spelling is: the id is a derivation
+  // input, and answering a typo with the default issues addresses under an identity nobody chose.
+  const chainIdInvalid = env.chainId === 'invalid';
+  const chainIdMismatch = typeof env.chainId === 'number' && env.chainId !== chainId;
+
+  // The two before last are what the derivation is made of. Without either, this deployment would
+  // issue well-formed addresses that are not the ones it issued yesterday — and nothing downstream
+  // can tell the difference — so the family stays off instead. The last one is the same question
+  // asked of the values themselves, once, at startup.
   const disabledReason: CardanoDisabledReason = !env.enabled
     ? 'flag_off'
     : readNetwork === null
       ? 'network_unknown'
-      : !providerUrl
-        ? 'provider_missing'
-        : providerKeyMissing
-          ? 'provider_key_missing'
-          : !env.hasSecret
-            ? 'secret_missing'
-            : !env.labelsReadable
-              ? 'labels_unreadable'
-              : '';
+      : chainIdInvalid
+        ? 'chain_id_invalid'
+        : chainIdMismatch
+          ? 'chain_id_mismatch'
+          : !providerUrl
+            ? 'provider_missing'
+            : providerKeyMissing
+              ? 'provider_key_missing'
+              : !env.hasSecret
+                ? 'secret_missing'
+                : !env.labelsReadable
+                  ? 'labels_unreadable'
+                  : withDerivationState
+                    ? cardanoDerivationDisabledReason()
+                    : '';
 
   return {
     enabled: disabledReason === '',
@@ -188,6 +220,29 @@ export function getCardanoConfig(): CardanoConfig {
     explorerUrl: env.explorerUrl || EXPLORER_URL[network],
     disabledReason
   };
+}
+
+/**
+ * The Cardano configuration every caller reads.
+ *
+ * @returns The configuration, off while anything the family needs is missing and while its
+ *   derivation has not been shown to be the one this deployment issued before.
+ */
+export function getCardanoConfig(): CardanoConfig {
+  return resolveCardanoConfig(true);
+}
+
+/**
+ * The same configuration, before the derivation verdict is applied.
+ *
+ * Exists for one caller: the startup check, which has to derive an address to produce the verdict
+ * and therefore cannot wait for it. Everything else reads {@link getCardanoConfig} — reading this
+ * one from a request path would be a way to act on a derivation nobody verified.
+ *
+ * @returns The configuration with every reason except the derivation ones resolved.
+ */
+export function getCardanoConfigForDerivationCheck(): CardanoConfig {
+  return resolveCardanoConfig(false);
 }
 
 /**

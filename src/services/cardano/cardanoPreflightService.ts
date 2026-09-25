@@ -172,6 +172,18 @@ export async function sponsorCanCoverFee(logKey: string): Promise<CardanoSponsor
   if (!feeConfig.sponsorNetworkFee) return pass;
 
   const config = getCardanoConfig();
+  // Asked here too, although the controller asked before getting this far: what follows derives the
+  // sponsor key, and a derivation nobody verified must not happen because the caller forgot. The
+  // refusal is the sponsor one, which is what an unusable sponsor is from the user's side.
+  if (!config.enabled) {
+    Logger.warn(
+      'sponsorCanCoverFee',
+      logKey,
+      `Sponsor not derived: Cardano is unavailable (${config.disabledReason || 'disabled'})`
+    );
+    return { ok: false, refusal: { reason: 'sponsor_unavailable', params: {} } };
+  }
+
   try {
     const sponsor = cardanoSignerService.getSponsorAccount(
       feeConfig.sponsorWalletId,

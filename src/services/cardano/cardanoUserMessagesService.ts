@@ -31,6 +31,7 @@ const TEMPLATE_FOR: Readonly<Record<CardanoRefusalReason, NotificationEnum>> = {
   token_balance_not_enough: NotificationEnum.cardano_token_balance_not_enough,
   amount_below_fee: NotificationEnum.cardano_amount_below_fee,
   sponsor_unavailable: NotificationEnum.cardano_sponsor_unavailable,
+  fee_price_unavailable: NotificationEnum.cardano_fee_price_unavailable,
   insufficient_funds: NotificationEnum.cardano_insufficient_funds
 };
 
@@ -65,6 +66,10 @@ const FALLBACK_MESSAGE: Readonly<Record<CardanoRefusalReason, string>> = {
     'The amount has to be more than the [FEE] fee for this transfer, otherwise nothing would ' +
     'reach the destination.',
   sponsor_unavailable:
+    'We could not process the transfer right now. Please try again in a few minutes.',
+  // Says nothing about prices: what is missing is a quote ChatterPay needs to charge its own fee,
+  // which is not a fact about the user's transfer and not something they can act on.
+  fee_price_unavailable:
     'We could not process the transfer right now. Please try again in a few minutes.',
   insufficient_funds:
     'Your Cardano wallet does not have enough ADA for this transfer. Fund this address and try ' +

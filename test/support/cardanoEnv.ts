@@ -1,3 +1,7 @@
+import {
+  recordCardanoDerivationState,
+  resetCardanoDerivationState
+} from '../../src/config/cardanoDerivationState';
 import type { CardanoEnv, CardanoFeeEnv } from '../../src/types/cardanoType';
 
 /**
@@ -33,6 +37,8 @@ import type { CardanoEnv, CardanoFeeEnv } from '../../src/types/cardanoType';
 export interface CardanoEnvState {
   /** The address recorded for the startup check. */
   derivationCheck: string;
+  /** The sponsor address recorded for the startup check. */
+  sponsorDerivationCheck: string;
   /** The credential the staking sync endpoint accepts. */
   syncSecret: string;
   /** Everything `getCardanoConfig` resolves from. */
@@ -45,6 +51,7 @@ export interface CardanoEnvState {
 function blank(): CardanoEnvState {
   return {
     derivationCheck: '',
+    sponsorDerivationCheck: '',
     syncSecret: '',
     env: {
       enabled: false,
@@ -111,6 +118,10 @@ export function cardanoConstantsMock<T extends object>(actual: T): T {
       CDC5: { value: '743a733a', enumerable: true },
       CDC6: { value: '743a73733a', enumerable: true },
       CARDANO_DERIVATION_CHECK: { get: () => cardanoEnvState.derivationCheck, enumerable: true },
+      CARDANO_SPONSOR_DERIVATION_CHECK: {
+        get: () => cardanoEnvState.sponsorDerivationCheck,
+        enumerable: true
+      },
       // Read through a getter so a suite can change it between cases. The endpoint fails closed when
       // it is empty, which is the blank state every suite starts from.
       CARDANO_STAKING_SYNC_SECRET: {
@@ -127,8 +138,13 @@ export function cardanoConstantsMock<T extends object>(actual: T): T {
  * @param overrides - What this test needs on top of the blank state.
  */
 export function resetCardanoEnv(overrides: Partial<CardanoEnvState> = {}): void {
+  // The startup verdict is process state, so it outlives a suite the way a configuration object
+  // does not. Put back to `pending` here, which is what an unconfigured deployment has.
+  resetCardanoDerivationState();
   const fresh = blank();
   cardanoEnvState.derivationCheck = overrides.derivationCheck ?? fresh.derivationCheck;
+  cardanoEnvState.sponsorDerivationCheck =
+    overrides.sponsorDerivationCheck ?? fresh.sponsorDerivationCheck;
   cardanoEnvState.syncSecret = overrides.syncSecret ?? fresh.syncSecret;
   cardanoEnvState.env = { ...fresh.env, ...overrides.env };
   cardanoEnvState.feeEnv = { ...fresh.feeEnv, ...overrides.feeEnv };
@@ -152,10 +168,23 @@ export function setCardanoFeeEnv(patch: Partial<CardanoFeeEnv>): void {
   cardanoEnvState.feeEnv = { ...cardanoEnvState.feeEnv, ...patch };
 }
 
+/**
+ * Marks the derivation as the one this deployment recorded.
+ *
+ * The verdict is produced at startup by the derivation check, and a suite that drives services
+ * directly never runs it. Without this the configuration reports the family off with
+ * `derivation_unverified`, which is correct and is exactly what the guard is for — a test that
+ * wants a working family says so here.
+ */
+export function markCardanoDerivationVerified(): void {
+  recordCardanoDerivationState({ status: 'verified' });
+}
+
 /** The usable configuration most suites want: the family on, against Preprod. */
 export function enableCardanoPreprod(patch: Partial<CardanoEnv> = {}): void {
   resetCardanoEnv();
   setCardanoEnv({ enabled: true, network: 'preprod', ...patch });
+  markCardanoDerivationVerified();
 }
 
 /**

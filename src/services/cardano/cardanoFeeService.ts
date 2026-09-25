@@ -15,7 +15,7 @@
  */
 
 import { Logger } from '../../helpers/loggerHelper';
-import type { CardanoFeeConfig } from '../../types/cardanoType';
+import type { CardanoFeeConfig, CardanoFeeQuote } from '../../types/cardanoType';
 import { getTokenPrices } from '../balanceService';
 
 /** Lovelace in one ADA. */
@@ -78,7 +78,9 @@ export async function chatterPayFeeUnits(
  *   destination, which happens when the recipient does not hold this token yet and there is nothing
  *   to recycle. It costs roughly 1.16 ADA that never comes back, so it is charged at its own rate.
  *   Ignored under scheme 1, where that ADA is the sender's to begin with.
- * @returns The fee in the asset's base units, zero when nothing is charged or no price can be had.
+ * @param isAda - Whether what is moving is ADA itself. See {@link chatterPayFeeAdaUnits}.
+ * @returns The fee in the asset's base units, or a refusal when it is denominated in ADA, has to be
+ *   charged, and no price can be had.
  */
 export async function chatterPayFeeFor(
   config: CardanoFeeConfig,
@@ -86,8 +88,13 @@ export async function chatterPayFeeFor(
   decimals: number,
   fundsNewOutput = false,
   isAda = symbol.toUpperCase() === ADA_SYMBOL
-): Promise<bigint> {
-  if (config.scheme !== 2) return chatterPayFeeUnits(config.transferFeeUsd, symbol, decimals);
+): Promise<CardanoFeeQuote> {
+  // Scheme 1 keeps the policy it has always had: a fee denominated in USD is a few cents, and
+  // forgoing it costs ChatterPay nothing else. Under scheme 2 the fee also has to cover the min-ADA
+  // and the network fee ChatterPay is about to pay, which is why the two answer differently.
+  if (config.scheme !== 2) {
+    return { ok: true, units: await chatterPayFeeUnits(config.transferFeeUsd, symbol, decimals) };
+  }
   const feeAda = fundsNewOutput ? config.transferFeeAdaNewOutput : config.transferFeeAda;
   return chatterPayFeeAdaUnits(feeAda, symbol, decimals, isAda);
 }
@@ -108,31 +115,36 @@ export async function chatterPayFeeFor(
  *   would fall through to a price lookup that answers nothing and make every ADA transfer free.
  *   Callers that know the answer — and the transfer path does, from the token's own address — pass
  *   it rather than let the string decide.
- * @returns The fee in the asset's base units. **Zero when either price is unknown**, for the same
- *   reason the USD path forgoes it: a fee computed from a price nobody could quote would take an
- *   arbitrary amount out of somebody's transfer.
+ * @returns The fee in the asset's base units, or a refusal when a price is needed and none can be
+ *   had. Refusing rather than charging zero is what separates the outage from a deployment that
+ *   configured no fee: under this scheme ChatterPay has already committed to the min-ADA of the
+ *   new output and to the network fee, so a transfer that charges nothing is one it pays for.
  */
 export async function chatterPayFeeAdaUnits(
   feeAda: number,
   symbol: string,
   decimals: number,
   isAda = symbol.toUpperCase() === ADA_SYMBOL
-): Promise<bigint> {
-  if (feeAda <= 0) return 0n;
+): Promise<CardanoFeeQuote> {
+  // Charging nothing was asked for. No price is consulted, so nothing here can fail.
+  if (!(feeAda > 0)) return { ok: true, units: 0n };
 
   const lovelace = BigInt(Math.round(feeAda * LOVELACE_PER_ADA));
   if (isAda) {
     Logger.log('chatterPayFeeAdaUnits', `${feeAda} ADA is ${lovelace} lovelace, no price needed`);
-    return lovelace > 0n ? lovelace : 0n;
+    return { ok: true, units: lovelace > 0n ? lovelace : 0n };
   }
 
   const [adaUsd, assetUsd] = await Promise.all([priceOf(ADA_SYMBOL), priceOf(symbol)]);
-  if (adaUsd <= 0 || assetUsd <= 0) {
-    Logger.warn(
+  // `Number.isFinite` as well as the sign: a quote of `NaN` or `Infinity` passes a `> 0` test in
+  // the second case and fails it in the first, and neither is a price. Both mean the same thing
+  // here — there is no figure to charge from.
+  if (!Number.isFinite(adaUsd) || !Number.isFinite(assetUsd) || adaUsd <= 0 || assetUsd <= 0) {
+    Logger.error(
       'chatterPayFeeAdaUnits',
-      `No usable price for ADA (${adaUsd}) or ${symbol} (${assetUsd}); charging no fee on this transfer`
+      `No usable price for ADA (${adaUsd}) or ${symbol} (${assetUsd}); refusing to price this transfer`
     );
-    return 0n;
+    return { ok: false, reason: 'price_unavailable' };
   }
 
   const units = BigInt(Math.round(((feeAda * adaUsd) / assetUsd) * 10 ** decimals));
@@ -140,7 +152,7 @@ export async function chatterPayFeeAdaUnits(
     'chatterPayFeeAdaUnits',
     `${feeAda} ADA is ${units} base units of ${symbol} at ADA ${adaUsd} and ${symbol} ${assetUsd} USD`
   );
-  return units > 0n ? units : 0n;
+  return { ok: true, units: units > 0n ? units : 0n };
 }
 
 /**

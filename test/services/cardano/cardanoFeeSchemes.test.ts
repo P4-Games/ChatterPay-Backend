@@ -289,9 +289,12 @@ describe('getCardanoFeeConfig - which scheme a deployment resolves to', () => {
       transferFeeAdaNewOutput: 1.6
     });
     const config = getCardanoFeeConfig();
-    expect(await chatterPayFeeFor(config, 'ADA', 6)).toBe(450_000n);
+    expect(await chatterPayFeeFor(config, 'ADA', 6)).toEqual({ ok: true, units: 450_000n });
     // And the dearer figure when this transfer funds a new output for the destination.
-    expect(await chatterPayFeeFor(config, 'ADA', 6, true)).toBe(1_600_000n);
+    expect(await chatterPayFeeFor(config, 'ADA', 6, true)).toEqual({
+      ok: true,
+      units: 1_600_000n
+    });
   });
 
   it('charges nothing under scheme 1 no matter what the ADA figures say', async () => {
@@ -305,7 +308,7 @@ describe('getCardanoFeeConfig - which scheme a deployment resolves to', () => {
     });
     const config = getCardanoFeeConfig();
     expect(chargesTransferFee(config)).toBe(false);
-    expect(await chatterPayFeeFor(config, 'ADA', 6, true)).toBe(0n);
+    expect(await chatterPayFeeFor(config, 'ADA', 6, true)).toEqual({ ok: true, units: 0n });
   });
 
   it('keeps recycling behind its own switch, off even under scheme 2', () => {

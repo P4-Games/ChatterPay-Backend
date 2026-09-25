@@ -428,6 +428,14 @@ export async function setStakingConsent(
   accept: boolean,
   source: string
 ): Promise<StakingUserResult<{ optedIn: boolean; termsVersion: string | null }>> {
+  // Which account this is about is decided by the chain id, and the chain id comes from the
+  // configuration. Reading it before anything is written is what keeps an opt-out from landing on
+  // an account inferred from a network this deployment could not resolve.
+  const cardano = getCardanoConfig();
+  if (!cardano.enabled) {
+    return { ok: false, refusal: 'staking_disabled', detail: cardano.disabledReason };
+  }
+
   const own = await resolveOwn(phoneNumber);
   if (!own.ok) return own;
   const { account } = own.data;
@@ -449,6 +457,15 @@ export async function setStakingConsent(
       ok: true,
       data: { optedIn: false, termsVersion: account.termsConsent?.version ?? null }
     };
+  }
+
+  // Opting in is the direction that needs the settings to be there, and it needs them for a reason
+  // the opt-out does not have: what gets written is a consent stamped with the terms version this
+  // network is running. A disabled configuration answers `''` for that version, and a consent
+  // stamped with nothing is a record that says the user agreed to something unidentifiable — while
+  // the same write clears an opt-out they had asked for.
+  if (!config.enabled) {
+    return { ok: false, refusal: 'staking_disabled', detail: config.disabledReason };
   }
 
   await CardanoStakingAccount.updateOne(
@@ -796,6 +813,15 @@ export async function authorizeStakingAction(
     return { ok: false, refusal: 'action_not_allowed', detail: action };
   }
 
+  // The same gate the action endpoint carries, and read before the PIN for the reason that endpoint
+  // reads it before the security gate: a grant is only ever spent on a mutation, so issuing one
+  // while the family is off buys nothing, and checking a PIN on the way is a PIN check nobody asked
+  // for.
+  const cardano = getCardanoConfig();
+  if (!cardano.enabled) {
+    return { ok: false, refusal: 'staking_disabled', detail: cardano.disabledReason };
+  }
+
   // Read here too, and by the same function: the grant is bound to the target, so a target the action
   // endpoint would refuse must not be able to buy a grant.
   const parsedTarget = parseGovernanceTarget(options.governanceTarget, action);
@@ -1063,9 +1089,12 @@ export async function quoteStakingExit(
   const feeConfig = getCardanoFeeConfig();
   // The same schedule a transfer of the same ada would pay, and nothing bespoke. `isAda` is stated
   // rather than read off a ticker.
-  const commercialFeeLovelace = chargesTransferFee(feeConfig)
+  // `isAda` being stated is also what makes the quote unfailable here: an ADA fee converts straight
+  // to lovelace and consults no price, so there is no outage this call can run into.
+  const feeQuote = chargesTransferFee(feeConfig)
     ? await chatterPayFeeFor(feeConfig, 'ADA', 6, false, true)
-    : 0n;
+    : { ok: true as const, units: 0n };
+  const commercialFeeLovelace = feeQuote.ok ? feeQuote.units : 0n;
 
   const assembly = await assembleStakingPlan({
     account,

@@ -349,8 +349,16 @@ export interface CardanoEnv {
   enabled: boolean;
   /** Network as written, trimmed. Resolving the spelling is the caller's job. */
   network: string;
-  /** Explicit chain id, when one was set. */
-  chainId: number | null;
+  /**
+   * Explicit chain id, as configured.
+   *
+   * Three states rather than two, because "absent" and "present and unusable" are different
+   * answers: absent means the network's own constant applies, while a value of `0`, `abc` or the
+   * other network's id is a misconfiguration to report. Collapsing them would turn a typo into the
+   * default, which is the one outcome the family must never reach — the chain id is a derivation
+   * input, so a wrong one issues addresses nobody can sign for.
+   */
+  chainId: number | 'invalid' | null;
   /** Provider root as configured. Stripping its trailing slashes is the caller's job, so that a
    *  value of nothing but slashes still reads as a value and not as an absent one. */
   providerUrl: string;
@@ -410,6 +418,11 @@ export interface CardanoFeeEnv {
  * - `provider_key_missing` — the configured provider needs a credential, and none was set.
  * - `secret_missing` — the master secret every wallet derives from is absent.
  * - `labels_unreadable` — one of the configured derivation labels is absent or not readable.
+ * - `chain_id_invalid` — a chain id was configured and it is not a usable one.
+ * - `chain_id_mismatch` — the configured chain id belongs to the other network.
+ * - `derivation_unverified` — the startup check has not run yet.
+ * - `derivation_unrecorded` — there is no recorded address to compare this deployment against.
+ * - `derivation_changed` — this deployment no longer derives the address it recorded.
  */
 export type CardanoDisabledReason =
   | ''
@@ -418,7 +431,12 @@ export type CardanoDisabledReason =
   | 'provider_missing'
   | 'provider_key_missing'
   | 'secret_missing'
-  | 'labels_unreadable';
+  | 'labels_unreadable'
+  | 'chain_id_invalid'
+  | 'chain_id_mismatch'
+  | 'derivation_unverified'
+  | 'derivation_unrecorded'
+  | 'derivation_changed';
 
 /**
  * The hosted providers this deployment can read the chain through.
@@ -538,12 +556,21 @@ export interface CardanoFeeConfig {
   disabledReason: CardanoSponsorDisabledReason;
 }
 
+/**
+ * Which derivation a check result is about.
+ *
+ * The two are separate keys from separate inputs: a user address comes from the phone number, the
+ * payment and stake labels; the sponsor address comes from its wallet id and two labels of its own.
+ * Verifying one says nothing about the other, so every result carries which one it saw.
+ */
+export type CardanoDerivationScope = 'user' | 'sponsor';
+
 /** What the startup derivation check concluded. */
 export type CardanoDerivationCheck =
-  | { status: 'ok'; address: string }
+  | { status: 'ok'; address: string; sponsorAddress: string | null }
   | { status: 'skipped'; detail: string }
-  | { status: 'unrecorded'; address: string }
-  | { status: 'changed'; expected: string; derived: string };
+  | { status: 'unrecorded'; scope: CardanoDerivationScope; address: string }
+  | { status: 'changed'; scope: CardanoDerivationScope; expected: string; derived: string };
 
 /**
  * Why a transfer was refused, in a form that can still be said in the user's language.
@@ -583,8 +610,27 @@ export type CardanoRefusalReason =
   | 'amount_below_fee'
   /** ChatterPay cannot cover the network fee right now. */
   | 'sponsor_unavailable'
+  /**
+   * The fee cannot be priced, so a sponsored token transfer cannot be charged for.
+   *
+   * Separate from `sponsor_unavailable` because the remedy is not the same: the sponsor holds
+   * funds, and what is missing is a quote. Charging nothing instead would hand out the transfer
+   * ChatterPay is paying the min-ADA and the network fee for.
+   */
+  | 'fee_price_unavailable'
   /** Discovered inside the transfer: the wallet has to be funded before this can work. */
   | 'insufficient_funds';
+
+/**
+ * What ChatterPay charges for one transfer, or why it could not be worked out.
+ *
+ * A figure and a failure are different answers and are returned as such. The alternative — zero for
+ * both — reads as "this transfer is free", which is a legitimate configuration, and makes a pricing
+ * outage indistinguishable from a deployment that decided to charge nothing.
+ */
+export type CardanoFeeQuote =
+  | { ok: true; units: bigint }
+  | { ok: false; reason: 'price_unavailable' };
 
 /** A refusal the user is going to read, before it has been put into words. */
 export interface CardanoRefusal {

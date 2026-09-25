@@ -6,7 +6,12 @@ import {
   getCardanoConfig,
   isCardanoChainId
 } from '../../src/config/cardanoConfig';
-import { resetCardanoEnv, setCardanoEnv } from '../support/cardanoEnv';
+import { recordCardanoDerivationState } from '../../src/config/cardanoDerivationState';
+import {
+  markCardanoDerivationVerified,
+  resetCardanoEnv,
+  setCardanoEnv
+} from '../support/cardanoEnv';
 
 vi.mock('../../src/helpers/envHelper', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/helpers/envHelper')>();
@@ -19,6 +24,9 @@ beforeEach(() => {
   // about the setting it names and nothing else.
   resetCardanoEnv();
   setCardanoEnv({ enabled: true });
+  // The startup check is what produces this, and no test here runs it. Stated so that each
+  // test is about the setting it names; the verdict has a describe of its own below.
+  markCardanoDerivationVerified();
 });
 
 describe('getCardanoConfig - the network', () => {
@@ -118,6 +126,7 @@ describe('getCardanoConfig - the disabled reasons, in order', () => {
     for (const [expected, arrange] of states) {
       resetCardanoEnv();
       setCardanoEnv({ enabled: true });
+      markCardanoDerivationVerified();
       arrange();
       const { disabledReason, enabled } = getCardanoConfig();
       expect(enabled, expected).toBe(false);
@@ -150,9 +159,140 @@ describe('getCardanoConfig - numeric settings', () => {
     expect(config.depositConfirmations).toBe(1);
   });
 
-  it('takes an explicit chain id over the default for the network', () => {
-    setCardanoEnv({ network: 'mainnet', chainId: CARDANO_PREPROD_CHAIN_ID });
+  it('accepts a chain id that states what the network already says', () => {
+    setCardanoEnv({ network: 'mainnet', chainId: CARDANO_MAINNET_CHAIN_ID });
+    expect(getCardanoConfig().chainId).toBe(CARDANO_MAINNET_CHAIN_ID);
+    setCardanoEnv({ network: 'preprod', chainId: CARDANO_PREPROD_CHAIN_ID });
     expect(getCardanoConfig().chainId).toBe(CARDANO_PREPROD_CHAIN_ID);
+  });
+});
+
+describe('getCardanoConfig - the chain id', () => {
+  it('uses the network constant when nothing was configured', () => {
+    // Omitting it is not a misconfiguration: the network already says which id it is.
+    setCardanoEnv({ network: 'preprod', chainId: null });
+    expect(getCardanoConfig()).toMatchObject({
+      enabled: true,
+      chainId: CARDANO_PREPROD_CHAIN_ID
+    });
+    setCardanoEnv({ network: 'mainnet', chainId: null });
+    expect(getCardanoConfig()).toMatchObject({
+      enabled: true,
+      chainId: CARDANO_MAINNET_CHAIN_ID
+    });
+  });
+
+  it('answers the same id for every spelling of a network', () => {
+    for (const value of ['preprod', 'testnet', 'TestNet']) {
+      setCardanoEnv({ network: value, chainId: CARDANO_PREPROD_CHAIN_ID });
+      expect(getCardanoConfig().chainId, value).toBe(CARDANO_PREPROD_CHAIN_ID);
+    }
+  });
+
+  it('refuses the other network id rather than deriving under an identity nobody chose', () => {
+    // The combination that used to be accepted. The network decides the address prefix and the
+    // chain id goes into the key derivation, so this is a deployment issuing mainnet addresses
+    // under preprod keys and writing every row with the wrong network's id.
+    setCardanoEnv({ network: 'mainnet', chainId: CARDANO_PREPROD_CHAIN_ID });
+    expect(getCardanoConfig()).toMatchObject({
+      enabled: false,
+      disabledReason: 'chain_id_mismatch'
+    });
+
+    setCardanoEnv({ network: 'preprod', chainId: CARDANO_MAINNET_CHAIN_ID });
+    expect(getCardanoConfig()).toMatchObject({
+      enabled: false,
+      disabledReason: 'chain_id_mismatch'
+    });
+  });
+
+  it('refuses the chain id of an EVM network', () => {
+    // Scroll Sepolia, the deployment's own default chain. Accepting it would point the Cardano
+    // token catalogue and every wallet row at another network's rows.
+    setCardanoEnv({ network: 'preprod', chainId: 534351 });
+    expect(getCardanoConfig()).toMatchObject({
+      enabled: false,
+      disabledReason: 'chain_id_mismatch'
+    });
+  });
+
+  it('refuses a value that is present and unusable instead of defaulting', () => {
+    // What the reader answers for `abc`, `900000000001abc`, `0`, a negative, a decimal and
+    // anything past the safe integer range. Each of those is a typo, and the one outcome a typo
+    // must never have is the default.
+    setCardanoEnv({ network: 'preprod', chainId: 'invalid' });
+    expect(getCardanoConfig()).toMatchObject({
+      enabled: false,
+      disabledReason: 'chain_id_invalid'
+    });
+  });
+
+  it('never answers with a chain id that is not one of the two, whatever was configured', () => {
+    // The property the callers depend on: `Token.find({ chain_id })` and every wallet row take
+    // this number, and a refused configuration must not hand them a third value to use.
+    for (const chainId of ['invalid' as const, 534351, CARDANO_MAINNET_CHAIN_ID]) {
+      setCardanoEnv({ network: 'preprod', chainId });
+      expect(isCardanoChainId(getCardanoConfig().chainId), String(chainId)).toBe(true);
+    }
+  });
+
+  it('reports the network first, because the network decides which id is the right one', () => {
+    setCardanoEnv({ network: 'mainet', chainId: 'invalid' });
+    expect(getCardanoConfig().disabledReason).toBe('network_unknown');
+  });
+});
+
+describe('getCardanoConfig - the derivation verdict', () => {
+  it('is off until the startup check has run', () => {
+    // Pending is not ok. A process that fell over before the check, or never called it, has
+    // verified nothing, and a configuration reporting the family on would be saying it had.
+    recordCardanoDerivationState({ status: 'pending' });
+    expect(getCardanoConfig()).toMatchObject({
+      enabled: false,
+      disabledReason: 'derivation_unverified'
+    });
+  });
+
+  it('is off while there is nothing to compare this deployment against', () => {
+    recordCardanoDerivationState({ status: 'unrecorded', scope: 'user' });
+    expect(getCardanoConfig()).toMatchObject({
+      enabled: false,
+      disabledReason: 'derivation_unrecorded'
+    });
+  });
+
+  it('is off when the sponsor derivation is the one nobody recorded', () => {
+    // Same reason, different key. The sponsor signs and spends, so an unverified sponsor is not a
+    // lesser state than an unverified user derivation.
+    recordCardanoDerivationState({ status: 'unrecorded', scope: 'sponsor' });
+    expect(getCardanoConfig().disabledReason).toBe('derivation_unrecorded');
+  });
+
+  it('is off when a derivation no longer matches what was recorded', () => {
+    recordCardanoDerivationState({ status: 'changed', scope: 'sponsor' });
+    expect(getCardanoConfig()).toMatchObject({
+      enabled: false,
+      disabledReason: 'derivation_changed'
+    });
+  });
+
+  it('is read last, so a configuration fault is reported as itself', () => {
+    // A deployment with no secret has a problem the operator can act on. Reporting it as a
+    // derivation verdict would send them looking at the wrong setting.
+    recordCardanoDerivationState({ status: 'changed', scope: 'user' });
+    setCardanoEnv({ hasSecret: false });
+    expect(getCardanoConfig().disabledReason).toBe('secret_missing');
+  });
+
+  it('never names a setting in its reasons either', () => {
+    for (const state of [
+      { status: 'pending' } as const,
+      { status: 'unrecorded', scope: 'user' } as const,
+      { status: 'changed', scope: 'sponsor' } as const
+    ]) {
+      recordCardanoDerivationState(state);
+      expect(getCardanoConfig().disabledReason).not.toMatch(/CARDANO_|_INTERNAL_|addr/);
+    }
   });
 });
 

@@ -33,11 +33,19 @@ export interface CardanoWallet {
 /**
  * The Cardano account a phone number resolves to, without touching the database.
  *
+ * Every path that provisions, stores or signs for a Cardano address goes through here, which is
+ * why the availability of the family is asserted here rather than trusted from the caller. The
+ * callers do check — but a derivation is the one operation whose result looks correct even when the
+ * configuration behind it is wrong, so the last function before the key material refuses on its
+ * own rather than relying on somebody upstream having asked.
+ *
  * @param phoneNumber - The user's phone number, in any accepted format.
  * @returns The derived account.
+ * @throws Error `CARDANO_DISABLED` when the family is unavailable, carrying the reason.
  */
 export function deriveCardanoAccount(phoneNumber: string): CardanoAccount {
-  const { network, chainId } = getCardanoConfig();
+  const { network, chainId, enabled, disabledReason } = getCardanoConfig();
+  if (!enabled) throw new Error(`CARDANO_DISABLED: ${disabledReason || 'disabled'}`);
   return cardanoSignerService.getAccount(phoneNumber, network, chainId);
 }
 

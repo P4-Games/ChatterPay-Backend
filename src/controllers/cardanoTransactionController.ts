@@ -61,6 +61,7 @@ import {
   hasUserAnyOperationInProgress,
   openOperation
 } from '../services/userService';
+import type { CardanoFeeQuote } from '../types/cardanoType';
 import { ConcurrentOperationsEnum, type TransactionData } from '../types/commonType';
 
 /** The chain's own coin: the default asset, and the one every fee is charged in. */
@@ -314,7 +315,7 @@ export const makeCardanoTransaction = async (
     // destination is the amount less this, and a preflight that ignored it would wave through a
     // transfer the builder then refuses.
     const feeConfig = getCardanoFeeConfig();
-    const estimatedChatterPayFee =
+    const feeQuote: CardanoFeeQuote =
       feeConfig.sponsorNetworkFee && chargesTransferFee(feeConfig)
         ? await chatterPayFeeFor(
             feeConfig,
@@ -331,7 +332,25 @@ export const makeCardanoTransaction = async (
             // answers nothing, and quietly make every ADA transfer free.
             resolved.isAda
           )
-        : 0n;
+        : { ok: true, units: 0n };
+    if (!feeQuote.ok) {
+      // Refused here, where refusing is still free: the lock is not open, nothing has been signed
+      // and the user has not been told the operation is under way. The sentence says the transfer
+      // could not be processed and nothing about quotes, which are ChatterPay's problem.
+      const { message, template } = await cardanoRefusalMessage(channel_user_id, {
+        reason: 'fee_price_unavailable',
+        params: {}
+      });
+      await persistNotification(channel_user_id, message, template);
+      Logger.error(
+        'makeCardanoTransaction',
+        logKey,
+        `Fee could not be priced for ${resolved.symbol}; refusing before the lock`
+      );
+      await returnSuccessResponse(reply, message);
+      return undefined;
+    }
+    const estimatedChatterPayFee = feeQuote.units;
     const preflight = await canAffordCardanoTransfer(
       senderAddress,
       amount,
@@ -398,6 +417,24 @@ export const makeCardanoTransaction = async (
         const { title, message, template } = await cardanoRefusalMessage(channel_user_id, {
           reason: 'insufficient_funds',
           params: { '[ADDRESS]': senderAddress }
+        });
+        await persistAndSendNotification({
+          to: channel_user_id,
+          messageBot: message,
+          messagePush: message,
+          template,
+          sendPush: true,
+          sendBot: true,
+          title
+        });
+      } else if (result.errorCode === 'CARDANO_FEE_PRICE_UNAVAILABLE') {
+        // The preflight prices the fee too, so reaching this means the quote was there and was gone
+        // by the time the transfer asked. Its own sentence rather than the incident one: nothing
+        // broke, and trying again in a few minutes is the remedy.
+        if (lastBotMsgDelaySeconds > 0) await delaySeconds(lastBotMsgDelaySeconds);
+        const { title, message, template } = await cardanoRefusalMessage(channel_user_id, {
+          reason: 'fee_price_unavailable',
+          params: {}
         });
         await persistAndSendNotification({
           to: channel_user_id,

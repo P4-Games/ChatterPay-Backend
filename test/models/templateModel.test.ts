@@ -525,6 +525,18 @@ it('should create and save a Template document successfully', async () => {
           pt: 'Não conseguimos processar a transferência neste momento. Por favor, tente novamente em alguns minutos.'
         }
       },
+      cardano_fee_price_unavailable: {
+        title: {
+          en: 'ChatterPay - We could not process the transfer',
+          es: 'ChatterPay - No pudimos procesar la transferencia',
+          pt: 'ChatterPay - Não conseguimos processar a transferência'
+        },
+        message: {
+          en: 'We could not process the transfer right now. Please try again in a few minutes.',
+          es: 'No pudimos procesar la transferencia en este momento. Por favor, intentá de nuevo en unos minutos.',
+          pt: 'Não conseguimos processar a transferência neste momento. Por favor, tente novamente em alguns minutos.'
+        }
+      },
       cardano_insufficient_funds: {
         title: {
           en: 'ChatterPay - Insufficient balance',
