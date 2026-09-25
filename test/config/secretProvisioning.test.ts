@@ -3,27 +3,11 @@ import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Where the staking credentials are allowed to go, and where their values are not.
+ * Provisioning rules for the two staking credentials, asserted rather than left to review.
  *
- * `CARDANO_STAKING_SYNC_SECRET` is the whole authorisation in front of an endpoint that starts
- * transactions, and `CARDANO_STAKING_FRONTEND_BFF_SECRET` signs the assertion that says which
- * session a mutation came from. Both are held in Secret Manager and injected into the Cloud Run
- * service, which is where the running process reads them.
- *
- * The build declares both names — Cloud Build pulls them for the step that writes the workspace
- * `.env`, and the Dockerfile declares the `ARG`/`ENV` pair every setting has. What must not happen
- * is the *value* travelling into the image: the Build step assembles one `--build-arg` per `ARG`
- * it finds in the Dockerfile, so a credential that is not excluded from that loop ends up in an
- * `ENV` layer in the registry, where it outlives every rotation and is readable by anybody who can
- * pull the image.
- *
- * That exclusion is a single word in a space-separated list inside a bash line, which is exactly
- * the kind of thing that gets lost in an edit and shows no symptom when it does. So it is asserted
- * rather than left to review.
- *
- * What this does not assert: that the values never reach the build at all. They do — the step that
- * writes `.env` runs `printenv`, and that is the mechanism this deployment uses. Narrowing that is
- * a separate decision about the pipeline, not something a test can pin.
+ * Both are provisioned on the Cloud Run service. The build declares their names and must not
+ * pass their values, which depends on one entry in a list inside a bash line — something an edit
+ * drops without any symptom.
  */
 
 /** The credentials whose values must never be passed into the image. */
@@ -94,25 +78,22 @@ function buildArgExclusions(): string[] {
 
 describe('the staking credentials never reach a layer of the image', () => {
   it.each(RUNTIME_ONLY)('%s is excluded from the build arguments', (name) => {
-    // The one assertion that matters. Everything else about these two — the ARG, the ENV, the
-    // secretEnv entries — is inert as long as the loop that reads the Dockerfile skips them.
+    // The assertion the rest of this file depends on.
     expect(buildArgExclusions()).toContain(name);
   });
 
   it.each(
     RUNTIME_ONLY
   )('%s is declared in the Dockerfile, which is why the above matters', (name) => {
-    // Not a requirement, a premise. An ARG is what makes the assembly loop consider a name at all,
-    // so if this ever stops being true the exclusion above has nothing left to protect and the
-    // reasoning in this file has to be revisited rather than silently kept.
+    // A premise, not a requirement: if this stops holding, the exclusion above protects nothing
+    // and this file has to be revisited rather than silently kept.
     const lines = instructionLines(repoFile('Dockerfile'), '#');
 
     expect(lines.filter((line) => line.startsWith(`ARG ${name}`))).toHaveLength(1);
   });
 
   it.each(RUNTIME_ONLY)('%s is not passed as a build argument locally either', (name) => {
-    // The local script has no assembly loop and no skip list: it spells its `--build-arg` list out.
-    // A credential added there is a credential baked into every image built on a developer machine.
+    // The local script spells its `--build-arg` list out and has no exclusion to fall back on.
     const lines = instructionLines(repoFile('scripts/docker-build.sh'), '#');
 
     expect(lines.filter((line) => line.includes(name))).toEqual([]);
@@ -125,8 +106,8 @@ describe('the staking credentials never reach a layer of the image', () => {
   });
 
   it('keeps excluding the credentials that were already excluded', () => {
-    // The list is shared with every other secret in the project. A change made for the two staking
-    // ones must not drop somebody else's on the way through.
+    // The list is shared with the rest of the project. A change for these two must not drop one of
+    // the others on the way through.
     expect(buildArgExclusions()).toEqual(
       expect.arrayContaining([
         'SEED_INTERNAL_SALT_EVM',

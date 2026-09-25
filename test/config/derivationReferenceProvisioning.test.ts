@@ -5,17 +5,10 @@ import { describe, expect, it } from 'vitest';
 /**
  * That the two derivation references reach the running process.
  *
- * `CARDANO_DERIVATION_CHECK` and `CARDANO_SPONSOR_DERIVATION_CHECK` are the addresses the startup
- * check compares this deployment against. A reference that does not arrive is indistinguishable from
- * one that was never recorded, and the consequence is the same: Cardano stays off with
- * `derivation_unrecorded` while everything else runs. That failure is quiet — the deploy succeeds,
- * the health check passes, and the only symptom is a family that refuses every request — which is
- * why the plumbing is asserted rather than left to whoever adds the next setting.
- *
- * They are settings, not credentials: the value is a public address, and unlike the staking secrets
- * it *has* to travel into the image, because the check runs before the port opens. So this file is
- * the mirror image of `secretProvisioning.test.ts` — it asserts presence everywhere that one
- * asserts absence.
+ * They are settings rather than credentials — bech32 addresses — and they have to be in the image,
+ * because the startup check reads them before the port opens. A reference that does not arrive
+ * reads as one that was never recorded, and the deploy succeeds either way, so the plumbing is
+ * asserted here instead of being left to whoever adds the next setting.
  */
 
 /** The addresses this deployment is verified against. */
@@ -70,8 +63,7 @@ describe('the derivation references reach the container', () => {
   });
 
   it.each(REFERENCES)('%s is not treated as a credential and withheld from the build', (name) => {
-    // The one list that would stop the value reaching the image. Adding either name to it would
-    // leave the check with nothing to compare against in every deployed environment.
+    // Adding either name to this list would leave the check with nothing to compare against.
     const line = instructionLines(repoFile('cloudbuild.yaml')).find((candidate) =>
       candidate.includes("secrets='")
     );
@@ -81,10 +73,7 @@ describe('the derivation references reach the container', () => {
   });
 
   it('gives the sponsor substitution a default, so a trigger that lacks it still builds', () => {
-    // Cloud Build matches substitutions strictly: a `${_X}` the build request does not define fails
-    // the build. The default is what keeps adding this reference from blocking every deploy until
-    // each trigger has been edited, and an empty one is the safe value — it reads as "not recorded",
-    // which switches Cardano off and nothing else.
+    // Cloud Build matches substitutions strictly, so a `${_X}` no trigger defines fails the build.
     const lines = instructionLines(repoFile('cloudbuild.yaml'));
 
     expect(

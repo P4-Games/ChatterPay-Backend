@@ -185,14 +185,7 @@ steps:
       '--allow-unauthenticated'
     ]
 
-# Default for the sponsor derivation reference.
-#
-# Here as well as in the trigger so that a deployment that has never been told about it still
-# builds. A trigger that sets it overrides this. Empty is the safe value: the startup check finds
-# no address to compare the sponsor wallet against, reports Cardano off, and leaves every other
-# family running — which is what an environment that has not verified its sponsor key should get.
-#
-# It is not a credential. The address is public, and the check needs it before the port opens.
+# Defaults for triggers that do not define these. A trigger that sets one overrides it.
 substitutions:
   _CARDANO_SPONSOR_DERIVATION_CHECK: ''
 

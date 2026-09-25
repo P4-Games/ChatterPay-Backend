@@ -420,13 +420,5 @@ export const CARDANO_ROUTE_DUST_TO_SPONSOR: string = cardanoRouteDustToSponsor;
 export const CARDANO_SPONSOR_WALLET_ID: string = cardanoSponsorWalletId;
 export const CARDANO_DERIVATION_CHECK: string = cardanoDerivationCheck.trim();
 export const CARDANO_SPONSOR_DERIVATION_CHECK: string = cardanoSponsorDerivationCheck.trim();
-// The one credential that reaches the staking sync endpoint. Held by this deployment and by the
-// schedule, and by nothing else: it is deliberately not one of the product tokens, so holding the
-// frontend or bot token does not let anything start a run that spends sponsor fees. Empty means the
-// endpoint authorises nobody.
 export const CARDANO_STAKING_SYNC_SECRET: string = cardanoStakingSyncSecret;
-// Shared with the Next.js routes and with nothing else. It is what lets the backend tell a request
-// that came from a route which authenticated a session apart from anything else holding the internal
-// token, and it must never reach a browser bundle. Empty means every staking mutation is refused:
-// the signature is not optional.
 export const CARDANO_STAKING_FRONTEND_BFF_SECRET: string = cardanoStakingFrontendBffSecret;
