@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { CARDANO_PREPROD_CHAIN_ID } from '../../src/config/cardanoConfig';
 import { CHATIZALO_TOKEN, DEFAULT_CHAIN_ID } from '../../src/config/constants';
 import { buildServer } from '../../src/config/server';
 import Blockchain from '../../src/models/blockchainModel';
-import { enableCardanoPreprod, setCardanoSyncSecret } from '../support/cardanoEnv';
+import { enableCardanoPreprod } from '../support/cardanoEnv';
 
 vi.mock('../../src/helpers/envHelper', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/helpers/envHelper')>();
@@ -23,10 +23,9 @@ vi.mock('../../src/config/constants', async (importOriginal) => {
  * The staking endpoints, driven over a real socket.
  *
  * What this proves is the part a service test structurally cannot: that the routes are registered,
- * that the sync path is genuinely exempt from the `Origin` check, that its own credential is
- * checked before the handler rather than instead of the shared-token check, and that neither
- * exemption accidentally extended to the user-facing routes. Those are properties of wiring, and
- * wiring is what silently stops working.
+ * that the sync path is genuinely exempt from the `Origin` check while still requiring the shared
+ * token, and that the exemption did not accidentally extend to the user-facing routes. Those are
+ * properties of wiring, and wiring is what silently stops working.
  *
  * The provider points at a closed port, so an accidental chain call fails instantly instead of making
  * the suite depend on Blockfrost.
@@ -136,10 +135,7 @@ afterAll(async () => {
   await server?.close();
 });
 
-/** The credential the suite configures the endpoint with. Long enough to be accepted as one. */
-const SYNC_SECRET = 'Zp8rN4tQv7Lw2Hs9Kd3Fj6Xb1Cm5Ty0Ge4Ra8Uo2Iv6Nq';
-
-describe('POST /internal/cardano/staking/sync, unconfigured', () => {
+describe('POST /internal/cardano/staking/sync', () => {
   it('is reachable without an Origin header', async () => {
     // The point of the exemption. A scheduler sends no `Origin`, so an endpoint behind that check is
     // an endpoint no scheduler can reach and the failure would look like a CORS problem rather than
@@ -154,66 +150,45 @@ describe('POST /internal/cardano/staking/sync, unconfigured', () => {
   });
 
   it('refuses a call carrying no credential', async () => {
-    const { status } = await call('/internal/cardano/staking/sync', {
+    // The exemption is from the origin check and nothing else. Keeping the path off the public list is
+    // what stops an endpoint that starts transactions from answering an unauthenticated caller.
+    const { status, text } = await call('/internal/cardano/staking/sync', {
       method: 'POST',
       authorization: null,
       body: {}
     });
 
     expect(status).toBe(401);
+    expect(text).toContain('Authentication token was not provided');
   });
 
-  it('authorises nobody while no secret is configured', async () => {
-    // Unconfigured verifies nothing and therefore allows nobody. That failure mode is the reason the
-    // route can sit outside the shared-token check without becoming open.
+  it('refuses a token this deployment does not know', async () => {
     const { status, text } = await call('/internal/cardano/staking/sync', {
       method: 'POST',
-      authorization: `Bearer ${SYNC_SECRET}`,
+      authorization: 'Bearer not-a-token',
       body: {}
     });
 
     expect(status).toBe(401);
-    expect(text).toContain('not_configured');
+    expect(text).toContain('Invalid Authorization Token');
   });
 
-  it('refuses a GET too, before saying whether the method exists', async () => {
-    // The credential is checked by path rather than by method, so an unauthenticated caller learns
-    // nothing about the route at all. A 404 here would answer a question nobody had authorisation
-    // to ask.
-    const { status } = await call('/internal/cardano/staking/sync');
-
-    expect(status).toBe(401);
-  });
-});
-
-describe('POST /internal/cardano/staking/sync, configured', () => {
-  beforeEach(() => {
-    setCardanoSyncSecret(SYNC_SECRET);
-  });
-
-  afterEach(() => {
-    setCardanoSyncSecret('');
-  });
-
-  it('lets the scheduler through to the run', async () => {
+  it('lets the shared product token through to the run', async () => {
     // The positive case, end to end over a socket. Cardano staking is off in this suite, so the run
     // refuses on configuration, which is the answer *past* authentication and is what proves the
-    // credential was taken rather than merely not rejected.
-    const { status, text } = await call('/internal/cardano/staking/sync', {
+    // token was taken rather than merely not rejected.
+    const { status } = await call('/internal/cardano/staking/sync', {
       method: 'POST',
-      authorization: `Bearer ${SYNC_SECRET}`,
       body: { jobName: 'cardano-staking-sync' }
     });
 
     expect(status).not.toBe(401);
-    expect(text).not.toContain('not_configured');
   });
 
   it('lets it through with no Origin header, which is how a scheduler calls', async () => {
     const { status } = await call('/internal/cardano/staking/sync', {
       method: 'POST',
       origin: false,
-      authorization: `Bearer ${SYNC_SECRET}`,
       body: {}
     });
 
@@ -221,86 +196,11 @@ describe('POST /internal/cardano/staking/sync, configured', () => {
     expect(status).not.toBe(403);
   });
 
-  it('refuses the internal bearer token that the rest of the product uses', async () => {
-    // Deliberate, and the reason this endpoint has a credential at all: the shared token is held by
-    // the web routes and by the bot, so accepting it here would let any of them start a run that
-    // spends sponsor fees.
-    const { status, text } = await call('/internal/cardano/staking/sync', {
-      method: 'POST',
-      body: {}
-    });
-
-    expect(status).toBe(401);
-    expect(text).toContain('credential_mismatch');
-  });
-
-  it('refuses a credential that is nearly right', async () => {
-    const { status, text } = await call('/internal/cardano/staking/sync', {
-      method: 'POST',
-      authorization: `Bearer ${SYNC_SECRET.slice(0, -1)}X`,
-      body: {}
-    });
-
-    expect(status).toBe(401);
-    expect(text).toContain('credential_mismatch');
-  });
-
   it('serves no GET on that path', async () => {
-    // Past the credential, the route is POST only. Anything else is a route that was never
-    // registered, and it says so.
-    const { status } = await call('/internal/cardano/staking/sync', {
-      authorization: `Bearer ${SYNC_SECRET}`
-    });
+    // Past the token, the route is POST only. Anything else is a route that was never registered.
+    const { status } = await call('/internal/cardano/staking/sync');
 
     expect(status).toBe(404);
-  });
-
-  it('reaches its own check rather than the shared-token one', async () => {
-    // The bug this test was written to catch. The global auth hook demands a token *it* recognises,
-    // so a scheduler credential was once rejected before the staking verification ever ran, which
-    // made the endpoint unreachable by any schedule. The refusal has to come from the staking check,
-    // and the reason it carries is how that is visible.
-    const { status, text } = await call('/internal/cardano/staking/sync', {
-      method: 'POST',
-      authorization: 'Bearer not-the-secret',
-      body: {}
-    });
-
-    expect(status).toBe(401);
-    expect(text).not.toContain('Invalid Authorization Token');
-    expect(text).toContain('credential_mismatch');
-  });
-});
-
-describe('POST /internal/cardano/staking/sync, configured badly', () => {
-  afterEach(() => {
-    setCardanoSyncSecret('');
-  });
-
-  it('refuses a secret too short to be one, rather than honouring it', async () => {
-    setCardanoSyncSecret('changeme');
-
-    const { status, text } = await call('/internal/cardano/staking/sync', {
-      method: 'POST',
-      authorization: 'Bearer changeme',
-      body: {}
-    });
-
-    expect(status).toBe(401);
-    expect(text).toContain('secret_too_short');
-  });
-
-  it('refuses a secret pointed at a product token', async () => {
-    setCardanoSyncSecret(CHATIZALO_TOKEN ?? '');
-
-    const { status, text } = await call('/internal/cardano/staking/sync', {
-      method: 'POST',
-      body: {}
-    });
-
-    expect(status).toBe(401);
-    // Either fault is a refusal; which one depends on how long the product token happens to be.
-    expect(text).toMatch(/secret_reused|secret_too_short/);
   });
 });
 

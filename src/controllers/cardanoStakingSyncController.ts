@@ -1,17 +1,16 @@
 /**
  * The endpoint a scheduler calls, and the only route in this repository that a browser never reaches.
  *
- * Everything else here is authenticated by an `Origin` header and a shared token. Neither works for
- * this: `Origin` is absent from every server-to-server call, and the shared token is held by the web
- * routes and by the bot, so accepting it here would let every component holding it start a run that
- * spends sponsor fees. So this route is exempt from the origin check and carries a credential of its
- * own instead — see `cardanoStakingSyncAuthService` for what makes it usable as one.
+ * Authentication is the shared product token, the same one the rest of the API takes, checked by the
+ * global auth hook. What this route does not take is the `Origin` check: that header is absent from
+ * every server-to-server call, so a scheduler behind it would be refused with a 403 no credential
+ * could fix. The path is listed in `CORS_ORIGINS_EXCEPTIONS` for that reason.
  *
  * The HTTP contract is deliberately small, because the scheduler is configured outside this
  * repository and by hand:
  *
  *     POST /internal/cardano/staking/sync
- *     Authorization: Bearer <CARDANO_STAKING_SYNC_SECRET>
+ *     Authorization: Bearer <FRONTEND_TOKEN or CHATIZALO_TOKEN>
  *     Content-Type: application/json
  *
  *     { "jobName": "cardano-staking-sync", "scheduledTime": "2026-01-01T03:00:00Z" }
@@ -28,8 +27,7 @@
  *
  * - `200` the run did something, or deliberately did nothing. Includes a lease held by another
  *   instance and a tick that already completed: both mean "no work for you", not "try again".
- * - `401` the credential did not verify, or this deployment has none configured. Retrying will not
- *   help; the body names which of the two it was.
+ * - `401` the token did not verify. Retrying will not help.
  * - `409` staking is off or misconfigured in this deployment.
  * - `500` the run failed part way. A retry resumes it from its checkpoint.
  */

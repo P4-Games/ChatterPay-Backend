@@ -37,7 +37,13 @@ const RETIRED = [
   // Not a setting that moved: a switch that turned the BFF assertion off. Every deployment has the
   // secret provisioned, so the only thing it could still do was weaken the check that proves a
   // mutation came from a route that authenticated somebody.
-  'CARDANO_STAKING_ASSERTION_REQUIRED'
+  'CARDANO_STAKING_ASSERTION_REQUIRED',
+  // Not a setting that moved either: the sync endpoint's own credential. It authenticated one caller
+  // against a value kept in two places by hand — this deployment and the schedule's header — and a
+  // schedule whose header drifted was refused with no way to tell that apart from a wrong secret. The
+  // endpoint takes the shared product token now, like every other route, and the origin exemption is
+  // all that still distinguishes it.
+  'CARDANO_STAKING_SYNC_SECRET'
 ] as const;
 
 /**
@@ -47,7 +53,6 @@ const RETIRED = [
  * and travels in every dump of it; these verify callers, so they live where secrets live.
  */
 const KEPT = [
-  'CARDANO_STAKING_SYNC_SECRET',
   'CARDANO_STAKING_FRONTEND_BFF_SECRET',
   // Not a per-network setting: a credential, which is why it did not move to the document with the
   // provider root it goes with. Anything with read access to the database would hold it there.

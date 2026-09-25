@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
  */
 
 /** The credentials whose values must never be passed into the image. */
-const RUNTIME_ONLY = ['CARDANO_STAKING_SYNC_SECRET', 'CARDANO_STAKING_FRONTEND_BFF_SECRET'];
+const RUNTIME_ONLY = ['CARDANO_STAKING_FRONTEND_BFF_SECRET'];
 
 /**
  * Settings that used to travel through the build and no longer exist.
@@ -39,7 +39,11 @@ const RETIRED_SETTINGS = [
   'CARDANO_STAKING_SYNC_EXECUTE',
   'CARDANO_STAKING_ASSERTION_REQUIRED',
   'CARDANO_STAKING_MAX_SPONSORED_REGISTRATIONS',
-  'CARDANO_STAKING_SPONSOR_WINDOW_DAYS'
+  'CARDANO_STAKING_SPONSOR_WINDOW_DAYS',
+  // A credential rather than a setting, retired for the same reason the others were: it was a second
+  // place the same authorisation had to be configured, and the sync endpoint now takes the shared
+  // product token.
+  'CARDANO_STAKING_SYNC_SECRET'
 ];
 
 /**

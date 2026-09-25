@@ -93,7 +93,6 @@ const {
   CARDANO_SPONSOR_WALLET_ID: cardanoSponsorWalletId = '',
   CARDANO_DERIVATION_CHECK: cardanoDerivationCheck = '',
   CARDANO_SPONSOR_DERIVATION_CHECK: cardanoSponsorDerivationCheck = '',
-  CARDANO_STAKING_SYNC_SECRET: cardanoStakingSyncSecret = '',
   CARDANO_STAKING_FRONTEND_BFF_SECRET: cardanoStakingFrontendBffSecret = '',
   TELEGRAM_BOT_API_KEY,
   SECURITY_PIN_LENGTH: securityPinLength = 6,
@@ -271,9 +270,8 @@ export const ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY: boolean =
 
 export const TELEGRAM_WEBHOOK_PATH = '/telegram/webhook';
 
-// The scheduler endpoint, named once. The route registration, the origin exemption and the auth hook
-// all have to agree on this string: a path that drifts in one of the three either stops working or
-// stops being checked, and only one of those two is noisy.
+// The scheduler endpoint, named once. The route registration and the origin exemption have to agree
+// on this string: a path that drifts in one of the two stops being reachable by any schedule.
 export const CARDANO_STAKING_SYNC_PATH = '/internal/cardano/staking/sync';
 
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
@@ -282,10 +280,9 @@ export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLow
 // metadata entry read `/metadata/opensea` while the route is `/nft/metadata/opensea/:id`,
 // so it never matched and every request without an Origin header was rejected — which is
 // exactly how explorers, marketplaces and link previews fetch the tokenURI.
-// The staking sync endpoint is exempt from the Origin check and carries a credential of its own
-// instead. The check asks "did a browser page ask for this", which is the wrong question about a
-// scheduler: the header is absent from every server-to-server call and forgeable by anything that is
-// not a browser.
+// The staking sync endpoint is exempt from the Origin check. The check asks "did a browser page ask
+// for this", which is a question no server-to-server call can answer: the header is absent from every
+// one of them. The endpoint is still authenticated, by the shared token like the rest of the API.
 export const CORS_ORIGINS_EXCEPTIONS: string = `/nft/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH},/polymarket/terms,${CARDANO_STAKING_SYNC_PATH}`;
 
 export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/price';
@@ -408,5 +405,4 @@ export const CARDANO_ROUTE_DUST_TO_SPONSOR: string = cardanoRouteDustToSponsor;
 export const CARDANO_SPONSOR_WALLET_ID: string = cardanoSponsorWalletId;
 export const CARDANO_DERIVATION_CHECK: string = cardanoDerivationCheck.trim();
 export const CARDANO_SPONSOR_DERIVATION_CHECK: string = cardanoSponsorDerivationCheck.trim();
-export const CARDANO_STAKING_SYNC_SECRET: string = cardanoStakingSyncSecret;
 export const CARDANO_STAKING_FRONTEND_BFF_SECRET: string = cardanoStakingFrontendBffSecret;

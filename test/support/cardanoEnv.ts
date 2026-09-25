@@ -45,8 +45,6 @@ export interface CardanoEnvState {
   derivationCheck: string;
   /** The sponsor address recorded for the startup check. */
   sponsorDerivationCheck: string;
-  /** The credential the staking sync endpoint accepts. */
-  syncSecret: string;
   /** What the environment still holds. The network's own settings are published separately. */
   env: CardanoEnv;
   /** Everything `getCardanoFeeConfig` resolves from. */
@@ -58,7 +56,6 @@ function blank(): CardanoEnvState {
   return {
     derivationCheck: '',
     sponsorDerivationCheck: '',
-    syncSecret: '',
     env: {
       enabled: false,
       providerApiKey: '',
@@ -121,12 +118,6 @@ export function cardanoConstantsMock<T extends object>(actual: T): T {
       CARDANO_SPONSOR_DERIVATION_CHECK: {
         get: () => cardanoEnvState.sponsorDerivationCheck,
         enumerable: true
-      },
-      // Read through a getter so a suite can change it between cases. The endpoint fails closed when
-      // it is empty, which is the blank state every suite starts from.
-      CARDANO_STAKING_SYNC_SECRET: {
-        get: () => cardanoEnvState.syncSecret,
-        enumerable: true
       }
     }
   ) as T;
@@ -148,7 +139,6 @@ export function resetCardanoEnv(overrides: Partial<CardanoEnvState> = {}): void 
   cardanoEnvState.derivationCheck = overrides.derivationCheck ?? fresh.derivationCheck;
   cardanoEnvState.sponsorDerivationCheck =
     overrides.sponsorDerivationCheck ?? fresh.sponsorDerivationCheck;
-  cardanoEnvState.syncSecret = overrides.syncSecret ?? fresh.syncSecret;
   cardanoEnvState.env = { ...fresh.env, ...overrides.env };
   cardanoEnvState.feeEnv = { ...fresh.feeEnv, ...overrides.feeEnv };
 }
@@ -238,13 +228,4 @@ export function enableCardanoPreprod(
   setCardanoEnv({ enabled: true, ...patch });
   setCardanoNetwork(settings);
   markCardanoDerivationVerified();
-}
-
-/**
- * Configures the credential the staking sync endpoint accepts.
- *
- * @param secret - The secret, or an empty string to leave the deployment unconfigured.
- */
-export function setCardanoSyncSecret(secret: string): void {
-  cardanoEnvState.syncSecret = secret;
 }

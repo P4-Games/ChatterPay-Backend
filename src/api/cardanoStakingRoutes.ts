@@ -15,17 +15,15 @@ import { cardanoStakingSync } from '../controllers/cardanoStakingSyncController'
 /**
  * The Cardano staking routes.
  *
- * Two kinds, authenticated two different ways, and the split is the point.
- *
- * `/internal/` is a convention this repository did not have before: a path no browser reaches, exempt
- * from the `Origin` check and carrying a credential of its own rather than the shared product token.
+ * Every route here takes the shared product token, checked by the global auth hook. `/internal/` is a
+ * convention this repository did not have before: a path no browser reaches, and the one thing it is
+ * exempt from is the `Origin` check, since that header is absent from every server-to-server call.
  * The schedule that calls it is configured in GCP, outside this repository — nothing here creates,
- * deploys or assumes a scheduler; the endpoint answers whoever presents that one secret.
+ * deploys or assumes a scheduler.
  *
- * The rest are the user-facing ones, and they use what the product already uses: the internal token
- * from a Next.js route that resolved the session itself. None of them takes a wallet. Every one takes
- * a `channel_user_id` and the service resolves the credential from it, so a request cannot be aimed
- * at somebody else's position.
+ * The user-facing ones are reached through a Next.js route that resolved the session itself. None of
+ * them takes a wallet. Every one takes a `channel_user_id` and the service resolves the credential
+ * from it, so a request cannot be aimed at somebody else's position.
  *
  * @param fastify - Fastify instance.
  */

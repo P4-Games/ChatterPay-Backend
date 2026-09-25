@@ -226,8 +226,5 @@ CARDANO_DERIVATION_CHECK=''
 # Reference address for sponsor wallet validation.
 CARDANO_SPONSOR_DERIVATION_CHECK=''
 
-# Authentication credential for staking synchronization.
-CARDANO_STAKING_SYNC_SECRET=''
-
 # Authentication credential for frontend staking requests.
 CARDANO_STAKING_FRONTEND_BFF_SECRET=''
