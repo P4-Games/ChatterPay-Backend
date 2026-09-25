@@ -270,20 +270,13 @@ export const ALCHEMY_VALIDATE_WEBHOOK_HEADER_API_KEY: boolean =
 
 export const TELEGRAM_WEBHOOK_PATH = '/telegram/webhook';
 
-// The scheduler endpoint, named once. The route registration and the origin exemption have to agree
-// on this string: a path that drifts in one of the two stops being reachable by any schedule.
-export const CARDANO_STAKING_SYNC_PATH = '/internal/cardano/staking/sync';
-
 export const CORS_ORIGINS_CHECK_POSTMAN: boolean = corsOriginsCheckPostman.toLowerCase() === 'true';
 // Paths exempt from the origin check. They must match the routes as registered in
 // `src/api/*.ts`, since the check compares against the full request path: the NFT
 // metadata entry read `/metadata/opensea` while the route is `/nft/metadata/opensea/:id`,
 // so it never matched and every request without an Origin header was rejected — which is
 // exactly how explorers, marketplaces and link previews fetch the tokenURI.
-// The staking sync endpoint is exempt from the Origin check. The check asks "did a browser page ask
-// for this", which is a question no server-to-server call can answer: the header is absent from every
-// one of them. The endpoint is still authenticated, by the shared token like the rest of the API.
-export const CORS_ORIGINS_EXCEPTIONS: string = `/nft/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH},/polymarket/terms,${CARDANO_STAKING_SYNC_PATH}`;
+export const CORS_ORIGINS_EXCEPTIONS: string = `/nft/metadata/opensea,/favicon.ico,/docs,${TELEGRAM_WEBHOOK_PATH},${ALCHEMY_WEBHOOKS_PATH},/polymarket/terms`;
 
 export const COINGECKO_API_BASE_URL = 'https://api.coingecko.com/api/v3/simple/price';
 export const TOKEN_IDS = ['usd-coin', 'tether', 'ethereum', 'bitcoin', 'wrapped-bitcoin', 'dai'];

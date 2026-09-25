@@ -22,10 +22,9 @@ vi.mock('../../src/config/constants', async (importOriginal) => {
 /**
  * The staking endpoints, driven over a real socket.
  *
- * What this proves is the part a service test structurally cannot: that the routes are registered,
- * that the sync path is genuinely exempt from the `Origin` check while still requiring the shared
- * token, and that the exemption did not accidentally extend to the user-facing routes. Those are
- * properties of wiring, and wiring is what silently stops working.
+ * What this proves is the part a service test structurally cannot: that the routes are registered and
+ * that the sync path is authenticated and origin-checked exactly like every other route here, with no
+ * exemption of its own. Those are properties of wiring, and wiring is what silently stops working.
  *
  * The provider points at a closed port, so an accidental chain call fails instantly instead of making
  * the suite depend on Blockfrost.
@@ -136,22 +135,22 @@ afterAll(async () => {
 });
 
 describe('POST /internal/cardano/staking/sync', () => {
-  it('is reachable without an Origin header', async () => {
-    // The point of the exemption. A scheduler sends no `Origin`, so an endpoint behind that check is
-    // an endpoint no scheduler can reach and the failure would look like a CORS problem rather than
-    // like a design mistake.
+  it('refuses a call carrying no Origin header, like every other route', async () => {
+    // No exemption: the job sends an `Origin` the deployment allows, the same way the other scheduled
+    // endpoints in this repository are called. A path listed as an exception would be one whose
+    // schedule keeps working after the allowed origins change, and nobody would find out here.
     const { status } = await call('/internal/cardano/staking/sync', {
       method: 'POST',
       origin: false,
       body: {}
     });
 
-    expect(status).not.toBe(403);
+    expect(status).toBe(403);
   });
 
   it('refuses a call carrying no credential', async () => {
-    // The exemption is from the origin check and nothing else. Keeping the path off the public list is
-    // what stops an endpoint that starts transactions from answering an unauthenticated caller.
+    // Keeping the path off the public list is what stops an endpoint that starts transactions from
+    // answering an unauthenticated caller.
     const { status, text } = await call('/internal/cardano/staking/sync', {
       method: 'POST',
       authorization: null,
@@ -185,17 +184,6 @@ describe('POST /internal/cardano/staking/sync', () => {
     expect(status).not.toBe(401);
   });
 
-  it('lets it through with no Origin header, which is how a scheduler calls', async () => {
-    const { status } = await call('/internal/cardano/staking/sync', {
-      method: 'POST',
-      origin: false,
-      body: {}
-    });
-
-    expect(status).not.toBe(401);
-    expect(status).not.toBe(403);
-  });
-
   it('serves no GET on that path', async () => {
     // Past the token, the route is POST only. Anything else is a route that was never registered.
     const { status } = await call('/internal/cardano/staking/sync');
@@ -206,8 +194,8 @@ describe('POST /internal/cardano/staking/sync', () => {
 
 describe('the user-facing staking routes', () => {
   it('still require an Origin header', async () => {
-    // The exemption is one path, not a prefix. A user route that inherited it would be reachable from
-    // any page on the internet.
+    // A route reachable from any page on the internet is what this would be if the origin check ever
+    // stopped applying to it.
     const { status } = await call('/cardano/staking/state?channel_user_id=5491100000001', {
       origin: false
     });

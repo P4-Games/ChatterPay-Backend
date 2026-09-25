@@ -1,16 +1,14 @@
 /**
  * The endpoint a scheduler calls, and the only route in this repository that a browser never reaches.
  *
- * Authentication is the shared product token, the same one the rest of the API takes, checked by the
- * global auth hook. What this route does not take is the `Origin` check: that header is absent from
- * every server-to-server call, so a scheduler behind it would be refused with a 403 no credential
- * could fix. The path is listed in `CORS_ORIGINS_EXCEPTIONS` for that reason.
- *
- * The HTTP contract is deliberately small, because the scheduler is configured outside this
- * repository and by hand:
+ * It is authenticated and origin-checked like every other route here, which is what the other
+ * scheduled endpoints in this repository do: the job presents the shared product token and an
+ * `Origin` the deployment allows. The HTTP contract is small because the scheduler is configured
+ * outside this repository and by hand:
  *
  *     POST /internal/cardano/staking/sync
  *     Authorization: Bearer <FRONTEND_TOKEN or CHATIZALO_TOKEN>
+ *     Origin: <an origin in CORS_ORIGINS>
  *     Content-Type: application/json
  *
  *     { "jobName": "cardano-staking-sync", "scheduledTime": "2026-01-01T03:00:00Z" }

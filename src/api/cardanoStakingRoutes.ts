@@ -15,11 +15,11 @@ import { cardanoStakingSync } from '../controllers/cardanoStakingSyncController'
 /**
  * The Cardano staking routes.
  *
- * Every route here takes the shared product token, checked by the global auth hook. `/internal/` is a
- * convention this repository did not have before: a path no browser reaches, and the one thing it is
- * exempt from is the `Origin` check, since that header is absent from every server-to-server call.
+ * Every route here takes the shared product token and the origin check, with no exemption for any of
+ * them. `/internal/` marks a path no browser reaches rather than a different way of authenticating.
  * The schedule that calls it is configured in GCP, outside this repository — nothing here creates,
- * deploys or assumes a scheduler.
+ * deploys or assumes a scheduler; the job carries the token and an allowed `Origin` like any other
+ * client.
  *
  * The user-facing ones are reached through a Next.js route that resolved the session itself. None of
  * them takes a wallet. Every one takes a `channel_user_id` and the service resolves the credential
