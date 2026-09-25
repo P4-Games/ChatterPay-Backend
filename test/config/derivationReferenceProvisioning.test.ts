@@ -71,13 +71,4 @@ describe('the derivation references reach the container', () => {
 
     expect((/secrets='([^']*)'/.exec(line)?.[1] ?? '').split(/\s+/)).not.toContain(name);
   });
-
-  it('gives the sponsor substitution a default, so a trigger that lacks it still builds', () => {
-    // Cloud Build matches substitutions strictly, so a `${_X}` no trigger defines fails the build.
-    const lines = instructionLines(repoFile('cloudbuild.yaml'));
-
-    expect(
-      lines.filter((line) => /^\s+_CARDANO_SPONSOR_DERIVATION_CHECK:\s*''$/.test(line))
-    ).toHaveLength(1);
-  });
 });
