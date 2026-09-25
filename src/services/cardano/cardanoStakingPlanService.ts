@@ -31,6 +31,10 @@ import type {
   ICardanoStakingAccount
 } from '../../models/cardanoStakingAccountModel';
 import type { CardanoStakingOperationKind } from '../../models/cardanoStakingOperationModel';
+import {
+  governanceTargetAlreadyInPlace,
+  type ParsedGovernanceTarget
+} from './cardanoGovernanceTargetService';
 import { assessStakingEnrolment } from './cardanoStakingEligibilityService';
 import type {
   CardanoPoolState,
@@ -169,6 +173,14 @@ export interface StakingDecisionContext {
    * `countSponsoredRegistrations`.
    */
   sponsoredRegistrationsInWindow: number;
+  /**
+   * What a requested vote delegation is aimed at, when one was requested.
+   *
+   * Absent for the sweep, which has no target to be aimed at - it initiates the neutral delegation and
+   * nothing else. Present for a user's request, and the only thing it decides here is whether the
+   * credential already delegates exactly there, which is a network fee spent to change nothing.
+   */
+  governanceTarget?: ParsedGovernanceTarget | null;
 }
 
 /**
@@ -378,6 +390,13 @@ export function decideRequestedAction(
 
     case 'delegate_vote': {
       if (!onChain.registered) return refuse('not_registered');
+      // Compared by what the identifiers decode to, never as text: the same DRep is spelled three
+      // ways across CIP-105, its revision and CIP-129, so a text comparison would read "already
+      // there" as a change worth building a transaction for.
+      const target = context.governanceTarget ?? null;
+      if (target !== null && governanceTargetAlreadyInPlace(onChain.governanceDelegation, target)) {
+        return refuse('already_delegated', target.idCip129 ?? target.kind);
+      }
       return act('delegate_vote');
     }
 

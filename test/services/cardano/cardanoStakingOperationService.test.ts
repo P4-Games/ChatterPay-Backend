@@ -322,6 +322,48 @@ describe('cardanoStakingOperationService', () => {
     });
   });
 
+  describe('what a vote delegation records', () => {
+    it('stores the target, so the row says which of the three it was', async () => {
+      // `delegate_vote` covers three different instructions to the ledger. A row that named only the
+      // kind could not tell an abstention from a vote of no confidence after the fact.
+      const account = await seedReadyAccount();
+      await createStakingOperation(account, {
+        ...intent('delegate_vote'),
+        governanceTarget: 'always_no_confidence'
+      });
+
+      const stored = await CardanoStakingOperation.findOne({ accountId: account._id });
+      expect(stored?.governanceTarget).toBe('always_no_confidence');
+      expect(stored?.governanceDrepIdCip129).toBeNull();
+    });
+
+    it('stores a representative in the canonical form and nothing else', async () => {
+      // CIP-129, because the same representative has a different string under each of the three
+      // spellings in circulation and a column holding whichever one a request used could not be
+      // compared to anything.
+      const account = await seedReadyAccount();
+      const idCip129 = 'drep1y242424242424242424242424242424242424242424242sdg97tu';
+      await createStakingOperation(account, {
+        ...intent('delegate_vote'),
+        governanceTarget: 'drep',
+        governanceDrepIdCip129: idCip129
+      });
+
+      const stored = await CardanoStakingOperation.findOne({ accountId: account._id });
+      expect(stored?.governanceTarget).toBe('drep');
+      expect(stored?.governanceDrepIdCip129).toBe(idCip129);
+    });
+
+    it('leaves both fields empty on an operation that delegates no vote', async () => {
+      const account = await seedReadyAccount();
+      await createStakingOperation(account, intent('withdraw_rewards'));
+
+      const stored = await CardanoStakingOperation.findOne({ accountId: account._id });
+      expect(stored?.governanceTarget).toBeNull();
+      expect(stored?.governanceDrepIdCip129).toBeNull();
+    });
+  });
+
   describe('the index list is one list', () => {
     it('checks exactly what the schemas declare, across every staking collection', async () => {
       // The guard and the documented deliverables read the same source. Two lists would drift, and

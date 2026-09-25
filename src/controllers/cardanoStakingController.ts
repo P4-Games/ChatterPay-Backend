@@ -48,6 +48,8 @@ const STATUS_OF: Record<StakingUserRefusal, number> = {
   assertion: 401,
   pin_grant: 401,
   action_not_allowed: 400,
+  // The action was permitted and what it was aimed at could not be used. A malformed request, so 400.
+  governance_target: 400,
   // The request was understood and the state does not permit it. 409 rather than 400: nothing about
   // the request was wrong, and a client that retries it unchanged after the state changes is right.
   refused: 409,
@@ -55,14 +57,33 @@ const STATUS_OF: Record<StakingUserRefusal, number> = {
   not_started: 502
 };
 
+/**
+ * Where a vote delegation sends the voting power, as the body carries it.
+ *
+ * Typed as loosely here as the wire really is and validated by
+ * `cardanoGovernanceTargetService.parseGovernanceTarget`, which is also what the service calls. One
+ * validator, called from one place, rather than a shape asserted here and re-checked further in.
+ */
+interface GovernanceTargetBody {
+  kind?: string;
+  drep_id?: string;
+}
+
 /** What the action endpoint accepts. */
 interface ActionBody {
   channel_user_id?: string;
   action?: string;
   recipient_address?: string | null;
-  /** Signed by the Next.js route over the user it authenticated and the action asked for. */
+  /**
+   * Where `delegate_vote` sends the voting power.
+   *
+   * Required for that action and refused for every other one. Without it `delegate_vote` could only
+   * ever mean the assembler's default, which is how abstaining came to be the only reachable target.
+   */
+  governance_target?: GovernanceTargetBody | null;
+  /** Signed by the Next.js route over the user it authenticated, the action and the target. */
   bff_assertion?: string;
-  /** Issued by `/cardano/staking/authorize` once the PIN verified for this exact action. */
+  /** Issued by `/cardano/staking/authorize` once the PIN verified for this exact action and target. */
   pin_grant?: string;
 }
 
@@ -71,6 +92,8 @@ interface AuthorizeBody {
   channel_user_id?: string;
   action?: string;
   recipient_address?: string | null;
+  /** The target being authorised. The grant is bound to it, so it is part of what the PIN confirms. */
+  governance_target?: GovernanceTargetBody | null;
   pin?: string;
   bff_assertion?: string;
 }
@@ -163,6 +186,7 @@ export async function cardanoStakingAction(
   try {
     const result = await requestStakingAction(body.channel_user_id, action, {
       recipientAddress: body.recipient_address ?? null,
+      governanceTarget: body.governance_target ?? null,
       // Recorded on the operation so an audit can tell a user's request from the sweep's decision.
       actor: 'web',
       bffAssertion: body.bff_assertion ?? null,
@@ -275,6 +299,7 @@ export async function cardanoStakingAuthorize(
     const result = await authorizeStakingAction(body.channel_user_id, action, {
       pin: body.pin,
       recipientAddress: body.recipient_address ?? null,
+      governanceTarget: body.governance_target ?? null,
       bffAssertion: body.bff_assertion ?? null,
       actor: 'web'
     });

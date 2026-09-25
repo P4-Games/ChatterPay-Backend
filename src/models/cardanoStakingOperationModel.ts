@@ -14,6 +14,15 @@ export type CardanoStakingOperationKind =
   | 'update_drep'
   | 'cast_drep_vote';
 
+/**
+ * Where a vote delegation sent the voting power.
+ *
+ * The three targets Cardano offers a delegator. Declared here rather than imported from the service
+ * that parses requests, because the model is what the database validator is generated from and it must
+ * not depend on a service to say what it stores.
+ */
+export type CardanoStakingGovernanceTarget = 'always_abstain' | 'always_no_confidence' | 'drep';
+
 /** How far an operation has got, from this service's point of view. */
 export type CardanoStakingOperationStatus =
   | 'queued'
@@ -176,6 +185,22 @@ export interface ICardanoStakingOperation extends Document {
   commercialFeeLovelace: string | null;
   quoteSnapshot: CardanoStakingQuoteSnapshot | null;
   recipientAddress: string | null;
+  /**
+   * Where a vote delegation sent the voting power. `null` on every other kind.
+   *
+   * Recorded because the kind alone does not say what the operation did: `delegate_vote` covers three
+   * different instructions to the ledger, and a history that named only the kind could not tell an
+   * abstention from a vote of no confidence after the fact.
+   */
+  governanceTarget: CardanoStakingGovernanceTarget | null;
+  /**
+   * The DRep, canonically, when `governanceTarget` is `drep`. `null` otherwise.
+   *
+   * CIP-129 and nothing else. The same DRep has a different string under each of the three spellings
+   * in circulation, so a column holding whichever one a request happened to use could not be compared
+   * to anything.
+   */
+  governanceDrepIdCip129: string | null;
   availableRewardWithdrawalLovelace: string | null;
   errorCode: string | null;
   attempts: number;
@@ -283,6 +308,13 @@ const cardanoStakingOperationSchema = new Schema<ICardanoStakingOperation>(
     commercialFeeLovelace: { type: String, required: false, default: null },
     quoteSnapshot: { type: quoteSnapshotSchema, required: false, default: null },
     recipientAddress: { type: String, required: false, default: null },
+    governanceTarget: {
+      type: String,
+      enum: ['always_abstain', 'always_no_confidence', 'drep'],
+      required: false,
+      default: null
+    },
+    governanceDrepIdCip129: { type: String, required: false, default: null },
     availableRewardWithdrawalLovelace: { type: String, required: false, default: null },
     errorCode: { type: String, required: false, default: null },
     attempts: { type: Number, required: true, default: 0 },

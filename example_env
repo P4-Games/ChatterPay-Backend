@@ -10,6 +10,12 @@ SEED_INTERNAL_SALT_CAR=
 SIGNING_KEY=
 
 # Security PIN Configuration
+# SECURITY_PIN_ENABLED governs every surface that consults the PIN: the operation gate, the Cardano
+# staking gate, whether a staking mutation must carry a PIN grant, and whether the staking
+# authorisation endpoint verifies a PIN before issuing one. With it false, a staking action is
+# authorised without a PIN and each such authorisation is logged as a warning.
+# SECURITY_PIN_HMAC_KEY is mandatory whenever staking is on: the key a PIN grant is signed with is
+# derived from it, and without it the authorisation endpoint refuses with pin_grant/not_configured.
 SECURITY_PIN_HMAC_KEY=
 SECURITY_PIN_LENGTH=6
 SECURITY_PIN_MAX_FAILED_ATTEMPTS=5

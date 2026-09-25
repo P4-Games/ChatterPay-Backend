@@ -32,6 +32,7 @@ import CardanoStakingAccount, {
 } from '../../models/cardanoStakingAccountModel';
 import { declaredIndexNames, STAKING_COLLECTIONS } from '../../models/cardanoStakingCollections';
 import CardanoStakingOperation, {
+  type CardanoStakingGovernanceTarget,
   type CardanoStakingOperationKind,
   type ICardanoStakingOperation
 } from '../../models/cardanoStakingOperationModel';
@@ -245,6 +246,10 @@ export interface StakingOperationIntent {
   /** Defaults to the account's current cycle. Required when this operation opens a new one. */
   lifecycleId?: string;
   recipientAddress?: string | null;
+  /** Where a vote delegation sends the voting power. `null` for every other kind. */
+  governanceTarget?: CardanoStakingGovernanceTarget | null;
+  /** The DRep in canonical CIP-129 form, when the target is one. */
+  governanceDrepIdCip129?: string | null;
 }
 
 /**
@@ -282,6 +287,8 @@ export async function createStakingOperation(
     kind: intent.kind,
     actor: intent.actor,
     idempotencyKey: intent.idempotencyKey,
-    recipientAddress: intent.recipientAddress ?? null
+    recipientAddress: intent.recipientAddress ?? null,
+    governanceTarget: intent.governanceTarget ?? null,
+    governanceDrepIdCip129: intent.governanceDrepIdCip129 ?? null
   });
 }

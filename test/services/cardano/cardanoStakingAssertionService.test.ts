@@ -41,8 +41,26 @@ const PHONE = '5491122223333';
 const OTHER = '5491199998888';
 const RECIPIENT = 'addr_test1vrhdandhv2ngazdseql7v5fkg5utnu629anv9zt25x8vrsqn2mhal';
 
+/**
+ * Two DReps, as the canonical target strings a request produces for them.
+ *
+ * Written out rather than derived, because what these tests are about is that the *string* inside the
+ * signature differs. How it is built is `cardanoGovernanceTargetService`'s business and is tested
+ * there.
+ */
+const DREP_ONE = 'drep:drep1ytmqvnmfzlp9wvqd0kjdtqj6kqxh2yepzcmqmr8rhmalgks5p6tqa';
+const DREP_TWO = 'drep:drep1y2qdkxhvj5rk6c6pdsy3xq5t8k9qh4wqz5xkmczw6kuhmfsq4rpxz';
+
 /** What a request for a withdrawal expects. */
-const WITHDRAW = { sub: PHONE, act: 'withdraw_rewards' as const, rcp: null };
+const WITHDRAW = { sub: PHONE, act: 'withdraw_rewards' as const, rcp: null, gov: null };
+
+/** What a request to abstain expects. */
+const ABSTAIN = {
+  sub: PHONE,
+  act: 'delegate_vote' as const,
+  rcp: null,
+  gov: 'always_abstain'
+};
 
 beforeEach(() => {
   state.bffSecret = 'a-shared-secret-between-the-bff-and-the-backend';
@@ -144,7 +162,7 @@ describe('the BFF assertion', () => {
     const assertion = signBffAssertion(PHONE, 'withdraw_rewards');
 
     expect(
-      verifyBffAssertion(assertion, { sub: PHONE, act: 'exit_and_send_max', rcp: null })
+      verifyBffAssertion(assertion, { sub: PHONE, act: 'exit_and_send_max', rcp: null, gov: null })
     ).toMatchObject({ ok: false, rejection: 'mismatched' });
   });
 
@@ -157,7 +175,8 @@ describe('the BFF assertion', () => {
       verifyBffAssertion(assertion, {
         sub: PHONE,
         act: 'exit_and_send_max',
-        rcp: 'addr_test1_somewhere_else'
+        rcp: 'addr_test1_somewhere_else',
+        gov: null
       })
     ).toMatchObject({ ok: false, rejection: 'mismatched' });
   });
@@ -166,7 +185,12 @@ describe('the BFF assertion', () => {
     const assertion = signBffAssertion(PHONE, 'exit_and_send_max', RECIPIENT);
 
     expect(
-      verifyBffAssertion(assertion, { sub: PHONE, act: 'exit_and_send_max', rcp: RECIPIENT })
+      verifyBffAssertion(assertion, {
+        sub: PHONE,
+        act: 'exit_and_send_max',
+        rcp: RECIPIENT,
+        gov: null
+      })
     ).toMatchObject({ ok: true });
   });
 
@@ -178,7 +202,7 @@ describe('the BFF assertion', () => {
 
   it('expires', () => {
     const issuedAt = new Date('2026-01-01T00:00:00Z');
-    const assertion = signBffAssertion(PHONE, 'withdraw_rewards', null, issuedAt);
+    const assertion = signBffAssertion(PHONE, 'withdraw_rewards', null, null, issuedAt);
 
     expect(verifyBffAssertion(assertion, WITHDRAW, new Date('2026-01-01T00:10:00Z'))).toMatchObject(
       { ok: false, rejection: 'expired' }
@@ -187,7 +211,7 @@ describe('the BFF assertion', () => {
 
   it('is still good a moment after it was issued', () => {
     const issuedAt = new Date('2026-01-01T00:00:00Z');
-    const assertion = signBffAssertion(PHONE, 'withdraw_rewards', null, issuedAt);
+    const assertion = signBffAssertion(PHONE, 'withdraw_rewards', null, null, issuedAt);
 
     expect(verifyBffAssertion(assertion, WITHDRAW, new Date('2026-01-01T00:00:30Z'))).toMatchObject(
       { ok: true }
@@ -198,6 +222,7 @@ describe('the BFF assertion', () => {
     const assertion = signBffAssertion(
       PHONE,
       'withdraw_rewards',
+      null,
       null,
       new Date('2026-01-01T01:00:00Z')
     );
@@ -221,10 +246,11 @@ describe('the BFF assertion', () => {
   it('refuses a payload of an unknown version', () => {
     // A different shape would be compared field by field against fields that mean something else.
     const claims = {
-      v: 2,
+      v: 99,
       sub: PHONE,
       act: 'withdraw_rewards',
       rcp: null,
+      gov: null,
       nonce: 'aa',
       iat: 1,
       exp: 9
@@ -235,6 +261,141 @@ describe('the BFF assertion', () => {
       ok: false,
       rejection: 'malformed'
     });
+  });
+
+  it('refuses the shape this contract used to have', () => {
+    // Version 1 carried no governance target, so its fields canonicalise into different positions.
+    // Accepting it would mean accepting an assertion that says nothing about what a vote delegation
+    // is aimed at, which is the whole hole the version was raised to close.
+    const claims = {
+      v: 1,
+      sub: PHONE,
+      act: 'delegate_vote',
+      rcp: null,
+      nonce: 'aa',
+      iat: 1,
+      exp: 9
+    };
+    const payload = Buffer.from(JSON.stringify(claims), 'utf8').toString('base64url');
+
+    expect(verifyBffAssertion(`${payload}.signature`, ABSTAIN)).toMatchObject({
+      ok: false,
+      rejection: 'malformed'
+    });
+  });
+});
+
+describe('the governance target inside an assertion', () => {
+  it('verifies the target it was signed for', () => {
+    const assertion = signBffAssertion(PHONE, 'delegate_vote', null, 'always_abstain');
+
+    expect(verifyBffAssertion(assertion, ABSTAIN)).toMatchObject({ ok: true });
+  });
+
+  it('refuses an abstention presented as a vote of no confidence', () => {
+    // The two are opposite instructions to the ledger. An assertion for one is not an assertion for
+    // the other, and without the target inside the signature they would be indistinguishable.
+    const assertion = signBffAssertion(PHONE, 'delegate_vote', null, 'always_abstain');
+
+    expect(
+      verifyBffAssertion(assertion, { ...ABSTAIN, gov: 'always_no_confidence' })
+    ).toMatchObject({ ok: false, rejection: 'mismatched' });
+  });
+
+  it('refuses an abstention presented as a delegation to a DRep', () => {
+    const assertion = signBffAssertion(PHONE, 'delegate_vote', null, 'always_abstain');
+
+    expect(verifyBffAssertion(assertion, { ...ABSTAIN, gov: DREP_ONE })).toMatchObject({
+      ok: false,
+      rejection: 'mismatched'
+    });
+  });
+
+  it('refuses one DRep presented as another', () => {
+    // The case the whole target claim exists for: two representatives who would vote differently, and
+    // an assertion that names one of them.
+    const assertion = signBffAssertion(PHONE, 'delegate_vote', null, DREP_ONE);
+
+    expect(verifyBffAssertion(assertion, { ...ABSTAIN, gov: DREP_TWO })).toMatchObject({
+      ok: false,
+      rejection: 'mismatched'
+    });
+  });
+
+  it('refuses a targeted assertion presented for an action that has no target', () => {
+    const assertion = signBffAssertion(PHONE, 'delegate_vote', null, DREP_ONE);
+
+    expect(verifyBffAssertion(assertion, { ...ABSTAIN, gov: null })).toMatchObject({
+      ok: false,
+      rejection: 'mismatched'
+    });
+  });
+
+  it('refuses an untargeted assertion presented for a target', () => {
+    // The direction that used to be the bug rather than a refusal: an assertion signed over the
+    // action alone would otherwise authorise whichever target the request happened to carry.
+    const assertion = signBffAssertion(PHONE, 'delegate_vote', null, null);
+
+    expect(verifyBffAssertion(assertion, ABSTAIN)).toMatchObject({
+      ok: false,
+      rejection: 'mismatched'
+    });
+  });
+});
+
+describe('the governance target inside a PIN grant', () => {
+  it('verifies the target it was issued for', () => {
+    const issued = issuePinGrant(PHONE, 'delegate_vote', null, DREP_ONE);
+
+    expect(verifyPinGrant(issued?.grant ?? null, { ...ABSTAIN, gov: DREP_ONE })).toMatchObject({
+      ok: true
+    });
+  });
+
+  it('cannot be spent on a different predefined target', () => {
+    // The PIN was entered under a screen that said "abstain". Spending that confirmation on a vote of
+    // no confidence would make the PIN a fact about a session again.
+    const issued = issuePinGrant(PHONE, 'delegate_vote', null, 'always_abstain');
+
+    expect(
+      verifyPinGrant(issued?.grant ?? null, { ...ABSTAIN, gov: 'always_no_confidence' })
+    ).toMatchObject({ ok: false, rejection: 'mismatched' });
+  });
+
+  it('cannot be spent on a DRep', () => {
+    const issued = issuePinGrant(PHONE, 'delegate_vote', null, 'always_abstain');
+
+    expect(verifyPinGrant(issued?.grant ?? null, { ...ABSTAIN, gov: DREP_ONE })).toMatchObject({
+      ok: false,
+      rejection: 'mismatched'
+    });
+  });
+
+  it('cannot be spent on a different DRep', () => {
+    const issued = issuePinGrant(PHONE, 'delegate_vote', null, DREP_ONE);
+
+    expect(verifyPinGrant(issued?.grant ?? null, { ...ABSTAIN, gov: DREP_TWO })).toMatchObject({
+      ok: false,
+      rejection: 'mismatched'
+    });
+  });
+
+  it('cannot be spent on a no-confidence vote by dropping the target', () => {
+    const issued = issuePinGrant(PHONE, 'delegate_vote', null, 'always_no_confidence');
+
+    expect(verifyPinGrant(issued?.grant ?? null, { ...ABSTAIN, gov: null })).toMatchObject({
+      ok: false,
+      rejection: 'mismatched'
+    });
+  });
+
+  it('keeps the nonce, so the target it was issued for is also single-use', () => {
+    // The nonce becomes the operation's idempotency key. A grant bound to one target is therefore
+    // spendable once, on that target.
+    const first = issuePinGrant(PHONE, 'delegate_vote', null, DREP_ONE);
+    const second = issuePinGrant(PHONE, 'delegate_vote', null, DREP_ONE);
+
+    expect(first?.nonce).not.toBe(second?.nonce);
   });
 });
 
@@ -257,7 +418,12 @@ describe('the PIN grant', () => {
     const issued = issuePinGrant(PHONE, 'withdraw_rewards');
 
     expect(
-      verifyPinGrant(issued?.grant ?? null, { sub: PHONE, act: 'exit_and_send_max', rcp: null })
+      verifyPinGrant(issued?.grant ?? null, {
+        sub: PHONE,
+        act: 'exit_and_send_max',
+        rcp: null,
+        gov: null
+      })
     ).toMatchObject({ ok: false, rejection: 'mismatched' });
   });
 
@@ -296,7 +462,13 @@ describe('the PIN grant', () => {
   });
 
   it('expires within minutes, not hours', () => {
-    const issued = issuePinGrant(PHONE, 'withdraw_rewards', null, new Date('2026-01-01T00:00:00Z'));
+    const issued = issuePinGrant(
+      PHONE,
+      'withdraw_rewards',
+      null,
+      null,
+      new Date('2026-01-01T00:00:00Z')
+    );
 
     expect(
       verifyPinGrant(issued?.grant ?? null, WITHDRAW, new Date('2026-01-01T00:04:00Z'))
@@ -307,7 +479,13 @@ describe('the PIN grant', () => {
   });
 
   it('reports when it expires', () => {
-    const issued = issuePinGrant(PHONE, 'withdraw_rewards', null, new Date('2026-01-01T00:00:00Z'));
+    const issued = issuePinGrant(
+      PHONE,
+      'withdraw_rewards',
+      null,
+      null,
+      new Date('2026-01-01T00:00:00Z')
+    );
 
     expect(issued?.expiresAt.toISOString()).toBe('2026-01-01T00:05:00.000Z');
   });

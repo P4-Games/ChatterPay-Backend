@@ -28,6 +28,11 @@
  * The keys are separate on purpose. The grant key is derived from the PIN key with its own label, so a
  * grant cannot be turned into a PIN hash or the reverse; the BFF key is its own configured secret,
  * because the party that holds it is a different party.
+ *
+ * Both are bound to the *whole* of what is being asked for, and that is what makes the governance
+ * options safe to offer. A vote delegation names a target as well as an action, so the target is a
+ * claim: a grant issued for abstaining cannot be spent on voting no confidence, and one issued for
+ * a named DRep cannot be spent on a different DRep.
  */
 
 import crypto from 'crypto';
@@ -54,16 +59,36 @@ const CLOCK_TOLERANCE_SECONDS = 30;
 /** The label that separates the grant key from the PIN key it is derived from. */
 const GRANT_KEY_LABEL = 'cardano-staking-operation-grant';
 
+/**
+ * The shape both sides sign, as a number inside the signature.
+ *
+ * Raised when the canonical form gains or loses a field, which is the only thing it is for. Version 2
+ * added the governance target: an assertion written under version 1 canonicalises its fields into
+ * different positions, so comparing the two field by field would compare fields that mean different
+ * things. Both sides of this contract ship together, so an assertion of the previous version is a
+ * deployment that is half applied rather than a caller to accommodate, and it is refused as malformed.
+ */
+const ASSERTION_VERSION = 2;
+
 /** What both assertions are signed over. */
 export interface StakingAssertionClaims {
   /** Format version, so a change of shape cannot be replayed as the old one. */
-  v: 1;
+  v: typeof ASSERTION_VERSION;
   /** The phone number, formatted. Whose position this is about. */
   sub: string;
   /** The exact action. Inside the signature, so an assertion cannot be moved to another one. */
   act: CardanoStakingOperationKind;
   /** An exit's destination, or `null`. Inside the signature, so the money cannot be redirected. */
   rcp: string | null;
+  /**
+   * The governance target, canonically, or `null` for an action that has none.
+   *
+   * Inside the signature for the same reason the destination is: a vote delegation is two decisions,
+   * and an assertion that named only the first would let a grant obtained for abstaining be spent on
+   * delegating to a DRep. See `cardanoGovernanceTargetService` for what the string is and why it is
+   * built from the identifier as supplied rather than from its normalised form.
+   */
+  gov: string | null;
   /** Unique per assertion. Becomes the operation's idempotency key, which is what makes it single-use. */
   nonce: string;
   iat: number;
@@ -75,6 +100,8 @@ export interface StakingAssertionExpectation {
   sub: string;
   act: CardanoStakingOperationKind;
   rcp: string | null;
+  /** The canonical governance target the request is asking for, or `null` when it has none. */
+  gov: string | null;
 }
 
 /** Why an assertion was not accepted. */
@@ -89,7 +116,7 @@ export type StakingAssertionRejection =
   | 'bad_signature'
   /** Past its expiry, or issued in the future. */
   | 'expired'
-  /** Verified, and about a different user, action or destination than the request. */
+  /** Verified, and about a different user, action, destination or governance target than the request. */
   | 'mismatched';
 
 export type StakingAssertionVerification =
@@ -151,8 +178,12 @@ function grantKey(): string | null {
  * Serialises the claims the way both sides must agree on.
  *
  * Fixed field order, and a delimiter that cannot appear in any field: the phone number is digits, the
- * action is from a closed set, the nonce is hex, and an address is bech32. Signing a JSON object
- * instead would make the signature depend on key order and on how each runtime spells a number.
+ * action is from a closed set, the nonce is hex, an address is bech32, and the governance target is a
+ * keyword or a DRep identifier that `cardanoGovernanceTargetService` has already restricted to
+ * lowercase alphanumerics and the underscore. That restriction is what keeps this join injective — a
+ * field able to carry a `|` could be chosen to make two different claim sets canonicalise to the same
+ * string. Signing a JSON object instead would make the signature depend on key order and on how each
+ * runtime spells a number.
  *
  * @param claims - The claims.
  * @returns The canonical string.
@@ -163,6 +194,7 @@ function canonical(claims: StakingAssertionClaims): string {
     claims.sub,
     claims.act,
     claims.rcp ?? '-',
+    claims.gov ?? '-',
     claims.nonce,
     claims.iat,
     claims.exp
@@ -218,7 +250,7 @@ function verify(
 
   // The version is checked before the signature is trusted for anything: a payload of a different
   // shape would be compared field by field against fields that mean something else.
-  if (claims.v !== 1) {
+  if (claims.v !== ASSERTION_VERSION) {
     return { ok: false, rejection: 'malformed', detail: 'unexpected assertion version' };
   }
   if (
@@ -267,6 +299,16 @@ function verify(
       detail: 'the assertion names another destination'
     };
   }
+  // The binding the three governance targets exist behind. Abstaining, voting no confidence and
+  // following a named DRep are three different instructions to the ledger, and a grant is good for
+  // exactly the one its holder was shown and typed a PIN for.
+  if ((claims.gov ?? null) !== (expected.gov ?? null)) {
+    return {
+      ok: false,
+      rejection: 'mismatched',
+      detail: 'the assertion names another governance target'
+    };
+  }
 
   return { ok: true, claims };
 }
@@ -277,6 +319,7 @@ function verify(
  * @param sub - The phone number.
  * @param act - The action.
  * @param rcp - An exit's destination, or `null`.
+ * @param gov - The canonical governance target, or `null`.
  * @param ttlSeconds - How long it lasts.
  * @param now - The clock.
  * @returns The claims, with a fresh nonce.
@@ -285,15 +328,17 @@ function claimsFor(
   sub: string,
   act: CardanoStakingOperationKind,
   rcp: string | null,
+  gov: string | null,
   ttlSeconds: number,
   now: Date
 ): StakingAssertionClaims {
   const seconds = Math.floor(now.getTime() / 1000);
   return {
-    v: 1,
+    v: ASSERTION_VERSION,
     sub: getPhoneNumberFormatted(sub),
     act,
     rcp: rcp ?? null,
+    gov: gov ?? null,
     nonce: crypto.randomBytes(16).toString('hex'),
     iat: seconds,
     exp: seconds + ttlSeconds
@@ -310,6 +355,7 @@ function claimsFor(
  * @param sub - The phone number the caller authenticated.
  * @param act - The action being asked for.
  * @param rcp - An exit's destination, or `null`.
+ * @param gov - The canonical governance target, or `null` for an action that has none.
  * @param now - The clock.
  * @returns The assertion, or `null` when no secret is configured.
  */
@@ -317,11 +363,12 @@ export function signBffAssertion(
   sub: string,
   act: CardanoStakingOperationKind,
   rcp: string | null = null,
+  gov: string | null = null,
   now: Date = new Date()
 ): string | null {
   const key = bffKey();
   if (key === null) return null;
-  return sign(claimsFor(sub, act, rcp, BFF_TTL_SECONDS, now), key);
+  return sign(claimsFor(sub, act, rcp, gov, BFF_TTL_SECONDS, now), key);
 }
 
 /**
@@ -350,6 +397,7 @@ export function verifyBffAssertion(
  * @param sub - The phone number whose PIN verified.
  * @param act - The action it was verified for.
  * @param rcp - An exit's destination, or `null`.
+ * @param gov - The canonical governance target it was verified for, or `null`.
  * @param now - The clock.
  * @returns The grant and when it expires, or `null` when no key is configured.
  */
@@ -357,6 +405,7 @@ export function issuePinGrant(
   sub: string,
   act: CardanoStakingOperationKind,
   rcp: string | null = null,
+  gov: string | null = null,
   now: Date = new Date()
 ): { grant: string; expiresAt: Date; nonce: string } | null {
   const key = grantKey();
@@ -368,7 +417,7 @@ export function issuePinGrant(
     return null;
   }
 
-  const claims = claimsFor(sub, act, rcp, GRANT_TTL_SECONDS, now);
+  const claims = claimsFor(sub, act, rcp, gov, GRANT_TTL_SECONDS, now);
   return {
     grant: sign(claims, key),
     expiresAt: new Date(claims.exp * 1000),

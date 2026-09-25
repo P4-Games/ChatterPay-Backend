@@ -342,6 +342,45 @@ describe('the user-facing staking routes', () => {
     expect(status).toBe(400);
   });
 
+  it('refuse a vote delegation that names no governance target', async () => {
+    // The route carries the target and the service validates it, and 400 is the answer either way: the
+    // action is offered and the request did not say what it is aimed at. Reaching the assembler's
+    // default instead is what made abstaining the only target this screen could ask for.
+    const { status, text } = await call('/cardano/staking/action', {
+      method: 'POST',
+      body: { channel_user_id: '5491100000001', action: 'delegate_vote' }
+    });
+
+    expect(status).toBe(400);
+    expect(text).toContain('governance_target');
+  });
+
+  it('refuse a governance target on an action that has none', async () => {
+    const { status, text } = await call('/cardano/staking/action', {
+      method: 'POST',
+      body: {
+        channel_user_id: '5491100000001',
+        action: 'withdraw_rewards',
+        governance_target: { kind: 'always_abstain' }
+      }
+    });
+
+    expect(status).toBe(400);
+    expect(text).toContain('governance_target');
+  });
+
+  it('refuse an authorisation for a vote delegation with no target', async () => {
+    // The grant is bound to the target, so a target the action endpoint would refuse must not be able
+    // to buy one here either.
+    const { status, text } = await call('/cardano/staking/authorize', {
+      method: 'POST',
+      body: { channel_user_id: '5491100000001', action: 'delegate_vote', pin: '000000' }
+    });
+
+    expect(status).toBe(400);
+    expect(text).toContain('governance_target');
+  });
+
   it('refuse a consent that says neither yes nor no', async () => {
     // A missing flag read as `false` would switch staking off for anybody whose body did not arrive.
     const { status } = await call('/cardano/staking/consent', {

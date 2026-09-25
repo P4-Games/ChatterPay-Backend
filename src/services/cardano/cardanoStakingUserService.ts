@@ -39,6 +39,11 @@ import CardanoStakingReward from '../../models/cardanoStakingRewardModel';
 import { type IUser, UserModel } from '../../models/userModel';
 import { securityService } from '../securityService';
 import { chatterPayFeeFor } from './cardanoFeeService';
+import {
+  type CardanoGovernanceTargetKind,
+  governanceTargetCanonical,
+  parseGovernanceTarget
+} from './cardanoGovernanceTargetService';
 import { buildCardanoProvider } from './cardanoProviderService';
 import { assembleStakingPlan } from './cardanoStakingAssemblyService';
 import {
@@ -97,6 +102,13 @@ export type StakingUserRefusal =
   | 'pin_grant'
   /** The action is not one a user may ask for. */
   | 'action_not_allowed'
+  /**
+   * The governance target is missing, malformed, unreadable, or supplied for an action without one.
+   *
+   * Separate from `action_not_allowed` because the two are different things for a caller to fix: the
+   * action was permitted and what it was aimed at was not usable.
+   */
+  | 'governance_target'
   /** The decision refused it. Carries the decision's own reason. */
   | 'refused'
   /** The plan could not be assembled. Carries the assembly's reason. */
@@ -536,15 +548,35 @@ export async function requestStakingAction(
   options: {
     recipientAddress?: string | null;
     actor: string;
-    /** Signed by the BFF over this user and this action. */
+    /** Signed by the BFF over this user, this action and this governance target. */
     bffAssertion?: string | null;
-    /** Issued by `authorizeStakingAction` after the PIN verified for this action. */
+    /** Issued by `authorizeStakingAction` after the PIN verified for this action and target. */
     pinGrant?: string | null;
+    /**
+     * Where a vote delegation sends the voting power, as the request carried it.
+     *
+     * Taken as `unknown` and validated here rather than by the route, so that the one place which
+     * decides whether an action may be taken is also the place which decides whether what it is aimed
+     * at can be read. A route that pre-parsed it would be a second validator to keep in step.
+     */
+    governanceTarget?: unknown;
   }
 ): Promise<StakingUserResult<StakingActionStarted>> {
   if (!USER_REQUESTABLE_ACTIONS.includes(action)) {
     return { ok: false, refusal: 'action_not_allowed', detail: action };
   }
+
+  // Before the assertion, because the assertion is bound to the target: there is nothing to verify
+  // against until the target has been read, and an unreadable one is refused either way.
+  const parsedTarget = parseGovernanceTarget(options.governanceTarget, action);
+  if (!parsedTarget.ok) {
+    return {
+      ok: false,
+      refusal: 'governance_target',
+      detail: `${parsedTarget.refusal}: ${parsedTarget.detail}`
+    };
+  }
+  const target = parsedTarget.target;
 
   const cardano = getCardanoConfig();
   if (!cardano.enabled) {
@@ -552,7 +584,12 @@ export async function requestStakingAction(
   }
 
   const recipient = options.recipientAddress ?? null;
-  const expectation = { sub: phoneNumber, act: action, rcp: recipient };
+  const expectation = {
+    sub: phoneNumber,
+    act: action,
+    rcp: recipient,
+    gov: governanceTargetCanonical(target)
+  };
 
   // Before the gate and before any read. Both of these say *who is asking and for what*, and there is
   // no reason to look anything up on behalf of a request that has not established that.
@@ -612,7 +649,10 @@ export async function requestStakingAction(
     sponsoredRegistrationsInWindow: await countSponsoredRegistrations(
       account._id as Types.ObjectId,
       config.sponsorWindowDays
-    )
+    ),
+    // Only the request path knows what the delegation is aimed at, so only the request path can be
+    // told that the credential already delegates there. The sweep passes none and is unaffected.
+    governanceTarget: target
   });
 
   if (decision.action === 'none') {
@@ -636,7 +676,10 @@ export async function requestStakingAction(
     user,
     action,
     provider,
-    recipientAddress: recipient
+    recipientAddress: recipient,
+    // Left out entirely rather than passed as `undefined` for an action with no target, so the
+    // assembler's own default - abstaining, which is what the sweep delegates - stays the default.
+    ...(target === null ? {} : { drep: target.drep })
   });
   if (assembly.outcome === 'refused') {
     return {
@@ -663,11 +706,18 @@ export async function requestStakingAction(
     // From the grant's nonce when there is one, so a replayed grant collides with the unique index on
     // `(chainId, idempotencyKey)` rather than starting a second operation. Without a grant there is
     // nothing to be single-use about, and the key falls back to being merely unique.
+    // Without a grant the key is merely unique, and the target belongs in it anyway: it is what
+    // distinguishes two operations that would otherwise read as the same intent.
     idempotencyKey:
       grantNonce === null
-        ? `user:${String(account._id)}:${action}:${Date.now()}`
+        ? `user:${String(account._id)}:${action}:${target?.canonical ?? '-'}:${Date.now()}`
         : assertionIdempotencyKey(grantNonce),
-    recipientAddress: options.recipientAddress ?? null
+    recipientAddress: options.recipientAddress ?? null,
+    governanceTarget: target?.kind ?? null,
+    // The canonical CIP-129 form, never the spelling the request used: a record that stored one of
+    // three spellings per row could not tell two rows about the same DRep from two about different
+    // ones.
+    governanceDrepIdCip129: target?.idCip129 ?? null
   });
 
   const execution = await executeStakingOperation({
@@ -710,6 +760,14 @@ export interface StakingAuthorization {
   grant: string;
   expiresAt: Date;
   action: CardanoStakingOperationKind;
+  /**
+   * The governance target the grant is good for, or `null` when the action has none.
+   *
+   * Echoed back rather than left implicit: the caller has to present the same target with the action,
+   * and a response that named only the action would let a screen believe a grant is more general than
+   * it is.
+   */
+  governanceTarget: CardanoGovernanceTargetKind | null;
 }
 
 /**
@@ -722,6 +780,10 @@ export interface StakingAuthorization {
  *
  * The BFF assertion is required here too. Issuing a grant is not a read: a caller that could ask for
  * one on somebody else's behalf would be able to brute-force their PIN.
+ *
+ * `SECURITY_PIN_ENABLED` governs the PIN check, and a deployment with the switch off gets a grant
+ * without one. That is the same rule the gate and `pinGrantRequired` follow; the assertion is required
+ * either way.
  *
  * @param phoneNumber - The authenticated user's phone number.
  * @param action - The action being authorised.
@@ -736,14 +798,33 @@ export async function authorizeStakingAction(
     recipientAddress?: string | null;
     bffAssertion?: string | null;
     actor: string;
+    /** Where the vote delegation being authorised sends the voting power. */
+    governanceTarget?: unknown;
   }
 ): Promise<StakingUserResult<StakingAuthorization>> {
   if (!USER_REQUESTABLE_ACTIONS.includes(action)) {
     return { ok: false, refusal: 'action_not_allowed', detail: action };
   }
 
+  // Read here too, and by the same function: the grant is bound to the target, so a target the action
+  // endpoint would refuse must not be able to buy a grant.
+  const parsedTarget = parseGovernanceTarget(options.governanceTarget, action);
+  if (!parsedTarget.ok) {
+    return {
+      ok: false,
+      refusal: 'governance_target',
+      detail: `${parsedTarget.refusal}: ${parsedTarget.detail}`
+    };
+  }
+  const target = parsedTarget.target;
+
   const recipient = options.recipientAddress ?? null;
-  const expectation = { sub: phoneNumber, act: action, rcp: recipient };
+  const expectation = {
+    sub: phoneNumber,
+    act: action,
+    rcp: recipient,
+    gov: governanceTargetCanonical(target)
+  };
 
   if (bffAssertionRequired()) {
     const asserted = verifyBffAssertion(options.bffAssertion ?? null, expectation);
@@ -761,21 +842,41 @@ export async function authorizeStakingAction(
   const own = await resolveOwn(phoneNumber);
   if (!own.ok) return own;
 
-  const verified = await securityService.verifyPin(phoneNumber, options.pin, options.actor);
-  if (!verified.ok) {
-    // The status travels and the PIN never does. `blocked` and `not_set` are different situations for
-    // the user to resolve, and the failed-attempt counter is the security service's to keep.
-    return { ok: false, refusal: 'security_gate', detail: verified.status ?? 'pin_rejected' };
+  // The PIN switch governs this step the way it governs `stakingSecurityGate`,
+  // `securityService.getOperationGate` and `pinGrantRequired`. With the PIN off no user has one to
+  // verify, so verifying here refuses every authorisation with `security_gate` and leaves the whole
+  // surface unreachable — the only path to a mutation goes through this function. Issuing the grant
+  // without a PIN adds no capability either: `requestStakingAction` does not require a grant when the
+  // switch is off, so a caller that can reach this can already mutate without presenting one.
+  if (SECURITY_PIN_ENABLED) {
+    const verified = await securityService.verifyPin(phoneNumber, options.pin, options.actor);
+    if (!verified.ok) {
+      // The status travels and the PIN never does. `blocked` and `not_set` are different situations for
+      // the user to resolve, and the failed-attempt counter is the security service's to keep.
+      return { ok: false, refusal: 'security_gate', detail: verified.status ?? 'pin_rejected' };
+    }
+  } else {
+    // A decision somebody wrote down, logged every time it is taken, so it cannot be a gap nobody
+    // remembers opening.
+    Logger.warn(
+      'authorizeStakingAction',
+      `Cardano staking ${action} authorised without verifying a PIN: SECURITY_PIN_ENABLED is false`
+    );
   }
 
-  const issued = issuePinGrant(phoneNumber, action, recipient);
+  const issued = issuePinGrant(phoneNumber, action, recipient, governanceTargetCanonical(target));
   if (issued === null) {
     return { ok: false, refusal: 'pin_grant', detail: 'not_configured' };
   }
 
   return {
     ok: true,
-    data: { grant: issued.grant, expiresAt: issued.expiresAt, action }
+    data: {
+      grant: issued.grant,
+      expiresAt: issued.expiresAt,
+      action,
+      governanceTarget: target?.kind ?? null
+    }
   };
 }
 
