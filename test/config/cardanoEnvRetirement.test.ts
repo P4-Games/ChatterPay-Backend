@@ -4,13 +4,24 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * The environment variables staking no longer reads.
+ * The environment variables Cardano no longer reads.
  *
- * Each of these became a field of `blockchains.staking`. A consumer left behind would not
- * fail to compile — it would read an empty string and quietly apply a default, which is exactly the
- * second source of truth this change removed. So the check is on the source text.
+ * Each of these became a field of the network's own `blockchains` document. A consumer left behind
+ * would not fail to compile — it would read an empty string and quietly apply a default, which is
+ * exactly the second source of truth these changes removed. So the check is on the source text.
  */
 const RETIRED = [
+  // The network's own operating parameters: `blockchains.network`, `.chainId`, `.providerUrl`,
+  // `.ttlSlots`, `.depositConfirmations` and `.explorer`. They decide the address prefix, the key
+  // derivation and the transaction validity window, which is why a parallel default is not a
+  // fallback but a second deployment.
+  'CARDANO_NETWORK',
+  'CARDANO_CHAIN_ID',
+  'CARDANO_PROVIDER_URL',
+  'CARDANO_TTL_SLOTS',
+  'CARDANO_DEPOSIT_CONFIRMATIONS',
+  'CARDANO_EXPLORER_URL',
+  // Staking policy: `blockchains.staking`.
   'CARDANO_STAKING_ENABLED',
   'CARDANO_STAKING_MIN_ENROLMENT_ADA',
   'CARDANO_STAKING_DEFAULT_POOL_ID',
@@ -35,7 +46,13 @@ const RETIRED = [
  * Secrets. A credential in `blockchains` is readable by anything with read access to the database
  * and travels in every dump of it; these verify callers, so they live where secrets live.
  */
-const KEPT = ['CARDANO_STAKING_SYNC_SECRET', 'CARDANO_STAKING_FRONTEND_BFF_SECRET'] as const;
+const KEPT = [
+  'CARDANO_STAKING_SYNC_SECRET',
+  'CARDANO_STAKING_FRONTEND_BFF_SECRET',
+  // Not a per-network setting: a credential, which is why it did not move to the document with the
+  // provider root it goes with. Anything with read access to the database would hold it there.
+  'CARDANO_PROVIDER_API_KEY'
+] as const;
 
 /**
  * Every TypeScript file under a directory.
@@ -56,7 +73,7 @@ const SOURCES = sourceFiles(join(process.cwd(), 'src')).map((path) => ({
   text: readFileSync(path, 'utf8')
 }));
 
-describe('the retired staking environment variables', () => {
+describe('the retired Cardano environment variables', () => {
   it.each(RETIRED)('%s is read nowhere in src', (name) => {
     const users = SOURCES.filter((file) => file.text.includes(name)).map((file) => file.path);
 

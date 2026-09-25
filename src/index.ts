@@ -1,6 +1,7 @@
 import { start } from '@google-cloud/trace-agent';
 import type { FastifyInstance } from 'fastify/types/instance';
 import mongoose from 'mongoose';
+import { loadCardanoNetworkSettings } from './config/cardanoNetworkSettings';
 import { $B, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
 import { connectToDatabaseWithRetry } from './config/database';
 import { startServer } from './config/server';
@@ -68,6 +69,14 @@ async function main(): Promise<void> {
     // delays startup instead of killing the container, which is what used to
     // leave port 8080 closed until Cloud Run's startup probe gave up.
     await connectToDatabaseWithRetry();
+
+    // The six operational settings of the Cardano network live in its `blockchains` document, and
+    // this is where they are read: once, before anything can ask for them, and published in memory
+    // for the synchronous readers. Doing it per transfer would put a database round trip in the
+    // middle of every operation and let two halves of one transfer disagree about the TTL they were
+    // built with. Changing any of them therefore takes a restart, which is the deliberate trade.
+    // It answers by switching Cardano off, never by stopping the process.
+    await loadCardanoNetworkSettings();
 
     // Before the port opens: an address issued by a deployment whose derivation moved is an address
     // nobody can sign for, and no request should be served until that is ruled out. It answers by

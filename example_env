@@ -172,7 +172,6 @@ USE_LIFI='true'
 # Set POLYMARKET_ENABLED='true' to enable Polymarket prediction markets integration.
 # Polymarket operates on Polygon (chain 137). Funds are bridged from Scroll via LiFi.
 # Currently on basic plan (no revenue share). Future: submit for Builder Program verification.
-
 POLYMARKET_ENABLED='false'
 POLYMARKET_CLOB_API_URL='https://pm.chatterpay.net/polymarket-clob'
 POLYMARKET_GAMMA_API_URL='https://pm.chatterpay.net/polymarket-gamma'
@@ -188,27 +187,47 @@ POLYMARKET_POLYGON_RPC_URL=''
 POLYMARKET_ADAPTER_AUTH_TOKEN=''
 
 # Cardano
+# Enable or disable Cardano operations.
 CARDANO_ENABLED='false'
-CARDANO_NETWORK='preprod'
-CARDANO_CHAIN_ID=900000000001
-CARDANO_PROVIDER_URL='https://preprod.koios.rest/api/v1'
+
+# API credential for the configured provider.
 CARDANO_PROVIDER_API_KEY=''
+
+# Provider request timeout in milliseconds.
 CARDANO_PROVIDER_TIMEOUT_MS=20000
-CARDANO_TTL_SLOTS=900
-CARDANO_DEPOSIT_CONFIRMATIONS=3
-CARDANO_EXPLORER_URL='https://preprod.cardanoscan.io/transaction/'
+
+# Enable sponsored transaction fees.
 CARDANO_SPONSOR_FEES='true'
+
+# Transfer fee in USD.
 CARDANO_TRANSFER_FEE_USD=0.08
+
+# Sponsor wallet identifier.
 CARDANO_SPONSOR_WALLET_ID='some-text'
+
+# Active transaction fee scheme.
 CARDANO_FEE_SCHEME=2
+
+# Standard transfer fee in ADA.
 CARDANO_TRANSFER_FEE_ADA=0.45
+
+# Transfer fee when a new output is required.
 CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT=1.6
+
+# Enable eligible destination output reuse.
 CARDANO_RECYCLE_DESTINATION_UTXO='false'
+
+# Configure handling of small transaction remainders.
 CARDANO_ROUTE_DUST_TO_SPONSOR='false'
 
-# Bech32 addresses, taken from an address already in use in this environment. The second one is
-# only read while CARDANO_SPONSOR_FEES is on.
+# Reference address for wallet configuration validation.
 CARDANO_DERIVATION_CHECK=''
+
+# Reference address for sponsor wallet validation.
 CARDANO_SPONSOR_DERIVATION_CHECK=''
+
+# Authentication credential for staking synchronization.
 CARDANO_STAKING_SYNC_SECRET=''
+
+# Authentication credential for frontend staking requests.
 CARDANO_STAKING_FRONTEND_BFF_SECRET=''

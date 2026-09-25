@@ -7,10 +7,15 @@ import {
   isCardanoChainId
 } from '../../src/config/cardanoConfig';
 import { recordCardanoDerivationState } from '../../src/config/cardanoDerivationState';
+import { resetCardanoNetworkSettings } from '../../src/config/cardanoNetworkSettings';
+import type { CardanoDisabledReason } from '../../src/types/cardanoType';
 import {
+  failCardanoNetwork,
   markCardanoDerivationVerified,
+  preprodNetworkSettings,
   resetCardanoEnv,
-  setCardanoEnv
+  setCardanoEnv,
+  setCardanoNetwork
 } from '../support/cardanoEnv';
 
 vi.mock('../../src/helpers/envHelper', async (importOriginal) => {
@@ -20,75 +25,116 @@ vi.mock('../../src/helpers/envHelper', async (importOriginal) => {
 });
 
 beforeEach(() => {
-  // Every test starts from a blank configuration with the family switched on, so that each one is
-  // about the setting it names and nothing else.
+  // Every test starts from a blank configuration with the family switched on and the stored Preprod
+  // network published, so that each one is about the setting it names and nothing else.
   resetCardanoEnv();
   setCardanoEnv({ enabled: true });
+  setCardanoNetwork();
   // The startup check is what produces this, and no test here runs it. Stated so that each
   // test is about the setting it names; the verdict has a describe of its own below.
   markCardanoDerivationVerified();
 });
 
-describe('getCardanoConfig - the network', () => {
-  it('reads mainnet whatever the case', () => {
-    // A capital letter in a Cloud Build substitution must not become a deployment that issues
-    // testnet addresses on mainnet. They are well-formed and unspendable, and nothing downstream
-    // notices.
-    for (const value of ['mainnet', 'Mainnet', 'MAINNET', 'MainNet']) {
-      setCardanoEnv({ network: value });
-      const config = getCardanoConfig();
-      expect(config.network, value).toBe('mainnet');
-      expect(config.enabled, value).toBe(true);
-      expect(config.chainId, value).toBe(CARDANO_MAINNET_CHAIN_ID);
-      expect(config.explorerUrl, value).toBe('https://cardanoscan.io/transaction/');
-      expect(config.providerUrl, value).toBe('https://api.koios.rest/api/v1');
-    }
+describe('getCardanoConfig - where the network settings come from', () => {
+  it('reports what the network document holds, field for field', () => {
+    expect(getCardanoConfig()).toMatchObject({
+      enabled: true,
+      network: 'testnet',
+      chainId: CARDANO_PREPROD_CHAIN_ID,
+      providerUrl: 'https://preprod.koios.rest/api/v1',
+      ttlSlots: 900,
+      depositConfirmations: 3,
+      explorerUrl: 'https://preprod.cardanoscan.io/transaction/'
+    });
   });
 
-  it('reads the testnet spellings whatever the case', () => {
-    for (const value of ['preprod', 'Preprod', 'PREPROD', 'testnet', 'TestNet']) {
-      setCardanoEnv({ network: value });
-      const config = getCardanoConfig();
-      expect(config.network, value).toBe('testnet');
-      expect(config.enabled, value).toBe(true);
-      expect(config.chainId, value).toBe(CARDANO_PREPROD_CHAIN_ID);
-      expect(config.explorerUrl, value).toBe('https://preprod.cardanoscan.io/transaction/');
-    }
+  it('takes the stored values whatever they are, with no default underneath', () => {
+    setCardanoNetwork({
+      network: 'mainnet',
+      chainId: CARDANO_MAINNET_CHAIN_ID,
+      providerUrl: 'https://api.koios.rest/api/v1',
+      ttlSlots: 120,
+      depositConfirmations: 1,
+      explorerUrl: 'https://cardanoscan.io/transaction/'
+    });
+    expect(getCardanoConfig()).toMatchObject({
+      enabled: true,
+      network: 'mainnet',
+      chainId: CARDANO_MAINNET_CHAIN_ID,
+      providerUrl: 'https://api.koios.rest/api/v1',
+      ttlSlots: 120,
+      depositConfirmations: 1,
+      explorerUrl: 'https://cardanoscan.io/transaction/'
+    });
+  });
+});
+
+describe('getCardanoConfig - without a network document', () => {
+  it('is off before the startup read has happened, rather than on Preprod', () => {
+    // A process that fell over before the read, or that never ran it, has no network. Coming up on
+    // a plausible default is how a deployment issues addresses nobody configured.
+    resetCardanoNetworkSettings();
+    expect(getCardanoConfig()).toMatchObject({
+      enabled: false,
+      disabledReason: 'settings_unloaded'
+    });
   });
 
-  it('falls back to testnet when nothing was configured', () => {
-    // "Not configured" is a different thing from "configured wrong", and testnet is the safe
-    // default for it.
-    setCardanoEnv({ network: '' });
+  it('carries no network, no chain id and no URLs while it is off', () => {
+    resetCardanoNetworkSettings();
     const config = getCardanoConfig();
-    expect(config.network).toBe('testnet');
-    expect(config.enabled).toBe(true);
+    expect(isCardanoChainId(config.chainId)).toBe(false);
+    expect(config.providerUrl).toBe('');
+    expect(config.explorerUrl).toBe('');
+    expect(config.ttlSlots).toBe(0);
+    expect(config.depositConfirmations).toBe(0);
   });
 
-  it('refuses a value it cannot read instead of quietly using testnet', () => {
-    // `mainet` is not a request for testnet, it is a typo. Answering it with a silent testnet is
-    // exactly the failure the case-insensitivity above exists to prevent.
-    for (const value of ['mainet', 'main net', 'prod', 'preview', 'cardano']) {
-      setCardanoEnv({ network: value });
-      const config = getCardanoConfig();
-      expect(config.enabled, value).toBe(false);
-      expect(config.disabledReason, value).toBe('network_unknown');
+  it.each([
+    'deployment_unknown',
+    'settings_unreadable',
+    'settings_missing',
+    'settings_ambiguous',
+    'network_unknown',
+    'chain_id_invalid',
+    'chain_id_mismatch',
+    'provider_missing',
+    'ttl_invalid',
+    'deposit_confirmations_invalid',
+    'explorer_invalid'
+  ] as const)('reports %s exactly as the read concluded it', (reason: CardanoDisabledReason) => {
+    failCardanoNetwork(reason);
+    expect(getCardanoConfig()).toMatchObject({ enabled: false, disabledReason: reason });
+  });
+
+  it('never names a setting in those reasons either', () => {
+    for (const reason of ['settings_missing', 'chain_id_mismatch', 'explorer_invalid'] as const) {
+      failCardanoNetwork(reason);
+      expect(getCardanoConfig().disabledReason).not.toMatch(/CARDANO_|_INTERNAL_/);
     }
   });
 });
 
 describe('getCardanoConfig - the disabled reasons, in order', () => {
   it('reports the flag first, because nothing else matters when it is off', () => {
-    setCardanoEnv({ enabled: false, network: 'nonsense' });
+    setCardanoEnv({ enabled: false });
+    failCardanoNetwork('settings_missing');
     const config = getCardanoConfig();
     expect(config.enabled).toBe(false);
     expect(config.disabledReason).toBe('flag_off');
   });
 
+  it('reports the network document before anything it would be used for', () => {
+    // A deployment with no network has no provider root either, and reporting the credential would
+    // send an operator to a secret when what is missing is a document.
+    failCardanoNetwork('settings_missing');
+    setCardanoEnv({ hasSecret: false });
+    expect(getCardanoConfig().disabledReason).toBe('settings_missing');
+  });
+
   it('stays off without the master secret, even with everything else in place', () => {
     // Deriving without it would produce well-formed addresses that are not this deployment's.
     setCardanoEnv({ hasSecret: false });
-    setCardanoEnv({ network: 'mainnet' });
     const config = getCardanoConfig();
     expect(config.enabled).toBe(false);
     expect(config.disabledReason).toBe('secret_missing');
@@ -98,7 +144,6 @@ describe('getCardanoConfig - the disabled reasons, in order', () => {
     // An unreadable label is not a different address: two of them resolving to nothing collapse
     // the payment and staking credentials of an address into one key.
     setCardanoEnv({ labelsReadable: false });
-    setCardanoEnv({ network: 'mainnet' });
     const config = getCardanoConfig();
     expect(config.enabled).toBe(false);
     expect(config.disabledReason).toBe('labels_unreadable');
@@ -109,15 +154,15 @@ describe('getCardanoConfig - the disabled reasons, in order', () => {
     // built on its own: the chain short-circuits, so one case only ever reaches one code.
     const states: Array<[string, () => void]> = [
       ['flag_off', () => setCardanoEnv({ enabled: false })],
-      ['network_unknown', () => setCardanoEnv({ network: 'mainet' })],
-      ['provider_missing', () => setCardanoEnv({ providerUrl: '///' })],
+      ['settings_missing', () => failCardanoNetwork('settings_missing')],
+      ['network_unknown', () => failCardanoNetwork('network_unknown')],
+      ['provider_missing', () => failCardanoNetwork('provider_missing')],
       [
         'provider_key_missing',
-        () =>
-          setCardanoEnv({
-            providerUrl: 'https://cardano-preprod.blockfrost.io/api/v0',
-            providerApiKey: ''
-          })
+        () => {
+          setCardanoNetwork({ providerUrl: 'https://cardano-preprod.blockfrost.io/api/v0' });
+          setCardanoEnv({ providerApiKey: '' });
+        }
       ],
       ['secret_missing', () => setCardanoEnv({ hasSecret: false })],
       ['labels_unreadable', () => setCardanoEnv({ labelsReadable: false })]
@@ -126,6 +171,7 @@ describe('getCardanoConfig - the disabled reasons, in order', () => {
     for (const [expected, arrange] of states) {
       resetCardanoEnv();
       setCardanoEnv({ enabled: true });
+      setCardanoNetwork();
       markCardanoDerivationVerified();
       arrange();
       const { disabledReason, enabled } = getCardanoConfig();
@@ -144,101 +190,30 @@ describe('getCardanoConfig - the disabled reasons, in order', () => {
 });
 
 describe('getCardanoConfig - numeric settings', () => {
-  it('uses the declared defaults when unset', () => {
-    setCardanoEnv({ network: 'preprod' });
-    const config = getCardanoConfig();
-    expect(config.providerTimeoutMs).toBe(20_000);
-    expect(config.ttlSlots).toBe(900);
-    expect(config.depositConfirmations).toBe(3);
+  it('uses the declared default for the provider timeout, which is not a network setting', () => {
+    expect(getCardanoConfig().providerTimeoutMs).toBe(20_000);
   });
 
-  it('takes a configured value over the default', () => {
-    setCardanoEnv({ network: 'preprod', ttlSlots: 120, depositConfirmations: 1 });
-    const config = getCardanoConfig();
-    expect(config.ttlSlots).toBe(120);
-    expect(config.depositConfirmations).toBe(1);
-  });
-
-  it('accepts a chain id that states what the network already says', () => {
-    setCardanoEnv({ network: 'mainnet', chainId: CARDANO_MAINNET_CHAIN_ID });
-    expect(getCardanoConfig().chainId).toBe(CARDANO_MAINNET_CHAIN_ID);
-    setCardanoEnv({ network: 'preprod', chainId: CARDANO_PREPROD_CHAIN_ID });
-    expect(getCardanoConfig().chainId).toBe(CARDANO_PREPROD_CHAIN_ID);
+  it('takes a configured timeout over the default', () => {
+    setCardanoEnv({ providerTimeoutMs: 5_000 });
+    expect(getCardanoConfig().providerTimeoutMs).toBe(5_000);
   });
 });
 
 describe('getCardanoConfig - the chain id', () => {
-  it('uses the network constant when nothing was configured', () => {
-    // Omitting it is not a misconfiguration: the network already says which id it is.
-    setCardanoEnv({ network: 'preprod', chainId: null });
-    expect(getCardanoConfig()).toMatchObject({
-      enabled: true,
-      chainId: CARDANO_PREPROD_CHAIN_ID
-    });
-    setCardanoEnv({ network: 'mainnet', chainId: null });
-    expect(getCardanoConfig()).toMatchObject({
-      enabled: true,
-      chainId: CARDANO_MAINNET_CHAIN_ID
-    });
+  it('answers the id the network document holds', () => {
+    expect(getCardanoConfig().chainId).toBe(CARDANO_PREPROD_CHAIN_ID);
+    setCardanoNetwork({ network: 'mainnet', chainId: CARDANO_MAINNET_CHAIN_ID });
+    expect(getCardanoConfig().chainId).toBe(CARDANO_MAINNET_CHAIN_ID);
   });
 
-  it('answers the same id for every spelling of a network', () => {
-    for (const value of ['preprod', 'testnet', 'TestNet']) {
-      setCardanoEnv({ network: value, chainId: CARDANO_PREPROD_CHAIN_ID });
-      expect(getCardanoConfig().chainId, value).toBe(CARDANO_PREPROD_CHAIN_ID);
+  it('answers a chain id no row carries while the family is off', () => {
+    // The property the callers depend on: `Token.find({ chain_id })` and every wallet row take this
+    // number, and a refused configuration must not hand them one that finds another network's rows.
+    for (const reason of ['settings_missing', 'chain_id_mismatch', 'network_unknown'] as const) {
+      failCardanoNetwork(reason);
+      expect(isCardanoChainId(getCardanoConfig().chainId), reason).toBe(false);
     }
-  });
-
-  it('refuses the other network id rather than deriving under an identity nobody chose', () => {
-    // The combination that used to be accepted. The network decides the address prefix and the
-    // chain id goes into the key derivation, so this is a deployment issuing mainnet addresses
-    // under preprod keys and writing every row with the wrong network's id.
-    setCardanoEnv({ network: 'mainnet', chainId: CARDANO_PREPROD_CHAIN_ID });
-    expect(getCardanoConfig()).toMatchObject({
-      enabled: false,
-      disabledReason: 'chain_id_mismatch'
-    });
-
-    setCardanoEnv({ network: 'preprod', chainId: CARDANO_MAINNET_CHAIN_ID });
-    expect(getCardanoConfig()).toMatchObject({
-      enabled: false,
-      disabledReason: 'chain_id_mismatch'
-    });
-  });
-
-  it('refuses the chain id of an EVM network', () => {
-    // Scroll Sepolia, the deployment's own default chain. Accepting it would point the Cardano
-    // token catalogue and every wallet row at another network's rows.
-    setCardanoEnv({ network: 'preprod', chainId: 534351 });
-    expect(getCardanoConfig()).toMatchObject({
-      enabled: false,
-      disabledReason: 'chain_id_mismatch'
-    });
-  });
-
-  it('refuses a value that is present and unusable instead of defaulting', () => {
-    // What the reader answers for `abc`, `900000000001abc`, `0`, a negative, a decimal and
-    // anything past the safe integer range. Each of those is a typo, and the one outcome a typo
-    // must never have is the default.
-    setCardanoEnv({ network: 'preprod', chainId: 'invalid' });
-    expect(getCardanoConfig()).toMatchObject({
-      enabled: false,
-      disabledReason: 'chain_id_invalid'
-    });
-  });
-
-  it('never answers with a chain id that is not one of the two, whatever was configured', () => {
-    // The property the callers depend on: `Token.find({ chain_id })` and every wallet row take
-    // this number, and a refused configuration must not hand them a third value to use.
-    for (const chainId of ['invalid' as const, 534351, CARDANO_MAINNET_CHAIN_ID]) {
-      setCardanoEnv({ network: 'preprod', chainId });
-      expect(isCardanoChainId(getCardanoConfig().chainId), String(chainId)).toBe(true);
-    }
-  });
-
-  it('reports the network first, because the network decides which id is the right one', () => {
-    setCardanoEnv({ network: 'mainet', chainId: 'invalid' });
-    expect(getCardanoConfig().disabledReason).toBe('network_unknown');
   });
 });
 
@@ -284,6 +259,12 @@ describe('getCardanoConfig - the derivation verdict', () => {
     expect(getCardanoConfig().disabledReason).toBe('secret_missing');
   });
 
+  it('is read after the network document, which the check needs before it can derive', () => {
+    recordCardanoDerivationState({ status: 'changed', scope: 'user' });
+    failCardanoNetwork('settings_missing');
+    expect(getCardanoConfig().disabledReason).toBe('settings_missing');
+  });
+
   it('never names a setting in its reasons either', () => {
     for (const state of [
       { status: 'pending' } as const,
@@ -297,52 +278,49 @@ describe('getCardanoConfig - the derivation verdict', () => {
 });
 
 describe('getCardanoConfig - providerUrl', () => {
-  it('strips trailing slashes, so a path is never built with a double one', () => {
-    setCardanoEnv({ network: 'preprod', providerUrl: 'https://example.test/api/v1///' });
+  it('carries the stored root through unchanged, because the document already stripped it', () => {
+    setCardanoNetwork({ providerUrl: 'https://example.test/api/v1' });
     expect(getCardanoConfig().providerUrl).toBe('https://example.test/api/v1');
   });
 
-  it('reports a configured root that resolves to nothing rather than using the default', () => {
-    setCardanoEnv({ network: 'preprod', providerUrl: '///' });
-    const config = getCardanoConfig();
-    expect(config.enabled).toBe(false);
-    expect(config.disabledReason).toBe('provider_missing');
+  it('is empty while there is no network document, and never a default root', () => {
+    failCardanoNetwork('provider_missing');
+    expect(getCardanoConfig().providerUrl).toBe('');
   });
 });
 
 describe('getCardanoConfig - the provider kind', () => {
   it('reads Blockfrost off the host, whatever the path and the case', () => {
-    for (const url of [
+    for (const providerUrl of [
       'https://cardano-preprod.blockfrost.io/api/v0',
-      'https://cardano-mainnet.blockfrost.io/api/v0/',
+      'https://cardano-mainnet.blockfrost.io/api/v0',
       'https://BLOCKFROST.IO/api/v0'
     ]) {
-      setCardanoEnv({ network: 'preprod', providerUrl: url, providerApiKey: 'preprodkey' });
-      expect(getCardanoConfig().providerKind, url).toBe('blockfrost');
+      setCardanoNetwork({ providerUrl });
+      setCardanoEnv({ providerApiKey: 'preprodkey' });
+      expect(getCardanoConfig().providerKind, providerUrl).toBe('blockfrost');
     }
   });
 
-  it('reads everything else as Koios, the default roots included', () => {
-    for (const url of [
-      '',
+  it('reads everything else as Koios, the public roots included', () => {
+    for (const providerUrl of [
       'https://preprod.koios.rest/api/v1',
       // The host decides, not the string: a path or a query naming the other provider must not
       // switch the dialect, because the client that results would misread every answer.
-      'https://preprod.koios.rest/api/v1/blockfrost.io',
-      'not a url at all'
+      'https://preprod.koios.rest/api/v1/blockfrost.io'
     ]) {
-      setCardanoEnv({ network: 'preprod', providerUrl: url });
-      expect(getCardanoConfig().providerKind, url || '(unset)').toBe('koios');
+      setCardanoNetwork({ providerUrl });
+      expect(getCardanoConfig().providerKind, providerUrl).toBe('koios');
     }
   });
 
   it('carries the credential through to the config, for either provider', () => {
-    setCardanoEnv({ network: 'preprod', providerApiKey: 'koios-bearer-token' });
+    setCardanoEnv({ providerApiKey: 'koios-bearer-token' });
     expect(getCardanoConfig().providerApiKey).toBe('koios-bearer-token');
   });
 
   it('stays on for a Koios root with no credential, because the public tier answers without one', () => {
-    setCardanoEnv({ network: 'preprod', providerApiKey: '' });
+    setCardanoEnv({ providerApiKey: '' });
     const config = getCardanoConfig();
     expect(config.enabled).toBe(true);
     expect(config.providerApiKey).toBe('');
@@ -351,15 +329,20 @@ describe('getCardanoConfig - the provider kind', () => {
   it('goes off for a Blockfrost root with no credential, rather than 403 on every call', () => {
     // Starting would look like a chain that is down: every read and every submit fails, and the
     // user sees an outage instead of a deployment that was never finished being configured.
-    setCardanoEnv({
-      network: 'preprod',
-      providerUrl: 'https://cardano-preprod.blockfrost.io/api/v0',
-      providerApiKey: ''
-    });
+    setCardanoNetwork({ providerUrl: 'https://cardano-preprod.blockfrost.io/api/v0' });
+    setCardanoEnv({ providerApiKey: '' });
     const config = getCardanoConfig();
     expect(config.enabled).toBe(false);
     expect(config.disabledReason).toBe('provider_key_missing');
     expect(config.disabledReason).not.toMatch(/CARDANO_|_INTERNAL_/);
+  });
+
+  it('does not send a Blockfrost credential to a Koios root', () => {
+    // The pairing the provider kind exists to keep straight: the credential follows the stored
+    // root, so a document moved to Koios is read as Koios whatever the environment still holds.
+    setCardanoNetwork(preprodNetworkSettings());
+    setCardanoEnv({ providerApiKey: 'preprodBlockfrostProjectId' });
+    expect(getCardanoConfig().providerKind).toBe('koios');
   });
 });
 

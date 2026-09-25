@@ -22,7 +22,8 @@ import {
   markCardanoDerivationVerified,
   resetCardanoEnv,
   setCardanoEnv,
-  setCardanoFeeEnv
+  setCardanoFeeEnv,
+  setCardanoNetwork
 } from '../../support/cardanoEnv';
 import { seedStakingNetwork } from '../../support/cardanoStakingNetwork';
 
@@ -53,7 +54,8 @@ const UNKNOWN_PHONE = '5491100000032';
 /** A deployment configured correctly, whose startup check has not run. */
 function unverified(): void {
   resetCardanoEnv();
-  setCardanoEnv({ enabled: true, network: 'preprod' });
+  setCardanoEnv({ enabled: true });
+  setCardanoNetwork();
 }
 
 /** A deployment whose sponsor derivation no longer matches what it recorded. */

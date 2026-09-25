@@ -163,7 +163,7 @@ async function call(
  */
 beforeAll(async () => {
   // A closed port: an accidental chain call fails instantly instead of reaching out.
-  enableCardanoPreprod({ providerUrl: 'http://127.0.0.1:1', providerTimeoutMs: 1000 });
+  enableCardanoPreprod({ providerTimeoutMs: 1000 }, { providerUrl: 'http://127.0.0.1:1' });
   setCardanoEnv({ enabled: false });
 
   // Seeded before booting: the network config plugin snapshots the catalogue at startup.

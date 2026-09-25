@@ -2,7 +2,13 @@ import {
   recordCardanoDerivationState,
   resetCardanoDerivationState
 } from '../../src/config/cardanoDerivationState';
-import type { CardanoEnv, CardanoFeeEnv } from '../../src/types/cardanoType';
+import {
+  CARDANO_PREPROD_CHAIN_ID,
+  type CardanoNetworkSettings,
+  recordCardanoNetworkSettings,
+  resetCardanoNetworkSettings
+} from '../../src/config/cardanoNetworkSettings';
+import type { CardanoDisabledReason, CardanoEnv, CardanoFeeEnv } from '../../src/types/cardanoType';
 
 /**
  * The Cardano settings, as the tests drive them.
@@ -41,7 +47,7 @@ export interface CardanoEnvState {
   sponsorDerivationCheck: string;
   /** The credential the staking sync endpoint accepts. */
   syncSecret: string;
-  /** Everything `getCardanoConfig` resolves from. */
+  /** What the environment still holds. The network's own settings are published separately. */
   env: CardanoEnv;
   /** Everything `getCardanoFeeConfig` resolves from. */
   feeEnv: CardanoFeeEnv;
@@ -55,14 +61,8 @@ function blank(): CardanoEnvState {
     syncSecret: '',
     env: {
       enabled: false,
-      network: '',
-      chainId: null,
-      providerUrl: '',
       providerApiKey: '',
       providerTimeoutMs: null,
-      ttlSlots: null,
-      depositConfirmations: null,
-      explorerUrl: '',
       hasSecret: true,
       labelsReadable: true
     },
@@ -141,6 +141,9 @@ export function resetCardanoEnv(overrides: Partial<CardanoEnvState> = {}): void 
   // The startup verdict is process state, so it outlives a suite the way a configuration object
   // does not. Put back to `pending` here, which is what an unconfigured deployment has.
   resetCardanoDerivationState();
+  // So is the network document read at startup. `unloaded` is what a process has before it runs,
+  // and it is what keeps a suite that never states a network from inheriting the previous one's.
+  resetCardanoNetworkSettings();
   const fresh = blank();
   cardanoEnvState.derivationCheck = overrides.derivationCheck ?? fresh.derivationCheck;
   cardanoEnvState.sponsorDerivationCheck =
@@ -180,10 +183,60 @@ export function markCardanoDerivationVerified(): void {
   recordCardanoDerivationState({ status: 'verified' });
 }
 
-/** The usable configuration most suites want: the family on, against Preprod. */
-export function enableCardanoPreprod(patch: Partial<CardanoEnv> = {}): void {
+/**
+ * The Preprod document as it is stored, which is what the loader publishes for a test deployment.
+ *
+ * A copy of the real one rather than an invention: the same chain id, TTL and confirmation count
+ * the network runs on, so a suite exercises the values a deployment does.
+ *
+ * @param patch - What this test changes about it.
+ * @returns The settings.
+ */
+export function preprodNetworkSettings(
+  patch: Partial<CardanoNetworkSettings> = {}
+): CardanoNetworkSettings {
+  return {
+    network: 'testnet',
+    chainId: CARDANO_PREPROD_CHAIN_ID,
+    providerUrl: 'https://preprod.koios.rest/api/v1',
+    ttlSlots: 900,
+    depositConfirmations: 3,
+    explorerUrl: 'https://preprod.cardanoscan.io/transaction/',
+    ...patch
+  };
+}
+
+/**
+ * Publishes network settings, the way the startup read does.
+ *
+ * @param patch - What this test needs on top of the stored Preprod values.
+ */
+export function setCardanoNetwork(patch: Partial<CardanoNetworkSettings> = {}): void {
+  recordCardanoNetworkSettings({ status: 'loaded', settings: preprodNetworkSettings(patch) });
+}
+
+/**
+ * Publishes a refusal, the way the startup read does when no usable document was found.
+ *
+ * @param reason - Why the network is unusable.
+ */
+export function failCardanoNetwork(reason: CardanoDisabledReason): void {
+  recordCardanoNetworkSettings({ status: 'failed', reason });
+}
+
+/**
+ * The usable configuration most suites want: the family on, against Preprod.
+ *
+ * @param patch - Environment settings this test needs on top of the blank ones.
+ * @param settings - Network settings this test needs on top of the stored Preprod ones.
+ */
+export function enableCardanoPreprod(
+  patch: Partial<CardanoEnv> = {},
+  settings: Partial<CardanoNetworkSettings> = {}
+): void {
   resetCardanoEnv();
-  setCardanoEnv({ enabled: true, network: 'preprod', ...patch });
+  setCardanoEnv({ enabled: true, ...patch });
+  setCardanoNetwork(settings);
   markCardanoDerivationVerified();
 }
 

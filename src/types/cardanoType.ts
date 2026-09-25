@@ -340,44 +340,27 @@ export interface CardanoAccount {
 /**
  * Cardano settings as the environment holds them.
  *
- * For the numbers, `null` means "not configured", never "zero": the defaults are declared in
- * `cardanoConfig.ts` alongside the reasoning for each one, so the reader validates without
- * deciding. The strings say the same thing with `''`.
+ * Only what is not a per-network setting. The network, its chain id, its provider root, its TTL,
+ * its confirmation count and its explorer come from the network's own `blockchains` document and
+ * have no environment form at all — see `cardanoNetworkSettings.ts`.
+ *
+ * For the numbers, `null` means "not configured", never "zero": the default is declared in
+ * `cardanoConfig.ts` alongside the reasoning for it, so the reader validates without deciding. The
+ * strings say the same thing with `''`.
  */
 export interface CardanoEnv {
   /** Whether the family was switched on. Not whether it is usable — that is a conclusion. */
   enabled: boolean;
-  /** Network as written, trimmed. Resolving the spelling is the caller's job. */
-  network: string;
-  /**
-   * Explicit chain id, as configured.
-   *
-   * Three states rather than two, because "absent" and "present and unusable" are different
-   * answers: absent means the network's own constant applies, while a value of `0`, `abc` or the
-   * other network's id is a misconfiguration to report. Collapsing them would turn a typo into the
-   * default, which is the one outcome the family must never reach — the chain id is a derivation
-   * input, so a wrong one issues addresses nobody can sign for.
-   */
-  chainId: number | 'invalid' | null;
-  /** Provider root as configured. Stripping its trailing slashes is the caller's job, so that a
-   *  value of nothing but slashes still reads as a value and not as an absent one. */
-  providerUrl: string;
   /**
    * Provider credential as configured, trimmed.
    *
-   * What it stands for depends on the provider the root URL names — a Blockfrost project id, a
-   * Koios bearer token — which is why one setting serves both: a deployment swaps providers by
-   * changing the URL, and the credential follows it.
+   * What it stands for depends on the provider the stored root URL names — a Blockfrost project id,
+   * a Koios bearer token — which is why one setting serves both: a deployment swaps providers by
+   * changing the document's `providerUrl`, and the credential follows it.
    */
   providerApiKey: string;
   /** Per-call ceiling for provider requests, in milliseconds. */
   providerTimeoutMs: number | null;
-  /** Slots of validity given to a transaction, from the tip. */
-  ttlSlots: number | null;
-  /** Confirmations required before an output is spendable. */
-  depositConfirmations: number | null;
-  /** Explorer base URL. */
-  explorerUrl: string;
   /** Whether the master secret every wallet derives from is present. */
   hasSecret: boolean;
   /** Whether every derivation label is present and readable. */
@@ -413,13 +396,22 @@ export interface CardanoFeeEnv {
  * operator reads the same code in the log and knows what to look at.
  *
  * - `flag_off` — the family was not switched on.
- * - `network_unknown` — the configured network is not one this deployment can read.
- * - `provider_missing` — a provider root was configured, and it resolved to nothing.
- * - `provider_key_missing` — the configured provider needs a credential, and none was set.
+ * - `deployment_unknown` — this deployment maps to no `blockchains.environment`, so no network
+ *   document can be selected for it.
+ * - `settings_unloaded` — the startup read has not happened, so nothing has been verified.
+ * - `settings_unreadable` — the network documents could not be read.
+ * - `settings_missing` — no Cardano document belongs to this deployment.
+ * - `settings_ambiguous` — more than one does, so which network to operate is undecided.
+ * - `network_unknown` — the stored network is not one this deployment can read.
+ * - `provider_missing` — the stored provider root is absent or not a usable URL.
+ * - `provider_key_missing` — the stored provider needs a credential, and none was set.
  * - `secret_missing` — the master secret every wallet derives from is absent.
  * - `labels_unreadable` — one of the configured derivation labels is absent or not readable.
- * - `chain_id_invalid` — a chain id was configured and it is not a usable one.
- * - `chain_id_mismatch` — the configured chain id belongs to the other network.
+ * - `chain_id_invalid` — the stored chain id is not a usable one.
+ * - `chain_id_mismatch` — the stored chain id belongs to the other network.
+ * - `ttl_invalid` — the stored transaction validity window is not a usable count of slots.
+ * - `deposit_confirmations_invalid` — the stored confirmation count is not a usable one.
+ * - `explorer_invalid` — the stored explorer base is absent or not a usable URL.
  * - `derivation_unverified` — the startup check has not run yet.
  * - `derivation_unrecorded` — there is no recorded address to compare this deployment against.
  * - `derivation_changed` — this deployment no longer derives the address it recorded.
@@ -427,6 +419,11 @@ export interface CardanoFeeEnv {
 export type CardanoDisabledReason =
   | ''
   | 'flag_off'
+  | 'deployment_unknown'
+  | 'settings_unloaded'
+  | 'settings_unreadable'
+  | 'settings_missing'
+  | 'settings_ambiguous'
   | 'network_unknown'
   | 'provider_missing'
   | 'provider_key_missing'
@@ -434,6 +431,9 @@ export type CardanoDisabledReason =
   | 'labels_unreadable'
   | 'chain_id_invalid'
   | 'chain_id_mismatch'
+  | 'ttl_invalid'
+  | 'deposit_confirmations_invalid'
+  | 'explorer_invalid'
   | 'derivation_unverified'
   | 'derivation_unrecorded'
   | 'derivation_changed';

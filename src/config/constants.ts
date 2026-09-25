@@ -81,14 +81,8 @@ const {
   CDC6,
   NODE_ENV: nodeEnv = '',
   CARDANO_ENABLED: cardanoEnabled = 'false',
-  CARDANO_NETWORK: cardanoNetwork = '',
-  CARDANO_CHAIN_ID: cardanoChainId = '',
-  CARDANO_PROVIDER_URL: cardanoProviderUrl = '',
   CARDANO_PROVIDER_API_KEY: cardanoProviderApiKey = '',
   CARDANO_PROVIDER_TIMEOUT_MS: cardanoProviderTimeoutMs = '',
-  CARDANO_TTL_SLOTS: cardanoTtlSlots = '',
-  CARDANO_DEPOSIT_CONFIRMATIONS: cardanoDepositConfirmations = '',
-  CARDANO_EXPLORER_URL: cardanoExplorerUrl = '',
   CARDANO_SPONSOR_FEES: cardanoSponsorFees = 'false',
   CARDANO_FEE_SCHEME: cardanoFeeScheme = '',
   CARDANO_TRANSFER_FEE_USD: cardanoTransferFeeUsd = '',
@@ -402,14 +396,8 @@ export const CACHE_POLYMARKET_PRICES_CHECK_PERIOD = 120; // 2 min
 // Read as the environment holds them. `envHelper` turns them into the shapes the subsystem uses.
 export const NODE_ENV: string = nodeEnv;
 export const CARDANO_ENABLED: string = cardanoEnabled;
-export const CARDANO_NETWORK: string = cardanoNetwork;
-export const CARDANO_CHAIN_ID: string = cardanoChainId;
-export const CARDANO_PROVIDER_URL: string = cardanoProviderUrl;
 export const CARDANO_PROVIDER_API_KEY: string = cardanoProviderApiKey;
 export const CARDANO_PROVIDER_TIMEOUT_MS: string = cardanoProviderTimeoutMs;
-export const CARDANO_TTL_SLOTS: string = cardanoTtlSlots;
-export const CARDANO_DEPOSIT_CONFIRMATIONS: string = cardanoDepositConfirmations;
-export const CARDANO_EXPLORER_URL: string = cardanoExplorerUrl;
 export const CARDANO_SPONSOR_FEES: string = cardanoSponsorFees;
 export const CARDANO_FEE_SCHEME: string = cardanoFeeScheme;
 export const CARDANO_TRANSFER_FEE_USD: string = cardanoTransferFeeUsd;

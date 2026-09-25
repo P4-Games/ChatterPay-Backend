@@ -16,12 +16,17 @@ const RUNTIME_ONLY = ['CARDANO_STAKING_SYNC_SECRET', 'CARDANO_STAKING_FRONTEND_B
 /**
  * Settings that used to travel through the build and no longer exist.
  *
- * Every one of them became a field of `blockchains.staking`, read from the network's own document.
- * They are listed here so that adding one back — to the Dockerfile, to Cloud Build, or to the local
- * build script — fails instead of quietly reintroducing a second source of truth that the code no
- * longer reads.
+ * Every one of them became a field of the network's own `blockchains` document. They are listed
+ * here so that adding one back — to the Dockerfile, to Cloud Build, or to the local build script —
+ * fails instead of quietly reintroducing a second source of truth that the code no longer reads.
  */
 const RETIRED_SETTINGS = [
+  'CARDANO_NETWORK',
+  'CARDANO_CHAIN_ID',
+  'CARDANO_PROVIDER_URL',
+  'CARDANO_TTL_SLOTS',
+  'CARDANO_DEPOSIT_CONFIRMATIONS',
+  'CARDANO_EXPLORER_URL',
   'CARDANO_STAKING_ENABLED',
   'CARDANO_STAKING_MIN_ENROLMENT_ADA',
   'CARDANO_STAKING_DEFAULT_POOL_ID',
@@ -149,7 +154,7 @@ describe('what the staking screen is told about the configuration', () => {
   });
 });
 
-describe('the retired staking settings', () => {
+describe('the retired Cardano settings', () => {
   it.each(RETIRED_SETTINGS)('%s is gone from the Dockerfile', (name) => {
     const lines = instructionLines(repoFile('Dockerfile'), '#');
 

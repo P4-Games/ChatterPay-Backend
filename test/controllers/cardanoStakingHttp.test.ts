@@ -121,7 +121,7 @@ async function seedCardanoNetwork(): Promise<void> {
 }
 
 beforeAll(async () => {
-  enableCardanoPreprod({ providerUrl: 'http://127.0.0.1:1', providerTimeoutMs: 1000 });
+  enableCardanoPreprod({ providerTimeoutMs: 1000 }, { providerUrl: 'http://127.0.0.1:1' });
   // Seeded before booting: the network config plugin snapshots the catalogue at startup.
   await seedEvmNetwork();
   await seedCardanoNetwork();

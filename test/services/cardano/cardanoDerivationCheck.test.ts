@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CARDANO_PREPROD_CHAIN_ID, getCardanoConfig } from '../../../src/config/cardanoConfig';
 import { getCardanoDerivationState } from '../../../src/config/cardanoDerivationState';
+import { resetCardanoNetworkSettings } from '../../../src/config/cardanoNetworkSettings';
 import {
   checkCardanoDerivation,
   verifyCardanoDerivation
@@ -10,9 +11,11 @@ import { cardanoSignerService } from '../../../src/services/cardano/cardanoSigne
 import {
   cardanoEnvState,
   enableCardanoPreprod,
+  failCardanoNetwork,
   resetCardanoEnv,
   setCardanoEnv,
-  setCardanoFeeEnv
+  setCardanoFeeEnv,
+  setCardanoNetwork
 } from '../../support/cardanoEnv';
 
 /**
@@ -68,7 +71,8 @@ beforeEach(() => {
   // `enableCardanoPreprod` states the verdict for suites that need a working family. This one is
   // about producing the verdict, so it starts from the state a process has before the check runs.
   resetCardanoEnv();
-  setCardanoEnv({ enabled: true, network: 'preprod' });
+  setCardanoEnv({ enabled: true });
+  setCardanoNetwork();
 });
 
 describe('before the check has run', () => {
@@ -198,10 +202,18 @@ describe('a configuration that is already refused for its own reason', () => {
     expect(getCardanoConfig().disabledReason).toBe('flag_off');
   });
 
-  it('does not derive against a chain id that was refused', () => {
-    setCardanoEnv({ chainId: 534351 });
+  it('does not derive against a network document that was refused', () => {
+    // The chain id is a derivation input, so a document the loader refused must not reach the
+    // check: it would derive against whatever was left and record a verdict about it.
+    failCardanoNetwork('chain_id_mismatch');
 
     expect(checkCardanoDerivation()).toEqual({ status: 'skipped', detail: 'chain_id_mismatch' });
+  });
+
+  it('does not derive before the network document has been read at all', () => {
+    resetCardanoNetworkSettings();
+
+    expect(checkCardanoDerivation()).toEqual({ status: 'skipped', detail: 'settings_unloaded' });
   });
 });
 
@@ -230,7 +242,8 @@ describe('what a refusal costs the rest of the backend', () => {
         }
       ]) {
         resetCardanoEnv();
-        setCardanoEnv({ enabled: true, network: 'preprod' });
+        setCardanoEnv({ enabled: true });
+        setCardanoNetwork();
         arrange();
 
         expect(() => verifyCardanoDerivation()).not.toThrow();
