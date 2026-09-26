@@ -369,3 +369,115 @@ describe('runStakingSync', () => {
     expect(after?.onChain.asOf?.getTime()).toBe(before?.onChain.asOf?.getTime());
   });
 });
+
+describe('the discovery pass', () => {
+  /**
+   * A user with a Cardano wallet and no staking account, which is what every user looks like before
+   * this pass exists.
+   *
+   * @param phoneNumber - Whose wallet it is.
+   * @returns The stored user.
+   */
+  async function seedWalletWithoutAccount(phoneNumber: string) {
+    const derived = cardanoSignerService.getAccount(phoneNumber, 'testnet', CHAIN_ID);
+    return UserModel.create({
+      phone_number: phoneNumber,
+      name: `user-${phoneNumber}`,
+      wallets: [
+        {
+          wallet_proxy: derived.address,
+          wallet_eoa: derived.address,
+          created_with_chatterpay_proxy_address: '',
+          created_with_factory_address: '',
+          chain_id: CHAIN_ID,
+          status: 'active',
+          address_type: 'cardano_base',
+          cardano_public_key: derived.publicKey,
+          cardano_stake_public_key: derived.stakePublicKey
+        }
+      ],
+      settings: {}
+    });
+  }
+
+  it('gives an account to a Cardano wallet that has none', async () => {
+    // The gap this closes: the refresh reads accounts, so a wallet without one is invisible to it and
+    // the user is answered `no_staking_account` no matter how often the job runs.
+    const user = await seedWalletWithoutAccount('5491100000020');
+
+    const result = await runStakingSync(request());
+
+    expect(result.accountsCreated).toBe(1);
+    const stored = await CardanoStakingAccount.findOne({ userId: user._id, chainId: CHAIN_ID });
+    expect(stored?.walletAddress).toBe(user.wallets[0].wallet_proxy);
+  });
+
+  it('refreshes what it just created, in the same run', async () => {
+    // Discovery runs before the refresh on purpose. An account created after it would wait a whole
+    // day for its first observation.
+    await seedWalletWithoutAccount('5491100000021');
+
+    const result = await runStakingSync(request());
+
+    expect(result.accountsCreated).toBe(1);
+    expect(result.accountsScanned).toBe(1);
+  });
+
+  it('enrols nobody: the account it creates is still waiting for consent', async () => {
+    const user = await seedWalletWithoutAccount('5491100000022');
+
+    await runStakingSync(request());
+
+    const stored = await CardanoStakingAccount.findOne({ userId: user._id, chainId: CHAIN_ID });
+    expect(stored?.state).toBe('awaiting_consent');
+    expect(stored?.preference.enabled).toBe(false);
+  });
+
+  it('creates nothing on a second tick, and no duplicates', async () => {
+    const user = await seedWalletWithoutAccount('5491100000023');
+    await runStakingSync(request());
+
+    const second = await runStakingSync(
+      request({ scheduledTime: new Date('2026-01-02T03:00:00.000Z') })
+    );
+
+    expect(second.accountsCreated).toBe(0);
+    expect(await CardanoStakingAccount.countDocuments({ userId: user._id })).toBe(1);
+  });
+
+  it('ignores a wallet of another network', async () => {
+    // The pass is scoped to the run's chain id. A wallet on another network would get an account
+    // keyed to a chain its address does not belong to.
+    await UserModel.create({
+      phone_number: '5491100000024',
+      name: 'user-evm-only',
+      wallets: [
+        {
+          wallet_proxy: '0xc17456b51CE6BEbC5fb01869d1403517111dbE02',
+          wallet_eoa: '0x2D8bce1F07361EC1571eC7ffad24DeB777d212BB',
+          created_with_chatterpay_proxy_address: '',
+          created_with_factory_address: '',
+          chain_id: 534351,
+          status: 'active'
+        }
+      ],
+      settings: {}
+    });
+
+    const result = await runStakingSync(request());
+
+    expect(result.accountsCreated).toBe(0);
+    expect(await CardanoStakingAccount.countDocuments({})).toBe(0);
+  });
+
+  it('records on the run how many it created', async () => {
+    // The number an operator reads to tell a quiet day from a pass that never ran.
+    await seedWalletWithoutAccount('5491100000025');
+
+    await runStakingSync(request());
+
+    const run = await CardanoStakingSyncRun.findById(syncRunId(CHAIN_ID, JOB, TICK)).lean();
+    expect(run?.accountsCreated).toBe(1);
+    expect(run?.discoveryCursor).not.toBeNull();
+  });
+});
