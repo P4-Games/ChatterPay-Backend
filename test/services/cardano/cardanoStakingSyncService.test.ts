@@ -478,6 +478,21 @@ describe('the discovery pass', () => {
 
     const run = await CardanoStakingSyncRun.findById(syncRunId(CHAIN_ID, JOB, TICK)).lean();
     expect(run?.accountsCreated).toBe(1);
-    expect(run?.discoveryCursor).not.toBeNull();
+  });
+
+  it('spends the batch on wallets that need an account, not on the ones that have one', async () => {
+    // With the provisioned wallets left in the query, a universe larger than one batch would make
+    // every run examine the same first users and never reach the tail. The first wallet here fills the
+    // budget if and only if it is still being counted.
+    await seedWalletWithoutAccount('5491100000026');
+    await runStakingSync(request({ batchLimit: 1 }));
+    await seedWalletWithoutAccount('5491100000027');
+
+    const second = await runStakingSync(
+      request({ batchLimit: 1, scheduledTime: new Date('2026-01-02T03:00:00.000Z') })
+    );
+
+    expect(second.accountsCreated).toBe(1);
+    expect(await CardanoStakingAccount.countDocuments({ chainId: CHAIN_ID })).toBe(2);
   });
 });

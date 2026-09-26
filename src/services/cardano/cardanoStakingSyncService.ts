@@ -363,42 +363,64 @@ async function reconcilePass(request: StakingSyncRequest): Promise<number> {
  * Creating a row enrols nobody. The account starts at `awaiting_consent` with the preference off, so
  * what this pass changes is whether the position can be *seen*, not whether it participates.
  *
- * Paged by user `_id` from the run's own discovery cursor, and bounded by the same batch limit as the
- * refresh: a pass that walked every user would make the length of one run depend on the size of the
- * product rather than on how much work there is.
+ * The wallets that already have an account are excluded by the query rather than skipped in the loop,
+ * and that is what makes the pass finish its universe. Bounded by the batch limit like the refresh —
+ * a pass that walked every user would make the length of a run depend on the size of the product —
+ * and a limit spent on wallets that need nothing is a limit that never reaches the ones that do: with
+ * a universe larger than one batch, every run would examine the same first users, find them all
+ * provisioned, and the tail would never be reached. Excluding them means each run spends its budget
+ * on alta and the remainder shrinks by what was created.
  *
  * @param request - The run's request.
  * @returns How many accounts were created.
  */
 async function discoveryPass(request: StakingSyncRequest): Promise<number> {
-  const runId = syncRunId(request.chainId, request.jobName, request.scheduledTime);
-  const stored = await CardanoStakingSyncRun.findById(runId).lean();
-  const cursor = stored?.discoveryCursor ?? null;
-
-  const filter: Record<string, unknown> = {
-    wallets: { $elemMatch: { chain_id: request.chainId, address_type: 'cardano_base' } }
-  };
-  if (cursor !== null) filter._id = { $gt: new Types.ObjectId(cursor) };
-
-  const users = await UserModel.find(filter).sort({ _id: 1 }).limit(request.batchLimit).exec();
+  const pending = await UserModel.aggregate<{ _id: Types.ObjectId }>([
+    {
+      $match: {
+        wallets: { $elemMatch: { chain_id: request.chainId, address_type: 'cardano_base' } }
+      }
+    },
+    // Oldest first, and before the lookup: the sort decides who the batch is spent on, so it has to
+    // happen while the whole universe is still in play.
+    { $sort: { _id: 1 } },
+    {
+      // The join runs against `user_chain_unique`, and `$limit: 1` inside it is what keeps this from
+      // reading a user's accounts on other networks.
+      $lookup: {
+        from: 'cardano_staking_accounts',
+        let: { userId: '$_id' },
+        pipeline: [
+          { $match: { $expr: { $eq: ['$userId', '$$userId'] }, chainId: request.chainId } },
+          { $limit: 1 },
+          { $project: { _id: 1 } }
+        ],
+        as: 'stakingAccount'
+      }
+    },
+    { $match: { stakingAccount: { $size: 0 } } },
+    { $limit: request.batchLimit },
+    { $project: { _id: 1 } }
+  ]);
 
   let created = 0;
-  let lastId: string | null = cursor;
 
-  for (const user of users) {
-    lastId = String(user._id);
+  for (const row of pending) {
+    // Read as a document rather than carried out of the aggregation: the alta needs the wallets, and
+    // a user who was provisioned between the query and here is answered by the same idempotent path.
+    const user = await UserModel.findById(row._id).exec();
+    if (user === null) continue;
+
     const wallet = user.wallets.find(
       (entry) => entry.chain_id === request.chainId && entry.address_type === 'cardano_base'
     );
     if (wallet === undefined) continue;
 
     // Quietly: one wallet whose data cannot produce an account is not a reason to abandon the rest of
-    // the pass, and the refusal is logged with which wallet it was.
+    // the pass, and the refusal is logged with which wallet it was. A wallet refused this way is read
+    // again by the next run, which is the right behaviour — the fix is in the wallet, and when it
+    // lands the account appears without anybody rerunning anything.
     if (await ensureStakingAccountQuietly(user, wallet)) created += 1;
-
-    // The cursor advances as the pass goes. A container that disappears here has still recorded
-    // everything before this point, and the retry of the same tick resumes instead of starting over.
-    await CardanoStakingSyncRun.updateOne({ _id: runId }, { $set: { discoveryCursor: lastId } });
   }
 
   if (created > 0) {

@@ -44,14 +44,6 @@ export interface ICardanoStakingSyncRun extends Document<string> {
    */
   userCursor: string | null;
   operationCursor: string | null;
-  /**
-   * Where the discovery pass stopped inside this run, as a user `_id`.
-   *
-   * Its own cursor rather than the one above, because the two passes page through different
-   * collections: discovery walks `users` and the refresh walks the accounts. Sharing one would make
-   * each pass resume where the other stopped.
-   */
-  discoveryCursor: string | null;
   accountsScanned: number;
   /** Staking accounts the discovery pass created for wallets that had none. */
   accountsCreated: number;
@@ -102,7 +94,6 @@ const cardanoStakingSyncRunSchema = new Schema<ICardanoStakingSyncRun>(
     },
     userCursor: { type: String, required: false, default: null },
     operationCursor: { type: String, required: false, default: null },
-    discoveryCursor: { type: String, required: false, default: null },
     accountsScanned: { type: Number, required: true, default: 0 },
     accountsCreated: { type: Number, required: true, default: 0 },
     operationsReconciled: { type: Number, required: true, default: 0 },
