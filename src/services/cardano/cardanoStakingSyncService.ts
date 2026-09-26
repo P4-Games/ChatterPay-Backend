@@ -26,7 +26,7 @@
  * one run trying to hold a lease for an hour.
  */
 
-import type { Types } from 'mongoose';
+import { Types } from 'mongoose';
 
 import { getCardanoConfig } from '../../config/cardanoConfig';
 import {
@@ -44,6 +44,7 @@ import CardanoStakingSyncRun, {
 } from '../../models/cardanoStakingSyncRunModel';
 import { type IUser, UserModel } from '../../models/userModel';
 import type { CardanoProvider } from './cardanoProviderService';
+import { ensureStakingAccountQuietly } from './cardanoStakingAccountService';
 import { assembleStakingPlan } from './cardanoStakingAssemblyService';
 import {
   DEFAULT_RECONCILIATION_POLICY,
@@ -123,6 +124,8 @@ export interface StakingSyncResult {
   status: CardanoStakingSyncStatus;
   phase: CardanoStakingSyncPhase;
   accountsScanned: number;
+  /** Staking accounts created for wallets that had none. */
+  accountsCreated: number;
   operationsReconciled: number;
   actionsStarted: number;
   /** Accounts that decided an action and could not act on it, with the reason. */
@@ -164,6 +167,7 @@ export async function runStakingSync(input: StakingSyncRequest): Promise<Staking
     status: 'failed',
     phase: 'reconciling',
     accountsScanned: 0,
+    accountsCreated: 0,
     operationsReconciled: 0,
     actionsStarted: 0,
     refusals: {},
@@ -190,6 +194,12 @@ export async function runStakingSync(input: StakingSyncRequest): Promise<Staking
     await setPhase(runId, 'reconciling');
     result.operationsReconciled = await reconcilePass(request);
 
+    // Before the refresh, so an account created now is refreshed by the same run instead of waiting
+    // for tomorrow's. A wallet with no account is invisible to the refresh, which is why discovery
+    // reads `users` rather than the accounts.
+    await setPhase(runId, 'discovering');
+    result.accountsCreated = await discoveryPass(request);
+
     await setPhase(runId, 'refreshing');
     const refreshed = await refreshPass(request, result);
     result.accountsScanned = refreshed.scanned;
@@ -207,6 +217,7 @@ export async function runStakingSync(input: StakingSyncRequest): Promise<Staking
           lease: null,
           userCursor: refreshed.cursor,
           accountsScanned: result.accountsScanned,
+          accountsCreated: result.accountsCreated,
           operationsReconciled: result.operationsReconciled,
           backlogCount: result.backlogCount,
           backlogOldestAt: refreshed.backlogOldestAt
@@ -339,6 +350,64 @@ async function reconcilePass(request: StakingSyncRequest): Promise<number> {
   }
 
   return examined;
+}
+
+/**
+ * Gives a staking account to every Cardano wallet on this network that has none.
+ *
+ * The refresh pass reads accounts, so a wallet without one is invisible to it and stays invisible
+ * forever: no read creates the row and the user is answered `no_staking_account` for as long as that
+ * lasts. This pass is the other half — it reads `users`, and what it writes is what the refresh then
+ * has something to refresh.
+ *
+ * Creating a row enrols nobody. The account starts at `awaiting_consent` with the preference off, so
+ * what this pass changes is whether the position can be *seen*, not whether it participates.
+ *
+ * Paged by user `_id` from the run's own discovery cursor, and bounded by the same batch limit as the
+ * refresh: a pass that walked every user would make the length of one run depend on the size of the
+ * product rather than on how much work there is.
+ *
+ * @param request - The run's request.
+ * @returns How many accounts were created.
+ */
+async function discoveryPass(request: StakingSyncRequest): Promise<number> {
+  const runId = syncRunId(request.chainId, request.jobName, request.scheduledTime);
+  const stored = await CardanoStakingSyncRun.findById(runId).lean();
+  const cursor = stored?.discoveryCursor ?? null;
+
+  const filter: Record<string, unknown> = {
+    wallets: { $elemMatch: { chain_id: request.chainId, address_type: 'cardano_base' } }
+  };
+  if (cursor !== null) filter._id = { $gt: new Types.ObjectId(cursor) };
+
+  const users = await UserModel.find(filter).sort({ _id: 1 }).limit(request.batchLimit).exec();
+
+  let created = 0;
+  let lastId: string | null = cursor;
+
+  for (const user of users) {
+    lastId = String(user._id);
+    const wallet = user.wallets.find(
+      (entry) => entry.chain_id === request.chainId && entry.address_type === 'cardano_base'
+    );
+    if (wallet === undefined) continue;
+
+    // Quietly: one wallet whose data cannot produce an account is not a reason to abandon the rest of
+    // the pass, and the refusal is logged with which wallet it was.
+    if (await ensureStakingAccountQuietly(user, wallet)) created += 1;
+
+    // The cursor advances as the pass goes. A container that disappears here has still recorded
+    // everything before this point, and the retry of the same tick resumes instead of starting over.
+    await CardanoStakingSyncRun.updateOne({ _id: runId }, { $set: { discoveryCursor: lastId } });
+  }
+
+  if (created > 0) {
+    Logger.log(
+      'discoveryPass',
+      `Created ${created} Cardano staking accounts on ${request.chainId}`
+    );
+  }
+  return created;
 }
 
 /** What one refresh pass got through. */

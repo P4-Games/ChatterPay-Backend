@@ -37,14 +37,24 @@ export interface ICardanoStakingSyncRun extends Document<string> {
   phase: CardanoStakingSyncPhase;
   status: CardanoStakingSyncStatus;
   /**
-   * Where discovery stopped inside this run.
+   * Where the refresh pass stopped inside this run.
    *
    * Paired with the per-network cursor below: without one that survives between runs, a backlog
    * means every day starts again at the same first accounts and the tail is never reached.
    */
   userCursor: string | null;
   operationCursor: string | null;
+  /**
+   * Where the discovery pass stopped inside this run, as a user `_id`.
+   *
+   * Its own cursor rather than the one above, because the two passes page through different
+   * collections: discovery walks `users` and the refresh walks the accounts. Sharing one would make
+   * each pass resume where the other stopped.
+   */
+  discoveryCursor: string | null;
   accountsScanned: number;
+  /** Staking accounts the discovery pass created for wallets that had none. */
+  accountsCreated: number;
   operationsReconciled: number;
   registrationsCreated: number;
   providerRequests: number;
@@ -92,7 +102,9 @@ const cardanoStakingSyncRunSchema = new Schema<ICardanoStakingSyncRun>(
     },
     userCursor: { type: String, required: false, default: null },
     operationCursor: { type: String, required: false, default: null },
+    discoveryCursor: { type: String, required: false, default: null },
     accountsScanned: { type: Number, required: true, default: 0 },
+    accountsCreated: { type: Number, required: true, default: 0 },
     operationsReconciled: { type: Number, required: true, default: 0 },
     registrationsCreated: { type: Number, required: true, default: 0 },
     providerRequests: { type: Number, required: true, default: 0 },
