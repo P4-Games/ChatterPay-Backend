@@ -27,6 +27,7 @@ import {
   authorizeStakingAction,
   getGovernanceHistory,
   getStakingChatSummary,
+  getStakingOperationStatus,
   getStakingView,
   listGovernanceOptions,
   quoteStakingExit,
@@ -117,6 +118,33 @@ export async function cardanoStakingState(
     return returnSuccessResponse(reply, 'Cardano staking state', { staking: result.data });
   } catch (error) {
     return failed(reply, 'cardanoStakingState', error);
+  }
+}
+
+/**
+ * Handles `GET /cardano/staking/operation-status`.
+ *
+ * The light read for a screen waiting on an operation: the newest operation and the on-chain
+ * position, with the live operation settled when it is due. No balance, parameters or pool reads.
+ *
+ * @param request - The Fastify request.
+ * @param reply - The Fastify reply.
+ */
+export async function cardanoStakingOperationStatus(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<unknown> {
+  const { channel_user_id: channelUserId } = (request.query ?? {}) as { channel_user_id?: string };
+  if (!channelUserId) return missingUser(reply);
+
+  try {
+    const result = await getStakingOperationStatus(channelUserId);
+    if (!result.ok) return refuse(reply, result.refusal, result.detail);
+    return returnSuccessResponse(reply, 'Cardano staking operation status', {
+      status: result.data
+    });
+  } catch (error) {
+    return failed(reply, 'cardanoStakingOperationStatus', error);
   }
 }
 

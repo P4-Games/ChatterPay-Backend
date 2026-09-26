@@ -129,7 +129,27 @@ export interface CardanoStakingConfig {
   maxWalletsPerRun: number;
   /** Ceiling on provider calls one scheduler run may make. */
   maxProviderRequestsPerRun: number;
+  /**
+   * Whether the sweep may move a delegation off a pool with a retirement on record.
+   *
+   * Read by the sweep before it spends a request on the pool's state: with this off the pool is not
+   * read and no redelegation is initiated automatically.
+   */
+  autoRedelegateRetiredPools: boolean;
+  /** Minimum spacing between chain lookups for one live operation, in milliseconds. */
+  operationStatusCheckIntervalMs: number;
+  /** Spacing between checks of an empty, unregistered wallet, in milliseconds. */
+  emptyAccountRecheckMs: number;
+  /** Spacing between full refreshes of a funded or registered wallet, in milliseconds. */
+  activeAccountRecheckMs: number;
 }
+
+/** Pacing used when the network document predates the fields, or holds an unusable value. */
+export const STAKING_PACING_DEFAULTS = {
+  operationStatusCheckIntervalMs: 30 * 1000,
+  emptyAccountRecheckMs: 24 * 60 * 60 * 1000,
+  activeAccountRecheckMs: 6 * 60 * 60 * 1000
+} as const;
 
 /** Stand-in figures for a configuration that is off. Never used: `enabled` is false alongside them. */
 const DISABLED_AMOUNTS = {
@@ -166,8 +186,22 @@ function disabled(
     defaultGovernance: 'always_abstain',
     enrolmentAllowlist: null,
     sweepExecutionEnabled: false,
+    autoRedelegateRetiredPools: false,
+    ...STAKING_PACING_DEFAULTS,
     ...DISABLED_AMOUNTS
   };
+}
+
+/**
+ * Reads a stored positive duration.
+ *
+ * @param raw - The value as stored, in `unitMs` units.
+ * @param unitMs - Milliseconds per stored unit.
+ * @param fallback - What to use when the value is absent or not a positive number.
+ * @returns The duration in milliseconds.
+ */
+function readDurationMs(raw: unknown, unitMs: number, fallback: number): number {
+  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw * unitMs : fallback;
 }
 
 /**
@@ -288,6 +322,22 @@ export async function loadCardanoStakingConfig(chainId?: number): Promise<Cardan
     sponsorWindowDays: sponsorWindowDays ?? 30,
     sweepExecutionEnabled: staking.sweepExecutionEnabled === true,
     maxWalletsPerRun: maxWalletsPerRun ?? 0,
-    maxProviderRequestsPerRun: maxProviderRequestsPerRun ?? 0
+    maxProviderRequestsPerRun: maxProviderRequestsPerRun ?? 0,
+    autoRedelegateRetiredPools: staking.autoRedelegateRetiredPools === true,
+    operationStatusCheckIntervalMs: readDurationMs(
+      staking.operationStatusCheckIntervalSeconds,
+      1000,
+      STAKING_PACING_DEFAULTS.operationStatusCheckIntervalMs
+    ),
+    emptyAccountRecheckMs: readDurationMs(
+      staking.emptyAccountRecheckHours,
+      60 * 60 * 1000,
+      STAKING_PACING_DEFAULTS.emptyAccountRecheckMs
+    ),
+    activeAccountRecheckMs: readDurationMs(
+      staking.activeAccountRecheckHours,
+      60 * 60 * 1000,
+      STAKING_PACING_DEFAULTS.activeAccountRecheckMs
+    )
   };
 }

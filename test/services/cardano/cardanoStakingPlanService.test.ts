@@ -300,6 +300,24 @@ describe('cardanoStakingPlanService', () => {
   describe('a pool that stops paying', () => {
     it('moves the delegation when a retirement is on record', () => {
       const decision = decideAutomaticAction(
+        account({ ...ALREADY_STAKING, poolId: OTHER_POOL }),
+        context({
+          poolState: {
+            poolId: OTHER_POOL,
+            retirementScheduled: true,
+            retiringEpoch: null,
+            activeStakeLovelace: 0n
+          }
+        })
+      );
+
+      expect(decision.action).toBe('redelegate_pool');
+    });
+
+    it('does not re-delegate to the pool that is retiring when it is the default', () => {
+      // The move goes to the default pool; paying a fee to delegate to the same retiring pool changes
+      // nothing. It waits for an operator to configure another default.
+      const decision = decideAutomaticAction(
         account(ALREADY_STAKING),
         context({
           poolState: {
@@ -311,15 +329,15 @@ describe('cardanoStakingPlanService', () => {
         })
       );
 
-      expect(decision.action).toBe('redelegate_pool');
+      expect(decision).toMatchObject({ action: 'none', refusal: 'no_pool_configured' });
     });
 
     it('moves it before withdrawing, because the rewards stop either way', () => {
       const decision = decideAutomaticAction(
-        account({ ...ALREADY_STAKING, withdrawableRewardsLovelace: '8183734' }),
+        account({ ...ALREADY_STAKING, poolId: OTHER_POOL, withdrawableRewardsLovelace: '8183734' }),
         context({
           poolState: {
-            poolId: POOL,
+            poolId: OTHER_POOL,
             retirementScheduled: true,
             retiringEpoch: 318,
             activeStakeLovelace: 0n
@@ -651,11 +669,15 @@ describe('cardanoStakingPlanService', () => {
 
     it('does not move a retiring pool for an account outside the confinement', () => {
       const decision = decideAutomaticAction(
-        account({ ...ALREADY_STAKING, governanceDelegation: { kind: 'always_abstain' } }),
+        account({
+          ...ALREADY_STAKING,
+          poolId: OTHER_POOL,
+          governanceDelegation: { kind: 'always_abstain' }
+        }),
         context({
           config: OUTSIDE,
           poolState: {
-            poolId: POOL,
+            poolId: OTHER_POOL,
             retirementScheduled: true,
             retiringEpoch: 320,
             activeStakeLovelace: null

@@ -282,6 +282,12 @@ export function decideAutomaticAction(
   // A pool with a retirement on record stops paying. Moving the delegation is the only remedy, and
   // it is the same remedy whether the retirement is scheduled or already in effect.
   if (context.poolState?.retirementScheduled === true) {
+    // The move goes to the default pool. When the retiring pool *is* the default, there is nowhere to
+    // move to until an operator configures another, and re-delegating to the same pool is a fee spent
+    // on nothing.
+    if (context.config.defaultPoolId === null || context.config.defaultPoolId === onChain.poolId) {
+      return refuse('no_pool_configured', 'the default pool is the one retiring');
+    }
     return sweepMayInitiate(account, context.config)
       ? act('redelegate_pool')
       : refuse('not_allowlisted', 'redelegate_pool');

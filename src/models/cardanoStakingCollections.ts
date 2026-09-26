@@ -13,7 +13,7 @@
  */
 
 import type { Model } from 'mongoose';
-
+import CardanoProviderQuota from './cardanoProviderQuotaModel';
 import CardanoStakingAccount from './cardanoStakingAccountModel';
 import CardanoStakingDepositEvent from './cardanoStakingDepositEventModel';
 import CardanoStakingFeeBudget from './cardanoStakingFeeBudgetModel';
@@ -21,6 +21,7 @@ import CardanoStakingGovernanceEvent from './cardanoStakingGovernanceEventModel'
 import CardanoStakingOperation from './cardanoStakingOperationModel';
 import CardanoStakingReward from './cardanoStakingRewardModel';
 import CardanoStakingSponsorFeeEvent from './cardanoStakingSponsorFeeEventModel';
+import CardanoStakingSyncLock from './cardanoStakingSyncLockModel';
 import CardanoStakingSyncRun from './cardanoStakingSyncRunModel';
 import CardanoUtxoClaim from './cardanoUtxoClaimModel';
 
@@ -59,6 +60,16 @@ export const STAKING_COLLECTIONS: readonly StakingCollection[] = [
   {
     model: CardanoStakingSyncRun as unknown as Model<never>,
     collection: 'cardano_staking_sync_runs'
+  },
+  {
+    model: CardanoStakingSyncLock as unknown as Model<never>,
+    collection: 'cardano_staking_sync_locks'
+  },
+  // Shared by every provider consumer, not only staking; listed here so its index is created with the
+  // rest and checked by the same guard.
+  {
+    model: CardanoProviderQuota as unknown as Model<never>,
+    collection: 'cardano_provider_quota'
   },
   // Not introduced by this rollout — transfers have used it all along — but its expiry behaviour is
   // what keeps a staking operation's inputs held while its outcome is unknown, and an index that

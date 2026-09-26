@@ -137,6 +137,34 @@ export interface CardanoStakingSettings {
    * needs its own deposit policy, custody model and scope before it can be turned on.
    */
   drepOwnEnabled: boolean;
+  /**
+   * Seconds between chain lookups for one live operation, shared by the sweep and the dashboard.
+   *
+   * Bounds what a page left open, or refreshed repeatedly, can spend on one transaction. It does not
+   * shorten the absence rule: absence still needs its readings spread over the configured slots.
+   */
+  operationStatusCheckIntervalSeconds: number;
+  /** Hours between checks of a wallet that holds nothing and is not registered. */
+  emptyAccountRecheckHours: number;
+  /** Hours between full refreshes of a wallet that holds ada or is registered. */
+  activeAccountRecheckHours: number;
+  /**
+   * Requests per day the provider credential of this network allows, for every consumer of it:
+   * balances, transfers, confirmations, staking and the dashboard.
+   */
+  providerDailyRequestLimit: number;
+  /** Of that, the most the background sweep may spend in one day. */
+  providerBackgroundDailyLimit: number;
+  /**
+   * Requests held back for submissions and confirmations. Interactive and background reads stop at
+   * `providerDailyRequestLimit - providerCriticalReserve`.
+   */
+  providerCriticalReserve: number;
+  /**
+   * Where the provider's day starts, in minutes after 00:00 UTC. Zero assumes a UTC day, which is an
+   * assumption about the plan rather than something this code verified.
+   */
+  providerQuotaDayStartOffsetMinutes: number;
 }
 
 export interface IBlockchain extends Document {
@@ -292,7 +320,16 @@ const cardanoStakingSchema = new Schema<CardanoStakingSettings>(
     autoRedelegateRetiredPools: { type: Boolean, required: true, default: false },
     governanceEnabled: { type: Boolean, required: true, default: false },
     allowlistedDReps: { type: [String], required: true, default: () => [] },
-    drepOwnEnabled: { type: Boolean, required: true, default: false }
+    drepOwnEnabled: { type: Boolean, required: true, default: false },
+    // Pacing and quota. Defaults rather than refusals: none of these decides money, and a document
+    // written before they existed has to keep working with a prudent cadence.
+    operationStatusCheckIntervalSeconds: { type: Number, required: false, default: 30 },
+    emptyAccountRecheckHours: { type: Number, required: false, default: 24 },
+    activeAccountRecheckHours: { type: Number, required: false, default: 6 },
+    providerDailyRequestLimit: { type: Number, required: false, default: 50000 },
+    providerBackgroundDailyLimit: { type: Number, required: false, default: 20000 },
+    providerCriticalReserve: { type: Number, required: false, default: 1000 },
+    providerQuotaDayStartOffsetMinutes: { type: Number, required: false, default: 0 }
   },
   { _id: false }
 );

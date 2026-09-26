@@ -78,12 +78,16 @@ export type StakingObservationProvider = Pick<
  * @param account - The account to observe.
  * @param provider - Where to read.
  * @param now - Observation time, stamped on the snapshot.
+ * @param options - `includeRewardHistory: false` skips the paged reward history and leaves the
+ *   stored credits and their completeness as they were. Used after an operation settles, when what
+ *   changed is the registration, pool or vote delegation and the history is refreshed by the sweep.
  * @returns What was established.
  */
 export async function observeStakingAccount(
   account: ICardanoStakingAccount,
   provider: StakingObservationProvider,
-  now: Date = new Date()
+  now: Date = new Date(),
+  options: { includeRewardHistory?: boolean } = {}
 ): Promise<StakingObservation> {
   const accountId = account._id as Types.ObjectId;
 
@@ -113,12 +117,22 @@ export async function observeStakingAccount(
 
   const depositLovelace = await resolveDeposit(account, state, provider);
   const registrationOrigin = await resolveOrigin(account, state);
-  const rewards = await recordRewards(account, provider);
+  // An unregistered credential that holds nothing and never earned anything has no history to read.
+  // Skipping it is what keeps the check of an empty wallet at one request.
+  const nothingEarned =
+    !state.registered &&
+    state.controlledLovelace === 0n &&
+    (state.lifetimeRewardsLovelace ?? 0n) === 0n;
+  const rewards =
+    options.includeRewardHistory === false || nothingEarned
+      ? null
+      : await recordRewards(account, provider);
 
   await CardanoStakingAccount.updateOne(
     { _id: accountId },
     {
       $set: {
+        ...(rewards === null ? {} : { 'onChain.historicalCompleteness': rewards.completeness }),
         'onChain.registered': state.registered,
         'onChain.poolId': state.poolId,
         'onChain.governanceDelegation': state.governanceDelegation,
@@ -127,7 +141,6 @@ export async function observeStakingAccount(
         'onChain.withdrawableRewardsLovelace': String(state.withdrawableRewardsLovelace),
         'onChain.lifetimeRewardsLovelace':
           state.lifetimeRewardsLovelace === null ? '0' : String(state.lifetimeRewardsLovelace),
-        'onChain.historicalCompleteness': rewards.completeness,
         // Written last in this object and only on a read that succeeded: this is the field that
         // tells every economic path the snapshot is real.
         'onChain.asOf': now,
@@ -142,7 +155,7 @@ export async function observeStakingAccount(
   return {
     outcome: 'observed',
     reason: null,
-    newRewardCredits: rewards.inserted,
+    newRewardCredits: rewards?.inserted ?? 0,
     externallyRegistered: registrationOrigin === 'external',
     state
   };

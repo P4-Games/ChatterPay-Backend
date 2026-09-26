@@ -7,6 +7,7 @@ import {
   cardanoStakingAuthorize,
   cardanoStakingConsent,
   cardanoStakingExitQuote,
+  cardanoStakingOperationStatus,
   cardanoStakingState,
   cardanoStakingSummary
 } from '../controllers/cardanoStakingController';
@@ -41,6 +42,14 @@ export const cardanoStakingRoutes = async (fastify: FastifyInstance): Promise<vo
    * @route GET /cardano/staking/state?channel_user_id=<id>
    */
   fastify.get('/cardano/staking/state', cardanoStakingState);
+
+  /**
+   * The newest operation and the on-chain position, for a screen polling a pending operation. Settles
+   * the live operation at most once per the network's interval; no balance reads.
+   *
+   * @route GET /cardano/staking/operation-status?channel_user_id=<id>
+   */
+  fastify.get('/cardano/staking/operation-status', cardanoStakingOperationStatus);
 
   /**
    * Records the terms acceptance and the opt-in, together.

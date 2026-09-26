@@ -44,7 +44,7 @@ import {
   governanceTargetCanonical,
   parseGovernanceTarget
 } from './cardanoGovernanceTargetService';
-import { buildCardanoProvider } from './cardanoProviderService';
+import { buildCardanoProvider, type CardanoProvider } from './cardanoProviderService';
 import { assembleStakingPlan } from './cardanoStakingAssemblyService';
 import {
   assertionIdempotencyKey,
@@ -59,13 +59,19 @@ import {
   resolveStakingBalance
 } from './cardanoStakingBalanceService';
 import { buildCardanoStakingTransaction } from './cardanoStakingBuilderService';
-import { executeStakingOperation } from './cardanoStakingLifecycleService';
+import {
+  executeStakingOperation,
+  RECONCILABLE_STATUSES,
+  reconcileWhenDue
+} from './cardanoStakingLifecycleService';
+import { observeStakingAccount } from './cardanoStakingObservationService';
 import {
   countSponsoredRegistrations,
   createStakingOperation
 } from './cardanoStakingOperationService';
 import { decideRequestedAction, type StakingDecisionRefusal } from './cardanoStakingPlanService';
 import { buildStakingProvider, type CardanoStakingProvider } from './cardanoStakingProviderService';
+import { requestStakingRefresh } from './cardanoStakingRefreshService';
 import { selectableStakingUtxos } from './cardanoStakingReservationService';
 import { stakingSignerFor } from './cardanoStakingSignerService';
 import { deriveStakingAccountState } from './cardanoStakingStateService';
@@ -283,17 +289,196 @@ async function resolveOwn(
   return { ok: true, data: { user, account } };
 }
 
+/** Collaborators a read can be given instead of building its own. For tests. */
+export interface StakingReadDependencies {
+  base?: CardanoProvider;
+  staking?: CardanoStakingProvider;
+  now?: Date;
+}
+
+/**
+ * Settles the account's live operation, if it has one and it is due for a lookup.
+ *
+ * The dashboard's half of reconciliation. It goes through {@link reconcileWhenDue}, the same entry
+ * point and the same policy the sweep uses, so a screen cannot settle anything the sweep would not:
+ * three confirmations to confirm, readings spread over the policy's slots to conclude absence, and a
+ * provider failure settles nothing. The spacing is claimed in Mongo, so a refresh loop, two tabs or
+ * two instances make at most one lookup per interval between them.
+ *
+ * Only `signed`, `submitted` and `unknown_submit` are looked up. `queued` and `executing` have no
+ * transaction on chain yet, and `manual_review` waits for a person; those are shown as stored.
+ *
+ * An account with no such operation costs nothing here: one indexed Mongo read and no provider call.
+ *
+ * On confirmation the credential is re-read without its reward history, so the registration, pool
+ * and vote delegation on screen match the chain, and the account is marked for a full refresh by the
+ * sweep. Balances and rewards are not assumed to have moved with it.
+ *
+ * @param account - The account.
+ * @param intervalMs - The network's spacing between lookups for one operation.
+ * @param base - The transfer provider: tip and transaction lookup.
+ * @param staking - The staking provider, for the post-confirmation read.
+ * @param now - The clock.
+ * @returns Whether the stored account changed and should be read again.
+ */
+export async function settleLiveOperation(
+  account: ICardanoStakingAccount,
+  intervalMs: number,
+  base: Pick<CardanoProvider, 'tip' | 'statusOf'>,
+  staking: Pick<CardanoStakingProvider, 'stakeAccount' | 'rewardHistory' | 'registrationHistory'>,
+  now: Date = new Date()
+): Promise<boolean> {
+  const accountId = account._id as Types.ObjectId;
+  const live = await CardanoStakingOperation.findOne({
+    accountId,
+    status: { $in: RECONCILABLE_STATUSES }
+  })
+    .sort({ createdAt: -1 })
+    .select('_id')
+    .lean<{ _id: Types.ObjectId } | null>();
+  if (live === null) return false;
+
+  const due = await reconcileWhenDue(live._id, base, intervalMs, now);
+  if (due.outcome === 'confirmed') {
+    await requestStakingRefresh({ accountIds: [accountId] }, 'operation_confirmed', now);
+    const fresh = await CardanoStakingAccount.findById(accountId).exec();
+    if (fresh !== null) {
+      await observeStakingAccount(fresh, staking, now, { includeRewardHistory: false });
+    }
+    return true;
+  }
+  if (due.outcome === 'absent_past_ttl' || due.outcome === 'reorg_suspected') {
+    await requestStakingRefresh({ accountIds: [accountId] }, 'operation_settled', now);
+    return true;
+  }
+  return false;
+}
+
+/** What a screen polling a pending operation needs, without the balance or the actions. */
+export interface StakingOperationStatusView {
+  state: CardanoStakingAccountState;
+  registered: boolean;
+  poolId: string | null;
+  governanceDelegation: unknown;
+  /** The newest operation, live or not, or `null` when the account has none. */
+  operation: StakingOperationView | null;
+  /** When the snapshot above was read from the chain. */
+  asOf: Date | null;
+}
+
+/**
+ * The light read for a screen waiting on an operation.
+ *
+ * Settles the live operation when it is due, exactly as {@link getStakingView} does, and returns the
+ * operation and the on-chain position — and nothing else. No UTxOs, no protocol parameters, no pool
+ * state and no reward history are read, so polling this costs at most one throttled lookup per
+ * interval, and nothing at all when no operation is live.
+ *
+ * @param phoneNumber - The authenticated user's phone number.
+ * @param deps - Providers and clock, for tests.
+ * @returns The status, or a refusal.
+ */
+export async function getStakingOperationStatus(
+  phoneNumber: string,
+  deps: StakingReadDependencies = {}
+): Promise<StakingUserResult<StakingOperationStatusView>> {
+  const cardano = getCardanoConfig();
+  if (!cardano.enabled) {
+    return { ok: false, refusal: 'staking_disabled', detail: cardano.disabledReason };
+  }
+
+  const own = await resolveOwn(phoneNumber);
+  if (!own.ok) return own;
+
+  const config = await loadCardanoStakingConfig(own.data.account.chainId);
+  const now = deps.now ?? new Date();
+  const changed = await settleLiveOperation(
+    own.data.account,
+    config.operationStatusCheckIntervalMs,
+    deps.base ?? buildCardanoProvider(),
+    deps.staking ?? stakingProvider(),
+    now
+  );
+  const account = changed
+    ? ((await CardanoStakingAccount.findById(own.data.account._id).exec()) ?? own.data.account)
+    : own.data.account;
+
+  const latest = await CardanoStakingOperation.findOne({ accountId: account._id })
+    .sort({ createdAt: -1 })
+    .lean();
+  const live = LIVE_STATUSES.includes(latest?.status ?? 'confirmed') ? latest : null;
+
+  return {
+    ok: true,
+    data: {
+      state: deriveStakingAccountState(
+        account,
+        live === null ? null : { kind: live.kind, status: live.status },
+        null,
+        config.consentRequired
+      ),
+      registered: account.onChain.registered,
+      poolId: account.onChain.poolId,
+      governanceDelegation: account.onChain.governanceDelegation,
+      operation: latest === null ? null : operationView(latest),
+      asOf: account.onChain.asOf
+    }
+  };
+}
+
+/** Statuses a screen shows as still in progress. */
+const LIVE_STATUSES: readonly string[] = [
+  'queued',
+  'executing',
+  'signed',
+  'submitted',
+  'unknown_submit',
+  'manual_review'
+];
+
+/**
+ * One operation, as a screen shows it.
+ *
+ * @param operation - The stored operation.
+ * @returns The view.
+ */
+function operationView(operation: {
+  kind: CardanoStakingOperationKind;
+  status: string;
+  chainOutcome: string;
+  txId: string | null;
+  networkFeeLovelace: string | null;
+}): StakingOperationView {
+  return {
+    kind: operation.kind,
+    status: operation.status,
+    chainOutcome: operation.chainOutcome,
+    txId: operation.txId,
+    networkFeeLovelace: operation.networkFeeLovelace,
+    createdAt: (operation as { createdAt?: Date }).createdAt ?? null,
+    // An unsettled operation is shown as informative, never as a figure to act on: the chain may
+    // still change it, and a screen that presents `pending` as done is a screen that lies briefly.
+    settled: operation.chainOutcome === 'confirmed' || operation.chainOutcome === 'rejected'
+  };
+}
+
 /**
  * The staking screen for the authenticated user's own wallet.
  *
  * Read-only, and it works for a wallet this deployment cannot sign for: the position is shown, and
  * every action reports `signer_unavailable` instead.
  *
+ * A live operation is settled first when it is due (see {@link settleLiveOperation}), so an action
+ * started from the dashboard shows `pending` straight away and its confirmation without waiting for
+ * the sweep.
+ *
  * @param phoneNumber - The authenticated user's phone number.
+ * @param deps - Providers and clock, for tests.
  * @returns The view, or a refusal.
  */
 export async function getStakingView(
-  phoneNumber: string
+  phoneNumber: string,
+  deps: StakingReadDependencies = {}
 ): Promise<StakingUserResult<StakingUserView>> {
   const cardano = getCardanoConfig();
   if (!cardano.enabled) {
@@ -302,11 +487,22 @@ export async function getStakingView(
 
   const own = await resolveOwn(phoneNumber);
   if (!own.ok) return own;
-  const { user, account } = own.data;
+  const { user } = own.data;
 
-  const config = await loadCardanoStakingConfig(account.chainId);
-  const base = buildCardanoProvider();
-  const staking = stakingProvider();
+  const config = await loadCardanoStakingConfig(own.data.account.chainId);
+  const base = deps.base ?? buildCardanoProvider();
+  const staking = deps.staking ?? stakingProvider();
+
+  const changed = await settleLiveOperation(
+    own.data.account,
+    config.operationStatusCheckIntervalMs,
+    base,
+    staking,
+    deps.now ?? new Date()
+  );
+  const account = changed
+    ? ((await CardanoStakingAccount.findById(own.data.account._id).exec()) ?? own.data.account)
+    : own.data.account;
 
   const balance = await resolveStakingBalance(account, account.walletAddress, base);
   const signer = stakingSignerFor(account, user);
@@ -395,17 +591,7 @@ export async function getStakingView(
         sourceType: reward.sourceType,
         observedAt: reward.observedAt
       })),
-      operations: operations.map((operation) => ({
-        kind: operation.kind,
-        status: operation.status,
-        chainOutcome: operation.chainOutcome,
-        txId: operation.txId,
-        networkFeeLovelace: operation.networkFeeLovelace,
-        createdAt: (operation as { createdAt?: Date }).createdAt ?? null,
-        // An unsettled operation is shown as informative, never as a figure to act on: the chain may
-        // still change it, and a screen that presents `pending` as done is a screen that lies briefly.
-        settled: operation.chainOutcome === 'confirmed' || operation.chainOutcome === 'rejected'
-      })),
+      operations: operations.map((operation) => operationView(operation)),
       lastSyncAt: account.lastSyncAt
     }
   };

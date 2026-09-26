@@ -550,3 +550,34 @@ describe('assembleStakingPlan', () => {
     expect(new Set(witnesses.map((witness) => witness.publicKey)).size).toBe(3);
   });
 });
+
+describe('the vote delegation a plan carries', () => {
+  it("uses the network's default governance when nobody named a target", async () => {
+    const result = await assembleStakingPlan({
+      account: account(),
+      user: user(),
+      action: 'register_and_delegate',
+      provider: providerFor({ state: chainState({ registered: false }) }),
+      config: stakingConfig({ defaultGovernance: 'always_no_confidence' })
+    });
+
+    if (result.outcome !== 'assembled') throw new Error(`refused: ${result.refusal}`);
+    expect(result.plan.drep).toEqual({ kind: 'always_no_confidence' });
+  });
+
+  it('keeps the target a user named over the default', async () => {
+    const result = await assembleStakingPlan({
+      account: account({ registered: true }),
+      user: user(),
+      action: 'delegate_vote',
+      provider: providerFor({
+        state: chainState({ registered: true, governanceDelegation: { kind: 'none' } })
+      }),
+      drep: { kind: 'always_abstain' },
+      config: stakingConfig({ defaultGovernance: 'always_no_confidence' })
+    });
+
+    if (result.outcome !== 'assembled') throw new Error(`refused: ${result.refusal}`);
+    expect(result.plan.drep).toEqual({ kind: 'always_abstain' });
+  });
+});

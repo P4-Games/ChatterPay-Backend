@@ -203,6 +203,32 @@ export interface ICardanoStakingAccount extends Document {
   lastError: string | null;
   /** Why auto-enrolment is paused, when it is: budget, churn limit, or an operator. */
   autoEnrollSuspendedReason: string | null;
+  /**
+   * When the sweep should next look at this account. `null` means due now, which is what every
+   * account written before the field, and every new one, reads as.
+   *
+   * The sweep selects by this field, oldest first, rather than by `_id`, so an account can neither be
+   * skipped forever nor be read far more often than its cadence.
+   */
+  nextEligibleCheckAt: Date | null;
+  /**
+   * Set when something this backend did may have changed the wallet — a transfer in or out, an
+   * operation settling. Makes the account due now. Cleared only by an observation that started
+   * after it was set, so a request that arrives mid-observation is not lost.
+   *
+   * It never implies the absence of an external deposit: accounts without it are still checked on
+   * their own cadence.
+   */
+  refreshRequestedAt: Date | null;
+  /** Why the refresh was requested, e.g. `transfer_in`, `operation_confirmed`. */
+  refreshReason: string | null;
+  /**
+   * The total the provider last reported under this stake credential, in lovelace, as a decimal
+   * string. `null` when never read or when the provider does not report it.
+   */
+  lastKnownBalanceLovelace: string | null;
+  /** Consecutive observations the provider could not answer. Drives the backoff. */
+  observationFailures: number;
 }
 
 const drepCredentialSchema = new Schema<CardanoDRepCredential>(
@@ -324,7 +350,12 @@ const cardanoStakingAccountSchema = new Schema<ICardanoStakingAccount>(
     lastObservedAt: { type: Date, required: false, default: null },
     lastSyncAt: { type: Date, required: false, default: null },
     lastError: { type: String, required: false, default: null },
-    autoEnrollSuspendedReason: { type: String, required: false, default: null }
+    autoEnrollSuspendedReason: { type: String, required: false, default: null },
+    nextEligibleCheckAt: { type: Date, required: false, default: null },
+    refreshRequestedAt: { type: Date, required: false, default: null },
+    refreshReason: { type: String, required: false, default: null },
+    lastKnownBalanceLovelace: { type: String, required: false, default: null },
+    observationFailures: { type: Number, required: false, default: 0 }
   },
   // Collections and indexes in this database are administered by hand, so the model must not bring
   // either into existence. Mongoose otherwise creates the collection and builds its indexes in the
@@ -348,6 +379,12 @@ cardanoStakingAccountSchema.index(
 // The daily sweep scans by state and staleness, and pages by _id from a durable cursor.
 cardanoStakingAccountSchema.index({ chainId: 1, state: 1, lastSyncAt: 1 }, { name: 'sync_scan' });
 cardanoStakingAccountSchema.index({ chainId: 1, _id: 1 }, { name: 'cursor_scan' });
+// The sweep's work queue: due accounts, oldest due first. Also answers the backlog count and the
+// age of the oldest due account without a collection scan.
+cardanoStakingAccountSchema.index(
+  { chainId: 1, nextEligibleCheckAt: 1, _id: 1 },
+  { name: 'due_scan' }
+);
 
 const CardanoStakingAccount = model<ICardanoStakingAccount>(
   'CardanoStakingAccount',

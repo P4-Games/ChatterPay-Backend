@@ -21,10 +21,16 @@
  * A `scheduledTime` in the body is read only when that header is absent, because a job's body is
  * static and a fixed date there would give every tick the same identity.
  *
+ * A header time in the future is not a tick. Cloud Scheduler's "Force run" sends the *next*
+ * scheduled time, and taking it as identity would complete that tick early and turn the real
+ * delivery into `already_completed`. Such a call, and any call with no usable time, runs as a manual
+ * run with an identity of its own. See {@link resolveSyncTrigger}.
+ *
  * Status codes carry the distinction a scheduler needs in order to decide whether to retry:
  *
  * - `200` the run did something, or deliberately did nothing. Includes a lease held by another
- *   instance and a tick that already completed: both mean "no work for you", not "try again".
+ *   instance, another run working on the network and a tick that already completed: all mean "no
+ *   work for you", not "try again". `executed` and `refusal` in the body say which.
  * - `401` the token did not verify. Retrying will not help.
  * - `409` staking is off or misconfigured in this deployment.
  * - `500` the run failed part way. A retry resumes it from its checkpoint.
@@ -36,6 +42,8 @@ import { getCardanoConfig } from '../config/cardanoConfig';
 import { loadCardanoStakingConfig } from '../config/cardanoStakingConfig';
 import { Logger } from '../helpers/loggerHelper';
 import { returnErrorResponse, returnSuccessResponse } from '../helpers/requestHelper';
+import type { CardanoStakingSyncTrigger } from '../models/cardanoStakingSyncRunModel';
+import { providerUsageSnapshot } from '../services/cardano/cardanoProviderQuotaService';
 import { buildCardanoProvider } from '../services/cardano/cardanoProviderService';
 import { buildStakingProvider } from '../services/cardano/cardanoStakingProviderService';
 import {
@@ -48,6 +56,13 @@ const DEFAULT_BATCH_LIMIT = 50;
 
 /** Ceiling on the batch limit, whatever is configured or asked for. */
 const MAX_BATCH_LIMIT = 500;
+
+/**
+ * How far ahead of this machine's clock a schedule time may be and still be read as the current
+ * tick. Covers clock skew between Cloud Scheduler and the instance; a Force run is ahead by a whole
+ * schedule interval, far past this.
+ */
+export const SCHEDULE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
 /** What the endpoint accepts in the body. */
 interface SyncRequestBody {
@@ -80,7 +95,7 @@ export async function cardanoStakingSync(
   }
 
   const body = (request.body ?? {}) as SyncRequestBody;
-  const scheduledTime = scheduledTimeFrom(
+  const trigger = resolveSyncTrigger(
     request.headers['x-cloudscheduler-scheduletime'],
     body.scheduledTime
   );
@@ -94,7 +109,9 @@ export async function cardanoStakingSync(
     const result = await runStakingSync({
       chainId: config.chainId,
       jobName: (body.jobName ?? 'cardano-staking-sync').slice(0, 120),
-      scheduledTime,
+      scheduledTime: trigger.scheduledTime,
+      trigger: trigger.kind,
+      triggerReason: trigger.reason,
       // Names the process, so a lease says which instance holds it. Cloud Run gives no stable
       // instance id to application code, so this is the best available: it changes per process, which
       // is exactly the granularity a lease needs.
@@ -125,21 +142,27 @@ export async function cardanoStakingSync(
       );
     }
 
-    Logger.log(
-      'cardanoStakingSync',
-      `run ${result.runId} ${result.status}: ${result.accountsScanned} accounts, ` +
-        `${result.operationsReconciled} reconciled, ${result.actionsStarted} started, ` +
-        `${result.backlogCount} remaining`
-    );
+    // A refusal is logged as a refusal, never as a run that scanned nothing: "completed: 0" and
+    // "did not run" are different facts for whoever reads the log.
+    Logger.log('cardanoStakingSync', describeResult(result));
 
     return returnSuccessResponse(reply, 'Cardano staking sync finished', {
       runId: result.runId,
+      executed: result.executed,
+      trigger: result.trigger,
+      triggerReason: result.triggerReason,
       status: result.status,
       phase: result.phase,
       accountsScanned: result.accountsScanned,
+      accountsCreated: result.accountsCreated,
       operationsReconciled: result.operationsReconciled,
       actionsStarted: result.actionsStarted,
       backlogCount: result.backlogCount,
+      providerRequests: result.providerRequests,
+      stopReason: result.stopReason,
+      // The credential's usage today across every consumer in this backend, not only this run. A
+      // failure to read it does not fail the response.
+      providerUsage: await providerUsageSnapshot(config.chainId).catch(() => null),
       // Counts by reason rather than per account: it is what tells an operator whether a run did
       // nothing because there was nothing to do or because everything was refused for one reason.
       outcomes: result.refusals,
@@ -182,6 +205,87 @@ export function scheduledTimeFrom(
   now: Date = new Date()
 ): Date {
   return readTime(header) ?? readTime(body) ?? now;
+}
+
+/** What kind of run a delivery asks for, and why it was read that way. */
+export interface SyncTrigger {
+  kind: CardanoStakingSyncTrigger;
+  /** The tick for a scheduled run; the arrival time for a manual one. */
+  scheduledTime: Date;
+  /** Why the delivery was classified as it was. */
+  reason: string;
+}
+
+/**
+ * Classifies a delivery as a scheduled tick or a manual run.
+ *
+ * Only a time that is not in the future identifies a tick. The authenticated caller is the same in
+ * both cases, so nothing here grants more than the token already does: a manual run goes through the
+ * same lease, network lock and per-account guards as a scheduled one.
+ *
+ * - Header present, readable, not ahead of `now` by more than {@link SCHEDULE_CLOCK_SKEW_MS}:
+ *   `scheduled`, identified by the header. Every retry of that tick resolves to the same run.
+ * - Header ahead of that: `manual` (`schedule_time_in_future`). This is Cloud Scheduler's "Force
+ *   run", which sends the next tick's time.
+ * - Header present and unreadable: `manual` (`schedule_time_unreadable`).
+ * - No header, body time readable and not in the future: `scheduled` (`body_tick`), for an operator
+ *   resuming a named past tick.
+ * - No header, body time in the future: `manual` (`body_time_in_future`).
+ * - Nothing usable: `manual` (`no_schedule_time`).
+ *
+ * @param header - What `X-CloudScheduler-ScheduleTime` carried, if anything.
+ * @param body - What the body's `scheduledTime` named, if anything.
+ * @param now - The current time, injectable for tests.
+ * @returns The classification.
+ */
+export function resolveSyncTrigger(
+  header: unknown,
+  body: string | undefined,
+  now: Date = new Date()
+): SyncTrigger {
+  const limit = now.getTime() + SCHEDULE_CLOCK_SKEW_MS;
+  const headerPresent = typeof header === 'string' && header.trim() !== '';
+
+  if (headerPresent) {
+    const tick = readTime(header);
+    if (tick === null) {
+      return { kind: 'manual', scheduledTime: now, reason: 'schedule_time_unreadable' };
+    }
+    if (tick.getTime() > limit) {
+      return { kind: 'manual', scheduledTime: now, reason: 'schedule_time_in_future' };
+    }
+    return { kind: 'scheduled', scheduledTime: tick, reason: 'scheduler_header' };
+  }
+
+  const named = readTime(body);
+  if (named !== null) {
+    if (named.getTime() > limit) {
+      return { kind: 'manual', scheduledTime: now, reason: 'body_time_in_future' };
+    }
+    return { kind: 'scheduled', scheduledTime: named, reason: 'body_tick' };
+  }
+
+  return { kind: 'manual', scheduledTime: now, reason: 'no_schedule_time' };
+}
+
+/**
+ * One log line for a sync call.
+ *
+ * @param result - What the run reported.
+ * @returns The line. Contains ids and counts only; no address or phone number.
+ */
+function describeResult(result: Awaited<ReturnType<typeof runStakingSync>>): string {
+  if (!result.executed) {
+    return `run ${result.runId} (${result.trigger}) not executed: ${result.refusal}, stored status ${result.status}`;
+  }
+  const reason = result.triggerReason === null ? '' : `:${result.triggerReason}`;
+  const stop = result.stopReason === null ? '' : `, stopped: ${result.stopReason}`;
+  return (
+    `run ${result.runId} (${result.trigger}${reason}) ${result.status}: ` +
+    `${result.accountsScanned} accounts, ${result.operationsReconciled} reconciled, ` +
+    `${result.actionsStarted} started, ${result.backlogCount} remaining, ` +
+    `${result.providerRequests} provider requests${stop}`
+  );
 }
 
 /**
@@ -243,6 +347,7 @@ function stakingSyncProvider(): StakingSyncProvider {
     stakingProtocolParameters: () => staking.stakingProtocolParameters(),
     stakeAccount: (rewardAddress: string) => staking.stakeAccount(rewardAddress),
     rewardHistory: (rewardAddress: string) => staking.rewardHistory(rewardAddress),
-    registrationHistory: (rewardAddress: string) => staking.registrationHistory(rewardAddress)
+    registrationHistory: (rewardAddress: string) => staking.registrationHistory(rewardAddress),
+    poolState: (poolId: string) => staking.poolState(poolId)
   };
 }

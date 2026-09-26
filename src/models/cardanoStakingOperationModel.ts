@@ -219,6 +219,18 @@ export interface ICardanoStakingOperation extends Document {
   absentObservations: number;
   /** The slot at which the transaction was first found absent, for measuring that spread. */
   firstAbsentAtSlot: number | null;
+  /**
+   * Earliest moment another chain lookup may be made for this operation.
+   *
+   * Claimed with a conditional update before every lookup, by the sweep and by the dashboard alike,
+   * so two tabs, two instances or a sweep and a tab cannot ask the provider the same question at
+   * once. `null` means due now, which is what every document written before the field reads as.
+   */
+  nextCheckAt: Date | null;
+  /** When the last lookup was claimed. */
+  lastReconcileAttemptAt: Date | null;
+  /** Consecutive lookups the provider could not answer. Drives the backoff; reset by any answer. */
+  reconcileFailures: number;
 }
 
 const outpointSchema = new Schema<CardanoStakingOutpoint>(
@@ -319,7 +331,10 @@ const cardanoStakingOperationSchema = new Schema<ICardanoStakingOperation>(
     errorCode: { type: String, required: false, default: null },
     attempts: { type: Number, required: true, default: 0 },
     absentObservations: { type: Number, required: true, default: 0 },
-    firstAbsentAtSlot: { type: Number, required: false, default: null }
+    firstAbsentAtSlot: { type: Number, required: false, default: null },
+    nextCheckAt: { type: Date, required: false, default: null },
+    lastReconcileAttemptAt: { type: Date, required: false, default: null },
+    reconcileFailures: { type: Number, required: true, default: 0 }
   },
   // Collections and indexes in this database are administered by hand, so the model must not bring
   // either into existence. Mongoose otherwise creates the collection and builds its indexes in the

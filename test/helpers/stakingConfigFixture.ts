@@ -34,6 +34,10 @@ export function stakingConfigFixture(
     sweepExecutionEnabled: true,
     maxWalletsPerRun: 50,
     maxProviderRequestsPerRun: 1000,
+    autoRedelegateRetiredPools: false,
+    operationStatusCheckIntervalMs: 30_000,
+    emptyAccountRecheckMs: 24 * 60 * 60 * 1000,
+    activeAccountRecheckMs: 6 * 60 * 60 * 1000,
     ...overrides
   };
 }

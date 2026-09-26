@@ -7,6 +7,7 @@ import { connectToDatabaseWithRetry } from './config/database';
 import { startServer } from './config/server';
 import { Logger } from './helpers/loggerHelper';
 import { verifyCardanoDerivation } from './services/cardano/cardanoDerivationCheck';
+import { installCardanoProviderMeter } from './services/cardano/cardanoProviderQuotaService';
 import { registerPolymarketApiAdapter } from './services/polymarket/polymarketProxyHelper';
 
 /**
@@ -83,6 +84,10 @@ async function main(): Promise<void> {
     // switching Cardano off, never by stopping the process — the rest of the product has nothing to
     // do with this deployment's Cardano keys.
     verifyCardanoDerivation();
+
+    // Every Cardano provider request from here on is reserved against the credential's shared daily
+    // quota in Mongo, whichever instance and whichever flow sends it.
+    installCardanoProviderMeter();
 
     const server = await startServer();
     setupGracefulShutdown(server);

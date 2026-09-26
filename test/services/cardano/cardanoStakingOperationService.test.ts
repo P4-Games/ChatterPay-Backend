@@ -371,7 +371,7 @@ describe('cardanoStakingOperationService', () => {
       // database was supposed to get waves through the deployment where they were never created.
       const collections = STAKING_COLLECTIONS.map((entry) => entry.collection);
 
-      expect(collections).toHaveLength(9);
+      expect(collections).toHaveLength(11);
       expect(mongoose.connection.readyState).toBe(1);
       expect(await missingStakingIndexes()).toEqual([]);
     });

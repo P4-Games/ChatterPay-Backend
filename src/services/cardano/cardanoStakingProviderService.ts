@@ -81,6 +81,16 @@ export interface CardanoStakeAccountState {
    * Blockfrost does not report it at all, which is why the confirmed registration is recorded.
    */
   depositLovelace: bigint | null;
+  /**
+   * Everything held under this stake credential — outputs at every address carrying it, plus
+   * withdrawable rewards — when the provider reports it. `0n` for a credential the chain has never
+   * seen. Optional: a reader that does not report it leaves it absent, and callers then read the
+   * outputs themselves.
+   *
+   * Blockfrost `controlled_amount`, Koios `total_balance`. This is what lets one request answer
+   * whether an unregistered wallet received anything since it was last read.
+   */
+  controlledLovelace?: bigint | null;
 }
 
 /** One reward credit, as an epoch paid it. */
@@ -450,6 +460,7 @@ interface KoiosStakingEpochParams {
 interface KoiosAccountInfo {
   stake_address: string;
   status: string;
+  total_balance?: string | null;
   delegated_pool: string | null;
   delegated_drep: string | null;
   rewards_available: string | null;
@@ -586,7 +597,8 @@ export class KoiosStakingProvider extends HttpCardanoProvider implements Cardano
         : 0n,
       lifetimeRewardsLovelace: optionalLovelace(row.rewards, 'rewards'),
       withdrawnLovelace: optionalLovelace(row.withdrawals, 'withdrawals'),
-      depositLovelace: optionalLovelace(row.deposit, 'deposit')
+      depositLovelace: optionalLovelace(row.deposit, 'deposit'),
+      controlledLovelace: optionalLovelace(row.total_balance, 'total_balance')
     };
   }
 
@@ -754,6 +766,7 @@ interface BlockfrostStakingEpochParams {
 interface BlockfrostAccount {
   stake_address: string;
   active: boolean;
+  controlled_amount?: string | null;
   registered?: boolean;
   pool_id: string | null;
   drep_id: string | null;
@@ -881,7 +894,8 @@ export class BlockfrostStakingProvider
       withdrawnLovelace: optionalLovelace(row.withdrawals_sum, 'withdrawals_sum'),
       // This dialect reports no deposit. The refund a deregistration owes has to come from the
       // registration this backend confirmed, which is why it is recorded there at all.
-      depositLovelace: null
+      depositLovelace: null,
+      controlledLovelace: optionalLovelace(row.controlled_amount, 'controlled_amount')
     };
   }
 
@@ -1025,7 +1039,9 @@ function unregisteredAccount(): CardanoStakeAccountState {
     withdrawableRewardsLovelace: 0n,
     lifetimeRewardsLovelace: null,
     withdrawnLovelace: null,
-    depositLovelace: null
+    depositLovelace: null,
+    // No row means the chain has never seen the credential: nothing was ever sent to it.
+    controlledLovelace: 0n
   };
 }
 

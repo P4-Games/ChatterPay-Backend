@@ -69,9 +69,6 @@ import {
  */
 export const STAKING_FEE_ESTIMATE_LOVELACE = 500_000;
 
-/** The default vote delegation, when the caller names none. */
-const DEFAULT_DREP: CardanoDRepTarget = { kind: 'always_abstain' };
-
 /** What assembly needs to read. */
 export type StakingAssemblyProvider = Pick<CardanoProvider, 'tip' | 'utxosFor'> &
   Pick<CardanoStakingProvider, 'stakingProtocolParameters' | 'stakeAccount'>;
@@ -118,7 +115,7 @@ export interface StakingAssemblyRequest {
   recipientAddress?: string | null;
   /** ChatterPay's commercial fee on an exit, from the existing fee service. */
   commercialFeeLovelace?: bigint;
-  /** Vote delegation target. Defaults to abstaining, which participates in nothing. */
+  /** Vote delegation target. Defaults to the network's `defaultGovernance`. */
   drep?: CardanoDRepTarget;
   /** Overrides the environment's staking configuration. For tests. */
   config?: CardanoStakingConfig;
@@ -313,7 +310,12 @@ function resolveAmounts(
   config: CardanoStakingConfig,
   reads: ChainReads
 ): ResolvedAmounts {
-  const drep = request.drep ?? DEFAULT_DREP;
+  // A target the caller named — a user's own choice — always wins. Without one, the network's
+  // `defaultGovernance` applies. That only happens for a delegation this backend initiates: a new
+  // registration, or a credential the chain reports as never having delegated its vote. A credential
+  // that already delegates is not re-delegated by the sweep, so this default never replaces a vote
+  // somebody cast.
+  const drep: CardanoDRepTarget = request.drep ?? { kind: config.defaultGovernance };
 
   switch (request.action) {
     case 'register_and_delegate': {

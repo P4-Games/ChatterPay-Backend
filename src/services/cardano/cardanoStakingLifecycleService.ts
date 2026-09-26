@@ -467,6 +467,108 @@ export async function reconcileStakingOperation(
   return 'absent_past_ttl';
 }
 
+/** Statuses whose transaction may be on chain and which a lookup can settle. */
+export const RECONCILABLE_STATUSES: readonly CardanoStakingOperationStatus[] = [
+  'signed',
+  'submitted',
+  'unknown_submit'
+];
+
+/** Longest wait between lookups for an operation whose provider keeps failing. */
+const MAX_RECONCILE_BACKOFF_MS = 30 * 60 * 1000;
+
+/** What {@link reconcileWhenDue} did. */
+export interface DueReconciliation {
+  /** Whether this call made the lookup. `false` when another caller did so recently. */
+  checked: boolean;
+  /** What the lookup established, when one was made. */
+  outcome: StakingReconciliationOutcome | null;
+}
+
+/**
+ * Reconciles one operation if nobody has looked at it within its interval.
+ *
+ * The one entry point the sweep and the dashboard share, so both apply the same policy
+ * ({@link reconcileStakingOperation}) and neither can be laxer than the other. The spacing is claimed
+ * in Mongo before the provider is asked: the conditional update matches only while `nextCheckAt` is
+ * due, and moves it forward in the same write, so of any number of concurrent callers — tabs,
+ * instances, a sweep — exactly one makes the lookup.
+ *
+ * A provider failure (the tip or the lookup) never settles anything. It pushes the next lookup out
+ * with an exponential backoff and leaves the operation live, as `reconcileStakingOperation` does.
+ * The absence rule is untouched: each lookup is one reading, and absence still needs its readings
+ * spread over the policy's slots, which more frequent lookups cannot shorten because the spread is
+ * measured in chain slots from the provider's own tip.
+ *
+ * @param operationId - The operation.
+ * @param provider - Where to read. The tip and the lookup come from the same provider.
+ * @param intervalMs - Minimum spacing between lookups for this operation.
+ * @param now - The clock.
+ * @param policy - How sure to be before settling.
+ * @param tipSlot - A tip already read from the same provider in this pass, so a caller settling
+ *   several operations reads it once. Read here when absent.
+ * @returns Whether a lookup was made, and what it established.
+ */
+export async function reconcileWhenDue(
+  operationId: Types.ObjectId,
+  provider: Pick<CardanoProvider, 'statusOf' | 'tip'>,
+  intervalMs: number,
+  now: Date = new Date(),
+  policy: StakingReconciliationPolicy = DEFAULT_RECONCILIATION_POLICY,
+  tipSlot?: number
+): Promise<DueReconciliation> {
+  const claimed = await CardanoStakingOperation.findOneAndUpdate(
+    {
+      _id: operationId,
+      status: { $in: RECONCILABLE_STATUSES },
+      $or: [
+        { nextCheckAt: null },
+        { nextCheckAt: { $exists: false } },
+        { nextCheckAt: { $lte: now } }
+      ]
+    },
+    {
+      $set: {
+        nextCheckAt: new Date(now.getTime() + intervalMs),
+        lastReconcileAttemptAt: now
+      }
+    },
+    { new: true }
+  ).exec();
+  if (claimed === null) return { checked: false, outcome: null };
+
+  let outcome: StakingReconciliationOutcome;
+  try {
+    const slot = tipSlot ?? (await provider.tip()).slot;
+    outcome = await reconcileStakingOperation(claimed, provider, slot, policy);
+  } catch (error) {
+    // The tip could not be read. Nothing was learnt about the transaction, so nothing moves except
+    // the next lookup, which waits longer.
+    Logger.warn(
+      'reconcileWhenDue',
+      `Cardano staking operation ${operationId.toHexString()} could not be checked: ${
+        error instanceof CardanoProviderError ? error.failure : 'tip_failed'
+      }`
+    );
+    outcome = 'undetermined';
+  }
+
+  const failures = outcome === 'undetermined' ? (claimed.reconcileFailures ?? 0) + 1 : 0;
+  const delay =
+    failures === 0 ? intervalMs : Math.min(intervalMs * 2 ** failures, MAX_RECONCILE_BACKOFF_MS);
+  await CardanoStakingOperation.updateOne(
+    { _id: operationId },
+    {
+      $set: {
+        reconcileFailures: failures,
+        nextCheckAt: new Date(now.getTime() + Math.max(delay, intervalMs))
+      }
+    }
+  );
+
+  return { checked: true, outcome };
+}
+
 /**
  * The claim keys a built transaction holds, for a caller that has to release them by hand.
  *

@@ -12,6 +12,24 @@ export type CardanoStakingSyncPhase =
 /** Whether a run finished its universe, part of it, or failed. */
 export type CardanoStakingSyncStatus = 'running' | 'partial' | 'completed' | 'failed';
 
+/**
+ * What started a run.
+ *
+ * `scheduled` runs are identified by their tick, so every redelivery of that tick resolves to the
+ * same run. `manual` runs get an identity of their own and are never merged with a tick, which is
+ * what keeps a Cloud Scheduler "Force run" from completing the next scheduled tick ahead of time.
+ */
+export type CardanoStakingSyncTrigger = 'scheduled' | 'manual';
+
+/** Why a run stopped before reaching the end of what was due. */
+export type CardanoStakingSyncStopReason =
+  /** The batch limit was reached. */
+  | 'batch_limit'
+  /** The run's own provider-request ceiling was reached. */
+  | 'run_request_limit'
+  /** The shared daily provider quota refused the request, or the provider answered 429. */
+  | 'rate_limited';
+
 /** Lease held by whichever instance is running this. */
 export interface CardanoStakingSyncLease {
   owner: string;
@@ -31,6 +49,12 @@ export interface ICardanoStakingSyncRun extends Document<string> {
   _id: string;
   chainId: number;
   scheduledTime: Date;
+  /** Absent on runs written before the field existed, which were all treated as scheduled. */
+  trigger: CardanoStakingSyncTrigger;
+  /** Why the trigger was classified as it was, e.g. `schedule_time_in_future`. */
+  triggerReason: string | null;
+  /** Why the run stopped short, when it did. */
+  stopReason: CardanoStakingSyncStopReason | null;
   startedAt: Date;
   finishedAt: Date | null;
   lease: CardanoStakingSyncLease | null;
@@ -70,6 +94,19 @@ const cardanoStakingSyncRunSchema = new Schema<ICardanoStakingSyncRun>(
     _id: { type: String, required: true },
     chainId: { type: Number, required: true },
     scheduledTime: { type: Date, required: true },
+    trigger: {
+      type: String,
+      enum: ['scheduled', 'manual'],
+      required: true,
+      default: 'scheduled'
+    },
+    triggerReason: { type: String, required: false, default: null },
+    stopReason: {
+      type: String,
+      enum: ['batch_limit', 'run_request_limit', 'rate_limited', null],
+      required: false,
+      default: null
+    },
     startedAt: { type: Date, required: true, default: Date.now },
     finishedAt: { type: Date, required: false, default: null },
     lease: { type: leaseSchema, required: false, default: null },

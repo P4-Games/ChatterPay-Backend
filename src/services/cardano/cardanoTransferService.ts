@@ -32,6 +32,7 @@ import {
   logCardanoProviderError
 } from './cardanoProviderService';
 import { cardanoSignerService } from './cardanoSignerService';
+import { requestStakingRefreshQuietly } from './cardanoStakingRefreshService';
 import {
   assetBalance,
   buildCardanoTransfer,
@@ -339,6 +340,43 @@ async function spendablePendingChange(
 
   await forgetPendingChange(stale);
   return usable;
+}
+
+/**
+ * How long after a submit the staking sweep should wait before reading the wallets it moved. A
+ * transaction is usually in a block within a minute; the margin covers provider indexing lag.
+ */
+const TRANSFER_SETTLE_MS = 10 * 60 * 1000;
+
+/**
+ * Asks the staking sweep to re-read both ends of a transfer this backend sent.
+ *
+ * A signal, not a proof: it brings those accounts' next check forward and says nothing about any
+ * other wallet, which is why every account keeps its own periodic check for deposits from outside.
+ * Never fails the transfer.
+ *
+ * @param chainId - The network.
+ * @param fromAddress - The sender's base address.
+ * @param toAddress - The destination.
+ */
+async function markStakingAccountsMoved(
+  chainId: number,
+  fromAddress: string,
+  toAddress: string
+): Promise<void> {
+  const now = new Date();
+  await requestStakingRefreshQuietly(
+    { chainId, walletAddresses: [fromAddress] },
+    'transfer_out',
+    now,
+    TRANSFER_SETTLE_MS
+  );
+  await requestStakingRefreshQuietly(
+    { chainId, walletAddresses: [toAddress] },
+    'transfer_in',
+    now,
+    TRANSFER_SETTLE_MS
+  );
 }
 
 /**
@@ -705,6 +743,8 @@ export async function executeCardanoTransfer(
       );
     }
 
+    await markStakingAccountsMoved(chainId, account.address, toAddress);
+
     Logger.info(
       'cardanoTransfer',
       logKey,
@@ -731,7 +771,12 @@ export async function executeCardanoTransfer(
     // An undetermined submit is the one outcome where the claims must stand: the transaction may be
     // in a mempool this process can no longer ask about, and handing its inputs to the next transfer
     // would build a second transaction around outputs the first one is still about to spend.
-    if (error instanceof CardanoProviderError && error.undetermined) outcomeUnknown = true;
+    if (error instanceof CardanoProviderError && error.undetermined) {
+      outcomeUnknown = true;
+      // The transaction may land; the balances it would move are worth a read either way.
+      if (account !== undefined)
+        await markStakingAccountsMoved(chainId, account.address, toAddress);
+    }
     // The chain refused it outright. When the transaction was built on an output that had only been
     // promised, the promise is the likeliest thing that was wrong -- the output may have been spent
     // by something that never passed through the claim store, or its transaction never landed.

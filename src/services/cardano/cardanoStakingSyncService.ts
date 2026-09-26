@@ -26,6 +26,8 @@
  * one run trying to hold a lease for an hour.
  */
 
+import { randomUUID } from 'node:crypto';
+
 import { Types } from 'mongoose';
 
 import { getCardanoConfig } from '../../config/cardanoConfig';
@@ -38,18 +40,28 @@ import CardanoStakingAccount, {
   type ICardanoStakingAccount
 } from '../../models/cardanoStakingAccountModel';
 import CardanoStakingOperation from '../../models/cardanoStakingOperationModel';
+import CardanoStakingSyncLock from '../../models/cardanoStakingSyncLockModel';
 import CardanoStakingSyncRun, {
   type CardanoStakingSyncPhase,
-  type CardanoStakingSyncStatus
+  type CardanoStakingSyncStatus,
+  type CardanoStakingSyncStopReason,
+  type CardanoStakingSyncTrigger,
+  type ICardanoStakingSyncRun
 } from '../../models/cardanoStakingSyncRunModel';
 import { type IUser, UserModel } from '../../models/userModel';
-import type { CardanoProvider } from './cardanoProviderService';
+import {
+  type CardanoProvider,
+  CardanoProviderError,
+  CardanoProviderQuotaError,
+  type CardanoProviderRunBudget,
+  withCardanoProviderContext
+} from './cardanoProviderService';
 import { ensureStakingAccountQuietly } from './cardanoStakingAccountService';
 import { assembleStakingPlan } from './cardanoStakingAssemblyService';
 import {
   DEFAULT_RECONCILIATION_POLICY,
   executeStakingOperation,
-  reconcileStakingOperation
+  reconcileWhenDue
 } from './cardanoStakingLifecycleService';
 import { observeStakingAccount } from './cardanoStakingObservationService';
 import {
@@ -61,7 +73,8 @@ import {
   type StakingAction,
   type StakingDecision
 } from './cardanoStakingPlanService';
-import type { CardanoStakingProvider } from './cardanoStakingProviderService';
+import type { CardanoPoolState, CardanoStakingProvider } from './cardanoStakingProviderService';
+import { requestStakingRefresh } from './cardanoStakingRefreshService';
 import { selectableStakingUtxos } from './cardanoStakingReservationService';
 import { stakingSignerFor } from './cardanoStakingSignerService';
 import { deriveStakingAccountState, type StakingFundsVerdict } from './cardanoStakingStateService';
@@ -74,6 +87,14 @@ import { deriveStakingAccountState, type StakingFundsVerdict } from './cardanoSt
  */
 const LEASE_SECONDS = 15 * 60;
 
+/**
+ * How often a working run extends its lease and the network lock.
+ *
+ * Well inside {@link LEASE_SECONDS}, so a run that is still making progress never lapses and is
+ * never taken over by a redelivery while it works.
+ */
+const LEASE_RENEW_MS = 60 * 1000;
+
 /** Operations examined for settlement in one pass. */
 const RECONCILE_LIMIT = 200;
 
@@ -85,14 +106,39 @@ export type StakingSyncProvider = Pick<
   Pick<
     CardanoStakingProvider,
     'stakingProtocolParameters' | 'stakeAccount' | 'rewardHistory' | 'registrationHistory'
-  >;
+  > &
+  // Optional: a provider without it is read as "pool state unknown", which initiates no move.
+  Partial<Pick<CardanoStakingProvider, 'poolState'>>;
 
 export interface StakingSyncRequest {
   chainId: number;
   /** The scheduler job, part of the run's identity. */
   jobName: string;
-  /** The tick this run is for. A retry carries the same value, which is what makes it resume. */
+  /**
+   * The tick this run is for. A retry carries the same value, which is what makes it resume.
+   *
+   * For a manual run it is the moment of the request and is recorded, not used as identity.
+   */
   scheduledTime: Date;
+  /**
+   * Whether this run belongs to a scheduled tick or was asked for by hand. Defaults to `scheduled`.
+   *
+   * A manual run never shares an identity with a tick, so it can neither complete a tick ahead of
+   * time nor be answered `already_completed` by one.
+   */
+  trigger?: CardanoStakingSyncTrigger;
+  /** Why the trigger was classified as it was. Recorded on the run. */
+  triggerReason?: string | null;
+  /**
+   * The run's identity, resolved once by {@link runStakingSync}. Callers leave it out: a scheduled
+   * run derives it from the tick and a manual one is given a fresh one.
+   */
+  runId?: string;
+  /**
+   * The run's provider-request ceiling and what it has spent, from `maxProviderRequestsPerRun`.
+   * Created by {@link runStakingSync}; callers leave it out.
+   */
+  runBudget?: CardanoProviderRunBudget;
   /** Who is running it. Any stable per-process identifier. */
   owner: string;
   /** Accounts refreshed in one pass. */
@@ -116,11 +162,21 @@ export type StakingSyncRefusal =
   | 'staking_disabled'
   /** Another instance holds the lease and is still inside it. */
   | 'lease_held'
+  /** Another run, with a different identity, is working on this network. */
+  | 'overlap_held'
   /** This tick already ran to completion. */
   | 'already_completed';
 
 export interface StakingSyncResult {
   runId: string;
+  /** Whether this call did any work. `false` for every refusal. */
+  executed: boolean;
+  trigger: CardanoStakingSyncTrigger;
+  triggerReason: string | null;
+  /**
+   * The run's status. For `already_completed` it is the stored run's, and the counters below are
+   * the stored run's too, so a redelivery reports what the tick did rather than zeroes.
+   */
   status: CardanoStakingSyncStatus;
   phase: CardanoStakingSyncPhase;
   accountsScanned: number;
@@ -131,6 +187,10 @@ export interface StakingSyncResult {
   /** Accounts that decided an action and could not act on it, with the reason. */
   refusals: Record<string, number>;
   backlogCount: number;
+  /** Provider requests this run spent, as counted by the shared meter. */
+  providerRequests: number;
+  /** Why the run stopped short of what was due, when it did. */
+  stopReason: CardanoStakingSyncStopReason | null;
   refusal: StakingSyncRefusal | null;
 }
 
@@ -149,21 +209,44 @@ export function syncRunId(chainId: number, jobName: string, scheduledTime: Date)
 }
 
 /**
+ * A fresh run identifier for a run nobody scheduled.
+ *
+ * Never derived from a tick. A Cloud Scheduler "Force run" carries the *next* scheduled time in its
+ * header; deriving the id from it would complete that tick early and turn the real delivery into
+ * `already_completed`. The random suffix keeps two manual calls in the same millisecond apart.
+ *
+ * @param chainId - The network.
+ * @param jobName - The job name the call carried.
+ * @param requestedAt - When the call arrived.
+ * @returns The `_id`.
+ */
+export function manualSyncRunId(chainId: number, jobName: string, requestedAt: Date): string {
+  return `${chainId}:${jobName}:manual:${requestedAt.toISOString()}:${randomUUID().slice(0, 8)}`;
+}
+
+/**
  * Runs one pass, or explains why it did not.
  *
- * @param request - What to run and how far.
- * @returns What happened.
+ * @param input - What to run and how far.
+ * @returns What happened. A refusal carries `executed: false`.
  */
 export async function runStakingSync(input: StakingSyncRequest): Promise<StakingSyncResult> {
   const config = input.config ?? (await loadCardanoStakingConfig(input.chainId));
+  const now = input.now ?? new Date();
+  const trigger: CardanoStakingSyncTrigger = input.trigger ?? 'scheduled';
+  const runId =
+    trigger === 'manual'
+      ? manualSyncRunId(input.chainId, input.jobName, now)
+      : syncRunId(input.chainId, input.jobName, input.scheduledTime);
   // Resolved once and carried down. The passes below need the same settings per account, and
   // re-reading the network document per wallet would multiply one lookup by the batch size.
-  const request: StakingSyncRequest = { ...input, config };
-  const now = request.now ?? new Date();
-  const runId = syncRunId(request.chainId, request.jobName, request.scheduledTime);
+  const request: StakingSyncRequest = { ...input, config, trigger, runId };
 
   const empty: StakingSyncResult = {
     runId,
+    executed: false,
+    trigger,
+    triggerReason: input.triggerReason ?? null,
     status: 'failed',
     phase: 'reconciling',
     accountsScanned: 0,
@@ -172,6 +255,8 @@ export async function runStakingSync(input: StakingSyncRequest): Promise<Staking
     actionsStarted: 0,
     refusals: {},
     backlogCount: 0,
+    providerRequests: 0,
+    stopReason: null,
     refusal: null
   };
 
@@ -185,14 +270,76 @@ export async function runStakingSync(input: StakingSyncRequest): Promise<Staking
     return { ...empty, status: 'failed', refusal: 'staking_disabled' };
   }
 
-  const claim = await claimRun(runId, request, now);
-  if (claim !== 'claimed') return { ...empty, status: 'completed', refusal: claim };
+  // A tick that already finished is answered from its own record, before any lock is touched: a
+  // redelivery must learn what the tick did, not see zeroes that read as "nothing happened".
+  const stored = await CardanoStakingSyncRun.findById(runId).lean<ICardanoStakingSyncRun | null>();
+  if (stored !== null && stored.status === 'completed') {
+    return { ...fromStoredRun(empty, stored), refusal: 'already_completed' };
+  }
 
-  const result: StakingSyncResult = { ...empty, status: 'running', refusal: null };
+  const owner = request.owner;
+  if (!(await acquireNetworkLock(request.chainId, runId, owner, now))) {
+    return {
+      ...(stored === null ? empty : fromStoredRun(empty, stored)),
+      status: stored?.status ?? 'running',
+      refusal: 'overlap_held'
+    };
+  }
+
+  const renewal = leaseRenewal(request.chainId, runId, owner);
+  let result: StakingSyncResult = { ...empty, status: 'running', refusal: null };
+
+  try {
+    const claim = await claimRun(runId, request, now);
+    if (claim !== 'claimed') {
+      return {
+        ...(stored === null ? empty : fromStoredRun(empty, stored)),
+        status: stored?.status ?? 'running',
+        refusal: claim
+      };
+    }
+    result = await executeRun(request, runId, renewal, result);
+  } finally {
+    parameterCaches.delete(runId);
+    for (const key of poolStateCache.keys()) {
+      if (key.startsWith(`${runId}|`)) poolStateCache.delete(key);
+    }
+    await releaseNetworkLock(request.chainId, runId, owner);
+  }
+
+  return result;
+}
+
+/**
+ * The passes of one claimed run.
+ *
+ * @param request - The run's request, with its configuration resolved.
+ * @param runId - The run's identity.
+ * @param renewal - Extends the lease and the network lock while the run works.
+ * @param initial - The result being accumulated.
+ * @returns What happened.
+ */
+async function executeRun(
+  request: StakingSyncRequest,
+  runId: string,
+  renewal: LeaseRenewal,
+  initial: StakingSyncResult
+): Promise<StakingSyncResult> {
+  const result: StakingSyncResult = { ...initial, executed: true };
+  const config = request.config ?? (await loadCardanoStakingConfig(request.chainId));
+  // One budget for the whole run, shared by both passes: `maxProviderRequestsPerRun` is a ceiling on
+  // what one run may spend, on top of the shared daily quota every request is also reserved against.
+  const runBudget: CardanoProviderRunBudget = { limit: config.maxProviderRequestsPerRun, used: 0 };
+  const budgeted: StakingSyncRequest = { ...request, runBudget };
 
   try {
     await setPhase(runId, 'reconciling');
-    result.operationsReconciled = await reconcilePass(request);
+    // Settling operations already on their way is `pending` work: it outranks discovery and refresh,
+    // and keeps running when the background share of the quota is spent.
+    result.operationsReconciled = await withCardanoProviderContext(
+      { priority: 'pending', origin: 'sync.reconcile', runBudget },
+      () => reconcilePass(budgeted, renewal)
+    );
 
     // Before the refresh, so an account created now is refreshed by the same run instead of waiting
     // for tomorrow's. A wallet with no account is invisible to the refresh, which is why discovery
@@ -201,9 +348,14 @@ export async function runStakingSync(input: StakingSyncRequest): Promise<Staking
     result.accountsCreated = await discoveryPass(request);
 
     await setPhase(runId, 'refreshing');
-    const refreshed = await refreshPass(request, result);
+    const refreshed = await withCardanoProviderContext(
+      { priority: 'background', origin: 'sync.refresh', runBudget },
+      () => refreshPass(budgeted, result, renewal)
+    );
+    result.providerRequests = runBudget.used;
     result.accountsScanned = refreshed.scanned;
     result.backlogCount = refreshed.backlog;
+    result.stopReason = refreshed.stopReason;
     result.status = refreshed.exhausted ? 'completed' : 'partial';
     result.phase = refreshed.exhausted ? 'done' : 'refreshing';
 
@@ -213,12 +365,14 @@ export async function runStakingSync(input: StakingSyncRequest): Promise<Staking
         $set: {
           phase: result.phase,
           status: result.status,
+          stopReason: result.stopReason,
           finishedAt: new Date(),
           lease: null,
           userCursor: refreshed.cursor,
           accountsScanned: result.accountsScanned,
           accountsCreated: result.accountsCreated,
           operationsReconciled: result.operationsReconciled,
+          providerRequests: result.providerRequests,
           backlogCount: result.backlogCount,
           backlogOldestAt: refreshed.backlogOldestAt
         }
@@ -229,9 +383,18 @@ export async function runStakingSync(input: StakingSyncRequest): Promise<Staking
     Logger.error('runStakingSync', `Cardano staking sync ${runId} failed: ${detail}`);
     // The lease is released rather than held to its expiry. The run failed; the next delivery should
     // be able to pick it up now instead of waiting out a claim nobody is using.
+    result.providerRequests = runBudget.used;
     await CardanoStakingSyncRun.updateOne(
       { _id: runId },
-      { $set: { status: 'failed', lease: null, lastError: detail, finishedAt: new Date() } }
+      {
+        $set: {
+          status: 'failed',
+          lease: null,
+          lastError: detail,
+          finishedAt: new Date(),
+          providerRequests: runBudget.used
+        }
+      }
     );
     result.status = 'failed';
   }
@@ -267,6 +430,8 @@ async function claimRun(
         _id: runId,
         chainId: request.chainId,
         scheduledTime: request.scheduledTime,
+        trigger: request.trigger ?? 'scheduled',
+        triggerReason: request.triggerReason ?? null,
         startedAt: now,
         lease,
         phase: 'reconciling',
@@ -296,6 +461,139 @@ async function claimRun(
 }
 
 /**
+ * A refusal's result, filled from the stored run so the counters describe what that run did.
+ *
+ * @param base - The empty result for this call.
+ * @param stored - The run as stored.
+ * @returns The result.
+ */
+function fromStoredRun(base: StakingSyncResult, stored: ICardanoStakingSyncRun): StakingSyncResult {
+  return {
+    ...base,
+    executed: false,
+    status: stored.status,
+    phase: stored.phase,
+    trigger: stored.trigger ?? base.trigger,
+    triggerReason: stored.triggerReason ?? base.triggerReason,
+    accountsScanned: stored.accountsScanned ?? 0,
+    accountsCreated: stored.accountsCreated ?? 0,
+    operationsReconciled: stored.operationsReconciled ?? 0,
+    backlogCount: stored.backlogCount ?? 0,
+    providerRequests: stored.providerRequests ?? 0,
+    stopReason: stored.stopReason ?? null
+  };
+}
+
+/**
+ * Takes the network lock for a run.
+ *
+ * The filter matches a lock that lapsed or that this same run and process already hold; anything
+ * else makes the upsert try to insert an `_id` that exists, and the duplicate-key error is the
+ * refusal. No read precedes the write, so two instances cannot both conclude the lock is free.
+ *
+ * @param chainId - The network.
+ * @param runId - The run asking.
+ * @param owner - The process asking.
+ * @param now - The clock.
+ * @returns Whether the lock is now held by this run.
+ * @throws Any database error other than the duplicate key that means "held elsewhere".
+ */
+export async function acquireNetworkLock(
+  chainId: number,
+  runId: string,
+  owner: string,
+  now: Date
+): Promise<boolean> {
+  try {
+    await CardanoStakingSyncLock.updateOne(
+      {
+        _id: String(chainId),
+        $or: [{ expiresAt: { $lt: now } }, { runId, owner }]
+      },
+      {
+        $set: {
+          runId,
+          owner,
+          expiresAt: new Date(now.getTime() + LEASE_SECONDS * 1000),
+          acquiredAt: now
+        }
+      },
+      { upsert: true }
+    );
+    return true;
+  } catch (error) {
+    if (isDuplicateKey(error)) return false;
+    throw error;
+  }
+}
+
+/**
+ * Gives the network lock back, if this run still holds it.
+ *
+ * Conditional on the holder, so a run whose lock lapsed and was taken by another cannot release the
+ * other run's claim.
+ *
+ * @param chainId - The network.
+ * @param runId - The run releasing.
+ * @param owner - The process releasing.
+ */
+async function releaseNetworkLock(chainId: number, runId: string, owner: string): Promise<void> {
+  await CardanoStakingSyncLock.deleteOne({ _id: String(chainId), runId, owner });
+}
+
+/** Extends a working run's lease and network lock, at most once per {@link LEASE_RENEW_MS}. */
+interface LeaseRenewal {
+  renewIfDue(): Promise<void>;
+}
+
+/**
+ * The renewal a run carries through its passes.
+ *
+ * The lease was previously written once and never extended, so a run that took longer than the
+ * lease could be taken over by a redelivery while it was still working. Renewing from the passes
+ * themselves ties the claim to progress: a run that stops making progress stops renewing.
+ *
+ * @param chainId - The network.
+ * @param runId - The run.
+ * @param owner - The process holding both claims.
+ * @returns The renewal.
+ */
+function leaseRenewal(chainId: number, runId: string, owner: string): LeaseRenewal {
+  let last = Date.now();
+  return {
+    async renewIfDue(): Promise<void> {
+      const now = Date.now();
+      if (now - last < LEASE_RENEW_MS) return;
+      last = now;
+      const expiresAt = new Date(now + LEASE_SECONDS * 1000);
+      await CardanoStakingSyncRun.updateOne(
+        { _id: runId, 'lease.owner': owner },
+        { $set: { 'lease.expiresAt': expiresAt } }
+      );
+      await CardanoStakingSyncLock.updateOne(
+        { _id: String(chainId), runId, owner },
+        { $set: { expiresAt } }
+      );
+    }
+  };
+}
+
+/**
+ * Whether a database error is a unique-index collision.
+ *
+ * @param error - What was thrown.
+ * @returns `true` for code 11000.
+ */
+function isDuplicateKey(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 11000
+  );
+}
+
+/**
  * Moves the run's phase marker.
  *
  * @param runId - The run.
@@ -313,12 +611,19 @@ async function setPhase(runId: string, phase: CardanoStakingSyncPhase): Promise<
  * waiting a further day.
  *
  * @param request - The run's request.
+ * @param renewal - Keeps the run's claims alive while it works.
  * @returns How many operations were examined.
  */
-async function reconcilePass(request: StakingSyncRequest): Promise<number> {
+async function reconcilePass(request: StakingSyncRequest, renewal: LeaseRenewal): Promise<number> {
   const live = await CardanoStakingOperation.find({
     chainId: request.chainId,
-    status: { $in: ['signed', 'submitted', 'unknown_submit'] }
+    status: { $in: ['signed', 'submitted', 'unknown_submit'] },
+    // Only the ones due. A pass that found nothing due does not read the tip at all.
+    $or: [
+      { nextCheckAt: null },
+      { nextCheckAt: { $exists: false } },
+      { nextCheckAt: { $lte: request.now ?? new Date() } }
+    ]
   })
     .limit(RECONCILE_LIMIT)
     .exec();
@@ -328,15 +633,30 @@ async function reconcilePass(request: StakingSyncRequest): Promise<number> {
   const tip = await request.provider.tip();
   let examined = 0;
 
+  const config = request.config ?? (await loadCardanoStakingConfig(request.chainId));
+  const now = request.now ?? new Date();
+
   for (const operation of live) {
+    await renewal.renewIfDue();
     try {
-      await reconcileStakingOperation(
-        operation,
+      // The same claimed entry point the dashboard uses: an operation a screen looked at a moment
+      // ago is not looked at again, and neither side can settle on a laxer rule than the other.
+      const due = await reconcileWhenDue(
+        operation._id as Types.ObjectId,
         request.provider,
-        tip.slot,
-        DEFAULT_RECONCILIATION_POLICY
+        config.operationStatusCheckIntervalMs,
+        now,
+        DEFAULT_RECONCILIATION_POLICY,
+        tip.slot
       );
-      examined += 1;
+      if (due.checked) examined += 1;
+      if (due.outcome === 'confirmed' || due.outcome === 'absent_past_ttl') {
+        await requestStakingRefresh(
+          { accountIds: [operation.accountId] },
+          due.outcome === 'confirmed' ? 'operation_confirmed' : 'operation_settled',
+          now
+        );
+      }
     } catch (error) {
       // One operation that cannot be reconciled does not stop the pass. It stays live and is
       // examined again on the next tick, which is the correct outcome: nothing about it was decided.
@@ -439,92 +759,179 @@ interface RefreshOutcome {
   exhausted: boolean;
   backlog: number;
   backlogOldestAt: Date | null;
+  stopReason: CardanoStakingSyncStopReason | null;
+}
+
+/** Stops a pass because a quota said no. The account being worked on stays due. */
+class SweepHalt extends Error {
+  /**
+   * @param reason - Which ceiling stopped the pass.
+   */
+  constructor(readonly reason: CardanoStakingSyncStopReason) {
+    super(`sweep halted: ${reason}`);
+    this.name = 'SweepHalt';
+  }
+}
+
+/** Shortest wait before an account whose read failed is tried again. */
+const OBSERVATION_BACKOFF_BASE_MS = 15 * 60 * 1000;
+
+/**
+ * The filter for accounts due now.
+ *
+ * `null` is due: an account created by discovery, and every account written before the field
+ * existed, is read on the first pass that reaches it.
+ *
+ * @param chainId - The network.
+ * @param now - The clock.
+ * @returns The filter.
+ */
+function dueFilter(chainId: number, now: Date): Record<string, unknown> {
+  return { chainId, $or: [{ nextEligibleCheckAt: null }, { nextEligibleCheckAt: { $lte: now } }] };
 }
 
 /**
- * Observes accounts, decides what each needs, and acts when the run is allowed to.
+ * Observes the accounts that are due, decides what each needs, and acts when the run may.
  *
- * Paged by `_id` from the cursor the run carries, so an interrupted pass continues rather than
- * restarting — which is what keeps the tail of a large universe from never being reached.
+ * Selected by `nextEligibleCheckAt`, oldest due first, rather than by `_id`. Every account read is
+ * given its next check before the pass moves on — a day out for an empty, unregistered wallet, hours
+ * for one that holds ada or is registered, a backoff for one whose read failed — so what a pass did
+ * is recorded on the accounts themselves. An interrupted pass resumes by selecting what is still due,
+ * and an account can neither be starved (its due time only ever ages) nor read far more often than
+ * its cadence. A transfer or a settled operation makes an account due now through
+ * `cardanoStakingRefreshService`, which never touches consent or opt-out.
+ *
+ * A quota refusal or a provider 429 stops the pass where it is. The account being worked on keeps
+ * its due time and is first in line next time; nothing is marked as checked that was not.
  *
  * @param request - The run's request.
  * @param result - Accumulates what was started and what was refused.
+ * @param renewal - Keeps the run's claims alive while it works.
  * @returns How far it got.
  */
 async function refreshPass(
   request: StakingSyncRequest,
-  result: StakingSyncResult
+  result: StakingSyncResult,
+  renewal: LeaseRenewal
 ): Promise<RefreshOutcome> {
-  const runId = syncRunId(request.chainId, request.jobName, request.scheduledTime);
-  const stored = await CardanoStakingSyncRun.findById(runId).lean();
-  const cursor = stored?.userCursor ?? null;
+  const runId = runIdOf(request);
+  const now = request.now ?? new Date();
 
-  const filter: Record<string, unknown> = { chainId: request.chainId };
-  if (cursor !== null) filter._id = { $gt: cursor };
-
-  const accounts = await CardanoStakingAccount.find(filter)
-    .sort({ _id: 1 })
+  const accounts = await CardanoStakingAccount.find(dueFilter(request.chainId, now))
+    .sort({ nextEligibleCheckAt: 1, _id: 1 })
     .limit(request.batchLimit)
     .exec();
 
   let scanned = 0;
-  let lastId: string | null = cursor;
+  let lastId: string | null = null;
+  let stopReason: CardanoStakingSyncStopReason | null = null;
 
   for (const account of accounts) {
-    lastId = String(account._id);
-    scanned += 1;
+    await renewal.renewIfDue();
     try {
       await refreshAccount(account, request, result);
     } catch (error) {
+      const halt = haltReason(error, request);
+      if (halt !== null) {
+        stopReason = halt;
+        break;
+      }
       // Recorded on the account rather than raised. One unreadable wallet is not a reason to abandon
       // the rest of the universe, and the error is exactly the thing the next pass needs to see.
       const detail = error instanceof Error ? error.message : String(error);
-      Logger.warn('runStakingSync', `Cardano staking account ${lastId} failed: ${detail}`);
-      await CardanoStakingAccount.updateOne(
-        { _id: account._id },
-        { $set: { lastError: `sync:${detail}` } }
+      Logger.warn(
+        'runStakingSync',
+        `Cardano staking account ${String(account._id)} failed: ${detail}`
       );
+      await scheduleAfterFailure(account, request, `sync:${detail}`);
     }
+    lastId = String(account._id);
+    scanned += 1;
 
     // The checkpoint goes in as the pass goes, not at the end. A container that disappears here has
     // still recorded everything before this point.
     await CardanoStakingSyncRun.updateOne(
       { _id: runId },
-      { $set: { userCursor: lastId, accountsScanned: scanned } }
+      {
+        $set: {
+          userCursor: lastId,
+          accountsScanned: scanned,
+          providerRequests: request.runBudget?.used ?? 0
+        }
+      }
     );
   }
 
-  const exhausted = accounts.length < request.batchLimit;
-  const remaining = exhausted
-    ? 0
-    : await CardanoStakingAccount.countDocuments({
-        chainId: request.chainId,
-        _id: { $gt: lastId }
-      });
-
-  const oldest = exhausted
-    ? null
-    : await CardanoStakingAccount.findOne({ chainId: request.chainId, _id: { $gt: lastId } })
-        .sort({ lastSyncAt: 1 })
-        .lean();
+  const due = dueFilter(request.chainId, now);
+  const backlog = await CardanoStakingAccount.countDocuments(due);
+  const oldest =
+    backlog === 0
+      ? null
+      : await CardanoStakingAccount.findOne(due)
+          .sort({ nextEligibleCheckAt: 1, _id: 1 })
+          .select('nextEligibleCheckAt lastSyncAt createdAt')
+          .lean<{ nextEligibleCheckAt: Date | null; lastSyncAt: Date | null; createdAt?: Date }>();
+  const exhausted = backlog === 0;
 
   return {
     scanned,
-    // A pass that reached the end clears the cursor, so the next tick starts from the top rather
-    // than from wherever the last account happened to be.
     cursor: exhausted ? null : lastId,
     exhausted,
-    backlog: remaining,
-    backlogOldestAt: oldest?.lastSyncAt ?? null
+    backlog,
+    // Since when the oldest due account has been waiting: its due time, or for one never checked,
+    // when it was last attempted or created.
+    backlogOldestAt:
+      oldest === null
+        ? null
+        : (oldest.nextEligibleCheckAt ?? oldest.lastSyncAt ?? oldest.createdAt ?? null),
+    stopReason: exhausted ? null : (stopReason ?? 'batch_limit')
   };
+}
+
+/**
+ * Whether an error means the pass has to stop, and why.
+ *
+ * @param error - What was thrown while refreshing one account.
+ * @param request - The run's request, for its request budget.
+ * @returns The stop reason, or `null` for an error that concerns only that account.
+ */
+function haltReason(
+  error: unknown,
+  request: StakingSyncRequest
+): CardanoStakingSyncStopReason | null {
+  if (error instanceof SweepHalt) return error.reason;
+  if (error instanceof CardanoProviderQuotaError) {
+    return error.scope === 'run' ? 'run_request_limit' : 'rate_limited';
+  }
+  if (error instanceof CardanoProviderError && error.failure === 'rate_limited') {
+    return runBudgetSpent(request) ? 'run_request_limit' : 'rate_limited';
+  }
+  return null;
+}
+
+/**
+ * Whether the run has used its whole request budget.
+ *
+ * @param request - The run's request.
+ * @returns `true` when a budget is set and spent.
+ */
+function runBudgetSpent(request: StakingSyncRequest): boolean {
+  const budget = request.runBudget;
+  return budget !== undefined && budget.used >= budget.limit;
 }
 
 /**
  * One account: read it, decide, and act if allowed.
  *
+ * An unregistered credential the provider reports as holding nothing costs one request: the stake
+ * account read, which carries the total under the credential. Nothing else is read for it — no reward
+ * history, no parameters, no UTxOs — because nothing could be decided: an empty wallet cannot pay a
+ * deposit. When the provider does not report that total, the full path runs as before.
+ *
  * @param account - The account.
  * @param request - The run's request.
  * @param result - Accumulates what happened.
+ * @throws SweepHalt When a quota refused the account's read.
  */
 async function refreshAccount(
   account: ICardanoStakingAccount,
@@ -532,12 +939,46 @@ async function refreshAccount(
   result: StakingSyncResult
 ): Promise<void> {
   const now = request.now ?? new Date();
+  const config = request.config ?? (await loadCardanoStakingConfig(request.chainId));
   const observation = await observeStakingAccount(account, request.provider, now);
 
-  await CardanoStakingAccount.updateOne({ _id: account._id }, { $set: { lastSyncAt: now } });
-
-  if (observation.outcome !== 'observed') {
+  if (observation.outcome !== 'observed' || observation.state === null) {
+    if (observation.reason === 'rate_limited') {
+      throw new SweepHalt(runBudgetSpent(request) ? 'run_request_limit' : 'rate_limited');
+    }
     count(result, `observe_${observation.reason ?? 'unavailable'}`);
+    await scheduleAfterFailure(account, request, null);
+    return;
+  }
+
+  const controlled = observation.state.controlledLovelace ?? null;
+  const empty = !observation.state.registered && controlled === 0n;
+
+  const cadence = new Date(
+    now.getTime() + (empty ? config.emptyAccountRecheckMs : config.activeAccountRecheckMs)
+  );
+  // One pipeline update, so a refresh requested while this account was being read is honoured
+  // atomically: a request whose moment lies ahead of this observation keeps the next check no later
+  // than that moment and is not cleared; one this observation already covers is cleared.
+  const pending = { $ifNull: ['$refreshRequestedAt', null] };
+  const ahead = { $and: [{ $ne: [pending, null] }, { $gt: [pending, now] }] };
+  await CardanoStakingAccount.updateOne({ _id: account._id }, [
+    {
+      $set: {
+        lastSyncAt: now,
+        observationFailures: 0,
+        lastKnownBalanceLovelace: controlled === null ? null : String(controlled),
+        ...(controlled !== null && controlled > 0n ? { lastPositiveBalanceAt: now } : {}),
+        nextEligibleCheckAt: { $cond: [ahead, { $min: [cadence, pending] }, cadence] },
+        refreshRequestedAt: { $cond: [ahead, pending, null] },
+        refreshReason: { $cond: [ahead, '$refreshReason', null] }
+      }
+    }
+  ]);
+
+  if (empty) {
+    await writeState(account._id as Types.ObjectId, 'not_eligible', config.consentRequired);
+    count(result, 'empty_wallet');
     return;
   }
 
@@ -552,11 +993,7 @@ async function refreshAccount(
   // Recomputed on every pass, before anything is started and again after. The state is derived from
   // facts held elsewhere, so recomputing it is how an account whose state drifted is corrected —
   // rather than by somebody noticing that a registered wallet still reads `awaiting_consent`.
-  await writeState(
-    account._id as Types.ObjectId,
-    decision.refusal,
-    (request.config ?? (await loadCardanoStakingConfig(request.chainId))).consentRequired
-  );
+  await writeState(account._id as Types.ObjectId, decision.refusal, config.consentRequired);
 
   if (decision.action === 'none') {
     count(result, decision.refusal ?? 'nothing_to_do');
@@ -568,14 +1005,49 @@ async function refreshAccount(
     return;
   }
 
-  const started = await startAction(account, user, decision.action, request);
+  // The account as stored after this pass observed it. The copy the pass selected predates the
+  // observation, and for a wallet read for the first time it carries no confirmed chain read, which
+  // the operation guard refuses — leaving the enrolment to the next pass for no reason.
+  const observed = (await CardanoStakingAccount.findById(account._id).exec()) ?? account;
+  const started = await startAction(observed, user, decision.action, request);
   if (started === 'started') result.actionsStarted += 1;
   else count(result, started);
 
-  await writeState(
-    account._id as Types.ObjectId,
-    decision.refusal,
-    (request.config ?? (await loadCardanoStakingConfig(request.chainId))).consentRequired
+  await writeState(account._id as Types.ObjectId, decision.refusal, config.consentRequired);
+}
+
+/**
+ * Records a failed read and pushes the account's next check out.
+ *
+ * `lastObservedAt` is not touched: it says when the chain last answered, and a failure is not an
+ * answer. The wait doubles per consecutive failure, from fifteen minutes up to the active cadence.
+ *
+ * @param account - The account.
+ * @param request - The run's request.
+ * @param lastError - What to record, or `null` to leave the observation's own record.
+ */
+async function scheduleAfterFailure(
+  account: ICardanoStakingAccount,
+  request: StakingSyncRequest,
+  lastError: string | null
+): Promise<void> {
+  const now = request.now ?? new Date();
+  const config = request.config ?? (await loadCardanoStakingConfig(request.chainId));
+  const failures = (account.observationFailures ?? 0) + 1;
+  const delay = Math.min(
+    OBSERVATION_BACKOFF_BASE_MS * 2 ** (failures - 1),
+    config.activeAccountRecheckMs
+  );
+  await CardanoStakingAccount.updateOne(
+    { _id: account._id },
+    {
+      $set: {
+        lastSyncAt: now,
+        observationFailures: failures,
+        nextEligibleCheckAt: new Date(now.getTime() + delay),
+        ...(lastError === null ? {} : { lastError })
+      }
+    }
   );
 }
 
@@ -638,7 +1110,7 @@ async function decide(
   const fresh = await CardanoStakingAccount.findById(account._id).exec();
   const subject = fresh ?? account;
 
-  const parameters = await request.provider.stakingProtocolParameters();
+  const parameters = await decisionParameters(request);
   const signer = stakingSignerFor(subject, user);
   const utxos = signer.available
     ? await selectableStakingUtxos(await request.provider.utxosFor(subject.walletAddress))
@@ -650,7 +1122,7 @@ async function decide(
     parameters,
     addressBytes: signer.available ? signer.material.user.addressBytes : new Uint8Array(),
     spendableLovelace: spendable,
-    poolState: null,
+    poolState: await poolStateFor(subject, config, request),
     operationInFlight: await hasLiveOperation(subject._id as Types.ObjectId),
     signerAvailable: signer.available,
     sponsoredRegistrationsInWindow: await countSponsoredRegistrations(
@@ -659,6 +1131,81 @@ async function decide(
     )
   });
 }
+
+/**
+ * Protocol parameters for deciding, read once per run.
+ *
+ * Only the decision reads them from here: whether a wallet clears the threshold does not change
+ * inside a run of a few minutes, and reading them per account multiplied one request by every funded
+ * wallet. Building and signing never use this copy — `assembleStakingPlan` reads the parameters in
+ * force at that moment, which is what the deposit and fee in a transaction must come from. A failed
+ * read is not kept, so the next account asks again.
+ *
+ * @param request - The run's request, which carries the cache for the run.
+ * @returns The parameters.
+ */
+function decisionParameters(
+  request: StakingSyncRequest
+): ReturnType<StakingSyncProvider['stakingProtocolParameters']> {
+  const cache = parameterCaches.get(request.runId ?? '');
+  if (cache !== undefined) return cache;
+  const read = request.provider.stakingProtocolParameters();
+  const key = request.runId ?? '';
+  parameterCaches.set(key, read);
+  read.catch(() => parameterCaches.delete(key));
+  return read;
+}
+
+/**
+ * The state of the pool an account delegates to, when the sweep may act on it.
+ *
+ * Read only when `autoRedelegateRetiredPools` is on and the credential is registered to a pool: with
+ * the flag off nothing would be done with the answer, so no request is spent on it. Each pool is read
+ * once per run, however many accounts delegate to it. A failed read is `null` — unknown — which
+ * initiates no move; a quota refusal or 429 still stops the pass.
+ *
+ * @param account - The account, freshly observed.
+ * @param config - The network's settings.
+ * @param request - The run's request, which carries the per-run cache key.
+ * @returns The pool's state, or `null`.
+ */
+async function poolStateFor(
+  account: ICardanoStakingAccount,
+  config: CardanoStakingConfig,
+  request: StakingSyncRequest
+): Promise<CardanoPoolState | null> {
+  const poolId = account.onChain.poolId;
+  const read = request.provider.poolState;
+  if (!config.autoRedelegateRetiredPools || !account.onChain.registered) return null;
+  if (poolId === null || read === undefined) return null;
+
+  const key = `${request.runId ?? ''}|${poolId}`;
+  let pending = poolStateCache.get(key);
+  if (pending === undefined) {
+    pending = read.call(request.provider, poolId);
+    poolStateCache.set(key, pending);
+  }
+  try {
+    return await pending;
+  } catch (error) {
+    poolStateCache.delete(key);
+    if (error instanceof CardanoProviderError && error.failure === 'rate_limited') throw error;
+    Logger.warn(
+      'runStakingSync',
+      `Pool ${poolId} could not be read: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return null;
+  }
+}
+
+/** Per-run pool reads, keyed by `<runId>|<poolId>` and dropped when the run ends. */
+const poolStateCache = new Map<string, Promise<CardanoPoolState | null>>();
+
+/** Per-run parameter reads, keyed by run id and dropped when the run ends. */
+const parameterCaches = new Map<
+  string,
+  ReturnType<StakingSyncProvider['stakingProtocolParameters']>
+>();
 
 /**
  * Whether an operation already holds this credential.
@@ -717,7 +1264,7 @@ async function startAction(
     account.currentLifecycleId = opened;
   }
 
-  const runId = syncRunId(request.chainId, request.jobName, request.scheduledTime);
+  const runId = runIdOf(request);
   let operation: Awaited<ReturnType<typeof createStakingOperation>>;
   try {
     operation = await createStakingOperation(account, {
@@ -751,6 +1298,16 @@ async function startAction(
   return execution.outcome === 'submitted' || execution.outcome === 'unknown_submit'
     ? 'started'
     : `execute_${execution.outcome}`;
+}
+
+/**
+ * The identity {@link runStakingSync} resolved for this run.
+ *
+ * @param request - The run's request.
+ * @returns The run id; derived from the tick when the request predates the field.
+ */
+function runIdOf(request: StakingSyncRequest): string {
+  return request.runId ?? syncRunId(request.chainId, request.jobName, request.scheduledTime);
 }
 
 /**
