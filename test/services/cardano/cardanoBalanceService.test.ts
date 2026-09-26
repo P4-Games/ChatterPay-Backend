@@ -1,8 +1,11 @@
+import { Types } from 'mongoose';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CARDANO_PREPROD_CHAIN_ID } from '../../../src/config/cardanoConfig';
+import { ADA_ADDRESS_PREFIX, CARDANO_PREPROD_CHAIN_ID } from '../../../src/config/cardanoConfig';
+import CardanoStakingAccount from '../../../src/models/cardanoStakingAccountModel';
 import Token from '../../../src/models/tokenModel';
 import {
   getCardanoBalance,
+  getCardanoTokenBalances,
   isCardanoWalletAddress
 } from '../../../src/services/cardano/cardanoBalanceService';
 import { CardanoProviderError } from '../../../src/services/cardano/cardanoProviderService';
@@ -146,5 +149,92 @@ describe('getCardanoBalance', () => {
     expect(balance.spendableAda).toBe('0.000000');
     expect(balance.utxoCount).toBe(0);
     expect(balance.address).toBe(ADDRESS);
+  });
+});
+
+describe('getCardanoTokenBalances', () => {
+  const adaRow = (balances: { symbol: string; balance: string | number }[]) =>
+    balances.find((row) => row.symbol === 'ADA')?.balance;
+
+  beforeEach(async () => {
+    await Token.deleteMany({});
+    await CardanoStakingAccount.deleteMany({});
+    await Token.create({
+      name: 'Cardano',
+      symbol: 'ADA',
+      display_symbol: 'ADA',
+      chain_id: CARDANO_PREPROD_CHAIN_ID,
+      decimals: 6,
+      display_decimals: 2,
+      address: `${ADA_ADDRESS_PREFIX}ada`,
+      type: 'volatile',
+      ramp_enabled: false,
+      operations_limits: {
+        transfer: { L1: { min: 1, max: 1000 }, L2: { min: 1, max: 1000 } },
+        swap: { L1: { min: 0, max: 0 }, L2: { min: 0, max: 0 } }
+      }
+    });
+  });
+
+  /** A registered credential whose deposit and rewards are the user's. */
+  async function stakedAccount(depositLovelace: string, withdrawableRewardsLovelace: string) {
+    await CardanoStakingAccount.create({
+      userId: new Types.ObjectId(),
+      chainId: CARDANO_PREPROD_CHAIN_ID,
+      walletAddress: ADDRESS,
+      rewardAddress: 'stake_test1uqwv9u9kpmjufmdhhnzxgyrc05uf2wwdmadkfuqpyvztj8d',
+      stakeCredentialHex: 'ce3b525279e269bac5368d404508d9fa9c527bda6eadbf639fed1767',
+      onChain: {
+        registered: true,
+        poolId: 'pool1abc',
+        governanceDelegation: null,
+        depositLovelace,
+        withdrawableRewardsLovelace,
+        pendingRewardsLovelace: '9000000',
+        lifetimeRewardsLovelace: '0',
+        historicalCompleteness: 'partial',
+        asOf: new Date()
+      }
+    });
+  }
+
+  it('reports the outputs alone for a wallet that is not staking', async () => {
+    provider.fund(ADDRESS, 10_000_000n);
+
+    const { balances } = await getCardanoTokenBalances(ADDRESS, () => 0, provider);
+
+    expect(adaRow(balances)).toBe('10.000000');
+  });
+
+  it('keeps the registration deposit and withdrawable rewards in the ADA row once staking', async () => {
+    // Registering moves the deposit out of the outputs. Without it the portfolio would show the
+    // user two ada less than the staking screen does. Pending rewards stay out, as they do there.
+    provider.fund(ADDRESS, 8_000_000n);
+    await stakedAccount('2000000', '500000');
+
+    const { balances, raw } = await getCardanoTokenBalances(ADDRESS, () => 0, provider);
+
+    expect(adaRow(balances)).toBe('10.500000');
+    // What a transfer can move is still the outputs.
+    expect(raw.spendableAda).toBe('8.000000');
+  });
+
+  it('reads the outputs once for both figures', async () => {
+    provider.fund(ADDRESS, 8_000_000n);
+    await stakedAccount('2000000', '0');
+    const reads = vi.spyOn(provider, 'utxosFor');
+
+    await getCardanoTokenBalances(ADDRESS, () => 0, provider);
+
+    expect(reads).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to zero rather than throwing when the provider fails', async () => {
+    await stakedAccount('2000000', '0');
+    provider.failNextRead(new CardanoProviderError('rate_limited', 'CARDANO_PROVIDER_429'));
+
+    const { balances } = await getCardanoTokenBalances(ADDRESS, () => 0, provider);
+
+    expect(adaRow(balances)).toBe('0.000000');
   });
 });

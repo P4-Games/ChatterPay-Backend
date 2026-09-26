@@ -23,8 +23,9 @@ import {
   lovelaceToAdaNumber
 } from '../../helpers/cardanoAmountHelper';
 import { Logger } from '../../helpers/loggerHelper';
+import CardanoStakingAccount from '../../models/cardanoStakingAccountModel';
 import Token, { type IToken } from '../../models/tokenModel';
-import { assetUnit, type CardanoAssetAmount } from '../../types/cardanoType';
+import { assetUnit, type CardanoAssetAmount, type CardanoUtxo } from '../../types/cardanoType';
 import type { TokenBalance } from '../../types/commonType';
 import { mongoBlockchainService } from '../mongo/mongoBlockchainService';
 import { decodeCardanoAddress } from './cardanoAddressService';
@@ -33,6 +34,7 @@ import {
   type CardanoProvider,
   logCardanoProviderError
 } from './cardanoProviderService';
+import { resolveStakingBalance } from './cardanoStakingBalanceService';
 import { adaOnlyBalance, selectableBalance, totalAssets } from './cardanoTxService';
 
 /**
@@ -124,6 +126,61 @@ export function isCardanoWalletAddress(address: string): boolean {
   return decoded !== null && decoded.network === getCardanoConfig().network;
 }
 
+/** The one provider call a balance read makes. */
+type UtxoReader = Pick<CardanoProvider, 'utxosFor'>;
+
+/**
+ * A reader that asks the provider once per address, however many figures are built from the answer.
+ *
+ * The portfolio reads the same outputs twice — once for the asset breakdown, once for the staking
+ * total — and each read is a provider call billed against the quota.
+ *
+ * @param provider - Where the outputs come from. Built on first use when absent, so that a provider
+ *   that cannot be built fails inside the reads, which already answer failures without throwing.
+ * @returns A reader that shares one in-flight request per address.
+ */
+function sharedUtxoReads(provider?: UtxoReader): UtxoReader {
+  const reads = new Map<string, Promise<CardanoUtxo[]>>();
+  return {
+    utxosFor(address: string): Promise<CardanoUtxo[]> {
+      let read = reads.get(address);
+      if (!read) {
+        read = Promise.resolve().then(() => (provider ?? buildCardanoProvider()).utxosFor(address));
+        reads.set(address, read);
+      }
+      return read;
+    }
+  };
+}
+
+/**
+ * The wallet's total ada as the staking screen reports it, formatted like the other ADA figures.
+ *
+ * @param address - Base address of the wallet.
+ * @param chainId - Cardano chain id of this deployment.
+ * @param provider - Where to read the outputs.
+ * @returns The total, or `null` when it cannot be assembled — the outputs could not be read, or the
+ *   staking account lookup failed — in which case the caller falls back to the outputs-only figure.
+ */
+async function totalAdaIncludingStaking(
+  address: string,
+  chainId: number,
+  provider: UtxoReader
+): Promise<string | null> {
+  try {
+    const account = await CardanoStakingAccount.findOne({ chainId, walletAddress: address });
+    const staked = await resolveStakingBalance(account, address, provider);
+    // `stale` still carries every figure; it only rules out economic decisions, and this is a display.
+    return staked.availability === 'unavailable' ? null : lovelaceToAda(staked.totalAdaLovelace);
+  } catch (error) {
+    Logger.warn(
+      'totalAdaIncludingStaking',
+      `Showing outputs-only ADA for ${address}; staking figures unavailable: ${String(error)}`
+    );
+    return null;
+  }
+}
+
 /**
  * The ADA an address holds.
  *
@@ -135,7 +192,7 @@ export function isCardanoWalletAddress(address: string): boolean {
  */
 export async function getCardanoBalance(
   address: string,
-  provider?: CardanoProvider
+  provider?: UtxoReader
 ): Promise<CardanoBalance> {
   try {
     const utxos = await (provider ?? buildCardanoProvider()).utxosFor(address);
@@ -192,6 +249,11 @@ export async function getCardanoBalance(
  * Tokens configured but not held are reported at zero rather than omitted, which is what lets the
  * user see what they *can* receive on this network.
  *
+ * The ADA row is the wallet's total ada, the same figure the staking screen shows: outputs plus the
+ * user-owned registration deposit plus withdrawable rewards. Registering a stake credential moves
+ * the deposit out of the outputs and into the ledger, so an outputs-only figure drops by the deposit
+ * the moment a user starts staking. What an ADA transfer can move is still `raw.spendableAda`.
+ *
  * @param address - Bech32 address to read.
  * @param rateFor - Resolves a USD rate for a ticker. Assets with no price feed get `0`.
  * @param provider - Provider override, for tests.
@@ -203,8 +265,10 @@ export async function getCardanoTokenBalances(
   provider?: CardanoProvider
 ): Promise<{ networkName: string; balances: TokenBalance[]; raw: CardanoBalance }> {
   const config = getCardanoConfig();
-  const [raw, catalogue, network] = await Promise.all([
-    getCardanoBalance(address, provider),
+  const shared = sharedUtxoReads(provider);
+  const [raw, adaTotal, catalogue, network] = await Promise.all([
+    getCardanoBalance(address, shared),
+    totalAdaIncludingStaking(address, config.chainId, shared),
     cardanoCatalogue(),
     mongoBlockchainService.getBlockchain(config.chainId)
   ]);
@@ -213,11 +277,11 @@ export async function getCardanoTokenBalances(
   const balances: TokenBalance[] = catalogue.map((token) => {
     const unit = token.address.toLowerCase();
     // ADA is the row whose address is the sentinel rather than an asset unit: the chain's own coin
-    // has no policy and no contract, and its balance is the spendable lovelace.
+    // has no policy and no contract.
     const isAda = unit.startsWith(ADA_ADDRESS_PREFIX);
     const held = heldByUnit.get(unit);
     const balance = isAda
-      ? raw.spendableAda
+      ? (adaTotal ?? raw.spendableAda)
       : fromBaseUnits(BigInt(held?.quantity ?? '0'), token.decimals);
 
     return {
