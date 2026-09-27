@@ -1,11 +1,13 @@
 import { start } from '@google-cloud/trace-agent';
 import type { FastifyInstance } from 'fastify/types/instance';
 import mongoose from 'mongoose';
+import { loadCardanoNetworkSettings } from './config/cardanoNetworkLoader';
 import { $B, GCP_CLOUD_TRACE_ENABLED } from './config/constants';
 import { connectToDatabaseWithRetry } from './config/database';
 import { startServer } from './config/server';
 import { Logger } from './helpers/loggerHelper';
-import { assertCardanoDerivationUnchanged } from './services/cardano/cardanoDerivationCheck';
+import { verifyCardanoDerivation } from './services/cardano/cardanoDerivationCheck';
+import { installCardanoProviderMeter } from './services/cardano/cardanoProviderQuotaService';
 import { registerPolymarketApiAdapter } from './services/polymarket/polymarketProxyHelper';
 
 /**
@@ -69,9 +71,23 @@ async function main(): Promise<void> {
     // leave port 8080 closed until Cloud Run's startup probe gave up.
     await connectToDatabaseWithRetry();
 
+    // The six operational settings of the Cardano network live in its `blockchains` document, and
+    // this is where they are read: once, before anything can ask for them, and published in memory
+    // for the synchronous readers. Doing it per transfer would put a database round trip in the
+    // middle of every operation and let two halves of one transfer disagree about the TTL they were
+    // built with. Changing any of them therefore takes a restart, which is the deliberate trade.
+    // It answers by switching Cardano off, never by stopping the process.
+    await loadCardanoNetworkSettings();
+
     // Before the port opens: an address issued by a deployment whose derivation moved is an address
-    // nobody can sign for, and no request should be served until that is ruled out.
-    assertCardanoDerivationUnchanged();
+    // nobody can sign for, and no request should be served until that is ruled out. It answers by
+    // switching Cardano off, never by stopping the process — the rest of the product has nothing to
+    // do with this deployment's Cardano keys.
+    verifyCardanoDerivation();
+
+    // Every Cardano provider request from here on is reserved against the credential's shared daily
+    // quota in Mongo, whichever instance and whichever flow sends it.
+    installCardanoProviderMeter();
 
     const server = await startServer();
     setupGracefulShutdown(server);
