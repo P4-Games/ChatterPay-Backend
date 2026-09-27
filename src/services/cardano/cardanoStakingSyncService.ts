@@ -61,12 +61,14 @@ import { assembleStakingPlan } from './cardanoStakingAssemblyService';
 import {
   DEFAULT_RECONCILIATION_POLICY,
   executeStakingOperation,
-  reconcileWhenDue
+  reconcileWhenDue,
+  recoverStrandedStakingOperations
 } from './cardanoStakingLifecycleService';
 import { observeStakingAccount } from './cardanoStakingObservationService';
 import {
   countSponsoredRegistrations,
-  createStakingOperation
+  createStakingOperation,
+  hasLiveStakingOperation
 } from './cardanoStakingOperationService';
 import {
   decideAutomaticAction,
@@ -615,6 +617,19 @@ async function setPhase(runId: string, phase: CardanoStakingSyncPhase): Promise<
  * @returns How many operations were examined.
  */
 async function reconcilePass(request: StakingSyncRequest, renewal: LeaseRenewal): Promise<number> {
+  // Unsigned operations have no transaction to look up, so the lookups below never reach them. One
+  // left behind by a process that stopped holds its account until it is cancelled here.
+  try {
+    await recoverStrandedStakingOperations({ chainId: request.chainId }, request.now ?? new Date());
+  } catch (error) {
+    Logger.warn(
+      'runStakingSync',
+      `Stranded Cardano staking operations could not be recovered: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+
   const live = await CardanoStakingOperation.find({
     chainId: request.chainId,
     status: { $in: ['signed', 'submitted', 'unknown_submit'] },
@@ -1141,7 +1156,7 @@ async function decide(
     addressBytes: signer.available ? signer.material.user.addressBytes : new Uint8Array(),
     spendableLovelace: spendable,
     poolState: await poolStateFor(subject, config, request),
-    operationInFlight: await hasLiveOperation(subject._id as Types.ObjectId),
+    operationInFlight: await hasLiveStakingOperation(subject._id as Types.ObjectId),
     signerAvailable: signer.available,
     sponsoredRegistrationsInWindow: await countSponsoredRegistrations(
       subject._id as Types.ObjectId,
@@ -1247,20 +1262,6 @@ const parameterCaches = new Map<
   string,
   ReturnType<StakingSyncProvider['stakingProtocolParameters']>
 >();
-
-/**
- * Whether an operation already holds this credential.
- *
- * @param accountId - The account.
- * @returns `true` when one is live.
- */
-async function hasLiveOperation(accountId: Types.ObjectId): Promise<boolean> {
-  const live = await CardanoStakingOperation.countDocuments({
-    accountId,
-    status: { $in: ['queued', 'executing', 'signed', 'submitted', 'unknown_submit'] }
-  });
-  return live > 0;
-}
 
 /**
  * Creates the operation, assembles its plan and executes it.
