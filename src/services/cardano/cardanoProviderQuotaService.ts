@@ -29,7 +29,7 @@
 
 import { createHash } from 'node:crypto';
 
-import { getCardanoConfig } from '../../config/cardanoConfig';
+import { getCardanoConfig, resolveProviderKind } from '../../config/cardanoConfig';
 import { Logger } from '../../helpers/loggerHelper';
 import CardanoProviderQuota, {
   type ICardanoProviderQuota
@@ -84,7 +84,9 @@ export function quotaScope(baseUrl: string, credential: string): string {
   } catch {
     // An unparseable root still gets a scope of its own rather than sharing one.
   }
-  const kind = host.endsWith('blockfrost.io') ? 'blockfrost' : 'koios';
+  // The same classification the client uses to pick its dialect, so a root is never counted under one
+  // provider and spoken to as the other.
+  const kind = resolveProviderKind(baseUrl);
   const fingerprint =
     credential === ''
       ? 'nokey'

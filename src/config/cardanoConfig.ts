@@ -69,7 +69,7 @@ const NO_CHAIN_ID = 0;
  * @returns The dialect to speak. Anything this deployment does not recognise is treated as Koios,
  *   which is the dialect the public roots speak.
  */
-function resolveProviderKind(url: string): CardanoProviderKind {
+export function resolveProviderKind(url: string): CardanoProviderKind {
   let host: string;
   try {
     host = new URL(url).hostname.toLowerCase();
