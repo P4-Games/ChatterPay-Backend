@@ -1,14 +1,20 @@
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CARDANO_PREPROD_CHAIN_ID } from '../../src/config/cardanoConfig';
+import { recordCardanoDerivationState } from '../../src/config/cardanoDerivationState';
 import { CHATIZALO_TOKEN, DEFAULT_CHAIN_ID } from '../../src/config/constants';
 import { buildServer } from '../../src/config/server';
 import Blockchain from '../../src/models/blockchainModel';
 import Token from '../../src/models/tokenModel';
 import { UserModel } from '../../src/models/userModel';
+import { cardanoSignerService } from '../../src/services/cardano/cardanoSignerService';
 import { deriveCardanoAccount } from '../../src/services/cardano/cardanoWalletService';
-import { enableCardanoPreprod, setCardanoEnv } from '../support/cardanoEnv';
+import {
+  enableCardanoPreprod,
+  markCardanoDerivationVerified,
+  setCardanoEnv
+} from '../support/cardanoEnv';
 
 vi.mock('../../src/helpers/envHelper', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/helpers/envHelper')>();
@@ -89,12 +95,10 @@ async function seedCardanoNetwork(): Promise<void> {
     chainId: CARDANO_PREPROD_CHAIN_ID,
     environment: 'TEST',
     explorer: 'https://preprod.cardanoscan.io/transaction/',
-    cardano: {
-      network: 'testnet',
-      providerUrl: 'http://127.0.0.1:1',
-      ttlSlots: 900,
-      depositConfirmations: 3
-    },
+    network: 'testnet',
+    providerUrl: 'http://127.0.0.1:1',
+    ttlSlots: 900,
+    depositConfirmations: 3,
     limits: { transfer: { L1: { D: 14 }, L2: { D: 100 } } }
   });
 }
@@ -159,10 +163,15 @@ async function call(
  */
 beforeAll(async () => {
   // A closed port: an accidental chain call fails instantly instead of reaching out.
-  enableCardanoPreprod({ providerUrl: 'http://127.0.0.1:1', providerTimeoutMs: 1000 });
+  enableCardanoPreprod({ providerTimeoutMs: 1000 }, { providerUrl: 'http://127.0.0.1:1' });
   setCardanoEnv({ enabled: false });
 
   // Seeded before booting: the network config plugin snapshots the catalogue at startup.
+  //
+  // Cleared first because this runs before the shared setup's between-test pass has fired for
+  // this file, so whatever the previous file left behind is still there — and `tokens.address`
+  // is a unique index.
+  await Promise.all([Blockchain.deleteMany({}), Token.deleteMany({})]);
   await seedEvmNetwork();
   await seedCardanoNetwork();
   await seedTokens();
@@ -178,6 +187,11 @@ beforeAll(async () => {
  * put back. The server's own snapshot survives — it is only a cache of the same data.
  */
 beforeEach(async () => {
+  // Cleared before seeding rather than trusting that it already is. The shared setup empties
+  // every collection between tests, but it skips the pass while the connection is not yet
+  // ready — and a skipped pass turns this into a duplicate key on `tokens.address` that has
+  // nothing to do with the test that happens to be running.
+  await Promise.all([Blockchain.deleteMany({}), Token.deleteMany({})]);
   await seedEvmNetwork();
   await seedCardanoNetwork();
   await seedTokens();
@@ -280,6 +294,99 @@ describe('GET /balance_by_phone - the Cardano wallet is discoverable', () => {
 
     const body = JSON.parse(text);
     expect(body.data.balances.some((row: { token: string }) => row.token === 'ADA')).toBe(false);
+  });
+});
+
+describe('a Cardano derivation nobody verified', () => {
+  /**
+   * The verdict a deployment gets when one of its derivation inputs changed.
+   *
+   * Set through the state module rather than by arranging a real mismatch, because what is being
+   * tested here is not the check — it is what the rest of the application does with its answer.
+   */
+  function derivationChanged(): void {
+    setCardanoEnv({ enabled: true });
+    recordCardanoDerivationState({ status: 'changed', scope: 'user' });
+  }
+
+  afterEach(() => {
+    markCardanoDerivationVerified();
+  });
+
+  it('does not take the EVM transfer path down with it', async () => {
+    // The whole reason the check stopped ending the process. A wrong Cardano derivation label used
+    // to close the port, and with it every route in the product.
+    derivationChanged();
+
+    const { status, text } = await call('/make_transaction/', {
+      method: 'POST',
+      body: {
+        channel_user_id: '5491100000001',
+        to: '5491100000002',
+        token: 'USDC',
+        amount: '2'
+      }
+    });
+
+    expect(status).toBe(200);
+    expect(text).not.toContain('Cardano is not available');
+  });
+
+  it('refuses the Cardano transfer instead, with the answer the family already had', async () => {
+    derivationChanged();
+
+    const { status, text } = await call('/make_transaction/', {
+      method: 'POST',
+      body: {
+        channel_user_id: '5491100000001',
+        to: '5491100000002',
+        token: 'ADA',
+        amount: '2'
+      }
+    });
+
+    expect(status).toBe(200);
+    expect(text).toContain('Cardano is not available');
+  });
+
+  it('keeps the balance endpoint answering, without the Cardano address', async () => {
+    // A read that would otherwise derive. The address is omitted rather than the request failing:
+    // the user's EVM balances are not affected by this deployment's Cardano keys.
+    derivationChanged();
+    const phone = '5491100000007';
+    await UserModel.create({
+      phone_number: phone,
+      wallets: [
+        {
+          wallet_proxy: '0x3333333333333333333333333333333333333333',
+          wallet_eoa: '0x4444444444444444444444444444444444444444',
+          chain_id: EVM_CHAIN_ID,
+          status: 'active'
+        }
+      ]
+    });
+
+    const { status, text } = await call(`/balance_by_phone/?channel_user_id=${phone}`);
+
+    expect(status).toBe(200);
+    const body = JSON.parse(text);
+    const cardanoAddress = cardanoSignerService.getAccount(
+      phone,
+      'testnet',
+      CARDANO_PREPROD_CHAIN_ID
+    ).address;
+    expect(body.data.wallets).not.toContain(cardanoAddress);
+    // And nothing was written on the way: a refused derivation must not leave a wallet row behind.
+    const stored = await UserModel.findOne({ phone_number: phone });
+    expect(stored?.wallets).toHaveLength(1);
+  });
+
+  it('answers the health check, which is what keeps the revision alive', async () => {
+    derivationChanged();
+
+    const { status } = await call('/ping', { auth: false });
+
+    expect(status).toBe(200);
   });
 });
 
