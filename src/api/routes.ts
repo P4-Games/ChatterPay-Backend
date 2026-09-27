@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import aaveRoutes from './aaveRoutes';
 import webhookRoutes from './alchemyRoutes';
 import { balanceRoutes } from './balanceRoutes';
+import { cardanoStakingRoutes } from './cardanoStakingRoutes';
 import chainRoutes from './chainRoutes';
 import { chatterpointsRoutes } from './chatterpointsRoutes';
 import newsRoutes from './newsRoutes';
@@ -48,4 +49,5 @@ export async function setupRoutes(server: FastifyInstance): Promise<void> {
   server.register(webhookRoutes);
   server.register(chainRoutes, { prefix: '/chains' });
   server.register(polymarketRoutes);
+  server.register(cardanoStakingRoutes);
 }
