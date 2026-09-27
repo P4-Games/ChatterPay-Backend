@@ -38,6 +38,7 @@ function transfer(overrides: Partial<Parameters<typeof executeCardanoTransfer>[0
     amountLovelace: 2_000_000n,
     tokenSymbol: 'ADA',
     tokenDecimals: 6,
+    isAda: true,
     provider,
     network: 'testnet',
     chainId: CHAIN_ID,
