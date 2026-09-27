@@ -235,6 +235,16 @@ export interface StakingUserView {
   balance: StakingBalanceView;
   /** Whether this deployment can sign for the credential at all. */
   signable: boolean;
+  /**
+   * Whether an authorisation for this user verifies a PIN.
+   *
+   * True only when `SECURITY_PIN_ENABLED` is on and the user has a PIN set. The screen asks for the
+   * PIN when this is true and not otherwise; `pin_status` alone cannot tell it, because it knows
+   * nothing about the switch.
+   */
+  pinRequired: boolean;
+  /** When the user's PIN stops being blocked, or `null` when it is not blocked. */
+  pinBlockedUntil: Date | null;
   /** Each requestable action, and `null` or the reason it is refused. */
   actions: Record<string, StakingDecisionRefusal | null>;
   rewards: StakingRewardView[];
@@ -242,9 +252,20 @@ export interface StakingUserView {
   lastSyncAt: Date | null;
 }
 
+/**
+ * What the security service reported about a refused PIN.
+ *
+ * Carried beside a `security_gate` refusal so the screen can say how many attempts are left or until
+ * when the PIN is blocked, as the bot does from the same service.
+ */
+export interface StakingPinRefusal {
+  remainingAttempts: number | null;
+  blockedUntil: Date | null;
+}
+
 export type StakingUserResult<T> =
   | { ok: true; data: T }
-  | { ok: false; refusal: StakingUserRefusal; detail: string };
+  | { ok: false; refusal: StakingUserRefusal; detail: string; pin?: StakingPinRefusal };
 
 /**
  * The actions that mean the user is leaving.
@@ -544,7 +565,7 @@ export async function getStakingView(
 
   const enrolment = actions.register_and_delegate ?? null;
 
-  const [rewards, operations] = await Promise.all([
+  const [rewards, operations, pin] = await Promise.all([
     CardanoStakingReward.find({ accountId: account._id })
       .sort({ epoch: -1 })
       .limit(HISTORY_LIMIT)
@@ -552,7 +573,8 @@ export async function getStakingView(
     CardanoStakingOperation.find({ accountId: account._id })
       .sort({ createdAt: -1 })
       .limit(HISTORY_LIMIT)
-      .lean()
+      .lean(),
+    stakingPinRequirement(phoneNumber)
   ]);
 
   return {
@@ -584,6 +606,8 @@ export async function getStakingView(
       governanceDelegation: account.onChain.governanceDelegation,
       balance: balanceView(balance),
       signable: signer.available,
+      pinRequired: pin.required,
+      pinBlockedUntil: pin.blockedUntil,
       actions,
       rewards: rewards.map((reward) => ({
         epoch: reward.epoch,
@@ -814,7 +838,17 @@ export async function requestStakingAction(
   }
 
   const gate = await stakingSecurityGate(phoneNumber);
-  if (!gate.allowed) return { ok: false, refusal: 'security_gate', detail: gate.reason };
+  if (!gate.allowed) {
+    return {
+      ok: false,
+      refusal: 'security_gate',
+      detail: gate.reason,
+      pin:
+        gate.blockedUntil === null
+          ? undefined
+          : { remainingAttempts: null, blockedUntil: gate.blockedUntil }
+    };
+  }
 
   const own = await resolveOwn(phoneNumber);
   if (!own.ok) return own;
@@ -987,6 +1021,7 @@ export async function authorizeStakingAction(
   phoneNumber: string,
   action: CardanoStakingOperationKind,
   options: {
+    /** Empty when the user has no PIN set, in which case none is verified. */
     pin: string;
     recipientAddress?: string | null;
     bffAssertion?: string | null;
@@ -1043,18 +1078,17 @@ export async function authorizeStakingAction(
   if (!own.ok) return own;
 
   // The PIN switch governs this step the way it governs `stakingSecurityGate`,
-  // `securityService.getOperationGate` and `pinGrantRequired`. With the PIN off no user has one to
-  // verify, so verifying here refuses every authorisation with `security_gate` and leaves the whole
-  // surface unreachable — the only path to a mutation goes through this function. Issuing the grant
-  // without a PIN adds no capability either: `requestStakingAction` does not require a grant when the
-  // switch is off, so a caller that can reach this can already mutate without presenting one.
+  // `securityService.getOperationGate` and `pinGrantRequired`. Issuing the grant without a PIN when the
+  // switch is off adds no capability: `requestStakingAction` does not require a grant then, so a caller
+  // that can reach this can already mutate without presenting one.
+  //
+  // With the switch on, the user's own PIN decides, by the rule the bot applies before a transfer: a
+  // blocked PIN refuses, an active one is verified, and a user who never set one continues without it.
+  // The grant is issued in all three allowed cases, because the action endpoint requires it whenever
+  // the switch is on.
   if (SECURITY_PIN_ENABLED) {
-    const verified = await securityService.verifyPin(phoneNumber, options.pin, options.actor);
-    if (!verified.ok) {
-      // The status travels and the PIN never does. `blocked` and `not_set` are different situations for
-      // the user to resolve, and the failed-attempt counter is the security service's to keep.
-      return { ok: false, refusal: 'security_gate', detail: verified.status ?? 'pin_rejected' };
-    }
+    const checked = await checkStakingPin(phoneNumber, options.pin, options.actor);
+    if (!checked.ok) return checked;
   } else {
     // A decision somebody wrote down, logged every time it is taken, so it cannot be a gap nobody
     // remembers opening.
@@ -1484,28 +1518,24 @@ export async function getGovernanceHistory(
  * than a failure, and overriding it would make staking unusable in every environment where the PIN is
  * deliberately off — including the one this is tested in.
  *
+ * A user with no PIN set is allowed. The PIN is optional per user, and the bot lets such a user
+ * operate without one; refusing here would make staking the only operation that requires it.
+ *
  * @param phoneNumber - The user.
- * @returns Whether to proceed, and why not.
+ * @returns Whether to proceed, why not, and until when a blocked PIN stays blocked.
  */
 async function stakingSecurityGate(
   phoneNumber: string
-): Promise<{ allowed: boolean; reason: string }> {
-  if (!SECURITY_PIN_ENABLED) return { allowed: true, reason: '' };
+): Promise<{ allowed: boolean; reason: string; blockedUntil: Date | null }> {
+  if (!SECURITY_PIN_ENABLED) return { allowed: true, reason: '', blockedUntil: null };
 
   try {
     const status = await securityService.getSecurityStatus(phoneNumber);
-    if (status.pin_status === 'not_set') {
-      return { allowed: false, reason: 'security_pin_setup' };
+    // `getSecurityStatus` reports `blocked` only while `blocked_until` is in the future.
+    if (status.pin_status === 'blocked') {
+      return { allowed: false, reason: 'pin_blocked', blockedUntil: status.blocked_until };
     }
-    if (
-      status.pin_status === 'blocked' &&
-      status.blocked_until !== undefined &&
-      status.blocked_until !== null &&
-      status.blocked_until > new Date()
-    ) {
-      return { allowed: false, reason: 'pin_blocked' };
-    }
-    return { allowed: true, reason: '' };
+    return { allowed: true, reason: '', blockedUntil: null };
   } catch (error) {
     Logger.error(
       'stakingSecurityGate',
@@ -1513,7 +1543,104 @@ async function stakingSecurityGate(
         error instanceof Error ? error.message : String(error)
       }`
     );
-    return { allowed: false, reason: 'gate_unavailable' };
+    return { allowed: false, reason: 'gate_unavailable', blockedUntil: null };
+  }
+}
+
+/** A refusal, whatever the result type of the call it ends. */
+type StakingUserRefused = Extract<StakingUserResult<never>, { ok: false }>;
+
+/**
+ * Checks the user's own PIN for an authorisation, with the PIN switch on.
+ *
+ * The rule the bot applies before a transfer: a blocked PIN refuses, a PIN that is set is verified, and
+ * a user who never set one continues without it. Fails closed when the status cannot be read, as
+ * {@link stakingSecurityGate} does.
+ *
+ * An empty PIN from a user who has one is refused without reaching `verifyPin`, so it does not count as
+ * a failed attempt: it means the screen did not ask, not that the user got it wrong.
+ *
+ * @param phoneNumber - The user.
+ * @param pin - What the user typed, or an empty string when the screen did not ask.
+ * @param actor - Where the request came from, recorded on a failed attempt.
+ * @returns `ok`, or the refusal with what the security service reported.
+ */
+async function checkStakingPin(
+  phoneNumber: string,
+  pin: string,
+  actor: string
+): Promise<{ ok: true } | StakingUserRefused> {
+  let status: Awaited<ReturnType<typeof securityService.getSecurityStatus>>;
+  try {
+    status = await securityService.getSecurityStatus(phoneNumber);
+  } catch (error) {
+    Logger.error(
+      'checkStakingPin',
+      `Refusing a staking authorisation because the PIN status could not be read: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    return { ok: false, refusal: 'security_gate', detail: 'gate_unavailable' };
+  }
+
+  if (status.pin_status === 'not_set') return { ok: true };
+
+  if (status.pin_status === 'blocked') {
+    return {
+      ok: false,
+      refusal: 'security_gate',
+      detail: 'blocked',
+      pin: { remainingAttempts: null, blockedUntil: status.blocked_until }
+    };
+  }
+
+  if (pin.trim() === '') {
+    return { ok: false, refusal: 'security_gate', detail: 'pin_required' };
+  }
+
+  const verified = await securityService.verifyPin(phoneNumber, pin, actor);
+  if (verified.ok) return { ok: true };
+
+  // The status travels and the PIN never does. The failed-attempt counter is the security service's
+  // to keep; what it reported about it is passed on so the screen can show it.
+  return {
+    ok: false,
+    refusal: 'security_gate',
+    detail: verified.status,
+    pin: {
+      remainingAttempts: verified.remaining_attempts ?? null,
+      blockedUntil: verified.blocked_until ?? null
+    }
+  };
+}
+
+/**
+ * Whether the screen asks this user for a PIN before an authorisation.
+ *
+ * Mirrors {@link checkStakingPin}: no PIN is asked for with the switch off or from a user who has none.
+ * When the status cannot be read the answer is `true`, so the screen asks and the authorisation, which
+ * fails closed on the same read, decides.
+ *
+ * @param phoneNumber - The user.
+ * @returns Whether a PIN is required, and until when it is blocked.
+ */
+async function stakingPinRequirement(
+  phoneNumber: string
+): Promise<{ required: boolean; blockedUntil: Date | null }> {
+  if (!SECURITY_PIN_ENABLED) return { required: false, blockedUntil: null };
+
+  try {
+    const status = await securityService.getSecurityStatus(phoneNumber);
+    return {
+      required: status.pin_status !== 'not_set',
+      blockedUntil: status.pin_status === 'blocked' ? status.blocked_until : null
+    };
+  } catch (error) {
+    Logger.warn(
+      'stakingPinRequirement',
+      `PIN status could not be read: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return { required: true, blockedUntil: null };
   }
 }
 
