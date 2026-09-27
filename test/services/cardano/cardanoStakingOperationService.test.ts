@@ -1,0 +1,404 @@
+import mongoose, { Types } from 'mongoose';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import CardanoStakingAccount, {
+  type ICardanoStakingAccount
+} from '../../../src/models/cardanoStakingAccountModel';
+import { STAKING_COLLECTIONS } from '../../../src/models/cardanoStakingCollections';
+import CardanoStakingOperation from '../../../src/models/cardanoStakingOperationModel';
+import {
+  checkStakingOperationReadiness,
+  createStakingOperation,
+  missingStakingIndexes,
+  resetStakingSchemaVerification
+} from '../../../src/services/cardano/cardanoStakingOperationService';
+
+/**
+ * Whether this deployment requires the terms to have been accepted.
+ *
+ * Mocked rather than left to the environment. The setting is real configuration with a real default,
+ * and a suite that read it from whatever `.env` the machine happens to hold would pass or fail
+ * according to a file nobody changed on purpose — which is exactly what happened when staking was
+ * switched to automatic enrolment.
+ */
+const stakingConfig = vi.hoisted(() => ({ current: null as unknown }));
+
+vi.mock('../../../src/config/cardanoStakingConfig', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/config/cardanoStakingConfig')>();
+  return {
+    ...actual,
+    loadCardanoStakingConfig: async () => {
+      const { stakingConfigFixture } = await import('../../helpers/stakingConfigFixture');
+      return { ...stakingConfigFixture(), ...(stakingConfig.current ?? {}) };
+    }
+  };
+});
+
+const CHAIN_ID = 900000000001;
+const CREDENTIAL = 'cc2f0b60ee5c4edb7bcc46410787d389539cddf5b64f0012304b91da';
+
+/**
+ * Builds every declared staking index, the way an administrator does by hand.
+ */
+async function installSchema(): Promise<void> {
+  for (const { model } of STAKING_COLLECTIONS) await model.createIndexes();
+  resetStakingSchemaVerification();
+}
+
+/**
+ * An account in whatever state the case needs.
+ *
+ * @param overrides - Fields that differ from an account the backfill would have created.
+ * @returns The stored account.
+ */
+async function seedAccount(
+  overrides: Record<string, unknown> = {}
+): Promise<ICardanoStakingAccount> {
+  return CardanoStakingAccount.create({
+    userId: new Types.ObjectId(),
+    chainId: CHAIN_ID,
+    walletAddress: 'addr_test1qzasn8g8wgz5elr7a2jwcpvy9jdpzddy4vc5xtqpkrl53xw',
+    rewardAddress: 'stake_test1urxz7zmqaewyakmme3ryzpu86wy488xa7kmy7qqjxp9erksag4z3l',
+    stakeCredentialHex: CREDENTIAL,
+    currentLifecycleId: 'cycle-1',
+    ...overrides
+  });
+}
+
+/** An account the daily sync has already read on chain, and whose user consented. */
+async function seedReadyAccount(): Promise<ICardanoStakingAccount> {
+  return seedAccount({
+    termsConsent: { version: '1', acceptedAt: new Date(), source: 'dashboard' },
+    onChain: {
+      registered: false,
+      poolId: null,
+      governanceDelegation: null,
+      depositLovelace: null,
+      withdrawableRewardsLovelace: '0',
+      pendingRewardsLovelace: '0',
+      lifetimeRewardsLovelace: '0',
+      historicalCompleteness: 'partial',
+      asOf: new Date()
+    }
+  });
+}
+
+/**
+ * A distinct intent, so that two operations in one test do not collide on the idempotency key.
+ *
+ * @param kind - What the operation would do.
+ * @returns The intent.
+ */
+function intent(kind: Parameters<typeof createStakingOperation>[1]['kind']) {
+  return { kind, actor: 'cron', idempotencyKey: `key-${new Types.ObjectId().toHexString()}` };
+}
+
+describe('cardanoStakingOperationService', () => {
+  beforeEach(async () => {
+    stakingConfig.current = null;
+    await CardanoStakingAccount.deleteMany({});
+    await CardanoStakingOperation.deleteMany({});
+    await installSchema();
+  });
+
+  afterEach(() => {
+    resetStakingSchemaVerification();
+  });
+
+  describe('the schema has to be installed first', () => {
+    it('reports nothing missing once the indexes have been created', async () => {
+      expect(await missingStakingIndexes()).toEqual([]);
+    });
+
+    it('refuses an economic operation while a mandatory index is absent', async () => {
+      // Uniqueness in this rollout comes entirely from indexes. Mongo creates a collection
+      // implicitly on first insert without any of them, so a deployment whose indexes were never
+      // created would accept every write and let two accounts claim one deposit.
+      await CardanoStakingOperation.collection.dropIndex('one_live_op_per_account');
+      resetStakingSchemaVerification();
+      const account = await seedReadyAccount();
+
+      const readiness = await checkStakingOperationReadiness(account, 'register_and_delegate');
+
+      expect(readiness).toEqual({
+        ok: false,
+        refusal: 'indexes_missing',
+        detail: expect.stringContaining('cardano_staking_operations.one_live_op_per_account')
+      });
+    });
+
+    it('names every missing index, not just the first', async () => {
+      await CardanoStakingAccount.collection.dropIndex('chain_credential_unique');
+      await CardanoStakingOperation.collection.dropIndex('idempotency_unique');
+      resetStakingSchemaVerification();
+
+      const missing = await missingStakingIndexes();
+
+      expect(missing).toContain('cardano_staking_accounts.chain_credential_unique');
+      expect(missing).toContain('cardano_staking_operations.idempotency_unique');
+    });
+
+    it('creates no operation when the schema is incomplete', async () => {
+      await CardanoStakingOperation.collection.dropIndex('one_live_op_per_account');
+      resetStakingSchemaVerification();
+      const account = await seedReadyAccount();
+
+      await expect(
+        createStakingOperation(account, intent('register_and_delegate'))
+      ).rejects.toThrow('CARDANO_STAKING_REFUSED_INDEXES_MISSING');
+      expect(await CardanoStakingOperation.countDocuments({})).toBe(0);
+    });
+
+    it('does not remember a failure, so creating the indexes while up is enough to recover', async () => {
+      await CardanoStakingOperation.collection.dropIndex('one_live_op_per_account');
+      resetStakingSchemaVerification();
+      const account = await seedReadyAccount();
+      expect((await checkStakingOperationReadiness(account, 'withdraw_rewards')).ok).toBe(false);
+
+      await CardanoStakingOperation.createIndexes();
+
+      expect((await checkStakingOperationReadiness(account, 'withdraw_rewards')).ok).toBe(true);
+    });
+  });
+
+  describe('onChain.asOf: null is not a state anything may act on', () => {
+    it('refuses every economic kind while the credential has never been read', async () => {
+      // `null` means never read. It is not "registered: false" and it is not "no rewards": building
+      // a registration on it submits a certificate for a credential that may already be registered.
+      const account = await seedAccount({
+        termsConsent: { version: '1', acceptedAt: new Date(), source: 'dashboard' }
+      });
+      expect(account.onChain.asOf).toBeNull();
+
+      for (const kind of [
+        'register_and_delegate',
+        'withdraw_rewards',
+        'deregister',
+        'exit_and_send_max',
+        'redelegate_pool',
+        'delegate_vote'
+      ] as const) {
+        const readiness = await checkStakingOperationReadiness(account, kind);
+        expect(readiness).toEqual({
+          ok: false,
+          refusal: 'no_confirmed_chain_read',
+          detail: expect.stringContaining('never been read on chain')
+        });
+      }
+    });
+
+    it('creates no operation for an account the backfill has only just made', async () => {
+      // Exactly what preparing an account by hand leaves behind: a row and no on-chain read.
+      const account = await seedAccount();
+
+      await expect(
+        createStakingOperation(account, intent('register_and_delegate'))
+      ).rejects.toThrow('CARDANO_STAKING_REFUSED_NO_CONFIRMED_CHAIN_READ');
+      expect(await CardanoStakingOperation.countDocuments({})).toBe(0);
+    });
+
+    it('allows the operation once a read has landed', async () => {
+      const account = await seedReadyAccount();
+
+      const operation = await createStakingOperation(account, intent('register_and_delegate'));
+
+      expect(operation.kind).toBe('register_and_delegate');
+      expect(operation.status).toBe('queued');
+      // Live from the moment it exists: the credential is spoken for before anything is submitted.
+      expect(operation.liveness).toBe('live');
+    });
+
+    it('is not satisfied by a registered flag without a read behind it', async () => {
+      const account = await seedAccount({
+        termsConsent: { version: '1', acceptedAt: new Date(), source: 'dashboard' },
+        onChain: {
+          registered: true,
+          poolId: 'pool1abc',
+          governanceDelegation: null,
+          depositLovelace: '2000000',
+          withdrawableRewardsLovelace: '0',
+          pendingRewardsLovelace: '0',
+          lifetimeRewardsLovelace: '0',
+          historicalCompleteness: 'partial',
+          asOf: null
+        }
+      });
+
+      const readiness = await checkStakingOperationReadiness(account, 'deregister');
+
+      expect(readiness.ok).toBe(false);
+    });
+  });
+
+  describe('consent', () => {
+    it('refuses to start participation without it, where it is required', async () => {
+      stakingConfig.current = { consentRequired: true };
+
+      const account = await seedAccount({
+        onChain: {
+          registered: false,
+          poolId: null,
+          governanceDelegation: null,
+          depositLovelace: null,
+          withdrawableRewardsLovelace: '0',
+          pendingRewardsLovelace: '0',
+          lifetimeRewardsLovelace: '0',
+          historicalCompleteness: 'partial',
+          asOf: new Date()
+        }
+      });
+
+      const readiness = await checkStakingOperationReadiness(account, 'register_and_delegate');
+
+      expect(readiness).toEqual({
+        ok: false,
+        refusal: 'no_terms_consent',
+        detail: expect.stringContaining('no consent is on record')
+      });
+    });
+
+    it('does not ask for it where the deployment does not require it', async () => {
+      // Automatic enrolment: a wallet nobody asked is not a wallet that said no, and the only thing
+      // that keeps one out is a recorded opt-out.
+      stakingConfig.current = { consentRequired: false };
+      const account = await seedAccount({
+        onChain: {
+          registered: false,
+          poolId: null,
+          governanceDelegation: null,
+          depositLovelace: null,
+          withdrawableRewardsLovelace: '0',
+          pendingRewardsLovelace: '0',
+          lifetimeRewardsLovelace: '0',
+          historicalCompleteness: 'partial',
+          asOf: new Date()
+        }
+      });
+
+      expect(await checkStakingOperationReadiness(account, 'register_and_delegate')).toEqual({
+        ok: true
+      });
+    });
+
+    it.each([
+      'withdraw_rewards',
+      'deregister',
+      'exit_and_send_max'
+    ] as const)('still allows %s, because leaving is always allowed', async (kind) => {
+      const account = await seedAccount({
+        onChain: {
+          registered: true,
+          poolId: 'pool1abc',
+          governanceDelegation: null,
+          depositLovelace: '2000000',
+          withdrawableRewardsLovelace: '0',
+          pendingRewardsLovelace: '0',
+          lifetimeRewardsLovelace: '0',
+          historicalCompleteness: 'partial',
+          asOf: new Date()
+        }
+      });
+
+      expect((await checkStakingOperationReadiness(account, kind)).ok).toBe(true);
+    });
+  });
+
+  describe('the credential lock applies from creation', () => {
+    it('refuses a second operation for an account that already has a queued one', async () => {
+      const account = await seedReadyAccount();
+      await createStakingOperation(account, intent('register_and_delegate'));
+
+      await expect(createStakingOperation(account, intent('withdraw_rewards'))).rejects.toThrow();
+      expect(await CardanoStakingOperation.countDocuments({ accountId: account._id })).toBe(1);
+    });
+
+    it('refuses an operation with no cycle to belong to', async () => {
+      const account = await seedReadyAccount();
+      account.currentLifecycleId = null;
+
+      await expect(createStakingOperation(account, intent('withdraw_rewards'))).rejects.toThrow(
+        'CARDANO_STAKING_NO_LIFECYCLE'
+      );
+    });
+  });
+
+  describe('what a vote delegation records', () => {
+    it('stores the target, so the row says which of the three it was', async () => {
+      // `delegate_vote` covers three different instructions to the ledger. A row that named only the
+      // kind could not tell an abstention from a vote of no confidence after the fact.
+      const account = await seedReadyAccount();
+      await createStakingOperation(account, {
+        ...intent('delegate_vote'),
+        governanceTarget: 'always_no_confidence'
+      });
+
+      const stored = await CardanoStakingOperation.findOne({ accountId: account._id });
+      expect(stored?.governanceTarget).toBe('always_no_confidence');
+      expect(stored?.governanceDrepIdCip129).toBeNull();
+    });
+
+    it('stores a representative in the canonical form and nothing else', async () => {
+      // CIP-129, because the same representative has a different string under each of the three
+      // spellings in circulation and a column holding whichever one a request used could not be
+      // compared to anything.
+      const account = await seedReadyAccount();
+      const idCip129 = 'drep1y242424242424242424242424242424242424242424242sdg97tu';
+      await createStakingOperation(account, {
+        ...intent('delegate_vote'),
+        governanceTarget: 'drep',
+        governanceDrepIdCip129: idCip129
+      });
+
+      const stored = await CardanoStakingOperation.findOne({ accountId: account._id });
+      expect(stored?.governanceTarget).toBe('drep');
+      expect(stored?.governanceDrepIdCip129).toBe(idCip129);
+    });
+
+    it('leaves both fields empty on an operation that delegates no vote', async () => {
+      const account = await seedReadyAccount();
+      await createStakingOperation(account, intent('withdraw_rewards'));
+
+      const stored = await CardanoStakingOperation.findOne({ accountId: account._id });
+      expect(stored?.governanceTarget).toBeNull();
+      expect(stored?.governanceDrepIdCip129).toBeNull();
+    });
+  });
+
+  describe('the index list is one list', () => {
+    it('checks exactly what the schemas declare, across every staking collection', async () => {
+      // The guard and the documented deliverables read the same source. Two lists would drift, and
+      // the direction that drift takes is the dangerous one: a guard checking fewer indexes than the
+      // database was supposed to get waves through the deployment where they were never created.
+      const collections = STAKING_COLLECTIONS.map((entry) => entry.collection);
+
+      expect(collections).toHaveLength(11);
+      expect(mongoose.connection.readyState).toBe(1);
+      expect(await missingStakingIndexes()).toEqual([]);
+    });
+
+    it('covers the claim store, whose expiry a staking operation depends on', async () => {
+      // It is not a collection this rollout introduced — transfers have used it all along — but the
+      // way it expires is what keeps an uncertain operation's inputs held. An index that
+      // load-bearing cannot go on being created lazily by whichever process gets there first.
+      const collections = STAKING_COLLECTIONS.map((entry) => entry.collection);
+
+      expect(collections).toContain('cardano_utxo_claims');
+    });
+
+    it('refuses staking operations when the claim store has no expiry index', async () => {
+      // Without it, a pinned claim and a lapsed one are the same document to the server, and the
+      // whole hold is imaginary.
+      const database = mongoose.connection.db;
+      if (database === undefined) throw new Error('no database connection');
+      await database.collection('cardano_utxo_claims').dropIndex('expiresAt_1');
+      resetStakingSchemaVerification();
+
+      expect(await missingStakingIndexes()).toEqual(['cardano_utxo_claims.expiresAt_1']);
+
+      await database
+        .collection('cardano_utxo_claims')
+        .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'expiresAt_1' });
+      resetStakingSchemaVerification();
+    });
+  });
+});
