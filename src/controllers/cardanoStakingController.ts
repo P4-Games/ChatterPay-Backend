@@ -32,6 +32,7 @@ import {
   listGovernanceOptions,
   quoteStakingExit,
   requestStakingAction,
+  type StakingPinRefusal,
   type StakingUserRefusal,
   setStakingConsent,
   USER_REQUESTABLE_ACTIONS
@@ -95,7 +96,8 @@ interface AuthorizeBody {
   recipient_address?: string | null;
   /** The target being authorised. The grant is bound to it, so it is part of what the PIN confirms. */
   governance_target?: GovernanceTargetBody | null;
-  pin?: string;
+  /** Absent or empty when the user has no PIN set. */
+  pin?: string | null;
   bff_assertion?: string;
 }
 
@@ -220,7 +222,7 @@ export async function cardanoStakingAction(
       bffAssertion: body.bff_assertion ?? null,
       pinGrant: body.pin_grant ?? null
     });
-    if (!result.ok) return refuse(reply, result.refusal, result.detail);
+    if (!result.ok) return refuse(reply, result.refusal, result.detail, result.pin);
 
     Logger.log(
       'cardanoStakingAction',
@@ -319,19 +321,21 @@ export async function cardanoStakingAuthorize(
       `action must be one of: ${USER_REQUESTABLE_ACTIONS.join(', ')}`
     );
   }
-  if (typeof body.pin !== 'string' || body.pin.trim() === '') {
-    return returnErrorResponse('cardanoStakingAuthorize', '', reply, 400, 'pin is required');
+  // Optional: a user with no PIN set is authorised without one. Whether this user needs one is the
+  // service's decision, not the request's.
+  if (body.pin !== undefined && body.pin !== null && typeof body.pin !== 'string') {
+    return returnErrorResponse('cardanoStakingAuthorize', '', reply, 400, 'pin must be a string');
   }
 
   try {
     const result = await authorizeStakingAction(body.channel_user_id, action, {
-      pin: body.pin,
+      pin: body.pin ?? '',
       recipientAddress: body.recipient_address ?? null,
       governanceTarget: body.governance_target ?? null,
       bffAssertion: body.bff_assertion ?? null,
       actor: 'web'
     });
-    if (!result.ok) return refuse(reply, result.refusal, result.detail);
+    if (!result.ok) return refuse(reply, result.refusal, result.detail, result.pin);
     return returnSuccessResponse(reply, 'Cardano staking action authorised', { ...result.data });
   } catch (error) {
     return failed(reply, 'cardanoStakingAuthorize', error);
@@ -400,13 +404,39 @@ function missingUser(reply: FastifyReply): unknown {
  * @param reply - The Fastify reply.
  * @param refusal - Why.
  * @param detail - What is diagnosable about it.
+ * @param pin - What the security service reported about a refused PIN, when it reported anything.
  * @returns The response.
  */
-function refuse(reply: FastifyReply, refusal: StakingUserRefusal, detail: string): unknown {
+function refuse(
+  reply: FastifyReply,
+  refusal: StakingUserRefusal,
+  detail: string,
+  pin?: StakingPinRefusal
+): unknown {
   // The code travels in the message so a client can branch on it, and the detail travels beside it:
   // both were written to be read by whoever is looking at a refused staking action, and neither
   // carries an address, a key or a figure that is not already the caller's own.
-  return returnErrorResponse('cardanoStaking', '', reply, STATUS_OF[refusal], refusal, detail);
+  if (pin === undefined) {
+    return returnErrorResponse('cardanoStaking', '', reply, STATUS_OF[refusal], refusal, detail);
+  }
+
+  // Same envelope as `returnErrorResponse`, with the attempts left and the block expiry beside the
+  // code. That helper carries no extra fields, and these two are what the screen shows.
+  const status = STATUS_OF[refusal];
+  Logger.warn('cardanoStaking', refusal, detail);
+  return reply.status(status).send({
+    status: 'error',
+    data: {
+      code: status,
+      message: refusal,
+      details: detail,
+      pin: {
+        remainingAttempts: pin.remainingAttempts,
+        blockedUntil: pin.blockedUntil === null ? null : pin.blockedUntil.toISOString()
+      }
+    },
+    timestamp: new Date().toISOString()
+  });
 }
 
 /**
