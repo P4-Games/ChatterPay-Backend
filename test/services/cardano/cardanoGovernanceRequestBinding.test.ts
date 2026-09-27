@@ -24,8 +24,8 @@ import { enableCardanoPreprod } from '../../support/cardanoEnv';
  * transaction or writes an operation.
  *
  * The positive case cannot reach a chain either, so what it asserts is that neither proof is what
- * stopped it: the request gets past the assertion, past the grant and past the target validation, and
- * is then refused by the security gate for a user this suite never set a PIN for. That is the furthest
+ * stopped it: the request gets past the assertion, past the grant, past the target validation and past
+ * the security gate, and is then refused for a user this suite never created. That is the furthest
  * the binding can be observed without building a transaction, and building one is out of scope.
  */
 
@@ -160,12 +160,12 @@ describe('a grant issued for one target', () => {
       grantFor: CANONICAL.always_abstain
     });
 
-    // Refused further along, by the gate, for a user with no PIN on file. What matters is which
-    // refusal it is not.
+    // Refused further along, when the account is resolved for a user this suite never created. The
+    // gate lets a user with no PIN through. What matters is which refusal it is not.
     expect(result).toMatchObject({ ok: false });
     // Named rather than merely "not one of the three": a refusal from earlier in the sequence would
     // satisfy the negations below while proving nothing about the binding.
-    expect(result.ok === false && result.refusal).toBe('security_gate');
+    expect(result.ok === false && result.refusal).toBe('user_not_found');
     expect(result.ok === false && result.refusal).not.toBe('governance_target');
     expect(result.ok === false && result.refusal).not.toBe('assertion');
     expect(result.ok === false && result.refusal).not.toBe('pin_grant');
