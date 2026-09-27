@@ -254,6 +254,21 @@ export interface StakingOperationIntent {
 }
 
 /**
+ * Whether an operation holds the account's stake credential.
+ *
+ * The condition is the one the unique index `one_live_op_per_account` enforces, `liveness: 'live'`,
+ * and not a list of statuses. A list that leaves out a status the index still counts as live, such
+ * as `manual_review`, lets a caller decide to create an operation that the index then refuses, after
+ * whatever the caller wrote first — an exit's opt-out, for one — is already stored.
+ *
+ * @param accountId - The account.
+ * @returns `true` when an operation on the account is live.
+ */
+export async function hasLiveStakingOperation(accountId: Types.ObjectId): Promise<boolean> {
+  return (await CardanoStakingOperation.exists({ accountId, liveness: 'live' })) !== null;
+}
+
+/**
  * Creates an economic operation, or refuses.
  *
  * The operation is created `queued` with `chainOutcome: 'none'`, which the schema reads as **live**:
