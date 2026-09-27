@@ -19,6 +19,7 @@ import { type IUser, type IUserWallet, UserModel } from '../../models/userModel'
 import type { CardanoAccount } from '../../types/cardanoType';
 import { getUserWalletByChainId } from '../userService';
 import { cardanoSignerService } from './cardanoSignerService';
+import { ensureStakingAccountQuietly } from './cardanoStakingAccountService';
 
 /** A user's Cardano wallet, as the rest of the code needs it. */
 export interface CardanoWallet {
@@ -33,11 +34,19 @@ export interface CardanoWallet {
 /**
  * The Cardano account a phone number resolves to, without touching the database.
  *
+ * Every path that provisions, stores or signs for a Cardano address goes through here, which is
+ * why the availability of the family is asserted here rather than trusted from the caller. The
+ * callers do check — but a derivation is the one operation whose result looks correct even when the
+ * configuration behind it is wrong, so the last function before the key material refuses on its
+ * own rather than relying on somebody upstream having asked.
+ *
  * @param phoneNumber - The user's phone number, in any accepted format.
  * @returns The derived account.
+ * @throws Error `CARDANO_DISABLED` when the family is unavailable, carrying the reason.
  */
 export function deriveCardanoAccount(phoneNumber: string): CardanoAccount {
-  const { network, chainId } = getCardanoConfig();
+  const { network, chainId, enabled, disabledReason } = getCardanoConfig();
+  if (!enabled) throw new Error(`CARDANO_DISABLED: ${disabledReason || 'disabled'}`);
   return cardanoSignerService.getAccount(phoneNumber, network, chainId);
 }
 
@@ -98,6 +107,10 @@ export async function ensureCardanoWalletForUser(user: IUser): Promise<CardanoWa
       );
       throw new Error('CARDANO_ADDRESS_MISMATCH');
     }
+    // The staking account is ensured here too, not only on the branch that writes the wallet. Every
+    // wallet provisioned before staking existed reaches this branch and no other, so creating it only
+    // alongside a new wallet would leave exactly the users who have been here longest without one.
+    await ensureStakingAccountQuietly(user, existing);
     return { address: account.address, publicKey: account.publicKey, wasCreated: false };
   }
 
@@ -124,6 +137,10 @@ export async function ensureCardanoWalletForUser(user: IUser): Promise<CardanoWa
     'ensureCardanoWalletForUser',
     `Cardano wallet provisioned for ${user.phone_number}: ${account.address}`
   );
+
+  // Alongside the wallet, so a user who asks about staking right after signing up has a position to
+  // be shown rather than a refusal. Best effort: staking is not what provisioning was asked to do.
+  await ensureStakingAccountQuietly(user, entry);
 
   return { address: account.address, publicKey: account.publicKey, wasCreated: true };
 }
