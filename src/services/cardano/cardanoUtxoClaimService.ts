@@ -20,6 +20,14 @@
  * window where the provider still lists it as unspent. Claims are only released when the
  * transaction provably did not happen, and otherwise expire on their own.
  *
+ * **Except when they must not.** A transfer settles inside one validity window while the process
+ * that started it is still running, so an expiry there is a safety valve and a stale claim costs a
+ * retry. An operation that can sit undetermined for days — its submit never answered, its provider
+ * behind, and nothing scheduled to look again until tomorrow — is a different case: an expiry is
+ * then a release nothing proved, performed by an index, and afterwards a second transaction can be
+ * built around inputs the first may still spend. {@link pinClaims} is how such a claim opts out of
+ * expiring at all. Nothing about the transfer path changed.
+ *
  * The same store records the transactions this deployment submitted, for the opposite reason. An
  * output that a transfer just created -- the sender's change -- has no confirmations yet, and the
  * confirmation rule exists to keep somebody else's deposit from being credited before a rollback
@@ -40,8 +48,27 @@ const COLLECTION = 'cardano_utxo_claims';
  * Longer than a transaction's own validity window, so a claim never expires while the transaction
  * holding it could still be accepted, and long enough to cover the provider catching up: once the
  * spend is indexed, the output stops being offered and the claim stops mattering.
+ *
+ * This is the **transfer** lifetime, and it is right for a transfer: its fate settles inside one
+ * validity window, the process that started it is still running, and a stale claim costs a retry.
+ * It is not right for everything — see {@link PINNED} and the note on {@link pinClaims}.
  */
 const CLAIM_SECONDS = 1_200;
+
+/**
+ * An expiry that never arrives.
+ *
+ * MongoDB's TTL monitor selects documents whose indexed field holds a date in the past; a document
+ * whose field is `null` is not a candidate and is never deleted, however long it sits there. That
+ * is the documented behaviour and it was measured against a real `mongod` before anything here
+ * relied on it: with `expireAfterSeconds: 0` on `{ expiresAt: 1 }`, a past date disappears within
+ * one monitor pass while `null` survives indefinitely.
+ *
+ * It is spelled as a named constant rather than as a bare `null` because the meaning is not "no
+ * value". It is a deliberate statement that this claim is released by a decision and by nothing
+ * else.
+ */
+const PINNED = null;
 
 /**
  * How long a submitted transaction id is remembered.
@@ -65,8 +92,14 @@ interface ClaimDoc {
   _id: string;
   /** What took it, for an operator reading a stuck claim. */
   holder: string;
-  /** When it stops standing. A TTL index removes it. */
-  expiresAt: Date;
+  /**
+   * When it stops standing. A TTL index removes it.
+   *
+   * `null` means it does not stop standing on its own: the TTL monitor only ever deletes documents
+   * whose field holds a past date, so a `null` here takes the claim out of the monitor's reach
+   * entirely. Nothing but an explicit release can then drop it.
+   */
+  expiresAt: Date | null;
   /** Pending change only: the address the output pays. */
   address?: string;
   /** Pending change only: lovelace it carries, as a string because Mongo has no bigint. */
@@ -79,8 +112,17 @@ function collection() {
   return mongoose.connection.db!.collection<ClaimDoc>(COLLECTION);
 }
 
-/** The outpoint of a UTxO, in the form a claim uses. */
-export function outpointOf(utxo: CardanoUtxo): string {
+/**
+ * The outpoint of a UTxO, in the form a claim uses.
+ *
+ * Takes the two fields it reads rather than a whole `CardanoUtxo`, so that a caller holding only a
+ * stored outpoint — the operation document keeps them without their amounts — builds the same key
+ * instead of formatting a second one that has to stay in step by hand.
+ *
+ * @param utxo - Anything carrying a transaction hash and an output index.
+ * @returns The claim key.
+ */
+export function outpointOf(utxo: { txHash: string; outputIndex: number }): string {
   return `${utxo.txHash}#${utxo.outputIndex}`;
 }
 
@@ -89,12 +131,17 @@ let indexReady = false;
 /**
  * Makes sure expired claims are removed without anybody sweeping them.
  *
- * Created on first use rather than at boot: a deployment that never moves ADA should not be
- * creating collections for it.
+ * The staking guard refuses to run an economic operation without this index — because how this
+ * collection expires decides whether an uncertain staking operation still holds its inputs. The
+ * lazy creation here stays for the transfer path, which predates all of that and must keep working
+ * on a deployment whose store was never prepared by hand.
+ *
+ * The name is given explicitly and is the one Mongo would generate anyway, so that what this
+ * creates and what the schema declares are the same index rather than two that conflict.
  */
 async function ensureIndex(): Promise<void> {
   if (indexReady) return;
-  await collection().createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await collection().createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'expiresAt_1' });
   indexReady = true;
 }
 
@@ -107,11 +154,16 @@ async function ensureIndex(): Promise<void> {
  *
  * @param utxos - Exactly the outputs the built transaction consumes.
  * @param holder - What the claim is for, recorded for diagnosis.
+ * @param lifetimeSeconds - How long the claim stands before the store expires it on its own, or
+ *   `null` for a claim nothing but an explicit release can drop. The default suits a transfer,
+ *   whose fate settles inside one validity window. See {@link pinClaims} for when a bounded
+ *   lifetime stops being safe.
  * @returns The outpoints claimed, or `null` when any of them was already taken.
  */
 export async function claimUtxos(
   utxos: readonly CardanoUtxo[],
-  holder: string
+  holder: string,
+  lifetimeSeconds: number | null = CLAIM_SECONDS
 ): Promise<string[] | null> {
   await ensureIndex();
 
@@ -122,7 +174,7 @@ export async function claimUtxos(
       await collection().insertOne({
         _id: outpoint,
         holder,
-        expiresAt: new Date(Date.now() + CLAIM_SECONDS * 1000)
+        expiresAt: lifetimeSeconds === null ? PINNED : new Date(Date.now() + lifetimeSeconds * 1000)
       });
       taken.push(outpoint);
     } catch {
@@ -158,6 +210,62 @@ export async function releaseUtxos(outpoints: readonly string[]): Promise<void> 
 }
 
 /**
+ * Takes a holder's claims out of the TTL monitor's reach, for good.
+ *
+ * The expiry on a claim is a safety valve against a process that dies holding one, not a statement
+ * that its operation finished. For a transfer the two are close enough: the fate settles inside one
+ * validity window, the process that started it is still running, and a stale claim costs a retry.
+ *
+ * For an operation that can sit undetermined — a submit whose outcome was never established, a
+ * provider that has not caught up — an expiry is a **release without proof**. It happens silently,
+ * performed by an index, past every guard written to stop exactly that, and afterwards a second
+ * transaction can be built around inputs the first one may still spend.
+ *
+ * Renewing on a timer does not fix it, and that was the earlier mistake here. Renewal only works
+ * while something is running to renew, and the process that would do the renewing is a scheduled
+ * sync that runs once a day on an instance that scales to zero in between. A claim renewed for
+ * hours and then left alone for a day is a claim that expires — the guarantee was never stronger
+ * than the interval between the two things it depends on.
+ *
+ * So the claim is not renewed. It is **pinned**: its expiry becomes {@link PINNED}, and the TTL
+ * monitor stops being able to see it at all. From then on the only thing that drops it is an
+ * explicit release, which has to establish that the transaction is not and can never be on chain.
+ * The claim outlives any outage, any redeploy and any gap between syncs, because nothing about it
+ * depends on something continuing to run.
+ *
+ * Scoped to the holder: pinning a claim somebody else now owns would freeze their input on the
+ * strength of our stale list.
+ *
+ * @param outpoints - The claims to pin. An empty list is a no-op.
+ * @param holder - Who must still hold them.
+ * @returns How many claims that holder still had and are now pinned.
+ */
+export async function pinClaims(outpoints: readonly string[], holder: string): Promise<number> {
+  if (outpoints.length === 0) return 0;
+  const result = await collection().updateMany(
+    { _id: { $in: [...outpoints] }, holder },
+    { $set: { expiresAt: PINNED } }
+  );
+  return result.matchedCount;
+}
+
+/**
+ * The claims a given holder currently has.
+ *
+ * Exists because a claim is the only durable trace of a step that may have been interrupted before
+ * anything recorded it. A process that claims its inputs and dies before writing them onto its
+ * operation leaves a hold that the operation itself cannot describe — and a recovery that reads
+ * only the operation would never find it. The holder string is what makes the claim self-describing.
+ *
+ * @param holder - The holder to look up.
+ * @returns Its outpoints, empty when it holds none.
+ */
+export async function claimsHeldBy(holder: string): Promise<string[]> {
+  const rows = await collection().find({ holder }).project({ _id: 1 }).toArray();
+  return rows.map((row) => String(row._id));
+}
+
+/**
  * Removes the outputs this deployment has already committed to spending.
  *
  * @param utxos - What the provider reports the address holds.
@@ -184,6 +292,42 @@ export async function unclaimedUtxos(
       `claim store unreachable, spending unfiltered: ${error instanceof Error ? error.message : String(error)}`
     );
     return utxos;
+  }
+}
+
+/**
+ * The same filter, refusing to answer when the claim store cannot be read.
+ *
+ * {@link unclaimedUtxos} fails **open**: on a database failure it hands back everything, because
+ * refusing every transfer when the claim store is unreachable is worse than a collision the chain
+ * would reject cleanly. That trade is right for a transfer and wrong for staking, where a collision
+ * does not bounce off the chain harmlessly — it builds a second certificate for a stake credential
+ * whose first one may still be settling, and spends UTxOs another operation has already committed
+ * to. So staking gets a variant that fails closed, and transfers keep the behaviour they have.
+ *
+ * @param utxos - What the provider reports the address holds.
+ * @returns The ones nothing else is spending.
+ * @throws Error `CARDANO_CLAIM_STORE_UNAVAILABLE` when the claim store cannot be read.
+ */
+export async function unclaimedUtxosStrict(
+  utxos: readonly CardanoUtxo[]
+): Promise<readonly CardanoUtxo[]> {
+  if (utxos.length === 0) return utxos;
+
+  try {
+    await ensureIndex();
+    const outpoints = utxos.map(outpointOf);
+    const claimed = await collection()
+      .find({ _id: { $in: outpoints } }, { projection: { _id: 1 } })
+      .toArray();
+    const taken = new Set(claimed.map((doc) => doc._id));
+    return utxos.filter((utxo) => !taken.has(outpointOf(utxo)));
+  } catch (error) {
+    Logger.error(
+      'unclaimedUtxosStrict',
+      `claim store unreachable; refusing to select staking inputs: ${error instanceof Error ? error.message : String(error)}`
+    );
+    throw new Error('CARDANO_CLAIM_STORE_UNAVAILABLE');
   }
 }
 
