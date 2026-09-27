@@ -437,3 +437,78 @@ export async function releaseStakingFee(
     confirmedLovelace: released.confirmedLovelace
   };
 }
+
+/**
+ * The windows that hold a charge for an operation, oldest first.
+ *
+ * Found by the charge itself rather than by a window recorded elsewhere. The charge is the only
+ * record written in the same atomic update as the counter, so it cannot be missing where the
+ * counter was charged, and it covers operations created before any other record of the window
+ * existed. There is one window document per network and day, so the scan stays small.
+ *
+ * @param chainId - Internal Cardano chain id.
+ * @param operationId - The operation.
+ * @returns The window keys.
+ */
+async function windowsCharging(chainId: number, operationId: Types.ObjectId): Promise<string[]> {
+  const budgets = await CardanoStakingFeeBudget.find({
+    chainId,
+    [`operationCharges.${operationId.toHexString()}`]: { $exists: true }
+  })
+    .select('window')
+    .sort({ window: 1 })
+    .lean<{ window: string }[]>();
+  return budgets.map((budget) => budget.window);
+}
+
+/**
+ * Settles an operation's reservation against the fee its confirmed transaction paid, in the window
+ * it was charged.
+ *
+ * An operation reserves once, before its only build, so it holds a charge in one window. Should
+ * more than one hold a charge, only the first is settled: one transaction paid one fee, and
+ * settling it in two windows would count that fee as spent twice.
+ *
+ * @param chainId - Internal Cardano chain id.
+ * @param operationId - The operation.
+ * @param actualLovelace - Network fee the confirmed transaction paid.
+ * @param txId - The transaction, for the audit entry.
+ * @returns The settlement, or `null` when no window holds a charge for the operation.
+ */
+export async function settleOperationStakingFee(
+  chainId: number,
+  operationId: Types.ObjectId,
+  actualLovelace: number,
+  txId: string | null
+): Promise<StakingFeeSettlementResult | null> {
+  const windows = await windowsCharging(chainId, operationId);
+  if (windows.length === 0) return null;
+  if (windows.length > 1) {
+    Logger.error(
+      'settleOperationStakingFee',
+      `Cardano staking operation ${operationId.toHexString()} holds fee charges in ${windows.join(', ')}; settling the first only`
+    );
+  }
+  return settleStakingFee(chainId, windows[0], operationId, actualLovelace, txId);
+}
+
+/**
+ * Releases an operation's reservation in every window that holds one.
+ *
+ * Subject to the same rule as {@link releaseStakingFee}: nothing is released unless the operation
+ * carries an absence proof.
+ *
+ * @param chainId - Internal Cardano chain id.
+ * @param operationId - The operation.
+ * @returns One result per window that held a charge; empty when none did.
+ */
+export async function releaseOperationStakingFee(
+  chainId: number,
+  operationId: Types.ObjectId
+): Promise<StakingFeeSettlementResult[]> {
+  const results: StakingFeeSettlementResult[] = [];
+  for (const window of await windowsCharging(chainId, operationId)) {
+    results.push(await releaseStakingFee(chainId, window, operationId));
+  }
+  return results;
+}
