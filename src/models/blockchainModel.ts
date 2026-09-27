@@ -37,16 +37,134 @@ export interface ExternalDeposits {
  */
 export type BlockchainFamily = 'evm' | 'cardano';
 
-/** Settings that only a Cardano network has. Absent on every EVM document. */
-export interface CardanoNetworkSettings {
-  /** `testnet` or `mainnet`. Decides the header byte of every address issued (CIP-19). */
-  network: string;
-  /** Provider root URL. The API key, when the provider needs one, lives in the environment. */
-  providerUrl: string;
-  /** Slots of validity given to a transaction, counted from the tip. */
-  ttlSlots: number;
-  /** Confirmations required before an output is spendable. */
-  depositConfirmations: number;
+/** Who funds the registration deposit, and who funds the network fees around it. */
+export type CardanoStakingFinancingMode = 'user_deposit_sponsor_fees' | 'sponsor_deposit_and_fees';
+
+/** Vote delegation a newly registered credential starts with. */
+export type CardanoGovernanceDefault = 'always_abstain' | 'always_no_confidence';
+
+/** A pool the network is allowed to delegate to, and whether it is currently offered. */
+export interface CardanoAllowlistedPool {
+  poolId: string;
+  enabled: boolean;
+}
+
+/**
+ * Staking settings, per network. Absent on a Cardano network that does not stake, which is why the
+ * whole subdocument is optional: a network with no `staking` behaves exactly as it did before.
+ *
+ * Every lovelace amount is a decimal string. `number` loses precision above 2^53 and these are
+ * budgets that get compared against on-chain values, so they are read as `bigint` and never as a
+ * float.
+ */
+export interface CardanoStakingSettings {
+  /**
+   * Whether this network may sign staking operations. Off by default, and the environment flag has
+   * to agree: either one being false is enough to refuse. Reads and reconciliation keep working.
+   */
+  enabled: boolean;
+  /** Who funds the registration deposit. Fixed per registration cycle, never rewritten in place. */
+  financingMode: CardanoStakingFinancingMode;
+  /** Pool every new registration delegates to. Must be present and enabled in `allowlistedPools`. */
+  defaultPoolId: string | null;
+  /** Pools this network may delegate to. Validated against the pool's own network before signing. */
+  allowlistedPools: CardanoAllowlistedPool[];
+  /** Vote delegation set on first registration, as accepted in the terms. */
+  defaultGovernance: CardanoGovernanceDefault;
+  /** Version of the staking terms a user has to have accepted for this network to enrol them. */
+  termsVersion: string;
+  /**
+   * Whether a wallet must have accepted the terms before anything enrols it.
+   *
+   * With this off, staking is automatic: a wallet that was never asked is treated as one that
+   * agreed, and the sweep enrols it on the technical and economic checks alone. What it never
+   * weakens is an explicit opt-out — consent is the absence of a decision, an opt-out is a
+   * decision, and no setting turns one into the other.
+   */
+  consentRequired: boolean;
+  /**
+   * Addresses automatic enrolment is confined to. Empty means no confinement.
+   *
+   * Unlike `allowlistedPools`, the empty list cannot mean "nobody" here: a list that arrives empty
+   * because nobody filled it would stop every enrolment without saying so. Confinement during a
+   * rollout is expressed by naming the addresses.
+   */
+  enrolmentAllowlist: string[];
+  /**
+   * Commercial entry threshold, unrelated to the protocol deposit.
+   *
+   * It has to clear the deposit **plus** the minimum transfer amount plus room for fees, or a user
+   * lands registered and unable to move anything: the deposit leaves their UTxOs, and what is left
+   * falls under the token's own transfer minimum. This is a product decision, not a derived value,
+   * so it is stored rather than computed — but it is validated against the ADA token's transfer
+   * minimum at read time.
+   */
+  minimumUserAdaForEnrollmentLovelace: string;
+  /**
+   * Whether a scheduler run may act, or only observe.
+   *
+   * Off means the sweep still reads the chain, reconciles and records what it found, and signs
+   * nothing. It is what a network runs on while its numbers are being watched, and it is separate
+   * from `enabled` because switching the family off also switches the reads off.
+   */
+  sweepExecutionEnabled: boolean;
+  /** Ceiling on wallets touched per scheduler run, so a run finishes inside its deadline. */
+  maxWalletsPerRun: number;
+  /** Ceiling on provider calls per run, to stay inside the provider's quota. */
+  maxProviderRequestsPerRun: number;
+  /** Anti-churn: sponsored registrations allowed per account inside the rolling window. */
+  maxSponsoredRegistrationsPerAccountRollingWindow: number;
+  /** Length of that rolling window, in days. */
+  sponsorRollingWindowDays: number;
+  /** Budget the sponsor may spend on fees per window. Enforced by an atomic counter, not by a scan. */
+  dailySponsorFeeBudgetLovelace: string;
+  /** Whether a retiring pool triggers redelegation to another allowlisted pool. */
+  autoRedelegateRetiredPools: boolean;
+  /** Whether the governance surface is offered at all on this network. */
+  governanceEnabled: boolean;
+  /**
+   * DReps a user may delegate to. **Empty means no restriction**, unlike `allowlistedPools`.
+   *
+   * Narrowing who can represent a user is ChatterPay choosing their governance, which is a different
+   * thing from picking a default pool. The list exists so the decision can be made, not because one
+   * was made here.
+   */
+  allowlistedDReps: string[];
+  /**
+   * Whether registering ChatterPay's own DRep credential and casting votes is available.
+   *
+   * Separate from `enabled` on purpose: that flag being off must not be what keeps this off. It
+   * needs its own deposit policy, custody model and scope before it can be turned on.
+   */
+  drepOwnEnabled: boolean;
+  /**
+   * Seconds between chain lookups for one live operation, shared by the sweep and the dashboard.
+   *
+   * Bounds what a page left open, or refreshed repeatedly, can spend on one transaction. It does not
+   * shorten the absence rule: absence still needs its readings spread over the configured slots.
+   */
+  operationStatusCheckIntervalSeconds: number;
+  /** Hours between checks of a wallet that holds nothing and is not registered. */
+  emptyAccountRecheckHours: number;
+  /** Hours between full refreshes of a wallet that holds ada or is registered. */
+  activeAccountRecheckHours: number;
+  /**
+   * Requests per day the provider credential of this network allows, for every consumer of it:
+   * balances, transfers, confirmations, staking and the dashboard.
+   */
+  providerDailyRequestLimit: number;
+  /** Of that, the most the background sweep may spend in one day. */
+  providerBackgroundDailyLimit: number;
+  /**
+   * Requests held back for submissions and confirmations. Interactive and background reads stop at
+   * `providerDailyRequestLimit - providerCriticalReserve`.
+   */
+  providerCriticalReserve: number;
+  /**
+   * Where the provider's day starts, in minutes after 00:00 UTC. Zero assumes a UTC day, which is an
+   * assumption about the plan rather than something this code verified.
+   */
+  providerQuotaDayStartOffsetMinutes: number;
 }
 
 export interface IBlockchain extends Document {
@@ -63,8 +181,27 @@ export interface IBlockchain extends Document {
   environment: string;
   supportsEIP1559: boolean;
   externalDeposits: ExternalDeposits;
-  /** Present only on Cardano networks. */
-  cardano?: CardanoNetworkSettings;
+  /**
+   * `testnet` or `mainnet`. Decides the header byte of every address issued (CIP-19).
+   *
+   * This and the three fields below belong to a Cardano network and are absent on an EVM one. They
+   * sit at the top level rather than inside a `cardano` object: the document already says which
+   * family it is, and a wrapper holding four values added a level to every path without adding
+   * anything a reader could not see from `family`.
+   */
+  network?: string;
+  /** Provider root URL. The API key, when the provider needs one, lives in the environment. */
+  providerUrl?: string;
+  /** Slots of validity given to a transaction, counted from the tip. */
+  ttlSlots?: number;
+  /** Confirmations required before an output is spendable. */
+  depositConfirmations?: number;
+  /**
+   * Staking settings for this network. Absent on a network that does not stake, which is why it
+   * stays a section of its own: it is a policy an operator edits as a unit, unlike the four fields
+   * above, which describe how to reach the chain.
+   */
+  staking?: CardanoStakingSettings;
   contracts: {
     entryPoint: string;
     factoryAddress: string;
@@ -140,12 +277,59 @@ const externalDepositsSchema = new Schema<ExternalDeposits>(
   { _id: false }
 );
 
-const cardanoSettingsSchema = new Schema<CardanoNetworkSettings>(
+const allowlistedPoolSchema = new Schema<CardanoAllowlistedPool>(
   {
-    network: { type: String, required: true },
-    providerUrl: { type: String, required: true },
-    ttlSlots: { type: Number, required: true, default: 900 },
-    depositConfirmations: { type: Number, required: true, default: 3 }
+    poolId: { type: String, required: true },
+    enabled: { type: Boolean, required: true, default: false }
+  },
+  { _id: false }
+);
+
+// Defaults are the refusing ones. A staking subdocument written without them should not sign, enrol
+// or sponsor anything: the values that decide money are the ones an operator has to state.
+const cardanoStakingSchema = new Schema<CardanoStakingSettings>(
+  {
+    enabled: { type: Boolean, required: true, default: false },
+    financingMode: {
+      type: String,
+      enum: ['user_deposit_sponsor_fees', 'sponsor_deposit_and_fees'],
+      required: true,
+      default: 'user_deposit_sponsor_fees'
+    },
+    defaultPoolId: { type: String, required: false, default: null },
+    allowlistedPools: { type: [allowlistedPoolSchema], required: true, default: () => [] },
+    defaultGovernance: {
+      type: String,
+      enum: ['always_abstain', 'always_no_confidence'],
+      required: true,
+      default: 'always_abstain'
+    },
+    termsVersion: { type: String, required: true },
+    // Automatic staking is the default once the network is enabled: the terms are accepted in the
+    // product surface, and an operator who wants a gate has to ask for it. The opt-out is unaffected
+    // either way.
+    consentRequired: { type: Boolean, required: true, default: false },
+    enrolmentAllowlist: { type: [String], required: true, default: () => [] },
+    minimumUserAdaForEnrollmentLovelace: { type: String, required: true },
+    sweepExecutionEnabled: { type: Boolean, required: true, default: false },
+    maxWalletsPerRun: { type: Number, required: true, default: 500 },
+    maxProviderRequestsPerRun: { type: Number, required: true, default: 1000 },
+    maxSponsoredRegistrationsPerAccountRollingWindow: { type: Number, required: true, default: 2 },
+    sponsorRollingWindowDays: { type: Number, required: true, default: 30 },
+    dailySponsorFeeBudgetLovelace: { type: String, required: true, default: '0' },
+    autoRedelegateRetiredPools: { type: Boolean, required: true, default: false },
+    governanceEnabled: { type: Boolean, required: true, default: false },
+    allowlistedDReps: { type: [String], required: true, default: () => [] },
+    drepOwnEnabled: { type: Boolean, required: true, default: false },
+    // Pacing and quota. Defaults rather than refusals: none of these decides money, and a document
+    // written before they existed has to keep working with a prudent cadence.
+    operationStatusCheckIntervalSeconds: { type: Number, required: false, default: 30 },
+    emptyAccountRecheckHours: { type: Number, required: false, default: 24 },
+    activeAccountRecheckHours: { type: Number, required: false, default: 6 },
+    providerDailyRequestLimit: { type: Number, required: false, default: 50000 },
+    providerBackgroundDailyLimit: { type: Number, required: false, default: 20000 },
+    providerCriticalReserve: { type: Number, required: false, default: 1000 },
+    providerQuotaDayStartOffsetMinutes: { type: Number, required: false, default: 0 }
   },
   { _id: false }
 );
@@ -161,6 +345,16 @@ function evmOnly(this: IBlockchain): boolean {
   return (this?.family ?? 'evm') === 'evm';
 }
 
+/**
+ * Required on a Cardano network, absent everywhere else.
+ *
+ * The mirror of {@link evmOnly}: an EVM document has no provider URL to give, and demanding one
+ * would be asking every existing row for a value that means nothing on it.
+ */
+function cardanoOnly(this: IBlockchain): boolean {
+  return this?.family === 'cardano';
+}
+
 const blockchainSchema = new Schema<IBlockchain>({
   name: { type: String, required: true },
   family: { type: String, enum: ['evm', 'cardano'], required: true, default: 'evm' },
@@ -174,7 +368,11 @@ const blockchainSchema = new Schema<IBlockchain>({
   environment: { type: String, required: true },
   supportsEIP1559: { type: Boolean, required: evmOnly },
   externalDeposits: { type: externalDepositsSchema, required: evmOnly },
-  cardano: { type: cardanoSettingsSchema, required: false },
+  network: { type: String, required: cardanoOnly },
+  providerUrl: { type: String, required: cardanoOnly },
+  ttlSlots: { type: Number, required: cardanoOnly, default: 900 },
+  depositConfirmations: { type: Number, required: cardanoOnly, default: 3 },
+  staking: { type: cardanoStakingSchema, required: false },
   contracts: {
     entryPoint: { type: String, required: false },
     factoryAddress: { type: String, required: false },
