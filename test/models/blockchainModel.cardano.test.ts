@@ -35,12 +35,10 @@ function cardanoDoc(): Partial<IBlockchain> {
     chainId: 900000000001,
     environment: 'TEST',
     explorer: 'https://preprod.cardanoscan.io/transaction/',
-    cardano: {
-      network: 'testnet',
-      providerUrl: 'https://preprod.koios.rest/api/v1',
-      ttlSlots: 900,
-      depositConfirmations: 3
-    },
+    network: 'testnet',
+    providerUrl: 'https://preprod.koios.rest/api/v1',
+    ttlSlots: 900,
+    depositConfirmations: 3,
     // `D` is the daily operation count per user level — the same shape the EVM rows use. Per-amount
     // limits live on the token, not here.
     limits: {
