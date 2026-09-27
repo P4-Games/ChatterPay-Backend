@@ -190,6 +190,58 @@ export interface CardanoStakingProvider {
   poolState(poolId: string): Promise<CardanoPoolState | null>;
   drepState(id: string): Promise<CardanoDRepState | null>;
   listDReps(limit: number): Promise<readonly CardanoDRepState[]>;
+  drepNames(ids: readonly string[]): Promise<ReadonlyMap<string, string | null>>;
+}
+
+/** Longest DRep name shown. A longer one is cut and ends in an ellipsis. */
+const DREP_NAME_MAX_LENGTH = 40;
+
+/**
+ * Reads the name a DRep published in its CIP-119 metadata document.
+ *
+ * The name is `body.givenName`, a plain string in CIP-119 and a `{ "@value": ... }` object in the
+ * drafts some early DReps published against; `body.dRepName` is the field name those drafts used
+ * before `givenName`. Anything else reads as no name.
+ *
+ * The text is chosen by whoever registered the DRep and is shown to users next to a delegation, so
+ * control and format characters are removed: a bidirectional override or a zero-width character
+ * would let a name render as something other than what it contains.
+ *
+ * @param document - The metadata document, parsed or as the provider's JSON string.
+ * @returns The name, or `null` when the document carries none.
+ */
+export function readDRepGivenName(document: unknown): string | null {
+  let parsed = document;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return null;
+    }
+  }
+  if (parsed === null || typeof parsed !== 'object') return null;
+  const body = (parsed as { body?: unknown }).body;
+  if (body === null || typeof body !== 'object') return null;
+
+  const fields = body as { givenName?: unknown; dRepName?: unknown };
+  const raw = fields.givenName ?? fields.dRepName;
+  const wrapped =
+    raw !== null && typeof raw === 'object' ? (raw as { '@value'?: unknown })['@value'] : null;
+  const text = typeof raw === 'string' ? raw : typeof wrapped === 'string' ? wrapped : null;
+  if (text === null) return null;
+
+  const clean = text
+    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (clean === '') return null;
+  const characters = Array.from(clean);
+  if (characters.length <= DREP_NAME_MAX_LENGTH) return clean;
+  const cut = characters
+    .slice(0, DREP_NAME_MAX_LENGTH - 1)
+    .join('')
+    .trimEnd();
+  return `${cut}…`;
 }
 
 /**
@@ -748,6 +800,43 @@ export class KoiosStakingProvider extends HttpCardanoProvider implements Cardano
       .filter((row) => row.registered !== false && row.active !== false)
       .map((row) => drepFrom(row.drep_id, 'active', optionalLovelace(row.amount, 'amount')));
   }
+
+  /**
+   * The names DReps published in their metadata, in one batch call.
+   *
+   * @param ids - Canonical identifiers.
+   * @returns One entry per identifier: the name, or `null` when the DRep published none or its
+   *   document does not match the anchored hash.
+   * @throws CardanoProviderError On any provider failure.
+   */
+  async drepNames(ids: readonly string[]): Promise<ReadonlyMap<string, string | null>> {
+    const names = new Map<string, string | null>();
+    if (ids.length === 0) return names;
+    const rows = await this.call<KoiosDRepMetadata[]>('/drep_metadata', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ _drep_ids: ids })
+    });
+    if (!Array.isArray(rows)) {
+      throw new CardanoProviderError('unexpected_response', 'CARDANO_PROVIDER_DREP_METADATA_SHAPE');
+    }
+    const requested = new Set(ids);
+    for (const row of rows) {
+      const id = typeof row.drep_id === 'string' ? parseDRepId(row.drep_id)?.idCip129 : undefined;
+      if (id === undefined || !requested.has(id)) continue;
+      names.set(id, row.is_valid === false ? null : readDRepGivenName(row.json ?? row.meta_json));
+    }
+    // A batch endpoint returns the rows it found: a DRep with no row published no metadata.
+    for (const id of ids) if (!names.has(id)) names.set(id, null);
+    return names;
+  }
+}
+
+interface KoiosDRepMetadata {
+  drep_id: string;
+  json?: unknown;
+  meta_json?: unknown;
+  is_valid?: boolean | null;
 }
 
 interface BlockfrostEpoch {
@@ -1024,6 +1113,42 @@ export class BlockfrostStakingProvider
       )
       .filter((drep) => drep.status === 'active');
   }
+
+  /**
+   * The names DReps published in their metadata.
+   *
+   * This dialect has no batch endpoint, so it is one call per DRep. A call that fails leaves its
+   * DRep out of the answer rather than failing the rest: a name is a label, and one unreadable
+   * document is no reason to show none.
+   *
+   * @param ids - Canonical identifiers.
+   * @returns One entry per identifier whose metadata was read: the name, or `null` when the DRep
+   *   published no document, the provider could not fetch it or its hash did not match. An
+   *   identifier with no entry was not read.
+   */
+  async drepNames(ids: readonly string[]): Promise<ReadonlyMap<string, string | null>> {
+    const names = new Map<string, string | null>();
+    await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const row = await this.callOptional<BlockfrostDRepMetadata>(
+            `/governance/dreps/${encodeURIComponent(id)}/metadata`
+          );
+          const failed = row === null || (row.error !== undefined && row.error !== null);
+          names.set(id, failed ? null : readDRepGivenName(row.json_metadata));
+        } catch {
+          // Not read; see the method description.
+        }
+      })
+    );
+    return names;
+  }
+}
+
+interface BlockfrostDRepMetadata {
+  drep_id: string;
+  json_metadata: unknown;
+  error?: unknown;
 }
 
 /**

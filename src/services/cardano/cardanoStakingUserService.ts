@@ -1333,10 +1333,71 @@ export async function quoteStakingExit(
 }
 
 /**
+ * How long a DRep name read from its metadata is reused.
+ *
+ * A name changes only when the DRep publishes a new document, and on Blockfrost every read costs one
+ * provider call per DRep, so without this the governance tab would spend a call per listed DRep on
+ * every load.
+ */
+const DREP_NAME_TTL_MS = 6 * 60 * 60 * 1000;
+
+/** Entries above which the name cache is emptied rather than grown. */
+const DREP_NAME_CACHE_LIMIT = 1_000;
+
+const drepNameCache = new Map<string, { name: string | null; readAt: number }>();
+
+/**
+ * The published names of the given DReps, from the cache where it is fresh and from the provider
+ * otherwise.
+ *
+ * A failed read leaves the names it could not get out of the answer and out of the cache, so the
+ * next listing asks again. A DRep that published no name is cached as `null`, which is an answer.
+ *
+ * @param provider - The staking provider.
+ * @param ids - Canonical identifiers.
+ * @returns The name of each DRep whose metadata was read, `null` for one that published none.
+ */
+async function drepNames(
+  provider: CardanoStakingProvider,
+  ids: readonly string[]
+): Promise<ReadonlyMap<string, string | null>> {
+  const now = Date.now();
+  const stale = ids.filter((id) => {
+    const cached = drepNameCache.get(id);
+    return cached === undefined || now - cached.readAt > DREP_NAME_TTL_MS;
+  });
+
+  if (stale.length > 0) {
+    try {
+      const read = await provider.drepNames(stale);
+      if (drepNameCache.size + read.size > DREP_NAME_CACHE_LIMIT) drepNameCache.clear();
+      for (const [id, name] of read) drepNameCache.set(id, { name, readAt: now });
+    } catch (error) {
+      Logger.warn(
+        'listGovernanceOptions',
+        `Could not read DRep names: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  const names = new Map<string, string | null>();
+  for (const id of ids) {
+    const cached = drepNameCache.get(id);
+    if (cached !== undefined) names.set(id, cached.name);
+  }
+  return names;
+}
+
+/**
  * The governance options a user can delegate their vote to.
  *
  * Read-only. Nothing here registers a DRep or casts a vote; those kinds exist in the model so the
  * shape is settled and are refused while the flag is off.
+ *
+ * Each DRep carries the name it published in its metadata, or `null`. DReps with a name are listed
+ * first, each group in the order the chain gave it: a user picks a representative by name, and a
+ * list that opens on bare identifiers gives nothing to pick by. Within a group nothing is ranked,
+ * because ChatterPay does not recommend a representative.
  *
  * @param limit - How many to list.
  * @returns The options.
@@ -1350,25 +1411,33 @@ export async function listGovernanceOptions(
   }
 
   try {
-    const dreps = await stakingProvider().listDReps(limit);
+    const provider = stakingProvider();
+    const dreps = (await provider.listDReps(limit)).filter((drep) => drep.status === 'active');
+    const names = await drepNames(
+      provider,
+      dreps.map((drep) => drep.idCip129)
+    );
+    // Mapped rather than passed through: `votingPowerLovelace` is a bigint and would throw in the
+    // serialiser, which is a 500 on a read-only endpoint with nothing else wrong with it.
+    const listed = dreps.map((drep) => ({
+      idCip129: drep.idCip129,
+      idCip105: drep.idCip105,
+      name: names.get(drep.idCip129) ?? null,
+      credential: drep.credential,
+      status: drep.status,
+      votingPowerLovelace:
+        drep.votingPowerLovelace === null ? null : String(drep.votingPowerLovelace)
+    }));
     return {
       ok: true,
       data: {
         // Abstaining is the default and the neutral choice, and it is a real delegation on chain
         // rather than the absence of one — which is what unblocks a withdrawal under Conway.
         predefined: ['always_abstain', 'always_no_confidence'],
-        // Mapped rather than passed through: `votingPowerLovelace` is a bigint and would throw in
-        // the serialiser, which is a 500 on a read-only endpoint with nothing else wrong with it.
-        dreps: dreps
-          .filter((drep) => drep.status === 'active')
-          .map((drep) => ({
-            idCip129: drep.idCip129,
-            idCip105: drep.idCip105,
-            credential: drep.credential,
-            status: drep.status,
-            votingPowerLovelace:
-              drep.votingPowerLovelace === null ? null : String(drep.votingPowerLovelace)
-          }))
+        dreps: [
+          ...listed.filter((drep) => drep.name !== null),
+          ...listed.filter((drep) => drep.name === null)
+        ]
       }
     };
   } catch (error) {

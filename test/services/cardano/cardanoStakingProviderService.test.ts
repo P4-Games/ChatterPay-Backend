@@ -7,6 +7,7 @@ import {
   KoiosStakingProvider,
   normalizeGovernanceDelegation,
   optionalLovelace,
+  readDRepGivenName,
   readDRepStatus,
   readKoiosPoolStatus,
   readKoiosStatus,
@@ -375,6 +376,32 @@ describe('cardanoStakingProviderService', () => {
       expect(dreps[0]?.status).toBe('active');
     });
 
+    it('reads the name a DRep published in its metadata', async () => {
+      const { provider, asked } = blockfrost({
+        [`/governance/dreps/${DREP}/metadata`]: {
+          drep_id: DREP,
+          json_metadata: { body: { givenName: 'Cardano Commons' } }
+        }
+      });
+
+      const names = await provider.drepNames([DREP]);
+
+      expect(names.get(DREP)).toBe('Cardano Commons');
+      expect(asked).toEqual([`/governance/dreps/${DREP}/metadata`]);
+    });
+
+    it('answers no name without metadata, and leaves out a DRep it could not read', async () => {
+      const other = 'drep1ygqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq7vlc9n';
+      const { provider } = blockfrost({
+        [`/governance/dreps/${other}/metadata`]: { status: 500, body: { error: 'boom' } }
+      });
+
+      const names = await provider.drepNames([DREP, other]);
+
+      expect(names.get(DREP)).toBeNull();
+      expect(names.has(other)).toBe(false);
+    });
+
     it('reads the current epoch', async () => {
       const { provider } = blockfrost();
 
@@ -552,6 +579,44 @@ describe('cardanoStakingProviderService', () => {
       expect(
         buildStakingProvider('koios', 'https://preprod.koios.rest/api/v1', 1_000, '')
       ).toBeInstanceOf(KoiosStakingProvider);
+    });
+  });
+
+  describe('readDRepGivenName', () => {
+    it('reads the CIP-119 name', () => {
+      expect(readDRepGivenName({ body: { givenName: 'Cardano Commons' } })).toBe('Cardano Commons');
+    });
+
+    it('reads the draft spellings early DReps published', () => {
+      expect(readDRepGivenName({ body: { givenName: { '@value': 'Old Draft' } } })).toBe(
+        'Old Draft'
+      );
+      expect(readDRepGivenName({ body: { dRepName: 'Older Draft' } })).toBe('Older Draft');
+    });
+
+    it('reads a document the provider handed over as a string', () => {
+      expect(readDRepGivenName('{"body":{"givenName":"As Text"}}')).toBe('As Text');
+    });
+
+    it('answers no name for a document without one', () => {
+      expect(readDRepGivenName(null)).toBeNull();
+      expect(readDRepGivenName('not json')).toBeNull();
+      expect(readDRepGivenName({ body: {} })).toBeNull();
+      expect(readDRepGivenName({ body: { givenName: '   ' } })).toBeNull();
+    });
+
+    it('removes characters that would make the name render as something else', () => {
+      // A right-to-left override and a zero-width space.
+      expect(readDRepGivenName({ body: { givenName: 'Safe\u202Egnp.exe\u200B' } })).toBe(
+        'Safe gnp.exe'
+      );
+    });
+
+    it('cuts a long name', () => {
+      const name = readDRepGivenName({ body: { givenName: 'x'.repeat(100) } });
+
+      expect(Array.from(name ?? '')).toHaveLength(40);
+      expect(name?.endsWith('…')).toBe(true);
     });
   });
 });

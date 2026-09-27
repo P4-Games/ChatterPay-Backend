@@ -141,6 +141,9 @@ function providersFor(chain: ScriptedChain) {
       },
       listDReps: async () => {
         throw new Error('not read by a status check');
+      },
+      drepNames: async () => {
+        throw new Error('not read by a status check');
       }
     }
   };
