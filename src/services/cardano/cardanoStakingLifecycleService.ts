@@ -11,10 +11,11 @@
  * The order is fixed, and each step is idempotent on its own:
  *
  * 1. **Reserve the fee budget.** Keyed by operation id, so a repeat charges nothing. Before the
- *    build, because over-reserving is recoverable and over-spending is not.
+ *    build, because over-reserving is recoverable and over-spending is not. A window with no room
+ *    cancels the operation.
  * 2. **Build.** Pure. Produces the body, its id, and the exact inputs it spends.
  * 3. **Claim the inputs.** All or nothing. A collision means another operation got there first and
- *    this one has to be rebuilt, not retried.
+ *    this one is cancelled; the next attempt is a new operation built around other inputs.
  * 4. **Sign, pin the claims, then store the signed bytes — in that order, before submitting.**
  *    Storing the bytes is what makes recovery possible at all: a process that dies afterwards comes
  *    back holding the exact transaction it was about to send, and can ask the chain about it
@@ -23,6 +24,15 @@
  * 5. **Submit.** Three outcomes, not two — accepted, refused, and *unknown*. An unknown submit is
  *    the dangerous one and is treated as live: the transaction may be propagating.
  * 6. **Reconcile.** Only a lookup settles an unknown, and only a settled absence releases anything.
+ *    A confirmation settles the fee reservation against the fee actually paid; an absence releases
+ *    it.
+ *
+ * **An operation that never produced signed bytes never waits.** Nothing was sent, so its absence is
+ * proved by this backend's own history, and it is cancelled on the spot with its inputs and its fee
+ * reservation given back. Leaving it pending would hold the account's credential with nothing
+ * coming to move it, since only operations with a transaction are reconciled. Operations stranded
+ * unsigned by a process that died are cancelled the same way by
+ * {@link recoverStrandedStakingOperations}.
  *
  * **Nothing here depends on staying running.** The sync that drives reconciliation runs once a day
  * on an instance that scales to zero in between, so any guarantee that had to be refreshed on a
@@ -45,8 +55,10 @@ import CardanoStakingOperation, {
 import type { CardanoProvider } from './cardanoProviderService';
 import { CardanoProviderError } from './cardanoProviderService';
 import {
+  releaseOperationStakingFee,
   reserveStakingFee,
-  type StakingFeeReservationRequest
+  type StakingFeeReservationRequest,
+  settleOperationStakingFee
 } from './cardanoStakingBudgetService';
 import {
   type BuiltCardanoStakingTransaction,
@@ -69,9 +81,9 @@ export type StakingExecutionOutcome =
   | 'submitted'
   /** Submitted, and the provider's answer did not establish anything. The operation stays live. */
   | 'unknown_submit'
-  /** Another operation holds one of the inputs. Rebuild, do not retry. */
+  /** Another operation holds one of the inputs. This one is cancelled; a new one has to be built. */
   | 'input_collision'
-  /** The window has no room. Nothing was built and nothing was claimed. */
+  /** The window has no room. Nothing was built or claimed, and the operation is cancelled. */
   | 'budget_exhausted'
   /** Refused before anything was built: the plan cannot produce a transaction. */
   | 'refused';
@@ -136,7 +148,9 @@ export async function executeStakingOperation(
     amountLovelace: request.estimatedFeeLovelace
   });
   if (reservation.outcome === 'insufficient_budget' || reservation.outcome === 'invalid_cap') {
-    await mark(operationId, 'queued', `budget:${reservation.outcome}`);
+    // Nothing was reserved, built or claimed. Cancelling is what keeps the account from being held
+    // by an operation nothing will ever resume; the next attempt is a new operation.
+    await abandonUnsignedOperation(operation, `budget:${reservation.outcome}`);
     return {
       outcome: 'budget_exhausted',
       operationId,
@@ -156,10 +170,10 @@ export async function executeStakingOperation(
 
   const claim = await reserveStakingInputs(built, operationId);
   if (claim.outcome === 'collision') {
-    // Nothing was signed and nothing was submitted, so the operation goes back to the queue. Its
-    // budget reservation stands: releasing it here would need proof the transaction never reached
-    // the chain, and there is no transaction yet to prove anything about.
-    await mark(operationId, 'queued', 'input_collision');
+    // Nothing was signed and nothing was submitted, which is itself the proof of absence, so the
+    // operation is cancelled and its fee reservation given back. Retrying it would need a rebuild
+    // around other inputs, and nothing picks up an operation left waiting for one.
+    await abandonUnsignedOperation(operation, 'input_collision');
     return { outcome: 'input_collision', operationId, transactionId: null, reason: null };
   }
 
@@ -176,8 +190,13 @@ export async function executeStakingOperation(
   // Written **before** the submit, and this is the load-bearing line of the whole module. Without
   // it a process that dies here cannot tell whether the transaction exists, and rebuilding a
   // different one risks a second deposit.
-  await CardanoStakingOperation.updateOne(
-    { _id: operationId },
+  //
+  // Conditioned on the operation still being unsigned. The stranded-operation recovery cancels an
+  // unsigned operation under the same condition, so exactly one of the two writes lands: either
+  // the signature is recorded and the recovery leaves the operation alone, or the operation was
+  // cancelled and nothing is submitted.
+  const recorded = await CardanoStakingOperation.updateOne(
+    { _id: operationId, ...UNSIGNED_FILTER },
     {
       $set: {
         status: 'signed' satisfies CardanoStakingOperationStatus,
@@ -196,6 +215,17 @@ export async function executeStakingOperation(
       $inc: { attempts: 1 }
     }
   );
+  if (recorded.matchedCount === 0) {
+    // The recovery cancelled the operation while it was being built. The claims just taken are
+    // held under its id and pinned; `releaseStakingInputs` gives them back only if the
+    // cancellation's absence proof is on record, which is the case this branch exists for.
+    await releaseStakingInputs(operationId, []);
+    Logger.warn(
+      'executeStakingOperation',
+      `Cardano staking operation ${operationId.toHexString()} was cancelled before its signature was recorded; nothing was submitted`
+    );
+    return { outcome: 'refused', operationId, transactionId: null, reason: 'cancelled' };
+  }
 
   return submit(operationId, built.transactionId, signedCbor, provider);
 }
@@ -278,6 +308,125 @@ async function mark(
     { _id: operationId },
     { $set: { status, errorCode }, $inc: { attempts: 1 } }
   );
+}
+
+/**
+ * The condition under which an operation provably has no transaction: it has not got past the
+ * build, and no signed bytes or transaction id were ever recorded for it.
+ */
+const UNSIGNED_FILTER = {
+  status: { $in: ['queued', 'executing'] satisfies CardanoStakingOperationStatus[] },
+  signedCborProtected: null,
+  txId: null
+};
+
+/**
+ * How long an unsigned operation may go without a write before it counts as stranded.
+ *
+ * An execution records the signature within one request, so an unsigned operation this old
+ * belongs to a process that stopped. The margin only keeps the recovery from racing an execution
+ * that is still running; the conditional writes on both sides are what make that race harmless.
+ */
+export const STRANDED_UNSIGNED_OPERATION_MS = 15 * 60 * 1000;
+
+/** Most stranded operations one recovery call cancels. */
+const STRANDED_RECOVERY_LIMIT = 100;
+
+/**
+ * Cancels an operation that never produced signed bytes, and gives back what it held.
+ *
+ * The absence proof is `never_submitted`: the lifecycle stores signed bytes before any submit, so an
+ * operation without them never reached a node. The cancellation is conditioned on the operation
+ * still being unsigned, and the signature write in {@link executeStakingOperation} on the same, so
+ * the two cannot both land.
+ *
+ * Releasing the inputs and the fee reservation comes after the cancellation and does not undo it
+ * when it fails: the operation is settled either way, and what is left held is logged.
+ *
+ * @param operation - The operation, with its network.
+ * @param errorCode - Why it was cancelled.
+ * @param filter - Further conditions the operation has to meet.
+ * @returns `true` when this call cancelled it.
+ */
+async function abandonUnsignedOperation(
+  operation: { _id: unknown; chainId: number },
+  errorCode: string,
+  filter: Record<string, unknown> = {}
+): Promise<boolean> {
+  const operationId = operation._id as Types.ObjectId;
+  const cancelled = await CardanoStakingOperation.updateOne(
+    { ...filter, _id: operationId, ...UNSIGNED_FILTER },
+    {
+      $set: {
+        status: 'cancelled' satisfies CardanoStakingOperationStatus,
+        chainOutcome: 'rejected',
+        absenceProof: 'never_submitted',
+        errorCode
+      },
+      $inc: { attempts: 1 }
+    }
+  );
+  if (cancelled.matchedCount === 0) return false;
+
+  try {
+    await releaseStakingInputs(operationId, []);
+  } catch (error) {
+    Logger.error(
+      'abandonUnsignedOperation',
+      `Cardano staking operation ${operationId.toHexString()} was cancelled but its inputs could not be released:`,
+      error
+    );
+  }
+  try {
+    await releaseOperationStakingFee(operation.chainId, operationId);
+  } catch (error) {
+    Logger.error(
+      'abandonUnsignedOperation',
+      `Cardano staking operation ${operationId.toHexString()} was cancelled but its fee reservation could not be released:`,
+      error
+    );
+  }
+  return true;
+}
+
+/**
+ * Cancels operations left unsigned by a process that stopped mid-execution.
+ *
+ * Such an operation holds its account's credential, and nothing else moves it: reconciliation only
+ * looks at operations that have a transaction. Every new action on the account is refused while it
+ * stands, including an exit.
+ *
+ * @param scope - The network or the account to look in.
+ * @param now - The clock.
+ * @returns How many operations were cancelled.
+ */
+export async function recoverStrandedStakingOperations(
+  scope: { chainId: number } | { accountId: Types.ObjectId },
+  now: Date = new Date()
+): Promise<number> {
+  const staleSince = {
+    updatedAt: { $lte: new Date(now.getTime() - STRANDED_UNSIGNED_OPERATION_MS) }
+  };
+  const stranded = await CardanoStakingOperation.find({
+    ...scope,
+    ...UNSIGNED_FILTER,
+    ...staleSince
+  })
+    .select('_id chainId')
+    .limit(STRANDED_RECOVERY_LIMIT)
+    .lean<{ _id: Types.ObjectId; chainId: number }[]>();
+
+  let recovered = 0;
+  for (const operation of stranded) {
+    if (await abandonUnsignedOperation(operation, 'stranded_unsigned', staleSince)) recovered += 1;
+  }
+  if (recovered > 0) {
+    Logger.info(
+      'recoverStrandedStakingOperations',
+      `Cancelled ${recovered} Cardano staking operation(s) left unsigned for over ${STRANDED_UNSIGNED_OPERATION_MS / 60_000} minutes`
+    );
+  }
+  return recovered;
 }
 
 /** What a reconciliation concluded. */
@@ -380,6 +529,9 @@ export async function reconcileStakingOperation(
       await pinStakingInputs(operationId);
       return 'still_pending';
     }
+    // Before the confirmation is written, so a failure here leaves the operation reconcilable and
+    // the next lookup settles it. A repeat finds the charge already settled and changes nothing.
+    await settleConfirmedFee(operation, operationId);
     await CardanoStakingOperation.updateOne(
       { _id: operationId },
       {
@@ -464,7 +616,43 @@ export async function reconcileStakingOperation(
     `Cardano staking operation ${operationId.toHexString()} is absent past its TTL after ${observations} readings; inputs ${released}`
   );
 
+  // After the absence proof is recorded, because the release reads it from the operation. The
+  // operation is no longer reconciled after this point, so a failure is logged rather than retried.
+  try {
+    await releaseOperationStakingFee(operation.chainId, operationId);
+  } catch (error) {
+    Logger.error(
+      'reconcileStakingOperation',
+      `Cardano staking operation ${operationId.toHexString()} is absent but its fee reservation could not be released:`,
+      error
+    );
+  }
+
   return 'absent_past_ttl';
+}
+
+/**
+ * Settles a confirmed operation's fee reservation against the network fee its transaction paid.
+ *
+ * The fee is the one recorded when the transaction was signed, which is the fee in the body the
+ * chain confirmed: the lifecycle never submits different bytes for the same operation.
+ *
+ * @param operation - The confirmed operation.
+ * @param operationId - Its id.
+ */
+async function settleConfirmedFee(
+  operation: ICardanoStakingOperation,
+  operationId: Types.ObjectId
+): Promise<void> {
+  const paid = operation.networkFeeLovelace === null ? NaN : Number(operation.networkFeeLovelace);
+  if (!Number.isSafeInteger(paid) || paid < 0) {
+    Logger.error(
+      'reconcileStakingOperation',
+      `Cardano staking operation ${operationId.toHexString()} confirmed without a usable network fee (${operation.networkFeeLovelace}); its fee reservation stays as reserved`
+    );
+    return;
+  }
+  await settleOperationStakingFee(operation.chainId, operationId, paid, operation.txId);
 }
 
 /** Statuses whose transaction may be on chain and which a lookup can settle. */
