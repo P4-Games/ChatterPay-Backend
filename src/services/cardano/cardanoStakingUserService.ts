@@ -62,12 +62,14 @@ import { buildCardanoStakingTransaction } from './cardanoStakingBuilderService';
 import {
   executeStakingOperation,
   RECONCILABLE_STATUSES,
-  reconcileWhenDue
+  reconcileWhenDue,
+  recoverStrandedStakingOperations
 } from './cardanoStakingLifecycleService';
 import { observeStakingAccount } from './cardanoStakingObservationService';
 import {
   countSponsoredRegistrations,
-  createStakingOperation
+  createStakingOperation,
+  hasLiveStakingOperation
 } from './cardanoStakingOperationService';
 import { decideRequestedAction, type StakingDecisionRefusal } from './cardanoStakingPlanService';
 import { buildStakingProvider, type CardanoStakingProvider } from './cardanoStakingProviderService';
@@ -327,7 +329,9 @@ export interface StakingReadDependencies {
  * two instances make at most one lookup per interval between them.
  *
  * Only `signed`, `submitted` and `unknown_submit` are looked up. `queued` and `executing` have no
- * transaction on chain yet, and `manual_review` waits for a person; those are shown as stored.
+ * transaction on chain yet, and `manual_review` waits for a person; those are shown as stored. An
+ * unsigned one left behind by a stopped process is cancelled first, by the same recovery the sweep
+ * runs.
  *
  * An account with no such operation costs nothing here: one indexed Mongo read and no provider call.
  *
@@ -350,6 +354,7 @@ export async function settleLiveOperation(
   now: Date = new Date()
 ): Promise<boolean> {
   const accountId = account._id as Types.ObjectId;
+  const recovered = await recoverStrandedStakingOperations({ accountId }, now);
   const live = await CardanoStakingOperation.findOne({
     accountId,
     status: { $in: RECONCILABLE_STATUSES }
@@ -357,7 +362,7 @@ export async function settleLiveOperation(
     .sort({ createdAt: -1 })
     .select('_id')
     .lean<{ _id: Types.ObjectId } | null>();
-  if (live === null) return false;
+  if (live === null) return recovered > 0;
 
   const due = await reconcileWhenDue(live._id, base, intervalMs, now);
   if (due.outcome === 'confirmed') {
@@ -372,7 +377,7 @@ export async function settleLiveOperation(
     await requestStakingRefresh({ accountIds: [accountId] }, 'operation_settled', now);
     return true;
   }
-  return false;
+  return recovered > 0;
 }
 
 /** What a screen polling a pending operation needs, without the balance or the actions. */
@@ -550,7 +555,8 @@ export async function getStakingView(
     addressBytes: signer.available ? signer.material.user.addressBytes : new Uint8Array(),
     spendableLovelace: spendable,
     poolState,
-    operationInFlight: live !== null && live.status !== 'manual_review',
+    // The index's own condition, so an action the screen offers is one the request path can create.
+    operationInFlight: await hasLiveStakingOperation(account._id as Types.ObjectId),
     signerAvailable: signer.available,
     sponsoredRegistrationsInWindow: await countSponsoredRegistrations(
       account._id as Types.ObjectId,
@@ -864,6 +870,10 @@ export async function requestStakingAction(
     : [];
   const spendable = utxos.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
 
+  // Before the in-flight check, so an unsigned operation a stopped process left behind does not
+  // refuse this action, an exit included.
+  await recoverStrandedStakingOperations({ accountId: account._id as Types.ObjectId });
+
   const decision = decideRequestedAction(account, action, {
     config,
     parameters: await staking.stakingProtocolParameters(),
@@ -871,7 +881,7 @@ export async function requestStakingAction(
     spendableLovelace: spendable,
     poolState:
       account.onChain.poolId === null ? null : await staking.poolState(account.onChain.poolId),
-    operationInFlight: await hasLiveOperation(account._id as Types.ObjectId),
+    operationInFlight: await hasLiveStakingOperation(account._id as Types.ObjectId),
     signerAvailable: signer.available,
     sponsoredRegistrationsInWindow: await countSponsoredRegistrations(
       account._id as Types.ObjectId,
@@ -906,7 +916,12 @@ export async function requestStakingAction(
     recipientAddress: recipient,
     // Left out entirely rather than passed as `undefined` for an action with no target, so the
     // assembler's own default - abstaining, which is what the sweep delegates - stays the default.
-    ...(target === null ? {} : { drep: target.drep })
+    ...(target === null ? {} : { drep: target.drep }),
+    // The fee the exit quote showed, from the same function. Without it the assembler defaults to
+    // zero and the transaction sends more than the user was quoted.
+    ...(action === 'exit_and_send_max'
+      ? { commercialFeeLovelace: await exitCommercialFeeLovelace() }
+      : {})
   });
   if (assembly.outcome === 'refused') {
     return {
@@ -1245,6 +1260,23 @@ export interface StakingExitQuote {
 }
 
 /**
+ * ChatterPay's commercial fee on an exit that sends everything.
+ *
+ * The one source for both the quote and the exit, so the transaction charges what the user was
+ * shown. The schedule is the one a transfer of the same ada pays. `isAda` is stated rather than read
+ * off a ticker, which is also what makes the call unfailable here: an ADA fee converts straight to
+ * lovelace and consults no price, so there is no outage it can run into.
+ *
+ * @returns The fee in lovelace; zero when the deployment charges no transfer fee.
+ */
+async function exitCommercialFeeLovelace(): Promise<bigint> {
+  const feeConfig = getCardanoFeeConfig();
+  if (!chargesTransferFee(feeConfig)) return 0n;
+  const feeQuote = await chatterPayFeeFor(feeConfig, 'ADA', 6, false, true);
+  return feeQuote.ok ? feeQuote.units : 0n;
+}
+
+/**
  * What sending everything would actually send.
  *
  * Built, not estimated. The transaction is assembled and balanced exactly as the real one would be —
@@ -1288,6 +1320,9 @@ export async function quoteStakingExit(
     : [];
   const spendable = utxos.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
 
+  // The same recovery the exit itself runs, so the quote does not refuse an exit that would go ahead.
+  await recoverStrandedStakingOperations({ accountId: account._id as Types.ObjectId });
+
   const decision = decideRequestedAction(account, 'exit_and_send_max', {
     config,
     parameters: await staking.stakingProtocolParameters(),
@@ -1295,7 +1330,7 @@ export async function quoteStakingExit(
     spendableLovelace: spendable,
     poolState:
       account.onChain.poolId === null ? null : await staking.poolState(account.onChain.poolId),
-    operationInFlight: await hasLiveOperation(account._id as Types.ObjectId),
+    operationInFlight: await hasLiveStakingOperation(account._id as Types.ObjectId),
     signerAvailable: signer.available,
     sponsoredRegistrationsInWindow: await countSponsoredRegistrations(
       account._id as Types.ObjectId,
@@ -1306,15 +1341,7 @@ export async function quoteStakingExit(
     return { ok: false, refusal: 'refused', detail: decision.refusal ?? 'nothing_to_do' };
   }
 
-  const feeConfig = getCardanoFeeConfig();
-  // The same schedule a transfer of the same ada would pay, and nothing bespoke. `isAda` is stated
-  // rather than read off a ticker.
-  // `isAda` being stated is also what makes the quote unfailable here: an ADA fee converts straight
-  // to lovelace and consults no price, so there is no outage this call can run into.
-  const feeQuote = chargesTransferFee(feeConfig)
-    ? await chatterPayFeeFor(feeConfig, 'ADA', 6, false, true)
-    : { ok: true as const, units: 0n };
-  const commercialFeeLovelace = feeQuote.ok ? feeQuote.units : 0n;
+  const commercialFeeLovelace = await exitCommercialFeeLovelace();
 
   const assembly = await assembleStakingPlan({
     account,
@@ -1642,20 +1669,6 @@ async function stakingPinRequirement(
     );
     return { required: true, blockedUntil: null };
   }
-}
-
-/**
- * Whether an operation already holds this credential.
- *
- * @param accountId - The account.
- * @returns `true` when one is live.
- */
-async function hasLiveOperation(accountId: Types.ObjectId): Promise<boolean> {
-  const live = await CardanoStakingOperation.countDocuments({
-    accountId,
-    status: { $in: ['queued', 'executing', 'signed', 'submitted', 'unknown_submit'] }
-  });
-  return live > 0;
 }
 
 /**
