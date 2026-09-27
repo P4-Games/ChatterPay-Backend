@@ -9,8 +9,10 @@ import CardanoStakingOperation, {
 import CardanoStakingSponsorFeeEvent from '../../../src/models/cardanoStakingSponsorFeeEventModel';
 import {
   budgetWindowId,
+  releaseOperationStakingFee,
   releaseStakingFee,
   reserveStakingFee,
+  settleOperationStakingFee,
   settleStakingFee
 } from '../../../src/services/cardano/cardanoStakingBudgetService';
 
@@ -307,6 +309,133 @@ describe('cardanoStakingBudgetService', () => {
 
       expect(again.outcome).toBe('already_reserved');
       expect(await window()).toEqual({ reserved: 168405, confirmed: 168405 });
+    });
+  });
+
+  describe('settling and releasing by operation', () => {
+    const OTHER_WINDOW = '2026-09-23';
+
+    it('finds the window the operation was charged in and settles it there', async () => {
+      const operationId = new Types.ObjectId();
+      await reserveStakingFee(request(operationId, 400000));
+
+      const result = await settleOperationStakingFee(CHAIN_ID, operationId, 168405, 'tx-1');
+
+      expect(result?.outcome).toBe('applied');
+      expect(result?.windowId).toBe(WINDOW_ID);
+      expect(await window()).toEqual({ reserved: 168405, confirmed: 168405 });
+      const budget = await CardanoStakingFeeBudget.findById(WINDOW_ID);
+      expect(budget?.operationCharges.get(operationId.toHexString())).toMatchObject({
+        lovelace: 168405,
+        state: 'settled'
+      });
+      const event = await CardanoStakingSponsorFeeEvent.findOne({ operationId });
+      expect(event?.status).toBe('confirmed');
+      expect(event?.txId).toBe('tx-1');
+      expect(event?.amountLovelace).toBe('168405');
+    });
+
+    it('returns nothing for an operation no window charged', async () => {
+      await reserveStakingFee(request(new Types.ObjectId(), 400000));
+
+      const result = await settleOperationStakingFee(CHAIN_ID, new Types.ObjectId(), 168405, null);
+
+      expect(result).toBeNull();
+      expect(await window()).toEqual({ reserved: 400000, confirmed: 0 });
+    });
+
+    it('settles once however many times it is called', async () => {
+      const operationId = new Types.ObjectId();
+      await reserveStakingFee(request(operationId, 400000));
+
+      await settleOperationStakingFee(CHAIN_ID, operationId, 168405, 'tx-1');
+      const second = await settleOperationStakingFee(CHAIN_ID, operationId, 168405, 'tx-1');
+
+      expect(second?.outcome).toBe('already_applied');
+      expect(await window()).toEqual({ reserved: 168405, confirmed: 168405 });
+    });
+
+    it('leaves the charges of other operations as they are', async () => {
+      const settled = new Types.ObjectId();
+      const untouched = new Types.ObjectId();
+      await reserveStakingFee(request(settled, 400000));
+      await reserveStakingFee(request(untouched, 300000));
+
+      await settleOperationStakingFee(CHAIN_ID, settled, 168405, 'tx-1');
+
+      expect(await window()).toEqual({ reserved: 168405 + 300000, confirmed: 168405 });
+      const budget = await CardanoStakingFeeBudget.findById(WINDOW_ID);
+      expect(budget?.operationCharges.get(untouched.toHexString())?.state).toBe('reserved');
+    });
+
+    it('does not look in another network', async () => {
+      const operationId = new Types.ObjectId();
+      await reserveStakingFee(request(operationId, 400000));
+
+      expect(await settleOperationStakingFee(CHAIN_ID + 1, operationId, 168405, null)).toBeNull();
+      expect(await window()).toEqual({ reserved: 400000, confirmed: 0 });
+    });
+
+    it('settles a single window when an operation holds charges in two', async () => {
+      // One transaction paid one fee. Settling it in both windows would count it as spent twice.
+      const operationId = new Types.ObjectId();
+      await reserveStakingFee(request(operationId, 400000));
+      await reserveStakingFee({ ...request(operationId, 400000), window: OTHER_WINDOW });
+
+      const result = await settleOperationStakingFee(CHAIN_ID, operationId, 168405, 'tx-1');
+
+      expect(result?.windowId).toBe(WINDOW_ID);
+      const other = await CardanoStakingFeeBudget.findById(budgetWindowId(CHAIN_ID, OTHER_WINDOW));
+      expect(other?.confirmedLovelace).toBe(0);
+      expect(other?.reservedLovelace).toBe(400000);
+    });
+
+    it('releases in the window it was charged in when the operation carries an absence proof', async () => {
+      const operationId = new Types.ObjectId();
+      await seedOperation(operationId, 'rejected', 'never_submitted');
+      await reserveStakingFee(request(operationId, 400000));
+
+      const results = await releaseOperationStakingFee(CHAIN_ID, operationId);
+
+      expect(results.map((result) => result.outcome)).toEqual(['applied']);
+      expect(await window()).toEqual({ reserved: 0, confirmed: 0 });
+      const budget = await CardanoStakingFeeBudget.findById(WINDOW_ID);
+      expect(budget?.operationCharges.has(operationId.toHexString())).toBe(false);
+      expect((await CardanoStakingSponsorFeeEvent.findOne({ operationId }))?.status).toBe(
+        'released'
+      );
+    });
+
+    it('releases every window that holds a charge for the operation', async () => {
+      const operationId = new Types.ObjectId();
+      await seedOperation(operationId, 'rejected', 'never_submitted');
+      await reserveStakingFee(request(operationId, 400000));
+      await reserveStakingFee({ ...request(operationId, 400000), window: OTHER_WINDOW });
+
+      const results = await releaseOperationStakingFee(CHAIN_ID, operationId);
+
+      expect(results.map((result) => result.outcome)).toEqual(['applied', 'applied']);
+      const other = await CardanoStakingFeeBudget.findById(budgetWindowId(CHAIN_ID, OTHER_WINDOW));
+      expect(other?.reservedLovelace).toBe(0);
+      expect(await window()).toEqual({ reserved: 0, confirmed: 0 });
+    });
+
+    it('releases nothing without an absence proof', async () => {
+      const operationId = new Types.ObjectId();
+      await seedOperation(operationId, 'unknown');
+      await reserveStakingFee(request(operationId, 400000));
+
+      const results = await releaseOperationStakingFee(CHAIN_ID, operationId);
+
+      expect(results.map((result) => result.outcome)).toEqual(['no_absence_proof']);
+      expect(await window()).toEqual({ reserved: 400000, confirmed: 0 });
+    });
+
+    it('releases nothing for an operation no window charged', async () => {
+      const operationId = new Types.ObjectId();
+      await seedOperation(operationId, 'rejected', 'never_submitted');
+
+      expect(await releaseOperationStakingFee(CHAIN_ID, operationId)).toEqual([]);
     });
   });
 });
