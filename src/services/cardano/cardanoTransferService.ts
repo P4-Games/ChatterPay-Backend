@@ -20,6 +20,7 @@ import { Logger } from '../../helpers/loggerHelper';
 import type {
   CardanoAccount,
   CardanoAssetAmount,
+  CardanoFeeQuote,
   CardanoNetwork,
   CardanoUtxo
 } from '../../types/cardanoType';
@@ -31,6 +32,7 @@ import {
   logCardanoProviderError
 } from './cardanoProviderService';
 import { cardanoSignerService } from './cardanoSignerService';
+import { requestStakingRefreshQuietly } from './cardanoStakingRefreshService';
 import {
   assetBalance,
   buildCardanoTransfer,
@@ -65,6 +67,15 @@ export interface CardanoTransferInput {
   tokenSymbol: string;
   /** Decimals that ticker carries. */
   tokenDecimals: number;
+  /**
+   * Whether what is moving is ADA itself.
+   *
+   * Carried rather than read off the ticker. The catalogue decides this — ADA's row is the one
+   * whose address is the chain's own coin — and a deployment that named that row `tADA` would
+   * otherwise send the fee through a price lookup that answers nothing. Required for the same
+   * reason the ticker is: a caller that forgets it prices the wrong thing.
+   */
+  isAda: boolean;
   /** Bech32 destination address. */
   toAddress: string;
   /**
@@ -332,6 +343,43 @@ async function spendablePendingChange(
 }
 
 /**
+ * How long after a submit the staking sweep should wait before reading the wallets it moved. A
+ * transaction is usually in a block within a minute; the margin covers provider indexing lag.
+ */
+const TRANSFER_SETTLE_MS = 10 * 60 * 1000;
+
+/**
+ * Asks the staking sweep to re-read both ends of a transfer this backend sent.
+ *
+ * A signal, not a proof: it brings those accounts' next check forward and says nothing about any
+ * other wallet, which is why every account keeps its own periodic check for deposits from outside.
+ * Never fails the transfer.
+ *
+ * @param chainId - The network.
+ * @param fromAddress - The sender's base address.
+ * @param toAddress - The destination.
+ */
+async function markStakingAccountsMoved(
+  chainId: number,
+  fromAddress: string,
+  toAddress: string
+): Promise<void> {
+  const now = new Date();
+  await requestStakingRefreshQuietly(
+    { chainId, walletAddresses: [fromAddress] },
+    'transfer_out',
+    now,
+    TRANSFER_SETTLE_MS
+  );
+  await requestStakingRefreshQuietly(
+    { chainId, walletAddresses: [toAddress] },
+    'transfer_in',
+    now,
+    TRANSFER_SETTLE_MS
+  );
+}
+
+/**
  * Sends ADA from a user's derived address to a Cardano destination.
  *
  * @param input - Sender, destination, amount and the chain settings to use.
@@ -511,10 +559,30 @@ export async function executeCardanoTransfer(
     // somebody who does not hold the token yet is the expensive case and is charged as one; every
     // other transfer, recycled ones included, pays the ordinary figure.
     const fundsNewOutput = feeConfig.sponsorMinAda && input.asset !== undefined && !recycling;
-    const chatterPayFee =
+    // `isAda` is passed rather than left to the ticker. The catalogue's own answer is what decides
+    // whether ADA is moving, and a row named something other than `ADA` would otherwise fall
+    // through to a price lookup — pricing a transfer that needs no price, and disagreeing with the
+    // preflight, which reads the same field and passes it.
+    const quote: CardanoFeeQuote =
       sponsorAccount && chargesTransferFee(feeConfig)
-        ? await chatterPayFeeFor(feeConfig, input.tokenSymbol, input.tokenDecimals, fundsNewOutput)
-        : 0n;
+        ? await chatterPayFeeFor(
+            feeConfig,
+            input.tokenSymbol,
+            input.tokenDecimals,
+            fundsNewOutput,
+            input.isAda
+          )
+        : { ok: true, units: 0n };
+    if (!quote.ok) {
+      // Before the build, before any signature and before a UTxO is committed to anything. What
+      // ChatterPay is about to put in — the network fee, and the min-ADA of a new output — is not
+      // recoverable, so a transfer it cannot charge for is one it does not start.
+      throw new CardanoTransferRefusal(
+        'CARDANO_FEE_PRICE_UNAVAILABLE',
+        `no usable price to charge the transfer fee for ${input.tokenSymbol}`
+      );
+    }
+    const chatterPayFee = quote.units;
 
     const built = buildCardanoTransfer({
       utxos,
@@ -675,6 +743,8 @@ export async function executeCardanoTransfer(
       );
     }
 
+    await markStakingAccountsMoved(chainId, account.address, toAddress);
+
     Logger.info(
       'cardanoTransfer',
       logKey,
@@ -701,7 +771,12 @@ export async function executeCardanoTransfer(
     // An undetermined submit is the one outcome where the claims must stand: the transaction may be
     // in a mempool this process can no longer ask about, and handing its inputs to the next transfer
     // would build a second transaction around outputs the first one is still about to spend.
-    if (error instanceof CardanoProviderError && error.undetermined) outcomeUnknown = true;
+    if (error instanceof CardanoProviderError && error.undetermined) {
+      outcomeUnknown = true;
+      // The transaction may land; the balances it would move are worth a read either way.
+      if (account !== undefined)
+        await markStakingAccountsMoved(chainId, account.address, toAddress);
+    }
     // The chain refused it outright. When the transaction was built on an output that had only been
     // promised, the promise is the likeliest thing that was wrong -- the output may have been spent
     // by something that never passed through the claim store, or its transaction never landed.
