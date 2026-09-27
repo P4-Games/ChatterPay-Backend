@@ -10,17 +10,23 @@ import {
   rewardAddress
 } from '../../../src/services/cardano/cardanoAddressService';
 import { CardanoProviderError } from '../../../src/services/cardano/cardanoProviderService';
+import { reserveStakingFee } from '../../../src/services/cardano/cardanoStakingBudgetService';
 import type { CardanoStakingPlan } from '../../../src/services/cardano/cardanoStakingBuilderService';
 import {
   DEFAULT_RECONCILIATION_POLICY,
   executeStakingOperation,
   reconcileStakingOperation,
+  recoverStrandedStakingOperations,
+  STRANDED_UNSIGNED_OPERATION_MS,
   type StakingReconciliationOutcome
 } from '../../../src/services/cardano/cardanoStakingLifecycleService';
+import { stakingClaimHolder } from '../../../src/services/cardano/cardanoStakingReservationService';
+import { claimUtxos, pinClaims } from '../../../src/services/cardano/cardanoUtxoClaimService';
 import type { CardanoProtocolParameters, CardanoUtxo } from '../../../src/types/cardanoType';
 
 const CHAIN_ID = 900000000001;
 const WINDOW = '2026-09-23';
+const WINDOW_ID = `${CHAIN_ID}:${WINDOW}`;
 
 /**
  * Reconciles repeatedly, advancing the chain between readings, until something settles.
@@ -335,7 +341,7 @@ describe('cardanoStakingLifecycleService', () => {
   });
 
   describe('losing a race for the inputs', () => {
-    it('goes back to the queue without signing anything', async () => {
+    it('cancels the operation without signing anything', async () => {
       const first = await seedOperation();
       await executeStakingOperation(request(first, { submit: async () => 'ok' }));
 
@@ -344,9 +350,54 @@ describe('cardanoStakingLifecycleService', () => {
 
       expect(result.outcome).toBe('input_collision');
       const stored = await CardanoStakingOperation.findById(second._id);
-      expect(stored?.status).toBe('queued');
+      expect(stored?.status).toBe('cancelled');
+      expect(stored?.chainOutcome).toBe('rejected');
+      expect(stored?.absenceProof).toBe('never_submitted');
+      expect(stored?.liveness).toBe('settled');
+      expect(stored?.errorCode).toBe('input_collision');
       expect(stored?.signedCborProtected).toBeNull();
       expect(stored?.txId).toBeNull();
+    });
+
+    it("gives its fee reservation back and leaves the winner's in place", async () => {
+      const first = await seedOperation();
+      await executeStakingOperation(request(first, { submit: async () => 'ok' }));
+      const second = await seedOperation();
+
+      await executeStakingOperation(request(second, { submit: async () => 'ok' }));
+
+      const budget = await CardanoStakingFeeBudget.findById(WINDOW_ID);
+      expect(budget?.reservedLovelace).toBe(400_000);
+      expect([...(budget?.operationCharges.keys() ?? [])]).toEqual([
+        (first._id as Types.ObjectId).toHexString()
+      ]);
+      expect(
+        (await CardanoStakingSponsorFeeEvent.findOne({ operationId: second._id }))?.status
+      ).toBe('released');
+    });
+
+    it('does not release the inputs the winner holds', async () => {
+      const first = await seedOperation();
+      await executeStakingOperation(request(first, { submit: async () => 'ok' }));
+      const second = await seedOperation();
+
+      await executeStakingOperation(request(second, { submit: async () => 'ok' }));
+
+      expect(await claims().countDocuments({})).toBe(2);
+      expect(
+        await claims().countDocuments({ holder: stakingClaimHolder(first._id as Types.ObjectId) })
+      ).toBe(2);
+    });
+
+    it('frees the account for a new operation', async () => {
+      const first = await seedOperation();
+      await executeStakingOperation(request(first, { submit: async () => 'ok' }));
+      const second = await seedOperation();
+      await executeStakingOperation(request(second, { submit: async () => 'ok' }));
+
+      const next = await seedOperation({ accountId: second.accountId });
+
+      expect(next.liveness).toBe('live');
     });
   });
 
@@ -370,6 +421,58 @@ describe('cardanoStakingLifecycleService', () => {
       expect(
         (await CardanoStakingOperation.findById(operation._id))?.signedCborProtected
       ).toBeNull();
+    });
+
+    it('cancels the operation instead of leaving it queued', async () => {
+      // A queued operation holds the account's credential and nothing ever resumes it, so every
+      // later action on the account, an exit included, would be refused for good.
+      const operation = await seedOperation();
+
+      await executeStakingOperation({
+        ...request(operation, { submit: async () => 'ok' }),
+        budget: { ...request(operation, { submit: async () => 'ok' }).budget, capLovelace: '1000' }
+      });
+
+      const stored = await CardanoStakingOperation.findById(operation._id);
+      expect(stored?.status).toBe('cancelled');
+      expect(stored?.absenceProof).toBe('never_submitted');
+      expect(stored?.liveness).toBe('settled');
+      expect(stored?.errorCode).toBe('budget:insufficient_budget');
+      expect(await CardanoStakingSponsorFeeEvent.countDocuments({})).toBe(0);
+      expect((await CardanoStakingFeeBudget.findById(WINDOW_ID))?.reservedLovelace).toBe(0);
+    });
+
+    it('cancels on an unusable cap as well', async () => {
+      const operation = await seedOperation();
+
+      const result = await executeStakingOperation({
+        ...request(operation, { submit: async () => 'ok' }),
+        budget: {
+          ...request(operation, { submit: async () => 'ok' }).budget,
+          capLovelace: 'fifty ada'
+        }
+      });
+
+      expect(result).toMatchObject({ outcome: 'budget_exhausted', reason: 'invalid_cap' });
+      const stored = await CardanoStakingOperation.findById(operation._id);
+      expect(stored?.status).toBe('cancelled');
+      expect(stored?.errorCode).toBe('budget:invalid_cap');
+    });
+
+    it('lets the account run a new operation once a window has room', async () => {
+      const refused = await seedOperation();
+      await executeStakingOperation({
+        ...request(refused, { submit: async () => 'ok' }),
+        budget: { ...request(refused, { submit: async () => 'ok' }).budget, capLovelace: '1000' }
+      });
+
+      const next = await seedOperation({ accountId: refused.accountId });
+      const result = await executeStakingOperation({
+        ...request(next, { submit: async () => 'ok' }),
+        budget: { ...request(next, { submit: async () => 'ok' }).budget, window: '2026-09-24' }
+      });
+
+      expect(result.outcome).toBe('submitted');
     });
   });
 
@@ -588,6 +691,394 @@ describe('cardanoStakingLifecycleService', () => {
       });
 
       expect(next.liveness).toBe('live');
+    });
+  });
+
+  describe('settling the fee budget', () => {
+    /** Inputs no other operation in the case spends, so several can run side by side. */
+    function inputs(user: string, sponsor: string): Partial<CardanoStakingPlan> {
+      return { userUtxos: [utxo(user)], sponsorUtxos: [utxo(sponsor)] };
+    }
+
+    it('settles the reservation at the fee the confirmed transaction paid', async () => {
+      const operation = await seedOperation();
+      await executeStakingOperation(request(operation, { submit: async () => 'ok' }));
+      const submitted = await CardanoStakingOperation.findById(operation._id);
+      const paid = Number(submitted?.networkFeeLovelace);
+
+      await reconcileStakingOperation(
+        submitted!,
+        { statusOf: async () => ({ known: true, confirmations: 3 }) },
+        5_000
+      );
+
+      expect(paid).toBeGreaterThan(0);
+      expect(paid).toBeLessThan(400_000);
+      const budget = await CardanoStakingFeeBudget.findById(WINDOW_ID);
+      expect(budget?.reservedLovelace).toBe(paid);
+      expect(budget?.confirmedLovelace).toBe(paid);
+      expect(
+        budget?.operationCharges.get((operation._id as Types.ObjectId).toHexString())
+      ).toMatchObject({ lovelace: paid, state: 'settled' });
+      const event = await CardanoStakingSponsorFeeEvent.findOne({ operationId: operation._id });
+      expect(event?.status).toBe('confirmed');
+      expect(event?.txId).toBe(submitted?.txId);
+    });
+
+    it('counts the fee once however many times the confirmation is read', async () => {
+      const operation = await seedOperation();
+      await executeStakingOperation(request(operation, { submit: async () => 'ok' }));
+      const confirmed = { statusOf: async () => ({ known: true, confirmations: 3 }) };
+
+      for (let reading = 0; reading < 3; reading += 1) {
+        await reconcileStakingOperation(
+          (await CardanoStakingOperation.findById(operation._id))!,
+          confirmed,
+          5_000
+        );
+      }
+
+      const paid = Number(
+        (await CardanoStakingOperation.findById(operation._id))?.networkFeeLovelace
+      );
+      const budget = await CardanoStakingFeeBudget.findById(WINDOW_ID);
+      expect(budget?.confirmedLovelace).toBe(paid);
+      expect(budget?.reservedLovelace).toBe(paid);
+    });
+
+    it('keeps the full reservation while the transaction is not settled', async () => {
+      const operation = await seedOperation();
+      await executeStakingOperation(request(operation, { submit: async () => 'ok' }));
+
+      await reconcileStakingOperation(
+        (await CardanoStakingOperation.findById(operation._id))!,
+        { statusOf: async () => ({ known: true, confirmations: 0 }) },
+        5_000
+      );
+
+      const budget = await CardanoStakingFeeBudget.findById(WINDOW_ID);
+      expect(budget?.reservedLovelace).toBe(400_000);
+      expect(budget?.confirmedLovelace).toBe(0);
+    });
+
+    it('releases the reservation once absence is established', async () => {
+      const operation = await seedOperation();
+      await executeStakingOperation(request(operation, { submit: async () => 'ok' }));
+
+      const outcome = await reconcileUntilSettled(operation._id as Types.ObjectId, {
+        statusOf: async () => ({ known: false, confirmations: 0 })
+      });
+
+      expect(outcome).toBe('absent_past_ttl');
+      const budget = await CardanoStakingFeeBudget.findById(WINDOW_ID);
+      expect(budget?.reservedLovelace).toBe(0);
+      expect(budget?.confirmedLovelace).toBe(0);
+      expect(budget?.operationCharges.size).toBe(0);
+      expect(
+        (await CardanoStakingSponsorFeeEvent.findOne({ operationId: operation._id }))?.status
+      ).toBe('released');
+    });
+
+    it('keeps a settled fee counted when a rollback is suspected', async () => {
+      // The fee was paid by a transaction the chain confirmed. What happens to it afterwards is for a
+      // person to establish, and giving the room back would authorise spending that already happened.
+      const operation = await seedOperation();
+      await executeStakingOperation(request(operation, { submit: async () => 'ok' }));
+      await reconcileStakingOperation(
+        (await CardanoStakingOperation.findById(operation._id))!,
+        { statusOf: async () => ({ known: true, confirmations: 9 }) },
+        5_000
+      );
+
+      const outcome = await reconcileStakingOperation(
+        (await CardanoStakingOperation.findById(operation._id))!,
+        { statusOf: async () => ({ known: false, confirmations: 0 }) },
+        999_999
+      );
+
+      expect(outcome).toBe('reorg_suspected');
+      const paid = Number(
+        (await CardanoStakingOperation.findById(operation._id))?.networkFeeLovelace
+      );
+      const budget = await CardanoStakingFeeBudget.findById(WINDOW_ID);
+      expect(budget?.reservedLovelace).toBe(paid);
+      expect(budget?.confirmedLovelace).toBe(paid);
+    });
+
+    it('gives back the difference between the estimate and the fee, so the window admits more', async () => {
+      // A cap of 1 000 000 lovelace fits two estimates of 400 000 and refuses the third. Once the
+      // first confirms at its real fee, the room it no longer needs admits the next operation.
+      const capped = (
+        operation: Awaited<ReturnType<typeof seedOperation>>,
+        overrides: Partial<CardanoStakingPlan>
+      ) => ({
+        ...request(operation, { submit: async () => 'ok' }, overrides),
+        budget: {
+          ...request(operation, { submit: async () => 'ok' }).budget,
+          capLovelace: '1000000'
+        }
+      });
+      const first = await seedOperation();
+      const second = await seedOperation();
+      expect((await executeStakingOperation(capped(first, inputs('a', 'b')))).outcome).toBe(
+        'submitted'
+      );
+      expect((await executeStakingOperation(capped(second, inputs('c', 'd')))).outcome).toBe(
+        'submitted'
+      );
+      const refused = await seedOperation();
+      expect((await executeStakingOperation(capped(refused, inputs('e', 'f')))).outcome).toBe(
+        'budget_exhausted'
+      );
+
+      await reconcileStakingOperation(
+        (await CardanoStakingOperation.findById(first._id))!,
+        { statusOf: async () => ({ known: true, confirmations: 3 }) },
+        5_000
+      );
+
+      const admitted = await seedOperation();
+      expect((await executeStakingOperation(capped(admitted, inputs('1', '2')))).outcome).toBe(
+        'submitted'
+      );
+    });
+
+    it('confirms an operation that holds no reservation without failing', async () => {
+      const operation = await seedOperation({
+        status: 'submitted',
+        chainOutcome: 'pending',
+        txId: 'ab'.repeat(32),
+        signedCborProtected: 'cafe',
+        networkFeeLovelace: '170000'
+      });
+
+      const outcome = await reconcileStakingOperation(
+        operation,
+        { statusOf: async () => ({ known: true, confirmations: 3 }) },
+        5_000
+      );
+
+      expect(outcome).toBe('confirmed');
+      expect(await CardanoStakingFeeBudget.countDocuments({})).toBe(0);
+    });
+
+    it('confirms without settling when no usable fee was recorded', async () => {
+      const operation = await seedOperation({
+        status: 'submitted',
+        chainOutcome: 'pending',
+        txId: 'ab'.repeat(32),
+        signedCborProtected: 'cafe',
+        networkFeeLovelace: null
+      });
+      await reserveStakingFee({
+        ...request(operation, { submit: async () => 'ok' }).budget,
+        accountId: operation.accountId,
+        operationId: operation._id as Types.ObjectId,
+        amountLovelace: 400_000
+      });
+
+      const outcome = await reconcileStakingOperation(
+        operation,
+        { statusOf: async () => ({ known: true, confirmations: 3 }) },
+        5_000
+      );
+
+      expect(outcome).toBe('confirmed');
+      const budget = await CardanoStakingFeeBudget.findById(WINDOW_ID);
+      expect(budget?.reservedLovelace).toBe(400_000);
+      expect(budget?.confirmedLovelace).toBe(0);
+    });
+  });
+
+  describe('recovering stranded operations', () => {
+    /** A moment past the stranding threshold for anything written now. */
+    function later(): Date {
+      return new Date(Date.now() + STRANDED_UNSIGNED_OPERATION_MS + 60_000);
+    }
+
+    /**
+     * Moves an operation's last write into the past, as a process that stopped would leave it.
+     *
+     * @param operationId - The operation.
+     */
+    async function age(operationId: unknown): Promise<void> {
+      await CardanoStakingOperation.collection.updateOne(
+        { _id: operationId as Types.ObjectId },
+        { $set: { updatedAt: new Date(Date.now() - STRANDED_UNSIGNED_OPERATION_MS - 60_000) } }
+      );
+    }
+
+    it('cancels an unsigned operation left idle past the threshold', async () => {
+      const operation = await seedOperation();
+      await age(operation._id);
+
+      const recovered = await recoverStrandedStakingOperations({ chainId: CHAIN_ID });
+
+      expect(recovered).toBe(1);
+      const stored = await CardanoStakingOperation.findById(operation._id);
+      expect(stored?.status).toBe('cancelled');
+      expect(stored?.chainOutcome).toBe('rejected');
+      expect(stored?.absenceProof).toBe('never_submitted');
+      expect(stored?.liveness).toBe('settled');
+      expect(stored?.errorCode).toBe('stranded_unsigned');
+    });
+
+    it('recovers an operation a budget refusal left queued', async () => {
+      const operation = await seedOperation({ errorCode: 'budget:insufficient_budget' });
+      await age(operation._id);
+
+      await recoverStrandedStakingOperations({ accountId: operation.accountId });
+
+      expect((await CardanoStakingOperation.findById(operation._id))?.status).toBe('cancelled');
+      expect((await seedOperation({ accountId: operation.accountId })).liveness).toBe('live');
+    });
+
+    it('gives back the pinned inputs and the fee reservation a crashed execution held', async () => {
+      // The state a process leaves when it dies after pinning its claims and before recording the
+      // signature: the claims no longer expire and the window still counts the reservation.
+      const operation = await seedOperation();
+      const operationId = operation._id as Types.ObjectId;
+      await reserveStakingFee({
+        ...request(operation, { submit: async () => 'ok' }).budget,
+        accountId: operation.accountId,
+        operationId,
+        amountLovelace: 400_000
+      });
+      const holder = stakingClaimHolder(operationId);
+      const held = await claimUtxos([utxo('a'), utxo('b')], holder, 3_600);
+      await pinClaims(held ?? [], holder);
+      await age(operationId);
+
+      await recoverStrandedStakingOperations({ chainId: CHAIN_ID });
+
+      expect(await claims().countDocuments({})).toBe(0);
+      const budget = await CardanoStakingFeeBudget.findById(WINDOW_ID);
+      expect(budget?.reservedLovelace).toBe(0);
+      expect(budget?.operationCharges.size).toBe(0);
+    });
+
+    it('leaves an unsigned operation alone while it may still be executing', async () => {
+      const operation = await seedOperation();
+
+      const recovered = await recoverStrandedStakingOperations({ chainId: CHAIN_ID });
+
+      expect(recovered).toBe(0);
+      expect((await CardanoStakingOperation.findById(operation._id))?.status).toBe('queued');
+    });
+
+    it('never touches an operation that has signed bytes or a transaction id', async () => {
+      const signed = await seedOperation({
+        status: 'signed',
+        signedCborProtected: 'cafe',
+        txId: 'ab'.repeat(32)
+      });
+      const inconsistent = await seedOperation({ txId: 'cd'.repeat(32) });
+      const withBytes = await seedOperation({ signedCborProtected: 'cafe' });
+      for (const operation of [signed, inconsistent, withBytes]) await age(operation._id);
+
+      const recovered = await recoverStrandedStakingOperations({ chainId: CHAIN_ID }, later());
+
+      expect(recovered).toBe(0);
+      expect((await CardanoStakingOperation.findById(signed._id))?.status).toBe('signed');
+      expect((await CardanoStakingOperation.findById(inconsistent._id))?.status).toBe('queued');
+      expect((await CardanoStakingOperation.findById(withBytes._id))?.status).toBe('queued');
+    });
+
+    it('never touches an operation in flight or settled', async () => {
+      const submitted = await seedOperation();
+      await executeStakingOperation(request(submitted, { submit: async () => 'ok' }));
+      const review = await seedOperation({ status: 'manual_review' });
+      for (const operation of [submitted, review]) await age(operation._id);
+
+      expect(await recoverStrandedStakingOperations({ chainId: CHAIN_ID }, later())).toBe(0);
+      expect((await CardanoStakingOperation.findById(submitted._id))?.status).toBe('submitted');
+      expect((await CardanoStakingOperation.findById(review._id))?.status).toBe('manual_review');
+    });
+
+    it('only looks in the scope it is given', async () => {
+      const mine = await seedOperation();
+      const theirs = await seedOperation();
+      await age(mine._id);
+      await age(theirs._id);
+
+      expect(await recoverStrandedStakingOperations({ chainId: CHAIN_ID + 1 })).toBe(0);
+      expect(await recoverStrandedStakingOperations({ accountId: mine.accountId })).toBe(1);
+
+      expect((await CardanoStakingOperation.findById(mine._id))?.status).toBe('cancelled');
+      expect((await CardanoStakingOperation.findById(theirs._id))?.status).toBe('queued');
+    });
+
+    it('makes an execution that loses the race to the recovery submit nothing', async () => {
+      // The recovery cancels the operation between the claims being pinned and the signature being
+      // recorded. The signature write is conditioned on the operation still being unsigned, so it
+      // does not land, and the bytes are never sent.
+      const operation = await seedOperation();
+      const original = CardanoStakingOperation.updateOne.bind(CardanoStakingOperation);
+      let recovered = -1;
+      vi.spyOn(CardanoStakingOperation, 'updateOne').mockImplementation(((
+        filter: unknown,
+        update: unknown,
+        ...rest: unknown[]
+      ) => {
+        const status = (update as { $set?: { status?: string } } | undefined)?.$set?.status;
+        if (status === 'signed' && recovered === -1) {
+          return (async () => {
+            recovered = await recoverStrandedStakingOperations({ chainId: CHAIN_ID }, later());
+            return original(filter as never, update as never, ...(rest as []));
+          })();
+        }
+        return original(filter as never, update as never, ...(rest as []));
+      }) as never);
+      const sent: string[] = [];
+
+      const result = await executeStakingOperation(
+        request(operation, {
+          submit: async (cbor) => {
+            sent.push(cbor);
+            return 'ok';
+          }
+        })
+      );
+
+      expect(recovered).toBe(1);
+      expect(result).toMatchObject({ outcome: 'refused', reason: 'cancelled' });
+      expect(sent).toEqual([]);
+      const stored = await CardanoStakingOperation.findById(operation._id);
+      expect(stored?.status).toBe('cancelled');
+      expect(stored?.signedCborProtected).toBeNull();
+      expect(stored?.txId).toBeNull();
+      expect(await claims().countDocuments({})).toBe(0);
+      expect((await CardanoStakingFeeBudget.findById(WINDOW_ID))?.reservedLovelace).toBe(0);
+    });
+
+    it('leaves an execution alone once its signature is recorded', async () => {
+      const operation = await seedOperation();
+      const original = CardanoStakingOperation.updateOne.bind(CardanoStakingOperation);
+      let recovered = -1;
+      vi.spyOn(CardanoStakingOperation, 'updateOne').mockImplementation(((
+        filter: unknown,
+        update: unknown,
+        ...rest: unknown[]
+      ) => {
+        const status = (update as { $set?: { status?: string } } | undefined)?.$set?.status;
+        if (status === 'signed' && recovered === -1) {
+          return (async () => {
+            const written = await original(filter as never, update as never, ...(rest as []));
+            recovered = await recoverStrandedStakingOperations({ chainId: CHAIN_ID }, later());
+            return written;
+          })();
+        }
+        return original(filter as never, update as never, ...(rest as []));
+      }) as never);
+
+      const result = await executeStakingOperation(
+        request(operation, { submit: async () => 'ok' })
+      );
+
+      expect(recovered).toBe(0);
+      expect(result.outcome).toBe('submitted');
+      expect((await CardanoStakingOperation.findById(operation._id))?.status).toBe('submitted');
+      expect(await claims().countDocuments({})).toBe(2);
     });
   });
 });
