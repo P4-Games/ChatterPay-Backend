@@ -817,10 +817,28 @@ async function refreshPass(
   const runId = runIdOf(request);
   const now = request.now ?? new Date();
 
-  const accounts = await CardanoStakingAccount.find(dueFilter(request.chainId, now))
-    .sort({ nextEligibleCheckAt: 1, _id: 1 })
+  // Accounts something in this backend asked to refresh go first — a transfer, a settled operation.
+  // Ordered by due time alone they would queue behind every never-checked and every older due
+  // account, which on a first pass over a large universe is hours. The rest of the batch is the
+  // oldest due, so the periodic checks still advance on every run.
+  const requested = await CardanoStakingAccount.find({
+    ...dueFilter(request.chainId, now),
+    refreshRequestedAt: { $ne: null, $lte: now }
+  })
+    .sort({ refreshRequestedAt: 1, _id: 1 })
     .limit(request.batchLimit)
     .exec();
+  const periodic =
+    requested.length >= request.batchLimit
+      ? []
+      : await CardanoStakingAccount.find({
+          ...dueFilter(request.chainId, now),
+          _id: { $nin: requested.map((account) => account._id) }
+        })
+          .sort({ nextEligibleCheckAt: 1, _id: 1 })
+          .limit(request.batchLimit - requested.length)
+          .exec();
+  const accounts = [...requested, ...periodic];
 
   let scanned = 0;
   let lastId: string | null = null;
@@ -1117,7 +1135,7 @@ async function decide(
     : [];
   const spendable = utxos.reduce((sum, utxo) => sum + utxo.lovelace, 0n);
 
-  return decideAutomaticAction(subject, {
+  const decision = decideAutomaticAction(subject, {
     config,
     parameters,
     addressBytes: signer.available ? signer.material.user.addressBytes : new Uint8Array(),
@@ -1130,6 +1148,29 @@ async function decide(
       config.sponsorWindowDays
     )
   });
+
+  // The chain reads `none` again when a user's own vote delegation never landed — expired or
+  // refused. The default is for credentials nobody chose for; one whose owner asked for a delegation
+  // of their own is left for them to repeat, rather than given the default on their behalf.
+  if (decision.action === 'delegate_vote' && (await userChoseVote(subject._id as Types.ObjectId))) {
+    return { action: 'none', refusal: 'not_available', detail: 'user_governance_choice' };
+  }
+  return decision;
+}
+
+/**
+ * Whether the account's owner ever asked for a vote delegation of their own.
+ *
+ * @param accountId - The account.
+ * @returns `true` when a `delegate_vote` operation exists that the sweep did not start.
+ */
+async function userChoseVote(accountId: Types.ObjectId): Promise<boolean> {
+  const chosen = await CardanoStakingOperation.exists({
+    accountId,
+    kind: 'delegate_vote',
+    actor: { $ne: 'cron' }
+  });
+  return chosen !== null;
 }
 
 /**

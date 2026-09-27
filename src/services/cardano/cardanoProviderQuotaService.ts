@@ -153,21 +153,6 @@ function reservationFilter(
 }
 
 /**
- * Whether a database error is a unique-index collision.
- *
- * @param error - What was thrown.
- * @returns `true` for code 11000.
- */
-function isDuplicateKey(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === 11000
-  );
-}
-
-/**
  * A meter backed by the shared Mongo counter.
  *
  * @param options - Where the limits come from, and the clock.
@@ -187,9 +172,14 @@ export function createMongoProviderMeter(options: {
       const window = quotaWindow(now, limits.dayStartOffsetMinutes);
       const id = `${scope}|${window}`;
 
-      let reserved: Pick<ICardanoProviderQuota, 'total'> | null;
-      try {
-        reserved = await CardanoProviderQuota.findOneAndUpdate(
+      // A conditional update without upsert: the filter is the limit, and no match means no room.
+      // An upsert whose filter carries a condition cannot be used for this: under concurrency the
+      // losing writers collide on `_id` and a duplicate key is indistinguishable from "limit reached",
+      // which refused requests with the quota nowhere near spent. So the document is created on its
+      // own, by an upsert filtered on `_id` alone (which the server retries on collision), and only
+      // then is a miss read as a refusal.
+      const reserve = (): Promise<Pick<ICardanoProviderQuota, 'total'> | null> =>
+        CardanoProviderQuota.findOneAndUpdate(
           reservationFilter(id, meta.priority, limits, now),
           {
             $inc: {
@@ -198,13 +188,23 @@ export function createMongoProviderMeter(options: {
               [`byFamily.${providerFamily(meta.path)}`]: 1,
               [`byOrigin.${meta.origin.replace(/[.$]/g, '_')}`]: 1
             },
-            $set: { updatedAt: now },
-            $setOnInsert: { scope, window, createdAt: now }
+            $set: { updatedAt: now }
           },
-          { upsert: true, new: true, projection: { total: 1 } }
+          { new: true, projection: { total: 1 } }
         ).lean<Pick<ICardanoProviderQuota, 'total'> | null>();
-      } catch (error) {
-        if (isDuplicateKey(error)) {
+
+      let reserved: Pick<ICardanoProviderQuota, 'total'> | null;
+      try {
+        reserved = await reserve();
+        if (reserved === null) {
+          await CardanoProviderQuota.updateOne(
+            { _id: id },
+            { $setOnInsert: { scope, window, createdAt: now, total: 0 } },
+            { upsert: true }
+          );
+          reserved = await reserve();
+        }
+        if (reserved === null) {
           const refusal = meta.priority === 'background' ? 'background' : 'daily';
           await CardanoProviderQuota.updateOne(
             { _id: id },
@@ -215,6 +215,8 @@ export function createMongoProviderMeter(options: {
             `CARDANO_PROVIDER_QUOTA: ${meta.priority} request refused, ${refusal} limit reached`
           );
         }
+      } catch (error) {
+        if (error instanceof CardanoProviderQuotaError) throw error;
         if (meta.priority === 'background') {
           throw new CardanoProviderQuotaError(
             'meter_unavailable',

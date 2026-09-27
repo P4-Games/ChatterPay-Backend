@@ -389,6 +389,25 @@ describe('a deposit from outside ChatterPay', () => {
 });
 
 describe('a refresh this backend asked for', () => {
+  it('goes ahead of never-checked wallets on a first pass over a large universe', async () => {
+    const chain = emptyChain();
+    await insertAccounts(500, 'cold');
+    const [moved] = await insertAccounts(1, 'moved');
+    const account = await CardanoStakingAccount.findOne({ rewardAddress: moved }).lean();
+    await requestStakingRefresh(
+      { accountIds: [account?._id as Types.ObjectId] },
+      'transfer_in',
+      T0
+    );
+
+    await sweep(chain, T0, { batchLimit: 10 });
+
+    const read = await CardanoStakingAccount.findById(account?._id).lean();
+    expect(read?.lastSyncAt?.getTime()).toBe(T0.getTime());
+    expect(read?.refreshRequestedAt).toBeNull();
+    expect(await CardanoStakingAccount.countDocuments({ lastSyncAt: { $ne: null } })).toBe(10);
+  });
+
   it('brings the wallet forward, and survives a read that ran before the transfer could land', async () => {
     const chain = emptyChain();
     const [reward] = await insertAccounts(1, 't');

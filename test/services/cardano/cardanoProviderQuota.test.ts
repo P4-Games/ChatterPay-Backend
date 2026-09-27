@@ -244,6 +244,25 @@ describe('the shared daily limit', () => {
     expect(stored?.refused).toEqual({ background: 1 });
   });
 
+  it('refuses nothing under concurrency while the limit is far away', async () => {
+    // Concurrent writers used to collide on the document's `_id`, and the collision was read as a
+    // spent quota: most requests of a busy first minute were refused with the quota nearly empty.
+    const clock = { now: T0 };
+    for (const priority of ['interactive', 'background', 'critical'] as const) {
+      for (let round = 0; round < 5; round += 1) {
+        await CardanoProviderQuota.deleteMany({});
+        const meter = meterWith({}, clock);
+
+        const outcomes = await Promise.allSettled(
+          Array.from({ length: 10 }, () => meter.reserve(meta(priority)))
+        );
+
+        expect(outcomes.filter((outcome) => outcome.status === 'rejected')).toHaveLength(0);
+        expect((await usage())?.total).toBe(10);
+      }
+    }
+  });
+
   it('keeps the reserve for submissions', async () => {
     const clock = { now: T0 };
     const meter = meterWith({ dailyLimit: 3, criticalReserve: 1 }, clock);
@@ -438,5 +457,23 @@ describe('the sweep under a quota', () => {
     expect(result.stopReason).toBe('rate_limited');
     expect(received).toHaveLength(1);
     expect(await CardanoStakingAccount.countDocuments({ nextEligibleCheckAt: null })).toBe(3);
+  });
+
+  it('stops when the plan says its daily limit is spent, and holds background work back', async () => {
+    // Blockfrost answers 402 once the day's requests are used up, and bans a caller that keeps
+    // sending after it. Read as a credential failure, the sweep used to spend one request per wallet.
+    await seedEmptyAccounts(3);
+    const clock = { now: new Date() };
+    setCardanoProviderMeter(meterWith({}, clock));
+    forced = { status: 402 };
+
+    const result = await sweep(1000, T0);
+
+    expect(result.stopReason).toBe('rate_limited');
+    expect(received).toHaveLength(1);
+    expect(await CardanoStakingAccount.countDocuments({ nextEligibleCheckAt: null })).toBe(3);
+    const stored = await CardanoProviderQuota.findOne({}).lean();
+    expect(stored?.backgroundPausedUntil?.getUTCHours()).toBe(0);
+    expect(stored?.backgroundPausedUntil?.getUTCMinutes()).toBe(0);
   });
 });

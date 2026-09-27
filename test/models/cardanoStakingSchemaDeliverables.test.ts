@@ -172,7 +172,7 @@ describe('cardano staking database deliverables', () => {
 
   describe('the network document', () => {
     it('names the network it belongs to, and retires the wrapper', () => {
-      const update = readJson('chatterpay/blockchains.json') as {
+      const update = readJson('chatterpay/blockchains_dev.json') as {
         filter: { chainId: unknown };
         update: { $set: Record<string, unknown>; $unset: Record<string, unknown> };
       };
@@ -191,7 +191,7 @@ describe('cardano staking database deliverables', () => {
       // A field here that the schema does not declare is a setting an administrator would set and
       // nothing would ever read; one the schema declares and this omits is a setting that silently
       // takes its default on a network somebody configured by hand.
-      const update = readJson('chatterpay/blockchains.json') as {
+      const update = readJson('chatterpay/blockchains_dev.json') as {
         update: { $set: { staking: Record<string, unknown> } };
       };
       const stakingPaths = Object.keys(
@@ -203,7 +203,7 @@ describe('cardano staking database deliverables', () => {
     });
 
     it('is a document the model accepts', () => {
-      const update = readJson('chatterpay/blockchains.json') as {
+      const update = readJson('chatterpay/blockchains_dev.json') as {
         update: { $set: Record<string, unknown> };
       };
 
@@ -223,7 +223,7 @@ describe('cardano staking database deliverables', () => {
     it('keeps staking automatic, with the opt-out above everything', () => {
       // The product decision: an enabled network enrols the wallets that qualify. A consent gate is
       // something an operator turns on deliberately, and the opt-out is honoured either way.
-      const update = readJson('chatterpay/blockchains.json') as {
+      const update = readJson('chatterpay/blockchains_dev.json') as {
         update: { $set: { staking: { consentRequired: boolean; enrolmentAllowlist: string[] } } };
       };
 

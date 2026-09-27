@@ -129,10 +129,19 @@ describe('resolveSyncTrigger', () => {
   });
 
   it('keeps a header a little ahead of the clock as the tick', () => {
-    // Cloud Scheduler and the instance do not share a clock. Two minutes of skew is still this tick.
-    const early = new Date(TICK.getTime() - 2 * 60 * 1000);
+    // Cloud Scheduler and the instance do not share a clock. Thirty seconds of skew is still this tick.
+    const early = new Date(TICK.getTime() - 30 * 1000);
 
     expect(resolveSyncTrigger(TICK.toISOString(), undefined, early).kind).toBe('scheduled');
+  });
+
+  it('reads a Force run pressed minutes before the next tick as manual', () => {
+    const shortlyBefore = new Date(TICK.getTime() - 3 * 60 * 1000);
+
+    expect(resolveSyncTrigger(TICK.toISOString(), undefined, shortlyBefore)).toMatchObject({
+      kind: 'manual',
+      reason: 'schedule_time_in_future'
+    });
   });
 
   it('reads a Force run, which carries the next tick, as manual', () => {

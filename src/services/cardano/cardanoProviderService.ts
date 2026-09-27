@@ -27,13 +27,16 @@ import type { CardanoProtocolParameters, CardanoUtxo } from '../../types/cardano
 
 /** Why a provider call failed, in the terms the caller has to act on. */
 export type CardanoProviderFailure =
-  /** Rate limited. The call did not reach the chain; waiting is the whole remedy. */
+  /**
+   * Rate limited, or the plan's daily request limit is spent. The call did not reach the chain;
+   * waiting is the whole remedy.
+   */
   | 'rate_limited'
   /** The provider itself is unhealthy (5xx). Retryable. */
   | 'provider_unavailable'
   /** No answer within the timeout. **Undetermined** for a submit: it may have landed. */
   | 'timeout'
-  /** Credentials missing, wrong, or out of quota. Retrying changes nothing. */
+  /** Credentials missing or wrong. Retrying changes nothing. */
   | 'unauthorized'
   /** The provider answered, and the answer is not what this client can read. */
   | 'unexpected_response'
@@ -322,10 +325,15 @@ export abstract class HttpCardanoProvider {
     }
 
     if (!response.ok) {
-      if (response.status === 429 && installedMeter !== null) {
+      if (installedMeter !== null && [402, 418, 429].includes(response.status)) {
+        // 402 is Blockfrost's "daily request limit exceeded", which lasts until the plan resets at
+        // midnight UTC; 418 is its ban for requests that kept coming after a 402 or 429. Background
+        // work is held back for as long as either lasts, so it does not turn one into the other.
         await installedMeter.rateLimited(
           meta,
-          retryAfterSeconds(response.headers.get('retry-after'))
+          response.status === 402
+            ? secondsUntilUtcMidnight()
+            : retryAfterSeconds(response.headers.get('retry-after'))
         );
       }
       const body = (await response.text()).slice(0, 500);
@@ -848,6 +856,17 @@ function toCardanoUtxo(row: BlockfrostUtxo): CardanoUtxo {
 }
 
 /**
+ * Seconds from now to the next 00:00 UTC, when Blockfrost resets its daily counts.
+ *
+ * @returns The seconds, at least one.
+ */
+function secondsUntilUtcMidnight(): number {
+  const now = new Date();
+  const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  return Math.max(1, Math.ceil((midnight - now.getTime()) / 1000));
+}
+
+/**
  * Reads a `Retry-After` header.
  *
  * @param raw - The header value: seconds, or an HTTP date.
@@ -871,7 +890,10 @@ function retryAfterSeconds(raw: string | null): number | null {
  */
 function classifyStatus(status: number, method?: string): CardanoProviderFailure {
   if (status === 429 || status === 418) return 'rate_limited';
-  if (status === 401 || status === 402 || status === 403) return 'unauthorized';
+  // 402 is the provider's daily request limit, not a credential problem: it clears when the day
+  // resets, and treating it as rate limiting is what makes the sweep stop instead of pressing on.
+  if (status === 402) return 'rate_limited';
+  if (status === 401 || status === 403) return 'unauthorized';
   if (status >= 500) return 'provider_unavailable';
   if ((status === 400 || status === 422) && method === 'POST') return 'rejected_by_chain';
   return 'unexpected_response';

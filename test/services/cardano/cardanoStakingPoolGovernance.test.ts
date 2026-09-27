@@ -6,6 +6,7 @@ import type { CardanoStakingConfig } from '../../../src/config/cardanoStakingCon
 import CardanoStakingAccount, {
   type ICardanoStakingAccount
 } from '../../../src/models/cardanoStakingAccountModel';
+import CardanoStakingOperation from '../../../src/models/cardanoStakingOperationModel';
 import CardanoStakingSyncLock from '../../../src/models/cardanoStakingSyncLockModel';
 import CardanoStakingSyncRun from '../../../src/models/cardanoStakingSyncRunModel';
 import { UserModel } from '../../../src/models/userModel';
@@ -202,7 +203,10 @@ describe('the sweep and pool state', () => {
    * @param pool - What the pool read answers.
    * @returns The provider.
    */
-  function chain(pool: CardanoPoolState | null): StakingSyncProvider {
+  function chain(
+    pool: CardanoPoolState | null,
+    vote: CardanoStakeAccountState['governanceDelegation'] = { kind: 'always_abstain' }
+  ): StakingSyncProvider {
     return {
       tip: async () => ({ slot: 90_000_000, height: 3_000_000 }),
       utxosFor: async () => [],
@@ -214,7 +218,7 @@ describe('the sweep and pool state', () => {
       stakeAccount: async (): Promise<CardanoStakeAccountState> => ({
         registered: true,
         poolId: OLD_POOL,
-        governanceDelegation: { kind: 'always_abstain' },
+        governanceDelegation: vote,
         withdrawableRewardsLovelace: 0n,
         lifetimeRewardsLovelace: 0n,
         withdrawnLovelace: null,
@@ -286,6 +290,7 @@ describe('the sweep and pool state', () => {
     await CardanoStakingAccount.deleteMany({});
     await CardanoStakingSyncRun.deleteMany({});
     await CardanoStakingSyncLock.deleteMany({});
+    await CardanoStakingOperation.deleteMany({});
     await UserModel.deleteMany({});
   });
 
@@ -305,6 +310,37 @@ describe('the sweep and pool state', () => {
 
     expect(poolReads).toEqual({ [OLD_POOL]: 1 });
     expect(result.refusals.would_redelegate_pool).toBe(3);
+  });
+
+  it('does not give the default vote to a credential whose owner asked for their own', async () => {
+    await seedPositions(1);
+    const account = await CardanoStakingAccount.findOne({}).lean();
+    await CardanoStakingOperation.create({
+      accountId: account?._id,
+      chainId: CHAIN_ID,
+      lifecycleId: 'cycle',
+      kind: 'delegate_vote',
+      actor: 'web',
+      idempotencyKey: 'user-vote',
+      status: 'expired_unconfirmed',
+      chainOutcome: 'rejected',
+      absenceProof: 'ttl_expired_and_absent',
+      governanceTarget: 'drep',
+      governanceDrepIdCip129: USER_DREP
+    });
+
+    const result = await sweep(chain(null, { kind: 'none' }), {});
+
+    expect(result.refusals.would_delegate_vote ?? 0).toBe(0);
+    expect(result.refusals.not_available).toBe(1);
+  });
+
+  it('gives the default vote when nobody chose one', async () => {
+    await seedPositions(1);
+
+    const result = await sweep(chain(null, { kind: 'none' }), {});
+
+    expect(result.refusals.would_delegate_vote).toBe(1);
   });
 
   it('leaves positions on a healthy old pool after the default changed', async () => {

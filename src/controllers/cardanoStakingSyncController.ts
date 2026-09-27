@@ -59,10 +59,12 @@ const MAX_BATCH_LIMIT = 500;
 
 /**
  * How far ahead of this machine's clock a schedule time may be and still be read as the current
- * tick. Covers clock skew between Cloud Scheduler and the instance; a Force run is ahead by a whole
- * schedule interval, far past this.
+ * tick. Cloud Scheduler delivers at or after the scheduled time, so a genuine delivery is never
+ * ahead except by clock skew, which NTP keeps well under a second. A Force run sends the next
+ * tick's time; the tolerance is kept small so that one pressed shortly before a tick is still read
+ * as manual and does not take that tick's identity.
  */
-export const SCHEDULE_CLOCK_SKEW_MS = 5 * 60 * 1000;
+export const SCHEDULE_CLOCK_SKEW_MS = 60 * 1000;
 
 /** What the endpoint accepts in the body. */
 interface SyncRequestBody {
