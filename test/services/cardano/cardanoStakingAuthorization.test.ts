@@ -188,35 +188,90 @@ describe('authorizeStakingAction, with the PIN on', () => {
         governanceTarget: TARGET,
         actor: 'web'
       })
-    ).resolves.toMatchObject({ ok: false, refusal: 'security_gate', detail: 'active' });
+    ).resolves.toMatchObject({
+      ok: false,
+      refusal: 'security_gate',
+      detail: 'active',
+      pin: { remainingAttempts: 2, blockedUntil: null }
+    });
   });
 
-  it('refuses a user who has not set a PIN', async () => {
+  it('issues a grant to a user who has not set a PIN, without verifying one', async () => {
     await seed(PHONE);
 
-    await expect(
-      authorizeStakingAction(PHONE, 'delegate_vote', {
-        pin: PIN,
-        bffAssertion: signBffAssertion(PHONE, 'delegate_vote', null, TARGET_CANONICAL),
-        governanceTarget: TARGET,
-        actor: 'web'
+    // The PIN is optional per user. The bot lets a user without one operate, and so does this.
+    const result = await authorizeStakingAction(PHONE, 'delegate_vote', {
+      pin: '',
+      bffAssertion: signBffAssertion(PHONE, 'delegate_vote', null, TARGET_CANONICAL),
+      governanceTarget: TARGET,
+      actor: 'web'
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    if (!result.ok) return;
+    expect(
+      verifyPinGrant(result.data.grant, {
+        sub: PHONE,
+        act: 'delegate_vote',
+        rcp: null,
+        gov: TARGET_CANONICAL
       })
-    ).resolves.toMatchObject({ ok: false, refusal: 'security_gate', detail: 'not_set' });
+    ).toMatchObject({ ok: true });
   });
 
-  it('refuses a blocked PIN', async () => {
+  it('refuses an empty PIN from a user who has one, without counting an attempt', async () => {
     await seed(PHONE);
     await securityService.setPin(PHONE, PIN, 'frontend');
-    await mongoSecurityService.setPinBlockedUntil(PHONE, new Date(Date.now() + 60_000));
 
     await expect(
       authorizeStakingAction(PHONE, 'delegate_vote', {
-        pin: PIN,
+        pin: '',
         bffAssertion: signBffAssertion(PHONE, 'delegate_vote', null, TARGET_CANONICAL),
         governanceTarget: TARGET,
         actor: 'web'
       })
-    ).resolves.toMatchObject({ ok: false, refusal: 'security_gate', detail: 'blocked' });
+    ).resolves.toMatchObject({ ok: false, refusal: 'security_gate', detail: 'pin_required' });
+
+    const status = await securityService.getSecurityStatus(PHONE);
+    expect(status.failed_attempts).toBe(0);
+  });
+
+  it('refuses a blocked PIN and says until when', async () => {
+    await seed(PHONE);
+    await securityService.setPin(PHONE, PIN, 'frontend');
+    const blockedUntil = new Date(Date.now() + 60_000);
+    await mongoSecurityService.setPinBlockedUntil(PHONE, blockedUntil);
+
+    const result = await authorizeStakingAction(PHONE, 'delegate_vote', {
+      pin: PIN,
+      bffAssertion: signBffAssertion(PHONE, 'delegate_vote', null, TARGET_CANONICAL),
+      governanceTarget: TARGET,
+      actor: 'web'
+    });
+
+    expect(result).toMatchObject({ ok: false, refusal: 'security_gate', detail: 'blocked' });
+    expect(result.ok === false && result.pin?.blockedUntil?.getTime()).toBe(blockedUntil.getTime());
+  });
+
+  it('reports the block that the last failed attempt started', async () => {
+    await seed(PHONE);
+    await securityService.setPin(PHONE, PIN, 'frontend');
+
+    const attempt = () =>
+      authorizeStakingAction(PHONE, 'delegate_vote', {
+        pin: WRONG_PIN,
+        bffAssertion: signBffAssertion(PHONE, 'delegate_vote', null, TARGET_CANONICAL),
+        governanceTarget: TARGET,
+        actor: 'web'
+      });
+
+    await attempt();
+    await attempt();
+    const third = await attempt();
+
+    // SECURITY_PIN_MAX_FAILED_ATTEMPTS is 3 in this suite.
+    expect(third).toMatchObject({ ok: false, refusal: 'security_gate', detail: 'blocked' });
+    expect(third.ok === false && third.pin?.blockedUntil).toBeInstanceOf(Date);
   });
 
   it('refuses a request that carries no assertion, before it touches the PIN', async () => {
