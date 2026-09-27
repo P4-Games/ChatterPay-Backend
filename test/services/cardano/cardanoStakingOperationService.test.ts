@@ -5,10 +5,15 @@ import CardanoStakingAccount, {
   type ICardanoStakingAccount
 } from '../../../src/models/cardanoStakingAccountModel';
 import { STAKING_COLLECTIONS } from '../../../src/models/cardanoStakingCollections';
-import CardanoStakingOperation from '../../../src/models/cardanoStakingOperationModel';
+import CardanoStakingOperation, {
+  type CardanoStakingAbsenceProof,
+  type CardanoStakingChainOutcome,
+  type CardanoStakingOperationStatus
+} from '../../../src/models/cardanoStakingOperationModel';
 import {
   checkStakingOperationReadiness,
   createStakingOperation,
+  hasLiveStakingOperation,
   missingStakingIndexes,
   resetStakingSchemaVerification
 } from '../../../src/services/cardano/cardanoStakingOperationService';
@@ -319,6 +324,136 @@ describe('cardanoStakingOperationService', () => {
       await expect(createStakingOperation(account, intent('withdraw_rewards'))).rejects.toThrow(
         'CARDANO_STAKING_NO_LIFECYCLE'
       );
+    });
+  });
+
+  describe('whether an account holds a live operation', () => {
+    const STATUSES: CardanoStakingOperationStatus[] = [
+      'queued',
+      'executing',
+      'signed',
+      'submitted',
+      'unknown_submit',
+      'confirmed',
+      'expired_unconfirmed',
+      'rejected',
+      'cancelled',
+      'manual_review'
+    ];
+    const OUTCOMES: CardanoStakingChainOutcome[] = [
+      'none',
+      'pending',
+      'unknown',
+      'confirmed',
+      'rejected'
+    ];
+    const PROOFS: (CardanoStakingAbsenceProof | null)[] = [null, 'never_submitted'];
+
+    /**
+     * Stores an operation on an account, as whatever path wrote it left it.
+     *
+     * @param accountId - The account.
+     * @param fields - Status, outcome and proof.
+     */
+    async function seedOperation(
+      accountId: Types.ObjectId,
+      fields: {
+        status: CardanoStakingOperationStatus;
+        chainOutcome: CardanoStakingChainOutcome;
+        absenceProof: CardanoStakingAbsenceProof | null;
+      }
+    ): Promise<void> {
+      await CardanoStakingOperation.create({
+        accountId,
+        chainId: CHAIN_ID,
+        lifecycleId: 'cycle-1',
+        kind: 'withdraw_rewards',
+        actor: 'cron',
+        idempotencyKey: `seed-${new Types.ObjectId().toHexString()}`,
+        ...fields
+      });
+    }
+
+    it('answers exactly what the credential lock enforces, for every state an operation can be in', async () => {
+      // The answer decides whether a caller goes on to create an operation. Wherever it says "free"
+      // and the index says "held", the caller writes what it writes first and then fails on the
+      // index; wherever it says "held" and the index says "free", an account is refused for nothing.
+      const mismatches: string[] = [];
+      for (const status of STATUSES) {
+        for (const chainOutcome of OUTCOMES) {
+          for (const absenceProof of PROOFS) {
+            await CardanoStakingOperation.deleteMany({});
+            const accountId = new Types.ObjectId();
+            await seedOperation(accountId, { status, chainOutcome, absenceProof });
+
+            const live = await hasLiveStakingOperation(accountId);
+            const held = await CardanoStakingOperation.create({
+              accountId,
+              chainId: CHAIN_ID,
+              lifecycleId: 'cycle-1',
+              kind: 'withdraw_rewards',
+              actor: 'cron',
+              idempotencyKey: `second-${accountId.toHexString()}`
+            }).then(
+              () => false,
+              () => true
+            );
+
+            if (live !== held) {
+              mismatches.push(
+                `${status}/${chainOutcome}/${absenceProof}: live=${live} held=${held}`
+              );
+            }
+          }
+        }
+      }
+
+      expect(mismatches).toEqual([]);
+    });
+
+    it('counts an operation under review whose transaction was never built', async () => {
+      // The state a build refusal leaves. The index holds the account, so every action has to be
+      // refused before anything is written, an exit included.
+      const accountId = new Types.ObjectId();
+      await seedOperation(accountId, {
+        status: 'manual_review',
+        chainOutcome: 'none',
+        absenceProof: null
+      });
+
+      expect(await hasLiveStakingOperation(accountId)).toBe(true);
+    });
+
+    it('counts an operation under review whose transaction may still land', async () => {
+      const accountId = new Types.ObjectId();
+      await seedOperation(accountId, {
+        status: 'manual_review',
+        chainOutcome: 'unknown',
+        absenceProof: null
+      });
+
+      expect(await hasLiveStakingOperation(accountId)).toBe(true);
+    });
+
+    it('does not count an operation that provably never reached the chain', async () => {
+      const accountId = new Types.ObjectId();
+      await seedOperation(accountId, {
+        status: 'cancelled',
+        chainOutcome: 'rejected',
+        absenceProof: 'never_submitted'
+      });
+
+      expect(await hasLiveStakingOperation(accountId)).toBe(false);
+    });
+
+    it('does not count an operation of another account', async () => {
+      await seedOperation(new Types.ObjectId(), {
+        status: 'submitted',
+        chainOutcome: 'pending',
+        absenceProof: null
+      });
+
+      expect(await hasLiveStakingOperation(new Types.ObjectId())).toBe(false);
     });
   });
 
