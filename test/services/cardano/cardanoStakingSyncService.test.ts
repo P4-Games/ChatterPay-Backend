@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CARDANO_PREPROD_CHAIN_ID } from '../../../src/config/cardanoConfig';
 import type { CardanoStakingConfig } from '../../../src/config/cardanoStakingConfig';
 import CardanoStakingAccount from '../../../src/models/cardanoStakingAccountModel';
+import CardanoStakingOperation from '../../../src/models/cardanoStakingOperationModel';
 import CardanoStakingSyncRun from '../../../src/models/cardanoStakingSyncRunModel';
 import { UserModel } from '../../../src/models/userModel';
 import {
@@ -11,6 +12,7 @@ import {
   stakeCredentialHex
 } from '../../../src/services/cardano/cardanoAddressService';
 import { cardanoSignerService } from '../../../src/services/cardano/cardanoSignerService';
+import { STRANDED_UNSIGNED_OPERATION_MS } from '../../../src/services/cardano/cardanoStakingLifecycleService';
 import type { CardanoStakeAccountState } from '../../../src/services/cardano/cardanoStakingProviderService';
 import {
   runStakingSync,
@@ -494,5 +496,64 @@ describe('the discovery pass', () => {
 
     expect(second.accountsCreated).toBe(1);
     expect(await CardanoStakingAccount.countDocuments({ chainId: CHAIN_ID })).toBe(2);
+  });
+});
+
+describe('the reconcile pass and stranded operations', () => {
+  /**
+   * An operation on the account that never got past the build.
+   *
+   * @param accountId - Whose.
+   * @param chainId - Which network.
+   * @returns The operation id.
+   */
+  async function seedUnsigned(accountId: Types.ObjectId, chainId = CHAIN_ID) {
+    const operation = await CardanoStakingOperation.create({
+      accountId,
+      chainId,
+      lifecycleId: `cycle-${accountId.toHexString()}`,
+      kind: 'exit_and_send_max',
+      actor: 'web',
+      idempotencyKey: `unsigned-${accountId.toHexString()}`,
+      errorCode: 'budget:insufficient_budget'
+    });
+    return operation._id as Types.ObjectId;
+  }
+
+  beforeEach(async () => {
+    await CardanoStakingOperation.deleteMany({});
+    await CardanoStakingOperation.syncIndexes();
+  });
+
+  it('cancels an unsigned operation left behind, so it stops holding the account', async () => {
+    const accountId = await seedAccount('5491100000031');
+    const operationId = await seedUnsigned(accountId);
+    const now = new Date(Date.now() + STRANDED_UNSIGNED_OPERATION_MS + 60_000);
+
+    await runStakingSync(request({ now }));
+
+    const stored = await CardanoStakingOperation.findById(operationId);
+    expect(stored?.status).toBe('cancelled');
+    expect(stored?.absenceProof).toBe('never_submitted');
+    expect(stored?.liveness).toBe('settled');
+  });
+
+  it('leaves one that may still be executing', async () => {
+    const accountId = await seedAccount('5491100000032');
+    const operationId = await seedUnsigned(accountId);
+
+    await runStakingSync(request({ now: new Date() }));
+
+    expect((await CardanoStakingOperation.findById(operationId))?.status).toBe('queued');
+  });
+
+  it('leaves one of another network', async () => {
+    const accountId = await seedAccount('5491100000033');
+    const operationId = await seedUnsigned(accountId, CHAIN_ID + 1);
+    const now = new Date(Date.now() + STRANDED_UNSIGNED_OPERATION_MS + 60_000);
+
+    await runStakingSync(request({ now }));
+
+    expect((await CardanoStakingOperation.findById(operationId))?.status).toBe('queued');
   });
 });
