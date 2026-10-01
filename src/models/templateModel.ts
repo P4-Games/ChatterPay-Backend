@@ -53,6 +53,7 @@ export enum NotificationEnum {
   cardano_token_balance_not_enough = 'cardano_token_balance_not_enough',
   cardano_amount_below_fee = 'cardano_amount_below_fee',
   cardano_sponsor_unavailable = 'cardano_sponsor_unavailable',
+  cardano_fee_price_unavailable = 'cardano_fee_price_unavailable',
   cardano_insufficient_funds = 'cardano_insufficient_funds',
   user_blocked = 'user_blocked'
 }
@@ -225,6 +226,7 @@ const templateSchema = new Schema<ITemplateSchema>({
     cardano_token_balance_not_enough: { type: notificationSchema, required: false },
     cardano_amount_below_fee: { type: notificationSchema, required: false },
     cardano_sponsor_unavailable: { type: notificationSchema, required: false },
+    cardano_fee_price_unavailable: { type: notificationSchema, required: false },
     cardano_insufficient_funds: { type: notificationSchema, required: false },
     user_blocked: { type: notificationSchema, required: false }
   },

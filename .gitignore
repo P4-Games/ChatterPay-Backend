@@ -53,3 +53,6 @@ yarn.lock
 # Test coverage
 coverage
 
+
+# Local one-off scripts. Never part of the build or the repository.
+scratchpad/

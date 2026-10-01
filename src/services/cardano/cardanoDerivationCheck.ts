@@ -7,21 +7,28 @@
  * the previous ones hold. Nothing downstream can tell the two apart, because there is nothing to
  * compare against at request time.
  *
- * So the comparison is made here, once, against a value recorded when the settings were known to be
- * right. `CARDANO_DERIVATION_CHECK` holds the address a fixed internal identifier resolves to; if
- * the deployment no longer produces it, something it depends on changed and the process refuses to
- * start. Cloud Run keeps the previous revision serving, which is the correct outcome: yesterday's
- * deployment issuing yesterday's addresses beats today's issuing addresses nobody can reach.
+ * So the comparison is made here, once, against values recorded when the settings were known to be
+ * right. `CARDANO_DERIVATION_CHECK` holds the address a fixed internal identifier resolves to, and
+ * `CARDANO_SPONSOR_DERIVATION_CHECK` the address the sponsor wallet resolves to. Neither is a
+ * switch: they are addresses, and there is nothing to turn on.
  *
- * The check is opt-in. Without the recorded value there is nothing to compare against and the
- * deployment starts, with a warning — an environment that has never issued an address has nothing
- * to lose, and one that has should record it.
+ * The check is not optional, and its verdict switches off Cardano rather than the process. Those
+ * are the same decision made twice: an unverified derivation must not issue an address or sign
+ * anything, and a Cardano misconfiguration must not take EVM transfers, the bot and the webhooks
+ * down with it. The verdict reaches every Cardano path through the configuration, which reports the
+ * family off with a `disabledReason` the callers already handle.
+ *
+ * The sponsor is checked separately because it is a separate key: its own wallet id and its own two
+ * labels. It is only checked when sponsoring is on, because that is the only state in which it is
+ * derived at all.
  */
 
-import { getCardanoConfig } from '../../config/cardanoConfig';
-import { CARDANO_DERIVATION_CHECK } from '../../config/constants';
+import { getCardanoConfigForDerivationCheck } from '../../config/cardanoConfig';
+import { recordCardanoDerivationState } from '../../config/cardanoDerivationState';
+import { getCardanoFeeConfig } from '../../config/cardanoFeeConfig';
+import { CARDANO_DERIVATION_CHECK, CARDANO_SPONSOR_DERIVATION_CHECK } from '../../config/constants';
 import { Logger } from '../../helpers/loggerHelper';
-import type { CardanoDerivationCheck } from '../../types/cardanoType';
+import type { CardanoDerivationCheck, CardanoDerivationScope } from '../../types/cardanoType';
 import { cardanoSignerService } from './cardanoSignerService';
 
 /**
@@ -33,69 +40,115 @@ import { cardanoSignerService } from './cardanoSignerService';
 const CHECK_IDENTIFIER = '000000000000';
 
 /**
- * Compares what this deployment derives against what it recorded.
+ * Compares one derived address against the one recorded for it.
  *
- * @returns What it concluded. `changed` is the one the caller must not ignore.
+ * @param scope - Which derivation this is about.
+ * @param recorded - The address recorded for it, trimmed. Empty when none was recorded.
+ * @param derive - Produces the address this deployment derives now.
+ * @returns The verdict for this scope, or `null` when it matched.
  */
-export function checkCardanoDerivation(): CardanoDerivationCheck {
-  const config = getCardanoConfig();
-  if (!config.enabled) return { status: 'skipped', detail: config.disabledReason || 'disabled' };
-
+function compare(
+  scope: CardanoDerivationScope,
+  recorded: string,
+  derive: () => string
+): CardanoDerivationCheck | null {
   let derived: string;
   try {
-    derived = cardanoSignerService.getAccount(
-      CHECK_IDENTIFIER,
-      config.network,
-      config.chainId
-    ).address;
+    derived = derive();
   } catch (error) {
     // Reached only past the config gate, so this is not a missing setting: it is a setting the
-    // gate accepted and the derivation could not use.
+    // gate accepted and the derivation could not use. Unusable is treated as changed, because what
+    // it rules out is the same thing — that this deployment produces the address it recorded.
     const message = error instanceof Error ? error.message : String(error);
-    return {
-      status: 'changed',
-      expected: CARDANO_DERIVATION_CHECK || '(unrecorded)',
-      derived: message
-    };
+    return { status: 'changed', scope, expected: recorded || '(unrecorded)', derived: message };
   }
 
-  if (!CARDANO_DERIVATION_CHECK) return { status: 'unrecorded', address: derived };
-  if (CARDANO_DERIVATION_CHECK !== derived) {
-    return { status: 'changed', expected: CARDANO_DERIVATION_CHECK, derived };
-  }
-  return { status: 'ok', address: derived };
+  if (recorded === '') return { status: 'unrecorded', scope, address: derived };
+  if (recorded !== derived) return { status: 'changed', scope, expected: recorded, derived };
+  return null;
 }
 
 /**
- * Runs the check at startup and stops the process when the derivation has moved.
+ * Compares what this deployment derives against what it recorded.
  *
- * Exits rather than carrying on with Cardano switched off: a deployment that reaches this state was
- * misconfigured on the way in, and the deploy that produced it is the thing that should fail.
+ * @returns What it concluded. Only `ok` lets the family operate.
  */
-export function assertCardanoDerivationUnchanged(): void {
+export function checkCardanoDerivation(): CardanoDerivationCheck {
+  const config = getCardanoConfigForDerivationCheck();
+  // Already off for a reason of its own, and that reason is the one worth reporting. Deriving here
+  // would be deriving against a configuration the family has already refused.
+  if (!config.enabled) return { status: 'skipped', detail: config.disabledReason || 'disabled' };
+
+  const user = compare(
+    'user',
+    CARDANO_DERIVATION_CHECK,
+    () => cardanoSignerService.getAccount(CHECK_IDENTIFIER, config.network, config.chainId).address
+  );
+  if (user) return user;
+
+  const feeConfig = getCardanoFeeConfig();
+  // Nothing derives the sponsor while sponsoring is off, so there is nothing to verify and nothing
+  // to hold the family back for. Switching sponsoring on without recording its address is what the
+  // `unrecorded` verdict below is for.
+  // The address is the recorded one rather than the derived one: `compare` answered `null`, which
+  // is what says the two are the same string.
+  if (!feeConfig.sponsorNetworkFee) {
+    return { status: 'ok', address: CARDANO_DERIVATION_CHECK, sponsorAddress: null };
+  }
+
+  const sponsorAddress = () =>
+    cardanoSignerService.getSponsorAccount(
+      feeConfig.sponsorWalletId,
+      config.network,
+      config.chainId
+    ).address;
+  const sponsor = compare('sponsor', CARDANO_SPONSOR_DERIVATION_CHECK, sponsorAddress);
+  if (sponsor) return sponsor;
+
+  return {
+    status: 'ok',
+    address: CARDANO_DERIVATION_CHECK,
+    sponsorAddress: CARDANO_SPONSOR_DERIVATION_CHECK
+  };
+}
+
+/**
+ * Runs the check at startup and records what it concluded.
+ *
+ * Never throws and never exits: an unverified derivation is a reason to keep Cardano off, not a
+ * reason to leave the port closed. Every other family, the bot webhooks and the health check come
+ * up exactly as they did.
+ */
+export function verifyCardanoDerivation(): void {
   const result = checkCardanoDerivation();
 
   switch (result.status) {
     case 'skipped':
+      // The family is already off for a reason of its own, so the verdict changes nothing. The
+      // state stays `pending`, which is what it means: nothing was verified.
       Logger.log('cardanoDerivationCheck', `skipped: ${result.detail}`);
       break;
     case 'unrecorded':
-      Logger.warn(
+      recordCardanoDerivationState({ status: 'unrecorded', scope: result.scope });
+      Logger.error(
         'cardanoDerivationCheck',
-        'CARDANO_DERIVATION_CHECK is not set: nothing verifies that this deployment still issues ' +
-          `the addresses it used to. Record ${result.address} to switch the check on.`
+        `No address is recorded for the ${result.scope} derivation, so nothing verifies that this ` +
+          'deployment still issues the addresses it used to. Cardano stays off; everything else ' +
+          `runs. Verify ${result.address} against the addresses this environment already issued, ` +
+          'and record it once it checks out.'
       );
       break;
     case 'changed':
+      recordCardanoDerivationState({ status: 'changed', scope: result.scope });
       Logger.fatal(
         'cardanoDerivationCheck',
-        'This deployment no longer derives the address it recorded. Something the derivation ' +
-          `depends on changed. Expected ${result.expected}, derived ${result.derived}. Refusing ` +
-          'to start: every address issued from here would be one nobody can sign for.'
+        `This deployment no longer derives the ${result.scope} address it recorded. Something the ` +
+          `derivation depends on changed. Expected ${result.expected}, derived ${result.derived}. ` +
+          'Cardano is off: every address issued from here would be one nobody can sign for.'
       );
-      process.exit(1);
       break;
     default:
+      recordCardanoDerivationState({ status: 'verified' });
       Logger.log('cardanoDerivationCheck', 'ok');
   }
 }

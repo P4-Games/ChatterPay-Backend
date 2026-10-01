@@ -100,5 +100,35 @@ export const cardanoSignerService = {
     const seed = ed25519Seed(phoneNumber, network, chainId);
     const signature = ed25519.sign(Buffer.from(hex, 'hex'), seed);
     return `0x${Buffer.from(signature).toString('hex')}`;
+  },
+
+  /**
+   * Signs with the **staking** key of the same wallet.
+   *
+   * A transfer is authorised by the payment key alone, which is why nothing needed this before. A
+   * certificate addresses the stake credential and a withdrawal empties the account that credential
+   * owns, so both are witnessed by this key instead — a different key from the payment one, derived
+   * under the same seed with the staking label, and the one whose hash is written into every base
+   * address this deployment issues.
+   *
+   * @param phoneNumber - The user the wallet belongs to.
+   * @param network - Network the wallet is on.
+   * @param chainId - Internal chain id the derivation is bound to.
+   * @param transactionId - The body hash being signed.
+   * @returns The signature, hex with `0x`.
+   * @throws Error `CARDANO_INVALID_TRANSACTION_ID` for anything that is not a 32-byte hash. Signing
+   *   arbitrary bytes with a key that controls a stake credential is not something to do on trust.
+   */
+  signAsStake: (
+    phoneNumber: string,
+    network: CardanoNetwork,
+    chainId: number,
+    transactionId: string
+  ): string => {
+    const hex = transactionId.startsWith('0x') ? transactionId.slice(2) : transactionId;
+    if (!/^[0-9a-fA-F]{64}$/.test(hex)) throw new Error('CARDANO_INVALID_TRANSACTION_ID');
+    const seed = ed25519Seed(phoneNumber, network, chainId, 'stake');
+    const signature = ed25519.sign(Buffer.from(hex, 'hex'), seed);
+    return `0x${Buffer.from(signature).toString('hex')}`;
   }
 };

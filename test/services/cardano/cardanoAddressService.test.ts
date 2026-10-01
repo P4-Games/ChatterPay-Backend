@@ -4,9 +4,12 @@ import { describe, expect, it } from 'vitest';
 import {
   baseAddress,
   decodeCardanoAddress,
+  decodeRewardAddress,
   enterpriseAddress,
   isValidCardanoAddress,
-  paymentCredential
+  paymentCredential,
+  rewardAddress,
+  stakeCredentialHex
 } from '../../../src/services/cardano/cardanoAddressService';
 
 /**
@@ -210,5 +213,175 @@ describe('cardanoAddressService - isValidCardanoAddress', () => {
     expect(isValidCardanoAddress(CIP19.testnet.type06, 'testnet')).toBe(true);
     expect(isValidCardanoAddress(CIP19.testnet.type00, 'testnet')).toBe(true);
     expect(isValidCardanoAddress(CIP19.mainnet.type06, 'mainnet')).toBe(true);
+  });
+});
+
+describe('cardanoAddressService - rewardAddress', () => {
+  /**
+   * Reward addresses for the staking key of the CIP-19 vectors above.
+   *
+   * Built from `CIP19.stakeKeyHash` — which *is* from the specification, and which
+   * `paymentCredential` is already tested against — plus the type-14 header CIP-19 defines. They
+   * are not quoted type-14 vectors, so on their own they would only prove the code agrees with
+   * itself; the assertions below about the header byte, the payload length and the credential
+   * shared with the base address are what give them teeth.
+   */
+  const REWARD = {
+    mainnet: 'stake1uyehkck0lajq8gr28t9uxnuvgcqrc6070x3k9r8048z8y5gh6ffgw',
+    testnet: 'stake_test1uqehkck0lajq8gr28t9uxnuvgcqrc6070x3k9r8048z8y5gssrtvn'
+  };
+
+  it('derives the reward address of the CIP-19 staking key on mainnet', () => {
+    expect(rewardAddress(STAKE_PUBLIC_KEY, 'mainnet')).toBe(REWARD.mainnet);
+  });
+
+  it('derives the reward address of the CIP-19 staking key on testnet', () => {
+    expect(rewardAddress(STAKE_PUBLIC_KEY, 'testnet')).toBe(REWARD.testnet);
+  });
+
+  it('is built on the stake key hash the specification gives', () => {
+    const payload = Buffer.from(
+      bech32.fromWords(bech32.decode(REWARD.testnet as `${string}1${string}`, 256).words)
+    );
+
+    expect(payload.subarray(1).toString('hex')).toBe(CIP19.stakeKeyHash);
+  });
+
+  it('derives from the same credential the base address carries', () => {
+    // The property that matters and that a vector alone does not prove: a reward address built from
+    // a different staking key is perfectly well-formed, reads as empty forever, and looks exactly
+    // like "no rewards yet".
+    const base = baseAddress(PUBLIC_KEY, STAKE_PUBLIC_KEY, 'testnet');
+    const basePayload = Buffer.from(
+      bech32.fromWords(bech32.decode(base as `${string}1${string}`, 256).words)
+    );
+    const reward = rewardAddress(STAKE_PUBLIC_KEY, 'testnet');
+    const rewardPayload = Buffer.from(
+      bech32.fromWords(bech32.decode(reward as `${string}1${string}`, 256).words)
+    );
+
+    // Base address: header, payment credential, staking credential. Reward: header, staking.
+    expect(rewardPayload.subarray(1).toString('hex')).toBe(
+      basePayload.subarray(29).toString('hex')
+    );
+  });
+
+  it('carries a header and one credential, and nothing else', () => {
+    const payload = Buffer.from(
+      bech32.fromWords(
+        bech32.decode(rewardAddress(STAKE_PUBLIC_KEY, 'testnet') as `${string}1${string}`, 256)
+          .words
+      )
+    );
+
+    expect(payload).toHaveLength(29);
+    // Type 14 in the high nibble, network id in the low one.
+    expect(payload[0]).toBe((14 << 4) | 0);
+  });
+
+  it('puts the network in the header, not only in the prefix', () => {
+    const testnet = Buffer.from(
+      bech32.fromWords(
+        bech32.decode(rewardAddress(STAKE_PUBLIC_KEY, 'testnet') as `${string}1${string}`, 256)
+          .words
+      )
+    );
+    const mainnet = Buffer.from(
+      bech32.fromWords(
+        bech32.decode(rewardAddress(STAKE_PUBLIC_KEY, 'mainnet') as `${string}1${string}`, 256)
+          .words
+      )
+    );
+
+    expect(testnet[0]).toBe(0xe0);
+    expect(mainnet[0]).toBe(0xe1);
+    expect(testnet.subarray(1).toString('hex')).toBe(mainnet.subarray(1).toString('hex'));
+  });
+
+  it('refuses a key of the wrong size', () => {
+    expect(() => rewardAddress('00'.repeat(31), 'testnet')).toThrow(
+      'CARDANO_PUBLIC_KEY_MUST_BE_32_BYTES'
+    );
+  });
+});
+
+describe('cardanoAddressService - stakeCredentialHex', () => {
+  it('reproduces the stake key hash of the CIP-19 vectors', () => {
+    expect(stakeCredentialHex(STAKE_PUBLIC_KEY)).toBe(CIP19.stakeKeyHash);
+  });
+
+  it('accepts a key with the 0x prefix the database stores', () => {
+    expect(stakeCredentialHex(`0x${STAKE_PUBLIC_KEY}`)).toBe(CIP19.stakeKeyHash);
+  });
+});
+
+describe('decodeRewardAddress', () => {
+  const REWARD_TESTNET = 'stake_test1urxz7zmqaewyakmme3ryzpu86wy488xa7kmy7qqjxp9erksag4z3l';
+  const REWARD_MAINNET = 'stake1u8xz7zmqaewyakmme3ryzpu86wy488xa7kmy7qqjxp9erks6zlq4z';
+  const CREDENTIAL = 'cc2f0b60ee5c4edb7bcc46410787d389539cddf5b64f0012304b91da';
+
+  it('reads a reward address into its network, credential and 29-byte payload', () => {
+    const decoded = decodeRewardAddress(REWARD_TESTNET);
+
+    expect(decoded?.network).toBe('testnet');
+    expect(decoded?.credentialType).toBe('key_hash');
+    expect(decoded?.credentialHex).toBe(CREDENTIAL);
+    // The payload is what a `reward_account` is in the transaction CBOR: header byte and hash.
+    expect(decoded?.payload).toHaveLength(29);
+    expect(Buffer.from(decoded?.payload ?? []).toString('hex')).toBe(`e0${CREDENTIAL}`);
+  });
+
+  it('reads the mainnet form, whose header differs only in the low nibble', () => {
+    const decoded = decodeRewardAddress(REWARD_MAINNET);
+
+    expect(decoded?.network).toBe('mainnet');
+    expect(Buffer.from(decoded?.payload ?? []).toString('hex')).toBe(`e1${CREDENTIAL}`);
+  });
+
+  it('carries the same credential as the base address of the same staking key', () => {
+    const base = decodeCardanoAddress(
+      baseAddress(
+        '0x7c3ca0ade35d250f5706a17cbbc9e97402b5c230b26b24b940c77e4c00154636',
+        '0xce3b525279e269bac5368d404508d9fa9c527bda6eadbf639fed17673ed50d18',
+        'testnet'
+      )
+    );
+
+    expect(decodeRewardAddress(REWARD_TESTNET)?.credentialHex).toBe(base?.stakeCredentialHex);
+  });
+
+  it('refuses a payment address', () => {
+    // A payment address is where value goes; a reward address is what a withdrawal addresses.
+    const payment = baseAddress(
+      '0x7c3ca0ade35d250f5706a17cbbc9e97402b5c230b26b24b940c77e4c00154636',
+      '0xce3b525279e269bac5368d404508d9fa9c527bda6eadbf639fed17673ed50d18',
+      'testnet'
+    );
+
+    expect(decodeRewardAddress(payment)).toBeNull();
+  });
+
+  it('refuses a bad checksum, an unknown prefix and an empty string', () => {
+    const broken = `${REWARD_TESTNET.slice(0, -1)}${REWARD_TESTNET.endsWith('l') ? 'k' : 'l'}`;
+
+    expect(decodeRewardAddress(broken)).toBeNull();
+    expect(decodeRewardAddress('stake_wrong1qqqq')).toBeNull();
+    expect(decodeRewardAddress('')).toBeNull();
+  });
+
+  it('refuses an address whose prefix and header disagree about the network', () => {
+    // Well-formed bech32 under the testnet prefix, carrying a mainnet header byte. It reads as one
+    // network and would settle on another.
+    const payload = Uint8Array.from([0xe1, ...Buffer.from(CREDENTIAL, 'hex')]);
+    const crossed = bech32.encode('stake_test', bech32.toWords(payload), 256);
+
+    expect(decodeRewardAddress(crossed)).toBeNull();
+  });
+
+  it('reads a script reward address as a script credential', () => {
+    const payload = Uint8Array.from([0xf0, ...Buffer.from(CREDENTIAL, 'hex')]);
+    const scriptReward = bech32.encode('stake_test', bech32.toWords(payload), 256);
+
+    expect(decodeRewardAddress(scriptReward)?.credentialType).toBe('script_hash');
   });
 });

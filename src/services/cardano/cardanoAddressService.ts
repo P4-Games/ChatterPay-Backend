@@ -47,6 +47,21 @@ const BASE_KEY_HASH_TYPE = 0;
  */
 const ENTERPRISE_KEY_HASH_TYPE = 6;
 
+/**
+ * Address type 14: reward account, a staking key hash and nothing else.
+ *
+ * This is where rewards accrue and what a withdrawal names. It is derived from the *same* staking
+ * credential already carried inside the base address — a different credential would be a different
+ * account, earning nothing and refunding nothing.
+ */
+const REWARD_KEY_HASH_TYPE = 14;
+
+/** Human-readable part of a bech32 reward address, per network. */
+const REWARD_HRP: Readonly<Record<CardanoNetwork, string>> = {
+  testnet: 'stake_test',
+  mainnet: 'stake'
+};
+
 /** Size of a Cardano credential hash: blake2b-224 output, in bytes. */
 const CREDENTIAL_HASH_BYTES = 28;
 
@@ -125,6 +140,43 @@ export function baseAddress(
 }
 
 /**
+ * The reward address of a staking key on a network.
+ *
+ * Rewards do not land in the payment address: they accrue in a reward account keyed by the staking
+ * credential, and stay there until a withdrawal moves them into UTxOs. This is the address that
+ * account is read by, and the one a withdrawal names.
+ *
+ * It must be derived from the **same** staking key that went into the wallet's base address. A
+ * reward address built from any other key is a valid, well-formed address of an account this user
+ * has nothing to do with — it would read as empty forever and a withdrawal against it would be
+ * refused, both of which look like "no rewards yet".
+ *
+ * @param stakePublicKey - Raw 32-byte Ed25519 staking public key, hex with or without `0x`. The
+ *   same one {@link baseAddress} was given.
+ * @param network - Which network the address belongs to. Required on purpose.
+ * @returns The bech32 reward address, `stake_test1…` on testnet and `stake1…` on mainnet.
+ * @throws Error `CARDANO_PUBLIC_KEY_MUST_BE_32_BYTES` for a key of the wrong size.
+ */
+export function rewardAddress(stakePublicKey: string, network: CardanoNetwork): string {
+  const header = (REWARD_KEY_HASH_TYPE << 4) | NETWORK_ID[network];
+  const payload = Uint8Array.from([header, ...paymentCredential(stakePublicKey)]);
+  return bech32.encode(REWARD_HRP[network], bech32.toWords(payload), BECH32_LIMIT);
+}
+
+/**
+ * The staking credential hash of a staking key, as the ledger identifies it.
+ *
+ * Lowercase hex without `0x`, which is the form certificates and provider queries use.
+ *
+ * @param stakePublicKey - Raw 32-byte Ed25519 staking public key, hex with or without `0x`.
+ * @returns The blake2b-224 digest, 56 hex characters.
+ * @throws Error `CARDANO_PUBLIC_KEY_MUST_BE_32_BYTES` for a key of the wrong size.
+ */
+export function stakeCredentialHex(stakePublicKey: string): string {
+  return Buffer.from(paymentCredential(stakePublicKey)).toString('hex');
+}
+
+/**
  * The enterprise address of an Ed25519 public key on a network.
  *
  * Not what ChatterPay issues — see {@link baseAddress}. Kept for the CIP-19 vectors it is tested
@@ -198,6 +250,75 @@ export function decodeCardanoAddress(address: string): DecodedCardanoAddress | n
           payload.slice(1 + CREDENTIAL_HASH_BYTES, 1 + 2 * CREDENTIAL_HASH_BYTES)
         ).toString('hex')
       : undefined,
+    payload: Uint8Array.from(payload)
+  };
+}
+
+/** Reward address type carrying a script hash, the counterpart of {@link REWARD_KEY_HASH_TYPE}. */
+const REWARD_SCRIPT_HASH_TYPE = 15;
+
+/** What a reward address says about itself. */
+export interface DecodedRewardAddress {
+  network: CardanoNetwork;
+  /** `key_hash` for CIP-19 type 14, `script_hash` for type 15. */
+  credentialType: 'key_hash' | 'script_hash';
+  /** The 28-byte credential, lowercase hex without `0x`. */
+  credentialHex: string;
+  /**
+   * Header byte and credential, 29 bytes.
+   *
+   * This is what a `reward_account` is in the transaction CBOR — a byte string, not the bech32
+   * text. A withdrawal keyed by the bech32 string is a withdrawal from an account that does not
+   * exist, and the ledger rejects the whole transaction.
+   */
+  payload: Uint8Array;
+}
+
+/**
+ * Reads a reward address, checksum included.
+ *
+ * Separate from {@link decodeCardanoAddress} because the two answer different questions and a
+ * caller must not be able to confuse them: a payment address is where value goes, a reward address
+ * is what a withdrawal or a certificate addresses. Passing one where the other belongs is how a
+ * withdrawal ends up naming a payment credential.
+ *
+ * @param address - The address to read, `stake1…` or `stake_test1…`.
+ * @returns What the address says about itself, or `null` when it is not a readable reward address:
+ *   bad checksum, unknown prefix, wrong length, a header that is not a reward type, or a network
+ *   whose prefix and header byte disagree.
+ */
+export function decodeRewardAddress(address: string): DecodedRewardAddress | null {
+  const prefix: CardanoNetwork | null = address.startsWith(`${REWARD_HRP.testnet}1`)
+    ? 'testnet'
+    : address.startsWith(`${REWARD_HRP.mainnet}1`)
+      ? 'mainnet'
+      : null;
+  if (prefix === null) return null;
+
+  let words: number[];
+  try {
+    const decoded = bech32.decode(address as `${string}1${string}`, BECH32_LIMIT);
+    if (decoded.prefix !== REWARD_HRP[prefix]) return null;
+    words = [...decoded.words];
+  } catch {
+    return null;
+  }
+
+  const payload = bech32.fromWords(words);
+  const header = payload[0];
+  if (header === undefined) return null;
+  if (payload.length !== 1 + CREDENTIAL_HASH_BYTES) return null;
+
+  const addressType = header >> 4;
+  if (addressType !== REWARD_KEY_HASH_TYPE && addressType !== REWARD_SCRIPT_HASH_TYPE) return null;
+  // The prefix and the header both carry the network, and a disagreement between them is an address
+  // that reads as one network and would settle on another.
+  if ((header & 0x0f) !== NETWORK_ID[prefix]) return null;
+
+  return {
+    network: prefix,
+    credentialType: addressType === REWARD_KEY_HASH_TYPE ? 'key_hash' : 'script_hash',
+    credentialHex: Buffer.from(payload.slice(1)).toString('hex'),
     payload: Uint8Array.from(payload)
   };
 }

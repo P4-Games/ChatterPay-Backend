@@ -19,19 +19,24 @@
  * times out *after* the transaction reached the chain.
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import { getCardanoConfig } from '../../config/cardanoConfig';
 import { Logger } from '../../helpers/loggerHelper';
 import type { CardanoProtocolParameters, CardanoUtxo } from '../../types/cardanoType';
 
 /** Why a provider call failed, in the terms the caller has to act on. */
 export type CardanoProviderFailure =
-  /** Rate limited. The call did not reach the chain; waiting is the whole remedy. */
+  /**
+   * Rate limited, or the plan's daily request limit is spent. The call did not reach the chain;
+   * waiting is the whole remedy.
+   */
   | 'rate_limited'
   /** The provider itself is unhealthy (5xx). Retryable. */
   | 'provider_unavailable'
   /** No answer within the timeout. **Undetermined** for a submit: it may have landed. */
   | 'timeout'
-  /** Credentials missing, wrong, or out of quota. Retrying changes nothing. */
+  /** Credentials missing or wrong. Retrying changes nothing. */
   | 'unauthorized'
   /** The provider answered, and the answer is not what this client can read. */
   | 'unexpected_response'
@@ -69,6 +74,122 @@ export class CardanoProviderError extends Error {
       this.failure === 'timeout'
     );
   }
+}
+
+/** Which ceiling refused a request before it was sent. */
+export type CardanoProviderQuotaScope =
+  /** The job's own `maxProviderRequestsPerRun`. */
+  | 'run'
+  /** The shared daily quota, less the reserve for submissions. */
+  | 'daily'
+  /** The background share of the daily quota, or a pause after a 429. */
+  | 'background'
+  /** The shared counter could not be read, and this priority does not proceed blind. */
+  | 'meter_unavailable';
+
+/**
+ * A request this backend chose not to send, because a quota said no.
+ *
+ * A `rate_limited` failure like the provider's own 429, so every caller that already treats a 429 as
+ * "not now" treats this the same way. Nothing was sent: the chain was not asked and nothing about it
+ * may be concluded.
+ */
+export class CardanoProviderQuotaError extends CardanoProviderError {
+  /**
+   * @param scope - Which ceiling refused.
+   * @param message - Detail.
+   */
+  constructor(
+    readonly scope: CardanoProviderQuotaScope,
+    message: string
+  ) {
+    super('rate_limited', message);
+    this.name = 'CardanoProviderQuotaError';
+  }
+}
+
+/**
+ * Which kind of work a provider request serves, for the shared daily quota.
+ *
+ * - `critical` — submitting a transaction. Counted and never refused by this backend: refusing a
+ *   submit whose bytes are already stored would only turn it into an `unknown_submit`.
+ * - `interactive` — a user waiting on a screen or a chat answer: balances, quotes, actions. The
+ *   default for any request made outside a declared context.
+ * - `pending` — settling operations already on their way to the chain.
+ * - `background` — the sweep's discovery and refresh. The first to be refused.
+ */
+export type CardanoProviderPriority = 'critical' | 'interactive' | 'pending' | 'background';
+
+/** A ceiling on the requests one logical job may make, shared by every call inside it. */
+export interface CardanoProviderRunBudget {
+  limit: number;
+  used: number;
+}
+
+/** What a flow declares about the provider requests made inside it. */
+export interface CardanoProviderCallContext {
+  priority: CardanoProviderPriority;
+  /** Logical origin for the metrics, e.g. `sync.refresh`. Never a user identifier. */
+  origin: string;
+  runBudget?: CardanoProviderRunBudget;
+}
+
+const callContext = new AsyncLocalStorage<CardanoProviderCallContext>();
+
+/**
+ * Runs `work` with every provider request inside it attributed to `context`.
+ *
+ * Carried by async context rather than by parameters, so a request made three services down — a
+ * paged read, the tip `statusOf` reads for itself — is attributed to the flow that caused it without
+ * every signature in between having to pass it along.
+ *
+ * @param context - Priority, origin and optional run ceiling.
+ * @param work - The flow.
+ * @returns What the flow returns.
+ */
+export function withCardanoProviderContext<T>(
+  context: CardanoProviderCallContext,
+  work: () => Promise<T>
+): Promise<T> {
+  return callContext.run(context, work);
+}
+
+/** One outgoing request, as the meter sees it. Carries the credential only for fingerprinting. */
+export interface CardanoProviderCallMeta {
+  baseUrl: string;
+  credential: string;
+  path: string;
+  method: string;
+  priority: CardanoProviderPriority;
+  origin: string;
+}
+
+/**
+ * Accounts for provider requests against a shared quota.
+ *
+ * Installed once at startup; absent in unit tests, where requests are counted only against a run's
+ * own ceiling.
+ */
+export interface CardanoProviderMeter {
+  /**
+   * Reserves one request, or refuses it.
+   *
+   * @throws CardanoProviderQuotaError When the quota for this priority is spent.
+   */
+  reserve(meta: CardanoProviderCallMeta): Promise<void>;
+  /** Records a 429 and, when the provider said how long, how long to hold background work. */
+  rateLimited(meta: CardanoProviderCallMeta, retryAfterSeconds: number | null): Promise<void>;
+}
+
+let installedMeter: CardanoProviderMeter | null = null;
+
+/**
+ * Installs, or with `null` removes, the meter every provider request passes through.
+ *
+ * @param meter - The meter.
+ */
+export function setCardanoProviderMeter(meter: CardanoProviderMeter | null): void {
+  installedMeter = meter;
 }
 
 /** Where a transaction stands on chain, as far as the provider can see. */
@@ -142,8 +263,13 @@ interface KoiosTxStatus {
  * read a 429 as a hard failure on one provider and as a retry on the other would eventually send
  * the same transfer twice. So the classification lives here once, and each provider below says
  * only what its own dialect is.
+ *
+ * Exported so that the staking reads can extend it rather than reimplement it. They are a
+ * separate surface from the transfer flow — a deployment can transfer without ever reading a
+ * stake account — but they fail in exactly the same ways, and a second copy of this
+ * classification is a second place for the two to drift apart.
  */
-abstract class HttpCardanoProvider {
+export abstract class HttpCardanoProvider {
   /**
    * @param baseUrl - Network-specific provider root. The network lives in the URL: pointing a
    *   Preprod deployment at a mainnet root would read and submit against a chain whose addresses
@@ -175,6 +301,7 @@ abstract class HttpCardanoProvider {
    */
   protected async call<T>(path: string, init?: RequestInit): Promise<T> {
     const isWrite = init?.method === 'POST';
+    const meta = await this.meter(path, init?.method ?? 'GET');
     let response: Response;
     try {
       response = await fetch(`${this.baseUrl}${path}`, {
@@ -198,6 +325,17 @@ abstract class HttpCardanoProvider {
     }
 
     if (!response.ok) {
+      if (installedMeter !== null && [402, 418, 429].includes(response.status)) {
+        // 402 is Blockfrost's "daily request limit exceeded", which lasts until the plan resets at
+        // midnight UTC; 418 is its ban for requests that kept coming after a 402 or 429. Background
+        // work is held back for as long as either lasts, so it does not turn one into the other.
+        await installedMeter.rateLimited(
+          meta,
+          response.status === 402
+            ? secondsUntilUtcMidnight()
+            : retryAfterSeconds(response.headers.get('retry-after'))
+        );
+      }
       const body = (await response.text()).slice(0, 500);
       throw new CardanoProviderError(
         classifyStatus(response.status, init?.method),
@@ -218,6 +356,46 @@ abstract class HttpCardanoProvider {
         `CARDANO_PROVIDER_UNREADABLE: ${path}: ${text.slice(0, 200)}`
       );
     }
+  }
+
+  /**
+   * Counts one request before it is sent, and refuses it when a ceiling says so.
+   *
+   * Every request is counted here, before `fetch`, pages and the tip `statusOf` reads included,
+   * because this method is the only way out of the process. A request whose answer never arrived is
+   * still counted: whether the provider billed it is unknown, and assuming it did not is how a quota
+   * is overrun. A submit is `critical` whatever the context says, and is never refused here.
+   *
+   * @param path - Path under the network root.
+   * @param method - HTTP method.
+   * @returns The metadata the 429 accounting reuses.
+   * @throws CardanoProviderQuotaError When the run's ceiling or the shared quota refuses.
+   */
+  private async meter(path: string, method: string): Promise<CardanoProviderCallMeta> {
+    const context = callContext.getStore();
+    const submit = method === 'POST' && /submit/i.test(path);
+    const priority: CardanoProviderPriority = submit
+      ? 'critical'
+      : (context?.priority ?? 'interactive');
+    const meta: CardanoProviderCallMeta = {
+      baseUrl: this.baseUrl,
+      credential: this.apiKey,
+      path,
+      method,
+      priority,
+      origin: context?.origin ?? 'unattributed'
+    };
+
+    const budget = context?.runBudget;
+    if (budget !== undefined && priority !== 'critical' && budget.used >= budget.limit) {
+      throw new CardanoProviderQuotaError(
+        'run',
+        `CARDANO_PROVIDER_RUN_LIMIT: ${budget.used}/${budget.limit} requests used by this run`
+      );
+    }
+    if (installedMeter !== null) await installedMeter.reserve(meta);
+    if (budget !== undefined) budget.used += 1;
+    return meta;
   }
 
   /**
@@ -678,6 +856,31 @@ function toCardanoUtxo(row: BlockfrostUtxo): CardanoUtxo {
 }
 
 /**
+ * Seconds from now to the next 00:00 UTC, when Blockfrost resets its daily counts.
+ *
+ * @returns The seconds, at least one.
+ */
+function secondsUntilUtcMidnight(): number {
+  const now = new Date();
+  const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  return Math.max(1, Math.ceil((midnight - now.getTime()) / 1000));
+}
+
+/**
+ * Reads a `Retry-After` header.
+ *
+ * @param raw - The header value: seconds, or an HTTP date.
+ * @returns Seconds to wait, or `null` when absent or unreadable.
+ */
+function retryAfterSeconds(raw: string | null): number | null {
+  if (raw === null || raw.trim() === '') return null;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds);
+  const date = Date.parse(raw);
+  return Number.isNaN(date) ? null : Math.max(0, Math.ceil((date - Date.now()) / 1000));
+}
+
+/**
  * What an HTTP status from the provider means.
  *
  * @param status - The status code.
@@ -687,7 +890,10 @@ function toCardanoUtxo(row: BlockfrostUtxo): CardanoUtxo {
  */
 function classifyStatus(status: number, method?: string): CardanoProviderFailure {
   if (status === 429 || status === 418) return 'rate_limited';
-  if (status === 401 || status === 402 || status === 403) return 'unauthorized';
+  // 402 is the provider's daily request limit, not a credential problem: it clears when the day
+  // resets, and treating it as rate limiting is what makes the sweep stop instead of pressing on.
+  if (status === 402) return 'rate_limited';
+  if (status === 401 || status === 403) return 'unauthorized';
   if (status >= 500) return 'provider_unavailable';
   if ((status === 400 || status === 422) && method === 'POST') return 'rejected_by_chain';
   return 'unexpected_response';

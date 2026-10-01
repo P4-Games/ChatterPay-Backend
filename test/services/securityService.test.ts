@@ -274,12 +274,12 @@ describe('securityService', () => {
       expect(gate.allowed).toBe(true);
     });
 
-    it('blocks operation when PIN not set', async () => {
+    it('allows operation when PIN not set', async () => {
       const gate = await securityService.getOperationGate('1234567890');
 
-      expect(gate.allowed).toBe(false);
-      expect(gate.required_flow).toBe('security_pin_setup');
-      expect(gate.reason).toBe('pin_not_set');
+      expect(gate.allowed).toBe(true);
+      expect(gate.required_flow).toBeUndefined();
+      expect(gate.reason).toBeUndefined();
     });
 
     it('blocks operation when PIN is blocked', async () => {

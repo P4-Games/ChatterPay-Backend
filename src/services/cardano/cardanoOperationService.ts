@@ -352,6 +352,7 @@ export async function executeCardanoOperation(
     asset,
     tokenSymbol: token.symbol,
     tokenDecimals: token.decimals,
+    isAda: token.isAda,
     provider: input.provider ?? buildCardanoProvider(),
     network: config.network,
     chainId: config.chainId,

@@ -9,15 +9,10 @@
 
 import {
   $SC,
-  CARDANO_CHAIN_ID,
-  CARDANO_DEPOSIT_CONFIRMATIONS,
   CARDANO_ENABLED,
-  CARDANO_EXPLORER_URL,
   CARDANO_FEE_SCHEME,
-  CARDANO_NETWORK,
   CARDANO_PROVIDER_API_KEY,
   CARDANO_PROVIDER_TIMEOUT_MS,
-  CARDANO_PROVIDER_URL,
   CARDANO_RECYCLE_DESTINATION_UTXO,
   CARDANO_ROUTE_DUST_TO_SPONSOR,
   CARDANO_SPONSOR_FEES,
@@ -25,7 +20,6 @@ import {
   CARDANO_TRANSFER_FEE_ADA,
   CARDANO_TRANSFER_FEE_ADA_NEW_OUTPUT,
   CARDANO_TRANSFER_FEE_USD,
-  CARDANO_TTL_SLOTS,
   CDC1,
   CDC2,
   CDC3,
@@ -95,21 +89,18 @@ export function cardanoLabelsReadable(): boolean {
 }
 
 /**
- * Reads the Cardano settings.
+ * Reads the Cardano settings the environment still holds.
+ *
+ * The network and the five values that go with it are not among them: they come from the network's
+ * own `blockchains` document, through `cardanoNetworkSettings`.
  *
  * @returns The settings, validated but not defaulted.
  */
 export function readCardanoEnv(): CardanoEnv {
   return {
     enabled: CARDANO_ENABLED.trim().toLowerCase() === 'true',
-    network: CARDANO_NETWORK.trim(),
-    chainId: positiveIntOrNull(CARDANO_CHAIN_ID),
-    providerUrl: CARDANO_PROVIDER_URL.trim(),
     providerApiKey: CARDANO_PROVIDER_API_KEY.trim(),
     providerTimeoutMs: positiveIntOrNull(CARDANO_PROVIDER_TIMEOUT_MS),
-    ttlSlots: positiveIntOrNull(CARDANO_TTL_SLOTS),
-    depositConfirmations: positiveIntOrNull(CARDANO_DEPOSIT_CONFIRMATIONS),
-    explorerUrl: CARDANO_EXPLORER_URL.trim(),
     hasSecret: Boolean($SC),
     labelsReadable: cardanoLabelsReadable()
   };
