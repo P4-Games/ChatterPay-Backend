@@ -650,14 +650,9 @@ export const securityService = {
       const status = await securityService.getSecurityStatus(phoneNumber);
       const now = new Date();
 
-      // If PIN not set
-      if (status.pin_status === 'not_set') {
-        return {
-          allowed: false,
-          required_flow: 'security_pin_setup',
-          reason: 'pin_not_set'
-        };
-      }
+      // The PIN is optional: a user who never set one operates without it. Only a blocked PIN
+      // refuses here; an active one is verified by the caller (the bot's PIN flow, the staking
+      // authorisation) before the operation reaches this gate.
 
       // If PIN is blocked
       if (status.pin_status === 'blocked' && status.blocked_until && status.blocked_until > now) {
